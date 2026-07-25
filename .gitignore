@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+.env
+.venv
+*.sqlite
+*.db
+*.log
+pentool.log
+/raw
+/raw2
+venv/
+.obsidian/
+coverage.json
+MYPLANS/
+"fix comment"
+pentool/modules/scanner/
+handFIX/

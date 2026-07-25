@@ -1,0 +1,57 @@
+SaveProjectDialog {
+    align: center middle;
+}
+SaveProjectDialog > Vertical {
+    width: 60;
+    height: auto;
+    background: $surface;
+    border: solid $primary;
+    padding: 1 2;
+}
+SaveProjectDialog Label {
+    margin-bottom: 1;
+}
+SaveProjectDialog Input {
+    margin-bottom: 1;
+}
+SaveProjectDialog Horizontal {
+    height: auto;
+    align: right middle;
+    margin-top: 1;
+}
+SaveProjectDialog Button {
+    margin-left: 1;
+    height: 3;
+    min-width: 10;
+}
+
+LoadProjectDialog {
+    align: center middle;
+}
+LoadProjectDialog > Vertical {
+    width: 60;
+    height: auto;
+    background: $surface;
+    border: solid $primary;
+    padding: 1 2;
+}
+LoadProjectDialog Label {
+    margin-bottom: 1;
+}
+LoadProjectDialog Input {
+    margin-bottom: 1;
+}
+LoadProjectDialog Static.hint {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+LoadProjectDialog Horizontal {
+    height: auto;
+    align: right middle;
+    margin-top: 1;
+}
+LoadProjectDialog Button {
+    margin-left: 1;
+    height: 3;
+    min-width: 10;
+}

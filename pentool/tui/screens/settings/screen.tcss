@@ -1,0 +1,121 @@
+OptionCycler {
+    height: 1;
+    width: auto;
+    min-width: 14;
+    background: $panel;
+    color: $text;
+    padding: 0 1;
+}
+OptionCycler:hover {
+    background: $primary-darken-1;
+}
+
+SettingsScreen {
+    layout: vertical;
+}
+SettingsScreen TabbedContent {
+    height: 1fr;
+}
+SettingsScreen .settings-pane {
+    padding: 1 2;
+    layout: vertical;
+}
+SettingsScreen .section-title {
+    height: 1;
+    color: $primary;
+    margin-bottom: 1;
+}
+SettingsScreen .row {
+    height: auto;
+    layout: horizontal;
+    align: left middle;
+    margin-bottom: 1;
+}
+SettingsScreen .row-label {
+    width: 22;
+    color: $text-muted;
+}
+SettingsScreen Input {
+    border: none;
+    background: $panel;
+    width: 30;
+    padding: 0 1;
+}
+SettingsScreen #settings-save {
+    width: auto;
+    min-width: 10;
+    padding: 0 2;
+    margin-top: 1;
+}
+SettingsScreen #settings-open-ca {
+    width: auto;
+    background: $panel;
+    padding: 0 2;
+    margin-left: 1;
+}
+SettingsScreen #settings-save-proxy {
+    width: auto;
+    min-width: 10;
+    padding: 0 2;
+    margin-top: 1;
+}
+SettingsScreen #settings-save-project {
+    width: auto;
+    min-width: 10;
+    padding: 0 2;
+    margin-top: 1;
+}
+
+/* ── License tab ─────────────────────────────────────────── */
+SettingsScreen .license-status-free {
+    color: $text-muted;
+}
+SettingsScreen .license-status-pro {
+    color: $success;
+}
+SettingsScreen .license-mono {
+    color: $text-muted;
+    text-style: dim;
+}
+SettingsScreen .license-sep {
+    height: 1;
+    color: $primary-darken-3;
+    margin: 1 0;
+}
+SettingsScreen .license-buttons-row {
+    height: auto;
+    layout: horizontal;
+    align: left middle;
+    margin-bottom: 1;
+}
+SettingsScreen .license-buttons-row ToolbarButton {
+    margin-right: 1;
+}
+SettingsScreen .license-error {
+    color: $error;
+    height: auto;
+    display: none;
+}
+SettingsScreen .license-error.visible {
+    display: block;
+}
+SettingsScreen .license-features-title {
+    height: 1;
+    color: $text-muted;
+    margin-bottom: 0;
+}
+SettingsScreen #license-features {
+    height: auto;
+    color: $success;
+    margin-bottom: 1;
+}
+SettingsScreen .license-buy {
+    height: 1;
+    color: $primary;
+    margin-top: 1;
+}
+SettingsScreen #license-key-input {
+    width: 26;
+}
+/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+.toolbar-sep { width: auto; }

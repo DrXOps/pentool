@@ -1,0 +1,204 @@
+"""FilterBar — панель фильтрации над DataTable."""
+
+from __future__ import annotations
+
+from textual.app import ComposeResult
+from textual.message import Message
+from textual.widget import Widget
+from textual.widgets import Button, Input, Static
+from pathlib import Path
+
+_CSS = (Path(__file__).parent / "filter_bar.tcss").read_text(encoding="utf-8")
+
+_METHODS = ["Any", "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+
+
+class MethodCycler(Static):
+    """Кнопка-переключатель метода HTTP — клик циклически меняет значение."""
+
+    DEFAULT_CSS = _CSS
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__("Any ▼", **kwargs)
+        self._idx: int = 0
+
+    @property
+    def value(self) -> str:
+        return _METHODS[self._idx]
+
+    def reset(self) -> None:
+        self._idx = 0
+        self.update("Any ▼")
+
+    def on_click(self) -> None:
+        self._idx = (self._idx + 1) % len(_METHODS)
+        label = _METHODS[self._idx]
+        self.update(f"{label} ▼")
+        # Отправляем событие вверх чтобы FilterBar мог отреагировать
+        self.post_message(MethodCycler.Changed(label))
+
+    class Changed(Message):
+        def __init__(self, method: str) -> None:
+            super().__init__()
+            self.method = method
+
+
+class ScopeToggle(Static):
+    """Кнопка-переключатель фильтра 'только in-scope'."""
+
+    DEFAULT_CSS = _CSS
+
+    class Toggled(Message):
+        def __init__(self, active: bool) -> None:
+            super().__init__()
+            self.active = active
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__("★ Scope", **kwargs)
+        self._active: bool = False
+        self._scope_empty: bool = True  # изначально scope пуст → кнопка неактивна
+
+    @property
+    def active(self) -> bool:
+        return self._active
+
+    def set_scope_empty(self, empty: bool) -> None:
+        self._scope_empty = empty
+        if empty:
+            self.add_class("disabled")
+            if self._active:
+                self._active = False
+                self.remove_class("-active")
+                self.update("★ Scope")
+        else:
+            self.remove_class("disabled")
+
+    def on_click(self) -> None:
+        if self._scope_empty:
+            return  # игнорируем если scope пуст
+        self._active = not self._active
+        if self._active:
+            self.add_class("-active")
+            self.update("★ In Scope")
+        else:
+            self.remove_class("-active")
+            self.update("★ Scope")
+        self.post_message(self.Toggled(self._active))
+
+    def reset(self) -> None:
+        self._active = False
+        self.remove_class("-active")
+        self.update("★ Scope")
+
+
+class FilterBar(Widget):
+    """Строка фильтров: Host, Method, Status, Search + Apply/Reset.
+
+    Отправляет FilterChanged при нажатии Apply или Enter.
+    """
+
+    DEFAULT_CSS = _CSS
+
+    class FilterChanged(Message):
+        """Пользователь применил фильтр."""
+        def __init__(self, filters: dict) -> None:
+            super().__init__()
+            self.filters = filters
+
+    def compose(self) -> ComposeResult:
+        yield Static("Host:", classes="fb-label")
+        yield Input(placeholder="example.com", id="fb-host", compact=True)
+        yield Static(" ", classes="fb-sep")
+        yield Static("Method:", classes="fb-label")
+        yield MethodCycler(id="fb-method")
+        yield Static(" ", classes="fb-sep")
+        yield Static("Status:", classes="fb-label")
+        yield Input(placeholder="200-299", id="fb-status", compact=True)
+        yield Static(" ", classes="fb-sep")
+        yield Static("Search:", classes="fb-label")
+        yield Input(placeholder="FTS5 query...", id="fb-search", compact=True)
+        yield Static(" ", classes="fb-sep")
+        yield ScopeToggle(id="fb-scope")
+        yield Static(" ", classes="fb-sep")
+        yield Button("Filter", id="fb-apply", variant="primary")
+        yield Button("Clear", id="fb-reset")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "fb-apply":
+            self._apply()
+        elif event.button.id == "fb-reset":
+            self._reset()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Enter в любом Input применяет фильтр."""
+        self._apply()
+
+    def on_method_cycler_changed(self, event: MethodCycler.Changed) -> None:
+        """Смена метода сразу применяет фильтр."""
+        self._apply()
+
+    def on_scope_toggle_toggled(self, event: ScopeToggle.Toggled) -> None:
+        """Включение/выключение фильтра по scope сразу применяет фильтр."""
+        self._apply()
+
+    def _apply(self) -> None:
+        filters: dict = {}
+
+        host = self.query_one("#fb-host", Input).value.strip()
+        if host:
+            filters["host"] = host
+
+        try:
+            method = self.query_one("#fb-method", MethodCycler).value
+            if method and method != "Any":
+                filters["method"] = [method]
+        except Exception:
+            pass
+
+        status_raw = self.query_one("#fb-status", Input).value.strip()
+        if status_raw:
+            if "-" in status_raw:
+                parts = status_raw.split("-", 1)
+                try:
+                    filters["status_code"] = (int(parts[0]), int(parts[1]))
+                except ValueError:
+                    pass
+            else:
+                try:
+                    filters["status_code"] = int(status_raw)
+                except ValueError:
+                    pass
+
+        search = self.query_one("#fb-search", Input).value.strip()
+        if search:
+            filters["search"] = search
+
+        # Фильтр по scope — передаём флаг, ProxyScreen подставит список хостов
+        try:
+            scope_toggle = self.query_one("#fb-scope", ScopeToggle)
+            if scope_toggle.active:
+                filters["scope_only"] = True
+        except Exception:
+            pass
+
+        self.post_message(self.FilterChanged(filters))
+
+    def _reset(self) -> None:
+        self.query_one("#fb-host", Input).value = ""
+        self.query_one("#fb-status", Input).value = ""
+        self.query_one("#fb-search", Input).value = ""
+        try:
+            self.query_one("#fb-method", MethodCycler).reset()
+        except Exception:
+            pass
+        try:
+            self.query_one("#fb-scope", ScopeToggle).reset()
+        except Exception:
+            pass
+        self.post_message(self.FilterChanged({}))
+
+    def get_filters(self) -> dict:
+        self._apply()
+        # Возвращает последние построенные фильтры — через сообщение
+        return {}
+

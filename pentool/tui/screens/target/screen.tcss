@@ -1,0 +1,43 @@
+TargetScreen {
+    layout: vertical;
+    width: 1fr;
+    height: 1fr;
+}
+TargetScreen #toolbar {
+    height: 2;
+    width: 100%;
+    background: $panel;
+    layout: horizontal;
+    padding: 0 1;
+    align: left middle;
+    overflow: hidden hidden;
+    border-bottom: solid $primary-darken-2;
+}
+TargetScreen #main-split {
+    layout: horizontal;
+    height: 1fr;
+}
+TargetScreen #site-tree {
+    width: 2fr;
+    height: 1fr;
+    border: solid $primary-darken-3;
+}
+TargetScreen #detail-panel {
+    width: 1fr;
+    height: 1fr;
+    border: solid $primary-darken-3;
+    layout: vertical;
+    padding: 0 1;
+}
+TargetScreen .detail-label {
+    height: 1;
+    color: $text-muted;
+}
+TargetScreen #detail-log {
+    height: 1fr;
+}
+TargetScreen .in-scope {
+    color: $success;
+}
+/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+.toolbar-sep { width: auto; }

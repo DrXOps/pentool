@@ -1,0 +1,18 @@
+HelloScreen {
+    align: center middle;
+    width: 1fr;
+    height: 1fr;
+}
+HelloScreen #box {
+    width: 50;
+    height: auto;
+    border: double $success;
+    padding: 2 4;
+    background: $panel;
+}
+HelloScreen .title {
+    text-align: center;
+    text-style: bold;
+    color: $success;
+    margin-bottom: 1;
+}

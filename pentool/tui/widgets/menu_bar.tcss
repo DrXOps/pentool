@@ -1,0 +1,57 @@
+MenuItem {
+    width: 100%;
+    height: 1;
+    padding: 0 2;
+    color: $text;
+    pointer: pointer;
+}
+MenuItem:hover {
+    background: $primary;
+    color: $text;
+}
+MenuItem.-separator {
+    color: $text-muted;
+    height: 1;
+}
+MenuItem.-disabled {
+    color: $text-disabled;
+    pointer: not-allowed;
+}
+MenuItem.-disabled:hover {
+    background: transparent;
+    color: $text-disabled;
+}
+
+MenuDropdown {
+    layer: overlay;
+    display: none;
+    background: $surface;
+    border: solid $primary;
+    width: auto;
+    min-width: 30;
+    height: auto;
+    padding: 0;
+}
+
+MenuHeader {
+    width: auto;
+    padding: 0 1;
+    height: 1;
+    color: $text;
+    pointer: pointer;
+}
+MenuHeader:hover {
+    background: $primary;
+    color: $text;
+}
+MenuHeader.-active {
+    background: $primary;
+    color: $text;
+}
+
+MenuBar {
+    height: 1;
+    background: $surface;
+    width: 100%;
+    layout: horizontal;
+}

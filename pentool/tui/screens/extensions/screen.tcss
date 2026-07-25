@@ -1,0 +1,22 @@
+ExtensionsScreen {
+    align: center middle;
+    width: 1fr;
+    height: 1fr;
+}
+ExtensionsScreen #box {
+    width: 60;
+    height: auto;
+    border: double $primary;
+    padding: 2 4;
+    background: $panel;
+}
+ExtensionsScreen .title {
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+ExtensionsScreen .desc {
+    text-align: center;
+    color: $text;
+}

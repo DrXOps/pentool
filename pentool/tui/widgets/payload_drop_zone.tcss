@@ -1,0 +1,17 @@
+PayloadDropZone {
+    border: dashed $primary-darken-1;
+    height: 3;
+    width: 100%;
+    content-align: center middle;
+    color: $text-muted;
+    background: $panel;
+}
+PayloadDropZone:hover {
+    background: $primary-darken-3;
+    border: dashed $primary;
+}
+PayloadDropZone.-drag-over {
+    background: $primary-darken-3;
+    border: solid $primary;
+    color: $primary;
+}

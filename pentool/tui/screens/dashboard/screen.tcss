@@ -1,0 +1,218 @@
+LiveChart {
+    height: 7;
+    width: 1fr;
+    border: solid $primary-darken-3;
+    background: $panel;
+    padding: 0 1;
+}
+LiveChart #chart-title {
+    height: auto;
+    color: $primary;
+    text-style: bold;
+}
+LiveChart #chart-spark {
+    height: auto;
+    color: $success;
+}
+LiveChart #chart-axis {
+    height: auto;
+    color: $text-muted;
+}
+LiveChart #chart-stats {
+    height: auto;
+    color: $text-muted;
+}
+LiveChart #chart-meta {
+    height: auto;
+    color: $text-muted;
+}
+LiveChart #chart-summary {
+    height: auto;
+    color: $text-muted;
+}
+
+ThreatMeter {
+    height: 100%;
+    width: 1fr;
+    border: solid $error-darken-2;
+    background: $panel;
+    padding: 0 1;
+}
+ThreatMeter #tm-title {
+    height: auto;
+    color: $error;
+    text-style: bold;
+}
+ThreatMeter #tm-gauge {
+    height: auto;
+}
+ThreatMeter #tm-breakdown {
+    height: auto;
+    color: $text-muted;
+}
+ThreatMeter #tm-top {
+    height: auto;
+    color: $text-muted;
+}
+ThreatMeter #tm-hint {
+    height: auto;
+    color: $text-muted;
+    text-style: dim;
+}
+
+SeverityMatrix {
+    height: 1fr;
+    width: 1fr;
+    border: solid $warning-darken-2;
+    background: $panel;
+    padding: 0 1;
+}
+SeverityMatrix #mx-body {
+    height: 1fr;
+}
+
+DashboardScreen {
+    layout: vertical;
+    width: 1fr;
+    height: 1fr;
+    background: $background;
+}
+DashboardScreen #logo-bar {
+    height: 9;
+    background: $panel;
+    border-bottom: solid $primary-darken-3;
+    align: center middle;
+    padding: 0 2;
+}
+DashboardScreen #logo {
+    width: 100%;
+    text-align: center;
+}
+DashboardScreen #top-row {
+    height: 9;
+    layout: horizontal;
+    padding: 0 1;
+    margin-top: 1;
+}
+DashboardScreen #top-row LiveChart {
+    width: 1fr;
+    height: 1fr;
+    margin-right: 1;
+}
+DashboardScreen #top-row ThreatMeter {
+    width: 1fr;
+    height: 1fr;
+    margin-right: 1;
+}
+DashboardScreen #top-row ResourceMonitor {
+    width: 1fr;
+    height: 1fr;
+    border: solid $primary-darken-3;
+    background: $panel;
+    padding: 0 1;
+}
+DashboardScreen #dash-resources {
+    height: 1fr;
+}
+DashboardScreen #main-area {
+    height: 1fr;
+    layout: horizontal;
+    padding: 0 1;
+    margin-top: 1;
+}
+/* Левая колонка — Projects */
+DashboardScreen #left-pane {
+    width: 32%;
+    height: 1fr;
+    min-height: 16;
+    border: solid $primary-darken-2;
+    background: $panel;
+    padding: 0 1;
+    layout: vertical;
+}
+DashboardScreen #pp-title {
+    height: 1;
+    color: $primary;
+    text-style: bold;
+    border-bottom: solid $primary-darken-3;
+}
+DashboardScreen #project-tree {
+    height: 1fr;
+    min-height: 5;
+}
+DashboardScreen #pp-actions {
+    height: 3;
+    layout: horizontal;
+    border-top: solid $primary-darken-3;
+}
+DashboardScreen #pp-actions ToolbarButton {
+    height: 3;
+    padding: 0 1;
+}
+DashboardScreen #hk-panel {
+    height: auto;
+    color: $text-muted;
+    border-top: solid $primary-darken-3;
+    padding: 1 0 0 0;
+    text-style: dim;
+}
+/* Правая колонка */
+DashboardScreen #right-col {
+    width: 1fr;
+    height: 1fr;
+    layout: vertical;
+    margin-left: 1;
+}
+/* Верхняя часть правой колонки: Feed + Status */
+DashboardScreen #mid-row {
+    height: 10;
+    layout: horizontal;
+}
+DashboardScreen #feed-panel {
+    width: 1fr;
+    height: 1fr;
+    border: solid $primary-darken-3;
+    background: $panel;
+    padding: 0 1;
+    layout: vertical;
+}
+DashboardScreen #feed-panel-title {
+    height: 1;
+    color: $primary;
+    text-style: bold;
+}
+DashboardScreen #feed-log {
+    height: 1fr;
+}
+DashboardScreen #status-panel {
+    width: 22;
+    height: 1fr;
+    border: solid $primary-darken-3;
+    background: $panel;
+    padding: 0 1;
+    layout: vertical;
+    margin-left: 1;
+}
+DashboardScreen #status-panel-title {
+    height: 1;
+    color: $primary;
+    text-style: bold;
+}
+DashboardScreen #status-panel .led-item {
+    height: 1;
+    color: $text-muted;
+}
+/* Нижняя часть правой колонки: Vulnerability Matrix */
+DashboardScreen #matrix-col {
+    height: 1fr;
+    margin-top: 1;
+    border: solid $warning-darken-2;
+    background: $panel;
+}
+DashboardScreen #matrix-col SeverityMatrix {
+    height: 1fr;
+    width: 1fr;
+    border: none;
+}
+/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+.toolbar-sep { width: auto; }

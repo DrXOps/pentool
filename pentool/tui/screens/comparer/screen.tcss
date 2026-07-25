@@ -1,0 +1,86 @@
+ComparerScreen {
+    layout: vertical;
+    width: 1fr;
+    height: 1fr;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+ComparerScreen #cmp-toolbar {
+    height: 2;
+    width: 100%;
+    background: $panel;
+    layout: horizontal;
+    padding: 0 1;
+    align: left middle;
+    border-bottom: solid $primary-darken-2;
+    overflow: hidden hidden;
+}
+ComparerScreen .cmp-sep {
+    width: auto;
+    color: $primary-darken-2;
+}
+
+/* ── Stat bar ────────────────────────────────────────────────────────────── */
+ComparerScreen #cmp-stat-bar {
+    height: 1;
+    background: $panel;
+    padding: 0 1;
+    border-bottom: solid $primary-darken-3;
+}
+ComparerScreen #cmp-stats {
+    width: 1fr;
+}
+
+/* ── Edit area ───────────────────────────────────────────────────────────── */
+ComparerScreen #cmp-edit-area {
+    height: 1fr;
+    layout: horizontal;
+}
+ComparerScreen #cmp-left-col {
+    width: 1fr;
+    height: 1fr;
+    layout: vertical;
+}
+ComparerScreen #cmp-right-col {
+    width: 1fr;
+    height: 1fr;
+    layout: vertical;
+}
+ComparerScreen .cmp-col-label {
+    height: 1;
+    color: $text-muted;
+    background: $primary-darken-3;
+    padding: 0 1;
+    text-style: bold;
+}
+ComparerScreen #cmp-left,
+ComparerScreen #cmp-right {
+    height: 1fr;
+}
+
+/* ── Diff area ───────────────────────────────────────────────────────────── */
+ComparerScreen #cmp-diff-area {
+    height: 10;
+    layout: vertical;
+}
+ComparerScreen #cmp-diff-label {
+    height: 1;
+    color: $text-muted;
+    background: $primary-darken-3;
+    padding: 0 1;
+    text-style: bold;
+}
+ComparerScreen #cmp-diff-log {
+    height: 1fr;
+    padding: 0 1;
+}
+/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+.toolbar-sep { width: auto; }
+/* status-bar */
+#status-bar {
+    height: 1;
+    color: $text-muted;
+    background: $panel;
+    padding: 0 1;
+    text-style: dim;
+}

@@ -1,0 +1,55 @@
+ScopeDialog {
+    align: center middle;
+}
+ScopeDialog #dialog {
+    width: 65;
+    height: auto;
+    border: double $primary;
+    background: $surface;
+    padding: 1 2;
+}
+ScopeDialog #title {
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+ScopeDialog #hint {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+ScopeDialog #scope-area {
+    height: 8;
+    border: solid $primary-darken-2;
+    margin-bottom: 1;
+}
+ScopeDialog .regex-section-label {
+    color: $primary;
+    text-style: bold;
+    margin-top: 1;
+    height: 1;
+}
+ScopeDialog .regex-hint {
+    color: $text-muted;
+    height: 1;
+}
+ScopeDialog .regex-area {
+    height: 4;
+    border: solid $primary-darken-3;
+    margin-bottom: 0;
+}
+ScopeDialog .validation-msg {
+    height: 1;
+    color: $error;
+    margin-top: 1;
+}
+ScopeDialog #buttons {
+    layout: horizontal;
+    height: 1;
+    align: center middle;
+    margin-top: 1;
+}
+ScopeDialog #buttons ToolbarButton {
+    margin: 0 1;
+    padding: 0 2;
+}

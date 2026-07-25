@@ -1,0 +1,19 @@
+TerminalScreen {
+    layout: vertical;
+}
+TerminalScreen #term-statusbar {
+    height: 1;
+    background: $panel;
+    padding: 0 1;
+    color: $text-muted;
+}
+TerminalScreen #term-log {
+    height: 1fr;
+    background: $background;
+}
+TerminalScreen #term-hint {
+    height: 1;
+    background: $panel;
+    padding: 0 1;
+    color: $text-muted;
+}

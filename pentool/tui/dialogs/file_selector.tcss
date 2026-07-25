@@ -1,0 +1,67 @@
+FileSelectorDialog {
+    align: center middle;
+}
+FileSelectorDialog #dialog {
+    width: 70;
+    height: 24;
+    border: solid $primary;
+    background: $surface;
+    padding: 0;
+}
+FileSelectorDialog #title-bar {
+    height: 1;
+    background: $primary-darken-2;
+    color: $text;
+    padding: 0 1;
+    text-style: bold;
+}
+FileSelectorDialog #path-bar {
+    height: 1;
+    background: $panel;
+    padding: 0 1;
+    layout: horizontal;
+}
+FileSelectorDialog #path-label {
+    width: 1fr;
+    color: $text-muted;
+}
+FileSelectorDialog #btn-up {
+    width: 6;
+    min-width: 6;
+    padding: 0 1;
+    background: $panel;
+    color: $text-muted;
+}
+FileSelectorDialog #file-table {
+    height: 1fr;
+    border: none;
+}
+FileSelectorDialog #bottom-bar {
+    height: 1;
+    padding: 0 1;
+    background: $panel;
+    layout: horizontal;
+    align: left middle;
+}
+FileSelectorDialog #filename-input {
+    width: 1fr;
+    border: none;
+    background: $surface;
+    height: 1;
+}
+FileSelectorDialog #buttons {
+    height: 1;
+    layout: horizontal;
+    align: right middle;
+    padding: 0 1;
+    background: $panel;
+}
+FileSelectorDialog #btn-ok {
+    margin: 0 1;
+    padding: 0 2;
+    color: $success;
+}
+FileSelectorDialog #btn-cancel {
+    margin: 0 0;
+    padding: 0 2;
+}

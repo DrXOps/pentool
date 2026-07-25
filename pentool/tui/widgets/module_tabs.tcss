@@ -1,0 +1,9 @@
+ModuleTabs {
+    height: 3;
+    width: 100%;
+    background: $panel;
+    border-bottom: solid $primary-darken-2;
+}
+ModuleTabs Tabs {
+    height: 3;
+}

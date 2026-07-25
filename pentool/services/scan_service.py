@@ -1,0 +1,330 @@
+"""ScanService — оркестрирует Spider → ScanEngine → EventBus."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import dataclass, field
+from typing import Callable
+from urllib.parse import urlparse, urlencode, urlunparse
+
+from pentool.api.scanner_api import ScannerAPI, Finding
+from pentool.api.spider_api import SpiderAPI
+from pentool.core.event_bus import EventBus, get_event_bus
+from pentool.core.events import (
+    FindingDiscovered,
+    ScanFinished,
+    ScanProgressEvent,
+    ScanStarted,
+    SpiderFinished,
+    UrlCrawled,
+)
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+@dataclass
+class ScanConfig:
+    """Конфигурация одного запуска скана."""
+    targets: list[str]
+    seed_requests: list = field(default_factory=list)  # list[ParsedRequest]
+    check_names: list[str] | None = None
+    threads: int = 10
+    delay_sec: float = 0.0
+    max_depth: int = 3
+    max_pages: int = 100
+    db_path: str = ""
+    resume: bool = False  # True — пропустить краулинг, использовать seed_requests напрямую
+    resume_targets: list[str] = field(default_factory=list)  # URL для скана при resume
+    # on_request_sent(requests_sent, threads_active, check_name, param_name, url)
+    on_request_sent: Callable | None = None
+
+
+class ScanService:
+    """Оркестрирует: Spider → URL collection → ScanEngine → EventBus.
+
+    Не знает о Textual. Запускается через async @work в ScannerScreen.
+
+    Использование:
+        service = ScanService(scanner_api, spider_api, event_bus)
+        findings = await service.run(config)
+    """
+
+    def __init__(
+        self,
+        scanner_api: ScannerAPI,
+        spider_api: SpiderAPI,
+        event_bus: EventBus | None = None,
+        tui_loop: asyncio.AbstractEventLoop | None = None,
+        on_log: Callable[[str], None] | None = None,
+    ) -> None:
+        self._scanner = scanner_api
+        self._spider = spider_api
+        self._bus = event_bus or get_event_bus()
+        self._tui_loop = tui_loop         # loop основного потока для emit_threadsafe
+        self._on_log = on_log             # коллбэк для лога в TUI (опционально)
+        self._stop_requested = False
+
+    # ── публичный API ──────────────────────────────────────────────────────────
+
+    def request_stop(self) -> None:
+        """Запросить остановку (thread-safe)."""
+        self._stop_requested = True
+        self._spider.stop()
+        try:
+            engine = self._scanner._get_engine()
+            engine.request_stop()
+        except Exception:
+            pass
+
+    async def run(self, config: ScanConfig) -> list[Finding]:
+        self._stop_requested = False
+        self._emit(ScanStarted(
+            targets=config.targets,
+            checks=config.check_names or [],
+            source="scanner",
+        ))
+
+        # ── 1. Краулинг всех целей ─────────────────────────────────────────────
+        all_scan_targets: list[str] = []
+        all_forms: list = []
+
+        if config.resume and config.resume_targets:
+            # Resume: пропускаем краулинг — используем ранее собранные URL
+            all_scan_targets = list(config.resume_targets)
+            self._log(
+                f"[yellow]RESUME[/yellow] Skipping crawl — "
+                f"using {len(all_scan_targets)} previously discovered URLs"
+            )
+        else:
+            for base_url in config.targets:
+                if self._stop_requested:
+                    break
+                await self._crawl_target(
+                    base_url, config, all_scan_targets, all_forms
+                )
+
+        if self._stop_requested:
+            self._log("[yellow]STOP[/yellow] Scan stopped after crawl.")
+            self._emit(ScanFinished(total_findings=0, stopped_early=True, source="scanner"))
+            return []
+
+        # ── 2. Фильтрация статики + дедупликация по шаблону ──────────────────
+        from pentool.modules.scanner.helpers import is_scannable_url, path_template
+        seen_templates: set[str] = set()
+        unique: list[str] = []
+        skipped_static = 0
+        skipped_dedup = 0
+        for t in all_scan_targets:
+            if not is_scannable_url(t):
+                skipped_static += 1
+                continue
+            tmpl = path_template(t)
+            if tmpl in seen_templates:
+                skipped_dedup += 1
+                continue
+            seen_templates.add(tmpl)
+            unique.append(t)
+        all_scan_targets = unique
+        if skipped_static or skipped_dedup:
+            self._log(
+                f"[dim]FILTER[/dim] Skipped [bold]{skipped_static}[/bold] static, "
+                f"[bold]{skipped_dedup}[/bold] duplicate templates"
+            )
+
+        self._log(
+            f"[cyan]CRAWL[/cyan] Total: [bold]{len(all_scan_targets)}[/bold] URLs + "
+            f"[bold]{len(all_forms)}[/bold] POST forms to test"
+        )
+
+        # ── 3. Прогресс-бар и подготовка запросов ────────────────────────────
+        self._emit(ScanProgressEvent(done=0, total=len(all_scan_targets), scanning=True, source="scanner"))
+
+        # ── 4. Активное сканирование ──────────────────────────────────────────
+        findings: list[Finding] = []
+
+        def on_finding(f: Finding) -> None:
+            if not self._stop_requested:
+                findings.append(f)
+                self._emit(FindingDiscovered(finding=f, scan_source="active", source="scanner"))
+
+        def on_progress(done: int, total: int) -> None:
+            self._emit(ScanProgressEvent(done=done, total=total, scanning=True, source="scanner"))
+
+        def on_request(url: str, check_name: str, point_name: str = "") -> None:
+            pt = f" [{point_name}]" if point_name and point_name != "—" else ""
+            self._log(f"[dim]→ {check_name}{pt}[/dim]  {url[:80]}")
+
+        # Пробрасываем on_request_sent из конфига (задаётся TUI)
+        _on_request_sent = getattr(config, "on_request_sent", None)
+
+        from pentool.utils.http_client import HTTPClient
+        from pentool.utils.parser import ParsedRequest
+        http_client = HTTPClient(timeout=20.0, follow_redirects=True, verify_ssl=False)
+        engine = self._scanner._get_engine()
+        engine._http_client = http_client
+        engine._concurrency = config.threads
+        engine._request_delay = config.delay_sec
+        engine._stop_requested = False
+
+        try:
+            # Приоритет: seed_requests (реальные запросы из Proxy/History)
+            # Fallback: URL из краулера → голые GET запросы
+            if config.seed_requests:
+                # Для каждого URL из краулера — создаём ParsedRequest
+                # сохраняя заголовки из первого seed_request (auth контекст)
+                base_headers = dict(config.seed_requests[0].headers or {})
+                crawled_reqs = [
+                    ParsedRequest(method="GET", url=url, headers=base_headers, body="")
+                    for url in all_scan_targets
+                    if not any(sr.url == url for sr in config.seed_requests)
+                ]
+                all_reqs = list(config.seed_requests) + crawled_reqs
+            else:
+                all_reqs = [
+                    ParsedRequest(method="GET", url=url, headers={}, body="")
+                    for url in all_scan_targets
+                ]
+
+            self._log(
+                f"[bold green]SCAN[/bold green] Running active checks on "
+                f"[bold]{len(all_reqs)}[/bold] requests…"
+            )
+
+            active_findings = await engine.run_active_on_requests(
+                seed_requests=all_reqs,
+                check_names=config.check_names,
+                on_finding=on_finding,
+                on_progress=on_progress,
+                on_request=on_request,
+                on_request_sent=_on_request_sent,
+            )
+            all_findings = list({id(f): f for f in findings + active_findings}.values())
+        finally:
+            await http_client.close()
+
+        # ── 5. Сохранение ─────────────────────────────────────────────────────
+        if not self._stop_requested:
+            await engine.save_findings(all_findings)
+
+        self._emit(ScanFinished(
+            total_findings=len(all_findings),
+            stopped_early=self._stop_requested,
+            source="scanner",
+        ))
+        return all_findings
+
+    # ── приватные методы ───────────────────────────────────────────────────────
+
+    async def _crawl_target(
+        self,
+        base_url: str,
+        config: ScanConfig,
+        all_scan_targets: list[str],
+        all_forms: list,
+    ) -> None:
+        """Краулинг одного target, заполнение all_scan_targets и all_forms."""
+        try:
+            parsed = urlparse(base_url)
+            # Убираем стандартные порты из netloc
+            if parsed.port == 443 and parsed.scheme == "https":
+                base_url = urlunparse(parsed._replace(netloc=parsed.hostname))
+            elif parsed.port == 80 and parsed.scheme == "http":
+                base_url = urlunparse(parsed._replace(netloc=parsed.hostname))
+
+            # Передаём auth-заголовки (Cookie, Authorization) из seed_requests
+            auth_headers: dict = {}
+            if config.seed_requests:
+                raw_hdrs = dict(config.seed_requests[0].headers or {})
+                _AUTH_KEYS = {"cookie", "authorization", "x-auth-token", "x-api-key",
+                              "x-access-token", "bearer", "session"}
+                auth_headers = {
+                    k: v for k, v in raw_hdrs.items()
+                    if k.lower() in _AUTH_KEYS
+                }
+            result = await self._spider.crawl(base_url, extra_headers=auth_headers)
+            base_host = urlparse(base_url).netloc
+
+            self._log(
+                f"[cyan]CRAWL[/cyan] {base_url} → "
+                f"{len(result.pages)} pages, "
+                f"{len(result.forms)} forms, "
+                f"{len(result.endpoints)} endpoints, "
+                f"{len(result.js_files)} JS files"
+            )
+
+            # Emit SpiderFinished для подписчиков
+            self._emit(SpiderFinished(
+                base_url=base_url,
+                pages_count=len(result.pages),
+                forms_count=len(result.forms),
+                endpoints_count=len(result.endpoints),
+                source="spider",
+            ))
+
+            # base URL всегда включаем
+            all_scan_targets.append(base_url)
+
+            # Страницы
+            for page in result.pages:
+                phost = urlparse(page).netloc
+                if (phost == base_host or not phost) and page not in all_scan_targets:
+                    all_scan_targets.append(page)
+                    self._emit(UrlCrawled(url=page, base_target=base_url, source="spider"))
+
+            # Формы
+            for form in result.forms:
+                form_url = form.action
+                if not form_url.startswith("http"):
+                    continue
+                fhost = urlparse(form_url).netloc
+                if fhost != base_host and fhost:
+                    continue
+                if form.method.upper() == "GET" and form.fields:
+                    params = {f.name: f.value or "test" for f in form.fields}
+                    query = urlencode(params)
+                    p = urlparse(form_url)
+                    form_target = urlunparse(p._replace(query=query))
+                    if form_target not in all_scan_targets:
+                        all_scan_targets.append(form_target)
+                        self._emit(UrlCrawled(url=form_target, base_target=base_url, source="spider"))
+                elif form.method.upper() == "POST":
+                    all_forms.append(form)
+                    if form_url not in all_scan_targets:
+                        all_scan_targets.append(form_url)
+                        self._emit(UrlCrawled(url=form_url, base_target=base_url, source="spider"))
+
+            # Endpoints
+            for ep in result.endpoints:
+                ep_host = urlparse(ep.url).netloc
+                if (
+                    ep.url.startswith("http")
+                    and (ep_host == base_host or not ep_host)
+                    and ep.url not in all_scan_targets
+                ):
+                    all_scan_targets.append(ep.url)
+                    self._emit(UrlCrawled(url=ep.url, base_target=base_url, source="spider"))
+
+        except Exception as exc:
+            logger.warning("ScanService._crawl_target error for %s: %s", base_url, exc)
+            self._log(f"[yellow]CRAWL warn:[/yellow] {exc}")
+            if base_url not in all_scan_targets:
+                all_scan_targets.append(base_url)
+
+    def _emit(self, event) -> None:
+        """Emit события: через emit_threadsafe если есть tui_loop, иначе emit."""
+        try:
+            if self._tui_loop and not self._tui_loop.is_closed():
+                self._bus.emit_threadsafe(event, self._tui_loop)
+            else:
+                self._bus.emit(event)
+        except Exception as exc:
+            logger.debug("ScanService._emit error: %s", exc)
+
+    def _log(self, msg: str) -> None:
+        if self._on_log:
+            try:
+                self._on_log(msg)
+            except Exception:
+                pass

@@ -1,0 +1,37 @@
+LoadFromProxyDialog {
+    align: center middle;
+}
+LoadFromProxyDialog #dialog {
+    width: 90;
+    height: 34;
+    border: double $primary;
+    background: $surface;
+    padding: 1 2;
+    layout: vertical;
+}
+LoadFromProxyDialog #title {
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+    height: 1;
+}
+LoadFromProxyDialog #hint {
+    color: $text-muted;
+    height: 1;
+    margin-bottom: 1;
+}
+LoadFromProxyDialog #req-table {
+    height: 1fr;
+    border: solid $primary-darken-2;
+}
+LoadFromProxyDialog #buttons {
+    layout: horizontal;
+    height: 3;
+    align: center middle;
+    margin-top: 1;
+}
+LoadFromProxyDialog Button {
+    margin: 0 1;
+    min-width: 12;
+}

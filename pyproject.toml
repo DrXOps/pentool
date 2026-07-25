@@ -1,0 +1,109 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pentool"
+version = "1.0.0"
+description = "Modern Web Pentesting TUI - Professional security testing tool"
+authors = [
+    {name = "Pentool Team", email = "dev@pentool.dev"}
+]
+readme = "README.md"
+license = {text = "AGPL-3.0"}
+requires-python = ">=3.10"
+keywords = ["pentesting", "security", "burp", "proxy", "scanner", "intruder"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+]
+
+dependencies = [
+    "textual>=0.40.0",
+    "aiohttp>=3.9.0",
+    "aiosqlite>=0.19.0",
+    "beautifulsoup4>=4.12.0",
+    "click>=8.1.0",
+    "cryptography>=41.0.0",
+    "pyyaml>=6.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/pentool/pentool"
+Documentation = "https://pentool.dev/docs"
+Repository = "https://github.com/pentool/pentool"
+Issues = "https://github.com/pentool/pentool/issues"
+Changelog = "https://github.com/pentool/pentool/blob/main/CHANGELOG.md"
+
+[project.scripts]
+pentool = "pentool.cli.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pentool*"]
+exclude = ["tests*", "docs*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra -q --strict-markers"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["pentool"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true

@@ -1,0 +1,93 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e . --break-system-packages 2>/dev/null || pip install -e .
+          pip install pytest pytest-asyncio pytest-mock pytest-textual-snapshot coverage
+
+      - name: Check layer violations
+        run: python tools/check_layers.py
+
+      - name: Lint (flake8)
+        run: |
+          pip install flake8
+          flake8 pentool/ tests/ --max-line-length=120 --extend-ignore=E203,W503
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v --tb=short
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+
+      - name: Run snapshot tests
+        run: |
+          pytest tests/snapshot/ -v --tb=short
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        continue-on-error: true  # snapshot тесты могут требовать обновления
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v --tb=short
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+
+      - name: Coverage report
+        run: |
+          coverage run -m pytest tests/unit/ tests/integration/ -q
+          coverage report --fail-under=70
+          coverage xml
+
+      - name: Upload snapshot diffs (on failure)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: snapshot-diffs
+          path: |
+            tests/snapshot/**/*-diff.png
+            tests/snapshot/**/*.svg
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install lint tools
+        run: pip install flake8 mypy
+
+      - name: flake8
+        run: flake8 pentool/ --max-line-length=120 --extend-ignore=E203,W503
+
+      - name: mypy (non-blocking for now)
+        run: mypy pentool/ --ignore-missing-imports --no-strict-optional
+        continue-on-error: true

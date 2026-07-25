@@ -1,0 +1,156 @@
+name: Security Headers
+type: headers
+description: "Security headers for passive scanning — required headers, expected values, and missing header detection"
+detection: "passive — check response headers for presence/absence/value"
+
+# Заголовки, которые ДОЛЖНЫ присутствовать (обязательные)
+required_headers:
+  - name: "Strict-Transport-Security"
+    description: "HTTP Strict Transport Security (HSTS) — принудительный HTTPS"
+    expected_pattern: "max-age=\\d+"
+    recommended_value: "max-age=31536000; includeSubDomains; preload"
+    severity: "high"
+
+  - name: "X-Content-Type-Options"
+    description: "Запрет MIME-сниффинга браузером"
+    expected_value: "nosniff"
+    severity: "medium"
+
+  - name: "X-Frame-Options"
+    description: "Защита от clickjacking"
+    expected_values:
+      - "DENY"
+      - "SAMEORIGIN"
+    severity: "medium"
+
+  - name: "Content-Security-Policy"
+    description: "Политика безопасности контента (CSP)"
+    expected_pattern: "default-src|script-src|object-src"
+    severity: "high"
+
+  - name: "Referrer-Policy"
+    description: "Управление передачей Referer"
+    expected_values:
+      - "no-referrer"
+      - "no-referrer-when-downgrade"
+      - "strict-origin"
+      - "strict-origin-when-cross-origin"
+    severity: "low"
+
+  - name: "Permissions-Policy"
+    description: "Ограничение доступа к браузерным API (бывший Feature-Policy)"
+    expected_pattern: "geolocation|camera|microphone"
+    severity: "low"
+
+  - name: "X-XSS-Protection"
+    description: "Встроенный XSS-фильтр браузера (устаревший, но полезный для старых браузеров)"
+    expected_value: "1; mode=block"
+    severity: "low"
+
+  - name: "Cache-Control"
+    description: "Управление кешированием чувствительных страниц"
+    expected_pattern: "no-store|no-cache|private"
+    severity: "low"
+
+  - name: "Cross-Origin-Embedder-Policy"
+    description: "Изоляция cross-origin ресурсов"
+    expected_value: "require-corp"
+    severity: "low"
+
+  - name: "Cross-Origin-Opener-Policy"
+    description: "Изоляция window.opener"
+    expected_values:
+      - "same-origin"
+      - "same-origin-allow-popups"
+    severity: "low"
+
+  - name: "Cross-Origin-Resource-Policy"
+    description: "Ограничение cross-origin чтения ресурсов"
+    expected_values:
+      - "same-site"
+      - "same-origin"
+      - "cross-origin"
+    severity: "low"
+
+# Заголовки, которые НЕ должны присутствовать (утечка информации)
+forbidden_headers:
+  - name: "Server"
+    description: "Утечка версии веб-сервера"
+    severity: "info"
+    risk: "information disclosure"
+
+  - name: "X-Powered-By"
+    description: "Утечка технологического стека (PHP, ASP.NET, Express)"
+    severity: "info"
+    risk: "information disclosure"
+
+  - name: "X-AspNet-Version"
+    description: "Утечка версии ASP.NET"
+    severity: "info"
+    risk: "information disclosure"
+
+  - name: "X-AspNetMvc-Version"
+    description: "Утечка версии ASP.NET MVC"
+    severity: "info"
+    risk: "information disclosure"
+
+  - name: "X-Generator"
+    description: "Утечка CMS или фреймворка"
+    severity: "info"
+    risk: "information disclosure"
+
+  - name: "X-Runtime"
+    description: "Утечка времени обработки и стека (Rails)"
+    severity: "info"
+    risk: "information disclosure"
+
+  - name: "X-Version"
+    description: "Утечка версии приложения"
+    severity: "info"
+    risk: "information disclosure"
+
+# Небезопасные значения для существующих заголовков
+insecure_values:
+  - header: "Access-Control-Allow-Origin"
+    dangerous_values:
+      - "*"
+    description: "Wildcard CORS разрешает чтение ответов с любого домена"
+    severity: "high"
+
+  - header: "Access-Control-Allow-Credentials"
+    dangerous_condition: "true + Access-Control-Allow-Origin: *"
+    description: "Credentials + wildcard origin — особо опасная комбинация"
+    severity: "critical"
+
+  - header: "Content-Security-Policy"
+    dangerous_patterns:
+      - "unsafe-inline"
+      - "unsafe-eval"
+      - "* "
+    description: "Небезопасные CSP директивы нивелируют защиту"
+    severity: "medium"
+
+  - header: "Set-Cookie"
+    check_flags:
+      - flag: "HttpOnly"
+        description: "Отсутствие HttpOnly позволяет кражу куки через XSS"
+        severity: "high"
+      - flag: "Secure"
+        description: "Отсутствие Secure передаёт куки по HTTP"
+        severity: "high"
+      - flag: "SameSite"
+        description: "Отсутствие SameSite уязвимо к CSRF"
+        severity: "medium"
+        expected_values:
+          - "SameSite=Strict"
+          - "SameSite=Lax"
+
+# Подписи для обнаружения (используются в passive scanner)
+signatures:
+  - "X-Powered-By"
+  - "X-AspNet-Version"
+  - "X-Runtime"
+  - "Server:"
+
+# Payloads-заглушка (не применяются, только для совместимости со структурой)
+payloads: []

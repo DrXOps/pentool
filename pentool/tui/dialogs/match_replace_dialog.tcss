@@ -1,0 +1,104 @@
+MatchReplaceDialog {
+    align: center middle;
+}
+MatchReplaceDialog #dialog {
+    width: 80;
+    height: auto;
+    max-height: 34;
+    border: double $primary;
+    background: $surface;
+    padding: 0;
+    layout: vertical;
+}
+MatchReplaceDialog #title-bar {
+    height: 1;
+    layout: horizontal;
+    background: $primary-darken-2;
+    padding: 0 1;
+}
+MatchReplaceDialog #title {
+    width: 1fr;
+    text-style: bold;
+    color: $text;
+    height: 1;
+}
+MatchReplaceDialog #btn-close-title {
+    width: 3;
+    height: 1;
+    min-width: 3;
+    border: none;
+    background: $primary-darken-2;
+    color: $text;
+    padding: 0;
+}
+MatchReplaceDialog #btn-close-title:hover {
+    background: $error;
+}
+MatchReplaceDialog #rules-table {
+    height: 8;
+    border: solid $primary-darken-2;
+    margin: 0 1;
+}
+MatchReplaceDialog #table-buttons {
+    layout: horizontal;
+    height: 1;
+    margin: 0 1 1 1;
+}
+MatchReplaceDialog #table-buttons ToolbarButton {
+    margin: 0 1 0 0;
+    padding: 0 1;
+}
+MatchReplaceDialog #form {
+    height: auto;
+    border: solid $primary-darken-1;
+    padding: 0 1 1 1;
+    margin: 0 1;
+    layout: vertical;
+}
+MatchReplaceDialog #form-title {
+    color: $text-muted;
+    height: 1;
+    padding: 0;
+}
+MatchReplaceDialog .form-row {
+    layout: horizontal;
+    height: 1;
+    margin-top: 1;
+    align: left middle;
+}
+MatchReplaceDialog .form-label {
+    width: 10;
+    color: $text-muted;
+    text-align: left;
+    height: 1;
+}
+MatchReplaceDialog Input {
+    width: 1fr;
+    background: $surface-lighten-1;
+}
+MatchReplaceDialog .sel-btn {
+    width: 1fr;
+    height: 1;
+    background: $surface-darken-1;
+    padding: 0 1;
+}
+MatchReplaceDialog .form-row-checks {
+    height: 1;
+    align: left middle;
+}
+MatchReplaceDialog .form-row-checks Checkbox {
+    height: 1;
+    margin: 0 2 0 0;
+}
+MatchReplaceDialog #bottom-buttons {
+    layout: horizontal;
+    height: 1;
+    align: right middle;
+    margin: 1 1 1 1;
+}
+MatchReplaceDialog #bottom-buttons ToolbarButton {
+    margin: 0 1;
+    padding: 0 2;
+}
+/* toolbar-sep fix */
+.toolbar-sep { width: auto; }

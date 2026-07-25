@@ -1,0 +1,27 @@
+_MenuItem {
+    padding: 0 1;
+    width: 100%;
+}
+_MenuItem:hover {
+    background: $primary-darken-1;
+    color: $text;
+}
+_MenuItem.active {
+    background: $primary;
+    color: $text;
+    text-style: bold;
+}
+
+SideMenu {
+    width: 20;
+    height: 100%;
+    background: $panel;
+    border-right: solid $primary-darken-2;
+}
+SideMenu .menu-header {
+    background: $primary-darken-3;
+    color: $text-muted;
+    text-align: center;
+    padding: 1 0;
+    text-style: bold;
+}

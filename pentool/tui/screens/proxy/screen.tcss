@@ -1,0 +1,159 @@
+ProxyScreen {
+    layout: vertical;
+}
+ProxyScreen #toolbar {
+    height: 2;
+    background: $panel;
+    padding: 0 1;
+    align: left middle;
+    layout: horizontal;
+    border-bottom: solid $primary-darken-2;
+}
+ProxyScreen #proxy-subtabs {
+    height: 1fr;
+}
+ProxyScreen #proxy-subtabs > ContentTabs {
+    background: $panel;
+}
+ProxyScreen #proxy-subtabs > ContentTabs Tabs {
+    background: $panel;
+}
+ProxyScreen #body {
+    height: 1fr;
+    layout: horizontal;
+}
+ProxyScreen #main-panel {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+ProxyScreen #table-area {
+    height: 1fr;
+    min-height: 5;
+}
+ProxyScreen #filter-bar {
+    height: 1;
+}
+ProxyScreen #request-list {
+    height: 1fr;
+}
+ProxyScreen #req-panel {
+    width: 50%;
+    height: 100%;
+    layout: vertical;
+}
+ProxyScreen #resp-panel {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+ProxyScreen .panel-title {
+    height: 1;
+    background: $primary-darken-3;
+    color: $text-muted;
+    padding: 0 1;
+}
+ProxyScreen #req-panel HttpView,
+ProxyScreen #ws-req-panel HttpView,
+ProxyScreen #resp-panel HttpView,
+ProxyScreen #ws-resp-panel HttpView,
+ProxyScreen #intercept-sent-panel HttpView,
+ProxyScreen #intercept-resp-panel HttpView {
+    height: 1fr;
+}
+ProxyScreen InspectorPanel {
+    width: 25%;
+    height: 100%;
+    display: none;
+}
+ProxyScreen InspectorPanel.-visible {
+    display: block;
+}
+ProxyScreen #intercept-editor {
+    height: 1fr;
+}
+ProxyScreen #intercept-req-area {
+    height: 2fr;
+    min-height: 5;
+}
+ProxyScreen #intercept-bottom-area {
+    height: 1fr;
+    min-height: 5;
+    layout: horizontal;
+}
+ProxyScreen #intercept-sent-panel {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+ProxyScreen #intercept-resp-panel {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+ProxyScreen #intercept-sent-req {
+    height: 1fr;
+    border: none;
+}
+ProxyScreen #intercept-resp-viewer {
+    height: 1fr;
+    border: none;
+}
+ProxyScreen #intercept-toolbar {
+    height: 2;
+    background: $panel;
+    padding: 0 1;
+    align: left middle;
+    layout: horizontal;
+    border-bottom: solid $primary-darken-2;
+}
+ProxyScreen #intercept-hint {
+    color: $text-muted;
+    padding: 0 1;
+    height: 1;
+}
+ProxyScreen #intercept-headers-preview {
+    height: auto;
+    max-height: 10;
+    background: $panel;
+    padding: 0 1;
+    border-bottom: dashed $primary-darken-3;
+    display: none;
+}
+ProxyScreen .stub-label {
+    padding: 1 2;
+    color: $text-muted;
+}
+ProxyScreen #ws-body {
+    height: 1fr;
+    layout: horizontal;
+}
+ProxyScreen #ws-main-panel {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+ProxyScreen #ws-table-area {
+    height: 1fr;
+    min-height: 5;
+}
+ProxyScreen #ws-request-list {
+    height: 1fr;
+}
+ProxyScreen #ws-detail-area {
+    height: 1fr;
+    min-height: 5;
+    layout: horizontal;
+}
+ProxyScreen #ws-req-panel {
+    width: 50%;
+    height: 100%;
+    layout: vertical;
+}
+ProxyScreen #ws-resp-panel {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+.toolbar-sep { width: auto; }

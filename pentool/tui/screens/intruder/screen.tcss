@@ -1,0 +1,277 @@
+IntruderScreen {
+    layout: vertical;
+}
+IntruderScreen #toolbar {
+    height: 2;
+    background: $panel;
+    padding: 0 1;
+    align: left middle;
+    layout: horizontal;
+    border-bottom: solid $primary-darken-2;
+}
+IntruderScreen #top-area {
+    height: 1fr;
+    layout: horizontal;
+    min-height: 8;
+}
+IntruderScreen #positions-panel {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+IntruderScreen #payloads-panel {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+IntruderScreen .section-title {
+    height: 1;
+    background: $primary-darken-3;
+    color: $text-muted;
+    padding: 0 1;
+}
+IntruderScreen #positions-toolbar {
+    height: 1;
+    background: $panel;
+    padding: 0 1;
+    align: left middle;
+    layout: horizontal;
+    overflow: hidden hidden;
+}
+IntruderScreen #positions-toolbar Label {
+    width: auto;
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+IntruderScreen .pos-label {
+    width: auto;
+    height: 1;
+    padding: 0 1 0 0;
+    color: $text-muted;
+}
+IntruderScreen #attack-type-btn {
+    width: 20;
+    height: 1;
+    padding: 0 1;
+    color: $text;
+    background: $surface;
+}
+IntruderScreen #attack-type-btn:hover {
+    background: $primary-darken-1;
+}
+IntruderScreen #attack-type-desc {
+    width: 1fr;
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+IntruderScreen #template-editor {
+    height: 1fr;
+}
+IntruderScreen #template-editor .text-area--selection {
+    background: $primary 70%;
+}
+IntruderScreen #payloads-toolbar {
+    height: 1;
+    background: $panel;
+    padding: 0 1;
+    layout: horizontal;
+    align: left middle;
+}
+IntruderScreen #payloads-toolbar Label {
+    width: auto;
+    padding: 0 1;
+    color: $text-muted;
+}
+IntruderScreen #payload-set-btn {
+    width: 8;
+    height: 1;
+    padding: 0 1;
+    color: $text;
+    background: $surface;
+}
+IntruderScreen #payload-set-btn:hover {
+    background: $primary-darken-1;
+}
+IntruderScreen #payload-list {
+    height: 1fr;
+    border: solid $primary-darken-2;
+}
+IntruderScreen #payload-buttons {
+    height: 1;
+    layout: horizontal;
+    background: $panel;
+    padding: 0 1;
+    align: left middle;
+}
+IntruderScreen #payload-buttons ToolbarButton {
+    margin: 0 1 0 0;
+}
+IntruderScreen #payload-buttons .pro-locked {
+    color: $text-muted;
+    text-style: dim;
+}
+IntruderScreen #processing-bar {
+    height: 1;
+    layout: horizontal;
+    background: $panel;
+    padding: 0 1;
+    align: left middle;
+}
+IntruderScreen #processing-bar Label {
+    width: auto;
+    color: $text-muted;
+    padding: 0 0 0 1;
+}
+IntruderScreen #results-area {
+    height: 8;
+    min-height: 5;
+    layout: vertical;
+}
+IntruderScreen #results-toolbar {
+    height: 0;
+    display: none;
+}
+IntruderScreen #progress-row {
+    height: 1;
+    background: $panel;
+    padding: 0 1;
+    layout: horizontal;
+    align: left middle;
+}
+IntruderScreen #progress-label {
+    width: auto;
+    color: $text-muted;
+    padding: 0 1;
+}
+IntruderScreen #results-table {
+    height: 1fr;
+}
+IntruderScreen #results-filter-bar {
+    height: 2;
+    layout: horizontal;
+    background: $panel;
+    padding: 0 1;
+    align: left middle;
+}
+IntruderScreen #results-filter-bar Label {
+    width: auto;
+    color: $text-muted;
+    padding: 0 1;
+}
+IntruderScreen #results-filter-bar Input {
+    width: 8;
+    background: $surface;
+}
+IntruderScreen #results-filter-bar Button {
+    width: auto;
+    min-width: 8;
+    height: 1;
+    padding: 0 1;
+    border: none;
+}
+
+IntruderScreen #grep-bar {
+    height: 1;
+    layout: horizontal;
+    background: $panel;
+    padding: 0 1;
+    align: left middle;
+}
+IntruderScreen #grep-bar Label {
+    width: auto;
+    color: $text-muted;
+    padding: 0 1;
+    height: 1;
+}
+IntruderScreen #grep-bar Input {
+    width: 24;
+    background: $surface;
+}
+IntruderScreen #grep-bar Button {
+    width: auto;
+    min-width: 8;
+    height: 1;
+    padding: 0 1;
+    border: none;
+}
+
+_InputDialog {
+    align: center middle;
+}
+_InputDialog #dialog {
+    width: 50;
+    height: auto;
+    border: solid $primary;
+    background: $surface;
+    padding: 1 2;
+}
+_InputDialog #prompt-label {
+    height: 1;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+_InputDialog Input {
+    width: 100%;
+    margin-bottom: 1;
+}
+_InputDialog #buttons {
+    height: 1;
+    layout: horizontal;
+    align: right middle;
+    margin-top: 1;
+}
+_InputDialog #buttons ToolbarButton {
+    margin: 0 0 0 1;
+}
+
+_GenerateDialog {
+    align: center middle;
+}
+_GenerateDialog #dialog {
+    width: 40;
+    height: auto;
+    border: solid $primary;
+    background: $surface;
+    padding: 1 2;
+}
+_GenerateDialog .row {
+    height: 1;
+    layout: horizontal;
+    align: left middle;
+    margin-bottom: 1;
+}
+_GenerateDialog .row Label {
+    width: 8;
+    color: $text-muted;
+}
+_GenerateDialog Input {
+    width: 12;
+    background: $surface-darken-1;
+}
+_GenerateDialog #buttons {
+    height: 1;
+    layout: horizontal;
+    align: right middle;
+    margin-top: 1;
+}
+_GenerateDialog #buttons ToolbarButton {
+    margin: 0 0 0 1;
+}
+/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+.toolbar-sep { width: auto; }
+
+/* Threads / Delay inputs в тулбаре */
+IntruderScreen #toolbar Label.toolbar-label {
+    width: auto;
+    padding: 0 1;
+    color: $text-muted;
+}
+IntruderScreen #toolbar Input {
+    width: 6;
+    height: 1;
+    border: solid $primary-darken-2;
+    padding: 0 1;
+    background: $surface;
+}

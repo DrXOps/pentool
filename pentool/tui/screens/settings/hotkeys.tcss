@@ -1,0 +1,73 @@
+HotkeySettingsScreen {
+    layout: vertical;
+    padding: 1 2;
+}
+HotkeySettingsScreen .section-title {
+    height: 1;
+    color: $primary;
+    margin-bottom: 1;
+}
+HotkeySettingsScreen DataTable {
+    height: 1fr;
+}
+HotkeySettingsScreen #hotkey-edit-row {
+    height: 3;
+    display: none;
+    padding: 0 0 1 0;
+    align: left middle;
+}
+HotkeySettingsScreen #hotkey-edit-row.-visible {
+    display: block;
+}
+HotkeySettingsScreen #hk-edit-label {
+    width: auto;
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+HotkeySettingsScreen #hk-edit-input {
+    width: 20;
+    height: 1;
+    border: none;
+    background: $panel;
+}
+HotkeySettingsScreen #hk-edit-ok {
+    height: 1;
+    width: auto;
+    min-width: 6;
+    border: none;
+    background: $primary-darken-1;
+    padding: 0 1;
+    margin-left: 1;
+}
+HotkeySettingsScreen #hk-edit-cancel {
+    height: 1;
+    width: auto;
+    min-width: 8;
+    border: none;
+    background: $panel;
+    padding: 0 1;
+    margin-left: 1;
+}
+HotkeySettingsScreen #hotkey-buttons {
+    height: 1;
+    margin-top: 1;
+    align: left middle;
+}
+HotkeySettingsScreen #hk-reset {
+    height: 1;
+    width: auto;
+    min-width: 16;
+    border: none;
+    background: $panel;
+    padding: 0 1;
+}
+HotkeySettingsScreen #hk-save {
+    height: 1;
+    width: auto;
+    min-width: 10;
+    border: none;
+    background: $primary-darken-1;
+    padding: 0 1;
+    margin-left: 1;
+}

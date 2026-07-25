@@ -1,0 +1,41 @@
+SearchBar {
+    display: none;
+    dock: bottom;
+    height: 1;
+    background: $surface;
+    border-top: solid $primary;
+    layout: horizontal;
+    padding: 0 1;
+}
+SearchBar Label {
+    width: auto;
+    color: $text-muted;
+    height: 1;
+    padding: 0 1;
+}
+SearchBar Input {
+    width: 20;
+    background: $panel;
+}
+SearchBar Button {
+    width: 3;
+    height: 1;
+    min-width: 3;
+    border: none;
+    background: $panel;
+    padding: 0;
+}
+SearchBar #search-regex-toggle {
+    width: auto;
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+SearchBar #search-regex-toggle.-active {
+    color: $primary;
+}
+SearchBar #search-count {
+    width: auto;
+    color: $text-muted;
+    padding: 0 1;
+}

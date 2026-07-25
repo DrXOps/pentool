@@ -1,0 +1,35 @@
+ToolbarButton {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    color: $text;
+    background: $panel;
+    pointer: pointer;  /* кнопки — указывающая рука */
+}
+ToolbarButton:hover {
+    background: $primary-darken-1;
+    color: $text;
+}
+ToolbarButton.active {
+    color: $success;
+}
+ToolbarButton.inactive {
+    color: $error;
+}
+ToolbarButton.disabled {
+    color: $text-disabled;
+    pointer: not-allowed;
+}
+ToolbarButton.warn {
+    color: $warning;
+}
+ToolbarButton.sending {
+    color: $warning;
+    pointer: progress;
+}
+
+/* Общий разделитель тулбара — используется во всех экранах */
+.toolbar-sep {
+    width: auto;
+    color: $primary-darken-2;
+}

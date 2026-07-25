@@ -1,0 +1,36 @@
+CertInstallDialog {
+    align: center middle;
+}
+CertInstallDialog #dialog {
+    width: 72;
+    height: auto;
+    border: double $warning;
+    background: $surface;
+    padding: 1 2;
+    layout: vertical;
+}
+CertInstallDialog #title {
+    text-align: center;
+    text-style: bold;
+    color: $warning;
+    margin-bottom: 1;
+}
+CertInstallDialog .section-title {
+    text-style: bold;
+    color: $primary;
+    margin-top: 1;
+}
+CertInstallDialog .code {
+    background: $panel;
+    color: $success;
+    padding: 0 1;
+    margin: 0 0 0 2;
+}
+CertInstallDialog .note {
+    color: $text-muted;
+    margin-top: 1;
+}
+CertInstallDialog #btn-close {
+    margin-top: 1;
+    width: 100%;
+}

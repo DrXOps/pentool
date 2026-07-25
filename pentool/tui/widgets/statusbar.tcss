@@ -1,0 +1,35 @@
+StatusBar {
+    height: 1;
+    dock: bottom;
+    background: $primary-darken-3;
+    layout: horizontal;
+}
+StatusBar .status-proxy {
+    width: 20;
+    padding: 0 1;
+    color: $text;
+}
+StatusBar .status-proxy.running {
+    color: $success;
+}
+StatusBar .status-proxy.stopped {
+    color: $error;
+}
+StatusBar .status-project {
+    width: 1fr;
+    padding: 0 1;
+    color: $text-muted;
+    overflow: hidden hidden;
+}
+StatusBar .status-saved {
+    width: 12;
+    padding: 0 1;
+    text-align: center;
+    color: $text-muted;
+}
+StatusBar .status-time {
+    width: 10;
+    padding: 0 1;
+    text-align: right;
+    color: $text-muted;
+}

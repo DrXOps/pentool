@@ -1,0 +1,138 @@
+SequencerScreen {
+    layout: vertical;
+    width: 1fr;
+    height: 1fr;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+SequencerScreen #seq-toolbar {
+    height: 2;
+    width: 100%;
+    background: $panel;
+    layout: horizontal;
+    padding: 0 1;
+    align: left middle;
+    border-bottom: solid $primary-darken-2;
+    overflow: hidden hidden;
+}
+SequencerScreen .seq-sep {
+    width: auto;
+    color: $primary-darken-2;
+}
+
+/* ── Config row ──────────────────────────────────────────────────────────── */
+SequencerScreen #seq-config-row {
+    height: 2;
+    layout: horizontal;
+    align: left middle;
+    padding: 0 1;
+    background: $panel;
+    border-bottom: solid $primary-darken-3;
+}
+SequencerScreen .seq-cfg-label {
+    width: auto;
+    color: $text-muted;
+    padding: 0 1 0 0;
+}
+SequencerScreen #btn-seq-source {
+    width: auto;
+    padding: 0 1;
+    background: $surface;
+}
+SequencerScreen #seq-param-input {
+    width: 20;
+    background: $surface;
+    margin: 0 2 0 0;
+}
+SequencerScreen #seq-param-input:focus {
+    background: $surface-lighten-1;
+}
+SequencerScreen #seq-counter {
+    width: auto;
+    color: $primary;
+    padding: 0 2;
+}
+
+/* ── Summary bar ─────────────────────────────────────────────────────────── */
+SequencerScreen #seq-summary-bar {
+    height: 1;
+    background: $panel;
+    padding: 0 1;
+    border-bottom: solid $primary-darken-3;
+}
+SequencerScreen #seq-summary {
+    width: 1fr;
+    color: $text-muted;
+}
+
+/* ── Main area ───────────────────────────────────────────────────────────── */
+SequencerScreen #seq-main-area {
+    height: 1fr;
+    layout: horizontal;
+}
+
+/* Левая колонка: ввод токенов вручную */
+SequencerScreen #seq-input-col {
+    width: 1fr;
+    height: 1fr;
+    layout: vertical;
+}
+SequencerScreen .seq-col-label {
+    height: 1;
+    color: $text-muted;
+    background: $primary-darken-3;
+    padding: 0 1;
+    text-style: bold;
+}
+SequencerScreen #seq-token-area {
+    height: 1fr;
+}
+
+/* Правая колонка: анализ */
+SequencerScreen #seq-analysis-col {
+    width: 1fr;
+    height: 1fr;
+    layout: vertical;
+}
+SequencerScreen #seq-analysis-log {
+    height: 1fr;
+    padding: 0 1;
+}
+
+/* ── Entropy gauge ───────────────────────────────────────────────────────── */
+SequencerScreen #seq-gauge-area {
+    height: 5;
+    layout: vertical;
+    padding: 0 1;
+    background: $panel;
+}
+SequencerScreen #seq-gauge-label {
+    height: 1;
+    color: $text-muted;
+    background: $panel;
+    padding: 0 0;
+}
+SequencerScreen #seq-gauge {
+    width: 1fr;
+    height: 1;
+    color: $success;
+}
+SequencerScreen #seq-assessment {
+    height: 1;
+    color: $primary;
+    text-style: bold;
+}
+SequencerScreen #seq-bits-label {
+    height: 1;
+    color: $text-muted;
+}
+/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+.toolbar-sep { width: auto; }
+/* status-bar */
+#status-bar {
+    height: 1;
+    color: $text-muted;
+    background: $panel;
+    padding: 0 1;
+    text-style: dim;
+}

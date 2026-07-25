@@ -1,0 +1,68 @@
+RepeaterScreen {
+    layout: vertical;
+}
+RepeaterScreen #top-bar {
+    height: 2;
+    background: $panel;
+    padding: 0 1;
+    align: left middle;
+    layout: horizontal;
+    border-bottom: solid $primary-darken-2;
+}
+RepeaterScreen #tabs-area {
+    height: 1fr;
+    layout: vertical;
+}
+RepeaterScreen TabbedContent {
+    height: 1fr;
+}
+RepeaterScreen TabbedContent ContentSwitcher {
+    height: 1fr;
+}
+RepeaterScreen TabbedContent ContentTabs {
+    background: $panel;
+}
+RepeaterScreen TabbedContent ContentTabs Tabs {
+    background: $panel;
+}
+RepeaterScreen .tab-body {
+    layout: vertical;
+    height: 1fr;
+}
+RepeaterScreen .req-resp-row {
+    layout: horizontal;
+    height: 1fr;
+    min-height: 5;
+}
+RepeaterScreen .log-area {
+    height: 1;
+    background: $surface;
+    padding: 0 1;
+    color: $text-muted;
+    overflow-y: auto;
+}
+RepeaterScreen .req-panel {
+    width: 50%;
+    height: 100%;
+    layout: vertical;
+}
+RepeaterScreen .resp-panel {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+RepeaterScreen RequestEditor {
+    height: 1fr;
+}
+RepeaterScreen ResponseViewer {
+    height: 1fr;
+}
+RepeaterScreen #rename-input {
+    display: none;
+    dock: top;
+    width: 20;
+    background: $panel;
+    layer: overlay;
+}
+/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+.toolbar-sep { width: auto; }

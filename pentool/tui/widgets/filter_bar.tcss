@@ -1,0 +1,81 @@
+MethodCycler {
+    height: 1;
+    width: 8;
+    background: $panel;
+    color: $text;
+    padding: 0 1;
+    pointer: pointer;
+}
+MethodCycler:hover {
+    background: $primary-darken-1;
+}
+
+ScopeToggle {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    background: $panel;
+    color: $text-muted;
+    pointer: pointer;
+}
+ScopeToggle:hover {
+    background: $primary-darken-1;
+}
+ScopeToggle.-active {
+    color: $success;
+    background: $success-darken-3;
+}
+ScopeToggle.disabled {
+    color: $text-disabled;
+    background: $panel;
+    opacity: 0.5;
+}
+
+FilterBar {
+    height: 1;
+    layout: horizontal;
+    background: $surface;
+    padding: 0 1;
+}
+FilterBar .fb-label {
+    width: auto;
+    height: 1;
+    color: $text-muted;
+    padding: 0 1 0 0;
+}
+FilterBar Input {
+    height: 1;
+    border-left: solid $primary-darken-1;
+    border-right: solid $primary-darken-1;
+    background: $surface-lighten-1;
+    padding: 0 1;
+    color: $text;
+}
+FilterBar Input:focus {
+    border-left: solid $primary;
+    border-right: solid $primary;
+    background: $surface-lighten-2;
+}
+FilterBar #fb-host   { width: 16; }
+FilterBar #fb-status { width: 7; }
+FilterBar #fb-search { width: 20; }
+FilterBar #fb-apply {
+    height: 1;
+    width: auto;
+    min-width: 7;
+    background: $primary-darken-1;
+    border: none;
+    padding: 0 1;
+}
+FilterBar #fb-reset {
+    height: 1;
+    width: auto;
+    min-width: 7;
+    background: $panel;
+    border: none;
+    padding: 0 1;
+}
+FilterBar .fb-sep {
+    width: 1;
+    color: $primary-darken-2;
+}

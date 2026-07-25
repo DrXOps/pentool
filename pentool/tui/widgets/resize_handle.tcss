@@ -1,0 +1,29 @@
+ResizeHandle {
+    width: 1;
+    height: 100%;
+    background: $primary-darken-2;
+    pointer: ew-resize;  /* горизонтальный разделитель — двусторонняя стрелка по горизонтали */
+}
+ResizeHandle:hover {
+    background: $primary;
+}
+ResizeHandle.-dragging {
+    background: $accent;
+    pointer: grabbing;
+}
+ResizeHandle.-vertical {
+    width: 100%;
+    height: 1;
+    background: transparent;
+    color: $primary-darken-1;
+    pointer: ns-resize;  /* вертикальный разделитель — двусторонняя стрелка по вертикали */
+}
+ResizeHandle.-vertical:hover {
+    background: transparent;
+    color: $primary;
+}
+ResizeHandle.-vertical.-dragging {
+    background: transparent;
+    color: $accent;
+    pointer: grabbing;
+}
