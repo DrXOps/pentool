@@ -48,6 +48,9 @@ class Config:
     scan_marker_enabled: bool = False
     scan_marker_name: str = "X-Scanner"
     scan_marker_value: str = "pentool/1.0"
+    # ── Crash Reporting / Update Checker ────────────────────────────────────
+    send_crash_reports: bool = True   # отправлять анонимные отчёты об ошибках
+    check_updates: bool = True        # проверять обновления при запуске
 
     # Список наблюдателей — не сериализуется (R-16)
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)
@@ -114,6 +117,8 @@ class Config:
             "scan_marker_enabled": self.scan_marker_enabled,
             "scan_marker_name": self.scan_marker_name,
             "scan_marker_value": self.scan_marker_value,
+            "send_crash_reports": self.send_crash_reports,
+            "check_updates": self.check_updates,
         }
 
     def add_recent_project(self, path: str) -> None:

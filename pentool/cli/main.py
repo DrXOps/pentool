@@ -96,3 +96,40 @@ def decode_cmd(operation: str, text: str) -> None:
     except ValueError as exc:
         click.echo(f"Error: {exc}", err=True)
         raise SystemExit(1) from exc
+
+
+@cli.command("update")
+@click.option("--check", "check_only", is_flag=True, default=False,
+              help="Только проверить наличие обновления без установки.")
+def update_cmd(check_only: bool) -> None:
+    """Проверить и установить обновление Pentool."""
+    from pentool.core.updater import check_update_sync, do_pip_upgrade
+
+    click.echo("Checking for updates...")
+    info = check_update_sync()
+
+    if info.error:
+        click.echo(f"Could not check for updates: {info.error}", err=True)
+        raise SystemExit(1)
+
+    if not info.has_update:
+        click.echo(f"Already up to date (version {info.latest_version}).")
+        return
+
+    click.echo(f"New version available: {info.latest_version}")
+    click.echo(f"Release notes: {info.url}")
+
+    if check_only:
+        return
+
+    if click.confirm(f"Install {info.latest_version} now?", default=True):
+        click.echo("Upgrading via pip...")
+        if do_pip_upgrade():
+            click.echo("Upgrade successful. Restart Pentool to use the new version.")
+        else:
+            click.echo(
+                "pip upgrade failed. You can update manually:\n"
+                "  pip install --upgrade pentool",
+                err=True,
+            )
+            raise SystemExit(1)
