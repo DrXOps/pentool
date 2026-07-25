@@ -152,8 +152,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     # Для совместимости с тестами (test_stage8_5)
     _COL_LABELS = ["ID", "Mth", "URL", "St", "Size"]
 
-    # ── RequestContextMenuMixin config ────────────────────────────────────────
+    # ── RequestContextMenuMixin config (текстовая панель) ────────────────────
     _cm_show_nmap          = True
+    _cm_show_send_intruder = True
     _cm_show_send_scanner  = True
     _cm_show_send_decoder  = True
     _cm_show_send_comparer = True

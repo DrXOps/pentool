@@ -58,8 +58,10 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
     _rename_tab_prefix: str = "tab-"
     _rename_tabs_widget_id: str = "repeater-tabs"
 
-    # RequestContextMenuMixin config — Repeater: без Send-to модулей (только copy)
-    _cm_show_nmap = False
+    # RequestContextMenuMixin config — Repeater: Send to Intruder + Scanner, без nmap
+    _cm_show_nmap          = False
+    _cm_show_send_intruder = True
+    _cm_show_send_scanner  = True
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
