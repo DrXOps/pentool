@@ -82,6 +82,12 @@ SettingsScreen .license-sep {
     color: $primary-darken-3;
     margin: 1 0;
 }
+SettingsScreen .settings-hint {
+    height: auto;
+    color: $text-muted;
+    margin: 0 0 1 0;
+    text-style: italic;
+}
 SettingsScreen .license-buttons-row {
     height: auto;
     layout: horizontal;

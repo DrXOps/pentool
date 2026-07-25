@@ -175,6 +175,36 @@ class SettingsScreen(Widget):
                         yield Input(value="pentool/1.0", id="set-scan-marker-value", compact=True)
                     yield ToolbarButton("Save", "settings-save-network")
 
+            with TabPane("Privacy", id="tab-privacy"):
+                with Vertical(classes="settings-pane"):
+                    yield Static("Privacy & Updates", classes="section-title")
+                    with Horizontal(classes="row"):
+                        yield Static("Crash Reporting:", classes="row-label")
+                        yield Checkbox(
+                            "Send anonymous crash reports",
+                            id="set-send-crash-reports",
+                            value=True,
+                        )
+                    yield Static(
+                        "Crash reports contain only the error type and stack trace.\n"
+                        "No URLs, IPs, tokens, or personal data are included.",
+                        classes="settings-hint",
+                    )
+                    yield Static("─" * 40, classes="license-sep")
+                    with Horizontal(classes="row"):
+                        yield Static("Auto-update check:", classes="row-label")
+                        yield Checkbox(
+                            "Check for updates at startup",
+                            id="set-check-updates",
+                            value=True,
+                        )
+                    yield Static(
+                        "Checks GitHub releases for a newer version on startup.\n"
+                        "Run `pentool update` to install an available update.",
+                        classes="settings-hint",
+                    )
+                    yield ToolbarButton("Save", "settings-save-privacy")
+
             with TabPane("License", id="tab-license"):
                 with Vertical(classes="settings-pane"):
                     yield Static("License", classes="section-title")
@@ -246,6 +276,13 @@ class SettingsScreen(Widget):
             self.query_one("#set-scan-marker-value", Input).value = getattr(cfg, "scan_marker_value", "pentool/1.0")
         except Exception:
             pass
+        try:
+            from pentool.core.config import get_config
+            cfg = get_config()
+            self.query_one("#set-send-crash-reports", Checkbox).value = getattr(cfg, "send_crash_reports", True)
+            self.query_one("#set-check-updates", Checkbox).value = getattr(cfg, "check_updates", True)
+        except Exception:
+            pass
 
     # ── License UI ─────────────────────────────────────────────────────────────
 
@@ -313,6 +350,10 @@ class SettingsScreen(Widget):
     @on(ToolbarButton.Pressed, "#settings-save-network")
     def on_btn_settings_save_network(self, _: ToolbarButton.Pressed) -> None:
         self._save_network_settings()
+
+    @on(ToolbarButton.Pressed, "#settings-save-privacy")
+    def on_btn_settings_save_privacy(self, _: ToolbarButton.Pressed) -> None:
+        self._save_privacy_settings()
 
     @on(ToolbarButton.Pressed, "#btn-license-activate")
     def on_btn_license_activate(self, _: ToolbarButton.Pressed) -> None:
@@ -498,6 +539,33 @@ class SettingsScreen(Widget):
                 cfg.update(**changes)
             cfg.save()
             self.app.notify("Network settings saved", timeout=2)  # type: ignore[attr-defined]
+        except Exception as e:
+            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
+
+    def _save_privacy_settings(self) -> None:
+        try:
+            from pentool.core.config import get_config
+            cfg = get_config()
+            changes: dict = {}
+
+            try:
+                crash_v = self.query_one("#set-send-crash-reports", Checkbox).value
+                if crash_v != getattr(cfg, "send_crash_reports", True):
+                    changes["send_crash_reports"] = crash_v
+            except Exception:
+                pass
+
+            try:
+                upd_v = self.query_one("#set-check-updates", Checkbox).value
+                if upd_v != getattr(cfg, "check_updates", True):
+                    changes["check_updates"] = upd_v
+            except Exception:
+                pass
+
+            if changes:
+                cfg.update(**changes)
+            cfg.save()
+            self.app.notify("Privacy settings saved", timeout=2)  # type: ignore[attr-defined]
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
