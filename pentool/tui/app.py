@@ -329,6 +329,10 @@ class PentoolApp(App):
         # Автооткрытие последнего проекта при старте
         self.run_worker(self._auto_open_last_project(), exclusive=False, thread=False)
 
+        # Проверка обновлений в фоне (если включено в настройках)
+        if getattr(self._cfg, "check_updates", True):
+            self.run_worker(self._check_for_updates(), exclusive=False, thread=False)
+
     async def _auto_open_last_project(self) -> None:
         """Открыть последний проект из recent_projects при старте."""
         await asyncio.sleep(0.2)  # дать Textual отрисовать UI
@@ -341,6 +345,23 @@ class PentoolApp(App):
             return
         logger.info("APP: auto-opening last project: %s", path)
         self._switch_project_db(path, is_new=False)
+
+    async def _check_for_updates(self) -> None:
+        """Проверить наличие новой версии в фоне. Показать notify при наличии обновления."""
+        import asyncio as _asyncio
+        await _asyncio.sleep(3.0)  # дать UI прогрузиться полностью
+        try:
+            from pentool.core.updater import check_update_async
+            info = await check_update_async()
+            if info.has_update:
+                self.notify(
+                    f"New version available: {info.latest_version} — run `pentool update`",
+                    severity="information",
+                    timeout=10,
+                )
+                logger.info("APP: update available: %s", info.latest_version)
+        except Exception as exc:
+            logger.debug("APP: update check failed: %s", exc)
 
     def _setup_auto_save(self) -> None:
         """Настроить / перезапустить таймер авто-сохранения из текущего конфига."""
@@ -720,9 +741,10 @@ class PentoolApp(App):
         try:
             from pentool.tui.screens.repeater.screen import RepeaterScreen
             repeater = self.query_one(SCREEN_REPEATER, RepeaterScreen)
-            repeater.load_request(msg.raw)
+            # Всегда открываем новую вкладку — не затираем текущую работу пользователя
+            repeater.load_request_in_new_tab(msg.raw)
             self.action_switch_module("repeater")
-            self.notify("Sent to Repeater", severity="information", timeout=2)
+            self.notify("Sent to Repeater → new tab", severity="information", timeout=2)
             self._add_raw_to_target(msg.raw)
         except Exception as exc:
             self.notify(f"Send to Repeater failed: {exc}", severity="error", timeout=4)

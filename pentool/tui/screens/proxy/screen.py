@@ -1425,11 +1425,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     # ── RequestContextMenuMixin impl ──────────────────────────────────────────
 
     def _cm_get_raw_request(self) -> str:
-        """Raw HTTP из текстовой панели Request."""
+        """Raw HTTP из панели Request (HttpView#req-editor → TextArea#http-body)."""
         try:
-            from pentool.tui.widgets.request_editor import RequestEditor
-            editor = self.query_one(RequestEditor)
-            return editor.get_text()
+            from textual.widgets import TextArea
+            view = self.query_one("#req-editor", HttpView)
+            area = view.query_one("#http-body", TextArea)
+            return area.text or ""
         except Exception:
             return ""
 

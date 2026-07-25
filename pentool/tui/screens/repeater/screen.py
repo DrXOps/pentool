@@ -522,6 +522,41 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
             event.prevent_default()
 
     def load_request(self, raw: str) -> None:
+        """Загрузить запрос в активную вкладку."""
+        if self._active_tab_id is None:
+            return
+        try:
+            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+            editor.load_raw(raw)
+        except Exception:
+            pass
+
+    def load_request_in_new_tab(self, raw: str) -> None:
+        """Открыть новую вкладку и загрузить запрос в неё.
+
+        Используется при получении запроса из другого модуля (Proxy, Scanner…),
+        чтобы не перезаписывать текущую работу пользователя.
+        """
+        self.action_new_tab()
+        # Новая вкладка монтируется асинхронно — ждём через call_after_refresh
+        self.call_after_refresh(self._load_into_latest_tab, raw)
+
+    def _load_into_latest_tab(self, raw: str) -> None:
+        """Загрузить raw в последнюю созданную вкладку (используется из load_request_in_new_tab)."""
+        if self._active_tab_id is None:
+            return
+        try:
+            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+            editor.load_raw(raw)
+        except Exception:
+            # Виджет ещё не смонтирован — пробуем через дополнительный defer
+            state = self._get_tab_state(self._active_tab_id)
+            if state is not None:
+                state.request_text = raw
+            self.set_timer(0.12, lambda: self._load_into_latest_tab_retry(raw))
+
+    def _load_into_latest_tab_retry(self, raw: str) -> None:
+        """Повторная попытка загрузки после задержки (виджет ещё не смонтирован)."""
         if self._active_tab_id is None:
             return
         try:
