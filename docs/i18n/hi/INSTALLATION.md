@@ -42,7 +42,7 @@ pentool --version
 
 ```bash
 # रिपॉजिटरी क्लोन करें
-git clone https://github.com/pentool/pentool.git
+git clone https://github.com/docxqwerty/pentool.git
 cd pentool
 
 # वर्चुअल एनवायरनमेंट बनाएं
@@ -217,8 +217,8 @@ pip install pentool
 
 - [त्वरित प्रारंभ](QUICKSTART.md) — 5 मिनट में शुरू करें
 - [उपयोगकर्ता गाइड](USER_GUIDE.md) — पूर्ण दस्तावेज़
-- [GitHub](https://github.com/pentool/pentool) — स्रोत कोड
+- [GitHub](https://github.com/docxqwerty/pentool) — स्रोत कोड
 
 ---
 
-**सहायता चाहिए?** GitHub पर issue बनाएं: https://github.com/pentool/pentool/issues
+**सहायता चाहिए?** GitHub पर issue बनाएं: https://github.com/docxqwerty/pentool/issues

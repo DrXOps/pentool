@@ -11,7 +11,7 @@ Get started with Pentool in 5 minutes!
 pip install pentool
 
 # Or from source
-git clone https://github.com/pentool/pentool.git
+git clone https://github.com/docxqwerty/pentool.git
 cd pentool
 pip install -e .
 ```

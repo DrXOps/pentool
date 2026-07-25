@@ -11,7 +11,7 @@
 pip install pentool
 
 # 或从源代码
-git clone https://github.com/pentool/pentool.git
+git clone https://github.com/docxqwerty/pentool.git
 cd pentool
 pip install -e .
 ```
@@ -230,15 +230,15 @@ pentool
 
 - [完整指南](USER_GUIDE.md) — 所有功能的详细文档
 - [安装](INSTALLATION.md) — 扩展安装说明
-- [GitHub](https://github.com/pentool/pentool) — 源代码、issues、discussions
+- [GitHub](https://github.com/docxqwerty/pentool) — 源代码、issues、discussions
 
 ---
 
 ## 需要帮助？
 
 - **文档：** 仓库中的 `docs/`
-- **Issues：** https://github.com/pentool/pentool/issues
-- **Discussions：** https://github.com/pentool/pentool/discussions
+- **Issues：** https://github.com/docxqwerty/pentool/issues
+- **Discussions：** https://github.com/docxqwerty/pentool/discussions
 
 ---
 

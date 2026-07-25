@@ -468,9 +468,9 @@ status = 404 OR status = 500
 
 ## अतिरिक्त संसाधन
 
-- [GitHub Repository](https://github.com/pentool/pentool)
-- [Issue Tracker](https://github.com/pentool/pentool/issues)
-- [Discussions](https://github.com/pentool/pentool/discussions)
+- [GitHub Repository](https://github.com/docxqwerty/pentool)
+- [Issue Tracker](https://github.com/docxqwerty/pentool/issues)
+- [Discussions](https://github.com/docxqwerty/pentool/discussions)
 
 ---
 

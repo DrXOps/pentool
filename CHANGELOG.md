@@ -131,5 +131,5 @@ First public release of Pentool - Modern Web Pentesting TUI.
 - **MINOR** version for backwards-compatible functionality
 - **PATCH** version for backwards-compatible bug fixes
 
-[1.0.0]: https://github.com/pentool/pentool/releases/tag/v1.0.0
-[Unreleased]: https://github.com/pentool/pentool/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/docxqwerty/pentool/releases/tag/v1.0.0
+[Unreleased]: https://github.com/docxqwerty/pentool/compare/v1.0.0...HEAD

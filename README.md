@@ -1,188 +1,139 @@
-# 🔐 PENTOOL — Modern Web Pentesting TUI
+# 🔒 Pentool — Professional TUI Web Pentesting Toolkit
 
-**Версия:** 1.0 (Pre-release)  
-**Статус:** 87% готовности к релизу  
-**Автор:** @sudores (DoctorX)
+[![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
+[![CI](https://github.com/docxqwerty/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/docxqwerty/pentool/actions)
+[![License](https://img.shields.io/github/license/docxqwerty/pentool)](LICENSE)
+[![Downloads](https://img.shields.io/pypi/dm/pentool)](https://pypi.org/project/pentool/)
 
-Современный инструмент для тестирования безопасности веб-приложений с интуитивным TUI интерфейсом.
+🌐 **Languages:** [English](README.md) · [Русский](README_RU.md) · [中文](README_ZH.md) · [हिन्दी](README_HI.md)
 
 ---
 
-## 🚀 Быстрый старт
+**Pentool** is a terminal-based (TUI) security toolkit for penetration testers and security researchers.  
+It combines HTTP interception, vulnerability scanning, automated attacks, and data analysis — all inside your terminal.  
+Fast, transparent, and built for real-world testing.
+
+---
+
+## ✨ Features
+
+- **🌐 Proxy**  
+  Intercept and modify HTTP/HTTPS traffic in real time. Manage scope, apply Match & Replace rules, capture WebSocket messages.
+
+- **🔄 Repeater**  
+  Replay requests with any modifications. Save tabs between sessions and switch between scenarios instantly.
+
+- **💥 Intruder**  
+  Run automated payload attacks with four strategies: Sniper, Battering Ram, Pitchfork, Cluster Bomb.  
+  Turbo Mode delivers 10× speed via Keep-Alive and connection pooling.
+
+- **🔍 Scanner**  
+  Active and passive vulnerability analysis: SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT flaws, and more.  
+  Smart context-aware payloads, WAF bypass, time-based and boolean-blind techniques.
+
+- **🕷 Spider**  
+  Crawl targets automatically — collect pages, forms, API endpoints, and JS files.  
+  JavaScript rendering via Playwright is supported.
+
+- **🎯 Target / Site Map**  
+  Build a site map from proxy traffic, manage testing scope, and filter hosts directly from the UI.
+
+- **🔐 Decoder · Comparer · Sequencer**  
+  - **Decoder** — 19 encode/decode/hash operations with chaining support  
+  - **Comparer** — side-by-side diff with change highlighting  
+  - **Sequencer** — entropy analysis of tokens (sessions, CSRF, JWT) with FIPS tests
+
+- **🧩 Plugin System**  
+  Extend functionality without touching the core. PRO plugins add advanced scanners, smart payloads, and report generators.
+
+- **⚡ Async Core**  
+  Fully async engine handles thousands of concurrent connections and hundreds of requests per second.
+
+- **📦 One-line Install**  
+  `pip install pentool` — no complex setup, works on Linux, macOS, and Windows (WSL).
+
+- **🆓 Open Source + PRO Extensions**  
+  The base version is free and open. PRO extensions unlock exclusive features and support the project.
+
+---
+
+## 🚀 Quick Start
 
 ```bash
-# Установка
+# Install
 pip install pentool
 
-# Запуск
+# Launch TUI
 pentool
 
-# Или из исходников
-git clone https://github.com/pentool/pentool.git
-cd pentool
-pip install -e .
-pentool
+# Start proxy on custom port
+pentool proxy start --port 8080
+
+# Active scan
+pentool scan active --url https://example.com
+
+# Check for updates
+pentool update --check
 ```
 
 ---
 
-## ✨ Ключевые возможности
+## 📸 Screenshots
 
-### Основные инструменты (Free)
-- **Proxy** — HTTP/HTTPS перехват с SSL
-- **Repeater** — модификация и повтор запросов
-- **Intruder** — автоматизированные атаки с payloads
-- **Decoder** — кодирование/декодирование
-- **Comparer** — сравнение запросов/ответов
-- **HTTPQL** — мощная фильтрация истории
+> Screenshots and GIFs coming soon.
 
-### PRO возможности
-- **Turbo Mode Intruder** 🚀 — 10x ускорение (100-200 req/sec)
-- **Scanner** — автоматическое обнаружение уязвимостей (23 проверки)
-- **Spider** — автоматическое сканирование сайтов
-- **WebSocket** — перехват и модификация WS трафика
-- **AI Analysis** — анализ уязвимостей с помощью GPT-4
-- **Plugins** — система расширений
+| Dashboard | Proxy | Intruder |
+|-----------|-------|----------|
+| *(coming soon)* | *(coming soon)* | *(coming soon)* |
 
 ---
 
-## 📦 Установка
+## 📚 Documentation
 
-### Требования
-- Python 3.10+
-- Linux / macOS / Windows
+- [Quick Start Guide](docs/i18n/en/QUICKSTART.md)
+- [User Guide](docs/i18n/en/USER_GUIDE.md)
+- [Installation](docs/i18n/en/INSTALLATION.md)
+- [Plugin Development](docs/API_CONTRACTS.md)
 
-### Из PyPI
-```bash
-pip install pentool
-```
-
-### Из исходников
-```bash
-git clone https://github.com/pentool/pentool.git
-cd pentool
-python -m venv venv
-source venv/bin/activate  # или venv\Scripts\activate на Windows
-pip install -e ".[dev]"
-```
+Full docs: **[pentool.pro](https://pentool.pro)**
 
 ---
 
-## 📖 Документация
+## 💰 Support the Project
 
-- **Quick Start:** `docs/QUICKSTART.md`
-- **User Guide:** `docs/user/`
-- **API Reference:** `docs/API_CONTRACTS.md`
-- **Architecture:** `docs/ARCHITECTURE_AUDIT.md`
+Pentool is built and maintained in spare time by a solo developer.  
+If it helps your work, consider supporting — it directly funds new features, bug fixes, and faster releases.
 
----
+- ⭐ [Star on GitHub](https://github.com/docxqwerty/pentool) — free and helps a lot
+- 💳 [GitHub Sponsors](https://github.com/sponsors/docxqwerty)
+- 🔑 Purchase a PRO license — unlocks advanced features and supports development
 
-## 🧪 Тестирование
-
-```bash
-# Запустить все тесты
-pytest tests/
-
-# С coverage
-pytest tests/ --cov=pentool --cov-report=html
-
-# Только unit-тесты
-pytest tests/unit/ -v
-```
-
-**Текущий статус:**
-- Unit-тесты: 1348/1360 PASSED (99.1%)
-- Coverage: 29%
-- Integration: требуют отладки
-
----
-
-## 🏗️ Архитектура
-
-```
-pentool/
-├── core/              # Ядро: EventBus, license, features
-├── modules/           # Логика: proxy, scanner, intruder
-├── api/               # API фасады для модулей
-├── services/          # Оркестрация бизнес-логики
-├── storage/           # База данных (SQLite)
-├── tui/               # TUI интерфейс (Textual)
-├── cli/               # CLI команды
-├── plugins/           # Система плагинов
-└── utils/             # Вспомогательные утилиты
-```
-
----
-
-## 💰 Тарифные планы
-
-| Plan | Цена | Инструменты | Лимиты |
-|------|------|-------------|--------|
-| **Free** | $0 | Proxy, Repeater, Intruder Basic, Decoder | 500 записей истории, 10 потоков |
-| **Lite** | $29/мес | + Scanner, Spider, Match&Replace | 5K истории, 20 потоков |
-| **Medium** | $99/мес | + WebSocket, Plugins, Turbo Mode | 50K истории, 50 потоков |
-| **Full** | $299/мес | + AI Analysis, PRO Reports, API | Unlimited |
-
----
-
-## 🚀 Killer Features
-
-### Turbo Mode Intruder
-10x ускорение через HTTP Keep-Alive и connection pooling:
-- Обычный режим: ~10-20 req/sec
-- Turbo режим: ~100-200 req/sec
-
-```python
-from pentool.api.intruder_api import IntruderAPI
-
-api = IntruderAPI()
-await api.start_attack(config, turbo_mode=True)  # 🚀
-```
-
-### Коммерческие планы
-4 тарифа с автоматической проверкой лимитов:
-```python
-from pentool.core.features import has_feature, get_limit
-
-if has_feature("turbo_mode", plan):
-    max_threads = get_limit("intruder_max_threads", plan)
-```
+Every contribution matters. Thank you for supporting open-source security tooling. 🙌
 
 ---
 
 ## 🤝 Contributing
 
-Contributions приветствуются! Перед началом:
-1. Прочитай `docs/ARCHITECTURE_AUDIT.md`
-2. Проверь `MYPLANS/MASTER_PLAN.md` для актуальных задач
-3. Запусти тесты перед PR
+Contributions are welcome!  
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
 
 ---
 
 ## 📄 License
 
-- **Community Edition:** AGPL-3.0
-- **PRO Edition:** Commercial license
+Distributed under the **AGPL-3.0** license. See [LICENSE](LICENSE) for details.  
+PRO extensions are available under a commercial license.
 
 ---
 
-## 🔗 Ссылки
+## 📬 Contact
 
-- **GitHub:** https://github.com/pentool/pentool
-- **Docs:** https://pentool.dev/docs
-- **Discord:** https://discord.gg/pentool
-
----
-
-## 📊 Статус проекта
-
-- **Готовность:** 87%
-- **Последнее обновление:** 2026-07-22
-- **Тесты:** 99.1% проходят
-- **Прогноз релиза:** 1-8 августа 2026
-
-**Проект в активной разработке. Релиз 1.0 скоро!** 🚀
+- **Website:** [pentool.pro](https://pentool.pro)
+- **Telegram:** [@sudores](https://t.me/sudores)
+- **Email:** akashtanov2020@gmail.com
+- **Author:** Anatoly Kashtanov (DoctorX)
 
 ---
 
-*Создано с помощью Claude Opus 4.8*
+⭐ If Pentool saves you time, a GitHub star helps the project grow — thanks!

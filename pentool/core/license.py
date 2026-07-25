@@ -134,7 +134,7 @@ class FeatureNotAvailable(Exception):
         self.plan_required = plan_required
         super().__init__(
             f"Feature '{feature}' requires {plan_required.upper()} plan. "
-            f"Upgrade at https://pentool.dev/upgrade"
+            f"Upgrade at https://pentool.pro/upgrade"
         )
 
 
@@ -163,7 +163,7 @@ def require_feature(feature: str, plan_required: str = "pro"):
 
 
 async def activate_license(key: str) -> LicenseInfo:
-    """Активировать лицензию онлайн (license.pentool.dev/api/validate).
+    """Активировать лицензию онлайн (license.pentool.pro/api/validate).
 
     Returns:
         LicenseInfo с результатом активации.
@@ -185,7 +185,7 @@ async def activate_license(key: str) -> LicenseInfo:
             timeout=aiohttp.ClientTimeout(total=10)
         ) as session:
             async with session.post(
-                "https://license.pentool.dev/api/validate",
+                "https://license.pentool.pro/api/validate",
                 json={"key": key, "machine_id": machine_id},
                 ssl=False,
             ) as resp:

@@ -35,7 +35,7 @@ def _anonymize(text: str) -> str:
     return text
 
 
-async def send_crash_async(exc: BaseException, endpoint: str = "https://pentool.dev/api/crash") -> None:
+async def send_crash_async(exc: BaseException, endpoint: str = "https://pentool.pro/api/crash") -> None:
     """Send crash report asynchronously. Silently ignores any errors."""
     try:
         import aiohttp  # type: ignore[import]

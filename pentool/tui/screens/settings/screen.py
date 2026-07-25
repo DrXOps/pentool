@@ -236,7 +236,7 @@ class SettingsScreen(Widget):
                     yield Static("Features:", classes="license-features-title")
                     yield Static("", id="license-features")
                     yield Static(
-                        "Buy PRO: https://pentool.dev/pricing",
+                        "Buy PRO: https://pentool.pro/pricing",
                         id="license-buy-link",
                         classes="license-buy",
                     )

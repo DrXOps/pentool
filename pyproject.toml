@@ -7,7 +7,7 @@ name = "pentool"
 version = "0.1.1"
 description = "Modern Web Pentesting TUI - Professional security testing tool"
 authors = [
-    {name = "Pentool Team", email = "dev@pentool.dev"}
+    {name = "Pentool Team", email = "dev@pentool.pro"}
 ]
 readme = "README.md"
 license = {text = "AGPL-3.0"}

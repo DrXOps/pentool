@@ -11,7 +11,7 @@
 pip install pentool
 
 # या स्रोत से
-git clone https://github.com/pentool/pentool.git
+git clone https://github.com/docxqwerty/pentool.git
 cd pentool
 pip install -e .
 ```
@@ -230,15 +230,15 @@ pentool
 
 - [पूर्ण गाइड](USER_GUIDE.md) — सभी सुविधाओं का विस्तृत दस्तावेज़ीकरण
 - [इंस्टॉलेशन](INSTALLATION.md) — विस्तारित इंस्टॉलेशन निर्देश
-- [GitHub](https://github.com/pentool/pentool) — स्रोत कोड, issues, discussions
+- [GitHub](https://github.com/docxqwerty/pentool) — स्रोत कोड, issues, discussions
 
 ---
 
 ## सहायता चाहिए?
 
 - **दस्तावेज़:** रिपॉजिटरी में `docs/`
-- **Issues:** https://github.com/pentool/pentool/issues
-- **Discussions:** https://github.com/pentool/pentool/discussions
+- **Issues:** https://github.com/docxqwerty/pentool/issues
+- **Discussions:** https://github.com/docxqwerty/pentool/discussions
 
 ---
 

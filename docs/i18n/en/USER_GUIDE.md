@@ -653,10 +653,10 @@ curl -X POST http://example.com/api ...
 
 ## Getting Help
 
-- **Documentation:** https://pentool.dev/docs
-- **GitHub Issues:** https://github.com/pentool/pentool/issues
+- **Documentation:** https://pentool.pro/docs
+- **GitHub Issues:** https://github.com/docxqwerty/pentool/issues
 - **Discord:** https://discord.gg/pentool
-- **Email:** support@pentool.dev
+- **Email:** support@pentool.pro
 
 ---
 

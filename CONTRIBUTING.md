@@ -404,7 +404,7 @@ twine upload dist/*
 - **Questions:** Open a Discussion on GitHub
 - **Bugs:** Open an Issue
 - **Chat:** Join Discord
-- **Email:** dev@pentool.dev
+- **Email:** dev@pentool.pro
 
 ---
 

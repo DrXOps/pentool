@@ -42,7 +42,7 @@ pentool --version
 
 ```bash
 # 克隆仓库
-git clone https://github.com/pentool/pentool.git
+git clone https://github.com/docxqwerty/pentool.git
 cd pentool
 
 # 创建虚拟环境
@@ -217,8 +217,8 @@ pip install pentool
 
 - [快速入门](QUICKSTART.md) — 5 分钟开始使用
 - [用户指南](USER_GUIDE.md) — 完整文档
-- [GitHub](https://github.com/pentool/pentool) — 源代码
+- [GitHub](https://github.com/docxqwerty/pentool) — 源代码
 
 ---
 
-**需要帮助？** 在 GitHub 上创建 issue：https://github.com/pentool/pentool/issues
+**需要帮助？** 在 GitHub 上创建 issue：https://github.com/docxqwerty/pentool/issues
