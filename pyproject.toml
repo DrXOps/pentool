@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pentool"
-version = "1.0.0"
+version = "0.1.0"
 description = "Modern Web Pentesting TUI - Professional security testing tool"
 authors = [
     {name = "Pentool Team", email = "dev@pentool.dev"}
@@ -14,7 +14,7 @@ license = {text = "AGPL-3.0"}
 requires-python = ">=3.10"
 keywords = ["pentesting", "security", "burp", "proxy", "scanner", "intruder"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
     "Topic :: Security",
@@ -50,11 +50,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/pentool/pentool"
-Documentation = "https://pentool.dev/docs"
-Repository = "https://github.com/pentool/pentool"
-Issues = "https://github.com/pentool/pentool/issues"
-Changelog = "https://github.com/pentool/pentool/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/docxqwerty/pentool"
+Repository = "https://github.com/docxqwerty/pentool"
+Issues = "https://github.com/docxqwerty/pentool/issues"
+Changelog = "https://github.com/docxqwerty/pentool/blob/main/CHANGELOG.md"
 
 [project.scripts]
 pentool = "pentool.cli.main:cli"

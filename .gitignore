@@ -20,3 +20,12 @@ MYPLANS/
 "fix comment"
 pentool/modules/scanner/
 handFIX/
+docs/ARCHITECTURE_AUDIT.md
+docs/SCANNER_MODERNIZATION_PLAN.md
+docs/SELF_PROMPT.md
+docs/SCANNER_PROMO.md
+docs/memory
+docs/modules/
+pro
+project.json
+testpayloads.txt
