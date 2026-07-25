@@ -28,3 +28,9 @@ docs/memory
 docs/modules/
 project.json
 testpayloads.txt
+
+# PRO files — live in pro/ submodule (docxqwerty/pentool-pro)
+pentool/modules/intruder_turbo.py
+pentool/plugins/builtin/payloads_pro.py
+pentool/plugins/builtin/reports_pro.py
+pentool/plugins/builtin/scanner_pro.py
