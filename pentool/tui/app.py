@@ -368,10 +368,17 @@ class PentoolApp(App):
             logger.debug("APP: update check failed: %s", exc)
 
     def _setup_auto_save(self) -> None:
-        """Configure / restart the auto-save timer from the current config."""
-        # Stop the old timer if it exists
+        """Configure / restart the auto-save timer from the current config.
+
+        Safe to call at any time — including from call_after_refresh and on_mount.
+        Stops the old timer cleanly before creating a new one.
+        """
+        # Pause the old timer before replacing it.
+        # Timer.pause() is safe to call from any point in the event loop;
+        # .stop() schedules a cancellation but may race if called during a tick.
         if self._auto_save_timer is not None:
             try:
+                self._auto_save_timer.pause()
                 self._auto_save_timer.stop()
             except Exception:
                 pass
@@ -382,6 +389,8 @@ class PentoolApp(App):
             interval_sec = interval_min * 60
             self._auto_save_timer = self.set_interval(interval_sec, self._auto_save_tick)
             logger.info("APP: auto-save enabled, interval=%d min", interval_min)
+        else:
+            logger.info("APP: auto-save disabled")
 
     def _auto_save_tick(self) -> None:
         """Periodic auto-save of the project (silent, no dialogs)."""
@@ -875,15 +884,22 @@ class PentoolApp(App):
                 "Proxy settings updated — restart proxy to apply",
                 severity="information", timeout=4,
             )
-        # Apply theme if changed
+        # Apply theme if changed (skip if already the correct theme — avoids
+        # double-render when SettingsScreen sets self.app.theme directly and then
+        # also saves to config which fires this observer).
         if "theme" in fields:
             try:
-                self.theme = fields["theme"]
+                new_theme = fields["theme"]
+                if getattr(self, "theme", None) != new_theme:
+                    self.theme = new_theme
             except Exception:
                 pass
-        # Restart the auto-save timer if the relevant fields have changed
+        # Restart the auto-save timer if the relevant fields have changed.
+        # Use call_after_refresh so the current message-dispatch cycle finishes
+        # before we touch the timer (avoids a race where stop() is called on a
+        # timer that is still mid-fire).
         if "auto_save_enabled" in fields or "auto_save_interval" in fields:
-            self._setup_auto_save()
+            self.call_after_refresh(self._setup_auto_save)
 
     def _update_status(self) -> None:
         try:

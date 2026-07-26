@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
+from textual.timer import Timer
 from textual.widget import Widget
 from pathlib import Path
 
@@ -83,6 +85,9 @@ class SettingsScreen(Widget):
     """
 
     DEFAULT_CSS = _CSS
+
+    # Debounce timer for live theme preview — fires 150ms after last click
+    _theme_debounce: Timer | None = None
 
     _THEMES = [
         ("Dark",           "textual-dark"),
@@ -397,33 +402,80 @@ class SettingsScreen(Widget):
             wid = None
 
         if wid == "set-theme":
-            self._apply_theme(event.value)
+            # Debounced live preview — does NOT save to config until Save is clicked.
+            self._apply_theme_debounced(event.value)
         elif wid == "set-ui-mode":
             try:
                 self._apply_ui_mode(UIMode(event.value))
             except Exception:
                 pass
 
-    def _apply_theme(self, theme: str) -> None:
+    def _apply_theme_debounced(self, theme: str) -> None:
+        """Schedule a theme preview after a short debounce (150 ms).
+
+        Cancels any pending timer so rapid OptionCycler clicks do not fire
+        refresh_css() on every click — only after the user settles on a value.
+        """
+        if self._theme_debounce is not None:
+            try:
+                self._theme_debounce.stop()
+            except Exception:
+                pass
+            self._theme_debounce = None
+        # set_timer fires once after the delay
+        self._theme_debounce = self.set_timer(0.15, lambda: self._do_apply_theme(theme))
+
+    def _do_apply_theme(self, theme: str) -> None:
+        """Actually set app.theme — called after the debounce delay fires.
+
+        Does NOT save to config; saving happens only when the user clicks Save
+        so that we don't spam sync file-IO on every click.
+        """
+        self._theme_debounce = None
         try:
-            self.app.theme = theme  # type: ignore[attr-defined]
-            # Persist to config
+            # Guard: skip if Textual already has this theme (avoids double refresh_css).
+            if getattr(self.app, "theme", None) != theme:
+                self.app.theme = theme  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    def _apply_theme(self, theme: str) -> None:
+        """Apply theme immediately (no debounce) and persist to config via async worker.
+
+        Called only from _save_interface_settings (the Save button), so it is
+        safe to do both the Textual theme switch and the config write here.
+        """
+        try:
+            if getattr(self.app, "theme", None) != theme:
+                self.app.theme = theme  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        # Persist in a thread worker so yaml.dump + file.write don't block the event loop.
+        self.run_worker(self._async_save_theme(theme), exclusive=False, thread=False)
+
+    async def _async_save_theme(self, theme: str) -> None:
+        """Write the theme to config on a thread so disk IO doesn't stall the UI."""
+        import asyncio
+        loop = asyncio.get_running_loop()
+        try:
             from pentool.core.config import get_config
-            get_config().update(theme=theme)
-            get_config().save()
+            def _save() -> None:
+                get_config().update(theme=theme)
+                get_config().save()
+            await loop.run_in_executor(None, _save)
         except Exception:
             pass
 
     def _save_interface_settings(self) -> None:
-        """Apply theme and UI mode and save to config."""
-        # Apply theme
+        """Apply theme and UI mode, then persist to config asynchronously."""
+        # Apply theme (immediate + async save)
         try:
             theme_val = self.query_one("#set-theme", OptionCycler).value
             self._apply_theme(theme_val)
         except Exception:
             pass
 
-        # Apply UI mode
+        # Apply UI mode (no config write needed — ModuleTabs handles it)
         try:
             mode_val = self.query_one("#set-ui-mode", OptionCycler).value
             self._apply_ui_mode(UIMode(mode_val))
@@ -441,6 +493,28 @@ class SettingsScreen(Widget):
         except Exception:
             pass
 
+    async def _async_save_config(self, changes: dict, notify_msg: str) -> None:
+        """Apply *changes* to config and flush to disk in an executor thread.
+
+        Using run_in_executor keeps yaml.dump + file.write off the event loop so
+        the UI stays responsive during saves.
+        """
+        import asyncio
+        try:
+            from pentool.core.config import get_config
+            cfg = get_config()
+            loop = asyncio.get_running_loop()
+
+            def _do_save() -> None:
+                if changes:
+                    cfg.update(**changes)
+                cfg.save()
+
+            await loop.run_in_executor(None, _do_save)
+            self.app.notify(notify_msg, timeout=2)  # type: ignore[attr-defined]
+        except Exception as e:
+            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
+
     def _save_proxy_settings(self) -> None:
         try:
             from pentool.core.config import get_config
@@ -452,10 +526,10 @@ class SettingsScreen(Widget):
                 changes["proxy_host"] = host
             if port_str.isdigit() and int(port_str) != cfg.proxy_port:
                 changes["proxy_port"] = int(port_str)
-            if changes:
-                cfg.update(**changes)
-            cfg.save()
-            self.app.notify("Proxy settings saved (restart proxy to apply)", timeout=3)  # type: ignore[attr-defined]
+            self.run_worker(
+                self._async_save_config(changes, "Proxy settings saved (restart proxy to apply)"),
+                exclusive=False, thread=False,
+            )
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
@@ -478,10 +552,10 @@ class SettingsScreen(Widget):
                         changes["auto_save_interval"] = interval
             except Exception:
                 pass
-            if changes:
-                cfg.update(**changes)
-            cfg.save()
-            self.app.notify("Project settings saved", timeout=2)  # type: ignore[attr-defined]
+            self.run_worker(
+                self._async_save_config(changes, "Project settings saved"),
+                exclusive=False, thread=False,
+            )
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
@@ -558,10 +632,10 @@ class SettingsScreen(Widget):
             except Exception:
                 pass
 
-            if changes:
-                cfg.update(**changes)
-            cfg.save()
-            self.app.notify("Network settings saved", timeout=2)  # type: ignore[attr-defined]
+            self.run_worker(
+                self._async_save_config(changes, "Network settings saved"),
+                exclusive=False, thread=False,
+            )
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
@@ -585,10 +659,10 @@ class SettingsScreen(Widget):
             except Exception:
                 pass
 
-            if changes:
-                cfg.update(**changes)
-            cfg.save()
-            self.app.notify("Privacy settings saved", timeout=2)  # type: ignore[attr-defined]
+            self.run_worker(
+                self._async_save_config(changes, "Privacy settings saved"),
+                exclusive=False, thread=False,
+            )
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
