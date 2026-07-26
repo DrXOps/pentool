@@ -318,7 +318,10 @@ class PentoolApp(App):
         self._setup_signal_handlers()
 
         # R-16: subscribe to config changes — SettingsScreen will notify us
-        self._cfg.add_observer(self._on_config_changed)
+        # NOTE: do NOT name this _on_config_changed — Textual treats any method
+        # matching _(on_)<MessageClass> as a message handler and calls it with the
+        # Message object instead of dict, causing an infinite post_message loop.
+        self._cfg.add_observer(self._cfg_observer_cb)
 
         # Apply saved theme
         saved_theme = getattr(self._cfg, "theme", "textual-dark")
@@ -408,10 +411,14 @@ class PentoolApp(App):
         except Exception as exc:
             logger.debug("_auto_save_tick: %s", exc)
 
-    def _on_config_changed(self, changed_fields: dict) -> None:
+    def _cfg_observer_cb(self, changed_fields: dict) -> None:
         """Config Observer callback — called from any context (R-16).
 
-        Deliver changes to TUI via Message Bus (thread-safe).
+        Renamed away from _on_config_changed intentionally: Textual's dispatch
+        looks for cls.__dict__.get('_on_<message_name>') as a fallback handler,
+        so a method named _on_config_changed would be called with the ConfigChanged
+        *object* (not a dict), triggering post_message(ConfigChanged(msg)) →
+        infinite message loop → UI freeze with 20M log entries.
         """
         self.post_message(ConfigChanged(changed_fields))
 
