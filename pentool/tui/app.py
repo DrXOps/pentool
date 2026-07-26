@@ -320,6 +320,13 @@ class PentoolApp(App):
         # R-16: subscribe to config changes — SettingsScreen will notify us
         self._cfg.add_observer(self._on_config_changed)
 
+        # Apply saved theme
+        saved_theme = getattr(self._cfg, "theme", "textual-dark")
+        try:
+            self.theme = saved_theme
+        except Exception:
+            pass
+
         # Auto-save (Block 3.3) — start if enabled in config
         self._setup_auto_save()
 
@@ -853,6 +860,9 @@ class PentoolApp(App):
         the user must restart the proxy manually.
         """
         fields = msg.fields
+        if not isinstance(fields, dict):
+            logger.warning("APP: on_config_changed: unexpected fields type %s", type(fields))
+            return
         logger.info("APP: config changed: %s", list(fields.keys()))
         if self._proxy:
             if "proxy_host" in fields:
@@ -865,6 +875,12 @@ class PentoolApp(App):
                 "Proxy settings updated — restart proxy to apply",
                 severity="information", timeout=4,
             )
+        # Apply theme if changed
+        if "theme" in fields:
+            try:
+                self.theme = fields["theme"]
+            except Exception:
+                pass
         # Restart the auto-save timer if the relevant fields have changed
         if "auto_save_enabled" in fields or "auto_save_interval" in fields:
             self._setup_auto_save()

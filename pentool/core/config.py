@@ -51,6 +51,8 @@ class Config:
     # ── Crash Reporting / Update Checker ────────────────────────────────────────
     send_crash_reports: bool = True   # send anonymous crash reports
     check_updates: bool = True        # check for updates on startup
+    # ── UI ────────────────────────────────────────────────────────────────────────
+    theme: str = "textual-dark"       # Textual theme name
 
     # Observer list — not serialized
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)
@@ -119,6 +121,7 @@ class Config:
             "scan_marker_value": self.scan_marker_value,
             "send_crash_reports": self.send_crash_reports,
             "check_updates": self.check_updates,
+            "theme": self.theme,
         }
 
     def add_recent_project(self, path: str) -> None:

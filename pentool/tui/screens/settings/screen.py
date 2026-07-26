@@ -84,7 +84,17 @@ class SettingsScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    _THEMES = [("Dark", "dark"), ("Light", "light")]
+    _THEMES = [
+        ("Dark",           "textual-dark"),
+        ("Light",          "textual-light"),
+        ("Nord",           "nord"),
+        ("Dracula",        "dracula"),
+        ("Gruvbox",        "gruvbox"),
+        ("Tokyo Night",    "tokyo-night"),
+        ("Catppuccin",     "catppuccin-mocha"),
+        ("Solarized Dark", "solarized-dark"),
+        ("Monokai",        "monokai"),
+    ]
     _MODES = [("Advanced", "advanced"), ("Basic", "basic")]
 
     def compose(self) -> ComposeResult:
@@ -124,10 +134,7 @@ class SettingsScreen(Widget):
                 with Vertical(classes="settings-pane"):
                     yield Static("Project Settings", classes="section-title")
                     with Horizontal(classes="row"):
-                        yield Static("Auto-save path:", classes="row-label")
-                        yield Input(placeholder="project.json", id="set-autosave-path", compact=True)
-                    with Horizontal(classes="row"):
-                        yield Static("Auto-save interval:", classes="row-label")
+                        yield Static("Auto-save interval (min):", classes="row-label")
                         yield Input(placeholder="0 = disabled", id="set-autosave-interval", compact=True)
                     with Horizontal(classes="row"):
                         yield Static("Auto-save enabled:", classes="row-label")
@@ -283,6 +290,18 @@ class SettingsScreen(Widget):
             self.query_one("#set-check-updates", Checkbox).value = getattr(cfg, "check_updates", True)
         except Exception:
             pass
+        try:
+            from pentool.core.config import get_config
+            cfg = get_config()
+            saved_theme = getattr(cfg, "theme", "textual-dark")
+            cycler = self.query_one("#set-theme", OptionCycler)
+            # Set OptionCycler to the saved theme value
+            for label, val in self._THEMES:
+                if val == saved_theme:
+                    cycler.set_value(val)
+                    break
+        except Exception:
+            pass
 
     # ── License UI ─────────────────────────────────────────────────────────────
 
@@ -387,7 +406,11 @@ class SettingsScreen(Widget):
 
     def _apply_theme(self, theme: str) -> None:
         try:
-            self.app.dark = (theme == "dark")  # type: ignore[attr-defined]
+            self.app.theme = theme  # type: ignore[attr-defined]
+            # Persist to config
+            from pentool.core.config import get_config
+            get_config().update(theme=theme)
+            get_config().save()
         except Exception:
             pass
 
