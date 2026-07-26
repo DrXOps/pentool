@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pentool — Licensing & Pricing</title>
+  <meta name="description" content="Pentool PRO licensing plans, pricing and documentation." />
+  <style>
+    :root {
+      --bg:       #0d0d0d;
+      --bg2:      #141414;
+      --bg3:      #1a1a1a;
+      --border:   #2a2a2a;
+      --text:     #e0e0e0;
+      --muted:    #666;
+      --green:    #00ff41;
+      --green2:   #00cc33;
+      --green3:   #009922;
+      --red:      #ff3333;
+      --yellow:   #ffcc00;
+      --font:     'Courier New', Courier, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── NAV ── */
+    nav {
+      border-bottom: 1px solid var(--border);
+      padding: .75rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
+    }
+    .nav-logo {
+      color: var(--green);
+      font-size: 1.1rem;
+      font-weight: bold;
+      text-decoration: none;
+    }
+    .nav-logo span { color: var(--text); }
+    nav ul { list-style: none; display: flex; gap: 1.5rem; margin-left: auto; }
+    nav a { color: var(--muted); text-decoration: none; font-size: .9rem; transition: color .2s; }
+    nav a:hover { color: var(--green); }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 5rem 2rem 3rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-prompt {
+      color: var(--green);
+      font-size: .85rem;
+      margin-bottom: 1rem;
+    }
+    .hero h1 { font-size: 2.8rem; margin-bottom: 1rem; line-height: 1.2; }
+    .hero h1 em { font-style: normal; color: var(--green); }
+    .hero p { color: var(--muted); max-width: 560px; margin: 0 auto 2rem; }
+    .btn {
+      display: inline-block;
+      padding: .6rem 1.4rem;
+      border: 1px solid var(--green);
+      color: var(--green);
+      text-decoration: none;
+      font-family: var(--font);
+      font-size: .9rem;
+      cursor: pointer;
+      background: transparent;
+      transition: background .2s, color .2s;
+    }
+    .btn:hover { background: var(--green); color: var(--bg); }
+    .btn-fill { background: var(--green); color: var(--bg); }
+    .btn-fill:hover { background: var(--green2); }
+
+    /* ── SECTION ── */
+    section { padding: 4rem 2rem; max-width: 1100px; margin: 0 auto; }
+    .section-title {
+      color: var(--green);
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .15em;
+      margin-bottom: .5rem;
+    }
+    h2 { font-size: 1.8rem; margin-bottom: 2rem; }
+    .sep { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+    /* ── PRICING CARDS ── */
+    .plans {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+    .plan-card {
+      border: 1px solid var(--border);
+      background: var(--bg2);
+      padding: 2rem;
+      position: relative;
+    }
+    .plan-card.featured {
+      border-color: var(--green);
+    }
+    .plan-badge {
+      position: absolute;
+      top: -1px;
+      right: 1.5rem;
+      background: var(--green);
+      color: var(--bg);
+      font-size: .7rem;
+      padding: .2rem .6rem;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+    .plan-name { font-size: 1.2rem; margin-bottom: .3rem; }
+    .plan-price {
+      font-size: 2.2rem;
+      color: var(--green);
+      margin: .8rem 0 .2rem;
+    }
+    .plan-price sup { font-size: 1rem; vertical-align: super; }
+    .plan-price sub { font-size: .85rem; color: var(--muted); }
+    .plan-period { color: var(--muted); font-size: .85rem; margin-bottom: 1.5rem; }
+    .plan-features { list-style: none; }
+    .plan-features li {
+      padding: .35rem 0;
+      border-top: 1px solid var(--border);
+      font-size: .9rem;
+      display: flex;
+      align-items: flex-start;
+      gap: .5rem;
+    }
+    .plan-features li:first-child { border-top: none; }
+    .feat-yes { color: var(--green); }
+    .feat-no  { color: var(--muted); }
+    .plan-cta { margin-top: 1.5rem; width: 100%; text-align: center; display: block; }
+
+    /* ── FEATURES TABLE ── */
+    .feat-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .feat-table th, .feat-table td {
+      padding: .75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .feat-table th { color: var(--green); font-weight: normal; }
+    .feat-table td:not(:first-child) { text-align: center; }
+    .feat-table tr:hover td { background: var(--bg2); }
+    .check { color: var(--green); }
+    .cross { color: var(--muted); }
+
+    /* ── HOW IT WORKS ── */
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
+    .step { border-left: 2px solid var(--green); padding-left: 1rem; }
+    .step-num { color: var(--green); font-size: .8rem; margin-bottom: .3rem; }
+    .step h3 { margin-bottom: .4rem; font-size: 1rem; }
+    .step p { color: var(--muted); font-size: .85rem; }
+    pre.code-block {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: .85rem;
+      color: var(--green);
+      margin-top: 1rem;
+    }
+
+    /* ── FAQ ── */
+    .faq-item { border-top: 1px solid var(--border); padding: 1rem 0; }
+    .faq-q { cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .faq-q h3 { font-size: .95rem; font-weight: normal; }
+    .faq-toggle { color: var(--green); font-size: 1.2rem; transition: transform .2s; }
+    .faq-a { color: var(--muted); font-size: .9rem; max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+    .faq-item.open .faq-a { max-height: 300px; padding-top: .5rem; }
+    .faq-item.open .faq-toggle { transform: rotate(45deg); }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--green); }
+
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 1.9rem; }
+      nav ul { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/">PENTO<span>OL</span></a>
+  <ul>
+    <li><a href="/">Home</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#howto">How it works</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a href="https://github.com/docxqwerty/pentool" target="_blank">GitHub</a></li>
+  </ul>
+</nav>
+
+<div class="hero">
+  <div class="hero-prompt">$ pentool --version pro</div>
+  <h1>Professional TUI<br/><em>Web Pentesting</em> Toolkit</h1>
+  <p>HTTP proxy, scanner, intruder, repeater, decoder — all in your terminal. Open source core + PRO extensions.</p>
+  <a href="https://github.com/docxqwerty/pentool#installation" class="btn btn-fill" target="_blank">Get started free</a>
+  &nbsp;
+  <a href="#pricing" class="btn">View PRO plans</a>
+</div>
+
+<hr class="sep" />
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="section-title">// plans</div>
+  <h2>Simple, transparent pricing</h2>
+  <div class="plans">
+
+    <div class="plan-card">
+      <div class="plan-name">Free</div>
+      <div class="plan-price">$0</div>
+      <div class="plan-period">forever open source</div>
+      <ul class="plan-features">
+        <li><span class="feat-yes">✓</span> HTTP Proxy + history</li>
+        <li><span class="feat-yes">✓</span> Repeater</li>
+        <li><span class="feat-yes">✓</span> Basic Intruder (Sniper)</li>
+        <li><span class="feat-yes">✓</span> Decoder (19 ops)</li>
+        <li><span class="feat-yes">✓</span> Comparer</li>
+        <li><span class="feat-yes">✓</span> Spider</li>
+        <li><span class="feat-no">✗</span> PRO Scanner checks</li>
+        <li><span class="feat-no">✗</span> Smart Intruder payloads</li>
+        <li><span class="feat-no">✗</span> PDF / HTML reports</li>
+      </ul>
+      <a href="https://github.com/docxqwerty/pentool" class="btn plan-cta" target="_blank">Install free →</a>
+    </div>
+
+    <div class="plan-card featured">
+      <div class="plan-badge">Popular</div>
+      <div class="plan-name">PRO</div>
+      <div class="plan-price"><sup>$</sup>29<sub>/yr</sub></div>
+      <div class="plan-period">per user · annual billing</div>
+      <ul class="plan-features">
+        <li><span class="feat-yes">✓</span> Everything in Free</li>
+        <li><span class="feat-yes">✓</span> 10 advanced scanner checks</li>
+        <li><span class="feat-yes">✓</span> Smart payloads (SQLi, XSS, SSTI…)</li>
+        <li><span class="feat-yes">✓</span> PDF + HTML reports</li>
+        <li><span class="feat-yes">✓</span> Passive scan toggle</li>
+        <li><span class="feat-yes">✓</span> Priority email support</li>
+        <li><span class="feat-no">✗</span> Team collaboration</li>
+        <li><span class="feat-no">✗</span> Custom plugins</li>
+      </ul>
+      <a href="mailto:support@pentool.pro?subject=PRO License" class="btn btn-fill plan-cta">Buy PRO →</a>
+    </div>
+
+    <div class="plan-card">
+      <div class="plan-name">Team</div>
+      <div class="plan-price"><sup>$</sup>79<sub>/yr</sub></div>
+      <div class="plan-period">up to 5 seats · annual billing</div>
+      <ul class="plan-features">
+        <li><span class="feat-yes">✓</span> Everything in PRO</li>
+        <li><span class="feat-yes">✓</span> Up to 5 seats per key</li>
+        <li><span class="feat-yes">✓</span> Team collaboration sync</li>
+        <li><span class="feat-yes">✓</span> Custom plugin support</li>
+        <li><span class="feat-yes">✓</span> Dedicated support channel</li>
+        <li><span class="feat-yes">✓</span> Early access to new features</li>
+      </ul>
+      <a href="mailto:support@pentool.pro?subject=Team License" class="btn plan-cta">Buy Team →</a>
+    </div>
+
+  </div>
+</section>
+
+<hr class="sep" />
+
+<!-- FEATURES TABLE -->
+<section id="features">
+  <div class="section-title">// feature matrix</div>
+  <h2>What's included</h2>
+  <table class="feat-table">
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>Free</th>
+        <th>PRO</th>
+        <th>Team</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>HTTP Proxy + history (SQLite)</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Repeater (HTTP/HTTPS)</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Intruder — Sniper / Pitchfork / Cluster bomb</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Decoder — 19 operations, chain mode</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Comparer (diff view)</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Spider (link crawler)</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Sequencer (entropy analysis)</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Scanner — 10 advanced checks (SQLi, XSS, SSRF…)</td><td class="cross">—</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Intruder — Smart payload wordlists</td><td class="cross">—</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Reports (PDF + HTML)</td><td class="cross">—</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Passive scan auto-mode</td><td class="cross">—</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td>Team collaboration sync</td><td class="cross">—</td><td class="cross">—</td><td class="check">✓</td></tr>
+      <tr><td>Custom plugin loader</td><td class="cross">—</td><td class="cross">—</td><td class="check">✓</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<hr class="sep" />
+
+<!-- HOW IT WORKS -->
+<section id="howto">
+  <div class="section-title">// activation</div>
+  <h2>How licensing works</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01 / purchase</div>
+      <h3>Buy a license key</h3>
+      <p>Email us or use the button above. You'll receive a key in the format <code>PTOOL-XXXX-XXXX-XXXX</code> within minutes.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">02 / activate</div>
+      <h3>Enter in Settings</h3>
+      <p>Open Pentool → Settings → License tab. Paste your key and click <strong>Activate</strong>. The key binds to your machine ID on first activation.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">03 / verify</div>
+      <h3>Online validation</h3>
+      <p>Pentool validates against <code>license.pentool.pro/api/validate</code> on startup. Works offline for up to 7 days (grace period).</p>
+    </div>
+    <div class="step">
+      <div class="step-num">04 / transfer</div>
+      <h3>Need to move machines?</h3>
+      <p>Email <a href="mailto:support@pentool.pro">support@pentool.pro</a> to reset machine binding. We'll handle it within 24 h.</p>
+    </div>
+  </div>
+
+  <pre class="code-block"># CLI activation (alternative)
+$ pentool --activate PTOOL-XXXX-XXXX-XXXX
+
+# Check current license status
+$ pentool --license-info</pre>
+</section>
+
+<hr class="sep" />
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="section-title">// faq</div>
+  <h2>Frequently asked questions</h2>
+
+  <div class="faq-item">
+    <div class="faq-q">
+      <h3>Does the free version have any restrictions on usage?</h3>
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">No. The free version is fully open source (MIT). You can use it commercially, modify it, and redistribute it. PRO features are optional add-ons.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">
+      <h3>What happens when my license expires?</h3>
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">PRO features become unavailable, but the core tool continues to work. You'll get a warning 30 days before expiry. Renew at the same price.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">
+      <h3>Can I use one key on multiple machines?</h3>
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">PRO keys bind to a single machine on first activation. Team keys support up to 5 machines simultaneously. Contact us for enterprise multi-seat licensing.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">
+      <h3>Does Pentool phone home constantly?</h3>
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">No. Validation happens once at startup and caches the result for 24 hours. The only data sent is your license key and a machine ID hash — no usage telemetry.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">
+      <h3>Is there a trial for PRO?</h3>
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">Yes — email us and we'll issue a 14-day trial key. No card required.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">
+      <h3>Refund policy?</h3>
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">Full refund within 14 days of purchase, no questions asked. Email support@pentool.pro with your key.</div>
+  </div>
+</section>
+
+<footer>
+  <p>
+    © 2024–2026 Anatoly Kashtanov (DoctorX) · Pentool ·
+    <a href="https://github.com/docxqwerty/pentool">GitHub</a> ·
+    <a href="mailto:support@pentool.pro">support@pentool.pro</a>
+  </p>
+</footer>
+
+<script>
+  // FAQ accordion
+  document.querySelectorAll('.faq-q').forEach(q => {
+    q.addEventListener('click', () => {
+      const item = q.closest('.faq-item');
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+      if (!isOpen) item.classList.add('open');
+    });
+  });
+
+  // Smooth scroll for nav links
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    });
+  });
+</script>
+</body>
+</html>
