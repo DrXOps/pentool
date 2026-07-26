@@ -131,7 +131,7 @@ DashboardScreen #left-pane {
     layout: vertical;
 }
 DashboardScreen #pp-title {
-    height: 1;
+    height: 2;
     color: $primary;
     text-style: bold;
     border-bottom: solid $primary-darken-3;

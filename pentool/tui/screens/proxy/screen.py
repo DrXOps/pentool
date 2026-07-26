@@ -186,7 +186,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("M/R",         "btn-mr")
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("Load History","btn-load-history")
+            yield ToolbarButton("🔄 Reload",   "btn-load-history")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Clear",       "btn-clear")
 

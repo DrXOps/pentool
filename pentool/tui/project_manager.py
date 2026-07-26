@@ -330,6 +330,8 @@ class ProjectManager:
         if is_new:
             self._app.run_worker(self._init_new_db(path), exclusive=False, thread=False)
             self._app.post_message(ProxyClearHistory())
+            # Reload Target and other screens for new project
+            self._app.run_worker(self._reload_project_screens(path), exclusive=False, thread=False)
         else:
             self._app.run_worker(
                 self._open_project_sequence(path),
