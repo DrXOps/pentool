@@ -100,14 +100,25 @@ Full docs: **[pentool.pro](https://pentool.pro)**
 
 ---
 
+## 🧪 Beta / Testing Mode
+
+> **Pentool is currently in public beta.**  
+> All **free modules are fully available**. Paid (PRO) plugins are still in development — a **trial version** is provided for now.  
+>
+> If you run a **blog or channel in the information security field** and can help promote the project — write to us in private, we'll provide you with a **private PRO key** free of charge.
+>
+> 📬 Contact: **[@sudores](https://t.me/sudores)** on Telegram
+
+---
+
 ## 💰 Support the Project
 
 Pentool is built and maintained in spare time by a solo developer.  
 If it helps your work, consider supporting — it directly funds new features, bug fixes, and faster releases.
 
 - ⭐ [Star on GitHub](https://github.com/docxqwerty/pentool) — free and helps a lot
-- 💳 [GitHub Sponsors](https://github.com/sponsors/docxqwerty)
-- 🔑 Purchase a PRO license — unlocks advanced features and supports development
+- ☕ [Donate via TryBit](https://donate.trybit.com/KY1ECKA5) — one-time support in crypto
+- 🔑 PRO license — coming soon; trial available now
 
 Every contribution matters. Thank you for supporting open-source security tooling. 🙌
 

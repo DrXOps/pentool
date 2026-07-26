@@ -100,14 +100,25 @@ pentool update --check
 
 ---
 
+## 🧪 测试模式（Beta）
+
+> **Pentool 目前处于公开 Beta 测试阶段。**  
+> 所有**免费模块均可正常使用**。付费（PRO）插件仍在开发中——目前仅提供**试用版本**。  
+>
+> 但如果你拥有**信息安全领域的博客或频道**，并愿意帮助推广本项目——请私信我们，我们将免费为你提供**私有 PRO 密钥**。
+>
+> 📬 联系：**[@sudores](https://t.me/sudores)**（Telegram）
+
+---
+
 ## 💰 支持项目
 
 Pentool 由一位开发者在业余时间独立开发维护。  
 如果它对你的工作有帮助，欢迎给予支持——这将直接推动新功能的开发和 Bug 修复。
 
 - ⭐ [在 GitHub 上加星](https://github.com/docxqwerty/pentool) — 免费且帮助很大
-- 💳 [GitHub Sponsors](https://github.com/sponsors/docxqwerty)
-- 🔑 购买 PRO 许可证 — 解锁高级功能并支持开发
+- ☕ [通过 TryBit 捐款](https://donate.trybit.com/KY1ECKA5) — 加密货币一次性支持
+- 🔑 PRO 许可证 — 即将推出；现可试用
 
 每一份支持都意义重大。感谢你对开源安全工具的贡献！🙌
 
