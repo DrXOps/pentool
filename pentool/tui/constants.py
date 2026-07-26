@@ -1,4 +1,4 @@
-"""Константы widget ID для TUI — единое место хранения строковых идентификаторов."""
+"""Widget ID constants for TUI — single source of truth for string identifiers."""
 
 from __future__ import annotations
 

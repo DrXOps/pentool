@@ -1,4 +1,4 @@
-"""Dashboard — стартовый экран приложения."""
+"""Dashboard — application start screen."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Модульные константы
+# Module constants
 _LOGO = """\
 [bold green] ██████╗ [/][bold cyan]███████╗[/][bold green]███╗   ██╗[/][bold cyan]████████╗[/][bold green] ██████╗  ██████╗ ██╗[/]
 [bold green] ██╔══██╗[/][bold cyan]██╔════╝[/][bold green]████╗  ██║[/][bold cyan]╚══██╔══╝[/][bold green]██╔═══██╗██╔═══██╗██║[/]
@@ -76,7 +76,7 @@ _THREAT_CHARS = "█"
 _THREAT_COLORS = ["green", "green", "yellow", "yellow", "red", "red", "bold red", "bold red", "bold red", "bold red"]
 
 def _sparkline(values: list[int], width: int = 30, max_val: int | None = None) -> str:
-    """Строит sparkline из значений."""
+    """Build a sparkline from the given values."""
     if not values:
         return " " * width
     mv = max_val or max(values) or 1
@@ -90,7 +90,7 @@ def _sparkline(values: list[int], width: int = 30, max_val: int | None = None) -
     return result
 
 def _bar(value: int, max_val: int, width: int = 20, color: str = "green") -> str:
-    """Горизонтальный bar с цветом."""
+    """Horizontal bar with color."""
     if max_val == 0:
         filled = 0
     else:
@@ -124,7 +124,7 @@ def _threat_gauge(level: int, width: int = 40) -> str:
     return f"[{color}]{bar}[/{color}][{label_color}]{label} [{threat_word}][/{label_color}]"
 
 def _matrix_cell(count: int) -> str:
-    """Ячейка матрицы severity для heatmap."""
+    """Severity matrix cell for heatmap."""
     if count == 0:
         return "[dim]·[/dim]"
     elif count < 3:
@@ -137,7 +137,7 @@ def _matrix_cell(count: int) -> str:
         return "[bold red]▪[/bold red]"
 
 class LiveChart(Vertical):
-    """ASCII sparkline-график с живым обновлением."""
+    """ASCII sparkline chart with live updates."""
 
     DEFAULT_CSS = _CSS
 
@@ -150,7 +150,7 @@ class LiveChart(Vertical):
         self._total = 0
         self._peak = 0
         self._last_rate = 0
-        self._summary: str = ""  # дополнительная информационная строка
+        self._summary: str = ""  # additional info line
 
     def compose(self) -> ComposeResult:
         yield Static(f"┌─ {self._title} ─", id="chart-title")
@@ -201,7 +201,7 @@ class LiveChart(Vertical):
             pass
 
 class ThreatMeter(Vertical):
-    """Threat Level визуальный gauge."""
+    """Threat Level visual gauge."""
 
     DEFAULT_CSS = _CSS
 
@@ -252,7 +252,7 @@ class ThreatMeter(Vertical):
             pass
 
 class SeverityMatrix(Vertical):
-    """Heatmap матрица находок по типу × severity."""
+    """Heatmap matrix of findings by type × severity."""
 
     DEFAULT_CSS = _CSS
 
@@ -317,7 +317,7 @@ class SeverityMatrix(Vertical):
             pass
 
 class DashboardScreen(Widget):
-    """Dashboard — стартовый экран приложения."""
+    """Dashboard — application start screen."""
 
     DEFAULT_CSS = _CSS
 
@@ -335,8 +335,8 @@ class DashboardScreen(Widget):
         self._req_history: list[int] = []
         self._find_history: list[int] = []
         self._ticker: Timer | None = None
-        self._req_bucket = 0   # запросы за текущую секунду
-        self._find_bucket = 0  # находки за текущую секунду
+        self._req_bucket = 0   # requests in the current second
+        self._find_bucket = 0  # findings in the current second
 
     def compose(self) -> ComposeResult:
         yield from self._compose_overview()
@@ -439,7 +439,7 @@ class DashboardScreen(Widget):
                 else:
                     node_label = f"[dim]{proj_name} (missing)[/dim]"
 
-                # Добавляем как узел с дочерним листом-путём
+                # Add as a node with a child leaf showing the path
                 node = root.add(node_label, data=path)
                 node.add_leaf(f"[dim]{path}[/dim]", data=path)
                 if is_active:
@@ -577,7 +577,7 @@ class DashboardScreen(Widget):
         self.log_activity("Dashboard refreshed", "info")
 
     def _feed_write(self, text: str) -> None:
-        """Запись в RichLog live-ленты."""
+        """Write to the live-feed RichLog."""
         try:
             self.query_one("#feed-log", RichLog).write(text)
         except Exception:
@@ -635,7 +635,7 @@ class DashboardScreen(Widget):
         )
 
     def log_activity(self, message: str, level: str = "info") -> None:
-        """Системное сообщение в live feed."""
+        """Write a system message to the live feed."""
         ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         colors = {"info": "cyan", "warning": "yellow", "error": "red", "ok": "bold green"}
         color = colors.get(level, "white")

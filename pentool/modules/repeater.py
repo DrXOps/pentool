@@ -1,4 +1,4 @@
-"""Repeater — ручная отправка HTTP-запросов с историей."""
+"""Repeater — manual HTTP request sending with history."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class RepeaterEntry:
-    """Запись в истории Repeater."""
+    """A record in the Repeater history."""
 
     id: int
     tab_name: str
@@ -52,13 +52,13 @@ class RepeaterEntry:
 
 
 class Repeater:
-    """Repeater — отправка запросов и сохранение результатов в БД.
+    """Repeater — send requests and save results to DB.
 
     Args:
-        db_path: Путь к SQLite-базе данных.
-        project_id: ID текущего проекта (или None).
-        timeout: Таймаут HTTP-запроса в секундах.
-        verify_ssl: Проверять ли SSL сервера.
+        db_path: Path to the SQLite database.
+        project_id: Current project ID (or None).
+        timeout: HTTP request timeout in seconds.
+        verify_ssl: Whether to verify server SSL.
     """
 
     def __init__(
@@ -83,7 +83,7 @@ class Repeater:
             logger.info("REPEATER: sending %s %s", request.method, request.url)
             response = await client.send(request)
             logger.info(
-                "REPEATER: response %s %s → %d (%d bytes)",
+                "REPEATER: response %s %s -> %d (%d bytes)",
                 request.method, request.url, response.status,
                 len(response.body) if response.body else 0,
             )
@@ -166,7 +166,7 @@ class Repeater:
 
 
 def _row_to_entry(row: object) -> RepeaterEntry:
-    """Конвертировать строку БД в RepeaterEntry."""
+    """Convert a DB row to a RepeaterEntry."""
     r = dict(row)  # type: ignore[call-overload]
     ts_str = r.get("timestamp", "")
     try:

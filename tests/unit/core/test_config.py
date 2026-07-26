@@ -1,6 +1,6 @@
-"""Unit-тесты: core/config.py
+"""Unit tests: core/config.py
 
-Покрывает: Config dataclass, save/load, get_config, set_config.
+Covers: Config dataclass, save/load, get_config, set_config.
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ class TestConfigSaveLoad:
         assert path.exists()
 
     def test_load_ignores_unknown_keys(self, tmp_path: Path) -> None:
-        """Неизвестные ключи в YAML не вызывают ошибок."""
+        """Unknown keys in YAML do not cause errors."""
         import yaml
         path = tmp_path / "config.yaml"
         path.write_text(yaml.dump({"proxy_port": 7777, "unknown_key": "ignored"}))
@@ -123,7 +123,7 @@ class TestConfigSingleton:
 
 
 class TestConfigNetworkFields:
-    """Unit-тесты для Network настроек (Блок 4.10)."""
+    """Unit tests for Network settings (Block 4.10)."""
 
     def test_default_user_agent_not_empty(self) -> None:
         cfg = Config()

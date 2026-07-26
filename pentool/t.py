@@ -2,16 +2,16 @@
 # -*- coding: utf-8 -*-
 
 """
-Скрипт сборки проекта в один текстовый файл.
-Собирает все текстовые файлы (по расширениям и известным именам),
-игнорируя служебные папки (__pycache__, .git, node_modules и т.п.).
-Результат сохраняется в указанный файл с заголовками для каждого исходного файла.
+Script to bundle the project into a single text file.
+Collects all text files (by extension and known names),
+ignoring service folders (__pycache__, .git, node_modules, etc.).
+The result is saved to the specified file with headers for each source file.
 
-После создания выводится статистика:
-- размер файла на диске
-- количество символов
-- приблизительное число токенов (символы / 4)
-- предупреждение, если токенов > 128k
+After creation, stats are printed:
+- file size on disk
+- character count
+- approximate token count (characters / 4)
+- warning if tokens > 128k
 """
 
 import os
@@ -19,14 +19,14 @@ import sys
 import argparse
 from pathlib import Path
 
-# Папки, которые будут полностью исключены из обхода
+# Directories to be fully excluded from traversal
 EXCLUDE_DIRS = {
     '.git', '__pycache__', 'node_modules', '.venv', 'venv', 'env',
     'dist', 'build', '.idea', '.vscode', '.pytest_cache', '.mypy_cache',
     '.tox', '.eggs', 'coverage', 'htmlcov', '.ruff_cache', '.ipynb_checkpoints'
 }
 
-# Расширения файлов, считающихся текстовыми (код, конфиги, документация)
+# File extensions considered as text (code, configs, documentation)
 INCLUDE_EXTS = {
     '.py', '.js', '.jsx', '.ts', '.tsx', '.html', '.htm', '.css', '.scss', '.sass',
     '.json', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
@@ -38,7 +38,7 @@ INCLUDE_EXTS = {
     '.csv', '.tsv', '.svg', '.xml', '.xslt', '.wsdl'
 }
 
-# Имена файлов без расширения, которые тоже нужно включать
+# Extension-less filenames to include as well
 SPECIAL_NAMES = {
     'Dockerfile', 'Makefile', 'makefile', 'CMakeLists.txt', 'LICENSE',
     'README', 'README.md', 'CHANGELOG', 'CONTRIBUTING', 'AUTHORS'
@@ -47,27 +47,27 @@ SPECIAL_NAMES = {
 
 def should_include_file(file_path: Path, include_exts, exclude_dirs, special_names):
     """
-    Определяет, нужно ли включать файл в сборку.
-    Проверяет:
-      - не находится ли в исключённой папке;
-      - соответствует ли расширение списку разрешённых;
-      - или имя файла входит в специальные имена;
-      - а также пытается прочитать начало файла как UTF‑8 (проверка на текст).
+    Determine whether to include a file in the bundle.
+    Checks:
+      - not inside an excluded directory;
+      - extension matches the allowed list;
+      - or filename is in special names;
+      - also tries to read the beginning of the file as UTF-8 (text check).
     """
-    # Исключаем папки
+    # Exclude directories
     for part in file_path.parts:
         if part in exclude_dirs:
             return False
 
-    # Проверка расширения или специального имени
+    # Check extension or special name
     if file_path.suffix.lower() in include_exts:
-        pass  # разрешено по расширению
+        pass  # allowed by extension
     elif file_path.name in special_names:
-        pass  # разрешено по имени
+        pass  # allowed by name
     else:
-        return False  # не подходит
+        return False  # does not qualify
 
-    # Попытка прочитать небольшой кусок как текст UTF‑8
+    # Try reading a small chunk as UTF-8 text
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             f.read(1024)
@@ -77,7 +77,7 @@ def should_include_file(file_path: Path, include_exts, exclude_dirs, special_nam
 
 
 def collect_files(root_dir: str, include_exts=None, exclude_dirs=None, special_names=None):
-    """Рекурсивно собирает все подходящие файлы из корневой директории."""
+    """Recursively collect all qualifying files from the root directory."""
     if include_exts is None:
         include_exts = INCLUDE_EXTS
     if exclude_dirs is None:
@@ -87,7 +87,7 @@ def collect_files(root_dir: str, include_exts=None, exclude_dirs=None, special_n
 
     root = Path(root_dir).resolve()
     if not root.is_dir():
-        raise NotADirectoryError(f"'{root_dir}' не является директорией.")
+        raise NotADirectoryError(f"'{root_dir}' is not a directory.")
 
     files = []
     for item in root.rglob('*'):
@@ -98,115 +98,115 @@ def collect_files(root_dir: str, include_exts=None, exclude_dirs=None, special_n
 
 
 def generate_output(files, output_file: str, root_dir: str):
-    """Записывает все файлы в выходной файл с разделителями."""
+    """Write all files to the output file with separators."""
     with open(output_file, 'w', encoding='utf-8') as out:
         out.write("=" * 80 + "\n")
-        out.write("СБОРКА ВСЕХ ФАЙЛОВ ПРОЕКТА\n")
-        out.write(f"Корневая папка: {root_dir}\n")
-        out.write(f"Всего файлов: {len(files)}\n")
+        out.write("PROJECT FILES BUNDLE\n")
+        out.write(f"Root directory: {root_dir}\n")
+        out.write(f"Total files: {len(files)}\n")
         out.write("=" * 80 + "\n\n")
 
         for file_path in sorted(files):
-            # Относительный путь от корня проекта для наглядности
+            # Relative path from project root for clarity
             try:
                 rel_path = file_path.relative_to(Path(root_dir).resolve())
             except ValueError:
-                rel_path = file_path  # на случай, если путь не вложен
+                rel_path = file_path  # in case the path is not nested
 
-            out.write(f"ФАЙЛ: {rel_path}\n")
+            out.write(f"FILE: {rel_path}\n")
             out.write("-" * 80 + "\n")
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                 out.write(content)
             except Exception as e:
-                out.write(f"ОШИБКА ЧТЕНИЯ: {e}\n")
+                out.write(f"READ ERROR: {e}\n")
             out.write("\n" + "=" * 80 + "\n\n")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Собрать все текстовые файлы проекта в один файл для передачи ИИ."
+        description="Bundle all project text files into a single file for AI input."
     )
     parser.add_argument(
         '--root', default='.',
-        help='Корневая папка проекта (по умолчанию текущая)'
+        help='Project root directory (default: current directory)'
     )
     parser.add_argument(
         '--output', default='project_export.txt',
-        help='Выходной файл (по умолчанию project_export.txt)'
+        help='Output file (default: project_export.txt)'
     )
     parser.add_argument(
         '--extensions', nargs='+',
-        help='Список расширений для включения (например .py .js) — переопределяет стандартный список'
+        help='List of extensions to include (e.g. .py .js) — overrides the default list'
     )
     parser.add_argument(
         '--exclude-dirs', nargs='+',
-        help='Список дополнительных папок для исключения (добавляются к стандартным)'
+        help='List of additional directories to exclude (added to defaults)'
     )
     parser.add_argument(
         '--no-default-excludes', action='store_true',
-        help='Не использовать стандартный список исключённых папок'
+        help='Do not use the default excluded directories list'
     )
     parser.add_argument(
         '--max-size-mb', type=float, default=None,
-        help='Пропускать файлы размером больше указанного МБ (по умолчанию без ограничения)'
+        help='Skip files larger than the given MB (default: no limit)'
     )
     parser.add_argument(
         '--no-stats', action='store_true',
-        help='Не выводить статистику по итоговому файлу'
+        help='Do not print stats for the output file'
     )
     args = parser.parse_args()
 
     root_dir = args.root
     output_file = args.output
 
-    # Формируем списки
-    include_exts = set(args.extensions) if args.extensions else None  # None означает использовать стандартный
+    # Build lists
+    include_exts = set(args.extensions) if args.extensions else None  # None means use default
     exclude_dirs = set(args.exclude_dirs) if args.exclude_dirs else set()
     if not args.no_default_excludes:
         exclude_dirs.update(EXCLUDE_DIRS)
 
     files = collect_files(root_dir, include_exts, exclude_dirs, SPECIAL_NAMES)
 
-    # Фильтр по размеру, если задан
+    # Size filter if specified
     if args.max_size_mb is not None:
         max_bytes = args.max_size_mb * 1024 * 1024
         files = [f for f in files if f.stat().st_size <= max_bytes]
-        print(f"После фильтра по размеру осталось {len(files)} файлов.")
+        print(f"After size filter: {len(files)} files remaining.")
 
-    print(f"Найдено файлов для включения: {len(files)}")
+    print(f"Files to include: {len(files)}")
     generate_output(files, output_file, root_dir)
-    print(f"Результат записан в {output_file}")
+    print(f"Output written to {output_file}")
 
-    # --- ВЫВОД СТАТИСТИКИ ---
+    # --- STATS OUTPUT ---
     if not args.no_stats:
         try:
             file_size = os.path.getsize(output_file)
             with open(output_file, 'r', encoding='utf-8') as f:
                 content = f.read()
             char_count = len(content)
-            approx_tokens = char_count // 4  # грубая оценка
+            approx_tokens = char_count // 4  # rough estimate
 
             print("\n" + "=" * 50)
-            print("СТАТИСТИКА ИТОГОВОГО ФАЙЛА")
-            print(f"Размер на диске: {file_size} байт "
-                  f"({file_size / 1024:.2f} КБ, {file_size / 1024 / 1024:.2f} МБ)")
-            print(f"Количество символов: {char_count:,}")
-            print(f"Оценка токенов (символы ÷ 4): {approx_tokens:,}")
+            print("OUTPUT FILE STATS")
+            print(f"Size on disk: {file_size} bytes "
+                  f"({file_size / 1024:.2f} KB, {file_size / 1024 / 1024:.2f} MB)")
+            print(f"Character count: {char_count:,}")
+            print(f"Estimated tokens (chars / 4): {approx_tokens:,}")
 
-            # Предупреждение о превышении типичного контекста
+            # Warning if typical context exceeded
             if approx_tokens > 128_000:
-                print("\n⚠️  ВНИМАНИЕ: оценка токенов превышает 128 000.")
-                print("   Это может не поместиться в контекст многих современных моделей (GPT-4, Claude 3 и др.).")
-                print("   Рекомендуется сократить проект или разбить на части.")
+                print("\n⚠️  WARNING: estimated tokens exceed 128,000.")
+                print("   This may not fit in the context of many modern models (GPT-4, Claude 3, etc.).")
+                print("   Consider reducing the project size or splitting into parts.")
             elif approx_tokens > 16_000:
-                print("\nℹ️  Оценка токенов > 16 000 — контекст может быть заполнен значительной частью.")
+                print("\nℹ️  Estimated tokens > 16,000 — context may be largely filled.")
             else:
-                print("\n✅ Оценка токенов в пределах типичного контекста (≤ 16 000).")
+                print("\n✅ Estimated tokens within typical context (≤ 16,000).")
             print("=" * 50)
         except Exception as e:
-            print(f"Не удалось подсчитать статистику: {e}")
+            print(f"Could not compute stats: {e}")
 
 
 if __name__ == '__main__':

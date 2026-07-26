@@ -1,12 +1,12 @@
-"""RequestContextMenuMixin — стандартизированное контекстное меню для HTTP-запросов."""
+"""RequestContextMenuMixin — standardised context menu for HTTP requests."""
 
 from __future__ import annotations
 
 
 class RequestContextMenuMixin:
-    """Единое контекстное меню HTTP-запросов для всех модулей."""
+    """Unified HTTP request context menu for all modules."""
 
-    # ── Флаги пунктов (переопределить в подклассе) ───────────────────────────
+    # ── Item flags (override in subclass) ────────────────────────────────────
     _cm_show_copy_url:      bool = False
     _cm_show_ffuf:          bool = True
     _cm_show_sqlmap:        bool = True
@@ -19,18 +19,18 @@ class RequestContextMenuMixin:
     _cm_show_send_decoder:  bool = False
     _cm_show_send_comparer: bool = False
 
-    # ── Обязательный интерфейс ────────────────────────────────────────────────
+    # ── Required interface ────────────────────────────────────────────────────
 
     def _cm_get_raw_request(self) -> str:
         return ""
 
-    # ── Опциональный хук ─────────────────────────────────────────────────────
+    # ── Optional hook ─────────────────────────────────────────────────────────
 
     def _cm_on_custom_action(self, action: str) -> bool:
-        """Обработать кастомный action. Вернуть True если обработан."""
+        """Handle custom action. Return True if handled."""
         return False
 
-    # ── Публичный вход ────────────────────────────────────────────────────────
+    # ── Public entry point ────────────────────────────────────────────────────
 
     def cm_open_text_menu(self, x: int, y: int) -> None:
         items = self._cm_build_items()
@@ -38,7 +38,7 @@ class RequestContextMenuMixin:
             items, x, y, callback=self._cm_handle
         )
 
-    # ── Построение пунктов ────────────────────────────────────────────────────
+    # ── Building items ────────────────────────────────────────────────────────
 
     def _cm_build_items(self) -> list[tuple[str, str]]:
         items: list[tuple[str, str]] = [
@@ -69,7 +69,7 @@ class RequestContextMenuMixin:
                 ("-", ""),
                 ("save_req_txt", "Save request.txt"),
             ]
-        # Группа Send-to
+        # Send-to group
         send_items: list[tuple[str, str]] = []
         if self._cm_show_send_repeater:
             send_items.append(("send_repeater", "Send to Repeater"))
@@ -80,7 +80,7 @@ class RequestContextMenuMixin:
         if send_items:
             items.append(("-", ""))
             items += send_items
-        # Группа Decoder/Comparer
+        # Decoder/Comparer group
         tool_items: list[tuple[str, str]] = []
         if self._cm_show_send_decoder:
             tool_items.append(("send_decoder",  "Send to Decoder"))
@@ -91,7 +91,7 @@ class RequestContextMenuMixin:
             items += tool_items
         return items
 
-    # ── Диспетчер ─────────────────────────────────────────────────────────────
+    # ── Dispatcher ────────────────────────────────────────────────────────────
 
     def _cm_handle(self, action: str) -> None:
         if self._cm_on_custom_action(action):
@@ -123,7 +123,7 @@ class RequestContextMenuMixin:
         elif action == "send_comparer":
             self._cm_do_send_comparer(raw)
 
-    # ── Реализация действий ───────────────────────────────────────────────────
+    # ── Action implementations ────────────────────────────────────────────────
 
     def _cm_do_copy_selection(self) -> None:
         try:
@@ -239,9 +239,9 @@ class RequestContextMenuMixin:
             self.app.notify(f"Send to Scanner failed: {exc}", severity="error")  # type: ignore[attr-defined]
 
     def _cm_do_send_decoder(self, raw: str) -> None:
-        """Требует AppMixin в цепочке наследования."""
+        """Requires AppMixin in the inheritance chain."""
         self._send_to_decoder(raw)  # type: ignore[attr-defined]
 
     def _cm_do_send_comparer(self, raw: str) -> None:
-        """Требует AppMixin в цепочке наследования."""
+        """Requires AppMixin in the inheritance chain."""
         self._send_to_comparer(raw, label="Request")  # type: ignore[attr-defined]

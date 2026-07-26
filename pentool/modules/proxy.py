@@ -1,4 +1,4 @@
-"""Ядро прокси-сервера: HTTP/HTTPS перехват, scope."""
+"""Proxy server core: HTTP/HTTPS interception, scope."""
 
 from __future__ import annotations
 
@@ -26,13 +26,13 @@ from pentool.utils.parser import (
 
 logger = get_logger(__name__)
 
-# Максимальный размер тела запроса/ответа для чтения (10 МБ)
+# Maximum request/response body size to read (10 MB)
 _MAX_BODY = 10 * 1024 * 1024
 
-# Таймаут чтения данных из сокета (секунды)
+# Socket read timeout (seconds)
 _READ_TIMEOUT = 30.0
 
-# Таймаут ожидания решения пользователя при перехвате (секунды)
+# Timeout waiting for user decision during interception (seconds)
 _INTERCEPT_TIMEOUT = 300.0
 
 
@@ -41,7 +41,7 @@ InterceptState = Literal["waiting", "forwarded", "dropped"]
 
 @dataclass
 class InterceptedRequest:
-    """Перехваченный запрос с состоянием и ответом."""
+    """Intercepted request with state and response."""
 
     id: str
     method: str
@@ -53,15 +53,15 @@ class InterceptedRequest:
     response: ParsedResponse | None = None
     is_https: bool = False
     is_websocket: bool = False
-    # asyncio.Event — устанавливается когда пользователь принял решение
+    # asyncio.Event — set when the user has made a decision
     _decision_event: asyncio.Event = field(
         default_factory=asyncio.Event, repr=False, compare=False
     )
-    # Если пользователь отредактировал запрос перед forwarding
+    # If the user edited the request before forwarding
     _modified_raw: str | None = field(default=None, repr=False, compare=False)
 
     def to_parsed_request(self) -> ParsedRequest:
-        """Конвертировать в ParsedRequest для отправки через HTTPClient."""
+        """Convert to ParsedRequest for sending via HTTPClient."""
         return ParsedRequest(
             method=self.method,
             url=self.url,
@@ -70,9 +70,9 @@ class InterceptedRequest:
         )
 
     def to_dict(self) -> dict:
-        """Сериализовать перехваченный запрос в словарь (полный формат с response).
+        """Serialize the intercepted request to a dict (full format with response).
 
-        Симметрично from_dict() — пригоден для project persistence.
+        Symmetric with from_dict() — suitable for project persistence.
         """
         resp = self.response
         return {
@@ -95,7 +95,7 @@ class InterceptedRequest:
 
     @classmethod
     def from_dict(cls, data: dict) -> "InterceptedRequest":
-        """Восстановить InterceptedRequest из словаря (десериализация из проекта)."""
+        """Restore InterceptedRequest from a dict (deserialization from project)."""
         from datetime import datetime, timezone
         ts_raw = data.get("timestamp", "")
         try:
@@ -128,15 +128,15 @@ class InterceptedRequest:
 
 
 class ProxyServer:
-    """Асинхронный HTTP/HTTPS прокси-сервер с перехватом трафика.
+    """Asynchronous HTTP/HTTPS proxy server with traffic interception.
 
-    Запускается как asyncio-сервер. Поддерживает:
-    - Перехват HTTP и HTTPS (через CONNECT + динамические сертификаты)
-    - Интерактивный режим (intercept): приостановка запроса до решения пользователя
-    - Scope: фильтрация хостов
-    - Match/Replace: автоматическая замена в запросах/ответах (через MatchReplaceEngine)
-    - Логирование в SQLite через core/database
-    - Уведомления через EventBus: ProxyRequestCaptured, ProxyRequestCompleted
+    Runs as an asyncio server. Supports:
+    - HTTP and HTTPS interception (via CONNECT + dynamic certificates)
+    - Interactive mode (intercept): pauses request until user decision
+    - Scope: host filtering
+    - Match/Replace: automatic replacement in requests/responses (via MatchReplaceEngine)
+    - Logging to SQLite via core/database
+    - Notifications via EventBus: ProxyRequestCaptured, ProxyRequestCompleted
     """
 
     def __init__(
@@ -152,17 +152,17 @@ class ProxyServer:
         self.db_path = db_path
 
         self.intercept_enabled: bool = False
-        self.scope: list[str] = []  # Пустой = перехватывать всё
+        self.scope: list[str] = []  # Empty = intercept everything
 
-        # Match/Replace через выделенный движок (Sprint 5)
+        # Match/Replace via dedicated engine
         self._match_replace_engine = MatchReplaceEngine()
-        # WebSocket-обработчик (Sprint 5)
+        # WebSocket handler
         self._ws_handler = WebSocketHandler()
 
-        # Очередь запросов, ожидающих решения в интерактивном режиме
+        # Queue of requests waiting for decision in interactive mode
         self.intercept_queue: asyncio.Queue[InterceptedRequest] = asyncio.Queue()
 
-        # Все перехваченные запросы (история в памяти, макс. 10000)
+        # All intercepted requests (in-memory history, max 10000)
         self.requests: list[InterceptedRequest] = []
         self._requests_max = 10000
 
@@ -170,15 +170,15 @@ class ProxyServer:
         self._ca_cert_path: str | None = None
         self._ca_key_path: str | None = None
         self._running = False
-        # Луп прокси-треда — сохраняется при старте, нужен для thread-safe wakeup
+        # Proxy thread loop — saved on start, needed for thread-safe wakeup
         self._loop: asyncio.AbstractEventLoop | None = None
-        # Singleton HTTP-клиент — не создавать на каждый запрос
+        # Singleton HTTP client — do not create on every request
         self._http_client: HTTPClient | None = None
 
     async def start(self) -> None:
-        # Сохраняем луп текущего треда — нужен для thread-safe wakeup event'ов
+        # Save the current thread's loop — needed for thread-safe event wakeup
         self._loop = asyncio.get_running_loop()
-        # Загрузить или создать CA
+        # Load or create CA
         self._ca_cert_path, self._ca_key_path = load_or_create_ca(self.cert_dir)
         logger.info("CA certificate: %s", self._ca_cert_path)
 
@@ -197,7 +197,7 @@ class ProxyServer:
             self._server.close()
             await self._server.wait_closed()
             self._server = None
-        # Закрыть singleton HTTP-клиент
+        # Close singleton HTTP client
         if self._http_client:
             try:
                 await self._http_client.close()
@@ -213,7 +213,7 @@ class ProxyServer:
 
     @property
     def is_running(self) -> bool:
-        """True если прокси-сервер запущен и слушает порт."""
+        """True if the proxy server is running and listening on the port."""
         return self._running and self._server is not None
 
     def set_scope(self, hosts: list[str]) -> None:
@@ -228,14 +228,14 @@ class ProxyServer:
         self._match_replace_engine.set_rules(rules)
 
     def is_in_scope(self, host: str) -> bool:
-        """Проверить, входит ли хост в scope.
+        """Check if a host is in scope.
 
-        Если scope пустой — все хосты в scope.
-        Поддерживает wildcards: *.example.com
+        If scope is empty — all hosts are in scope.
+        Supports wildcards: *.example.com
         """
         if not self.scope:
             return True
-        host = host.lower().split(":")[0]  # убрать порт
+        host = host.lower().split(":")[0]  # remove port
         for pattern in self.scope:
             pattern = pattern.split(":")[0]
             if pattern.startswith("*."):
@@ -254,31 +254,31 @@ class ProxyServer:
             self._set_event_threadsafe(req._decision_event)
 
     def drop(self, req_id: str) -> None:
-        """Отбросить перехваченный запрос."""
+        """Drop an intercepted request."""
         req = self._find_request(req_id)
         if req and req.state == "waiting":
             req.state = "dropped"
             self._set_event_threadsafe(req._decision_event)
 
     def _set_event_threadsafe(self, event: asyncio.Event) -> None:
-        """Разбудить asyncio.Event из любого треда."""
+        """Wake up an asyncio.Event from any thread."""
         loop = self._loop
         if loop is not None and loop.is_running():
             loop.call_soon_threadsafe(event.set)
         else:
-            # Запасной вариант — прямой вызов (если луп не запущен)
+            # Fallback — direct call (if loop is not running)
             try:
                 event.set()
             except Exception as e:
                 logger.warning("_set_event_threadsafe: failed to set event: %s", e)
 
     def set_intercept(self, enabled: bool) -> None:
-        """Thread-safe установка флага intercept_enabled из любого треда.
+        """Thread-safe setting of intercept_enabled flag from any thread.
 
-        При вызове из TUI-треда (Textual) использует call_soon_threadsafe
-        чтобы избежать race condition: proxy-loop читает intercept_enabled
-        в asyncio-корутине, и прямая запись из другого треда может привести
-        к тому, что флаг изменится уже после проверки.
+        When called from the TUI thread (Textual) uses call_soon_threadsafe
+        to avoid race conditions: the proxy loop reads intercept_enabled
+        in an asyncio coroutine, and a direct write from another thread may
+        cause the flag to change after the check.
         """
         loop = self._loop
         if loop is not None and loop.is_running():
@@ -297,7 +297,7 @@ class ProxyServer:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        """Обработать входящее клиентское соединение."""
+        """Handle an incoming client connection."""
         try:
             await self._process_connection(reader, writer)
         except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
@@ -316,7 +316,7 @@ class ProxyServer:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        """Прочитать первый запрос и решить: HTTP или HTTPS CONNECT."""
+        """Read the first request and decide: HTTP or HTTPS CONNECT."""
         try:
             raw_request = await asyncio.wait_for(
                 self._read_http_message(reader),
@@ -341,7 +341,7 @@ class ProxyServer:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        """Обработать CONNECT-метод: установить HTTPS-туннель."""
+        """Handle CONNECT method: establish HTTPS tunnel."""
         first_line = raw_connect.split("\n")[0].strip()
         # CONNECT example.com:443 HTTP/1.1
         parts = first_line.split()
@@ -351,16 +351,16 @@ class ProxyServer:
         host_port = parts[1]
         domain = host_port.split(":")[0]
 
-        # Ответить 200 Connection Established
+        # Respond 200 Connection Established
         writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
         await writer.drain()
 
-        # Если хост вне scope — просто тунелируем без перехвата
+        # If host is out of scope — just tunnel without interception
         if not self.is_in_scope(domain):
             await self._tunnel_raw(domain, host_port, reader, writer)
             return
 
-        # Генерировать SSL-контекст для домена (с disk-cache через cert_dir)
+        # Generate SSL context for the domain (with disk-cache via cert_dir)
         try:
             ssl_ctx = create_ssl_context_for_domain(
                 domain, self._ca_cert_path, self._ca_key_path,
@@ -370,9 +370,9 @@ class ProxyServer:
             logger.warning("SSL context error for %s: %s", domain, exc)
             return
 
-        # Поднять TLS через start_tls с новым StreamReaderProtocol.
-        # connection_made нужно вызвать ДО start_tls чтобы протокол
-        # знал о транспорте и handshake прошёл корректно.
+        # Upgrade TLS via start_tls with a new StreamReaderProtocol.
+        # connection_made must be called BEFORE start_tls so the protocol
+        # knows about the transport and the handshake proceeds correctly.
         logger.debug("TLS: upgrading %s", domain)
         try:
             loop = asyncio.get_running_loop()
@@ -391,7 +391,7 @@ class ProxyServer:
             logger.warning("TLS upgrade failed for %s: %s", domain, exc)
             return
 
-        # Читать HTTPS-запросы
+        # Read HTTPS requests
         try:
             while True:
                 raw_req = await asyncio.wait_for(
@@ -401,7 +401,7 @@ class ProxyServer:
                 if not raw_req.strip():
                     break
 
-                # Вставить схему https в запрос
+                # Insert https scheme into the request
                 if not raw_req.startswith("http"):
                     first = raw_req.split("\n")[0]
                     method, path, *rest = first.split()
@@ -429,7 +429,7 @@ class ProxyServer:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        """Прозрачный TCP-туннель для хостов вне scope."""
+        """Transparent TCP tunnel for out-of-scope hosts."""
         port = int(host_port.split(":")[1]) if ":" in host_port else 443
         try:
             rem_reader, rem_writer = await asyncio.open_connection(domain, port)
@@ -446,7 +446,7 @@ class ProxyServer:
                     dst.write(data)
                     await dst.drain()
             except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
-                pass  # нормальное завершение TCP-туннеля
+                pass  # normal TCP tunnel termination
             except Exception as e:
                 logger.debug("_tunnel_raw pipe error: %s", e)
             finally:
@@ -468,7 +468,7 @@ class ProxyServer:
         writer: asyncio.StreamWriter,
         is_https: bool = False,
     ) -> ParsedResponse | None:
-        """Обработать HTTP-запрос: scope, match/replace, перехват, отправка."""
+        """Handle an HTTP request: scope, match/replace, interception, sending."""
         try:
             req = parse_http_request(raw_request)
         except ValueError as exc:
@@ -479,12 +479,12 @@ class ProxyServer:
         logger.debug("PROXY: _handle_http: %s %s (https=%s, intercept=%s, in_scope=%s)",
                     req.method, req.url, is_https, self.intercept_enabled, self.is_in_scope(host))
 
-        # Проверить scope (для HTTP; HTTPS уже проверен в _handle_connect)
+        # Check scope (for HTTP; HTTPS already checked in _handle_connect)
         if not is_https and not self.is_in_scope(host):
             logger.debug("PROXY: _handle_http: host %s out of scope, forwarding direct", host)
             return await self._forward_direct(req, writer)
 
-        # Применить match/replace к запросу (через engine)
+        # Apply match/replace to request (via engine)
         raw_request = self._request_to_raw(req)
         modified_raw = self._match_replace_engine.apply_to_request(raw_request)
         if modified_raw != raw_request:
@@ -493,10 +493,10 @@ class ProxyServer:
             except ValueError:
                 pass
 
-        # Определить WebSocket-соединение (по заголовку Upgrade: websocket)
+        # Detect WebSocket connection (by Upgrade: websocket header)
         is_websocket = req.headers.get("Upgrade", "").lower() == "websocket"
 
-        # Создать InterceptedRequest
+        # Create InterceptedRequest
         ireq = InterceptedRequest(
             id=str(uuid.uuid4())[:12],
             method=req.method,
@@ -509,7 +509,7 @@ class ProxyServer:
         )
         self._add_request(ireq)
 
-        # Уведомить подписчиков через EventBus (основной канал)
+        # Notify subscribers via EventBus (main channel)
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import ProxyRequestCaptured
@@ -526,7 +526,7 @@ class ProxyServer:
         except Exception as exc:
             logger.debug("EventBus emit ProxyRequestCaptured error: %s", exc)
 
-        # Интерактивный перехват
+        # Interactive interception
         if self.intercept_enabled:
             logger.debug("INTERCEPT: waiting for decision on %s %s (id=%s, event_set=%s, loop=%s)",
                         ireq.method, ireq.url, ireq.id,
@@ -546,7 +546,7 @@ class ProxyServer:
                 await writer.drain()
                 return None
 
-            # Пользователь мог отредактировать запрос
+            # User may have edited the request
             if ireq._modified_raw:
                 try:
                     req = parse_http_request(ireq._modified_raw)
@@ -557,12 +557,12 @@ class ProxyServer:
                 except ValueError:
                     pass
 
-        # WebSocket upgrade — отдельный путь (нужен raw TCP-туннель)
+        # WebSocket upgrade — separate path (requires raw TCP tunnel)
         if is_websocket:
             await self._handle_websocket(req, ireq, reader, writer)
             return None
 
-        # Отправить запрос к целевому серверу
+        # Send request to target server
         response = await self._send_request(req)
 
         if response is None:
@@ -572,7 +572,7 @@ class ProxyServer:
             ireq.response = None
             return None
 
-        # Применить match/replace к ответу (через engine)
+        # Apply match/replace to response (via engine)
         resp_raw = self._response_to_raw(response)
         modified_resp_raw = self._match_replace_engine.apply_to_response(resp_raw)
         if modified_resp_raw != resp_raw:
@@ -585,7 +585,7 @@ class ProxyServer:
         if ireq.state == "waiting":
             ireq.state = "forwarded"
 
-        # Уведомить подписчиков через EventBus (основной канал)
+        # Notify subscribers via EventBus (main channel)
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import ProxyRequestCompleted
@@ -599,22 +599,22 @@ class ProxyServer:
         except Exception as exc:
             logger.debug("EventBus emit ProxyRequestCompleted error: %s", exc)
 
-        # Отправить ответ клиенту (сырые байты без перекодирования)
+        # Send response to client (raw bytes without re-encoding)
         writer.write(self._response_to_bytes(response))
         await writer.drain()
 
         return response
 
-    # ── WebSocket support (делегируется в WebSocketHandler) ──────────────────
+    # ── WebSocket support (delegated to WebSocketHandler) ──────────────────
 
     @staticmethod
     def _parse_ws_frame(data: bytes) -> tuple[int, bool, bytes, int] | None:
-        """Обратная совместимость — делегирует в WebSocketHandler.parse_frame."""
+        """Backward compatibility — delegates to WebSocketHandler.parse_frame."""
         return WebSocketHandler.parse_frame(data)
 
     @staticmethod
     def _build_ws_frame(opcode: int, payload: bytes, mask: bool = False) -> bytes:
-        """Обратная совместимость — делегирует в WebSocketHandler.build_frame."""
+        """Backward compatibility — delegates to WebSocketHandler.build_frame."""
         return WebSocketHandler.build_frame(opcode, payload, mask)
 
     async def _ws_tunnel(
@@ -625,7 +625,7 @@ class ProxyServer:
         srv_reader: asyncio.StreamReader,
         srv_writer: asyncio.StreamWriter,
     ) -> None:
-        """Обратная совместимость — делегирует в WebSocketHandler.tunnel."""
+        """Backward compatibility — delegates to WebSocketHandler.tunnel."""
         await self._ws_handler.tunnel(
             request_id=request_id,
             client_reader=client_reader,
@@ -641,19 +641,20 @@ class ProxyServer:
         client_reader: asyncio.StreamReader,
         client_writer: asyncio.StreamWriter,
     ) -> None:
-        """Обратная совместимость — делегирует в WebSocketHandler.connect_and_handle."""
+        """Backward compatibility — delegates to WebSocketHandler.connect_and_handle."""
         await self._ws_handler.connect_and_handle(
             req=req,
             ireq=ireq,
             client_reader=client_reader,
             client_writer=client_writer,
         )
+
     async def _forward_direct(
         self,
         req: ParsedRequest,
         writer: asyncio.StreamWriter,
     ) -> ParsedResponse | None:
-        """Переслать запрос без перехвата (хост вне scope)."""
+        """Forward request without interception (host out of scope)."""
         response = await self._send_request(req)
         if response:
             writer.write(self._response_to_bytes(response))
@@ -662,7 +663,7 @@ class ProxyServer:
 
     async def _send_request(self, req: ParsedRequest) -> ParsedResponse | None:
         try:
-            # Используем singleton-клиент для connection pooling
+            # Use singleton client for connection pooling
             if self._http_client is None:
                 self._http_client = HTTPClient(verify_ssl=False, timeout=30.0)
             return await self._http_client.send(req)
@@ -671,8 +672,8 @@ class ProxyServer:
             return None
 
     async def _read_http_message(self, reader: asyncio.StreamReader) -> str:
-        """Прочитать HTTP-сообщение (заголовки + тело по Content-Length)."""
-        # Читаем заголовки построчно до пустой строки
+        """Read an HTTP message (headers + body by Content-Length)."""
+        # Read headers line by line until empty line
         header_lines: list[bytes] = []
         while True:
             try:
@@ -689,7 +690,7 @@ class ProxyServer:
 
         headers_raw = b"".join(header_lines)
 
-        # Определить Content-Length для чтения тела
+        # Determine Content-Length for body reading
         content_length = 0
         for line in header_lines:
             decoded = line.decode("utf-8", errors="replace").strip()
@@ -733,10 +734,9 @@ class ProxyServer:
     def clear_requests(self) -> None:
         self.requests.clear()
 
-
     @staticmethod
     def _request_to_raw(req: "ParsedRequest") -> str:
-        """Сериализовать ParsedRequest в сырую HTTP-строку (для match-replace)."""
+        """Serialize ParsedRequest to raw HTTP string (for match-replace)."""
         lines = [f"{req.method} {req.url} HTTP/1.1"]
         for k, v in req.headers.items():
             lines.append(f"{k}: {v}")
@@ -747,7 +747,7 @@ class ProxyServer:
 
     @staticmethod
     def _response_to_raw(resp: ParsedResponse) -> str:
-        """Сериализовать ParsedResponse в сырую HTTP-строку (для TUI/match-replace)."""
+        """Serialize ParsedResponse to raw HTTP string (for TUI/match-replace)."""
         lines = [f"{resp.http_version} {resp.status} {resp.reason}"]
         for k, v in resp.headers.items():
             lines.append(f"{k}: {v}")
@@ -758,12 +758,12 @@ class ProxyServer:
 
     @staticmethod
     def _response_to_bytes(resp: ParsedResponse) -> bytes:
-        """Сериализовать ParsedResponse в байты для отправки браузеру.
+        """Serialize ParsedResponse to bytes for sending to the browser.
 
-        aiohttp уже декодировал gzip/deflate и убрал chunked — нужно
-        почистить соответствующие заголовки и выставить правильный Content-Length.
+        aiohttp already decoded gzip/deflate and removed chunked — need to
+        clean up the corresponding headers and set the correct Content-Length.
         """
-        # Тело — сырые байты (уже декодированные aiohttp)
+        # Body — raw bytes (already decoded by aiohttp)
         if resp._raw_body is not None:
             body_bytes = resp._raw_body
         elif resp.body:
@@ -771,14 +771,14 @@ class ProxyServer:
         else:
             body_bytes = b""
 
-        # Заголовки: убрать те что стали невалидны после декодирования aiohttp
+        # Headers: remove those that became invalid after aiohttp decoding
         skip = {"transfer-encoding", "content-encoding", "content-length"}
         lines = [f"{resp.http_version} {resp.status} {resp.reason}"]
         for k, v in resp.headers.items():
             if k.lower() in skip:
                 continue
             lines.append(f"{k}: {v}")
-        # Выставить актуальный Content-Length
+        # Set actual Content-Length
         lines.append(f"Content-Length: {len(body_bytes)}")
 
         header_bytes = ("\r\n".join(lines) + "\r\n\r\n").encode("utf-8", errors="replace")

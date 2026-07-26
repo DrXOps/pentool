@@ -1,4 +1,4 @@
-"""SpiderAPI — публичный интерфейс Spider-модуля для TUI и CLI."""
+"""SpiderAPI — public Spider module interface for TUI and CLI."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from pentool.modules.spider import (
 
 logger = get_logger(__name__)
 
-# Реэкспорт типов — TUI использует их отсюда
+# Re-export types — TUI uses them from here
 __all__ = [
     "SpiderAPI", "SpiderResult", "SpiderForm", "SpiderEndpoint", "SpiderConfig",
     "is_playwright_available",
@@ -25,14 +25,14 @@ __all__ = [
 
 @dataclass
 class SpiderConfig:
-    """Конфигурация краулера."""
+    """Crawler configuration."""
     max_depth: int = 3
     max_pages: int = 100
     concurrency: int = 5
     timeout: float = 10.0
     user_agent: str = "pentool/1.0"
     respect_scope: bool = False
-    js_render: bool = False  # Playwright JS-рендеринг (если установлен)
+    js_render: bool = False  # Playwright JS rendering (if installed)
 
 
 class SpiderAPI:
@@ -50,7 +50,7 @@ class SpiderAPI:
         concurrency: int = 5,
         timeout: float = 10.0,
     ) -> "SpiderAPI":
-        """Удобный фабричный метод."""
+        """Convenience factory method."""
         return cls(SpiderConfig(
             max_depth=max_depth,
             max_pages=max_pages,
@@ -83,7 +83,7 @@ class SpiderAPI:
         try:
             result = await self._spider.crawl(url)
             logger.info(
-                "SpiderAPI.crawl: %s → %d pages, %d forms, %d endpoints",
+                "SpiderAPI.crawl: %s -> %d pages, %d forms, %d endpoints",
                 url, len(result.pages), len(result.forms), len(result.endpoints),
             )
             return result
@@ -92,7 +92,7 @@ class SpiderAPI:
             return SpiderResult(pages=[], forms=[], endpoints=[], js_files=[], errors=[str(exc)])
 
     def stop(self) -> None:
-        """Запросить остановку краулинга."""
+        """Request crawling to stop."""
         self._stop_requested = True
         if self._spider is not None:
             try:
@@ -102,5 +102,5 @@ class SpiderAPI:
 
     @property
     def config(self) -> SpiderConfig:
-        """Текущая конфигурация краулера (max_depth, max_pages, concurrency)."""
+        """Current crawler configuration (max_depth, max_pages, concurrency)."""
         return self._config

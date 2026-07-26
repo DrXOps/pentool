@@ -1,1 +1,1 @@
-"""Services — оркестрирующий слой между modules/api и TUI."""
+"""Services — orchestration layer between modules/api and TUI."""

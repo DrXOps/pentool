@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/services/repeater_service.py."""
+"""Unit tests for pentool/services/repeater_service.py."""
 
 from __future__ import annotations
 

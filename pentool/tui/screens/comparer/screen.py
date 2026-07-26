@@ -1,4 +1,4 @@
-"""Экран Comparer — side-by-side diff двух текстов."""
+"""Comparer screen — side-by-side diff of two texts."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 
 class ComparerScreen(Widget):
-    """Side-by-side text diff с подсветкой различий."""
+    """Side-by-side text diff with difference highlighting."""
 
     DEFAULT_CSS = _CSS
 
@@ -36,7 +36,7 @@ class ComparerScreen(Widget):
         self._last_result = None
 
     def compose(self) -> ComposeResult:
-        # ── Тулбар ─────────────────────────────────────────────────────────────
+        # ── Toolbar ────────────────────────────────────────────────────────────
         with Horizontal(id="cmp-toolbar"):
             yield ToolbarButton("⇄ Compare",     "btn-cmp-compare")
             yield Static(" │ ", classes="cmp-sep")
@@ -53,7 +53,7 @@ class ComparerScreen(Widget):
             yield Static("[dim]— Press Compare or Ctrl+Enter to diff —[/dim]",
                          id="cmp-stats", markup=True)
 
-        # ── Два TextArea ───────────────────────────────────────────────────────
+        # ── Two TextAreas ──────────────────────────────────────────────────────
         with Horizontal(id="cmp-edit-area"):
             with Vertical(id="cmp-left-col"):
                 yield Static("Left", id="cmp-left-label", classes="cmp-col-label")
@@ -132,7 +132,7 @@ class ComparerScreen(Widget):
                 self.app.notify("Run Compare first", severity="warning")
                 return
             text = self._last_result.rich_text()
-            # Убираем markup для копирования
+            # Strip markup before copying
             plain = re.sub(r"\[/?[^\]]+\]", "", text)
             if copy_to_clipboard(plain):
                 self.app.notify("Diff copied", timeout=2)
@@ -142,7 +142,7 @@ class ComparerScreen(Widget):
     # ── Compare ───────────────────────────────────────────────────────────────
 
     def action_compare(self) -> None:
-        """Выполнить сравнение и отобразить результат."""
+        """Run the comparison and display the result."""
         try:
             from pentool.api.comparer_api import compare
             left  = self.query_one("#cmp-left",  TextArea).text
@@ -155,7 +155,7 @@ class ComparerScreen(Widget):
             logger.debug("action_compare: %s", exc)
 
     def _render_result(self, result) -> None:
-        """Отобразить diff в лог и статистику в stat-bar."""
+        """Render diff to the log and statistics to the stat-bar."""
         try:
             # Stat bar
             s = result.stats
@@ -174,7 +174,7 @@ class ComparerScreen(Widget):
             log.clear()
             for dl in result.lines:
                 if dl.tag == "equal":
-                    # Показываем только несколько строк контекста вокруг изменений
+                    # Show only a few context lines around changes
                     log.write(f"[dim]  {dl.left[:120]}[/dim]")
                 elif dl.tag == "insert":
                     log.write(f"[green]+ {dl.right[:120]}[/green]")
@@ -202,7 +202,7 @@ class ComparerScreen(Widget):
         except Exception as exc:
             logger.debug("action_clear: %s", exc)
 
-    # ── Public API (загрузка из других модулей) ───────────────────────────────
+    # ── Public API (loading from other modules) ───────────────────────────────
 
     def load_left(self, text: str, label: str = "Left") -> None:
         try:

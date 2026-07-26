@@ -1,4 +1,4 @@
-"""Пакет экранов TUI."""
+"""TUI screens package."""
 
 from pentool.tui.screens.dashboard.screen import DashboardScreen
 from pentool.tui.screens.proxy.screen import ProxyScreen

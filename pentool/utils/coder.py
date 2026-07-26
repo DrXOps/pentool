@@ -1,4 +1,4 @@
-"""Кодирование, декодирование и хэширование строк."""
+"""String encoding, decoding, and hashing."""
 
 from __future__ import annotations
 
@@ -10,35 +10,35 @@ from typing import Callable
 
 
 def url_encode(text: str) -> str:
-    """URL-кодировать строку (все символы, кроме букв/цифр/'-._~')."""
+    """URL-encode a string (all characters except letters/digits/'-._~')."""
     return urllib.parse.quote(text, safe="")
 
 
 def url_decode(text: str) -> str:
-    """URL-декодировать строку."""
+    """URL-decode a string."""
     return urllib.parse.unquote(text)
 
 
 def url_encode_all(text: str) -> str:
-    """URL-кодировать строку, включая пробелы как %20."""
+    """URL-encode a string, encoding spaces as %20."""
     return urllib.parse.quote(text, safe="")
 
 
 def url_decode_plus(text: str) -> str:
-    """URL-декодировать строку, обрабатывая '+' как пробел."""
+    """URL-decode a string, treating '+' as a space."""
     return urllib.parse.unquote_plus(text)
 
 
 def base64_encode(text: str) -> str:
-    """Закодировать строку в стандартный Base64."""
+    """Encode a string to standard Base64."""
     return base64.b64encode(text.encode("utf-8")).decode("ascii")
 
 
 def base64_decode(text: str) -> str:
-    """Декодировать строку из стандартного Base64.
+    """Decode a string from standard Base64.
 
     Raises:
-        ValueError: Если строка не является корректным Base64.
+        ValueError: If the string is not valid Base64.
     """
     try:
         padded = text + "=" * (-len(text) % 4)
@@ -48,15 +48,15 @@ def base64_decode(text: str) -> str:
 
 
 def base64url_encode(text: str) -> str:
-    """Закодировать строку в URL-safe Base64 (без паддинга)."""
+    """Encode a string to URL-safe Base64 (without padding)."""
     return base64.urlsafe_b64encode(text.encode("utf-8")).decode("ascii").rstrip("=")
 
 
 def base64url_decode(text: str) -> str:
-    """Декодировать строку из URL-safe Base64.
+    """Decode a string from URL-safe Base64.
 
     Raises:
-        ValueError: Если строка не является корректным Base64url.
+        ValueError: If the string is not valid Base64url.
     """
     try:
         padded = text + "=" * (-len(text) % 4)
@@ -66,25 +66,25 @@ def base64url_decode(text: str) -> str:
 
 
 def html_encode(text: str) -> str:
-    """HTML-кодировать строку (заменить спецсимволы на HTML-сущности)."""
+    """HTML-encode a string (replace special characters with HTML entities)."""
     return html.escape(text, quote=True)
 
 
 def html_decode(text: str) -> str:
-    """HTML-декодировать строку (заменить HTML-сущности на символы)."""
+    """HTML-decode a string (replace HTML entities with characters)."""
     return html.unescape(text)
 
 
 def hex_encode(text: str) -> str:
-    """Закодировать строку в hex-представление байт (UTF-8)."""
+    """Encode a string to the hex representation of its UTF-8 bytes."""
     return text.encode("utf-8").hex()
 
 
 def hex_decode(text: str) -> str:
-    """Декодировать hex-строку обратно в текст.
+    """Decode a hex string back to text.
 
     Raises:
-        ValueError: Если строка не является корректным hex.
+        ValueError: If the string is not valid hex.
     """
     try:
         clean = text.replace(" ", "").replace("\\x", "").replace("0x", "")
@@ -94,7 +94,7 @@ def hex_decode(text: str) -> str:
 
 
 def unicode_escape(text: str) -> str:
-    """Закодировать строку в Unicode escape (\\uXXXX для не-ASCII)."""
+    """Encode a string to Unicode escape (\\uXXXX for non-ASCII characters)."""
     result = []
     for ch in text:
         code = ord(ch)
@@ -106,7 +106,7 @@ def unicode_escape(text: str) -> str:
 
 
 def unicode_unescape(text: str) -> str:
-    """Декодировать строку из Unicode escape."""
+    """Decode a string from Unicode escape."""
     try:
         return text.encode("utf-8").decode("unicode_escape")
     except Exception:
@@ -118,17 +118,17 @@ def unicode_unescape(text: str) -> str:
 
 
 def md5(text: str) -> str:
-    """Вычислить MD5-хэш строки (hex-дайджест)."""
+    """Compute the MD5 hash of a string (hex digest)."""
     return hashlib.md5(text.encode("utf-8")).hexdigest()
 
 
 def sha1(text: str) -> str:
-    """Вычислить SHA1-хэш строки (hex-дайджест)."""
+    """Compute the SHA1 hash of a string (hex digest)."""
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
 def sha256(text: str) -> str:
-    """Вычислить SHA256-хэш строки (hex-дайджест)."""
+    """Compute the SHA256 hash of a string (hex digest)."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
@@ -152,17 +152,17 @@ OPERATIONS: dict[str, Callable[[str], str]] = {
 
 
 def apply_operation(operation: str, text: str) -> str:
-    """Применить именованную операцию к тексту.
+    """Apply a named operation to text.
 
     Args:
-        operation: Имя операции из OPERATIONS.
-        text: Входная строка.
+        operation: Operation name from OPERATIONS.
+        text: Input string.
 
     Returns:
-        Результат операции.
+        Result of the operation.
 
     Raises:
-        ValueError: Если операция неизвестна.
+        ValueError: If the operation is unknown.
     """
     func = OPERATIONS.get(operation)
     if func is None:

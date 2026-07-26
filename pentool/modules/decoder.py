@@ -1,4 +1,4 @@
-"""Decoder/Encoder — 15 операций encode/decode + хэширование."""
+"""Decoder/Encoder — 15 encode/decode operations + hashing."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ __all__ = [
     "DecoderChain",
 ]
 
-# ── Реестр операций ────────────────────────────────────────────────────────────
+# ── Operations registry ────────────────────────────────────────────────────────
 
 def _url_encode(s: str) -> str:
     return urllib.parse.quote(s, safe="")
@@ -35,7 +35,7 @@ def _base64_encode(s: str) -> str:
     return base64.b64encode(s.encode()).decode()
 
 def _base64_decode(s: str) -> str:
-    # Добавляем паддинг если нужно
+    # Add padding if needed
     padded = s + "=" * (4 - len(s) % 4) if len(s) % 4 else s
     return base64.b64decode(padded).decode("utf-8", errors="replace")
 
@@ -56,13 +56,13 @@ def _hex_encode(s: str) -> str:
     return s.encode().hex()
 
 def _hex_decode(s: str) -> str:
-    # Убираем разделители
+    # Remove separators
     clean = re.sub(r"[\s:%-]", "", s)
-    # Оставляем только hex-символы
+    # Keep only hex characters
     hex_only = re.sub(r"[^0-9a-fA-F]", "", clean)
     if not hex_only:
-        return s  # не hex — возвращаем как есть
-    # Выравниваем до чётной длины
+        return s  # not hex — return as is
+    # Align to even length
     if len(hex_only) % 2:
         hex_only = "0" + hex_only
     return bytes.fromhex(hex_only).decode("utf-8", errors="replace")
@@ -84,7 +84,7 @@ def _unicode_decode(s: str) -> str:
         return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), s)
 
 def _jwt_decode(s: str) -> str:
-    """Декодирует header + payload JWT без верификации подписи."""
+    """Decode JWT header + payload without signature verification."""
     parts = s.strip().split(".")
     if len(parts) < 2:
         return "Invalid JWT"
@@ -126,7 +126,7 @@ def _gzip_decode(s: str) -> str:
         return f"[gzip error: {exc}]"
 
 
-# ── Операции: (label, fn, is_hash) ────────────────────────────────────────────
+# ── Operations: (label, fn, is_hash) ──────────────────────────────────────────
 
 OPERATIONS: list[tuple[str, Callable[[str], str], bool]] = [
     ("URL Encode",       _url_encode,       False),
@@ -155,7 +155,7 @@ OP_LABELS: list[str] = [label for label, _, _ in OPERATIONS]
 
 
 def encode_op(operation: str, text: str) -> str:
-    """Применить операцию по имени. Raises KeyError если операция неизвестна."""
+    """Apply an operation by name. Raises KeyError if the operation is unknown."""
     fn = _OP_MAP.get(operation)
     if fn is None:
         raise KeyError(f"Unknown operation: {operation!r}")
@@ -163,15 +163,15 @@ def encode_op(operation: str, text: str) -> str:
 
 
 def decode_op(operation: str, text: str) -> str:
-    """Alias для encode_op (операции уже включают направление в названии)."""
+    """Alias for encode_op (operations already include direction in name)."""
     return encode_op(operation, text)
 
 
 def run_chain(operations: list[str], text: str) -> tuple[str, list[str]]:
-    """Применить цепочку операций последовательно.
+    """Apply a chain of operations sequentially.
 
     Returns:
-        (result, steps) — итоговый текст и список промежуточных значений.
+        (result, steps) — final text and list of intermediate values.
     """
     steps: list[str] = [text]
     current = text
@@ -262,7 +262,7 @@ def decode_smart(text: str, max_depth: int = 8) -> str:
 
 @dataclass
 class DecoderChain:
-    """Цепочка операций с историей."""
+    """Chain of operations with history."""
 
     operations: list[str] = field(default_factory=list)
 

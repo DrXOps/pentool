@@ -1,4 +1,4 @@
-"""Система лицензирования Pentool."""
+"""Pentool licensing system."""
 
 from __future__ import annotations
 
@@ -18,16 +18,16 @@ _GRACE_PERIOD_DAYS = 7
 
 @dataclass
 class LicenseInfo:
-    """Информация о текущей лицензии."""
+    """Information about the current license."""
 
     valid: bool = False
     plan: str = "free"                      # "free" | "pro" | "enterprise"
     features: list[str] = field(default_factory=list)
-    expires: str | None = None           # ISO date или None (permanent)
+    expires: str | None = None           # ISO date or None (permanent)
     machine_id: str = ""
     license_key: str = ""
-    last_check: float | None = None      # timestamp последней онлайн-проверки
-    error: str = ""                         # сообщение об ошибке если not valid
+    last_check: float | None = None      # timestamp of last online check
+    error: str = ""                         # error message if not valid
 
     def has_feature(self, feature: str) -> bool:
         return self.valid and feature in self.features
@@ -52,7 +52,7 @@ def get_machine_id() -> str:
     try:
         import socket
         hostname = socket.gethostname()
-        # Получить MAC первого интерфейса через uuid
+        # Get MAC of first interface via uuid
         mac = hex(uuid.getnode())[2:]
         raw = f"{hostname}:{mac}"
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
@@ -89,7 +89,7 @@ def get_license() -> LicenseInfo:
     last_check = cached.get("last_check", 0)
     grace_seconds = _GRACE_PERIOD_DAYS * 24 * 3600
     if (time.time() - last_check) > grace_seconds:
-        # Grace period истёк — деактивируем
+        # Grace period expired — deactivate
         return LicenseInfo(
             valid=False,
             plan="free",
@@ -163,10 +163,10 @@ def require_feature(feature: str, plan_required: str = "pro"):
 
 
 async def activate_license(key: str) -> LicenseInfo:
-    """Активировать лицензию онлайн (license.pentool.pro/api/validate).
+    """Activate license online (license.pentool.pro/api/validate).
 
     Returns:
-        LicenseInfo с результатом активации.
+        LicenseInfo with activation result.
     """
     key = key.strip().upper()
     machine_id = get_machine_id()
@@ -178,7 +178,7 @@ async def activate_license(key: str) -> LicenseInfo:
             error="License key is empty",
         )
 
-    # Попытка реальной онлайн-проверки
+    # Attempt real online check
     try:
         import aiohttp
         async with aiohttp.ClientSession(
@@ -212,10 +212,10 @@ async def activate_license(key: str) -> LicenseInfo:
                         })
                     return info
     except Exception:
-        pass  # Сервер недоступен — fallback к локальной проверке
+        pass  # Server unavailable — fallback to local check
 
-    # Оффлайн-fallback: проверяем формат ключа
-    # Формат: XXXX-XXXX-XXXX-XXXX (16 hex символов через дефисы)
+    # Offline fallback: check key format
+    # Format: XXXX-XXXX-XXXX-XXXX (16 hex chars with dashes)
     import re
     if re.match(r'^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$', key):
         if key.startswith("DEMO"):
@@ -249,7 +249,7 @@ async def activate_license(key: str) -> LicenseInfo:
 
 
 def deactivate_license() -> None:
-    """Деактивировать лицензию (удалить кэш)."""
+    """Deactivate license (delete cache)."""
     try:
         if _LICENSE_FILE.exists():
             _LICENSE_FILE.unlink()
@@ -257,7 +257,7 @@ def deactivate_license() -> None:
         pass
 
 
-# Глобальный кэш лицензии для текущей сессии
+# Global license cache for current session
 _session_license: LicenseInfo | None = None
 
 

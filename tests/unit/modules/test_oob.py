@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/modules/scanner/oob.py."""
+"""Unit tests for pentool/modules/scanner/oob.py."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ class TestOOBHelperSSRFPayloads:
     def test_ssrf_payloads_are_urls(self):
         oob = OOBHelper("https://xxx.oastify.com")
         payloads = oob.get_ssrf_payloads()
-        # Хотя бы один должен быть полноценным URL
+        # At least one should be a full URL
         assert any(p.startswith("http") for p in payloads)
 
 
@@ -112,7 +112,7 @@ class TestOOBHelperCheckInteractions:
 
     @pytest.mark.asyncio
     async def test_check_interactions_empty_stub(self):
-        # Заглушка всегда возвращает []
+        # The stub always returns []
         oob = OOBHelper("https://xxx.oastify.com")
         result = await oob.check_interactions()
         assert result == []
@@ -135,6 +135,6 @@ class TestGetOOBHelper:
         assert not oob.enabled
 
     def test_get_oob_helper_no_crash_on_config_error(self):
-        """Если конфиг недоступен — возвращает отключённый хелпер."""
+        """If config is unavailable — returns a disabled helper."""
         oob = get_oob_helper()
         assert isinstance(oob, OOBHelper)

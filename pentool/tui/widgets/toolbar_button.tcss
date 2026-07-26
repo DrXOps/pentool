@@ -4,7 +4,7 @@ ToolbarButton {
     padding: 0 1;
     color: $text;
     background: $panel;
-    pointer: pointer;  /* кнопки — указывающая рука */
+    pointer: pointer;  /* buttons — pointing hand cursor */
 }
 ToolbarButton:hover {
     background: $primary-darken-1;
@@ -28,7 +28,7 @@ ToolbarButton.sending {
     pointer: progress;
 }
 
-/* Общий разделитель тулбара — используется во всех экранах */
+/* Common toolbar separator — used across all screens */
 .toolbar-sep {
     width: auto;
     color: $primary-darken-2;

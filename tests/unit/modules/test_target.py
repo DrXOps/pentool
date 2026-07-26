@@ -1,7 +1,7 @@
-"""Unit-тесты: modules/target.py + api/target_api.py (Этап 9.5).
+"""Unit tests: modules/target.py + api/target_api.py (Stage 9.5).
 
-Покрывает: SiteNode, SiteMap (add_request, scope, tree, save/load),
-           TargetAPI, экспорт JSON.
+Covers: SiteNode, SiteMap (add_request, scope, tree, save/load),
+           TargetAPI, JSON export.
 """
 
 from __future__ import annotations
@@ -115,7 +115,7 @@ class TestSiteMap:
         assert sitemap.get_request_count("example.com") == 2
 
     def test_add_request_invalid_url(self, sitemap: SiteMap) -> None:
-        # Не должен падать на плохом URL
+        # Should not crash on bad URL
         req = ParsedRequest(method="GET", url="not-a-url", headers={}, body="")
         sitemap.add_request(req)  # no exception
 

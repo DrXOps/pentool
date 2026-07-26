@@ -1,4 +1,4 @@
-"""Публичный API прокси-модуля для TUI и CLI."""
+"""Public API of the proxy module for TUI and CLI."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Реэкспорт типов — TUI импортирует их отсюда, не из modules.proxy
+# Re-export types — TUI imports them from here, not from modules.proxy
 __all__ = ["ProxyAPI", "InterceptedRequest", "MatchReplaceRule", "ProxyServer"]
 
 
@@ -27,10 +27,10 @@ class ProxyAPI:
 
     @property
     def proxy(self) -> ProxyServer | None:
-        """Легитимный доступ к ProxyServer через API-слой.
+        """Direct access to ProxyServer through the API layer.
 
-        Используется там где нужен прямой доступ к серверу
-        (proxy/screen.py для intercept, repeater/screen.py для scope).
+        Used where direct server access is needed
+        (proxy/screen.py for intercept, repeater/screen.py for scope).
         """
         return self._proxy
 
@@ -83,13 +83,13 @@ class ProxyAPI:
         return self._proxy.get_requests(limit=limit, method=method, host=host)
 
     def find_request(self, req_id: str) -> InterceptedRequest | None:
-        """Найти запрос по ID.
+        """Find a request by ID.
 
         Args:
-            req_id: UUID запроса (полный или частичный).
+            req_id: Request UUID (full or partial).
 
         Returns:
-            InterceptedRequest или None.
+            InterceptedRequest or None.
         """
         if self._proxy is None:
             return None
@@ -100,45 +100,45 @@ class ProxyAPI:
             self._proxy.clear_requests()
 
     def forward(self, req_id: str, modified_raw: str | None = None) -> None:
-        """Переслать ожидающий запрос на целевой сервер.
+        """Forward a waiting request to the target server.
 
         Args:
-            req_id: ID перехваченного запроса.
-            modified_raw: Изменённый сырой HTTP-текст (опционально).
+            req_id: ID of the intercepted request.
+            modified_raw: Modified raw HTTP text (optional).
 
         Returns:
             None
 
         Raises:
-            RuntimeError: Если прокси не инициализирован.
+            RuntimeError: If the proxy is not initialized.
         """
         if self._proxy is None:
-            raise RuntimeError("ProxyAPI: прокси не инициализирован")
+            raise RuntimeError("ProxyAPI: proxy not initialized")
         logger.debug("ProxyAPI: forward req_id=%s, has_modified=%s", req_id, bool(modified_raw))
         self._proxy.forward(req_id, modified_raw)
 
     def drop(self, req_id: str) -> None:
-        """Сбросить ожидающий запрос (вернуть браузеру 502).
+        """Drop a waiting request (return 502 to the browser).
 
         Args:
-            req_id: ID перехваченного запроса.
+            req_id: ID of the intercepted request.
 
         Returns:
             None
 
         Raises:
-            RuntimeError: Если прокси не инициализирован.
+            RuntimeError: If the proxy is not initialized.
         """
         if self._proxy is None:
-            raise RuntimeError("ProxyAPI: прокси не инициализирован")
+            raise RuntimeError("ProxyAPI: proxy not initialized")
         logger.debug("ProxyAPI: drop req_id=%s", req_id)
         self._proxy.drop(req_id)
 
     def set_intercept(self, enabled: bool) -> None:
         if self._proxy:
-            # ProxyServer.set_intercept() использует call_soon_threadsafe —
-            # обязательно для безопасного изменения флага из TUI-треда,
-            # пока proxy-loop работает в своём asyncio-треде.
+            # ProxyServer.set_intercept() uses call_soon_threadsafe —
+            # required for safely changing the flag from the TUI thread
+            # while the proxy loop runs in its own asyncio thread.
             self._proxy.set_intercept(enabled)
 
     def get_intercept(self) -> bool:
@@ -159,10 +159,10 @@ class ProxyAPI:
         return []
 
     def set_match_replace_rules(self, rules: list[MatchReplaceRule]) -> None:
-        """Заменить все правила match/replace.
+        """Replace all match/replace rules.
 
         Args:
-            rules: Новый список правил MatchReplaceRule.
+            rules: New list of MatchReplaceRule objects.
 
         Returns:
             None

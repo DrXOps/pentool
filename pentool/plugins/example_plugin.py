@@ -1,4 +1,4 @@
-"""Пример плагина для Pentool."""
+"""Example plugin for Pentool."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ _CSS = (Path(__file__).parent / "example_plugin.tcss").read_text(encoding="utf-8
 
 
 class HelloScreen(Widget):
-    """Простой экран-пример, добавляемый плагином."""
+    """A simple example screen added by a plugin."""
 
     DEFAULT_CSS = _CSS
 
@@ -35,5 +35,5 @@ class ExamplePlugin(BasePlugin):
 
 
 def register(hook: PluginHook) -> None:
-    """Точка входа плагина. Вызывается при загрузке."""
+    """Plugin entry point. Called when the plugin is loaded."""
     hook.register_screen("Hello Plugin", HelloScreen)

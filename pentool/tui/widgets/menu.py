@@ -1,4 +1,4 @@
-"""Боковое меню навигации по модулям."""
+"""Side navigation menu for modules."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 _CSS = (Path(__file__).parent / "menu.tcss").read_text(encoding="utf-8")
 
 
-# Список модулей: (id, отображаемое название, горячая клавиша)
+# Module list: (id, display name, hotkey)
 MODULES: list[tuple[str, str, str]] = [
     ("dashboard",  "Dashboard",  "^H"),
     ("proxy",      "Proxy",      "^P"),
@@ -27,12 +27,12 @@ MODULES: list[tuple[str, str, str]] = [
     ("settings",   "Settings",   "^,"),
 ]
 
-# Модули доступные в базовом режиме
+# Modules available in basic mode
 BASIC_MODULES = {"dashboard", "proxy", "repeater", "intruder", "settings"}
 
 
 class ModuleSelected(Message):
-    """Событие: пользователь выбрал модуль."""
+    """Event: user selected a module."""
 
     def __init__(self, module_id: str) -> None:
         super().__init__()
@@ -40,7 +40,7 @@ class ModuleSelected(Message):
 
 
 class _MenuItem(Static):
-    """Один пункт меню — кликабельный Static."""
+    """Single menu item — clickable Static."""
 
     DEFAULT_CSS = _CSS
 
@@ -53,7 +53,7 @@ class _MenuItem(Static):
 
 
 class SideMenu(Widget):
-    """Боковая панель навигации."""
+    """Side navigation panel."""
 
     DEFAULT_CSS = _CSS
 
@@ -68,12 +68,12 @@ class SideMenu(Widget):
         self._highlight(self.active_module)
 
     def on_module_selected(self, event: ModuleSelected) -> None:
-        """Перехватываем событие от _MenuItem, обновляем подсветку и пробрасываем выше."""
+        """Intercept event from _MenuItem, update highlight and bubble up."""
         self.active_module = event.module_id
         self._highlight(event.module_id)
 
     def select_module(self, module_id: str) -> None:
-        """Программно выбрать модуль (из горячей клавиши)."""
+        """Programmatically select a module (from hotkey)."""
         self.active_module = module_id
         self._highlight(module_id)
 

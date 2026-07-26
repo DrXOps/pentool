@@ -1,4 +1,4 @@
-"""CLI-команды сканирования: pentool scan active / passive / report."""
+"""CLI scan commands: pentool scan active / passive / report."""
 
 from __future__ import annotations
 
@@ -10,18 +10,18 @@ import click
 
 @click.group("scan")
 def scan() -> None:
-    """Модуль Scanner: сканирование уязвимостей."""
+    """Scanner module: vulnerability scanning."""
 
 
 @scan.command("active")
-@click.option("--url", "urls", required=True, multiple=True, help="Целевой URL (можно несколько).")
+@click.option("--url", "urls", required=True, multiple=True, help="Target URL (can be specified multiple times).")
 @click.option(
     "--checks", "check_names", default=None,
-    help="Проверки через запятую: missing_security_headers,info_leak",
+    help="Comma-separated checks: missing_security_headers,info_leak",
 )
-@click.option("--output", "output", default=None, help="Сохранить findings в файл (json/csv/html).")
-@click.option("--concurrency", default=5, show_default=True, help="Параллельных потоков.")
-@click.option("--delay", default=0.0, show_default=True, help="Задержка между запросами (сек).")
+@click.option("--output", "output", default=None, help="Save findings to file (json/csv/html).")
+@click.option("--concurrency", default=5, show_default=True, help="Number of parallel threads.")
+@click.option("--delay", default=0.0, show_default=True, help="Delay between requests (seconds).")
 @click.pass_context
 def scan_active(
     ctx: click.Context,
@@ -58,7 +58,7 @@ def scan_active(
             concurrency=concurrency,
             request_delay=delay,
         )
-        # Ждём завершения задачи
+        # Wait for the task to complete
         if api._active_task:
             await api._active_task
 
@@ -77,7 +77,7 @@ def scan_active(
 
 
 @scan.command("passive")
-@click.option("--scope", default=None, help="Фильтр хоста (например *.example.com).")
+@click.option("--scope", default=None, help="Host filter (e.g. *.example.com).")
 @click.pass_context
 def scan_passive(ctx: click.Context, scope: str | None) -> None:
     click.echo(
@@ -89,12 +89,12 @@ def scan_passive(ctx: click.Context, scope: str | None) -> None:
 
 
 @scan.command("report")
-@click.option("--output", required=True, help="Путь к файлу отчёта.")
+@click.option("--output", required=True, help="Path to the report file.")
 @click.option(
     "--format", "fmt", default="html",
     type=click.Choice(["html", "json", "csv"], case_sensitive=False),
     show_default=True,
-    help="Формат отчёта.",
+    help="Report format.",
 )
 @click.pass_context
 def scan_report(ctx: click.Context, output: str, fmt: str) -> None:

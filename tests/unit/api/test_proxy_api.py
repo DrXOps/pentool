@@ -1,6 +1,6 @@
-"""Unit-тесты: api/proxy_api.py
+"""Unit tests: api/proxy_api.py
 
-Покрывает: ProxyAPI без прокси (safe defaults), ProxyAPI с mock ProxyServer.
+Covers: ProxyAPI without proxy (safe defaults), ProxyAPI with mock ProxyServer.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from pentool.api.proxy_api import ProxyAPI, InterceptedRequest, MatchReplaceRule
 
 
 class TestProxyAPIWithoutProxy:
-    """Тесты ProxyAPI без инициализированного ProxyServer."""
+    """Tests for ProxyAPI without an initialized ProxyServer."""
 
     def test_is_running_false(self) -> None:
         api = ProxyAPI()
@@ -67,7 +67,7 @@ class TestProxyAPIWithoutProxy:
             api.drop("req-id")
 
     def test_set_intercept_no_error(self) -> None:
-        """set_intercept без прокси — тихо игнорируется."""
+        """set_intercept without proxy — silently ignored."""
         api = ProxyAPI()
         api.set_intercept(True)  # no error
 
@@ -81,7 +81,7 @@ class TestProxyAPIWithoutProxy:
 
 
 class TestProxyAPIWithMockProxy:
-    """Тесты ProxyAPI с mock ProxyServer."""
+    """Tests for ProxyAPI with mock ProxyServer."""
 
     def _make_api(self, mock_proxy) -> ProxyAPI:
         api = ProxyAPI()
@@ -90,7 +90,7 @@ class TestProxyAPIWithMockProxy:
 
     def test_is_running_delegates(self, mock_proxy_server) -> None:
         api = self._make_api(mock_proxy_server)
-        # is_running — @property на ProxyServer, доступ как атрибут
+        # is_running — @property on ProxyServer, accessed as attribute
         assert api.is_running() is True
 
     def test_get_port_delegates(self, mock_proxy_server) -> None:
@@ -117,7 +117,7 @@ class TestProxyAPIWithMockProxy:
     def test_set_intercept_updates_proxy(self, mock_proxy_server) -> None:
         api = self._make_api(mock_proxy_server)
         api.set_intercept(True)
-        # set_intercept теперь thread-safe — вызывает ProxyServer.set_intercept()
+        # set_intercept is now thread-safe — calls ProxyServer.set_intercept()
         mock_proxy_server.set_intercept.assert_called_once_with(True)
 
     def test_set_scope_calls_proxy(self, mock_proxy_server) -> None:

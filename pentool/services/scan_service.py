@@ -1,4 +1,4 @@
-"""ScanService — оркестрирует Spider → ScanEngine → EventBus."""
+"""ScanService — orchestrates Spider → ScanEngine → EventBus."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class ScanConfig:
-    """Конфигурация одного запуска скана."""
+    """Configuration for a single scan run."""
     targets: list[str]
     seed_requests: list = field(default_factory=list)  # list[ParsedRequest]
     check_names: list[str] | None = None
@@ -35,18 +35,18 @@ class ScanConfig:
     max_depth: int = 3
     max_pages: int = 100
     db_path: str = ""
-    resume: bool = False  # True — пропустить краулинг, использовать seed_requests напрямую
-    resume_targets: list[str] = field(default_factory=list)  # URL для скана при resume
+    resume: bool = False  # True — skip crawling, use seed_requests directly
+    resume_targets: list[str] = field(default_factory=list)  # URLs to scan on resume
     # on_request_sent(requests_sent, threads_active, check_name, param_name, url)
     on_request_sent: Callable | None = None
 
 
 class ScanService:
-    """Оркестрирует: Spider → URL collection → ScanEngine → EventBus.
+    """Orchestrates: Spider → URL collection → ScanEngine → EventBus.
 
-    Не знает о Textual. Запускается через async @work в ScannerScreen.
+    Has no knowledge of Textual. Launched via async @work in ScannerScreen.
 
-    Использование:
+    Usage:
         service = ScanService(scanner_api, spider_api, event_bus)
         findings = await service.run(config)
     """
@@ -62,14 +62,14 @@ class ScanService:
         self._scanner = scanner_api
         self._spider = spider_api
         self._bus = event_bus or get_event_bus()
-        self._tui_loop = tui_loop         # loop основного потока для emit_threadsafe
-        self._on_log = on_log             # коллбэк для лога в TUI (опционально)
+        self._tui_loop = tui_loop         # main thread loop for emit_threadsafe
+        self._on_log = on_log             # callback for TUI log (optional)
         self._stop_requested = False
 
-    # ── публичный API ──────────────────────────────────────────────────────────
+    # ── public API ─────────────────────────────────────────────────────────────
 
     def request_stop(self) -> None:
-        """Запросить остановку (thread-safe)."""
+        """Request stop (thread-safe)."""
         self._stop_requested = True
         self._spider.stop()
         try:
@@ -86,12 +86,12 @@ class ScanService:
             source="scanner",
         ))
 
-        # ── 1. Краулинг всех целей ─────────────────────────────────────────────
+        # ── 1. Crawl all targets ───────────────────────────────────────────────
         all_scan_targets: list[str] = []
         all_forms: list = []
 
         if config.resume and config.resume_targets:
-            # Resume: пропускаем краулинг — используем ранее собранные URL
+            # Resume: skip crawling — use previously collected URLs
             all_scan_targets = list(config.resume_targets)
             self._log(
                 f"[yellow]RESUME[/yellow] Skipping crawl — "
@@ -110,7 +110,7 @@ class ScanService:
             self._emit(ScanFinished(total_findings=0, stopped_early=True, source="scanner"))
             return []
 
-        # ── 2. Фильтрация статики + дедупликация по шаблону ──────────────────
+        # ── 2. Filter static assets + deduplicate by template ─────────────────
         from pentool.modules.scanner.helpers import is_scannable_url, path_template
         seen_templates: set[str] = set()
         unique: list[str] = []
@@ -138,10 +138,10 @@ class ScanService:
             f"[bold]{len(all_forms)}[/bold] POST forms to test"
         )
 
-        # ── 3. Прогресс-бар и подготовка запросов ────────────────────────────
+        # ── 3. Progress bar and request preparation ────────────────────────────
         self._emit(ScanProgressEvent(done=0, total=len(all_scan_targets), scanning=True, source="scanner"))
 
-        # ── 4. Активное сканирование ──────────────────────────────────────────
+        # ── 4. Active scanning ────────────────────────────────────────────────
         findings: list[Finding] = []
 
         def on_finding(f: Finding) -> None:
@@ -156,7 +156,7 @@ class ScanService:
             pt = f" [{point_name}]" if point_name and point_name != "—" else ""
             self._log(f"[dim]→ {check_name}{pt}[/dim]  {url[:80]}")
 
-        # Пробрасываем on_request_sent из конфига (задаётся TUI)
+        # Pass on_request_sent from config (set by TUI)
         _on_request_sent = getattr(config, "on_request_sent", None)
 
         from pentool.utils.http_client import HTTPClient
@@ -169,11 +169,11 @@ class ScanService:
         engine._stop_requested = False
 
         try:
-            # Приоритет: seed_requests (реальные запросы из Proxy/History)
-            # Fallback: URL из краулера → голые GET запросы
+            # Priority: seed_requests (real requests from Proxy/History)
+            # Fallback: URLs from crawler → bare GET requests
             if config.seed_requests:
-                # Для каждого URL из краулера — создаём ParsedRequest
-                # сохраняя заголовки из первого seed_request (auth контекст)
+                # For each URL from crawler — create ParsedRequest
+                # preserving headers from the first seed_request (auth context)
                 base_headers = dict(config.seed_requests[0].headers or {})
                 crawled_reqs = [
                     ParsedRequest(method="GET", url=url, headers=base_headers, body="")
@@ -204,7 +204,7 @@ class ScanService:
         finally:
             await http_client.close()
 
-        # ── 5. Сохранение ─────────────────────────────────────────────────────
+        # ── 5. Save ───────────────────────────────────────────────────────────
         if not self._stop_requested:
             await engine.save_findings(all_findings)
 
@@ -215,7 +215,7 @@ class ScanService:
         ))
         return all_findings
 
-    # ── приватные методы ───────────────────────────────────────────────────────
+    # ── private methods ────────────────────────────────────────────────────────
 
     async def _crawl_target(
         self,
@@ -224,16 +224,16 @@ class ScanService:
         all_scan_targets: list[str],
         all_forms: list,
     ) -> None:
-        """Краулинг одного target, заполнение all_scan_targets и all_forms."""
+        """Crawl a single target, populate all_scan_targets and all_forms."""
         try:
             parsed = urlparse(base_url)
-            # Убираем стандартные порты из netloc
+            # Strip standard ports from netloc
             if parsed.port == 443 and parsed.scheme == "https":
                 base_url = urlunparse(parsed._replace(netloc=parsed.hostname))
             elif parsed.port == 80 and parsed.scheme == "http":
                 base_url = urlunparse(parsed._replace(netloc=parsed.hostname))
 
-            # Передаём auth-заголовки (Cookie, Authorization) из seed_requests
+            # Pass auth headers (Cookie, Authorization) from seed_requests
             auth_headers: dict = {}
             if config.seed_requests:
                 raw_hdrs = dict(config.seed_requests[0].headers or {})
@@ -254,7 +254,7 @@ class ScanService:
                 f"{len(result.js_files)} JS files"
             )
 
-            # Emit SpiderFinished для подписчиков
+            # Emit SpiderFinished for subscribers
             self._emit(SpiderFinished(
                 base_url=base_url,
                 pages_count=len(result.pages),
@@ -263,17 +263,17 @@ class ScanService:
                 source="spider",
             ))
 
-            # base URL всегда включаем
+            # Always include base URL
             all_scan_targets.append(base_url)
 
-            # Страницы
+            # Pages
             for page in result.pages:
                 phost = urlparse(page).netloc
                 if (phost == base_host or not phost) and page not in all_scan_targets:
                     all_scan_targets.append(page)
                     self._emit(UrlCrawled(url=page, base_target=base_url, source="spider"))
 
-            # Формы
+            # Forms
             for form in result.forms:
                 form_url = form.action
                 if not form_url.startswith("http"):
@@ -313,7 +313,7 @@ class ScanService:
                 all_scan_targets.append(base_url)
 
     def _emit(self, event) -> None:
-        """Emit события: через emit_threadsafe если есть tui_loop, иначе emit."""
+        """Emit event: via emit_threadsafe if tui_loop is set, otherwise direct emit."""
         try:
             if self._tui_loop and not self._tui_loop.is_closed():
                 self._bus.emit_threadsafe(event, self._tui_loop)

@@ -1,4 +1,4 @@
-"""ToolbarButton — единая плоская кнопка для тулбаров всех экранов."""
+"""ToolbarButton — unified flat button for toolbars across all screens."""
 
 from __future__ import annotations
 
@@ -10,20 +10,20 @@ _CSS = (Path(__file__).parent / "toolbar_button.tcss").read_text(encoding="utf-8
 
 
 class ToolbarButton(Static):
-    """Плоская кнопка для тулбара — без рамки, высота 1.
+    """Flat toolbar button — no border, height 1.
 
-    CSS-классы:
-        .active   — зелёный цвет (включено / активно)
-        .inactive — красный цвет (выключено)
-        .disabled — серый цвет, клик игнорируется
-        .warn     — оранжевый цвет (предупреждение)
-        .sending  — жёлтый цвет (ожидание ответа)
+    CSS classes:
+        .active   — green color (enabled / active)
+        .inactive — red color (disabled)
+        .disabled — grey color, click is ignored
+        .warn     — orange color (warning)
+        .sending  — yellow color (waiting for response)
     """
 
     DEFAULT_CSS = _CSS
 
     class Pressed(Message):
-        """Сообщение о нажатии кнопки."""
+        """Button press message."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -33,7 +33,7 @@ class ToolbarButton(Static):
 
         @property
         def control(self) -> "ToolbarButton":
-            """Позволяет @on(ToolbarButton.Pressed, "#btn-id") CSS-селектор."""
+            """Allows @on(ToolbarButton.Pressed, "#btn-id") CSS selector."""
             return self.button
 
     def __init__(self, label: str, btn_id: str, classes: str = "") -> None:
@@ -63,6 +63,6 @@ class ToolbarButton(Static):
             self.remove_class("disabled")
 
     def on_click(self) -> None:
-        """Постит Pressed только если кнопка не disabled."""
+        """Posts Pressed only if the button is not disabled."""
         if not self._disabled:
             self.post_message(self.Pressed(self))

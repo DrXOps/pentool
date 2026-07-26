@@ -1,1 +1,1 @@
-"""Пакет cli: команды Click."""
+"""cli package: Click commands."""

@@ -1,4 +1,4 @@
-"""Диалог настройки Scope (список хостов + regex include/exclude)."""
+"""Scope settings dialog (host list + regex include/exclude)."""
 
 from __future__ import annotations
 
@@ -20,19 +20,19 @@ _CSS = (Path(__file__).parent / "scope_dialog.tcss").read_text(encoding="utf-8")
 
 @dataclass
 class ScopeConfig:
-    """Расширенная конфигурация Scope с поддержкой regex."""
+    """Extended Scope configuration with regex support."""
 
     hosts: list[str] = field(default_factory=list)
     regex_include: list[str] = field(default_factory=list)
     regex_exclude: list[str] = field(default_factory=list)
 
     def matches(self, url: str) -> bool:
-        """Проверить, попадает ли URL в scope.
+        """Check whether the URL falls within scope.
 
-        Логика:
-        1. Если hosts не пустой — хост URL должен совпадать с одним из шаблонов.
-        2. Если regex_include не пустой — URL должен совпасть хотя бы с одним.
-        3. Если regex_exclude не пустой — URL не должен совпадать ни с одним.
+        Logic:
+        1. If hosts is non-empty — URL host must match one of the patterns.
+        2. If regex_include is non-empty — URL must match at least one.
+        3. If regex_exclude is non-empty — URL must not match any.
         """
         from urllib.parse import urlparse
         try:
@@ -41,7 +41,7 @@ class ScopeConfig:
         except Exception:
             host = url
 
-        # Проверка host-списка (с wildcard)
+        # Check host list (with wildcard)
         if self.hosts:
             host_ok = any(_host_matches(h, host) for h in self.hosts)
             if not host_ok:
@@ -63,7 +63,7 @@ class ScopeConfig:
 
     @property
     def host_list(self) -> list[str]:
-        """Alias для backward-compat — возвращает список хостов."""
+        """Alias for backward-compat — returns the host list."""
         return self.hosts
 
 
@@ -77,7 +77,7 @@ def _host_matches(pattern: str, host: str) -> bool:
 
 
 def _regex_match(pattern: str, text: str) -> bool:
-    """Безопасный regex match — при ошибке паттерна возвращает False."""
+    """Safe regex match — returns False on pattern error."""
     try:
         return bool(re.search(pattern, text, re.IGNORECASE))
     except re.error:
@@ -85,7 +85,7 @@ def _regex_match(pattern: str, text: str) -> bool:
 
 
 def validate_patterns(patterns: list[str]) -> list[str]:
-    """Валидировать список regex-паттернов. Возвращает список ошибочных."""
+    """Validate a list of regex patterns. Returns list of invalid ones."""
     invalid = []
     for p in patterns:
         try:
@@ -96,10 +96,10 @@ def validate_patterns(patterns: list[str]) -> list[str]:
 
 
 class ScopeDialog(ModalScreen[list[str] | ScopeConfig | None]):
-    """Модальный диалог редактирования Scope.
+    """Modal dialog for editing Scope.
 
-    В режиме `extended=True` возвращает `ScopeConfig` (хосты + regex include/exclude).
-    В режиме `extended=False` (по умолчанию) возвращает `list[str]` — backward-compat.
+    In `extended=True` mode returns `ScopeConfig` (hosts + regex include/exclude).
+    In `extended=False` mode (default) returns `list[str]` — backward-compat.
     """
 
     DEFAULT_CSS = _CSS
@@ -119,7 +119,7 @@ class ScopeDialog(ModalScreen[list[str] | ScopeConfig | None]):
 
         if isinstance(current_scope, ScopeConfig):
             self._cfg = current_scope
-            self._extended = True  # всегда показываем extended если передали ScopeConfig
+            self._extended = True  # always show extended if ScopeConfig was passed
         elif isinstance(current_scope, list):
             self._cfg = ScopeConfig(hosts=list(current_scope))
         else:
@@ -194,14 +194,14 @@ class ScopeDialog(ModalScreen[list[str] | ScopeConfig | None]):
             self.dismiss(hosts)
             return
 
-        # Extended mode — собираем regex include/exclude
+        # Extended mode — collect regex include/exclude
         inc_text = self.query_one("#regex-include-area", TextArea).text
         exc_text = self.query_one("#regex-exclude-area", TextArea).text
 
         regex_include = [p.strip() for p in inc_text.splitlines() if p.strip()]
         regex_exclude = [p.strip() for p in exc_text.splitlines() if p.strip()]
 
-        # Валидация паттернов
+        # Validate patterns
         bad_inc = validate_patterns(regex_include)
         bad_exc = validate_patterns(regex_exclude)
         if bad_inc or bad_exc:

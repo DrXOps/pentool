@@ -1,6 +1,6 @@
-"""Unit-тесты: tui/widgets/request_editor.py
+"""Unit tests: tui/widgets/request_editor.py
 
-Покрывает: _get_content_type, _detect_language,
+Covers: _get_content_type, _detect_language,
            RequestEditor (load_request, load_raw, get_text, clear),
            ResponseViewer (load_response, load_raw, clear).
 """
@@ -37,7 +37,7 @@ class TestGetContentType:
         assert _get_content_type(headers) == "application/json"
 
 
-# ─── _detect_language (по Content-Type) ───────────────────────────────────────
+# ─── _detect_language (by Content-Type) ────────────────────────────────────────
 
 class TestDetectLanguageByContentType:
     def test_json(self) -> None:
@@ -83,7 +83,7 @@ class TestDetectLanguageByContentType:
         assert _detect_language("APPLICATION/JSON", "") == "json"
 
 
-# ─── _detect_language (эвристика по телу) ─────────────────────────────────────
+# ─── _detect_language (heuristic by body) ──────────────────────────────────────
 
 class TestDetectLanguageByBody:
     def test_json_object(self) -> None:
@@ -117,19 +117,19 @@ class TestDetectLanguageByBody:
         assert _detect_language("", "") is None
 
     def test_content_type_takes_priority_over_body(self) -> None:
-        # Если Content-Type есть — он приоритетнее эвристики по телу
+        # If Content-Type is present — it takes priority over body heuristic
         result = _detect_language("application/json", "<html></html>")
         assert result == "json"
 
     def test_no_false_positive_on_url(self) -> None:
-        # URL начинающийся с http не должен давать xml
+        # URL starting with http should not yield xml
         assert _detect_language("", "http://example.com") is None
 
 
-# ─── RequestEditor (юнит без Textual) ─────────────────────────────────────────
+# ─── RequestEditor (unit without Textual) ───────────────────────────────────────
 
 class TestRequestEditorHelpers:
-    """Тесты вспомогательной логики RequestEditor без запуска Textual."""
+    """Tests for RequestEditor helper logic without starting Textual."""
 
     def test_detect_lang_for_json_request(self) -> None:
         req = ParsedRequest(
@@ -165,10 +165,10 @@ class TestRequestEditorHelpers:
         assert lang is None
 
 
-# ─── ResponseViewer (юнит без Textual) ───────────────────────────────────────
+# ─── ResponseViewer (unit without Textual) ──────────────────────────────────────
 
 class TestResponseViewerHelpers:
-    """Тесты вспомогательной логики ResponseViewer без запуска Textual."""
+    """Tests for ResponseViewer helper logic without starting Textual."""
 
     def test_json_response(self) -> None:
         resp = ParsedResponse(
@@ -204,7 +204,7 @@ class TestResponseViewerHelpers:
         assert lang == "xml"
 
     def test_no_content_type_json_body(self) -> None:
-        """Без Content-Type эвристика определяет JSON по телу."""
+        """Without Content-Type the heuristic detects JSON from body."""
         resp = ParsedResponse(
             status=200,
             reason="OK",

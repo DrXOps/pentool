@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/modules/scanner/checks/path_traversal.py."""
+"""Unit tests for pentool/modules/scanner/checks/path_traversal.py."""
 
 from __future__ import annotations
 
@@ -163,7 +163,7 @@ class TestScanGetParams:
 
     @pytest.mark.asyncio
     async def test_non_path_param_still_tested(self):
-        """Не-path параметры тоже тестируются (после path-params)."""
+        """Non-path parameters are also tested (after path-params)."""
         check = PathTraversalCheck()
         client = _make_client("root:x:0:0:root:/root:/bin/bash")
         req = _make_request("https://example.com/?q=hello")
@@ -172,12 +172,12 @@ class TestScanGetParams:
 
     @pytest.mark.asyncio
     async def test_path_params_tested_before_others(self):
-        """path-like параметры должны встречаться в findings первыми."""
+        """path-like parameters should appear in findings first."""
         check = PathTraversalCheck()
         client = _make_client("root:x:0:0:root:/root:/bin/bash")
         req = _make_request("https://example.com/?q=x&file=y")
         findings = await check.scan(req, None, http_client=client)
-        # Первый finding должен быть из параметра 'file'
+        # First finding should come from parameter 'file'
         if findings:
             assert findings[0].parameter == "file"
 
@@ -188,7 +188,7 @@ class TestScanGetParams:
         req = _make_request("https://example.com/?doc=index.html")
         findings = await check.scan(req, None, http_client=client)
         assert findings
-        assert findings[0].payload  # payload не пустой
+        assert findings[0].payload  # payload is not empty
 
     @pytest.mark.asyncio
     async def test_finding_has_evidence(self):
@@ -236,7 +236,7 @@ class TestScanPathSegments:
         req = _make_request("https://example.com/files/report.pdf")
         findings = await check.scan(req, None, http_client=client)
         assert findings
-        # Должен содержать Path injection finding
+        # Should contain Path injection finding
         path_findings = [f for f in findings if "Path" in f.evidence]
         assert path_findings
 
@@ -251,7 +251,7 @@ class TestScanPathSegments:
 
     @pytest.mark.asyncio
     async def test_no_path_segments_skipped(self):
-        """URL без path-сегментов — path-инъекция пропускается."""
+        """URL without path segments — path injection is skipped."""
         check = PathTraversalCheck()
         client = _make_client("<html>clean</html>")
         req = _make_request("https://example.com/")
@@ -260,7 +260,7 @@ class TestScanPathSegments:
 
     @pytest.mark.asyncio
     async def test_path_segment_stops_after_first_finding(self):
-        """После первого path finding больше сегменты не проверяются."""
+        """After the first path finding, no more segments are checked."""
         check = PathTraversalCheck()
         call_count = 0
         original_body = "root:x:0:0:root:/root:/bin/bash"
@@ -275,8 +275,8 @@ class TestScanPathSegments:
         req = _make_request("https://example.com/a/b/c/d")
         findings = await check.scan(req, None, http_client=client)
         assert findings
-        # После первого сегмента с finding — цикл по сегментам прерывается
-        # (но GET params уже прошли свои запросы)
+        # After first segment with finding — segment loop breaks
+        # (but GET params already ran their requests)
 
 
 # ─── TestScanPostUrlencoded ───────────────────────────────────────────────────
@@ -297,13 +297,13 @@ class TestScanPostUrlencoded:
 
     @pytest.mark.asyncio
     async def test_get_request_skips_post(self):
-        """GET-запрос не тестирует POST тело."""
+        """GET request does not test POST body."""
         check = PathTraversalCheck()
         client = _make_client("<html>ok</html>")
         req = _make_request("https://example.com/?file=test", method="GET", body="file=x")
-        # POST не вызывается для GET-запросов
+        # POST is not called for GET requests
         findings = await check.scan(req, None, http_client=client)
-        # Нет finding для чистого ответа
+        # No finding for clean response
         assert findings == []
 
 
@@ -325,12 +325,12 @@ class TestScanJsonBody:
             body=body,
         )
         findings = await check.scan(req, None, http_client=client)
-        # JSON body должен быть протестирован
+        # JSON body should be tested
         assert isinstance(findings, list)
 
     @pytest.mark.asyncio
     async def test_non_json_body_no_json_test(self):
-        """Не-JSON тело не вызывает JSON-тестирование."""
+        """Non-JSON body does not trigger JSON testing."""
         check = PathTraversalCheck()
         client = _make_client("<html>ok</html>")
         req = ParsedRequest(

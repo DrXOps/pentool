@@ -1,14 +1,14 @@
-"""Диагностический тест: timing intercept Forward/Drop → ResponseViewer.
+"""Diagnostic test: timing intercept Forward/Drop → ResponseViewer.
 
-Запуск:
+Run:
     pytest tests/integration/test_intercept_timing.py -v -s --no-header
 
-Что проверяем:
-1. Forward: вызвать show_intercepted_request() → нажать Forward →
-   засечь время до появления контента в #intercept-resp-viewer.
-2. Drop: show_intercepted_request() → нажать Drop →
-   проверить что editor очистился.
-3. Очередь: два запроса подряд → Forward первого → второй появляется автоматически.
+What we check:
+1. Forward: call show_intercepted_request() → press Forward →
+   measure time until content appears in #intercept-resp-viewer.
+2. Drop: show_intercepted_request() → press Drop →
+   verify that the editor was cleared.
+3. Queue: two requests in a row → Forward the first → second appears automatically.
 """
 
 from __future__ import annotations
@@ -70,11 +70,11 @@ class TestInterceptTiming:
 
     @pytest.mark.asyncio
     async def test_forward_response_appears_in_viewer(self) -> None:
-        """Forward → ответ появляется в #intercept-resp-viewer.
+        """Forward → response appears in #intercept-resp-viewer.
 
-        Имитируем: show_intercepted_request() → Forward →
-        вручную симулируем on_request_done (т.к. реального сервера нет) →
-        замеряем время до появления контента.
+        Simulate: show_intercepted_request() → Forward →
+        manually simulate on_request_done (no real server) →
+        measure time until content appears.
         """
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.proxy.screen import ProxyScreen
@@ -87,39 +87,39 @@ class TestInterceptTiming:
 
             screen = app.query_one("#screen-proxy", ProxyScreen)
 
-            # Включаем intercept напрямую (без реального прокси)
+            # Enable intercept directly (without real proxy)
             app._proxy.intercept_enabled = True
             screen._sync_intercept_button()
             await asyncio.sleep(0)
 
-            # Создаём перехваченный запрос
+            # Create an intercepted request
             ireq = _make_intercepted_req("t001", "GET", "http://example.com/api/data")
 
-            # Показываем запрос в intercept UI
+            # Show the request in the intercept UI
             t_show = time.perf_counter()
             screen.show_intercepted_request(ireq)
             await asyncio.sleep(0)
             t_shown = time.perf_counter()
             print(f"\n[TIMING] show_intercepted_request: {(t_shown - t_show)*1000:.1f}ms")
 
-            # Проверяем что запрос отображён в редакторе
+            # Verify the request is displayed in the editor
             editor = app.query_one("#intercept-editor", TextArea)
             assert "/api/data" in editor.text or "example.com" in editor.text, \
-                f"Editor должен содержать путь или хост. Got: {editor.text[:100]}"
-            print(f"[OK] Editor содержит запрос: {editor.text[:60]!r}")
+                f"Editor should contain path or host. Got: {editor.text[:100]}"
+            print(f"[OK] Editor contains request: {editor.text[:60]!r}")
 
-            # Вызываем Forward напрямую (pilot.click зависает на больших окнах под pytest-asyncio)
+            # Call Forward directly (pilot.click hangs on large windows under pytest-asyncio)
             t_forward_click = time.perf_counter()
             screen.action_forward()
             await asyncio.sleep(0)
             t_forward_done = time.perf_counter()
             print(f"[TIMING] Forward action → handler: {(t_forward_done - t_forward_click)*1000:.1f}ms")
 
-            # _intercept_req должен быть None после Forward
-            assert screen._intercept_req is None, "После Forward _intercept_req должен быть None"
-            print("[OK] _intercept_req = None после Forward")
+            # _intercept_req should be None after Forward
+            assert screen._intercept_req is None, "After Forward _intercept_req should be None"
+            print("[OK] _intercept_req = None after Forward")
 
-            # Симулируем приход ответа (on_request_done callback)
+            # Simulate response arriving (on_request_done callback)
             ireq.response = _make_response(200, "Hello from server!")
             ireq.state = "forwarded"
 
@@ -129,19 +129,19 @@ class TestInterceptTiming:
             t_response_shown = time.perf_counter()
             print(f"[TIMING] show_intercept_response → rendered: {(t_response_shown - t_response_sim)*1000:.1f}ms")
 
-            # Проверяем что #intercept-resp-viewer существует и обновлён
+            # Verify #intercept-resp-viewer exists and was updated
             try:
                 viewer = app.query_one("#intercept-resp-viewer", HttpView)
-                print(f"[OK] #intercept-resp-viewer обновлён (widget exists, rendered)")
+                print(f"[OK] #intercept-resp-viewer updated (widget exists, rendered)")
             except Exception as e:
-                pytest.fail(f"#intercept-resp-viewer не найден: {e}")
+                pytest.fail(f"#intercept-resp-viewer not found: {e}")
 
             total = t_response_shown - t_show
             print(f"[TIMING] TOTAL show→forward→response: {total*1000:.1f}ms")
 
     @pytest.mark.asyncio
     async def test_drop_clears_editor(self) -> None:
-        """Drop → editor очищается, кнопки дизейблятся."""
+        """Drop → editor is cleared, buttons are disabled."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.proxy.screen import ProxyScreen
         from textual.widgets import TextArea
@@ -163,7 +163,7 @@ class TestInterceptTiming:
 
             editor = app.query_one("#intercept-editor", TextArea)
             assert "/drop-me" in editor.text or "example.com" in editor.text, \
-                f"Editor должен содержать путь. Got: {editor.text[:100]}"
+                f"Editor should contain path. Got: {editor.text[:100]}"
 
             t_drop = time.perf_counter()
             screen.action_drop()
@@ -171,23 +171,23 @@ class TestInterceptTiming:
             t_after_drop = time.perf_counter()
             print(f"\n[TIMING] Drop action → handler: {(t_after_drop - t_drop)*1000:.1f}ms")
 
-            assert screen._intercept_req is None, "После Drop _intercept_req должен быть None"
+            assert screen._intercept_req is None, "After Drop _intercept_req should be None"
 
-            # Editor должен показывать сообщение об очистке
+            # Editor should show a cleared message
             editor_text = app.query_one("#intercept-editor", TextArea).text
-            print(f"[OK] Editor после Drop: {editor_text[:60]!r}")
+            print(f"[OK] Editor after Drop: {editor_text[:60]!r}")
 
             from pentool.tui.widgets.toolbar_button import ToolbarButton
             fwd_btn = app.query_one("#btn-forward", ToolbarButton)
             drop_btn = app.query_one("#btn-drop", ToolbarButton)
-            assert fwd_btn.disabled, "Forward должна быть disabled после Drop"
-            assert drop_btn.disabled, "Drop должна быть disabled после Drop"
-            print("[OK] Forward и Drop кнопки задизейблены")
+            assert fwd_btn.disabled, "Forward should be disabled after Drop"
+            assert drop_btn.disabled, "Drop should be disabled after Drop"
+            print("[OK] Forward and Drop buttons are disabled")
 
     @pytest.mark.asyncio
     async def test_queue_shows_next_after_forward(self) -> None:
-        """Два запроса подряд → первый показан, второй в очереди →
-        Forward первого → второй автоматически появляется."""
+        """Two requests in a row → first shown, second in queue →
+        Forward the first → second appears automatically."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.proxy.screen import ProxyScreen
         from textual.widgets import TextArea
@@ -204,52 +204,52 @@ class TestInterceptTiming:
             req1 = _make_intercepted_req("q001", "GET", "http://first.com/req1")
             req2 = _make_intercepted_req("q002", "POST", "http://second.com/req2")
 
-            # Показываем оба запроса
+            # Show both requests
             screen.show_intercepted_request(req1)
             await pilot.pause(0.05)
             screen.show_intercepted_request(req2)
             await pilot.pause(0.1)
 
-            # Первый должен быть активным
+            # First should be active
             assert screen._intercept_req is req1, \
-                f"Первый запрос должен быть активным, а не {screen._intercept_req}"
-            # Второй — в очереди
+                f"First request should be active, not {screen._intercept_req}"
+            # Second should be in queue
             assert len(screen._intercept_pending) == 1, \
-                f"Второй запрос должен быть в очереди, len={len(screen._intercept_pending)}"
+                f"Second request should be in queue, len={len(screen._intercept_pending)}"
             assert screen._intercept_pending[0] is req2
-            print(f"\n[OK] req1 активен, req2 в очереди (len={len(screen._intercept_pending)})")
+            print(f"\n[OK] req1 active, req2 in queue (len={len(screen._intercept_pending)})")
 
-            # Editor содержит первый запрос
+            # Editor contains the first request
             editor = app.query_one("#intercept-editor", TextArea)
             assert "/req1" in editor.text or "GET" in editor.text, \
-                f"Editor должен показывать первый запрос: {editor.text[:100]}"
-            print(f"[OK] Editor показывает req1: {editor.text[:50]!r}")
+                f"Editor should show first request: {editor.text[:100]}"
+            print(f"[OK] Editor shows req1: {editor.text[:50]!r}")
 
-            # Forward первого (прямой вызов — pilot.click зависает на больших окнах)
+            # Forward the first (direct call — pilot.click hangs on large windows)
             t0 = time.perf_counter()
             screen.action_forward()
             await pilot.pause(0.15)
             t1 = time.perf_counter()
-            print(f"[TIMING] Forward req1 → req2 появился: {(t1-t0)*1000:.1f}ms")
+            print(f"[TIMING] Forward req1 → req2 appeared: {(t1-t0)*1000:.1f}ms")
 
-            # Второй должен стать активным
+            # Second should become active
             assert screen._intercept_req is req2, \
-                f"После Forward req1 активным должен стать req2, а не {screen._intercept_req}"
+                f"After Forward req1, req2 should become active, not {screen._intercept_req}"
             assert len(screen._intercept_pending) == 0, \
-                f"Очередь должна быть пустой, len={len(screen._intercept_pending)}"
-            print("[OK] req2 автоматически стал активным")
+                f"Queue should be empty, len={len(screen._intercept_pending)}"
+            print("[OK] req2 automatically became active")
 
-            # Editor содержит второй запрос
+            # Editor contains the second request
             editor_text = app.query_one("#intercept-editor", TextArea).text
             assert "/req2" in editor_text or "POST" in editor_text, \
-                f"Editor должен показывать второй запрос: {editor_text[:100]}"
-            print(f"[OK] Editor показывает req2: {editor_text[:50]!r}")
+                f"Editor should show second request: {editor_text[:100]}"
+            print(f"[OK] Editor shows req2: {editor_text[:50]!r}")
 
     @pytest.mark.asyncio
     async def test_response_viewer_timing_after_forward(self) -> None:
-        """Точный тайминг: сколько мс от show_intercept_response() до обновления виджета.
+        """Precise timing: how many ms from show_intercept_response() to widget update.
 
-        Проверяем нет ли задержки в show_intercept_response → ResponseViewer.load_response.
+        Check there is no delay in show_intercept_response → ResponseViewer.load_response.
         """
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.proxy.screen import ProxyScreen
@@ -266,11 +266,11 @@ class TestInterceptTiming:
             screen.show_intercepted_request(ireq)
             await pilot.pause(0.1)
 
-            # Форвардим без клика (напрямую через метод, чтобы убрать overhead UI)
+            # Forward without click (directly via method to remove UI overhead)
             screen.action_forward()
             await pilot.pause(0.05)
 
-            # Симулируем ответ
+            # Simulate response
             ireq.response = _make_response(200, "Timing test body " * 10)
             ireq.state = "forwarded"
 
@@ -286,6 +286,6 @@ class TestInterceptTiming:
             print(f"\n[TIMING] show_intercept_response avg: {avg:.1f}ms "
                   f"(min={min(timings):.1f}, max={max(timings):.1f})")
 
-            # Ожидаем что среднее < 200ms (без задержки это должно быть <50ms)
-            assert avg < 500, f"show_intercept_response слишком медленная: avg={avg:.1f}ms"
-            print(f"[OK] ResponseViewer обновляется быстро: {avg:.1f}ms avg")
+            # Expect average < 200ms (without delay this should be <50ms)
+            assert avg < 500, f"show_intercept_response is too slow: avg={avg:.1f}ms"
+            print(f"[OK] ResponseViewer updates quickly: {avg:.1f}ms avg")

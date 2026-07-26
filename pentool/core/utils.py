@@ -1,4 +1,4 @@
-"""core/utils.py — утилиты общего назначения."""
+"""core/utils.py — general-purpose utilities."""
 
 from __future__ import annotations
 

@@ -3,33 +3,33 @@ type: headers
 description: "Security headers for passive scanning — required headers, expected values, and missing header detection"
 detection: "passive — check response headers for presence/absence/value"
 
-# Заголовки, которые ДОЛЖНЫ присутствовать (обязательные)
+# Headers that MUST be present (required)
 required_headers:
   - name: "Strict-Transport-Security"
-    description: "HTTP Strict Transport Security (HSTS) — принудительный HTTPS"
+    description: "HTTP Strict Transport Security (HSTS) — enforces HTTPS"
     expected_pattern: "max-age=\\d+"
     recommended_value: "max-age=31536000; includeSubDomains; preload"
     severity: "high"
 
   - name: "X-Content-Type-Options"
-    description: "Запрет MIME-сниффинга браузером"
+    description: "Prevents MIME-type sniffing by the browser"
     expected_value: "nosniff"
     severity: "medium"
 
   - name: "X-Frame-Options"
-    description: "Защита от clickjacking"
+    description: "Clickjacking protection"
     expected_values:
       - "DENY"
       - "SAMEORIGIN"
     severity: "medium"
 
   - name: "Content-Security-Policy"
-    description: "Политика безопасности контента (CSP)"
+    description: "Content Security Policy (CSP)"
     expected_pattern: "default-src|script-src|object-src"
     severity: "high"
 
   - name: "Referrer-Policy"
-    description: "Управление передачей Referer"
+    description: "Controls Referer header transmission"
     expected_values:
       - "no-referrer"
       - "no-referrer-when-downgrade"
@@ -38,88 +38,88 @@ required_headers:
     severity: "low"
 
   - name: "Permissions-Policy"
-    description: "Ограничение доступа к браузерным API (бывший Feature-Policy)"
+    description: "Restricts access to browser APIs (formerly Feature-Policy)"
     expected_pattern: "geolocation|camera|microphone"
     severity: "low"
 
   - name: "X-XSS-Protection"
-    description: "Встроенный XSS-фильтр браузера (устаревший, но полезный для старых браузеров)"
+    description: "Built-in browser XSS filter (legacy, but useful for older browsers)"
     expected_value: "1; mode=block"
     severity: "low"
 
   - name: "Cache-Control"
-    description: "Управление кешированием чувствительных страниц"
+    description: "Controls caching of sensitive pages"
     expected_pattern: "no-store|no-cache|private"
     severity: "low"
 
   - name: "Cross-Origin-Embedder-Policy"
-    description: "Изоляция cross-origin ресурсов"
+    description: "Isolates cross-origin resources"
     expected_value: "require-corp"
     severity: "low"
 
   - name: "Cross-Origin-Opener-Policy"
-    description: "Изоляция window.opener"
+    description: "Isolates window.opener"
     expected_values:
       - "same-origin"
       - "same-origin-allow-popups"
     severity: "low"
 
   - name: "Cross-Origin-Resource-Policy"
-    description: "Ограничение cross-origin чтения ресурсов"
+    description: "Restricts cross-origin resource reads"
     expected_values:
       - "same-site"
       - "same-origin"
       - "cross-origin"
     severity: "low"
 
-# Заголовки, которые НЕ должны присутствовать (утечка информации)
+# Headers that MUST NOT be present (information leakage)
 forbidden_headers:
   - name: "Server"
-    description: "Утечка версии веб-сервера"
+    description: "Leaks web server version"
     severity: "info"
     risk: "information disclosure"
 
   - name: "X-Powered-By"
-    description: "Утечка технологического стека (PHP, ASP.NET, Express)"
+    description: "Leaks technology stack (PHP, ASP.NET, Express)"
     severity: "info"
     risk: "information disclosure"
 
   - name: "X-AspNet-Version"
-    description: "Утечка версии ASP.NET"
+    description: "Leaks ASP.NET version"
     severity: "info"
     risk: "information disclosure"
 
   - name: "X-AspNetMvc-Version"
-    description: "Утечка версии ASP.NET MVC"
+    description: "Leaks ASP.NET MVC version"
     severity: "info"
     risk: "information disclosure"
 
   - name: "X-Generator"
-    description: "Утечка CMS или фреймворка"
+    description: "Leaks CMS or framework"
     severity: "info"
     risk: "information disclosure"
 
   - name: "X-Runtime"
-    description: "Утечка времени обработки и стека (Rails)"
+    description: "Leaks processing time and stack (Rails)"
     severity: "info"
     risk: "information disclosure"
 
   - name: "X-Version"
-    description: "Утечка версии приложения"
+    description: "Leaks application version"
     severity: "info"
     risk: "information disclosure"
 
-# Небезопасные значения для существующих заголовков
+# Insecure values for existing headers
 insecure_values:
   - header: "Access-Control-Allow-Origin"
     dangerous_values:
       - "*"
-    description: "Wildcard CORS разрешает чтение ответов с любого домена"
+    description: "Wildcard CORS allows reading responses from any domain"
     severity: "high"
 
   - header: "Access-Control-Allow-Credentials"
     dangerous_condition: "true + Access-Control-Allow-Origin: *"
-    description: "Credentials + wildcard origin — особо опасная комбинация"
+    description: "Credentials + wildcard origin — especially dangerous combination"
     severity: "critical"
 
   - header: "Content-Security-Policy"
@@ -127,30 +127,30 @@ insecure_values:
       - "unsafe-inline"
       - "unsafe-eval"
       - "* "
-    description: "Небезопасные CSP директивы нивелируют защиту"
+    description: "Unsafe CSP directives neutralize the protection"
     severity: "medium"
 
   - header: "Set-Cookie"
     check_flags:
       - flag: "HttpOnly"
-        description: "Отсутствие HttpOnly позволяет кражу куки через XSS"
+        description: "Missing HttpOnly allows cookie theft via XSS"
         severity: "high"
       - flag: "Secure"
-        description: "Отсутствие Secure передаёт куки по HTTP"
+        description: "Missing Secure transmits cookies over HTTP"
         severity: "high"
       - flag: "SameSite"
-        description: "Отсутствие SameSite уязвимо к CSRF"
+        description: "Missing SameSite is vulnerable to CSRF"
         severity: "medium"
         expected_values:
           - "SameSite=Strict"
           - "SameSite=Lax"
 
-# Подписи для обнаружения (используются в passive scanner)
+# Detection signatures (used in passive scanner)
 signatures:
   - "X-Powered-By"
   - "X-AspNet-Version"
   - "X-Runtime"
   - "Server:"
 
-# Payloads-заглушка (не применяются, только для совместимости со структурой)
+# Placeholder payloads (not applied, for structural compatibility only)
 payloads: []

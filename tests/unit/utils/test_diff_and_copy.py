@@ -1,4 +1,4 @@
-"""Unit-тесты: utils/diff.py и utils/copy_as.py"""
+"""Unit tests: utils/diff.py and utils/copy_as.py"""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ class TestDiffTexts:
         text1 = "\n".join(["a", "b", "c", "d", "e"])
         text2 = "\n".join(["a", "b", "X", "d", "e"])
         result = diff_texts(text1, text2, context=1)
-        # Должны быть контекстные строки
+        # There should be context lines
         context = [d for d in result if d.type == " "]
         assert len(context) > 0
 
@@ -111,7 +111,7 @@ class TestCopyAsCurl:
         from pentool.utils.copy_as import copy_as_curl
         req = ParsedRequest(method="GET", url="http://example.com/", headers={})
         cmd = copy_as_curl(req)
-        # GET — нет -X GET
+        # GET — no -X GET
         assert "-X GET" not in cmd
 
 
@@ -131,5 +131,5 @@ class TestCopyAsFfuf:
             headers={},
         )
         cmd = copy_as_ffuf(req)
-        # FUZZ не дублируется
+        # FUZZ is not duplicated
         assert cmd.count("FUZZ") >= 1

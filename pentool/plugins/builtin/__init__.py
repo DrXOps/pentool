@@ -1,1 +1,1 @@
-"""Встроенные плагины-сканеры Pentool."""
+"""Pentool built-in scanner plugins."""

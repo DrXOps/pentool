@@ -14,7 +14,7 @@ signatures:
   - "TwigException"
   - "class java.lang"
 payloads:
-  # --- Базовые math probe (универсальные) ---
+  # --- Basic math probes (universal) ---
   - "{{7*7}}"
   - "${7*7}"
   - "#{7*7}"

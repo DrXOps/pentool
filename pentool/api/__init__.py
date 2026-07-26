@@ -1,4 +1,4 @@
-"""API-слой pentool — публичный интерфейс между modules/ и TUI/CLI."""
+"""Pentool API layer — public interface between modules/ and TUI/CLI."""
 
 from pentool.api.proxy_api     import ProxyAPI, InterceptedRequest, MatchReplaceRule
 from pentool.api.repeater_api  import RepeaterAPI
@@ -6,7 +6,7 @@ from pentool.api.scanner_api   import ScannerAPI
 from pentool.api.intruder_api  import IntruderAPI, IntruderConfig, IntruderAttack
 from pentool.api.spider_api    import SpiderAPI
 from pentool.api.target_api    import TargetAPI
-# Decoder/Comparer/Sequencer — функциональные API без класса-обёртки
+# Decoder/Comparer/Sequencer — functional APIs without a wrapper class
 from pentool.api.decoder_api   import (  # noqa: F401
     OPERATIONS, OP_LABELS, DecoderChain,
     decode_op, decode_smart, encode_op, run_chain,

@@ -1,4 +1,4 @@
-"""FilterBar — панель фильтрации над DataTable."""
+"""FilterBar — filtering panel above DataTable."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ _METHODS = ["Any", "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
 
 
 class MethodCycler(Static):
-    """Кнопка-переключатель метода HTTP — клик циклически меняет значение."""
+    """HTTP method toggle button — click cycles through values."""
 
     DEFAULT_CSS = _CSS
 
@@ -34,7 +34,7 @@ class MethodCycler(Static):
         self._idx = (self._idx + 1) % len(_METHODS)
         label = _METHODS[self._idx]
         self.update(f"{label} ▼")
-        # Отправляем событие вверх чтобы FilterBar мог отреагировать
+        # Post event upward so FilterBar can react
         self.post_message(MethodCycler.Changed(label))
 
     class Changed(Message):
@@ -44,7 +44,7 @@ class MethodCycler(Static):
 
 
 class ScopeToggle(Static):
-    """Кнопка-переключатель фильтра 'только in-scope'."""
+    """Toggle button for 'in-scope only' filter."""
 
     DEFAULT_CSS = _CSS
 
@@ -56,7 +56,7 @@ class ScopeToggle(Static):
     def __init__(self, **kwargs) -> None:
         super().__init__("★ Scope", **kwargs)
         self._active: bool = False
-        self._scope_empty: bool = True  # изначально scope пуст → кнопка неактивна
+        self._scope_empty: bool = True  # scope is initially empty → button inactive
 
     @property
     def active(self) -> bool:
@@ -75,7 +75,7 @@ class ScopeToggle(Static):
 
     def on_click(self) -> None:
         if self._scope_empty:
-            return  # игнорируем если scope пуст
+            return  # ignore if scope is empty
         self._active = not self._active
         if self._active:
             self.add_class("-active")
@@ -92,15 +92,15 @@ class ScopeToggle(Static):
 
 
 class FilterBar(Widget):
-    """Строка фильтров: Host, Method, Status, Search + Apply/Reset.
+    """Filter row: Host, Method, Status, Search + Apply/Reset.
 
-    Отправляет FilterChanged при нажатии Apply или Enter.
+    Posts FilterChanged on Apply or Enter.
     """
 
     DEFAULT_CSS = _CSS
 
     class FilterChanged(Message):
-        """Пользователь применил фильтр."""
+        """User applied a filter."""
         def __init__(self, filters: dict) -> None:
             super().__init__()
             self.filters = filters
@@ -130,15 +130,15 @@ class FilterBar(Widget):
             self._reset()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Enter в любом Input применяет фильтр."""
+        """Enter in any Input applies the filter."""
         self._apply()
 
     def on_method_cycler_changed(self, event: MethodCycler.Changed) -> None:
-        """Смена метода сразу применяет фильтр."""
+        """Changing method immediately applies the filter."""
         self._apply()
 
     def on_scope_toggle_toggled(self, event: ScopeToggle.Toggled) -> None:
-        """Включение/выключение фильтра по scope сразу применяет фильтр."""
+        """Toggling the scope filter immediately applies the filter."""
         self._apply()
 
     def _apply(self) -> None:
@@ -173,7 +173,7 @@ class FilterBar(Widget):
         if search:
             filters["search"] = search
 
-        # Фильтр по scope — передаём флаг, ProxyScreen подставит список хостов
+        # Scope filter — pass flag, ProxyScreen will supply the host list
         try:
             scope_toggle = self.query_one("#fb-scope", ScopeToggle)
             if scope_toggle.active:
@@ -199,6 +199,6 @@ class FilterBar(Widget):
 
     def get_filters(self) -> dict:
         self._apply()
-        # Возвращает последние построенные фильтры — через сообщение
+        # Returns the last built filters — via message
         return {}
 

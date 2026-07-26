@@ -1,4 +1,4 @@
-"""Диалог установки CA-сертификата для перехвата HTTPS."""
+"""Dialog for installing the CA certificate for HTTPS interception."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from textual.widgets import Button, Static
 
 
 class CertInstallDialog(ModalScreen[None]):
-    """Инструкция по установке CA-сертификата в браузер.
+    """Instructions for installing the CA certificate in a browser.
 
-    Показывает путь к CA и команды для Firefox, Chrome и системы.
+    Shows the CA path and commands for Firefox, Chrome and system-wide.
     """
 
     DEFAULT_CSS = _CSS

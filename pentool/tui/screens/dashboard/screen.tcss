@@ -120,7 +120,7 @@ DashboardScreen #main-area {
     padding: 0 1;
     margin-top: 1;
 }
-/* Левая колонка — Projects */
+/* Left column — Projects */
 DashboardScreen #left-pane {
     width: 32%;
     height: 1fr;
@@ -156,14 +156,14 @@ DashboardScreen #hk-panel {
     padding: 1 0 0 0;
     text-style: dim;
 }
-/* Правая колонка */
+/* Right column */
 DashboardScreen #right-col {
     width: 1fr;
     height: 1fr;
     layout: vertical;
     margin-left: 1;
 }
-/* Верхняя часть правой колонки: Feed + Status */
+/* Upper part of right column: Feed + Status */
 DashboardScreen #mid-row {
     height: 10;
     layout: horizontal;
@@ -202,7 +202,7 @@ DashboardScreen #status-panel .led-item {
     height: 1;
     color: $text-muted;
 }
-/* Нижняя часть правой колонки: Vulnerability Matrix */
+/* Lower part of right column: Vulnerability Matrix */
 DashboardScreen #matrix-col {
     height: 1fr;
     margin-top: 1;
@@ -214,5 +214,5 @@ DashboardScreen #matrix-col SeverityMatrix {
     width: 1fr;
     border: none;
 }
-/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
 .toolbar-sep { width: auto; }

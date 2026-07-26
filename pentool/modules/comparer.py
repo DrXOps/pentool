@@ -1,4 +1,4 @@
-"""Comparer — side-by-side diff двух текстов с подсветкой различий."""
+"""Comparer — side-by-side diff of two texts with difference highlighting."""
 
 from __future__ import annotations
 
@@ -10,18 +10,18 @@ __all__ = ["compare", "compare_lines", "CompareStats", "DiffLine", "DiffResult"]
 
 @dataclass
 class DiffLine:
-    """Одна строка diff-результата."""
+    """One line of the diff result."""
 
     tag: str           # "equal" | "replace" | "insert" | "delete"
-    left: str          # текст левой стороны (пустая если insert)
-    right: str         # текст правой стороны (пустая если delete)
-    line_left: int     # номер строки слева (0 если нет)
-    line_right: int    # номер строки справа (0 если нет)
+    left: str          # left side text (empty if insert)
+    right: str         # right side text (empty if delete)
+    line_left: int     # left line number (0 if absent)
+    line_right: int    # right line number (0 if absent)
 
 
 @dataclass
 class CompareStats:
-    """Статистика сравнения."""
+    """Comparison statistics."""
 
     total_left: int
     total_right: int
@@ -38,13 +38,13 @@ class CompareStats:
 
 @dataclass
 class DiffResult:
-    """Результат сравнения: строки diff + статистика."""
+    """Comparison result: diff lines + statistics."""
 
     lines: list[DiffLine]
     stats: CompareStats
 
     def rich_text(self) -> str:
-        """Собрать Rich-markup строку для RichLog."""
+        """Build a Rich-markup string for RichLog."""
         parts: list[str] = []
         for dl in self.lines:
             if dl.tag == "equal":
@@ -60,14 +60,14 @@ class DiffResult:
 
 
 def compare(left: str, right: str) -> DiffResult:
-    """Сравнить два текста построчно.
+    """Compare two texts line by line.
 
     Args:
-        left: Левый текст.
-        right: Правый текст.
+        left: Left text.
+        right: Right text.
 
     Returns:
-        DiffResult с построчными различиями и статистикой.
+        DiffResult with per-line differences and statistics.
     """
     left_lines = left.splitlines()
     right_lines = right.splitlines()
@@ -75,14 +75,14 @@ def compare(left: str, right: str) -> DiffResult:
 
 
 def compare_lines(left_lines: list[str], right_lines: list[str]) -> DiffResult:
-    """Сравнить два списка строк.
+    """Compare two lists of lines.
 
     Args:
-        left_lines: Строки левой стороны.
-        right_lines: Строки правой стороны.
+        left_lines: Left side lines.
+        right_lines: Right side lines.
 
     Returns:
-        DiffResult с построчными различиями и статистикой.
+        DiffResult with per-line differences and statistics.
     """
     matcher = difflib.SequenceMatcher(None, left_lines, right_lines, autojunk=False)
     opcodes = matcher.get_opcodes()
@@ -108,7 +108,7 @@ def compare_lines(left_lines: list[str], right_lines: list[str]) -> DiffResult:
             ln_right += j2 - j1
 
         elif tag == "replace":
-            # Показываем удалённые строки слева, добавленные справа
+            # Show removed lines on left, added lines on right
             left_chunk = left_lines[i1:i2]
             right_chunk = right_lines[j1:j2]
             max_len = max(len(left_chunk), len(right_chunk))
@@ -170,7 +170,7 @@ def compare_lines(left_lines: list[str], right_lines: list[str]) -> DiffResult:
 
 
 def compare_bytes(left: bytes, right: bytes) -> DiffResult:
-    """Сравнить два байтовых потока (декодируются как UTF-8 с заменой)."""
+    """Compare two byte streams (decoded as UTF-8 with replacement)."""
     return compare(
         left.decode("utf-8", errors="replace"),
         right.decode("utf-8", errors="replace"),

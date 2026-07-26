@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/core/storage_interface.py."""
+"""Unit tests for pentool/core/storage_interface.py."""
 
 from __future__ import annotations
 

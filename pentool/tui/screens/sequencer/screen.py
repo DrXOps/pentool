@@ -1,4 +1,4 @@
-"""Экран Sequencer — анализ энтропии токенов."""
+"""Sequencer screen — token entropy analysis."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ _SOURCE_OPTIONS = [
 
 
 class SequencerScreen(Widget):
-    """Захват и анализ энтропии токенов (session IDs, CSRF, JWT…)."""
+    """Capture and entropy analysis of tokens (session IDs, CSRF, JWT…)."""
 
     DEFAULT_CSS = _CSS
 
@@ -43,13 +43,13 @@ class SequencerScreen(Widget):
         super().__init__(**kwargs)
         from pentool.api.sequencer_api import Sequencer
         self._seq = Sequencer()
-        self._capturing = False       # режим перехвата из прокси
-        self._capture_param: str = "" # имя параметра/cookie для захвата
-        self._proxy_hook = None       # ссылка для unsubscribe
-        self._source: str = "manual"  # текущий выбранный источник
+        self._capturing = False       # live-capture mode from proxy
+        self._capture_param: str = "" # parameter/cookie name to capture
+        self._proxy_hook = None       # reference for unsubscribe
+        self._source: str = "manual"  # currently selected source
 
     def compose(self) -> ComposeResult:
-        # ── Тулбар ─────────────────────────────────────────────────────────────
+        # ── Toolbar ────────────────────────────────────────────────────────────
         with Horizontal(id="seq-toolbar"):
             yield ToolbarButton("▶ Capture",   "btn-seq-capture")
             yield Static(" │ ", classes="seq-sep")
@@ -86,7 +86,7 @@ class SequencerScreen(Widget):
 
         # ── Main area ──────────────────────────────────────────────────────────
         with Horizontal(id="seq-main-area"):
-            # Левая: ввод токенов (по одному на строку)
+            # Left column: token input (one per line)
             with Vertical(id="seq-input-col"):
                 yield Static("Tokens (one per line)", id="seq-tokens-label",
                              classes="seq-col-label")
@@ -94,7 +94,7 @@ class SequencerScreen(Widget):
 
             yield ResizeHandle("seq-input-col", "seq-analysis-col", id="seq-resize-h")
 
-            # Правая: результаты анализа
+            # Right column: analysis results
             with Vertical(id="seq-analysis-col"):
                 yield Static("Analysis", id="seq-analysis-label",
                              classes="seq-col-label")
@@ -168,7 +168,7 @@ class SequencerScreen(Widget):
             pass
 
     def _start_capture(self) -> None:
-        """Начать захват токенов из прокси."""
+        """Start capturing tokens from the proxy."""
         try:
             src = self._source
             param = self.query_one("#seq-param-input", Input).value.strip()
@@ -201,13 +201,13 @@ class SequencerScreen(Widget):
             logger.debug("_start_capture: %s", exc)
 
     def _attach_proxy_hook(self, proxy_api, param: str, source: str = "proxy") -> None:
-        """Подписаться на прокси-запросы для извлечения токенов.
+        """Subscribe to proxy requests for token extraction.
 
         Args:
-            proxy_api: ProxyAPI-объект для поиска запросов.
-            param: Имя параметра/cookie или regex-паттерн.
-            source: "proxy" — любой заголовок/query; "cookie" — только Cookie;
-                    "body_regex" — regex по телу ответа.
+            proxy_api: ProxyAPI object used to look up requests.
+            param: Parameter/cookie name or regex pattern.
+            source: "proxy" — any header/query; "cookie" — Cookie header only;
+                    "body_regex" — regex against the response body.
         """
         from pentool.core.event_bus import get_event_bus
         from pentool.core.events import ProxyRequestDoneEvent
@@ -223,14 +223,14 @@ class SequencerScreen(Widget):
                 token = None
 
                 if source == "cookie":
-                    # Только Cookie header
+                    # Cookie header only
                     for hdr_name, hdr_val in (req.headers or {}).items():
                         if hdr_name.lower() == "cookie":
                             token = self._seq.extract_from_header(hdr_val, param)
                             break
 
                 elif source == "body_regex":
-                    # Regex по телу ответа
+                    # Regex against the response body
                     resp = getattr(req, "response", None)
                     body = ""
                     if resp is not None:
@@ -251,7 +251,7 @@ class SequencerScreen(Widget):
                             if token:
                                 break
                     if not token:
-                        # Попробуем response Set-Cookie
+                        # Try response Set-Cookie
                         resp = getattr(req, "response", None)
                         if resp is not None:
                             for hdr_name, hdr_val in (getattr(resp, "headers", None) or {}).items():
@@ -301,7 +301,7 @@ class SequencerScreen(Widget):
             try:
                 text = Path(path).read_text(encoding="utf-8", errors="replace")
                 added = self._seq.add_from_text(text)
-                # Обновить TextArea
+                # Update TextArea
                 self.query_one("#seq-token-area", TextArea).load_text(
                     "\n".join(self._seq.tokens)
                 )
@@ -386,9 +386,9 @@ class SequencerScreen(Widget):
     # ── Analyze ───────────────────────────────────────────────────────────────
 
     def action_analyze(self) -> None:
-        """Синхронизировать токены из TextArea и запустить анализ."""
+        """Sync tokens from TextArea and run analysis."""
         try:
-            # Синхронизировать ручной ввод в Sequencer
+            # Sync manual input into Sequencer
             ta_text = self.query_one("#seq-token-area", TextArea).text.strip()
             if ta_text:
                 self._seq.clear()
@@ -406,12 +406,12 @@ class SequencerScreen(Widget):
             logger.debug("action_analyze: %s", exc)
 
     def _render_report(self, report) -> None:
-        """Отобразить отчёт в UI."""
+        """Render the report in the UI."""
         try:
             log = self.query_one("#seq-analysis-log", RichLog)
             log.clear()
 
-            # Общая статистика
+            # Summary statistics
             log.write(f"[bold cyan]── Token Analysis ── {report.token_count} tokens ──[/bold cyan]")
             log.write("")
             log.write(f"[bold]Count:[/bold]       {report.token_count}")
@@ -424,18 +424,18 @@ class SequencerScreen(Widget):
                 log.write(f"[bold red]Duplicates:[/bold red] [red]{report.duplicates}[/red]")
             log.write("")
 
-            # Гистограмма длин
+            # Length histogram
             log.write(report.rich_histogram(width=25))
             log.write("")
 
-            # Частота символов (топ 15)
+            # Character frequency (top 15)
             log.write(report.rich_charfreq(top_n=15))
 
-            # FIPS 140-2 тесты
+            # FIPS 140-2 tests
             log.write("")
             log.write(report.rich_fips())
 
-            # Аномалии по позициям (для fixed-length токенов)
+            # Position anomalies (for fixed-length tokens)
             log.write("")
             log.write(report.rich_position_anomalies())
 
@@ -452,7 +452,7 @@ class SequencerScreen(Widget):
             logger.debug("_render_report: %s", exc)
 
     def _render_gauge(self, report) -> None:
-        """Отрисовать entropy gauge в нижней панели."""
+        """Render the entropy gauge in the bottom panel."""
         try:
             bits = report.effective_bits
             max_bits = 256.0

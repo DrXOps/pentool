@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/modules/sequencer.py."""
+"""Unit tests for pentool/modules/sequencer.py."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ class TestCharsetSize:
         assert charset_size("DEADBEEF") == 16
 
     def test_lowercase_letters(self):
-        # "abcdef" является подмножеством hex — charset_size вернёт 16
-        # Для чисто буквенного токена вне hex нужен символ вне hex-диапазона
-        result = charset_size("ghijklmnop")  # g-p не hex
+        # "abcdef" is a subset of hex — charset_size will return 16
+        # For a purely alphabetic token outside hex, a character outside hex range is needed
+        result = charset_size("ghijklmnop")  # g-p not hex
         assert result >= 26
 
     def test_mixed_case(self):
@@ -35,31 +35,31 @@ class TestCharsetSize:
         assert result >= 62
 
     def test_minimum(self):
-        # Никогда не возвращает меньше 2
+        # Never returns less than 2
         assert charset_size("a") >= 2
 
     def test_empty(self):
         assert charset_size("") >= 2
 
     def test_base64_chars(self):
-        # Base64 использует a-z, A-Z, 0-9, +, /, = → должен дать 26+26+10+5=67
+        # Base64 uses a-z, A-Z, 0-9, +, /, = → should give 26+26+10+5=67
         result = charset_size("abc+/=XYZ123")
-        assert result >= 67  # нижняя + верхняя + цифры + 5 спецсимволов
+        assert result >= 67  # lowercase + uppercase + digits + 5 special chars
 
     def test_url_safe_base64(self):
-        # URL-safe Base64 использует _, - вместо +, / → 26+26+10+5=67
+        # URL-safe Base64 uses _, - instead of +, / → 26+26+10+5=67
         result = charset_size("abcXYZ123_-=")
         assert result >= 67
 
 
 class TestTokenEntropy:
     def test_single_char_token(self):
-        # Один символ повторяется — энтропия 0
+        # Single character repeats — entropy is 0
         result = token_entropy("aaaa")
         assert result == 0.0
 
     def test_max_entropy_uniform(self):
-        # Каждый символ уникальный → максимальная энтропия
+        # Each character is unique → maximum entropy
         token = "abcdefghijklmnopqrstuvwxyz"
         result = token_entropy(token)
         assert result == pytest.approx(math.log2(26), abs=0.01)
@@ -82,7 +82,7 @@ class TestTotalEntropyBits:
     def test_scales_with_length(self):
         short = total_entropy_bits("abc")
         long  = total_entropy_bits("abcabc")
-        # Вдвое длиннее → вдвое больше бит
+        # Twice as long → twice as many bits
         assert long == pytest.approx(short * 2, abs=0.1)
 
     def test_empty(self):
@@ -170,7 +170,7 @@ class TestSequencerAnalyze:
 
     def test_analyze_weak_token(self):
         seq = Sequencer()
-        # Очень короткие однообразные токены — должны быть WEAK
+        # Very short monotonous tokens — should be WEAK
         seq.add_tokens_bulk(["aa", "bb", "cc"])
         report = seq.analyze()
         assert "WEAK" in report.assessment or report.effective_bits < 64
@@ -178,7 +178,7 @@ class TestSequencerAnalyze:
     def test_analyze_strong_token(self):
         import secrets
         seq = Sequencer()
-        # 32 байта hex = 64 символа из 16 → ~256 бит теор.
+        # 32 bytes hex = 64 chars from 16 → ~256 bits theoretical
         tokens = [secrets.token_hex(32) for _ in range(10)]
         seq.add_tokens_bulk(tokens)
         report = seq.analyze()
@@ -229,7 +229,7 @@ class TestSequencerReport:
         report = seq.analyze()
         hist = report.rich_histogram()
         assert isinstance(hist, str)
-        assert "3" in hist  # длина 3
+        assert "3" in hist  # length 3
 
     def test_rich_charfreq_returns_string(self):
         seq = Sequencer()
@@ -271,7 +271,7 @@ class TestAssessmentLevels:
         assert any(w in report.assessment for w in level_words)
 
 
-# ── FIPS 140-2 Tests (Блок 4.5) ───────────────────────────────────────────────
+# ── FIPS 140-2 Tests (Block 4.5) ───────────────────────────────────────────────
 
 class TestFIPS140Monobit:
     def test_monobit_returns_fips_result(self):
@@ -284,7 +284,7 @@ class TestFIPS140Monobit:
 
     def test_monobit_balanced_passes(self):
         from pentool.modules.sequencer import fips140_monobit
-        # Ровно 50% единиц — должен пройти
+        # Exactly 50% ones — should pass
         bits = ("01" * 10000)[:20000]
         result = fips140_monobit(bits)
         assert result.passed
@@ -326,8 +326,8 @@ class TestFIPS140Runs:
 
     def test_runs_alternating_passes(self):
         from pentool.modules.sequencer import fips140_runs
-        # Чередующиеся биты дают 20000 серий — это ВЫШЕ диапазона [2267, 2733]
-        # Проверяем что value == 20000 (каждый бит — отдельная серия)
+        # Alternating bits give 20000 runs — this is ABOVE the range [2267, 2733]
+        # Verify value == 20000 (each bit is a separate run)
         bits = "01" * 10000
         result = fips140_runs(bits)
         assert result.value == 20000
@@ -409,13 +409,13 @@ class TestRunFIPSTests:
         assert "Poker Test" in names
 
     def test_run_fips_tests_few_tokens_no_crash(self):
-        """Мало токенов — должны быть повторены до 20000 бит."""
+        """Few tokens — should be repeated up to 20000 bits."""
         from pentool.modules.sequencer import run_fips_tests
         results = run_fips_tests(["abc"])
         assert len(results) == 4
 
     def test_analyze_includes_fips_results(self):
-        """SequencerReport содержит fips_results."""
+        """SequencerReport contains fips_results."""
         from pentool.modules.sequencer import Sequencer
         import secrets
         seq = Sequencer()
@@ -426,7 +426,7 @@ class TestRunFIPSTests:
         assert len(report.fips_results) == 4
 
     def test_report_rich_fips_returns_string(self):
-        """rich_fips() возвращает строку с результатами."""
+        """rich_fips() returns a string with results."""
         from pentool.modules.sequencer import Sequencer
         import secrets
         seq = Sequencer()
@@ -437,21 +437,21 @@ class TestRunFIPSTests:
         assert "FIPS" in text
 
     def test_report_rich_fips_empty_has_message(self):
-        """rich_fips() без токенов — возвращает сообщение."""
+        """rich_fips() without tokens — returns a message."""
         from pentool.modules.sequencer import Sequencer
         seq = Sequencer()
         report = seq.analyze()
         text = report.rich_fips()
         assert isinstance(text, str)
-        # Пустой анализ → нет fips_results
+        # Empty analysis → no fips_results
         assert "insufficient" in text.lower() or "data" in text.lower()
 
 
 class TestAnalyzePositionEntropy:
-    """Тесты для analyze_position_entropy — анализ аномалий по позициям."""
+    """Tests for analyze_position_entropy — positional anomaly analysis."""
 
     def test_uniform_tokens_no_anomalies(self) -> None:
-        """Случайные токены — высокая энтропия на каждой позиции."""
+        """Random tokens — high entropy at every position."""
         from pentool.modules.sequencer import analyze_position_entropy
         import secrets
         tokens = [secrets.token_hex(8) for _ in range(20)]
@@ -463,66 +463,66 @@ class TestAnalyzePositionEntropy:
             assert unique >= 2
 
     def test_fixed_prefix_tokens(self) -> None:
-        """Токены с фиксированным префиксом — первые позиции с нулевой энтропией."""
+        """Tokens with fixed prefix — first positions have zero entropy."""
         from pentool.modules.sequencer import analyze_position_entropy
-        # Все токены начинаются с "FIXED_" — первые 6 символов полностью предсказуемы
+        # All tokens start with "FIXED_" — first 6 characters are completely predictable
         tokens = [f"FIXED_{i:04d}" for i in range(20)]
         result = analyze_position_entropy(tokens)
         assert len(result) > 0
-        # Первые 6 позиций должны иметь энтропию 0.0 (все одинаковые)
+        # First 6 positions should have entropy 0.0 (all identical)
         for pos, h, unique in result[:6]:
-            assert h == 0.0, f"Pos {pos} должна иметь H=0.0, got {h}"
-            assert unique == 1, f"Pos {pos} должна иметь 1 уникальный символ, got {unique}"
+            assert h == 0.0, f"Pos {pos} should have H=0.0, got {h}"
+            assert unique == 1, f"Pos {pos} should have 1 unique char, got {unique}"
 
     def test_different_lengths_returns_empty(self) -> None:
-        """Токены разной длины — analyze_position_entropy возвращает []."""
+        """Tokens of different length — analyze_position_entropy returns []."""
         from pentool.modules.sequencer import analyze_position_entropy
         tokens = ["abc", "de", "fghi"]
         result = analyze_position_entropy(tokens)
         assert result == []
 
     def test_single_token_returns_empty(self) -> None:
-        """Один токен — недостаточно данных для анализа."""
+        """Single token — insufficient data for analysis."""
         from pentool.modules.sequencer import analyze_position_entropy
         result = analyze_position_entropy(["singletoken"])
         assert result == []
 
     def test_empty_tokens_returns_empty(self) -> None:
-        """Пустой список — возвращает []."""
+        """Empty list — returns []."""
         from pentool.modules.sequencer import analyze_position_entropy
         result = analyze_position_entropy([])
         assert result == []
 
     def test_position_entropy_values(self) -> None:
-        """Проверяем корректность вычисления энтропии."""
+        """Verify correctness of entropy calculation."""
         from pentool.modules.sequencer import analyze_position_entropy
-        # Позиция 0: все 'A' → H=0. Позиция 1: 50% 'x', 50% 'y' → H=1. Позиция 2: все '!'
+        # Position 0: all 'A' → H=0. Position 1: 50% 'x', 50% 'y' → H=1. Position 2: all '!'
         tokens = ["Ax!", "Ay!", "Ax!", "Ay!"]
         result = analyze_position_entropy(tokens)
         assert len(result) == 3
         pos0_h = result[0][1]
         pos1_h = result[1][1]
         pos2_h = result[2][1]
-        assert pos0_h == 0.0, f"Pos 0 все 'A' → H=0, got {pos0_h}"
+        assert pos0_h == 0.0, f"Pos 0 all 'A' → H=0, got {pos0_h}"
         assert abs(pos1_h - 1.0) < 1e-9, f"Pos 1 50/50 → H=1.0, got {pos1_h}"
-        assert pos2_h == 0.0, f"Pos 2 все '!' → H=0, got {pos2_h}"
+        assert pos2_h == 0.0, f"Pos 2 all '!' → H=0, got {pos2_h}"
 
     def test_position_unique_chars(self) -> None:
-        """Проверяем count unique_chars в каждой позиции."""
+        """Verify unique_chars count at each position."""
         from pentool.modules.sequencer import analyze_position_entropy
         tokens = ["abc", "adc", "aec"]  # pos0=a,a,a; pos1=b,d,e; pos2=c,c,c
         result = analyze_position_entropy(tokens)
         assert len(result) == 3
-        assert result[0][2] == 1   # pos0: только 'a'
+        assert result[0][2] == 1   # pos0: only 'a'
         assert result[1][2] == 3   # pos1: b,d,e
-        assert result[2][2] == 1   # pos2: только 'c'
+        assert result[2][2] == 1   # pos2: only 'c'
 
 
 class TestSequencerReportPositionAnomalies:
-    """Тесты для SequencerReport.rich_position_anomalies()."""
+    """Tests for SequencerReport.rich_position_anomalies()."""
 
     def test_rich_position_anomalies_no_data(self) -> None:
-        """Без данных — сообщение о невозможности анализа."""
+        """Without data — message about inability to analyze."""
         from pentool.modules.sequencer import Sequencer
         seq = Sequencer()
         report = seq.analyze()
@@ -531,7 +531,7 @@ class TestSequencerReportPositionAnomalies:
         assert "not available" in text.lower() or "different" in text.lower()
 
     def test_rich_position_anomalies_random_tokens(self) -> None:
-        """Случайные токены — нет аномалий."""
+        """Random tokens — no anomalies."""
         from pentool.modules.sequencer import Sequencer
         import secrets
         seq = Sequencer()
@@ -541,36 +541,36 @@ class TestSequencerReportPositionAnomalies:
         assert isinstance(text, str)
 
     def test_rich_position_anomalies_with_fixed_prefix(self) -> None:
-        """Токены с фиксированным префиксом — выявляются аномальные позиции."""
+        """Tokens with fixed prefix — anomalous positions are detected."""
         from pentool.modules.sequencer import Sequencer
         seq = Sequencer()
         import secrets
-        # Все токены начинаются с "SESS_" (фиксированный префикс)
+        # All tokens start with "SESS_" (fixed prefix)
         tokens = [f"SESS_{secrets.token_hex(6)}" for _ in range(20)]
         seq.add_tokens_bulk(tokens)
         report = seq.analyze()
-        # position_anomalies должен содержать данные (токены одинаковой длины)
+        # position_anomalies should contain data (tokens of equal length)
         assert len(report.position_anomalies) > 0
         text = report.rich_position_anomalies(low_entropy_threshold=2.0)
-        # Аномалии должны быть обнаружены (первые 5 позиций "SESS_" полностью предсказуемы)
+        # Anomalies should be detected (first 5 positions "SESS_" are fully predictable)
         assert isinstance(text, str)
 
 
 class TestSequencerReportIntegration:
-    """Интеграционные тесты: полный цикл analyze() включая новые поля."""
+    """Integration tests: full analyze() cycle including new fields."""
 
     def test_analyze_returns_position_anomalies_field(self) -> None:
-        """analyze() возвращает SequencerReport с полем position_anomalies."""
+        """analyze() returns SequencerReport with position_anomalies field."""
         from pentool.modules.sequencer import Sequencer
         seq = Sequencer()
         seq.add_tokens_bulk(["token_1", "token_2", "token_3"])
         report = seq.analyze()
         assert hasattr(report, "position_anomalies")
-        # Все токены одинаковой длины → analysis выполнен
+        # All tokens same length → analysis performed
         assert isinstance(report.position_anomalies, list)
 
     def test_analyze_mixed_length_position_anomalies_empty(self) -> None:
-        """analyze() с токенами разной длины → position_anomalies = []."""
+        """analyze() with tokens of different lengths → position_anomalies = []."""
         from pentool.modules.sequencer import Sequencer
         seq = Sequencer()
         seq.add_tokens_bulk(["short", "longertoken", "med"])

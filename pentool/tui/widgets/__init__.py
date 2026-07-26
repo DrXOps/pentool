@@ -1,1 +1,1 @@
-"""Пакет виджетов TUI."""
+"""TUI widgets package."""

@@ -1,4 +1,4 @@
-"""Диалог управления правилами Match/Replace."""
+"""Dialog for managing Match/Replace rules."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ _SCOPE_OPTIONS  = [("all", "All"), ("headers", "Headers"), ("body", "Body")]
 
 
 class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
-    """Диалог управления правилами автоматической замены."""
+    """Dialog for managing automatic replacement rules."""
 
     DEFAULT_CSS = _CSS
 
@@ -83,7 +83,7 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
     def on_mount(self) -> None:
         self._rebuild_table()
 
-    # ── таблица ───────────────────────────────────────────────────────────────
+    # ── table ─────────────────────────────────────────────────────────────────
 
     def _rebuild_table(self) -> None:
         table = self.query_one("#rules-table", DataTable)
@@ -139,7 +139,7 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
             enabled=enabled,
         )
 
-    # ── выпадающие меню Target / Scope ───────────────────────────────────────
+    # ── Target / Scope dropdown menus ────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-sel-target")
     def on_btn_sel_target(self, event: ToolbarButton.Pressed) -> None:
@@ -173,7 +173,7 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
         self._scope_val = val
         self._update_sel_labels()
 
-    # ── кнопки таблицы ───────────────────────────────────────────────────────
+    # ── table buttons ─────────────────────────────────────────────────────────
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-close-title":

@@ -1,4 +1,4 @@
-"""Сравнение текстов (diff) с форматированием для Rich/Textual."""
+"""Text comparison (diff) with Rich/Textual formatting."""
 
 from __future__ import annotations
 
@@ -9,22 +9,22 @@ from typing import Literal
 
 @dataclass
 class DiffLine:
-    """Одна строка результата diff."""
+    """A single line in a diff result."""
 
     type: Literal["+", "-", " ", "@"]
     content: str
 
 
 def diff_texts(text1: str, text2: str, context: int = 3) -> list[DiffLine]:
-    """Сравнить два текста и вернуть список строк diff (unified format).
+    """Compare two texts and return a list of diff lines (unified format).
 
     Args:
-        text1: Исходный текст (левый / «до»).
-        text2: Изменённый текст (правый / «после»).
-        context: Количество контекстных строк вокруг изменений.
+        text1: Original text (left / "before").
+        text2: Modified text (right / "after").
+        context: Number of context lines around changes.
 
     Returns:
-        Список объектов DiffLine.
+        List of DiffLine objects.
     """
     lines1 = text1.splitlines(keepends=True)
     lines2 = text2.splitlines(keepends=True)
@@ -48,13 +48,13 @@ def diff_texts(text1: str, text2: str, context: int = 3) -> list[DiffLine]:
 
 
 def diff_to_rich(diff: list[DiffLine]) -> str:
-    """Форматировать diff в строку с Rich-разметкой (цвета).
+    """Format a diff as a string with Rich markup (colors).
 
     Args:
-        diff: Список DiffLine от diff_texts().
+        diff: List of DiffLine objects from diff_texts().
 
     Returns:
-        Строка с Rich markup для отображения в Textual/Rich.
+        String with Rich markup for display in Textual/Rich.
     """
     lines: list[str] = []
     for dl in diff:

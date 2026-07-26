@@ -1,4 +1,4 @@
-"""Диалоги сохранения/загрузки проекта."""
+"""Project save/load dialogs."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ _CSS = (Path(__file__).parent / "project_dialog.tcss").read_text(encoding="utf-8
 
 
 class SaveProjectDialog(ModalScreen[str | None]):
-    """Диалог: введите путь для сохранения проекта."""
+    """Dialog: enter path to save the project."""
 
     DEFAULT_CSS = _CSS
 
@@ -47,7 +47,7 @@ class SaveProjectDialog(ModalScreen[str | None]):
 
 
 class LoadProjectDialog(ModalScreen[str | None]):
-    """Диалог: введите путь для загрузки проекта."""
+    """Dialog: enter path to load the project."""
 
     DEFAULT_CSS = _CSS
 

@@ -1,4 +1,4 @@
-"""LiveDashboard — вкладка «Live» в Dashboard с вау-эффектом."""
+"""LiveDashboard — «Live» tab in Dashboard with real-time widgets."""
 
 from __future__ import annotations
 
@@ -15,15 +15,15 @@ from textual.widgets import RichLog, Static
 
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
-# ── Вспомогательные функции ────────────────────────────────────────────────
+# ── Helper functions ───────────────────────────────────────────────────────
 
 _SPARK_CHARS = " ▁▂▃▄▅▆▇█"
 
 def _sparkline(values: list[float], width: int = 30) -> str:
-    """Построить ASCII-sparkline фиксированной ширины."""
+    """Build a fixed-width ASCII sparkline."""
     if not values:
         return " " * width
-    # Берём последние `width` значений
+    # Take the last `width` values
     data = list(values)[-width:]
     if len(data) < width:
         data = [0.0] * (width - len(data)) + data
@@ -36,23 +36,23 @@ def _sparkline(values: list[float], width: int = 30) -> str:
     return "".join(chars)
 
 def _hbar(value: float, max_val: float = 100.0, width: int = 20) -> str:
-    """Горизонтальный прогресс-бар."""
+    """Horizontal progress bar."""
     ratio = min(1.0, max(0.0, value / (max_val or 1.0)))
     filled = int(ratio * width)
     return "█" * filled + "░" * (width - filled)
 
 def _color_by_percent(pct: float) -> str:
-    """Цвет по проценту: green → yellow → red."""
+    """Color by percentage: green → yellow → red."""
     if pct < 50:
         return "green"
     elif pct < 80:
         return "yellow"
     return "red"
 
-# ── Виджет 1: Traffic Sparkline ────────────────────────────────────────────
+# ── Widget 1: Traffic Sparkline ────────────────────────────────────────────
 
 class TrafficSparkline(Widget):
-    """ASCII-sparkline запросов в секунду за последние 60 секунд."""
+    """ASCII sparkline of requests per second over the last 60 seconds."""
 
     DEFAULT_CSS = """
     TrafficSparkline {
@@ -77,7 +77,7 @@ class TrafficSparkline(Widget):
         self.set_interval(1.0, self._tick)
 
     def increment(self) -> None:
-        """Вызвать при каждом новом запросе."""
+        """Call on each new request."""
         self._count += 1
 
     def _tick(self) -> None:
@@ -111,10 +111,10 @@ class TrafficSparkline(Widget):
             pass
 
 
-# ── Виджет 2: Bubble Chart ─────────────────────────────────────────────────
+# ── Widget 2: Bubble Chart ─────────────────────────────────────────────────
 
 class BubbleChart(Widget):
-    """ASCII-карта уязвимостей по severity с анимацией при новом finding."""
+    """ASCII vulnerability map by severity with animation on new findings."""
 
     DEFAULT_CSS = """
     BubbleChart {
@@ -124,12 +124,12 @@ class BubbleChart(Widget):
     }
     """
 
-    # Символы «пузырьков» разного размера
+    # Bubble symbols of varying sizes
     _BUBBLES = {
-        0: "●",   # критично — большой
-        1: "◉",   # высокий
-        2: "○",   # средний
-        3: "·",   # низкий
+        0: "●",   # critical — large
+        1: "◉",   # high
+        2: "○",   # medium
+        3: "·",   # low
         4: "·",   # info
     }
     _COLORS = {
@@ -156,7 +156,7 @@ class BubbleChart(Widget):
         self.set_interval(0.5, self._update_display)
 
     def add_finding(self, severity: str) -> None:
-        """Добавить новый finding — пузырёк мигает."""
+        """Add a new finding — the bubble blinks."""
         sev = severity.lower()
         if sev in self._counts:
             self._counts[sev] += 1
@@ -190,10 +190,10 @@ class BubbleChart(Widget):
             pass
 
 
-# ── Виджет 3: Scan Speedometer ─────────────────────────────────────────────
+# ── Widget 3: Scan Speedometer ─────────────────────────────────────────────
 
 class ScanSpeedometer(Widget):
-    """ASCII-спидометр прогресса активного сканирования."""
+    """ASCII speedometer for active scan progress."""
 
     DEFAULT_CSS = """
     ScanSpeedometer {
@@ -230,7 +230,7 @@ class ScanSpeedometer(Widget):
 
     def _update_display(self) -> None:
         pct = self._progress
-        # ASCII дуга спидометра (0–100% → левая половина → правая половина)
+        # ASCII speedometer arc (0–100% → left half → right half)
         arc_len = 20
         filled = int(pct / 100 * arc_len)
         arc = "[green]" + "▓" * filled + "░" * (arc_len - filled) + "[/green]"
@@ -258,10 +258,10 @@ class ScanSpeedometer(Widget):
             pass
 
 
-# ── Виджет 4: Heatmap ─────────────────────────────────────────────────────
+# ── Widget 4: Heatmap ──────────────────────────────────────────────────────
 
 class HeatmapWidget(Widget):
-    """Тепловая карта scope-хостов по частоте запросов."""
+    """Heatmap of scope hosts by request frequency."""
 
     DEFAULT_CSS = """
     HeatmapWidget {
@@ -292,14 +292,14 @@ class HeatmapWidget(Widget):
             return
 
         total = max(self._host_counts.values())
-        # Топ 6 хостов
+        # Top 6 hosts
         sorted_hosts = sorted(self._host_counts.items(), key=lambda x: -x[1])[:6]
 
         lines = []
         for host, count in sorted_hosts:
             ratio = count / total
             bar_len = int(ratio * 18)
-            # Цвет от зелёного к красному
+            # Color from green to red
             if ratio < 0.3:
                 color = "green"
             elif ratio < 0.6:
@@ -317,10 +317,10 @@ class HeatmapWidget(Widget):
             pass
 
 
-# ── Виджет 5: Event Feed ───────────────────────────────────────────────────
+# ── Widget 5: Event Feed ───────────────────────────────────────────────────
 
 class EventFeed(Widget):
-    """Лента событий в реальном времени."""
+    """Real-time event feed."""
 
     DEFAULT_CSS = """
     EventFeed {
@@ -341,7 +341,7 @@ class EventFeed(Widget):
         )
 
     def add_event(self, event_type: str, message: str) -> None:
-        """Добавить событие в ленту."""
+        """Add an event to the feed."""
         colors = {
             "request":   "dim cyan",
             "intercept": "bold yellow",
@@ -359,10 +359,10 @@ class EventFeed(Widget):
             pass
 
 
-# ── Виджет 6: Resource Monitor ─────────────────────────────────────────────
+# ── Widget 6: Resource Monitor ─────────────────────────────────────────────
 
 class ResourceMonitor(Widget):
-    """CPU + RAM термометры."""
+    """CPU + RAM thermometers."""
 
     DEFAULT_CSS = """
     ResourceMonitor {
@@ -399,7 +399,7 @@ class ResourceMonitor(Widget):
 
             self.query_one("#res-cpu", Static).update(cpu_line)
             self.query_one("#res-ram", Static).update(ram_line)
-            # Доп инфо: количество потоков процесса
+            # Extra info: number of process threads
             try:
                 import os
                 proc = psutil.Process(os.getpid())
@@ -418,10 +418,10 @@ class ResourceMonitor(Widget):
             pass
 
 
-# ── Виджет 7: Emergency Stop ───────────────────────────────────────────────
+# ── Widget 7: Emergency Stop ───────────────────────────────────────────────
 
 class EmergencyStop(Widget):
-    """Кнопка Emergency Stop с 3-секундным обратным отсчётом."""
+    """Emergency Stop button with a 3-second countdown."""
 
     DEFAULT_CSS = """
     EmergencyStop {
@@ -472,7 +472,7 @@ class EmergencyStop(Widget):
             self._timer = None
         self._countdown = 0
         try:
-            self.query_one("#stop-countdown", Static).update("[dim]cancelled[/dim]")
+            self.query_one("#stop-countdown", Static).update("[dim]canceled[/dim]")
         except Exception:
             pass
         self.set_timer(1.0, lambda: self.query_one("#stop-countdown", Static).update(""))
@@ -506,7 +506,7 @@ class EmergencyStop(Widget):
                 self._on_stop()
             except Exception:
                 pass
-        # Отправить EmergencyStop через EventBus
+        # Emit EmergencyStop via EventBus
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import AppEvent
@@ -521,10 +521,10 @@ class EmergencyStop(Widget):
             pass
 
 
-# ── Mini Site Map ──────────────────────────────────────────────────────────
+# ── Mini Site Map ─────────────────────────────────────────────────────────
 
 class MiniSiteMap(Widget):
-    """Компактная карта сайта с прогресс-барами."""
+    """Compact site map with progress bars."""
 
     DEFAULT_CSS = """
     MiniSiteMap {
@@ -543,11 +543,11 @@ class MiniSiteMap(Widget):
         yield Static("", id="sitemap-body")
 
     def add_url(self, url: str) -> None:
-        """Добавить URL в мини-карту."""
+        """Add a URL to the mini-map."""
         try:
             from urllib.parse import urlparse
             parsed = urlparse(url)
-            # Первые 2 сегмента пути
+            # First 2 path segments
             parts = [p for p in parsed.path.split("/") if p]
             key = "/" + "/".join(parts[:2]) if parts else "/"
             self._paths[key] = self._paths.get(key, 0) + 1
@@ -579,10 +579,10 @@ class MiniSiteMap(Widget):
             pass
 
 
-# ── Контейнер: LiveDashboardTab ────────────────────────────────────────────
+# ── Container: LiveDashboardTab ────────────────────────────────────────────
 
 class LiveDashboardTab(Widget):
-    """Вкладка «Live» — весь новый дашборд в одном виджете."""
+    """«Live» tab — the entire live dashboard in one widget."""
 
     DEFAULT_CSS = """
     LiveDashboardTab {
@@ -642,7 +642,7 @@ class LiveDashboardTab(Widget):
             yield EmergencyStop(id="live-estop")
 
     def on_mount(self) -> None:
-        """Подписаться на EventBus."""
+        """Subscribe to EventBus."""
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import (

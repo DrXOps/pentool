@@ -1,4 +1,4 @@
-"""AsyncSpider — рекурсивный краулер сайта."""
+"""AsyncSpider — recursive site crawler."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def is_playwright_available() -> bool:
     except ImportError:
         return False
 
-# Regex для поиска API-эндпоинтов в JS
+# Regex to find API endpoints in JS
 _JS_API_PATTERNS = [
     re.compile(r'["\'](/api/[^"\'?\s]{1,200})', re.IGNORECASE),
     re.compile(r'["\'](/v\d+/[^"\'?\s]{1,200})', re.IGNORECASE),
@@ -34,19 +34,19 @@ _JS_API_PATTERNS = [
     re.compile(r'\.open\s*\(\s*["\'][A-Z]+["\']\s*,\s*["\']([^"\']{4,200})["\']', re.IGNORECASE),
 ]
 
-# Regex для path-параметров (числа/UUID в path)
+# Regex for path parameters (numbers/UUIDs in path)
 _PATH_SEGMENT_RE = re.compile(
     r'/(\d{1,10}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_\-]{8,36})(?=/|$)'
 )
 
-# Атрибуты с URL, которые ищем во всех тегах
+# Attributes with URLs to search in all tags
 _URL_ATTRIBUTES = ["href", "action", "src", "data-url", "data-href", "data-src",
                    "data-action", "data-link", "content"]
 
 
 @dataclass
 class FormField:
-    """Поле HTML-формы."""
+    """HTML form field."""
     name: str
     type: str = "text"
     value: str = ""
@@ -54,7 +54,7 @@ class FormField:
 
 @dataclass
 class SpiderForm:
-    """Найденная HTML-форма."""
+    """Found HTML form."""
     action: str
     method: str = "GET"
     fields: list[FormField] = field(default_factory=list)
@@ -63,18 +63,18 @@ class SpiderForm:
 
 @dataclass
 class SpiderEndpoint:
-    """Найденный эндпоинт (из HTML, JS, URL или path-segment)."""
+    """Found endpoint (from HTML, JS, URL, or path-segment)."""
     url: str
     source: str = "html"   # html | js | param | path | robots | sitemap | form
     method: str = "GET"
     params: list[str] = field(default_factory=list)
-    body: str = ""          # для POST-форм — encoded body
+    body: str = ""          # for POST forms — encoded body
     headers: dict = field(default_factory=dict)
 
 
 @dataclass
 class SpiderResult:
-    """Результат обхода сайта."""
+    """Site crawl result."""
     base_url: str
     pages: list[str] = field(default_factory=list)
     forms: list[SpiderForm] = field(default_factory=list)
@@ -96,7 +96,7 @@ class SpiderResult:
 
 
 class AsyncSpider:
-    """Асинхронный рекурсивный краулер сайта."""
+    """Asynchronous recursive site crawler."""
 
     def __init__(
         self,
@@ -121,7 +121,7 @@ class AsyncSpider:
         self.on_progress = on_progress
         self._stop = False
         self.extra_headers: dict = extra_headers or {}
-        # Playwright JS-рендеринг — включается только если playwright установлен
+        # Playwright JS rendering — enabled only if playwright is installed
         self.js_render = js_render and is_playwright_available()
 
     def stop(self) -> None:
@@ -140,12 +140,12 @@ class AsyncSpider:
         semaphore = asyncio.Semaphore(self.concurrency)
 
         if self.js_render:
-            # Playwright JS-рендеринг
+            # Playwright JS rendering
             await self._crawl_playwright(
                 start_url, base_domain, base_scheme, result, visited, queue, semaphore
             )
         else:
-            # Обычный aiohttp краулинг
+            # Regular aiohttp crawling
             import aiohttp
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             headers = {
@@ -156,13 +156,13 @@ class AsyncSpider:
             }
 
             async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-                # Сначала парсим robots.txt и sitemap.xml
+                # First parse robots.txt and sitemap.xml
                 await self._fetch_robots_sitemap(
                     session, base_scheme, base_domain, result, visited, queue
                 )
 
                 while queue and not self._stop and len(visited) < self.max_pages:
-                    # Берём пачку URL для параллельной обработки
+                    # Take a batch of URLs for parallel processing
                     batch = []
                     while queue and len(batch) < self.concurrency:
                         url, depth = queue.pop(0)
@@ -197,7 +197,7 @@ class AsyncSpider:
                                 if norm not in visited:
                                     queue.append((link, depth + 1))
 
-        # Дедупликация
+        # Deduplication
         result.pages = list(dict.fromkeys(result.pages))
         result.js_files = list(dict.fromkeys(result.js_files))
         result.total_requests = len(visited)
@@ -214,7 +214,7 @@ class AsyncSpider:
         visited: set,
         queue: list,
     ) -> None:
-        """Парсить robots.txt и sitemap.xml для расширенного обнаружения."""
+        """Parse robots.txt and sitemap.xml for extended discovery."""
         base = f"{scheme}://{domain}"
 
         # robots.txt
@@ -245,7 +245,7 @@ class AsyncSpider:
         except Exception as exc:
             logger.debug("robots.txt fetch error: %s", exc)
 
-        # sitemap.xml (fallback, если в robots не указана)
+        # sitemap.xml (fallback if not specified in robots)
         try:
             sitemap_url = f"{base}/sitemap.xml"
             await self._fetch_sitemap(session, sitemap_url, result, visited, queue, domain)
@@ -256,14 +256,14 @@ class AsyncSpider:
         self, session, sitemap_url: str, result: SpiderResult,
         visited: set, queue: list, domain: str,
     ) -> None:
-        """Парсить sitemap.xml и добавлять URL в очередь."""
+        """Parse sitemap.xml and add URLs to the queue."""
         try:
             async with session.get(sitemap_url, ssl=False, allow_redirects=True) as resp:
                 if resp.status != 200:
                     return
                 text = await resp.text(errors="replace")
                 result.total_requests += 1
-                # Ищем <loc>URL</loc>
+                # Look for <loc>URL</loc>
                 for match in re.finditer(r'<loc>\s*(https?://[^<]+)\s*</loc>', text):
                     url = match.group(1).strip()
                     if self._in_scope(url, domain):
@@ -273,7 +273,7 @@ class AsyncSpider:
                             result.endpoints.append(SpiderEndpoint(
                                 url=url, source="sitemap", method="GET",
                             ))
-                # Вложенные sitemap-индексы
+                # Nested sitemap indexes
                 for match in re.finditer(r'<sitemap>.*?<loc>\s*(https?://[^<]+)\s*</loc>', text, re.DOTALL):
                     nested = match.group(1).strip()
                     await self._fetch_sitemap(session, nested, result, visited, queue, domain)
@@ -302,11 +302,11 @@ class AsyncSpider:
                         self.on_page(url)
 
                     if "javascript" in content_type or url.split("?")[0].endswith(".js"):
-                        # JS-файл — ищем API эндпоинты и добавляем в список
+                        # JS file — find API endpoints and add to list
                         result.js_files.append(url)
                         endpoints = self._extract_js_endpoints(body, url)
                         result.endpoints.extend(endpoints)
-                        # Из JS-эндпоинтов тоже извлекаем страницы для краулинга
+                        # Also extract pages from JS endpoints for crawling
                         js_page_links = [
                             ep.url for ep in endpoints
                             if ep.url.startswith("http")
@@ -319,19 +319,19 @@ class AsyncSpider:
 
                     result.pages.append(url)
 
-                    # Парсинг HTML
+                    # HTML parsing
                     links, forms, js_links = self._parse_html(body, url, base_domain)
 
-                    # Добавляем формы
+                    # Add forms
                     result.forms.extend(forms)
 
-                    # JS-файлы добавляем в очередь (было пустой pass — теперь работает!)
+                    # JS files added to queue
                     for js_url in js_links:
                         norm = self._normalize_url(js_url)
                         if js_url not in result.js_files:
                             result.js_files.append(js_url)
 
-                    # Извлекаем параметры из URL текущей страницы
+                    # Extract parameters from current page URL
                     params = parse_qs(urlparse(url).query)
                     if params:
                         result.endpoints.append(SpiderEndpoint(
@@ -341,7 +341,7 @@ class AsyncSpider:
                             params=list(params.keys()),
                         ))
 
-                    # Обнаруживаем path-параметры (числа и UUID в пути)
+                    # Detect path parameters (numbers and UUIDs in path)
                     path_variants = self._extract_path_variants(url, base_domain)
                     for pv in path_variants:
                         if pv not in [ep.url for ep in result.endpoints]:
@@ -349,7 +349,7 @@ class AsyncSpider:
                                 url=pv, source="path", method="GET",
                             ))
 
-                    # Возвращаем ссылки + JS (JS тоже в очередь краулинга)
+                    # Return links + JS (JS also goes to crawl queue)
                     return links + js_links
 
             except asyncio.TimeoutError:
@@ -359,7 +359,7 @@ class AsyncSpider:
                 result.errors.append(f"Error {url}: {exc}")
                 return []
 
-    # ── Playwright JS-рендеринг ───────────────────────────────────────────────
+    # ── Playwright JS rendering ───────────────────────────────────────────────
 
     async def _crawl_playwright(
         self,
@@ -371,17 +371,17 @@ class AsyncSpider:
         queue: list,
         semaphore: asyncio.Semaphore,
     ) -> None:
-        """Краулинг с JavaScript-рендерингом через Playwright.
+        """Crawling with JavaScript rendering via Playwright.
 
-        Используется только если playwright установлен и js_render=True.
-        Запускает Chromium в headless-режиме, загружает страницы, ждёт
-        networkidle, затем извлекает HTML с выполненным JS.
+        Used only if playwright is installed and js_render=True.
+        Launches Chromium in headless mode, loads pages, waits for
+        networkidle, then extracts HTML with executed JS.
         """
         try:
             from playwright.async_api import async_playwright
         except ImportError:
             logger.warning("playwright not available, falling back to aiohttp")
-            # Fallback на aiohttp
+            # Fallback to aiohttp
             import aiohttp
             aio_timeout = aiohttp.ClientTimeout(total=self.timeout)
             headers = {
@@ -490,7 +490,7 @@ class AsyncSpider:
     def _parse_html(
         self, html: str, page_url: str, base_domain: str
     ) -> tuple[list[str], list[SpiderForm], list[str]]:
-        """Парсинг HTML: ссылки, формы, JS-файлы, data-атрибуты."""
+        """Parse HTML: links, forms, JS files, data attributes."""
         try:
             from bs4 import BeautifulSoup
         except ImportError:
@@ -519,11 +519,11 @@ class AsyncSpider:
                 seen_links.add(norm)
                 links.append(abs_url)
 
-        # <a href> и <link href>
+        # <a href> and <link href>
         for tag in soup.find_all(["a", "link"], href=True):
             _add_link(tag.get("href", ""))
 
-        # Все теги — ищем data-url / data-href / data-src / data-action
+        # All tags — look for data-url / data-href / data-src / data-action
         for tag in soup.find_all(True):
             for attr in _URL_ATTRIBUTES:
                 val = tag.get(attr, "")
@@ -537,7 +537,7 @@ class AsyncSpider:
             if m:
                 _add_link(m.group(1))
 
-        # JS-файлы (<script src>)
+        # JS files (<script src>)
         for script in soup.find_all("script", src=True):
             src = script.get("src", "")
             if src:
@@ -545,7 +545,7 @@ class AsyncSpider:
                 if urlparse(abs_url).scheme in ("http", "https"):
                     js_links.append(abs_url)
 
-        # inline <script> — ищем в них тоже
+        # Inline <script> — search in them too
         for script in soup.find_all("script", src=False):
             inline = script.get_text(strip=True)
             if inline and len(inline) > 20:
@@ -554,7 +554,7 @@ class AsyncSpider:
                     if ep.url.startswith("http") and self._in_scope(ep.url, base_domain):
                         _add_link(ep.url)
 
-        # Формы
+        # Forms
         for form in soup.find_all("form"):
             action = form.get("action", "") or page_url
             action = urljoin(page_url, action)
@@ -566,7 +566,7 @@ class AsyncSpider:
                 if not name:
                     continue
                 input_type = inp.get("type", "text").lower()
-                # Пропускаем кнопки и hidden-поля без значения
+                # Skip buttons and hidden fields without value
                 if input_type in ("submit", "button", "image", "reset"):
                     continue
                 fields.append(FormField(
@@ -588,7 +588,7 @@ class AsyncSpider:
     # ── JS endpoint extraction ────────────────────────────────────────────────
 
     def _extract_js_endpoints(self, js_content: str, js_url: str) -> list[SpiderEndpoint]:
-        """Извлечь API-эндпоинты из JS-кода."""
+        """Extract API endpoints from JS code."""
         endpoints: list[SpiderEndpoint] = []
         seen: set[str] = set()
 
@@ -600,7 +600,7 @@ class AsyncSpider:
                 path = match.group(1).strip()
                 if not path or len(path) > 300:
                     continue
-                # Игнорируем явно не URL
+                # Ignore clearly non-URL strings
                 if any(c in path for c in [" ", "\n", "\t"]):
                     continue
                 if path.startswith(("http://", "https://")):
@@ -608,13 +608,13 @@ class AsyncSpider:
                 elif path.startswith("/"):
                     full_url = base + path
                 else:
-                    # Относительный путь
+                    # Relative path
                     try:
                         full_url = urljoin(js_url, path)
                     except Exception:
                         continue
 
-                # Убираем фрагменты
+                # Remove fragments
                 full_url = full_url.split("#")[0]
                 if full_url in seen:
                     continue
@@ -633,20 +633,19 @@ class AsyncSpider:
     # ── path-segment injection discovery ────────────────────────────────────
 
     def _extract_path_variants(self, url: str, base_domain: str) -> list[str]:
-        """Обнаружить URL-варианты с path-параметрами для тестирования.
+        """Discover URL variants with path parameters for testing.
 
-        Пример: /api/users/123/profile → /api/users/INJECT/profile
-        Возвращаем URL с числовыми/UUID сегментами как потенциальные точки инъекции.
+        Example: /api/users/123/profile -> /api/users/INJECT/profile
+        Returns URLs with numeric/UUID segments as potential injection points.
         """
         variants: list[str] = []
         parsed = urlparse(url)
         path = parsed.path
 
-        # Ищем числа и UUID в path
+        # Find numbers and UUIDs in path
         for match in _PATH_SEGMENT_RE.finditer(path):
             segment = match.group(1)
-            # Создаём вариант с маркером вместо сегмента — для передачи в checks
-            # Храним как SpiderEndpoint.url с оригинальным сегментом
+            # Create variant with marker instead of segment — for passing to checks
             variants.append(url)
 
         return variants
@@ -654,7 +653,7 @@ class AsyncSpider:
     # ── utilities ─────────────────────────────────────────────────────────────
 
     def _normalize_url(self, url: str) -> str:
-        """Нормализовать URL (убрать фрагмент, trailing slash)."""
+        """Normalize URL (remove fragment, trailing slash)."""
         try:
             parsed = urlparse(url)
             normalized = parsed._replace(fragment="")
@@ -664,13 +663,13 @@ class AsyncSpider:
             return url
 
     def _in_scope(self, url: str, base_domain: str) -> bool:
-        """Проверить, что URL в скоупе (тот же домен или поддомен)."""
+        """Check that a URL is in scope (same domain or subdomain)."""
         try:
             parsed = urlparse(url)
             netloc = parsed.netloc
             if not netloc:
                 return True
-            # Точное совпадение или поддомен
+            # Exact match or subdomain
             return netloc == base_domain or netloc.endswith(f".{base_domain}")
         except Exception:
             return False

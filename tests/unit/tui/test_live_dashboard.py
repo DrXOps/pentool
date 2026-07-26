@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/tui/screens/dashboard/live_dashboard.py."""
+"""Unit tests for pentool/tui/screens/dashboard/live_dashboard.py."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 # ── helpers ──────────────────────────────────────────────────────────────────────
 
 class TestSparklineHelper:
-    """Тесты функции _sparkline из live_dashboard."""
+    """Tests for the _sparkline function from live_dashboard."""
 
     def _sparkline(self, values, width=10):
         from pentool.tui.screens.dashboard.live_dashboard import _sparkline
@@ -47,7 +47,7 @@ class TestSparklineHelper:
 
 
 class TestHbarHelper:
-    """Тесты функции _hbar из live_dashboard."""
+    """Tests for the _hbar function from live_dashboard."""
 
     def _hbar(self, value, max_val=100.0, width=10):
         from pentool.tui.screens.dashboard.live_dashboard import _hbar
@@ -67,18 +67,18 @@ class TestHbarHelper:
         assert filled == 5
 
     def test_zero_max_val_no_crash(self):
-        # max_val=0 не должен вызывать ZeroDivisionError
+        # max_val=0 should not raise ZeroDivisionError
         result = self._hbar(0.0, 0.0, width=5)
         assert isinstance(result, str)
 
     def test_length_equals_width(self):
         result = self._hbar(30.0, 100.0, width=20)
-        # Длина строки = width (только символы █ и ░)
+        # String length = width (only █ and ░ chars)
         assert len(result) == 20
 
 
 class TestColorByPercent:
-    """Тесты функции _color_by_percent из live_dashboard."""
+    """Tests for the _color_by_percent function from live_dashboard."""
 
     def _color(self, pct):
         from pentool.tui.screens.dashboard.live_dashboard import _color_by_percent
@@ -109,7 +109,7 @@ class TestColorByPercent:
 # ── TrafficSparkline ─────────────────────────────────────────────────────────────
 
 class TestTrafficSparkline:
-    """Тесты TrafficSparkline — только атрибуты (не монтируем TUI)."""
+    """Tests for TrafficSparkline — attributes only (no TUI mount)."""
 
     def test_initial_history_is_60_zeros(self):
         from pentool.tui.screens.dashboard.live_dashboard import TrafficSparkline
@@ -125,7 +125,7 @@ class TestTrafficSparkline:
     def test_history_deque_maxlen(self):
         from pentool.tui.screens.dashboard.live_dashboard import TrafficSparkline
         ts = TrafficSparkline()
-        # Добавим больше значений через прямую модификацию deque
+        # Add more values via direct deque modification
         for i in range(100):
             ts._history.append(float(i))
         assert len(ts._history) == 60
@@ -134,7 +134,7 @@ class TestTrafficSparkline:
 # ── BubbleChart ──────────────────────────────────────────────────────────────────
 
 class TestBubbleChart:
-    """Тесты BubbleChart — только логика подсчёта (не монтируем TUI)."""
+    """Tests for BubbleChart — counting logic only (no TUI mount)."""
 
     def test_initial_counts_all_zero(self):
         from pentool.tui.screens.dashboard.live_dashboard import BubbleChart
@@ -172,7 +172,7 @@ class TestBubbleChart:
 # ── ScanSpeedometer ──────────────────────────────────────────────────────────────
 
 class TestScanSpeedometer:
-    """Тесты ScanSpeedometer — только атрибуты (не монтируем TUI)."""
+    """Tests for ScanSpeedometer — attributes only (no TUI mount)."""
 
     def test_initial_progress_zero(self):
         from pentool.tui.screens.dashboard.live_dashboard import ScanSpeedometer
@@ -187,14 +187,14 @@ class TestScanSpeedometer:
     def test_update_progress_sets_progress(self):
         from pentool.tui.screens.dashboard.live_dashboard import ScanSpeedometer
         ss = ScanSpeedometer()
-        # Вызываем напрямую без рендеринга
+        # Call directly without rendering
         ss._progress = 75.0
         ss._findings = 10
         assert ss._progress == 75.0
         assert ss._findings == 10
 
     def test_update_progress_method_signature(self):
-        """Проверяем сигнатуру метода (3 позиционных аргумента)."""
+        """Verify method signature (3 positional arguments)."""
         from pentool.tui.screens.dashboard.live_dashboard import ScanSpeedometer
         import inspect
         sig = inspect.signature(ScanSpeedometer.update_progress)

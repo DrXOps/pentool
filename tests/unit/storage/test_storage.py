@@ -1,6 +1,6 @@
-"""Unit-тесты: storage/lru_cache.py и storage/http_storage.py
+"""Unit tests: storage/lru_cache.py and storage/http_storage.py
 
-Покрывает: LRUCache (eviction, put, get), HttpStorage (CRUD, FTS5, фильтры).
+Covers: LRUCache (eviction, put, get), HttpStorage (CRUD, FTS5, filters).
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ class TestLRUCache:
         cache = LRUCache(max_size=2)
         cache.put(1, "a")
         cache.put(2, "b")
-        cache.get(1)       # 1 — самый свежий
-        cache.put(3, "c")  # 2 вытесняется
+        cache.get(1)       # 1 — most recently used
+        cache.put(3, "c")  # 2 is evicted
         assert cache.get(1) == "a"
         assert cache.get(2) is None
         assert cache.get(3) == "c"
@@ -41,8 +41,8 @@ class TestLRUCache:
         cache = LRUCache(max_size=2)
         cache.put(1, "old")
         cache.put(2, "b")
-        cache.put(1, "new")  # обновляем 1 → 2 теперь самый старый
-        cache.put(3, "c")    # 2 вытесняется
+        cache.put(1, "new")  # update 1 → 2 is now oldest
+        cache.put(3, "c")    # 2 is evicted
         assert cache.get(1) == "new"
         assert cache.get(2) is None
 

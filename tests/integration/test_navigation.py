@@ -1,6 +1,6 @@
-"""Integration-тесты: навигация по модулям (TUI).
+"""Integration tests: module navigation (TUI).
 
-Проверяет переключение вкладок, ContentSwitcher, ModuleTabs через Textual Pilot.
+Checks tab switching, ContentSwitcher, ModuleTabs via Textual Pilot.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from pentool.core.config import Config, set_config
 
 @pytest.fixture(autouse=True)
 def isolated_config(tmp_path):
-    """Изолированная конфигурация для каждого теста."""
+    """Isolated configuration for each test."""
     cfg = Config(
         db_path=str(tmp_path / "test.db"),
         cert_dir=str(tmp_path / "certs"),
@@ -31,7 +31,7 @@ class TestAppCompose:
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            # Приложение смонтировалось без исключений
+            # App mounted without exceptions
 
     @pytest.mark.asyncio
     async def test_module_tabs_in_dom(self) -> None:
@@ -55,25 +55,25 @@ class TestAppCompose:
 
     @pytest.mark.asyncio
     async def test_menubar_hidden_in_dom(self) -> None:
-        """MenuBar убрана из DOM (R-12) — query должен вернуть пустой список."""
+        """MenuBar removed from DOM (R-12) — query should return empty list."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.widgets.menu_bar import MenuBar
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            # MenuBar убрана из DOM в R-12 — её не должно быть
+            # MenuBar removed from DOM in R-12 — should not be present
             mb_list = app.query(MenuBar)
-            assert len(mb_list) == 0  # не в DOM
+            assert len(mb_list) == 0  # not in DOM
 
     @pytest.mark.asyncio
     async def test_proxy_screen_default_active(self) -> None:
-        """По умолчанию активен экран proxy."""
+        """Proxy screen is active by default."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.proxy.screen import ProxyScreen
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            # ProxyScreen должен быть в DOM
+            # ProxyScreen should be in the DOM
             screens = app.query(ProxyScreen)
             assert len(screens) > 0
 
@@ -139,7 +139,7 @@ class TestProxyScreenWidgets:
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            # ProxyScreen активен по умолчанию
+            # ProxyScreen is active by default
             table = app.query("#request-list")
             assert len(table) > 0
 
@@ -166,7 +166,7 @@ class TestProxyScreenWidgets:
 class TestRepeaterScreenWidgets:
     @pytest.mark.asyncio
     async def test_send_button_always_in_dom(self) -> None:
-        """#btn-send всегда присутствует в DOM даже при неактивной вкладке."""
+        """#btn-send is always present in DOM even when tab is inactive."""
         from pentool.tui.app import PentoolApp
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
@@ -185,7 +185,7 @@ class TestRepeaterScreenWidgets:
             await pilot.pause()
             await pilot.press("R")
             await pilot.pause()
-            # RepeaterScreen использует динамические ID вида #req-editor-{tab_id}
+            # RepeaterScreen uses dynamic IDs like #req-editor-{tab_id}
             editors = app.query(RequestEditor)
             assert len(editors) > 0
 

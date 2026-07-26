@@ -1,4 +1,4 @@
-"""Экран Intruder — автоматизированные атаки с payload'ами."""
+"""Intruder screen — automated attacks with payloads."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Модульные константы
+# Module constants
 _ATTACK_LABELS = {
     AttackType.SNIPER:        "Sniper",
     AttackType.BATTERING_RAM: "Battering Ram",
@@ -56,7 +56,7 @@ _ATTACK_DESCRIPTIONS = {
 }
 
 class IntruderScreen(AppMixin, Widget):
-    """Экран модуля Intruder."""
+    """Intruder module screen."""
 
     DEFAULT_CSS = _CSS
 
@@ -79,15 +79,15 @@ class IntruderScreen(AppMixin, Widget):
         self._sort_reverse: bool = False
         self._running: bool = False
         self._paused: bool = False
-        # Grep Match/Extract (Блок 4.4)
-        self._grep_match_patterns: list[str] = []   # паттерны для маркировки строк
-        self._grep_extract_patterns: list[str] = [] # паттерны для извлечения значений
-        # Сохранённое выделение в template-editor (для ADD §§ после потери фокуса)
+        # Grep Match/Extract (Block 4.4)
+        self._grep_match_patterns: list[str] = []   # patterns for highlighting rows
+        self._grep_extract_patterns: list[str] = [] # patterns for extracting values
+        # Saved selection in template-editor (for ADD §§ after focus loss)
         self._last_editor_selection: tuple | None = None
         self._last_click_time: float = 0.0
 
     async def on_event(self, event: _tevents.Event) -> None:
-        """Двойной клик в template-editor — выделить слово под курсором."""
+        """Double-click in template-editor — select the word under the cursor."""
         if isinstance(event, _tevents.MouseDown) and event.button == 1 and not event.ctrl:
             now = time.monotonic()
             if (now - self._last_click_time) < 0.4:
@@ -273,22 +273,22 @@ class IntruderScreen(AppMixin, Widget):
 
     @on(TextArea.SelectionChanged, "#template-editor")
     def on_template_selection_changed(self, event: TextArea.SelectionChanged) -> None:
-        """Запомнить выделение в template-editor.
+        """Remember the selection in template-editor.
 
-        При start==end (курсор без выделения) НЕ затираем сохранённое выделение
-        сразу — первый такой event может быть сбросом при клике на кнопку ADD.
-        Сбрасываем только если пришло два подряд start==end (пользователь кликнул
-        в редакторе для снятия выделения).
+        When start==end (cursor without selection) we do NOT immediately clear the
+        saved selection — the first such event may be a reset on clicking the ADD
+        button. We clear only when two consecutive start==end events arrive (the
+        user clicked in the editor to deselect).
         """
         sel = event.selection
         if sel.start != sel.end:
-            # Реальное выделение — сохраняем, сбрасываем счётчик
+            # Real selection — save it, reset counter
             self._last_editor_selection = (sel.start, sel.end)
             self._cursor_only_count = 0
         else:
             self._cursor_only_count = getattr(self, "_cursor_only_count", 0) + 1
             if self._cursor_only_count >= 2:
-                # Два cursor-only события подряд — пользователь снял выделение
+                # Two cursor-only events in a row — user deselected
                 self._last_editor_selection = None
 
     @on(ToolbarButton.Pressed, "#btn-add-marker")
@@ -349,7 +349,7 @@ class IntruderScreen(AppMixin, Widget):
             self._clear_grep()
 
     def on_select_changed(self, event) -> None:
-        # Оставлен для совместимости — теперь Select не используется
+        # Kept for compatibility — Select is no longer used
         pass
 
     def _open_attack_type_menu(self, btn: ToolbarButton) -> None:
@@ -361,7 +361,7 @@ class IntruderScreen(AppMixin, Widget):
         x = r.x
         y = r.y + 1
 
-        screen = self  # явная ссылка на экран
+        screen = self  # explicit reference to the screen
 
         def _on_select(action: str) -> None:
             try:
@@ -409,12 +409,12 @@ class IntruderScreen(AppMixin, Widget):
         self.app.show_context_menu(items, x, y, callback=_on_select)
 
     def _add_marker_around_selection(self) -> None:
-        """Обернуть выделенный текст в §...§ маркеры."""
+        """Wrap the selected text in §...§ markers."""
         try:
             editor = self.query_one("#template-editor", TextArea)
             text = editor.text
 
-            # Используем сохранённое выделение (фокус мог уйти при клике на кнопку)
+            # Use the saved selection (focus may have moved on button click)
             if self._last_editor_selection is not None:
                 raw_start, raw_end = self._last_editor_selection
             else:
@@ -422,10 +422,10 @@ class IntruderScreen(AppMixin, Widget):
                 raw_start, raw_end = sel.start, sel.end
 
 
-            # Нормализуем порядок — выделение может идти справа налево
+            # Normalize order — selection may go right-to-left
             start, end = (raw_start, raw_end) if raw_start <= raw_end else (raw_end, raw_start)
 
-            # Переводим (row, col) в offset
+            # Convert (row, col) to offset
             lines = text.split("\n")
 
             def to_offset(row: int, col: int) -> int:
@@ -435,7 +435,7 @@ class IntruderScreen(AppMixin, Widget):
             e = to_offset(*end)
 
             if s == e:
-                # Нет выделения — вставить §§ в позицию курсора
+                # No selection — insert §§ at cursor position
                 new_text = text[:s] + "§§" + text[s:]
             else:
                 new_text = text[:s] + "§" + text[s:e] + "§" + text[e:]
@@ -459,7 +459,7 @@ class IntruderScreen(AppMixin, Widget):
             pass
 
     def _mark_all_params(self) -> None:
-        """Автоматически пометить все параметры URL и тела запроса маркерами §§."""
+        """Automatically mark all URL and body parameters with §§ markers."""
         try:
             editor = self.query_one("#template-editor", TextArea)
             text = editor.text
@@ -474,36 +474,36 @@ class IntruderScreen(AppMixin, Widget):
             return
 
         def _mark_query_params(line: str) -> str:
-            """Маркировать значения query параметров: key=value → key=§value§"""
+            """Mark query parameter values: key=value → key=§value§"""
             def mark_val(m: re.Match) -> str:
                 key = m.group(1)
                 val = m.group(2)
-                # Не маркируем уже маркированные
+                # Skip already-marked values
                 if "§" in val:
                     return m.group(0)
                 return f"{key}=§{val}§"
-            # Маркируем в query string (после ? или между &)
-            # Разделяем строку на часть до ? и после
+            # Mark in query string (after ? or between &)
+            # Split the line into the part before ? and after
             if "?" in line:
                 pre, qs = line.split("?", 1)
-                # Парсим query string вручную через re
+                # Parse query string manually via re
                 qs_marked = re.sub(r"([^&=\s]+)=([^&\s§]+)", mark_val, qs)
                 return f"{pre}?{qs_marked}"
             return line
 
-        # Маркируем первую строку (request line: GET /path?params HTTP/1.1)
+        # Mark the first line (request line: GET /path?params HTTP/1.1)
         if lines:
             lines[0] = _mark_query_params(lines[0])
 
-        # Ищем тело запроса (после пустой строки)
+        # Find the request body (after the blank line)
         body_start_idx = None
         for i, line in enumerate(lines):
             if line.strip() == "" and i > 0:
                 body_start_idx = i + 1
                 break
 
-        # Маркируем тело (application/x-www-form-urlencoded)
-        # Проверим Content-Type заголовок
+        # Mark the body (application/x-www-form-urlencoded)
+        # Check Content-Type header
         content_type = ""
         for line in lines[1:]:
             if line.strip() == "":
@@ -522,7 +522,7 @@ class IntruderScreen(AppMixin, Widget):
                         return f"{key}=§{val}§"
                     lines[i] = re.sub(r"([^&=\s]+)=([^&\s§]+)", mark_val_body, lines[i])
 
-        # Cookie заголовок — маркируем значения
+        # Cookie header — mark values
         for i, line in enumerate(lines):
             if line.lower().startswith("cookie:"):
                 prefix = line[:7]  # "Cookie:"
@@ -541,14 +541,14 @@ class IntruderScreen(AppMixin, Widget):
             self._update_payload_select()
             n = new_text.count("§") // 2
             self.app.notify(f"Marked {n} parameter(s)", timeout=2)
-            # Подсветить первую позицию (Set 1) сразу после автомаркировки
+            # Highlight the first position (Set 1) right after auto-marking
             self._highlight_nth_marker(self._active_set_idx)
         except Exception:
             pass
 
     def _update_payload_select(self) -> None:
-        """Синхронизировать кнопку «Set N» и список payload'ов с текущим состоянием."""
-        # 1) Сколько позиций в шаблоне — столько наборов нужно
+        """Sync the «Set N» button and payload list with the current state."""
+        # 1) Number of positions in the template = number of sets needed
         try:
             template = self.query_one("#template-editor", TextArea).text
         except Exception:
@@ -557,17 +557,17 @@ class IntruderScreen(AppMixin, Widget):
         while len(self._payloads) < n:
             self._payloads.append([])
 
-        # 2) Фиксируем индекс активного набора
+        # 2) Clamp the active set index
         idx = min(self._active_set_idx, n - 1)
         self._active_set_idx = idx
 
-        # 3) Обновляем кнопку выбора набора
+        # 3) Update the set selection button
         try:
             self.query_one("#btn-payload-set", ToolbarButton).label = f"Set {idx+1} ▼"
         except Exception:
             pass
 
-        # 4) Обновляем список payload'ов
+        # 4) Refresh the payload list
         self._refresh_payload_list()
 
     def _refresh_payload_list(self) -> None:
@@ -585,7 +585,7 @@ class IntruderScreen(AppMixin, Widget):
             pass
 
     def _highlight_nth_marker(self, n: int) -> None:
-        """Выделить N-ю пару §...§ в TextArea редакторе позиций."""
+        """Highlight the N-th §...§ pair in the positions TextArea editor."""
         try:
             from textual.widgets.text_area import Selection
             editor = self.query_one("#template-editor", TextArea)
@@ -593,17 +593,17 @@ class IntruderScreen(AppMixin, Widget):
             lines = text.split("\n")
 
             def to_rowcol(offset: int):
-                """Конвертировать offset в (row, col)."""
+                """Convert offset to (row, col)."""
                 row = 0
                 for line in lines:
-                    line_len = len(line) + 1  # +1 за \n
+                    line_len = len(line) + 1  # +1 for \n
                     if offset < line_len:
                         return (row, offset)
                     offset -= line_len
                     row += 1
                 return (row, 0)
 
-            # Найти все пары §...§
+            # Find all §...§ pairs
             pairs = []
             i = 0
             while i < len(text):
@@ -613,7 +613,7 @@ class IntruderScreen(AppMixin, Widget):
                 e = text.find("§", s + 1)
                 if e == -1:
                     break
-                pairs.append((s, e + 1))  # включаем закрывающий §
+                pairs.append((s, e + 1))  # include the closing §
                 i = e + 1
 
             if n < len(pairs):
@@ -652,7 +652,7 @@ class IntruderScreen(AppMixin, Widget):
 
     def _load_payloads_from_file(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
-        # Захватываем текущий индекс ДО открытия диалога
+        # Capture the current index BEFORE opening the dialog
         captured_idx = self._active_set_idx
 
         def _on_file(path: str | None) -> None:
@@ -673,10 +673,10 @@ class IntruderScreen(AppMixin, Widget):
         )
 
     async def _load_file_async(self, path: str, target_idx: int) -> None:
-        """Асинхронная загрузка payload-файла (не блокирует TUI)."""
+        """Asynchronous payload-file loading (does not block the TUI)."""
         payloads: list[str] = []
         try:
-            # Читаем файл в executor, чтобы не блокировать event loop
+            # Read file in executor to avoid blocking the event loop
             loop = asyncio.get_running_loop()
             content = await loop.run_in_executor(None, self._read_file_sync, path)
             lines = content.splitlines()
@@ -691,7 +691,7 @@ class IntruderScreen(AppMixin, Widget):
         while target_idx >= len(self._payloads):
             self._payloads.append([])
         self._payloads[target_idx].extend(payloads)
-        # Обновляем UI только если загружали в активный сет
+        # Update UI only if we loaded into the active set
         if target_idx == self._active_set_idx:
             self._refresh_payload_list()
         name = path.split("/")[-1]
@@ -699,7 +699,7 @@ class IntruderScreen(AppMixin, Widget):
 
     @staticmethod
     def _read_file_sync(path: str) -> str:
-        """Синхронное чтение файла (запускается в executor)."""
+        """Synchronous file read (runs in executor)."""
         return Path(path).read_text(encoding="utf-8", errors="replace")
 
     def _open_generate_dialog(self) -> None:
@@ -831,7 +831,7 @@ class IntruderScreen(AppMixin, Widget):
         try:
             pb = self.query_one("#attack-progress", ProgressBar)
             if done == 0:
-                # Первый вызов — инициализируем total
+                # First call — initialize total
                 pb.update(total=max(1, total), progress=0)
             else:
                 pb.advance(done - pb.progress)
@@ -882,7 +882,7 @@ class IntruderScreen(AppMixin, Widget):
             if len(payloads_str) > 40:
                 payloads_str = payloads_str[:37] + "…"
 
-            # Grep Extract: извлекаем значение из request_raw по первому паттерну
+            # Grep Extract: extract a value from request_raw using the first pattern
             extract_val = ""
             if self._grep_extract_patterns:
                 resp_body = getattr(result, "request_raw", "") or ""
@@ -896,7 +896,7 @@ class IntruderScreen(AppMixin, Widget):
                     except re.error:
                         pass
 
-            # Grep Match: проверяем совпадение со строкой результата
+            # Grep Match: check if the result row matches the pattern
             matched = False
             if self._grep_match_patterns:
                 search_str = (
@@ -924,7 +924,7 @@ class IntruderScreen(AppMixin, Widget):
                 str(result.response_time_ms or "-"),
                 result.error or "",
             ]
-            # Добавляем колонку Extract если паттерн задан
+            # Add Extract column if a pattern is set
             if self._grep_extract_patterns:
                 row.append(extract_val)
 
@@ -996,7 +996,7 @@ class IntruderScreen(AppMixin, Widget):
             cursor_row = table.cursor_row
             if 0 <= cursor_row < len(self._all_results):
                 result = self._all_results[cursor_row]
-                # Парсим URL из raw request
+                # Parse URL from raw request
                 raw = result.request_raw or ""
                 host = ""
                 for line in raw.splitlines():
@@ -1055,7 +1055,7 @@ class IntruderScreen(AppMixin, Widget):
         self._redraw_results()
 
     def _apply_grep(self) -> None:
-        """Применить Grep Match и Grep Extract паттерны."""
+        """Apply Grep Match and Grep Extract patterns."""
         try:
             match_val = self.query_one("#grep-match-input", Input).value.strip()
             self._grep_match_patterns = [match_val] if match_val else []
@@ -1075,7 +1075,7 @@ class IntruderScreen(AppMixin, Widget):
         )
 
     def _clear_grep(self) -> None:
-        """Сбросить Grep Match/Extract."""
+        """Reset Grep Match/Extract."""
         self._grep_match_patterns = []
         self._grep_extract_patterns = []
         try:
@@ -1157,7 +1157,7 @@ class IntruderScreen(AppMixin, Widget):
 
 
 class _InputDialog(ModalScreen):
-    """Диалог добавления payload'ов — не закрывается после ADD, накапливает список."""
+    """Payload add dialog — does not close after ADD, accumulates the list."""
 
     DEFAULT_CSS = _CSS
 
@@ -1165,7 +1165,7 @@ class _InputDialog(ModalScreen):
         super().__init__(**kwargs)
         self._title = title
         self._prompt = prompt
-        self._on_add = on_add  # callback(value: str) вызывается при каждом ADD
+        self._on_add = on_add  # callback(value: str) called on each ADD
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
@@ -1240,7 +1240,7 @@ class _GenerateDialog(ModalScreen):
             self.dismiss(None)
 
 class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
-    """PRO Smart Payload Generator — диалог генерации контекстных payload'ов."""
+    """PRO Smart Payload Generator — dialog for generating context-aware payloads."""
 
     DEFAULT_CSS = """
     _SmartPayloadsDialog {

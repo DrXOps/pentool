@@ -1,7 +1,7 @@
-"""Общие фикстуры pytest для тестов PenTool.
+"""Common pytest fixtures for PenTool tests.
 
-Все фикстуры используют pytest_asyncio в STRICT режиме.
-Async-фикстуры объявляются через @pytest_asyncio.fixture.
+All fixtures use pytest_asyncio in STRICT mode.
+Async fixtures are declared with @pytest_asyncio.fixture.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
 def pytest_configure(config):
-    """Регистрация кастомных маркеров."""
+    """Register custom markers."""
     config.addinivalue_line("markers", "integration: integration tests (TUI, network)")
     config.addinivalue_line("markers", "snapshot: visual regression tests")
     config.addinivalue_line("markers", "slow: slow tests")
@@ -49,7 +49,7 @@ def pytest_configure(config):
 
 @pytest.fixture
 def test_config(tmp_path: Path) -> Config:
-    """Тестовая конфигурация с изолированными временными путями."""
+    """Test configuration with isolated temporary paths."""
     cfg = Config(
         proxy_host="127.0.0.1",
         proxy_port=19081,
@@ -66,14 +66,14 @@ def test_config(tmp_path: Path) -> Config:
 
 @pytest_asyncio.fixture
 async def test_db(test_config: Config) -> str:
-    """Инициализированная тестовая БД (таблицы созданы)."""
+    """Initialized test database (tables created)."""
     await init_db(test_config.db_path)
     return test_config.db_path
 
 
 @pytest_asyncio.fixture
 async def http_storage(tmp_path: Path):
-    """Готовый HttpStorage с временной БД."""
+    """Ready HttpStorage with a temporary database."""
     from pentool.storage.http_storage import HttpStorage
     storage = HttpStorage()
     db_path = str(tmp_path / "history.db")
@@ -84,7 +84,7 @@ async def http_storage(tmp_path: Path):
 
 @pytest.fixture
 def sample_request() -> ParsedRequest:
-    """Типичный GET-запрос для тестов."""
+    """Typical GET request for tests."""
     return ParsedRequest(
         method="GET",
         url="http://example.com/api/users?page=1",
@@ -99,7 +99,7 @@ def sample_request() -> ParsedRequest:
 
 @pytest.fixture
 def sample_post_request() -> ParsedRequest:
-    """POST-запрос с телом."""
+    """POST request with a body."""
     return ParsedRequest(
         method="POST",
         url="https://example.com/login",
@@ -114,7 +114,7 @@ def sample_post_request() -> ParsedRequest:
 
 @pytest.fixture
 def sample_response() -> ParsedResponse:
-    """Типичный 200 ответ."""
+    """Typical 200 response."""
     return ParsedResponse(
         status=200,
         reason="OK",
@@ -128,7 +128,7 @@ def sample_response() -> ParsedResponse:
 
 @pytest.fixture
 def sample_404_response() -> ParsedResponse:
-    """404 ответ."""
+    """404 response."""
     return ParsedResponse(
         status=404,
         reason="Not Found",
@@ -139,9 +139,9 @@ def sample_404_response() -> ParsedResponse:
 
 @pytest.fixture
 def mock_proxy_server():
-    """Мок ProxyServer со стандартным поведением."""
+    """Mock ProxyServer with standard behavior."""
     mock = MagicMock()
-    mock.is_running = True  # @property на ProxyServer, не callable
+    mock.is_running = True  # @property on ProxyServer, not callable
     mock.port = 8080
     mock.host = "127.0.0.1"
     mock.intercept_enabled = False
@@ -159,6 +159,6 @@ def mock_proxy_server():
         "waiting_count": 0,
     }
     mock.get_requests.return_value = []
-    mock.get_scope.return_value = []  # Убираем если не нужен
+    mock.get_scope.return_value = []  # Remove if not needed
     mock._find_request.return_value = None
     return mock

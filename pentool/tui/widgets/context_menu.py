@@ -1,4 +1,4 @@
-"""Контекстное меню по правому клику / клавише."""
+"""Context menu on right-click / keyboard shortcut."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ _CSS = (Path(__file__).parent / "context_menu.tcss").read_text(encoding="utf-8")
 
 
 class ContextMenu(Widget):
-    """Всплывающее контекстное меню.
+    """Popup context menu.
 
-    Монтируется в app, захватывает мышь через app.capture_mouse(self).
-    Закрывается по Escape, Enter, или клику вне меню.
+    Mounted in app, captures mouse via app.capture_mouse(self).
+    Closes on Escape, Enter, or click outside the menu.
     """
 
     DEFAULT_CSS = _CSS
@@ -58,7 +58,7 @@ class ContextMenu(Widget):
     def on_mount(self) -> None:
         self._highlight(0)
         self.app.capture_mouse(self)
-        # Два прохода: первый — предварительная оценка, второй — по реальному size
+        # Two passes: first — preliminary estimate, second — based on real size
         self.call_after_refresh(self._fix_position)
         self.set_timer(0.05, self._fix_position)
 
@@ -67,7 +67,7 @@ class ContextMenu(Widget):
             screen_w = self.app.size.width
             screen_h = self.app.size.height
             menu_w = self.size.width or 30
-            # Считаем высоту вручную: каждый item/sep = 1 строка + 2 на border
+            # Calculate height manually: each item/sep = 1 line + 2 for border
             total_lines = len(self._items) + 2
             menu_h = self.size.height if self.size.height > 0 else total_lines
             x = self._menu_x
@@ -100,7 +100,7 @@ class ContextMenu(Widget):
 
     def _select(self, action: str) -> None:
         callback = self._callback
-        app = self.app  # сохранить до remove()
+        app = self.app  # save before remove()
         self.post_message(self.ItemSelected(action))
         self._dismiss()
         if callback is not None:
@@ -120,14 +120,14 @@ class ContextMenu(Widget):
             self._dismiss()
             return
 
-        # item.region — абсолютные координаты (как и event.screen_x/y)
+        # item.region — absolute coordinates (same as event.screen_x/y)
         for action, widget in self._action_items:
             wr = widget.region
             if (wr.y <= event.screen_y < wr.y + wr.height and
                     wr.x <= event.screen_x < wr.x + wr.width):
                 self._select(action)
                 return
-        # Клик по рамке или разделителю — не закрываем
+        # Click on border or separator — do not close
 
     def on_key(self, event: events.Key) -> None:
         if event.key == "escape":

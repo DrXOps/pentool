@@ -1,4 +1,4 @@
-"""Публичный API repeater-модуля для TUI и CLI."""
+"""Public API of the repeater module for TUI and CLI."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from __future__ import annotations
 from pentool.modules.repeater import Repeater, RepeaterEntry
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
-# Реэкспорт типов
+# Re-export types
 __all__ = ["RepeaterAPI", "RepeaterEntry"]
 
 

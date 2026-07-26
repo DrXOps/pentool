@@ -1,4 +1,4 @@
-"""Экран Repeater — ручная отправка HTTP-запросов."""
+"""Repeater screen — manual HTTP request sender."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from pentool.tui.mixins.tab_rename import TabRenameMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 
 class _TabState:
-    """Состояние одной вкладки Repeater."""
+    """State of a single Repeater tab."""
 
     def __init__(self, tab_id: str, name: str) -> None:
         self.tab_id = tab_id
@@ -40,7 +40,7 @@ class _TabState:
         self.sending: bool = False
 
 class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
-    """Экран модуля Repeater."""
+    """Repeater module screen."""
 
     DEFAULT_CSS = _CSS
 
@@ -58,7 +58,7 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
     _rename_tab_prefix: str = "tab-"
     _rename_tabs_widget_id: str = "repeater-tabs"
 
-    # RequestContextMenuMixin config — Repeater: Send to Intruder + Scanner, без nmap
+    # RequestContextMenuMixin config — Repeater: Send to Intruder + Scanner, no nmap
     _cm_show_nmap          = False
     _cm_show_send_intruder = True
     _cm_show_send_scanner  = True
@@ -252,7 +252,7 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     def on_search_bar_search(self, event: SearchBar.Search) -> None:
-        """Пользователь ввёл запрос в SearchBar."""
+        """User submitted a search query via SearchBar."""
         self._search_query = event.query
         self._search_regex = event.regex
         self._run_search(event.direction)
@@ -262,7 +262,7 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
         self._search_current = 0
 
     def _run_search(self, direction: int = 1) -> None:
-        """Найти совпадения в активном TextArea и перейти к следующему."""
+        """Find matches in the active TextArea and jump to the next one."""
         text = self._get_active_text()
         if not text or not self._search_query:
             return
@@ -314,7 +314,7 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
             return ""
 
     def _jump_to_match(self, text: str, offset: int) -> None:
-        """Переместить курсор TextArea к найденному совпадению."""
+        """Move the TextArea cursor to the found match."""
         if self._active_tab_id is None:
             return
         try:
@@ -524,7 +524,7 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
             event.prevent_default()
 
     def load_request(self, raw: str) -> None:
-        """Загрузить запрос в активную вкладку."""
+        """Load a request into the active tab."""
         if self._active_tab_id is None:
             return
         try:
@@ -534,31 +534,31 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     def load_request_in_new_tab(self, raw: str) -> None:
-        """Открыть новую вкладку и загрузить запрос в неё.
+        """Open a new tab and load the request into it.
 
-        Используется при получении запроса из другого модуля (Proxy, Scanner…),
-        чтобы не перезаписывать текущую работу пользователя.
+        Used when a request arrives from another module (Proxy, Scanner…)
+        so that the user's current work is not overwritten.
         """
         self.action_new_tab()
-        # Новая вкладка монтируется асинхронно — ждём через call_after_refresh
+        # New tab mounts asynchronously — wait via call_after_refresh
         self.call_after_refresh(self._load_into_latest_tab, raw)
 
     def _load_into_latest_tab(self, raw: str) -> None:
-        """Загрузить raw в последнюю созданную вкладку (используется из load_request_in_new_tab)."""
+        """Load raw into the most recently created tab (used from load_request_in_new_tab)."""
         if self._active_tab_id is None:
             return
         try:
             editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
             editor.load_raw(raw)
         except Exception:
-            # Виджет ещё не смонтирован — пробуем через дополнительный defer
+            # Widget not yet mounted — retry with an extra defer
             state = self._get_tab_state(self._active_tab_id)
             if state is not None:
                 state.request_text = raw
             self.set_timer(0.12, lambda: self._load_into_latest_tab_retry(raw))
 
     def _load_into_latest_tab_retry(self, raw: str) -> None:
-        """Повторная попытка загрузки после задержки (виджет ещё не смонтирован)."""
+        """Retry loading after a delay (widget not yet mounted)."""
         if self._active_tab_id is None:
             return
         try:
@@ -568,8 +568,8 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     def _toggle_special_chars(self, btn: ToolbarButton) -> None:
-        """Включить/выключить отображение спецсимволов \r\n в редакторе."""
-        # Синхронизируем _raw_body из текущего состояния TextArea перед переключением
+        """Toggle display of special characters \r\n in the editor."""
+        # Sync _raw_body from the current TextArea state before switching
         self._sync_raw_body_from_editor()
         self._show_special_chars = not self._show_special_chars
         if self._show_special_chars:
@@ -581,7 +581,7 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
         self._apply_special_chars_to_active_tab()
 
     def _sync_raw_body_from_editor(self) -> None:
-        """Зафиксировать текущий текст как _raw_full перед переключением режима."""
+        """Commit the current text as _raw_full before switching mode."""
         tab_id = self._active_tab_id
         if tab_id is None:
             return
@@ -614,7 +614,7 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
 
     @staticmethod
     def _visualize_special_chars(text: str) -> str:
-        """Заменить \r и \n на литеральные строки \\r\\n, сохраняя реальный \n для переноса строки."""
+        """Replace \r and \n with the literal strings \\r\\n, keeping the real \n for line breaks."""
         result = []
         i = 0
         while i < len(text):
@@ -643,11 +643,11 @@ class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
     # ── context menu ───────────────────────────────────────────────────────────
 
     def on__base_http_widget_context_menu_request(self, event) -> None:
-        """Ctrl+клик / правая кнопка на любом _BaseHttpWidget → контекстное меню."""
+        """Ctrl+click / right-click on any _BaseHttpWidget → context menu."""
         self.cm_open_text_menu(event.screen_x, event.screen_y)
 
     def _cm_get_raw_request(self) -> str:
-        """Raw HTTP из активного RequestEditor."""
+        """Raw HTTP from the active RequestEditor."""
         tab_id = self._active_tab_id
         if not tab_id:
             return ""

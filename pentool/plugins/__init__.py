@@ -1,1 +1,1 @@
-"""Система плагинов Pentool."""
+"""Pentool plugin system."""

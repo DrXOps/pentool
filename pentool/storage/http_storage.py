@@ -1,4 +1,4 @@
-"""HttpStorage — SQLite-хранилище HTTP-запросов/ответов."""
+"""HttpStorage — SQLite storage for HTTP requests/responses."""
 
 from __future__ import annotations
 
@@ -69,13 +69,13 @@ CREATE TRIGGER IF NOT EXISTS requests_au AFTER UPDATE ON requests BEGIN
 END;
 """
 
-_LARGE_BODY_THRESHOLD = 1 * 1024 * 1024  # 1 МБ
+_LARGE_BODY_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
 
 class HttpStorage:
-    """Асинхронное SQLite-хранилище HTTP-записей.
+    """Async SQLite storage for HTTP records.
 
-    Жизненный цикл:
+    Lifecycle:
         storage = HttpStorage()
         await storage.init_db("~/.config/pentool/history.db")
         row_id = await storage.add_request(req, resp)
@@ -88,24 +88,24 @@ class HttpStorage:
         self._path: str = ""
 
     async def init_db(self, path: str) -> None:
-        """Открыть/создать БД и применить схему."""
+        """Open/create the database and apply the schema."""
         self._path = str(Path(path).expanduser())
         logger.debug("HttpStorage: init_db at %s", self._path)
         Path(self._path).parent.mkdir(parents=True, exist_ok=True)
         self._db = await aiosqlite.connect(self._path)
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(_SCHEMA)
-        # Миграция: добавить is_websocket если отсутствует (для существующих БД)
+        # Migration: add is_websocket column if missing (for existing databases)
         try:
             await self._db.execute(
                 "ALTER TABLE requests ADD COLUMN is_websocket INTEGER NOT NULL DEFAULT 0"
             )
             await self._db.commit()
         except Exception:
-            pass  # колонка уже существует — это нормально, не нужно логировать
+            pass  # column already exists — this is normal, no need to log
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA synchronous=NORMAL")
-        await self._db.execute("PRAGMA cache_size=-32000")  # 32 МБ кэш
+        await self._db.execute("PRAGMA cache_size=-32000")  # 32 MB cache
         await self._db.commit()
 
     async def close(self) -> None:
@@ -150,12 +150,12 @@ class HttpStorage:
             ct = resp_headers.get("Content-Type", resp_headers.get("content-type", ""))
             mime_type = ct.split(";")[0].strip()
 
-        # Большие тела → на диск
+        # Large bodies → write to disk
         req_body_ref: str | None = None
         resp_body_ref: str | None = None
 
         if req_body and len(req_body) > _LARGE_BODY_THRESHOLD:
-            req_body_ref = "__large__"  # будет заменено после INSERT
+            req_body_ref = "__large__"  # will be replaced after INSERT
             req_body_store = None
         else:
             req_body_store = req_body
@@ -184,12 +184,12 @@ class HttpStorage:
         ) as cur:
             row_id = cur.lastrowid
 
-        # Шаг 1: commit сразу после INSERT — row_id зафиксирован.
-        # Если после этого процесс упадёт при записи файлов — строка в БД есть
-        # с ref=NULL. Нет ситуации "файл есть, строки нет".
+        # Step 1: commit immediately after INSERT — row_id is locked.
+        # If the process crashes after this during file writes — the row exists in DB
+        # with ref=NULL. No situation of "file exists, row does not".
         await self._db.commit()
 
-        # Сохраняем большие тела с реальным row_id
+        # Save large bodies with the real row_id
         from pentool.storage.large_body_handler import LargeBodyHandler
         if req_body_ref == "__large__" and req_body:
             ref = LargeBodyHandler.store(row_id, "req", req_body.encode())
@@ -202,7 +202,7 @@ class HttpStorage:
                 "UPDATE requests SET response_body_ref=? WHERE id=?", (ref, row_id)
             )
 
-        # Шаг 2: commit UPDATE если были большие тела
+        # Step 2: commit UPDATE if there were large bodies
         if (req_body_ref == "__large__" and req_body) or (resp_body_ref == "__large__" and resp_body):
             await self._db.commit()
         logger.debug("HttpStorage: add_request saved row_id=%d (%s %s, ws=%s, status=%s)", row_id, method, url, is_websocket, status_code)
@@ -231,7 +231,7 @@ class HttpStorage:
 
     async def delete(self, row_id: int) -> None:
         assert self._db
-        # Удаляем тела с диска
+        # Delete bodies from disk
         async with self._db.execute(
             "SELECT request_body_ref, response_body_ref FROM requests WHERE id=?",
             (row_id,),
@@ -258,7 +258,7 @@ class HttpStorage:
         assert self._db
         where, params = self._build_where(filters)
         direction = "DESC" if desc else "ASC"
-        # Валидация order_by против инъекций
+        # Validate order_by against injection
         valid_cols = {"id", "timestamp", "host", "method", "url",
                       "status_code", "length", "mime_type"}
         if order_by not in valid_cols:
@@ -277,7 +277,7 @@ class HttpStorage:
         return [dict(r) for r in rows]
 
     async def get_full_entry(self, row_id: int) -> dict | None:
-        """Загрузить полную запись включая тела."""
+        """Load a full record including bodies."""
         assert self._db
         async with self._db.execute(
             "SELECT * FROM requests WHERE id=?", (row_id,)
@@ -288,7 +288,7 @@ class HttpStorage:
 
         entry = dict(row)
 
-        # Подгружаем тела с диска если нужно
+        # Load bodies from disk if needed
         from pentool.storage.large_body_handler import LargeBodyHandler
         if entry.get("request_body_ref"):
             try:
@@ -308,7 +308,7 @@ class HttpStorage:
                 logger.warning("get_full_entry: failed to load resp body ref=%s: %s", entry["response_body_ref"], e)
                 entry["response_body"] = "(could not load body)"
 
-        # Десериализуем JSON-заголовки
+        # Deserialize JSON headers
         for key in ("request_headers", "response_headers"):
             raw = entry.get(key)
             if raw:
@@ -345,7 +345,7 @@ class HttpStorage:
         from pentool.storage.large_body_handler import LargeBodyHandler
         for row in rows:
             entry = dict(row)
-            # Загружаем большие тела
+            # Load large bodies
             if entry.get("request_body_ref"):
                 try:
                     entry["request_body"] = LargeBodyHandler.load(
@@ -360,7 +360,7 @@ class HttpStorage:
                     ).decode("utf-8", errors="replace")
                 except Exception:
                     entry["response_body"] = ""
-            # Десериализуем заголовки
+            # Deserialize headers
             import json as _json
             for key in ("request_headers", "response_headers"):
                 raw = entry.get(key)
@@ -393,7 +393,7 @@ class HttpStorage:
         return row[0] if row else 0
 
     async def search(self, query: str, limit: int = 100) -> list[dict]:
-        """Полнотекстовый поиск через FTS5."""
+        """Full-text search via FTS5."""
         assert self._db
         sql = """
             SELECT r.id, r.timestamp, r.host, r.method, r.url,
@@ -413,16 +413,16 @@ class HttpStorage:
             return []
 
     async def clear_all(self) -> None:
-        """Удалить все записи и связанные файлы больших тел с диска."""
+        """Delete all records and associated large body files from disk."""
         assert self._db
         from pentool.storage.large_body_handler import LargeBodyHandler
-        # Сначала собираем все ref на файлы
+        # First collect all file refs
         async with self._db.execute(
             "SELECT request_body_ref, response_body_ref FROM requests"
             " WHERE request_body_ref IS NOT NULL OR response_body_ref IS NOT NULL"
         ) as cur:
             rows = await cur.fetchall()
-        # Удаляем файлы
+        # Delete files
         for row in rows:
             if row["request_body_ref"]:
                 try:
@@ -434,14 +434,17 @@ class HttpStorage:
                     LargeBodyHandler.delete(row["response_body_ref"])
                 except Exception as e:
                     logger.warning("clear_all: failed to delete resp body file %s: %s", row["response_body_ref"], e)
-        # Теперь удаляем записи из БД
+        # Now delete records from DB
         await self._db.execute("DELETE FROM requests")
         await self._db.execute("DELETE FROM requests_fts")
         await self._db.commit()
         logger.info("HttpStorage: clear_all done, removed %d large body files", len(rows))
 
+    async def get_request_by_id(self, request_id: int) -> dict | None:
+        return await self.get_full_entry(request_id)
+
     def _build_where(self, filters: dict | None) -> tuple[str, list]:
-        """Построить WHERE-clause из словаря фильтров."""
+        """Build a WHERE clause from a filter dictionary."""
         if not filters:
             return "", []
 
@@ -453,14 +456,14 @@ class HttpStorage:
             clauses.append("host LIKE ?")
             params.append(f"%{host}%")
 
-        # Список хостов для фильтра "только in-scope"
-        # Используем LIKE чтобы учесть варианты с портом (example.com vs example.com:443)
+        # List of hosts for "in-scope only" filter
+        # Use LIKE to account for variants with port (example.com vs example.com:443)
         hosts = filters.get("hosts")
         if hosts and isinstance(hosts, (list, tuple)) and len(hosts) > 0:
             sub = " OR ".join("(host = ? OR host LIKE ?)" for _ in hosts)
             clauses.append(f"({sub})")
             for h in hosts:
-                base = h.split(":")[0]  # убрать порт если есть
+                base = h.split(":")[0]  # strip port if present
                 params.append(base)
                 params.append(f"{base}:%")
 

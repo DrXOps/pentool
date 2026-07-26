@@ -1,6 +1,6 @@
-"""Unit-тесты: modules/proxy.py
+"""Unit tests: modules/proxy.py
 
-Покрывает: MatchReplaceRule, MatchReplaceEngine, ProxyServer (состояние, scope, intercept).
+Covers: MatchReplaceRule, MatchReplaceEngine, ProxyServer (state, scope, intercept).
 """
 
 from __future__ import annotations
@@ -79,8 +79,8 @@ class TestMatchReplaceScope:
         engine.set_rules([MatchReplaceRule(id="1", match="secret", replace="REDACTED", scope="body")])
         raw = "POST / HTTP/1.1\r\nHost: secret.com\r\n\r\nsecret=value"
         result = engine.apply_to_request(raw)
-        assert "secret.com" in result      # заголовок не тронут
-        assert "REDACTED=value" in result  # тело изменено
+        assert "secret.com" in result      # header not touched
+        assert "REDACTED=value" in result  # body modified
 
     def test_headers_only_scope(self) -> None:
         from pentool.modules.match_replace import MatchReplaceEngine, MatchReplaceRule
@@ -88,8 +88,8 @@ class TestMatchReplaceScope:
         engine.set_rules([MatchReplaceRule(id="1", match="secret", replace="REDACTED", scope="headers")])
         raw = "POST / HTTP/1.1\r\nHost: secret.com\r\n\r\nsecret=value"
         result = engine.apply_to_request(raw)
-        assert "REDACTED.com" in result    # заголовок изменён
-        assert "secret=value" in result   # тело не тронуто
+        assert "REDACTED.com" in result    # header modified
+        assert "secret=value" in result   # body not touched
 
 
 class TestProxyServerState:
@@ -150,7 +150,7 @@ class TestProxyServerState:
     def test_empty_scope_matches_all(self, tmp_path: Path) -> None:
         from pentool.modules.proxy import ProxyServer
         server = ProxyServer(cert_dir=str(tmp_path / "certs"))
-        # Пустой scope → всё в scope
+        # Empty scope → everything is in scope
         assert server.is_in_scope("anything.com") is True
 
     def test_clear_requests(self, tmp_path: Path) -> None:

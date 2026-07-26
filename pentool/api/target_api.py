@@ -1,4 +1,4 @@
-"""TargetAPI — публичный интерфейс Target/SiteMap для TUI и CLI."""
+"""TargetAPI — public Target/SiteMap interface for TUI and CLI."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class TargetAPI:
 
     @property
     def sitemap(self) -> SiteMap:
-        """Прямой доступ к объекту SiteMap."""
+        """Direct access to the SiteMap object."""
         return self._sitemap
 
     async def load(self) -> None:
@@ -47,11 +47,11 @@ class TargetAPI:
         return self._sitemap.get_paths(host)
 
     async def set_in_scope(self, host: str, in_scope: bool) -> None:
-        """Задать scope-флаг для хоста.
+        """Set the scope flag for a host.
 
         Args:
-            host: Имя хоста.
-            in_scope: True — хост в scope, False — вне scope.
+            host: Host name.
+            in_scope: True — host is in scope, False — out of scope.
         """
         self._sitemap.set_in_scope(host, in_scope)
 

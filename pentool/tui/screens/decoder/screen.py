@@ -1,4 +1,4 @@
-"""Экран Decoder/Encoder — кодирование, декодирование, хэширование."""
+"""Decoder/Encoder screen — encoding, decoding, hashing."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 
 class DecoderScreen(Widget):
-    """Encoder / Decoder с цепочками операций."""
+    """Encoder / Decoder with operation chains."""
 
     DEFAULT_CSS = _CSS
 
@@ -34,13 +34,13 @@ class DecoderScreen(Widget):
         super().__init__(**kwargs)
         from pentool.api.decoder_api import OP_LABELS
         self._op_labels: list[str] = OP_LABELS
-        self._selected_op: str = OP_LABELS[0]  # текущая выбранная операция
-        self._chain: list[str] = []           # список операций в цепочке
+        self._selected_op: str = OP_LABELS[0]  # currently selected operation
+        self._chain: list[str] = []           # list of operations in the chain
 
     def compose(self) -> ComposeResult:
         from pentool.api.decoder_api import OP_LABELS
 
-        # ── Тулбар ─────────────────────────────────────────────────────────────
+        # ── Toolbar ────────────────────────────────────────────────────────────
         with Horizontal(id="dec-toolbar"):
             yield ToolbarButton("▶ Run",        "btn-dec-run")
             yield Static(" │ ", classes="toolbar-sep")
@@ -54,23 +54,23 @@ class DecoderScreen(Widget):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("🔍 Smart",      "btn-dec-smart")
 
-        # ── Operation selector (добавление шагов) ──────────────────────────────
+        # ── Operation selector (adding steps) ──────────────────────────────────
         with Horizontal(id="dec-op-row"):
             yield Label("Operation:", id="dec-op-label")
             yield ToolbarButton(f"{self._selected_op} ▼", "btn-dec-op-select")
             yield Label("  Chain:", id="dec-chain-label")
             yield Static("(empty)", id="dec-chain-display")
 
-        # ── Рабочая область ─────────────────────────────────────────────────────
+        # ── Work area ──────────────────────────────────────────────────────────
         with Horizontal(id="dec-work-area"):
-            # Ввод
+            # Input
             with Vertical(id="dec-input-col"):
                 yield Static("Input", id="dec-input-label", classes="dec-col-label")
                 yield TextArea(id="dec-input", language=None)
 
             yield ResizeHandle("dec-input-col", "dec-output-col", id="dec-resize-h")
 
-            # Вывод
+            # Output
             with Vertical(id="dec-output-col"):
                 yield Static("Output", id="dec-output-label", classes="dec-col-label")
                 yield TextArea(id="dec-output", language=None)
@@ -78,7 +78,7 @@ class DecoderScreen(Widget):
         yield ResizeHandle("dec-work-area", "dec-steps-area", vertical=True,
                            id="dec-resize-v")
 
-        # ── Лог шагов цепочки ─────────────────────────────────────────────────
+        # ── Chain steps log ────────────────────────────────────────────────────
         with Vertical(id="dec-steps-area"):
             yield Static("Chain steps", id="dec-steps-label", classes="dec-col-label")
             yield RichLog(id="dec-steps-log", highlight=True, markup=True,
@@ -164,7 +164,7 @@ class DecoderScreen(Widget):
             logger.debug("_swap_io: %s", exc)
 
     def _smart_decode(self) -> None:
-        """Автоопределение и цепочное декодирование ввода."""
+        """Auto-detect and chain-decode the input."""
         try:
             from pentool.api.decoder_api import decode_smart
             from pentool.modules.decoder import _detect_encoding, encode_op
@@ -232,7 +232,7 @@ class DecoderScreen(Widget):
                 return
 
             if not self._chain:
-                # Одиночная операция — по выбранной кнопкой
+                # Single operation — use the one selected by button
                 op = self._selected_op
                 try:
                     result = encode_op(op, inp_text)
@@ -290,7 +290,7 @@ class DecoderScreen(Widget):
         except Exception as exc:
             logger.debug("action_clear_all: %s", exc)
 
-    # ── Public API (загрузка из других модулей) ───────────────────────────────
+    # ── Public API (loading from other modules) ───────────────────────────────
 
     def load_text(self, text: str) -> None:
         try:

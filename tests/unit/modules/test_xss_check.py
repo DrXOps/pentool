@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/modules/scanner/checks/xss.py."""
+"""Unit tests for pentool/modules/scanner/checks/xss.py."""
 
 from __future__ import annotations
 

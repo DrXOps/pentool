@@ -1,4 +1,4 @@
-"""Горизонтальная панель вкладок для навигации по модулям (Burp-стиль)."""
+"""Horizontal module navigation tab bar (Burp-style)."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ _CSS = (Path(__file__).parent / "module_tabs.tcss").read_text(encoding="utf-8")
 
 
 class ModuleTabs(Widget):
-    """Горизонтальные вкладки навигации по модулям.
+    """Horizontal module navigation tabs.
 
-    Постит тот же ModuleSelected message что и SideMenu —
-    app.on_module_selected не требует изменений.
+    Posts the same ModuleSelected message as SideMenu —
+    app.on_module_selected requires no changes.
     """
 
     DEFAULT_CSS = _CSS
@@ -38,10 +38,10 @@ class ModuleTabs(Widget):
             self.post_message(ModuleSelected(module_id))
 
     def select_module(self, module_id: str) -> None:
-        """Программно переключить вкладку (без постинга события).
+        """Programmatically switch tab (without posting event).
 
         Args:
-            module_id: ID модуля из MODULES.
+            module_id: Module ID from MODULES.
         """
         self.active_module = module_id
         try:

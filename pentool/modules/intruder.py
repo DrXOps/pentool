@@ -1,4 +1,4 @@
-"""Intruder — модуль автоматизированных атак с подстановкой payload'ов."""
+"""Intruder — automated attack module with payload substitution."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class IntruderResult:
     id: str
     attack_id: str
     request_number: int
-    payload_values: list[str]          # значения по каждой позиции
+    payload_values: list[str]          # values per position
     request_raw: str
     response_status: int | None
     response_length: int | None
@@ -41,9 +41,9 @@ class IntruderResult:
 
 @dataclass
 class IntruderConfig:
-    template: str                      # raw HTTP с маркерами §payload§
+    template: str                      # raw HTTP with §payload§ markers
     attack_type: AttackType
-    payload_sets: list[list[str]]      # один список на каждую позицию
+    payload_sets: list[list[str]]      # one list per position
     threads: int = 10
     delay_ms: int = 0
     follow_redirects: bool = False
@@ -51,27 +51,27 @@ class IntruderConfig:
 
 
 def parse_markers(template: str) -> tuple[str, list[tuple[int, int]]]:
-    """Найти §маркеры§ в шаблоне.
+    """Find §markers§ in the template.
 
     Returns:
-        (clean_template, positions) где positions — список (start, end)
-        в clean_template для каждой позиции.
+        (clean_template, positions) where positions is a list of (start, end)
+        in clean_template for each position.
     """
     positions: list[tuple[int, int]] = []
     result = []
     i = 0
-    offset = 0  # смещение из-за удалённых §
+    offset = 0  # offset due to removed §
 
     while i < len(template):
         if template[i] == "§":
-            # Ищем закрывающий §
+            # Look for closing §
             j = template.find("§", i + 1)
             if j == -1:
-                # Нет закрывающего — оставляем как есть
+                # No closing marker — leave as is
                 result.append(template[i])
                 i += 1
                 continue
-            # Вырезаем содержимое маркера
+            # Extract marker content
             inner = template[i + 1 : j]
             start = len(result)
             result.append(inner)
@@ -86,7 +86,7 @@ def parse_markers(template: str) -> tuple[str, list[tuple[int, int]]]:
 
 
 def _find_marker_positions(template: str) -> list[tuple[int, int]]:
-    """Найти позиции §...§ пар в строке. Возвращает (start_§, end_§)."""
+    """Find positions of §...§ pairs in a string. Returns (start_§, end_§)."""
     positions = []
     i = 0
     while i < len(template):
@@ -96,16 +96,16 @@ def _find_marker_positions(template: str) -> list[tuple[int, int]]:
         end = template.find("§", start + 1)
         if end == -1:
             break
-        positions.append((start, end + 1))  # включая оба §
+        positions.append((start, end + 1))  # including both §
         i = end + 1
     return positions
 
 
 def substitute_payload(template: str, payload_values: list[str]) -> str:
-    """Подставить payload'ы в §маркеры§ шаблона.
+    """Substitute payloads into §markers§ of the template.
 
-    Заменяет маркеры слева направо. Если payload_values меньше чем маркеров —
-    оставшиеся маркеры заменяются пустой строкой.
+    Replaces markers left to right. If payload_values has fewer items than markers —
+    remaining markers are replaced with empty string.
     """
     result = template
     idx = 0
@@ -123,7 +123,7 @@ def substitute_payload(template: str, payload_values: list[str]) -> str:
 
 
 def count_markers(template: str) -> int:
-    """Подсчитать количество §маркеров§ в шаблоне."""
+    """Count the number of §markers§ in the template."""
     count = 0
     i = 0
     while True:
@@ -139,9 +139,9 @@ def count_markers(template: str) -> int:
 
 
 def extract_marker_defaults(template: str) -> list[str]:
-    """Извлечь оригинальные значения из §маркеров§ шаблона.
+    """Extract original values from §markers§ in the template.
 
-    Например: 'user=§admin§&pass=§secret§' → ['admin', 'secret']
+    Example: 'user=§admin§&pass=§secret§' -> ['admin', 'secret']
     """
     defaults = []
     i = 0
@@ -171,14 +171,14 @@ def load_payloads_from_file(path: str) -> list[str]:
 
 
 def generate_numeric_payloads(start: int, end: int, step: int = 1) -> list[str]:
-    """Числовой диапазон [start, end) с шагом step."""
+    """Numeric range [start, end) with step."""
     return [str(n) for n in range(start, end, step)]
 
 
 def generate_char_payloads(charset: str, min_len: int, max_len: int) -> list[str]:
-    """Перебор строк по набору символов заданной длины.
+    """Brute-force strings over a charset of given lengths.
 
-    Осторожно: может быть очень большим. Для min_len > max_len возвращает [].
+    Warning: can be very large. Returns [] if min_len > max_len.
     """
     result = []
     for length in range(min_len, max_len + 1):
@@ -188,10 +188,10 @@ def generate_char_payloads(charset: str, min_len: int, max_len: int) -> list[str
 
 
 def process_payload(payload: str, operations: list[str]) -> str:
-    """Применить операции из utils/coder.py к payload.
+    """Apply operations from utils/coder.py to a payload.
 
-    Операции применяются последовательно (pipeline).
-    Неизвестные операции — игнорируются.
+    Operations are applied sequentially (pipeline).
+    Unknown operations are ignored.
     """
     from pentool.utils.coder import OPERATIONS
     result = payload
@@ -206,7 +206,7 @@ def process_payload(payload: str, operations: list[str]) -> str:
 
 
 class IntruderAttack:
-    """Выполняет intruder-атаку заданного типа."""
+    """Executes an intruder attack of the specified type."""
 
     def __init__(
         self,
@@ -225,7 +225,7 @@ class IntruderAttack:
         self._total = 0
         self._results: list[IntruderResult] = []
         self._pause_event = asyncio.Event()
-        self._pause_event.set()  # не на паузе изначально
+        self._pause_event.set()  # not paused initially
 
     @property
     def attack_id(self) -> str:
@@ -248,33 +248,33 @@ class IntruderAttack:
         return list(self._results)
 
     def _iter_sniper(self) -> Iterator[list[str]]:
-        """Один набор payload'ов, по одной позиции за раз.
-        N_positions × M запросов.
-        Незатрагиваемые позиции сохраняют оригинальное значение из шаблона.
+        """One payload set, one position at a time.
+        N_positions x M requests.
+        Untouched positions keep the original value from the template.
         """
         n_positions = count_markers(self._config.template)
         defaults = extract_marker_defaults(self._config.template)
-        # Дополняем defaults до n_positions пустыми строками на случай рассинхрона
+        # Pad defaults to n_positions with empty strings in case of mismatch
         while len(defaults) < n_positions:
             defaults.append("")
-        # Берём только первый payload set для всех позиций
+        # Use only the first payload set for all positions
         payloads = self._config.payload_sets[0] if self._config.payload_sets else []
         for pos_idx in range(n_positions):
             for payload in payloads:
-                # В позиции pos_idx подставляем payload, в остальных — оригинал
+                # At pos_idx substitute payload, at others use original
                 values = list(defaults)
                 values[pos_idx] = payload
                 yield values
 
     def _iter_battering_ram(self) -> Iterator[list[str]]:
-        """Один payload во все позиции одновременно. M запросов."""
+        """One payload into all positions simultaneously. M requests."""
         n_positions = count_markers(self._config.template)
         payloads = self._config.payload_sets[0] if self._config.payload_sets else []
         for payload in payloads:
             yield [payload] * n_positions
 
     def _iter_pitchfork(self) -> Iterator[list[str]]:
-        """Параллельно берёт по одному из каждого набора (zip). min(M) запросов."""
+        """Takes one from each set in parallel (zip). min(M) requests."""
         sets = self._config.payload_sets
         if not sets:
             return
@@ -282,7 +282,7 @@ class IntruderAttack:
             yield list(combo)
 
     def _iter_cluster_bomb(self) -> Iterator[list[str]]:
-        """Декартово произведение всех наборов. M1×M2×... запросов."""
+        """Cartesian product of all sets. M1×M2×... requests."""
         sets = self._config.payload_sets
         if not sets:
             return
@@ -302,7 +302,7 @@ class IntruderAttack:
         return iter([])
 
     def _count_total(self) -> int:
-        """Подсчитать общее количество запросов (без реального выполнения)."""
+        """Count total number of requests (without actually executing them)."""
         return sum(1 for _ in self._get_iterator())
 
     async def run(
@@ -325,7 +325,7 @@ class IntruderAttack:
         async def _run_one(req_num: int, payload_values: list[str]) -> None:
             if self._stopped:
                 return
-            # Ожидаем снятия паузы
+            # Wait for unpause
             await self._pause_event.wait()
             if self._stopped:
                 return
@@ -334,10 +334,10 @@ class IntruderAttack:
                 if self._stopped:
                     return
 
-                # Подставляем payload'ы
+                # Substitute payloads
                 request_raw = substitute_payload(self._config.template, payload_values)
 
-                # Задержка
+                # Delay
                 if self._config.delay_ms > 0:
                     await asyncio.sleep(self._config.delay_ms / 1000.0)
 
@@ -407,7 +407,7 @@ class IntruderAttack:
 
     async def stop(self) -> None:
         self._stopped = True
-        self._pause_event.set()  # разблокировать ожидающие
+        self._pause_event.set()  # unblock waiting tasks
         self._is_running = False
 
     def export_csv(self, path: str) -> None:

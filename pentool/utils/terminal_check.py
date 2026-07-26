@@ -1,4 +1,4 @@
-"""Определение типа терминала при запуске."""
+"""Terminal type detection at startup."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def check_terminal() -> tuple[str, bool]:
 
 
 def get_terminal_warning() -> str | None:
-    """None если терминал современный, иначе текст предупреждения."""
+    """Returns None if the terminal is modern, otherwise returns a warning message."""
     term, is_modern = check_terminal()
     if not is_modern:
         return (

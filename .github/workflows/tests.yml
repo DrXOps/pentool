@@ -48,7 +48,7 @@ jobs:
           pytest tests/snapshot/ -v --tb=short
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        continue-on-error: true  # snapshot тесты могут требовать обновления
+        continue-on-error: true  # snapshot tests may require update
 
       - name: Run integration tests
         run: |

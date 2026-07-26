@@ -1,4 +1,4 @@
-"""Экран настроек приложения."""
+"""Application settings screen."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class UIMode(str, Enum):
 
 
 class OptionCycler(Static):
-    """Кнопка-переключатель опций — клик циклически меняет значение."""
+    """Option toggle button — each click cycles through values."""
 
     DEFAULT_CSS = _CSS
 
@@ -77,9 +77,9 @@ class OptionCycler(Static):
 
 
 class SettingsScreen(Widget):
-    """Диалог настроек: Interface / Proxy / Hotkeys / Project.
+    """Settings dialog: Interface / Proxy / Hotkeys / Project.
 
-    Монтируется как обычный экран-виджет; открывается через ContentSwitcher.
+    Mounted as a regular screen-widget; opened via ContentSwitcher.
     """
 
     DEFAULT_CSS = _CSS
@@ -369,9 +369,9 @@ class SettingsScreen(Widget):
             self._open_ca_cert()
 
     def on_option_cycler_changed(self, event: OptionCycler.Changed) -> None:
-        # Определяем источник события по иерархии widget
+        # Determine the event source from the widget hierarchy
         try:
-            # event.control — источник сообщения (стандартный атрибут Textual Message)
+            # event.control — message source (standard Textual Message attribute)
             widget = event.control  # type: ignore[attr-defined]
             wid = widget.id if widget else None
         except Exception:
@@ -392,15 +392,15 @@ class SettingsScreen(Widget):
             pass
 
     def _save_interface_settings(self) -> None:
-        """Применить тему и UI-режим и сохранить в конфиг."""
-        # Применяем тему
+        """Apply theme and UI mode and save to config."""
+        # Apply theme
         try:
             theme_val = self.query_one("#set-theme", OptionCycler).value
             self._apply_theme(theme_val)
         except Exception:
             pass
 
-        # Применяем UI-режим
+        # Apply UI mode
         try:
             mode_val = self.query_one("#set-ui-mode", OptionCycler).value
             self._apply_ui_mode(UIMode(mode_val))
@@ -410,7 +410,7 @@ class SettingsScreen(Widget):
         self.app.notify("Interface settings applied", timeout=2)  # type: ignore[attr-defined]
 
     def _apply_ui_mode(self, mode: UIMode) -> None:
-        """Показать/скрыть вкладки в зависимости от режима сложности."""
+        """Show/hide tabs depending on the complexity mode."""
         try:
             from pentool.tui.widgets.module_tabs import ModuleTabs
             tabs_widget = self.app.query_one(ModuleTabs)  # type: ignore[attr-defined]
@@ -582,7 +582,7 @@ class SettingsScreen(Widget):
         self.run_worker(self._async_activate(key), exclusive=True, name="license-activate")
 
     async def _async_activate(self, key: str) -> None:
-        """Асинхронный воркер активации."""
+        """Async activation worker."""
         from pentool.core.license import activate_license, refresh_session_license
         self.app.notify("Activating license…", timeout=2)  # type: ignore[attr-defined]
         try:
@@ -597,7 +597,7 @@ class SettingsScreen(Widget):
         self.call_after_refresh(self._refresh_license_ui)
 
     def _do_deactivate_license(self) -> None:
-        """Деактивировать лицензию (удалить кэш)."""
+        """Deactivate the license (remove cached data)."""
         from pentool.core.license import deactivate_license, refresh_session_license
         try:
             deactivate_license()

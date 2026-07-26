@@ -1,4 +1,4 @@
-"""WebSocketHandler — туннелирование и парсинг WebSocket-фреймов."""
+"""WebSocketHandler — WebSocket frame tunneling and parsing."""
 
 from __future__ import annotations
 
@@ -12,20 +12,20 @@ logger = get_logger(__name__)
 
 
 class WebSocketHandler:
-    """Обработчик WebSocket-соединений для прокси.
+    """WebSocket connection handler for the proxy.
 
-    Отвечает за:
-    - Парсинг/сборку WebSocket-фреймов (RFC 6455)
-    - Установку WS-соединения с целевым сервером
-    - Двунаправленный туннель с перехватом и логированием фреймов
+    Responsible for:
+    - Parsing/building WebSocket frames (RFC 6455)
+    - Establishing a WS connection to the target server
+    - Bidirectional tunnel with frame interception and logging
     """
 
     @staticmethod
     def parse_frame(data: bytes) -> tuple[int, bool, bytes, int] | None:
-        """Распарсить один WebSocket-фрейм (RFC 6455).
+        """Parse one WebSocket frame (RFC 6455).
 
         Returns:
-            (opcode, is_final, payload, total_bytes_consumed) или None если данных мало.
+            (opcode, is_final, payload, total_bytes_consumed) or None if not enough data.
         """
         if len(data) < 2:
             return None
@@ -64,12 +64,12 @@ class WebSocketHandler:
 
     @staticmethod
     def build_frame(opcode: int, payload: bytes, mask: bool = False) -> bytes:
-        """Собрать WebSocket-фрейм (RFC 6455).
+        """Build a WebSocket frame (RFC 6455).
 
         Args:
-            opcode: Тип фрейма (0x1=text, 0x2=binary, …)
-            payload: Тело фрейма (уже без маски)
-            mask: True — добавить маску (клиент→сервер)
+            opcode: Frame type (0x1=text, 0x2=binary, ...)
+            payload: Frame body (already unmasked)
+            mask: True — add masking (client->server)
         """
         b0 = 0x80 | (opcode & 0x0F)
         pay_len = len(payload)
@@ -100,10 +100,10 @@ class WebSocketHandler:
         srv_reader: asyncio.StreamReader,
         srv_writer: asyncio.StreamWriter,
     ) -> None:
-        """WebSocket-туннель с парсингом и логированием фреймов.
+        """WebSocket tunnel with frame parsing and logging.
 
-        Проксирует фреймы в обоих направлениях, emitит WebSocketFrameEvent
-        для каждого TEXT/BINARY/CLOSE фрейма.
+        Proxies frames in both directions, emitting WebSocketFrameEvent
+        for each TEXT/BINARY/CLOSE frame.
         """
         try:
             from pentool.core.event_bus import get_event_bus
@@ -162,8 +162,8 @@ class WebSocketHandler:
                     pass
 
         await asyncio.gather(
-            _relay(client_reader, srv_writer, "client→server"),
-            _relay(srv_reader, client_writer, "server→client"),
+            _relay(client_reader, srv_writer, "client->server"),
+            _relay(srv_reader, client_writer, "server->client"),
             return_exceptions=True,
         )
 

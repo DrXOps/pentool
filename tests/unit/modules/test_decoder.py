@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/modules/decoder.py."""
+"""Unit tests for pentool/modules/decoder.py."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ class TestBase64:
 class TestBase64URL:
     def test_base64url_encode(self):
         result = encode_op("Base64URL Encode", "Hello")
-        assert result == "SGVsbG8"  # без паддинга
+        assert result == "SGVsbG8"  # without padding
 
     def test_base64url_roundtrip(self):
         original = "url-safe data: +/="
@@ -103,7 +103,7 @@ class TestHexEncodeDecode:
 
 class TestUnicode:
     def test_unicode_encode_ascii(self):
-        # ASCII не кодируется
+        # ASCII is not encoded
         result = encode_op("Unicode Encode", "hello")
         assert result == "hello"
 
@@ -160,7 +160,7 @@ class TestJWTDecode:
 
     def test_jwt_invalid(self):
         result = encode_op("JWT Decode", "not.a.jwt")
-        # Не должен бросать, должен вернуть что-то
+        # Should not raise, should return something
         assert isinstance(result, str)
 
 
@@ -183,7 +183,7 @@ class TestRunChain:
 
     def test_invalid_op_in_chain(self):
         result, steps = run_chain(["INVALID_OP", "Base64 Encode"], "test")
-        # Ошибочная операция записывает [error ...] в output
+        # Failed operation writes [error ...] to output
         assert "[error" in steps[1]
 
     def test_roundtrip_chain(self):

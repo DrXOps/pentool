@@ -1,4 +1,4 @@
-"""Генерация и управление TLS-сертификатами для HTTPS-перехвата прокси."""
+"""TLS certificate generation and management for HTTPS proxy interception."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _generate_rsa_key(key_size: int = 2048) -> RSAPrivateKey:
 
 
 def _key_to_pem(key: RSAPrivateKey) -> bytes:
-    """Сериализовать приватный ключ в PEM без пароля."""
+    """Serialize a private key to PEM without a password."""
     return key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.TraditionalOpenSSL,
@@ -31,14 +31,14 @@ def _key_to_pem(key: RSAPrivateKey) -> bytes:
 
 
 def _cert_to_pem(cert: Certificate) -> bytes:
-    """Сериализовать сертификат в PEM."""
+    """Serialize a certificate to PEM."""
     return cert.public_bytes(serialization.Encoding.PEM)
 
 
 def generate_ca_cert(cert_dir: str) -> tuple[str, str]:
     dir_path = Path(cert_dir)
     dir_path.mkdir(parents=True, exist_ok=True)
-    # Устанавливаем права 700 для директории с сертификатами
+    # Set permissions 700 for the certificate directory
     dir_path.chmod(0o700)
 
     cert_path = dir_path / "ca.crt"
@@ -63,7 +63,7 @@ def generate_ca_cert(cert_dir: str) -> tuple[str, str]:
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now)
-        .not_valid_after(now + timedelta(days=3650))  # 10 лет
+        .not_valid_after(now + timedelta(days=3650))  # 10 years
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
         .add_extension(
             x509.KeyUsage(
@@ -104,7 +104,7 @@ def generate_domain_cert(
     ca_cert_path: str,
     ca_key_path: str,
 ) -> tuple[bytes, bytes]:
-    # Загрузить CA
+    # Load CA
     ca_cert = x509.load_pem_x509_certificate(Path(ca_cert_path).read_bytes())
     ca_key_data = Path(ca_key_path).read_bytes()
     ca_key = serialization.load_pem_private_key(ca_key_data, password=None)
@@ -116,13 +116,13 @@ def generate_domain_cert(
         x509.NameAttribute(NameOID.COMMON_NAME, domain),
     ])
 
-    # Определить SAN: IP или DNS
+    # Determine SAN: IP or DNS
     san_list: list[x509.GeneralName] = []
     try:
         san_list.append(x509.IPAddress(ipaddress.ip_address(domain)))
     except ValueError:
         san_list.append(x509.DNSName(domain))
-        # Добавить wildcard для поддоменов
+        # Add wildcard for subdomains
         if "." in domain and not domain.startswith("*."):
             san_list.append(x509.DNSName(f"*.{domain}"))
 
@@ -133,7 +133,7 @@ def generate_domain_cert(
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now)
-        .not_valid_after(now + timedelta(days=825))  # ~2 года 3 месяца
+        .not_valid_after(now + timedelta(days=825))  # ~2 years 3 months
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(x509.SubjectAlternativeName(san_list), critical=False)
         .add_extension(
@@ -166,22 +166,22 @@ def create_ssl_context_for_domain(
     ca_key_path: str,
     cert_dir: str | None = None,
 ) -> ssl.SSLContext:
-    # ── Уровень 1: in-memory LRU ──────────────────────────────────────────────
+    # ── Level 1: in-memory LRU ────────────────────────────────────────────────
     cache_key = f"{domain}:{ca_cert_path}"
     ctx = _ssl_ctx_cache.get(cache_key)
     if ctx is not None:
         return ctx
 
-    # ── Уровень 2: disk-cache ─────────────────────────────────────────────────
+    # ── Level 2: disk-cache ───────────────────────────────────────────────────
     ctx = _load_ctx_from_disk(domain, ca_cert_path, cert_dir)
     if ctx is not None:
         _ssl_ctx_cache.put(cache_key, ctx)
         return ctx
 
-    # ── Генерация нового сертификата ──────────────────────────────────────────
+    # ── Generate new certificate ──────────────────────────────────────────────
     cert_pem, key_pem = generate_domain_cert(domain, ca_cert_path, ca_key_path)
 
-    # Сохранить на диск (если cert_dir задан)
+    # Save to disk (if cert_dir is set)
     _save_ctx_to_disk(domain, cert_pem, key_pem, cert_dir)
 
     ctx = _build_ssl_ctx(cert_pem, key_pem)
@@ -189,10 +189,10 @@ def create_ssl_context_for_domain(
     return ctx
 
 
-# ── Вспомогательные функции для disk-cache ────────────────────────────────────
+# ── Helper functions for disk-cache ──────────────────────────────────────────
 
 def _domain_cache_path(domain: str, cert_dir: str) -> Path:
-    """Путь к кэш-файлу для домена: {cert_dir}/domains/{sha256(domain)[:16]}.pem"""
+    """Path to cache file for a domain: {cert_dir}/domains/{sha256(domain)[:16]}.pem"""
     import hashlib
     key = hashlib.sha256(domain.encode()).hexdigest()[:16]
     return Path(cert_dir) / "domains" / f"{key}.pem"
@@ -201,12 +201,12 @@ def _domain_cache_path(domain: str, cert_dir: str) -> Path:
 def _load_ctx_from_disk(
     domain: str, ca_cert_path: str, cert_dir: str | None
 ) -> ssl.SSLContext | None:
-    """Попытаться загрузить сертификат из disk-cache.
+    """Try to load a certificate from disk-cache.
 
-    Проверяет:
-    - файл существует
-    - CN сертификата совпадает с доменом
-    - срок действия не истекает в ближайшие 30 дней
+    Checks:
+    - file exists
+    - certificate CN matches the domain
+    - certificate does not expire within the next 30 days
     """
     if not cert_dir:
         return None
@@ -215,7 +215,7 @@ def _load_ctx_from_disk(
         return None
     try:
         pem_data = path.read_bytes()
-        # Файл содержит cert_pem + key_pem, разделённые маркером
+        # File contains cert_pem + key_pem separated by a marker
         sep = b"-----BEGIN RSA PRIVATE KEY-----"
         sep2 = b"-----BEGIN PRIVATE KEY-----"
         if sep in pem_data:
@@ -227,7 +227,7 @@ def _load_ctx_from_disk(
         else:
             return None
 
-        # Проверить срок действия
+        # Check expiry
         cert = x509.load_pem_x509_certificate(cert_pem)
         expires = cert.not_valid_after_utc
         margin = timedelta(days=30)
@@ -237,7 +237,7 @@ def _load_ctx_from_disk(
 
         return _build_ssl_ctx(cert_pem, key_pem)
     except Exception:
-        # Повреждённый кэш — удалить и регенерировать
+        # Corrupted cache — delete and regenerate
         try:
             path.unlink(missing_ok=True)
         except Exception:
@@ -256,11 +256,11 @@ def _save_ctx_to_disk(
         path.write_bytes(cert_pem + key_pem)
         path.chmod(0o600)
     except Exception:
-        pass  # disk-cache не критичен — продолжаем без него
+        pass  # disk-cache is not critical — continue without it
 
 
 def _build_ssl_ctx(cert_pem: bytes, key_pem: bytes) -> ssl.SSLContext:
-    """Собрать SSLContext из PEM-байтов через временные файлы."""
+    """Build an SSLContext from PEM bytes via temporary files."""
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.check_hostname = False
     ctx.set_alpn_protocols(["http/1.1"])
@@ -282,13 +282,13 @@ def _build_ssl_ctx(cert_pem: bytes, key_pem: bytes) -> ssl.SSLContext:
     return ctx
 
 
-# ── In-memory LRU cache для SSL-контекстов (1000 доменов) ────────────────────
+# ── In-memory LRU cache for SSL contexts (1000 domains) ──────────────────────
 
 class _SslCtxLRU:
-    """Простой LRU-кэш для SSLContext объектов.
+    """Simple LRU cache for SSLContext objects.
 
-    Ключ — строка "{domain}:{ca_cert_path}", значение — ssl.SSLContext.
-    Максимум 1000 записей — примерно 1–2 МБ памяти.
+    Key — string "{domain}:{ca_cert_path}", value — ssl.SSLContext.
+    Maximum 1000 entries — approximately 1–2 MB of memory.
     """
     def __init__(self, max_size: int = 1000) -> None:
         from collections import OrderedDict

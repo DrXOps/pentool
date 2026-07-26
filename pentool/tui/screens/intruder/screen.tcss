@@ -259,10 +259,10 @@ _GenerateDialog #buttons {
 _GenerateDialog #buttons ToolbarButton {
     margin: 0 0 0 1;
 }
-/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
 .toolbar-sep { width: auto; }
 
-/* Threads / Delay inputs в тулбаре */
+/* Threads / Delay inputs in toolbar */
 IntruderScreen #toolbar Label.toolbar-label {
     width: auto;
     padding: 0 1;

@@ -1,1 +1,1 @@
-"""Пакет modules: логика модулей, независимая от интерфейса."""
+"""modules package: interface-independent module logic."""

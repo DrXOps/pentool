@@ -1,6 +1,6 @@
-"""Integration-тесты: новые фичи — Sequencer, Target, Decoder, Dashboard Live, Settings Network.
+"""Integration tests: new features — Sequencer, Target, Decoder, Dashboard Live, Settings Network.
 
-Проверяет наличие виджетов и базовое поведение без crash.
+Checks widget presence and basic behavior without crashes.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pentool.core.config import Config, set_config
 
 @pytest.fixture(autouse=True)
 def isolated_config(tmp_path):
-    """Изолированная конфигурация для каждого теста."""
+    """Isolated configuration for each test."""
     cfg = Config(
         db_path=str(tmp_path / "test.db"),
         cert_dir=str(tmp_path / "certs"),
@@ -28,7 +28,7 @@ def isolated_config(tmp_path):
 class TestSequencerScreen:
     @pytest.mark.asyncio
     async def test_sequencer_in_dom(self) -> None:
-        """Sequencer экран монтируется без ошибок."""
+        """Sequencer screen mounts without errors."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.sequencer.screen import SequencerScreen
 
@@ -42,7 +42,7 @@ class TestSequencerScreen:
 
     @pytest.mark.asyncio
     async def test_seq_token_area_in_dom(self) -> None:
-        """TextArea для ввода токенов присутствует в DOM."""
+        """TextArea for token input is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -55,7 +55,7 @@ class TestSequencerScreen:
 
     @pytest.mark.asyncio
     async def test_seq_analyze_button_in_dom(self) -> None:
-        """Кнопка Analyze присутствует в DOM."""
+        """Analyze button is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -68,7 +68,7 @@ class TestSequencerScreen:
 
     @pytest.mark.asyncio
     async def test_seq_export_button_in_dom(self) -> None:
-        """Кнопка Export (Блок 4.5) присутствует в DOM."""
+        """Export button (Block 4.5) is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -81,7 +81,7 @@ class TestSequencerScreen:
 
     @pytest.mark.asyncio
     async def test_seq_analyze_no_tokens_shows_warning(self) -> None:
-        """Analyze без токенов не крашится."""
+        """Analyze without tokens does not crash."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -91,7 +91,7 @@ class TestSequencerScreen:
             await pilot.pause()
             await pilot.click("#btn-seq-analyze")
             await pilot.pause()
-            # Нет crash = OK
+            # No crash = OK
 
 
 # ── Target ────────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ class TestSequencerScreen:
 class TestTargetScreen:
     @pytest.mark.asyncio
     async def test_target_in_dom(self) -> None:
-        """Target экран монтируется."""
+        """Target screen mounts."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.target.screen import TargetScreen
 
@@ -114,7 +114,7 @@ class TestTargetScreen:
 
     @pytest.mark.asyncio
     async def test_scope_rules_button_in_dom(self) -> None:
-        """Кнопка 'Scope Rules' (Блок 4.9) присутствует в DOM."""
+        """'Scope Rules' button (Block 4.9) is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -127,7 +127,7 @@ class TestTargetScreen:
 
     @pytest.mark.asyncio
     async def test_site_tree_in_dom(self) -> None:
-        """Tree виджет присутствует в DOM."""
+        """Tree widget is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -145,7 +145,7 @@ class TestTargetScreen:
 class TestDecoderScreen:
     @pytest.mark.asyncio
     async def test_decoder_in_dom(self) -> None:
-        """Decoder экран монтируется."""
+        """Decoder screen mounts."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.decoder.screen import DecoderScreen
 
@@ -164,7 +164,7 @@ class TestDecoderScreen:
 class TestDashboardLiveTab:
     @pytest.mark.asyncio
     async def test_dashboard_in_dom(self) -> None:
-        """Dashboard экран монтируется без ошибок."""
+        """Dashboard screen mounts without errors."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.dashboard.screen import DashboardScreen
 
@@ -178,7 +178,7 @@ class TestDashboardLiveTab:
 
     @pytest.mark.asyncio
     async def test_dashboard_tabbed_content_in_dom(self) -> None:
-        """Dashboard содержит TabbedContent с вкладками Overview и Live."""
+        """Dashboard contains TabbedContent with Overview and Live tabs."""
         from pentool.tui.app import PentoolApp
         from textual.widgets import TabbedContent
 
@@ -192,7 +192,7 @@ class TestDashboardLiveTab:
 
     @pytest.mark.asyncio
     async def test_live_dashboard_tab_exists(self) -> None:
-        """Вкладка Live Dashboard присутствует в DOM."""
+        """Live Dashboard tab is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -210,20 +210,20 @@ class TestDashboardLiveTab:
 class TestSettingsNetworkTab:
     @pytest.mark.asyncio
     async def test_settings_network_tab_in_dom(self) -> None:
-        """Вкладка Network присутствует в Settings (Блок 4.10)."""
+        """Network tab is present in Settings (Block 4.10)."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            await pilot.press("ctrl+comma")  # открыть Settings
+            await pilot.press("ctrl+comma")  # open Settings
             await pilot.pause()
             network_tab = app.query("#tab-network")
             assert len(network_tab) > 0
 
     @pytest.mark.asyncio
     async def test_settings_user_agent_input_in_dom(self) -> None:
-        """Input для User-Agent присутствует в DOM."""
+        """User-Agent input is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -236,7 +236,7 @@ class TestSettingsNetworkTab:
 
     @pytest.mark.asyncio
     async def test_settings_collaborator_url_input_in_dom(self) -> None:
-        """Input для Collaborator URL присутствует в DOM."""
+        """Collaborator URL input is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -248,13 +248,13 @@ class TestSettingsNetworkTab:
             assert len(inp) > 0
 
 
-# ── Grep Match/Extract (Intruder Блок 4.4) ────────────────────────────────────
+# ── Grep Match/Extract (Intruder Block 4.4) ────────────────────────────────────
 
 @pytest.mark.integration
 class TestIntruderGrepBar:
     @pytest.mark.asyncio
     async def test_grep_bar_in_dom(self) -> None:
-        """#grep-bar с полями Match/Extract присутствует в DOM (Блок 4.4)."""
+        """#grep-bar with Match/Extract fields is present in DOM (Block 4.4)."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -267,7 +267,7 @@ class TestIntruderGrepBar:
 
     @pytest.mark.asyncio
     async def test_grep_match_input_in_dom(self) -> None:
-        """Input для Grep Match присутствует в DOM."""
+        """Grep Match input is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -280,7 +280,7 @@ class TestIntruderGrepBar:
 
     @pytest.mark.asyncio
     async def test_grep_apply_button_in_dom(self) -> None:
-        """Кнопка Apply для Grep присутствует в DOM."""
+        """Grep Apply button is present in DOM."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -293,7 +293,7 @@ class TestIntruderGrepBar:
 
     @pytest.mark.asyncio
     async def test_grep_apply_no_crash(self) -> None:
-        """Apply с пустым паттерном — нет crash."""
+        """Apply with empty pattern — no crash."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -303,4 +303,4 @@ class TestIntruderGrepBar:
             await pilot.pause()
             await pilot.click("#btn-grep-apply")
             await pilot.pause()
-            # Нет Exception = OK
+            # No Exception = OK

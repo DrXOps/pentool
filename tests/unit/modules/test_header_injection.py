@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/modules/scanner/checks/header_injection.py."""
+"""Unit tests for pentool/modules/scanner/checks/header_injection.py."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def _make_client(resp_body: str = "", status: int = 200,
 
 
 def _make_injected_client():
-    """Клиент, чьи get/post возвращают ответ с X-Injected в HTTP-заголовках."""
+    """Client whose get/post return a response with X-Injected in HTTP headers."""
     return _make_client("", resp_headers={"X-Injected": "header_injected"})
 
 
@@ -109,22 +109,22 @@ class TestPayloads:
 
 class TestDetectInjection:
     def test_x_injected_in_body_is_NOT_injection(self):
-        """Отражение payload в теле — НЕ инъекция заголовка (false positive был здесь)."""
+        """Payload reflection in body — NOT a header injection (false positive was here)."""
         resp = _make_resp("X-Injected: header_injected")
         result = _detect_injection(resp, "\r\nX-Injected: header_injected")
-        # _detect_injection проверяет тело для обратной совместимости,
-        # но _check_response (основной путь) теперь не детектирует тело.
-        # Этот тест фиксирует поведение низкоуровневой функции.
+        # _detect_injection checks body for backward compatibility,
+        # but _check_response (main path) no longer detects body.
+        # This test records the behavior of the low-level function.
         assert result == "body"  # _detect_injection — legacy helper
 
     def test_set_cookie_in_body_legacy(self):
-        """_detect_injection видит Set-Cookie в теле — legacy поведение."""
+        """_detect_injection sees Set-Cookie in body — legacy behavior."""
         resp = _make_resp("injected=header_injection_test")
         result = _detect_injection(resp, "\r\nSet-Cookie: injected=header_injection_test")
-        assert result is not None  # legacy helper — всё ещё детектирует
+        assert result is not None  # legacy helper — still detects
 
     def test_x_injected_in_response_headers(self):
-        """Реальная инъекция — заголовок X-Injected появился в HTTP-ответе."""
+        """Real injection — X-Injected header appeared in HTTP response."""
         resp = _make_resp("", headers={"X-Injected": "header_injected"})
         result = _detect_injection(resp, "\r\nX-Injected: header_injected")
         assert result == "header"
@@ -135,10 +135,10 @@ class TestDetectInjection:
         assert result is None
 
     def test_response_splitting_signature(self):
-        """HTTP Response Splitting — второй HTTP-ответ ПОСЛЕ \r\n\r\n."""
+        """HTTP Response Splitting — second HTTP response AFTER \r\n\r\n."""
         resp = _make_resp("\r\n\r\nHTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Injected</h1>")
         result = _detect_injection(resp, "")
-        # _detect_injection проверяет _RESPONSE_SPLIT_RE
+        # _detect_injection checks _RESPONSE_SPLIT_RE
         assert result is not None
 
     def test_none_response_returns_none(self):
@@ -146,7 +146,7 @@ class TestDetectInjection:
         assert result is None
 
     def test_real_header_injection_detected(self):
-        """Случай когда CRLF действительно добавил заголовок в ответ."""
+        """Case when CRLF actually added a header to the response."""
         resp = _make_resp("", headers={"X-Injected": "crlf"})
         result = _detect_injection(resp, "")
         assert result == "header"
@@ -195,17 +195,17 @@ class TestScanGetParams:
 
     @pytest.mark.asyncio
     async def test_injection_in_get_param_body(self):
-        """Payload в теле — НЕ должен давать false positive (исправление false positive)."""
+        """Payload in body — should NOT give false positive (false positive fix)."""
         check = HeaderInjectionCheck()
-        client = _make_client("X-Injected: header_injected")  # только в body
+        client = _make_client("X-Injected: header_injected")  # only in body
         req = _make_request("https://example.com/?redirect=test")
         findings = await check.scan(req, None, http_client=client)
-        # После фикса: отражение в теле НЕ является инъекцией заголовка
-        assert findings == [], "CRLF false positive: body-reflect не должен детектироваться"
+        # After fix: body reflection is NOT a header injection
+        assert findings == [], "CRLF false positive: body-reflect should not be detected"
 
     @pytest.mark.asyncio
     async def test_injection_in_get_param_response_header(self):
-        """Реальная инъекция: X-Injected появился в HTTP-заголовках ответа."""
+        """Real injection: X-Injected appeared in HTTP response headers."""
         check = HeaderInjectionCheck()
         resp = _make_resp("", headers={"X-Injected": "header_injected"})
         client = MagicMock()
@@ -235,7 +235,7 @@ class TestScanGetParams:
 
     @pytest.mark.asyncio
     async def test_multiple_get_params(self):
-        """Тестируются все GET-параметры — реальная инъекция в заголовок."""
+        """All GET params are tested — real injection into a header."""
         check = HeaderInjectionCheck()
         resp_injected = _make_resp("", headers={"X-Injected": "crlf"})
         resp_clean = _make_resp("clean")
@@ -243,7 +243,7 @@ class TestScanGetParams:
 
         async def fake_get(url, headers=None, **kwargs):
             call_count[0] += 1
-            # Первый вызов — инъекция сработала (заголовок в ответе)
+            # First call — injection triggered (header in response)
             if call_count[0] == 1:
                 return resp_injected
             return resp_clean
@@ -264,7 +264,7 @@ class TestScanInjectableHeaders:
         check = HeaderInjectionCheck()
 
         call_count = 0
-        # Реальная инъекция: X-Injected появляется в HTTP-заголовках ответа
+        # Real injection: X-Injected appears in HTTP response headers
         injected_resp = _make_resp("", headers={"X-Injected": "header_injected"})
         clean_resp = _make_resp("<html>ok</html>")
 
@@ -279,7 +279,7 @@ class TestScanInjectableHeaders:
 
         client = MagicMock()
         client.get = fake_get
-        # URL без параметров, чтобы GET params не нашли ничего
+        # URL without params so GET params find nothing
         req = _make_request("https://example.com/")
         findings = await check.scan(req, None, http_client=client)
         assert findings
@@ -301,7 +301,7 @@ class TestScanPost:
     @pytest.mark.asyncio
     async def test_post_urlencoded_injection(self):
         check = HeaderInjectionCheck()
-        # Реальная инъекция: заголовок X-Injected появился в HTTP-ответе
+        # Real injection: X-Injected header appeared in HTTP response
         resp = _make_resp("", headers={"X-Injected": "header_injected"})
         client = MagicMock()
         client.get = AsyncMock(return_value=_make_resp("clean"))
@@ -372,7 +372,7 @@ class TestFindingFields:
     @pytest.mark.asyncio
     async def test_finding_all_required_fields(self):
         check = HeaderInjectionCheck()
-        # Реальная инъекция: X-Injected должен быть в HTTP-заголовках ответа
+        # Real injection: X-Injected should be in HTTP response headers
         client = _make_injected_client()
         req = _make_request("https://example.com/?redirect=test")
         findings = await check.scan(req, None, http_client=client)

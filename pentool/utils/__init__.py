@@ -1,1 +1,1 @@
-"""Пакет utils: вспомогательные функции."""
+"""utils package: helper functions."""

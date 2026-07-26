@@ -1,4 +1,4 @@
-"""Сообщения (Message Bus) для межэкранного взаимодействия без прямых импортов."""
+"""Messages (Message Bus) for cross-screen communication without direct imports."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ class SendToTarget(Message):
 
 
 class SyncScopeToTarget(Message):
-    """Синхронизировать in-scope статус хоста с TargetScreen."""
+    """Synchronize in-scope status of a host with TargetScreen."""
 
     def __init__(self, host: str, in_scope: bool) -> None:
         super().__init__()
@@ -43,7 +43,7 @@ class SendHostToScanner(Message):
 
 
 class ProxyRequestAdded(Message):
-    """Прокси получил новый запрос — добавить строку в таблицу ProxyScreen."""
+    """Proxy received a new request — add a row to the ProxyScreen table."""
 
     def __init__(self, req: object) -> None:
         super().__init__()
@@ -51,7 +51,7 @@ class ProxyRequestAdded(Message):
 
 
 class ProxyRequestDone(Message):
-    """Прокси завершил запрос — обновить строку в таблице ProxyScreen."""
+    """Proxy completed a request — update the row in the ProxyScreen table."""
 
     def __init__(self, req: object) -> None:
         super().__init__()
@@ -63,7 +63,7 @@ class ProxyClearHistory(Message):
 
 
 class ProxyLoadProject(Message):
-    """Перезагрузить таблицу ProxyScreen из хранилища после загрузки проекта."""
+    """Reload the ProxyScreen table from storage after loading a project."""
 
 
 class SendToScanner(Message):
@@ -92,10 +92,10 @@ class TerminalStop(Message):
 
 
 class ConfigChanged(Message):
-    """Конфигурация изменена — уведомить всех подписчиков (R-16).
+    """Configuration changed — notify all subscribers (R-16).
 
-    Атрибут `fields` содержит словарь изменённых полей: {'proxy_port': 8081, ...}.
-    App-слой слушает это сообщение и применяет изменения к ProxyServer/StatusBar.
+    The `fields` attribute contains a dict of changed fields: {'proxy_port': 8081, ...}.
+    The app layer listens to this message and applies changes to ProxyServer/StatusBar.
     """
 
     def __init__(self, fields: dict) -> None:

@@ -1,4 +1,4 @@
-"""Главная группа CLI-команд."""
+"""Main CLI command group."""
 
 from __future__ import annotations
 
@@ -10,17 +10,17 @@ from pentool.core.logging import setup_logging
 
 @click.group()
 @click.version_option(package_name="pentool")
-@click.option("--config", "config_path", default=None, help="Путь к файлу конфигурации.")
-@click.option("--verbose", "-v", is_flag=True, default=False, help="Подробный вывод (DEBUG).")
+@click.option("--config", "config_path", default=None, help="Path to the configuration file.")
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Verbose output (DEBUG).")
 @click.pass_context
 def cli(ctx: click.Context, config_path: str | None, verbose: bool) -> None:
-    """Pentool — консольный инструмент для пентестинга веб-приложений.
+    """Pentool — a command-line tool for web application penetration testing.
 
-    Запустите без аргументов для открытия TUI:
+    Run without arguments to open the TUI:
 
         pentool
 
-    Или используйте команды ниже для работы из командной строки.
+    Or use the commands below for command-line usage.
     """
     ctx.ensure_object(dict)
 
@@ -35,7 +35,7 @@ def cli(ctx: click.Context, config_path: str | None, verbose: bool) -> None:
     ctx.obj["config"] = cfg
 
 
-# Импорт и регистрация групп команд
+# Import and register command groups
 from pentool.cli.project import project  # noqa: E402
 
 cli.add_command(project)
@@ -48,18 +48,18 @@ cli.add_command(proxy)
 
 @cli.group()
 def repeater() -> None:
-    """Модуль Repeater: ручная отправка запросов."""
+    """Repeater module: manual request sending."""
 
 
 @repeater.command("send")
-@click.option("--request-file", required=True, type=click.Path(exists=True), help="Файл с HTTP-запросом.")
+@click.option("--request-file", required=True, type=click.Path(exists=True), help="File containing the HTTP request.")
 def repeater_send(request_file: str) -> None:
     click.echo(f"Repeater send {request_file} — not implemented yet.")
 
 
 @cli.group()
 def intruder() -> None:
-    """Модуль Intruder: автоматизированные атаки."""
+    """Intruder module: automated attacks."""
 
 
 @intruder.command("run")
@@ -88,7 +88,7 @@ cli.add_command(scan)
 ]))
 @click.argument("text")
 def decode_cmd(operation: str, text: str) -> None:
-    """Кодировать/декодировать/хэшировать текст."""
+    """Encode/decode/hash text."""
     from pentool.utils.coder import apply_operation
     try:
         result = apply_operation(operation, text)
@@ -100,9 +100,9 @@ def decode_cmd(operation: str, text: str) -> None:
 
 @cli.command("update")
 @click.option("--check", "check_only", is_flag=True, default=False,
-              help="Только проверить наличие обновления без установки.")
+              help="Only check for updates without installing.")
 def update_cmd(check_only: bool) -> None:
-    """Проверить и установить обновление Pentool."""
+    """Check for and install Pentool updates."""
     from pentool.core.updater import check_update_sync, do_pip_upgrade
 
     click.echo("Checking for updates...")

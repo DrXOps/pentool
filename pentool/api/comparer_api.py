@@ -1,4 +1,4 @@
-"""ComparerAPI — публичный интерфейс Comparer для TUI."""
+"""ComparerAPI — public Comparer interface for TUI."""
 
 from __future__ import annotations
 

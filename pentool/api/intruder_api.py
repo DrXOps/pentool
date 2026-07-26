@@ -1,4 +1,4 @@
-"""Публичный API Intruder-модуля для TUI и CLI."""
+"""Public API of the Intruder module for TUI and CLI."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ class IntruderAPI:
             from pentool.modules.intruder_turbo import TurboIntruderAttack
             self._attack = TurboIntruderAttack(config)
         else:
-            # Обычный режим
+            # Standard mode
             self._attack = IntruderAttack(config, db_path=self._db_path)
 
         _on_result = on_result if on_result else lambda r: None
@@ -65,7 +65,7 @@ class IntruderAPI:
             await self._attack.pause()
 
     async def resume(self) -> None:
-        """Возобновить атаку после паузы."""
+        """Resume the attack after a pause."""
         if self._attack:
             await self._attack.resume()
 
@@ -75,7 +75,7 @@ class IntruderAPI:
 
     def get_results(self) -> list[IntruderResult]:
         if self._attack:
-            # Turbo mode использует get_results(), обычный - results property
+            # Turbo mode uses get_results(), standard mode uses results property
             if hasattr(self._attack, 'get_results'):
                 return self._attack.get_results()
             return self._attack.results
@@ -132,10 +132,10 @@ class IntruderAPI:
         from pentool.modules.intruder import IntruderResult
 
         results_data = data.get("results", [])
-        # Создаём фиктивный attack для хранения результатов
-        # без реального запуска атаки
+        # Create a dummy attack to store results
+        # without actually running an attack
         if self._attack is None:
-            # Ленивая инициализация — просто храним в атрибуте
+            # Lazy initialization — just store in attribute
             self._restored_results: list[IntruderResult] = []
         else:
             self._restored_results = []

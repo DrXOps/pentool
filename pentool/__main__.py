@@ -1,4 +1,4 @@
-"""Точка входа: без аргументов — TUI, с аргументами — CLI."""
+"""Entry point: no arguments — TUI, with arguments — CLI."""
 
 import sys
 
@@ -14,7 +14,7 @@ def main() -> None:
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception as exc:
-            # Отправляем анонимный отчёт об ошибке (если не отключено в настройках)
+            # Send anonymous crash report (if not disabled in settings)
             try:
                 from pentool.core.crash_reporter import send_crash
                 send_crash(exc)

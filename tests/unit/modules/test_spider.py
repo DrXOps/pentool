@@ -1,4 +1,4 @@
-"""Unit-тесты для AsyncSpider и SpiderResult."""
+"""Unit tests for AsyncSpider and SpiderResult."""
 from __future__ import annotations
 
 import pytest
@@ -174,12 +174,12 @@ class TestSpiderInternals:
 
     def test_in_scope_subdomain_in_scope(self):
         spider = AsyncSpider()
-        # субдомены example.com входят в scope (wildcard поддержка)
+        # example.com subdomains are in scope (wildcard support)
         assert spider._in_scope("https://sub.example.com/page", "example.com") is True
 
     def test_in_scope_different_subdomain_not_in_scope(self):
         spider = AsyncSpider()
-        # evil.com — не субдомен example.com
+        # evil.com — not a subdomain of example.com
         assert spider._in_scope("https://sub.evil.com/page", "example.com") is False
 
     def test_extract_js_endpoints_fetch(self):
@@ -208,7 +208,7 @@ class TestSpiderInternals:
         js = "fetch('/api/v1') \n fetch('/api/v1')"
         endpoints = spider._extract_js_endpoints(js, "https://example.com/app.js")
         urls = [ep.url for ep in endpoints]
-        # должны быть уникальными
+        # should be unique
         assert len(urls) == len(set(urls))
 
     def test_extract_js_endpoints_source_is_js(self):
@@ -235,7 +235,7 @@ class TestSpiderInternals:
         link_urls = [l for l in links]
         assert any("/page1" in u for u in link_urls)
         assert any("/page2" in u for u in link_urls)
-        # Внешние ссылки фильтруются при respect_scope=True
+        # External links are filtered when respect_scope=True
         assert not any("evil.com" in u for u in link_urls)
 
     def test_parse_html_extracts_forms(self):
@@ -265,7 +265,7 @@ class TestSpiderInternals:
         assert forms[0].method == "GET"
 
     def test_parse_html_form_without_named_fields_not_added(self):
-        """Форма без именованных полей (только submit) не добавляется."""
+        """Form without named fields (only submit) is not added."""
         spider = AsyncSpider()
         html = """<html><body>
         <form action="/action" method="POST">
@@ -273,7 +273,7 @@ class TestSpiderInternals:
         </form>
         </body></html>"""
         links, forms, js = spider._parse_html(html, "https://example.com/", "example.com")
-        # submit не имеет name → fields пустой → форма не добавляется
+        # submit has no name → fields empty → form is not added
         assert len(forms) == 0
 
     def test_parse_html_extracts_js(self):
@@ -302,7 +302,7 @@ class TestSpiderInternals:
         spider = AsyncSpider()
         html = '<a href="#top">Top</a>'
         links, forms, js = spider._parse_html(html, "https://example.com/", "example.com")
-        # href="#top" отфильтровывается (startswith("#"))
+        # href="#top" is filtered out (startswith("#"))
         assert not any(u.endswith("#top") for u in links)
 
     def test_parse_html_returns_absolute_urls(self):
@@ -423,7 +423,7 @@ class TestActiveChecksInit:
         check = SSTICheck()
         assert check.passive is False
         assert check.severity == "critical"
-        # CWE-1336 содержит "1336"
+        # CWE-1336 contains "1336"
         assert "1336" in check.cwe or "ssti" in check.cwe.lower() or check.cwe.startswith("CWE")
 
     def test_ssti_check_name(self):
@@ -492,34 +492,34 @@ class TestActiveChecksInit:
         assert "missing_security_headers" in names
 
     def test_all_checks_are_active(self):
-        """Все активные checks имеют passive=False."""
+        """All active checks have passive=False."""
         from pentool.modules.scanner.checks import (
             SQLiCheck, XSSCheck, SSTICheck, LFICheck,
             RCECheck, OpenRedirectCheck, SSRFCheck,
         )
         for cls in (SQLiCheck, XSSCheck, SSTICheck, LFICheck, RCECheck, OpenRedirectCheck, SSRFCheck):
             check = cls()
-            assert check.passive is False, f"{cls.__name__} должен быть активным (passive=False)"
+            assert check.passive is False, f"{cls.__name__} should be active (passive=False)"
 
     def test_checks_have_description(self):
-        """Все checks должны иметь непустое описание."""
+        """All checks should have a non-empty description."""
         from pentool.modules.scanner.checks import (
             SQLiCheck, XSSCheck, SSTICheck, LFICheck,
             RCECheck, OpenRedirectCheck, SSRFCheck,
         )
         for cls in (SQLiCheck, XSSCheck, SSTICheck, LFICheck, RCECheck, OpenRedirectCheck, SSRFCheck):
             check = cls()
-            assert check.description, f"{cls.__name__} должен иметь description"
+            assert check.description, f"{cls.__name__} should have description"
 
     def test_checks_have_mitre_attack(self):
-        """Все active checks имеют mitre_attack."""
+        """All active checks have mitre_attack."""
         from pentool.modules.scanner.checks import (
             SQLiCheck, XSSCheck, SSTICheck, LFICheck,
             RCECheck, OpenRedirectCheck, SSRFCheck,
         )
         for cls in (SQLiCheck, XSSCheck, SSTICheck, LFICheck, RCECheck, OpenRedirectCheck, SSRFCheck):
             check = cls()
-            assert check.mitre_attack, f"{cls.__name__} должен иметь mitre_attack"
+            assert check.mitre_attack, f"{cls.__name__} should have mitre_attack"
 
 
 # ── TestPlaywrightSupport ─────────────────────────────────────────────────────
@@ -531,9 +531,9 @@ class TestPlaywrightAvailable:
         assert isinstance(result, bool)
 
     def test_is_playwright_available_no_crash(self):
-        """Функция не падает независимо от наличия playwright."""
+        """Function does not crash regardless of playwright availability."""
         from pentool.modules.spider import is_playwright_available
-        # Просто вызываем — не должна кидать исключение
+        # Just call it — should not raise an exception
         is_playwright_available()
 
     def test_spider_api_has_is_playwright_available(self):
@@ -558,10 +558,10 @@ class TestSpiderJsRenderConfig:
         assert spider.js_render is False
 
     def test_async_spider_js_render_false_without_playwright(self):
-        """js_render=True без playwright должен стать False (fallback)."""
+        """js_render=True without playwright should become False (fallback)."""
         from pentool.modules.spider import is_playwright_available
         spider = AsyncSpider(js_render=True)
-        # Если playwright не установлен — js_render должен быть False
+        # If playwright is not installed — js_render should be False
         if not is_playwright_available():
             assert spider.js_render is False
         else:
@@ -572,25 +572,25 @@ class TestSpiderJsRenderConfig:
         assert spider.js_render is False
 
     def test_spider_api_passes_js_render_to_spider(self):
-        """SpiderAPI передаёт js_render из SpiderConfig в AsyncSpider."""
+        """SpiderAPI passes js_render from SpiderConfig to AsyncSpider."""
         from pentool.api.spider_api import SpiderAPI, SpiderConfig
         cfg = SpiderConfig(js_render=False, max_depth=1, max_pages=1)
         api = SpiderAPI(config=cfg)
         assert api.config.js_render is False
 
     def test_spider_api_from_params_no_js_render(self):
-        """from_params создаёт конфиг с js_render=False по умолчанию."""
+        """from_params creates config with js_render=False by default."""
         from pentool.api.spider_api import SpiderAPI
         api = SpiderAPI.from_params(max_depth=1, max_pages=1)
         assert api.config.js_render is False
 
 
 class TestPlaywrightFetchPage:
-    """Тесты _fetch_page_playwright с мок-объектами."""
+    """Tests for _fetch_page_playwright with mock objects."""
 
     @pytest.mark.asyncio
     async def test_fetch_page_playwright_success(self):
-        """_fetch_page_playwright возвращает HTML при успешном ответе."""
+        """_fetch_page_playwright returns HTML on a successful response."""
         spider = AsyncSpider()
         result = SpiderResult(base_url="https://example.com")
 
@@ -607,7 +607,7 @@ class TestPlaywrightFetchPage:
 
     @pytest.mark.asyncio
     async def test_fetch_page_playwright_non_ok_response(self):
-        """_fetch_page_playwright возвращает None при non-OK ответе."""
+        """_fetch_page_playwright returns None on a non-OK response."""
         spider = AsyncSpider()
         result = SpiderResult(base_url="https://example.com")
 
@@ -621,7 +621,7 @@ class TestPlaywrightFetchPage:
 
     @pytest.mark.asyncio
     async def test_fetch_page_playwright_none_response(self):
-        """_fetch_page_playwright возвращает None при goto→None."""
+        """_fetch_page_playwright returns None when goto returns None."""
         spider = AsyncSpider()
         result = SpiderResult(base_url="https://example.com")
 
@@ -633,7 +633,7 @@ class TestPlaywrightFetchPage:
 
     @pytest.mark.asyncio
     async def test_fetch_page_playwright_exception(self):
-        """_fetch_page_playwright записывает ошибку и возвращает None."""
+        """_fetch_page_playwright records an error and returns None."""
         spider = AsyncSpider()
         result = SpiderResult(base_url="https://example.com")
 
@@ -647,7 +647,7 @@ class TestPlaywrightFetchPage:
 
     @pytest.mark.asyncio
     async def test_fetch_page_playwright_increments_requests(self):
-        """_fetch_page_playwright увеличивает total_requests при успехе."""
+        """_fetch_page_playwright increments total_requests on success."""
         spider = AsyncSpider()
         result = SpiderResult(base_url="https://example.com")
         result.total_requests = 5

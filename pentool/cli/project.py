@@ -1,4 +1,4 @@
-"""CLI-команды для управления проектами."""
+"""CLI commands for project management."""
 
 from __future__ import annotations
 
@@ -17,15 +17,15 @@ logger = get_logger(__name__)
 
 @click.group()
 def project() -> None:
-    """Управление проектами: инициализация, список, открытие."""
+    """Project management: initialize, list, open."""
 
 
 @project.command("init")
-@click.option("--name", default="default", show_default=True, help="Имя проекта.")
+@click.option("--name", default="default", show_default=True, help="Project name.")
 @click.option(
     "--path",
     default=None,
-    help="Директория проекта (по умолчанию: ~/.config/pentool/projects/<name>).",
+    help="Project directory (default: ~/.config/pentool/projects/<name>).",
 )
 def project_init(name: str, path: str | None) -> None:
     cfg = get_config()
@@ -42,7 +42,7 @@ def project_init(name: str, path: str | None) -> None:
     cert_dir = str(project_dir / "certs")
     plugins_dir = str(project_dir / "plugins")
 
-    # Обновить и сохранить конфиг проекта
+    # Update and save project config
     project_cfg = Config(
         proxy_host=cfg.proxy_host,
         proxy_port=cfg.proxy_port,
@@ -55,7 +55,7 @@ def project_init(name: str, path: str | None) -> None:
     config_path = project_dir / "config.yaml"
     project_cfg.save(config_path)
 
-    # Создать таблицы БД
+    # Create database tables
     try:
         asyncio.run(init_db(db_path))
         click.echo(f"Project '{name}' initialized:")

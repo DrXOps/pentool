@@ -1,4 +1,4 @@
-"""SpiderScreen — полный краулер сайта."""
+"""SpiderScreen — full site crawler."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 
 class SpiderScreen(Widget):
-    """Рекурсивный краулер сайта — Spider."""
+    """Recursive site crawler — Spider."""
 
     DEFAULT_CSS = _CSS
 
@@ -245,7 +245,7 @@ class SpiderScreen(Widget):
             pass
 
     def _on_spider_done(self, result) -> None:
-        """Краулер завершил работу — отобразить полные результаты."""
+        """Crawler finished — display complete results."""
         self._set_idle_ui()
         self._populate_results(result)
         pages = len(result.pages)
@@ -253,7 +253,7 @@ class SpiderScreen(Widget):
         endpoints = len(result.endpoints)
         js_files = len(result.js_files)
         errors = len(result.errors)
-        # Emit SpiderFinished → EventBus history → project save сможет собрать сессии
+        # Emit SpiderFinished → EventBus history → project save can collect sessions
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import SpiderFinished
@@ -273,7 +273,7 @@ class SpiderScreen(Widget):
         )
 
     def _populate_results(self, result) -> None:
-        """Заполнить все вкладки результатами."""
+        """Populate all result tabs."""
         try:
             tree = self.query_one("#site-tree", Tree)
             tree.clear()
@@ -349,7 +349,7 @@ class SpiderScreen(Widget):
             pass
 
     def _set_idle_ui(self) -> None:
-        """Сбросить UI в idle состояние."""
+        """Reset UI to idle state."""
         self._running = False
         try:
             self.query_one("#btn-spider-start", Button).disabled = False

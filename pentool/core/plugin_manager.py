@@ -1,4 +1,4 @@
-"""Система плагинов Pentool: базовые классы и менеджер загрузки."""
+"""Pentool plugin system: base classes and load manager."""
 
 from __future__ import annotations
 
@@ -14,24 +14,24 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Текущая версия Plugin API. Плагины с api_version > CURRENT несовместимы.
+# Current Plugin API version. Plugins with api_version > CURRENT are incompatible.
 CURRENT_API_VERSION = 1
 
-# Директория пользовательских плагинов (PRO-плагины устанавливаются сюда)
+# User plugins directory (PRO plugins are installed here)
 USER_PLUGINS_DIR = Path.home() / ".pentool" / "plugins"
 
 
 class BasePlugin:
-    """Базовый класс для всех плагинов Pentool.
+    """Base class for all Pentool plugins.
 
-    Каждый плагин должен объявить атрибуты класса:
-        name             — уникальный ID (snake_case)
-        version          — строка версии ("1.0")
-        author           — имя автора
-        description      — краткое описание
-        api_version      — версия Plugin API (сейчас 1)
-        required_feature — строка feature из LicenseInfo.features, либо ""
-                           (пустая строка = бесплатный плагин, не требует PRO)
+    Each plugin must declare class attributes:
+        name             — unique ID (snake_case)
+        version          — version string ("1.0")
+        author           — author name
+        description      — short description
+        api_version      — Plugin API version (currently 1)
+        required_feature — feature string from LicenseInfo.features, or ""
+                           (empty string = free plugin, no PRO required)
     """
 
     name: str = ""
@@ -43,25 +43,25 @@ class BasePlugin:
 
 
 class BaseCheck:
-    """Базовый класс для отдельной проверки (активной или пассивной).
+    """Base class for an individual check (active or passive).
 
-    Используется в modules/scanner/ и в плагинах-сканерах.
+    Used in modules/scanner/ and scanner plugins.
     """
 
     name: str = ""
     description: str = ""
     severity: str = "info"      # critical | high | medium | low | info
-    passive: bool = False       # True → запускается на каждый прокси-запрос
+    passive: bool = False       # True -> runs on every proxy request
 
     async def scan(self, target: Any, http_client: Any, **kwargs) -> list:
         return []
 
 
 class BaseScanner(BasePlugin):
-    """Базовый класс для плагина-сканера.
+    """Base class for a scanner plugin.
 
-    Плагин-сканер объединяет несколько BaseCheck под одним именем.
-    Пример: XSSScanner регистрирует reflected_xss, dom_xss и т.д.
+    A scanner plugin groups several BaseChecks under one name.
+    Example: XSSScanner registers reflected_xss, dom_xss, etc.
     """
 
     checks: list[type[BaseCheck]] = []
@@ -80,7 +80,7 @@ class BaseScanner(BasePlugin):
 
 @dataclass
 class PluginScreen:
-    """Экран, зарегистрированный плагином."""
+    """Screen registered by a plugin."""
     name: str
     widget_class: type
     hotkey: str | None = None
@@ -89,16 +89,16 @@ class PluginScreen:
 
 @dataclass
 class PluginCommand:
-    """CLI-команда, зарегистрированная плагином."""
+    """CLI command registered by a plugin."""
     group_name: str
     command: Any               # click.Command
     plugin_name: str = ""
 
 
 class PluginHook:
-    """Объект, передаваемый в register(hook) каждого плагина.
+    """Object passed to register(hook) of each plugin.
 
-    Через него плагин объявляет свои вклады в TUI, CLI и сканер.
+    Through it a plugin declares its contributions to TUI, CLI, and scanner.
     """
 
     def __init__(self, plugin_name: str) -> None:
@@ -125,7 +125,7 @@ class PluginHook:
             PluginCommand(group_name=group_name, command=command,
                           plugin_name=self._plugin_name)
         )
-        logger.debug("Plugin '%s': registered CLI command '%s' → group '%s'",
+        logger.debug("Plugin '%s': registered CLI command '%s' -> group '%s'",
                      self._plugin_name, command.name, group_name)
 
     def register_scanner(self, scanner_class: type[BaseScanner]) -> None:
@@ -141,18 +141,18 @@ class PluginHook:
 
 @dataclass
 class PluginMeta:
-    """Метаданные о загруженном плагине."""
+    """Metadata about a loaded plugin."""
     name: str
     path: str
     version: str = "?"
     author: str = ""
     description: str = ""
     required_feature: str = ""  # "" = free
-    loaded: bool = True         # False = заблокирован лицензией
+    loaded: bool = True         # False = blocked by license
 
 
 class PluginManager:
-    """Загружает и хранит все зарегистрированные плагины."""
+    """Loads and stores all registered plugins."""
 
     def __init__(self) -> None:
         self._screens: list[PluginScreen] = []
@@ -162,17 +162,17 @@ class PluginManager:
         self._loaded: list[str] = []
         self._meta: list[PluginMeta] = []
 
-    # ── Загрузка ──────────────────────────────────────────────────────────────
+    # ── Loading ───────────────────────────────────────────────────────────────
 
     def load_plugins(self, dirs: list[str], *, warn_untrusted: bool = True) -> None:
-        """Сканирует директории и загружает плагины.
+        """Scan directories and load plugins.
 
-        Плагины с required_feature проверяются через get_session_license().
-        Если лицензия не покрывает feature — плагин пропускается с логом WARNING.
+        Plugins with required_feature are checked via get_session_license().
+        If the license does not cover the feature — plugin is skipped with WARNING log.
 
         Args:
-            dirs:           Список путей к директориям с плагинами.
-            warn_untrusted: Логировать предупреждение для нестандартных путей.
+            dirs:           List of paths to plugin directories.
+            warn_untrusted: Log a warning for non-standard paths.
         """
         builtin_dir = str(
             Path(__file__).parent.parent / "plugins" / "builtin"
@@ -209,7 +209,7 @@ class PluginManager:
                 logger.warning("Plugin has no register(): %s", path)
                 return
 
-            # Определяем имя и метаданные плагина
+            # Determine plugin name and metadata
             plugin_name = path.stem
             plugin_cls = self._find_plugin_class(module)
             version = getattr(plugin_cls, "version", "?") if plugin_cls else "?"
@@ -217,7 +217,7 @@ class PluginManager:
             description = getattr(plugin_cls, "description", "") if plugin_cls else ""
             required_feature = getattr(plugin_cls, "required_feature", "") if plugin_cls else ""
 
-            # Проверка совместимости api_version
+            # Check api_version compatibility
             if plugin_cls is not None:
                 api_ver = getattr(plugin_cls, "api_version", 1)
                 if api_ver > CURRENT_API_VERSION:
@@ -233,7 +233,7 @@ class PluginManager:
                     ))
                     return
 
-            # Проверка лицензии для PRO-плагинов
+            # License check for PRO plugins
             if required_feature:
                 if not self._check_license_feature(required_feature):
                     logger.warning(
@@ -268,7 +268,7 @@ class PluginManager:
 
     @staticmethod
     def _find_plugin_class(module: Any) -> type | None:
-        """Найти первый подкласс BasePlugin в модуле."""
+        """Find the first BasePlugin subclass in a module."""
         for cls_name in dir(module):
             cls = getattr(module, cls_name)
             if (isinstance(cls, type)
@@ -287,7 +287,7 @@ class PluginManager:
         except Exception:
             return False
 
-    # ── Геттеры ───────────────────────────────────────────────────────────────
+    # ── Getters ───────────────────────────────────────────────────────────────
 
     def get_screens(self) -> list[PluginScreen]:
         return list(self._screens)
@@ -305,7 +305,7 @@ class PluginManager:
         return list(self._loaded)
 
     def get_meta(self) -> list[PluginMeta]:
-        """Список метаданных всех плагинов (загруженных и заблокированных)."""
+        """List of metadata for all plugins (loaded and blocked)."""
         return list(self._meta)
 
     def is_feature_available(self, feature: str) -> bool:

@@ -1,4 +1,4 @@
-"""Экран Target / Site Map — дерево целей."""
+"""Target / Site Map screen — target tree view."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 
 class TargetScreen(Widget):
-    """Древовидное представление обнаруженных хостов и URL."""
+    """Tree view of discovered hosts and URLs."""
 
     DEFAULT_CSS = _CSS
 
@@ -29,7 +29,7 @@ class TargetScreen(Widget):
         self._target_api = None
         self._selected_host: str | None = None
         self._selected_node_data = None
-        self._scope_config = None  # ScopeConfig для regex include/exclude
+        self._scope_config = None  # ScopeConfig for regex include/exclude rules
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="toolbar"):
@@ -58,7 +58,7 @@ class TargetScreen(Widget):
         )
 
     def on_mount(self) -> None:
-        pass  # данные загружаются только явно через проект или кнопку Refresh
+        pass  # data is only loaded explicitly via a project or the Refresh button
 
     def _get_api(self):
         if self._target_api is None:
@@ -68,7 +68,7 @@ class TargetScreen(Widget):
         return self._target_api
 
     def _load_sitemap(self) -> None:
-        # Сохраняем текущие scope-хосты перед перезагрузкой
+        # Save current scope hosts before reload
         scope_hosts: set[str] = set()
         try:
             api = self._target_api
@@ -85,7 +85,7 @@ class TargetScreen(Widget):
         try:
             api = self._get_api()
             await api.load()
-            # Восстанавливаем scope для хостов, которые были отмечены до reload
+            # Restore scope for hosts that were marked before reload
             if scope_hosts:
                 for host in scope_hosts:
                     try:
@@ -311,7 +311,7 @@ class TargetScreen(Widget):
             self.app.notify(f"Export failed: {exc}", severity="error")
 
     def add_request_from_proxy(self, req) -> None:
-        """Вызывается из прокси при новом запросе — обновляет карту в реалтайм."""
+        """Called from proxy on a new request — updates the map in real time."""
         try:
             from pentool.utils.parser import ParsedRequest
             if isinstance(req, ParsedRequest):
@@ -327,7 +327,7 @@ class TargetScreen(Widget):
             api = self._get_api()
             api.add_request(parsed_req)
             self.call_after_refresh(self._refresh_tree)
-            # Персистировать в БД (батчи по ~20 запросам)
+            # Persist to DB (batches of ~20 requests)
             self._save_counter = getattr(self, "_save_counter", 0) + 1
             if self._save_counter % 20 == 0:
                 self.run_worker(self._do_save_sitemap())

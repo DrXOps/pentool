@@ -1,4 +1,4 @@
-"""Unit-тесты для ScopeConfig (regex include/exclude) из scope_dialog.py."""
+"""Unit tests for ScopeConfig (regex include/exclude) from scope_dialog.py."""
 
 from __future__ import annotations
 
@@ -49,12 +49,12 @@ class TestRegexMatch:
         assert _regex_match(r"example", "http://EXAMPLE.com/")
 
     def test_invalid_regex_no_crash(self):
-        # Невалидный regex — должен вернуть False, не упасть
+        # Invalid regex — should return False, not crash
         result = _regex_match(r"[invalid", "http://example.com")
         assert result is False
 
     def test_empty_pattern_matches_all(self):
-        # Пустая строка — matches all (re.search("", ...) → True)
+        # Empty string — matches all (re.search("", ...) → True)
         assert _regex_match("", "http://example.com")
 
 

@@ -1,6 +1,6 @@
-"""Unit-тесты: modules/repeater.py
+"""Unit tests: modules/repeater.py
 
-Покрывает: Repeater (send, save_to_history, get_history, get_entry, delete_entry).
+Covers: Repeater (send, save_to_history, get_history, get_entry, delete_entry).
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ class TestRepeaterHistory:
         for i in range(3):
             await repeater.save_to_history(req, resp, tab_name=f"Tab {i}")
         history = await repeater.get_history()
-        # Новые записи — первые
+        # New entries come first
         assert history[0].tab_name == "Tab 2"
 
 

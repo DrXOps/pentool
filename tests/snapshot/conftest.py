@@ -1,12 +1,12 @@
-"""Snapshot-инфраструктура без pytest-textual-snapshot.
+"""Snapshot infrastructure without pytest-textual-snapshot.
 
-Принцип:
-- Снимки хранятся в tests/snapshot/snaps/*.svg
-- Первый запуск: baseline создаётся автоматически, тест проходит
-- Повторный запуск: SVG сравнивается с baseline побайтово
-- pytest --snapshot-update: принудительно обновить baseline
+Principle:
+- Snapshots are stored in tests/snapshot/snaps/*.svg
+- First run: baseline is created automatically, test passes
+- Subsequent runs: SVG is compared to baseline byte by byte
+- pytest --snapshot-update: force update baseline
 
-Всегда используем size=(200, 50) — полное окно без обрезки.
+Always use size=(200, 50) — full window without clipping.
 """
 
 from __future__ import annotations
@@ -19,37 +19,37 @@ import pytest
 SNAPS_DIR = Path(__file__).parent / "snaps"
 SNAPS_DIR.mkdir(exist_ok=True)
 
-# Паттерны, которые убираем перед сравнением (нестабильные значения)
+# Patterns removed before comparison (unstable values)
 _UNSTABLE_PATTERNS = [
-    # Уникальный хэш класса терминала — меняется при каждом запуске
+    # Unique terminal class hash — changes every run
     (re.compile(r'terminal-\d+-'), 'terminal-HASH-'),
-    # Дата/время в title если есть
+    # Date/time in title if present
     (re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'), 'TIMESTAMP'),
-    # Время HH:MM:SS и HH:MM в SVG-тексте (динамические значения в UI)
+    # Time HH:MM:SS and HH:MM in SVG text (dynamic UI values)
     (re.compile(r'\d{2}:\d{2}:\d{2}'), 'HH:MM:SS'),
     (re.compile(r'\b\d{2}:\d{2}\b'), 'HH:MM'),
-    # Любой путь /home/... и /tmp/...
+    # Any path /home/... and /tmp/...
     (re.compile(r'/(?:home|tmp)/\S+'), '/PATH'),
-    # textLength — может меняться из-за разного контента терминала
+    # textLength — may change due to different terminal content
     (re.compile(r'textLength="[\d.]+"'), 'textLength="X"'),
-    # Вся строка с terminal-screen содержимым (нестабильный bash вывод)
+    # Entire line with terminal-screen content (unstable bash output)
     (re.compile(r'(?<=>)bash[^<]*'), 'bash...'),
-    # CSS классы стилей — могут различаться по количеству/порядку при разном контенте
+    # Style CSS classes — may differ in count/order for different content
     (re.compile(r'\.terminal-HASH-r\d+ \{ [^}]+ \}'), '.terminal-HASH-rX { STYLE }'),
-    # HTML-entities и escape-символы в terminal output
+    # HTML entities and escape characters in terminal output
     (re.compile(r'&#\d+;'), 'CHAR'),
 ]
 
 
 def _normalize(svg: str) -> str:
-    """Убрать нестабильные части SVG перед сравнением."""
+    """Remove unstable parts from SVG before comparison."""
     for pattern, replacement in _UNSTABLE_PATTERNS:
         svg = pattern.sub(replacement, svg)
     return svg
 
 
 class SnapshotMismatch(AssertionError):
-    """Снимок не совпадает с baseline."""
+    """Snapshot does not match baseline."""
 
     def __init__(self, name: str, baseline_path: Path, actual: str, baseline: str) -> None:
         diff_lines = _make_diff(baseline, actual)
@@ -62,7 +62,7 @@ class SnapshotMismatch(AssertionError):
 
 
 def _make_diff(baseline: str, actual: str, context: int = 3) -> str:
-    """Показать первые отличия между двумя строками SVG."""
+    """Show first differences between two SVG strings."""
     b_lines = baseline.splitlines()
     a_lines = actual.splitlines()
     diffs = []
@@ -82,16 +82,16 @@ def _make_diff(baseline: str, actual: str, context: int = 3) -> str:
 
 @pytest.fixture
 def assert_snapshot(request):
-    """Фикстура для snapshot-сравнения SVG.
+    """Fixture for snapshot SVG comparison.
 
-    Использование:
+    Usage:
         async def test_foo(assert_snapshot):
             svg = app.export_screenshot()
             assert_snapshot(svg, "foo")
 
-    Параметры:
-        svg: str — вывод app.export_screenshot()
-        name: str — имя файла (без .svg)
+    Parameters:
+        svg: str — output of app.export_screenshot()
+        name: str — file name (without .svg)
     """
     update_mode = request.config.getoption("--snapshot-update", default=False)
 
@@ -117,5 +117,5 @@ def pytest_addoption(parser):
         "--snapshot-update",
         action="store_true",
         default=False,
-        help="Обновить baseline SVG-снимки.",
+        help="Update baseline SVG snapshots.",
     )

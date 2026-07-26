@@ -1,6 +1,6 @@
-"""Unit-тесты: core/database.py
+"""Unit tests: core/database.py
 
-Покрывает: init_db, get_db, DDL-схема, таблицы.
+Covers: init_db, get_db, DDL schema, tables.
 """
 
 from __future__ import annotations
@@ -70,11 +70,11 @@ class TestInitDb:
 
     @pytest.mark.asyncio
     async def test_idempotent_multiple_calls(self, tmp_path: Path) -> None:
-        """Повторный вызов init_db не бросает ошибок."""
+        """Repeated call to init_db does not raise errors."""
         from pentool.core.database import init_db
         db_path = str(tmp_path / "test.db")
         await init_db(db_path)
-        await init_db(db_path)  # второй вызов — нет ошибок
+        await init_db(db_path)  # second call — no errors
 
     @pytest.mark.asyncio
     async def test_tables_initially_empty(self, tmp_path: Path) -> None:
@@ -119,7 +119,7 @@ class TestGetDb:
 
     @pytest.mark.asyncio
     async def test_foreign_key_cascade(self, tmp_path: Path) -> None:
-        """Удаление проекта → каскадное удаление repeater_entries."""
+        """Deleting a project → cascades to delete repeater_entries."""
         from pentool.core.database import init_db, get_db
         db_path = str(tmp_path / "test.db")
         await init_db(db_path)

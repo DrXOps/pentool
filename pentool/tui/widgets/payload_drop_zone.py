@@ -1,4 +1,4 @@
-"""PayloadDropZone — зона для перетаскивания файлов с payload'ами."""
+"""PayloadDropZone — drop zone for payload files."""
 
 from __future__ import annotations
 
@@ -10,19 +10,19 @@ _CSS = (Path(__file__).parent / "payload_drop_zone.tcss").read_text(encoding="ut
 
 
 class PayloadDropZone(Widget):
-    """Визуальная зона drag & drop для payload-файлов.
+    """Visual drag & drop zone for payload files.
 
-    При отсутствии нативного DragDrop (textual-filedrop) — показывает
-    подсказку. Интегрируется с кнопкой "Load from file".
+    If native DragDrop (textual-filedrop) is unavailable — shows a hint.
+    Integrates with the "Load from file" button.
 
-    Сообщения:
-        PayloadDropZone.PayloadsLoaded — payload'ы загружены из файла.
+    Messages:
+        PayloadDropZone.PayloadsLoaded — payloads loaded from file.
     """
 
     DEFAULT_CSS = _CSS
 
     class PayloadsLoaded(Message):
-        """Payload'ы успешно загружены из файла."""
+        """Payloads successfully loaded from file."""
         def __init__(self, payloads: list[str], source_path: str = "") -> None:
             super().__init__()
             self.payloads = payloads
@@ -33,7 +33,7 @@ class PayloadDropZone(Widget):
         self.update_text()
 
     def update_text(self, count: int = 0) -> None:
-        pass  # count аргумент сохранён для обратной совместимости API
+        pass  # count argument kept for backward API compatibility
 
     def render(self) -> str:
         return "  Drop .txt / .yaml payload file here\n  (or use 'Load from file' button)"
@@ -45,7 +45,7 @@ class PayloadDropZone(Widget):
             self.post_message(self.PayloadsLoaded(payloads, source_path=path))
 
     def on_click(self) -> None:
-        """Клик по зоне — открыть FileSelectorDialog как альтернативу DragDrop."""
+        """Click on the zone — open FileSelectorDialog as an alternative to DragDrop."""
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
 
         def _on_selected(path: str | None) -> None:

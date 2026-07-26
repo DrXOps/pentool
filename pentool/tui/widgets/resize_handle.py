@@ -1,4 +1,4 @@
-"""ResizeHandle — перетаскиваемый разделитель между двумя панелями."""
+"""ResizeHandle — draggable divider between two panels."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ _CSS = (Path(__file__).parent / "resize_handle.tcss").read_text(encoding="utf-8"
 
 
 class ResizeHandle(Widget):
-    """Перетаскиваемый разделитель между двумя виджетами.
+    """Draggable divider between two widgets.
 
-    Механика (без пустот, без отставания):
-    - mouse_down: фиксируем screen_x/y, размер левой панели и суммарный
-      размер пары (left.size + right.size). Total кешируется и не меняется
-      во время drag — иначе 1fr плавает.
+    Mechanics (no gaps, no lag):
+    - mouse_down: capture screen_x/y, left panel size and total pair size
+      (left.size + right.size). Total is cached and does not change during
+      drag — otherwise 1fr drifts.
     - mouse_move: new_left = start_left + (screen_x - start_x).
-      new_right = total - new_left. Обе панели в абсолютных единицах → нет пустот.
+      new_right = total - new_left. Both panels in absolute units — no gaps.
     - mouse_up: release_mouse.
     """
 
@@ -49,7 +49,7 @@ class ResizeHandle(Widget):
             self.add_class("-vertical")
 
     def render(self) -> str:
-        """Рендерим символ-разделитель вместо текста по умолчанию."""
+        """Render the divider character instead of default text."""
         if self._vertical:
             return "─" * (self.size.width or 1)
         return "│"
@@ -101,7 +101,7 @@ class ResizeHandle(Widget):
             left.styles.width = new_left
             right.styles.width = new_right
 
-        # Принудительный немедленный перерасчёт layout
+        # Force immediate layout recalculation
         if self.parent is not None:
             self.parent.refresh(layout=True)
 

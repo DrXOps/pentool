@@ -1,4 +1,4 @@
-"""MenuBar — горизонтальная полоса с каскадными выпадающими меню."""
+"""MenuBar — horizontal bar with cascading dropdown menus."""
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ _CSS = (Path(__file__).parent / "menu_bar.tcss").read_text(encoding="utf-8")
 
 
 class MenuItem(Static):
-    """Пункт выпадающего меню."""
+    """Dropdown menu item."""
 
     DEFAULT_CSS = _CSS
 
     class Selected(Message):
-        """Пользователь выбрал пункт меню."""
+        """User selected a menu item."""
         def __init__(self, action: str) -> None:
             super().__init__()
             self.action = action
@@ -59,7 +59,7 @@ class MenuItem(Static):
 
 
 class MenuDropdown(Widget):
-    """Выпадающий список пунктов меню."""
+    """Dropdown list of menu items."""
 
     DEFAULT_CSS = _CSS
 
@@ -87,25 +87,25 @@ class MenuDropdown(Widget):
     def on_menu_item_selected(self, event: MenuItem.Selected) -> None:
         event.stop()
         self.hide()
-        # Закрыть остальные дропдауны через MenuBar
+        # Close other dropdowns via MenuBar
         try:
             self.app.query_one("#menu-bar", MenuBar)._close_all()
         except Exception:
             pass
         action = event.action
         if action.startswith("app.action_"):
-            # run_action принимает имя без префикса "action_"
+            # run_action takes the name without the "action_" prefix
             action_name = action[len("app.action_"):]
             self.app.run_worker(self.app.run_action(action_name), exclusive=False)
 
 
 class MenuHeader(Static):
-    """Заголовок одного меню (кликабельный)."""
+    """Header of a single menu (clickable)."""
 
     DEFAULT_CSS = _CSS
 
     class Activated(Message):
-        """MenuHeader был нажат."""
+        """MenuHeader was clicked."""
         def __init__(self, header: MenuHeader) -> None:
             super().__init__()
             self.header = header
@@ -123,11 +123,11 @@ class MenuHeader(Static):
 
 
 class MenuBar(Static):
-    """Горизонтальная полоса с выпадающими меню — аналог десктопных приложений."""
+    """Horizontal bar with dropdown menus — desktop application style."""
 
     DEFAULT_CSS = _CSS
 
-    # Структура: [(label, menu_id, [(item_label, action, shortcut?), ...])]
+    # Structure: [(label, menu_id, [(item_label, action, shortcut?), ...])]
     MENUS: list[tuple[str, str, list]] = [
         ("PenTool", "burp", [
             ("About PenTool", "app.action_about"),
@@ -174,11 +174,11 @@ class MenuBar(Static):
         for label, menu_id, items in self.MENUS:
             yield MenuHeader(label, menu_id, id=f"menu-header-{menu_id}")
 
-        # Выпадающие списки монтируются вне MenuBar (через app.mount)
-        # чтобы они поверх всего контента
+        # Dropdowns are mounted outside MenuBar (via app.mount)
+        # so they appear on top of all content
 
     def on_mount(self) -> None:
-        # Создаём дропдауны и монтируем в app
+        # Create dropdowns and mount them in app
         for label, menu_id, items in self.MENUS:
             dropdown = MenuDropdown(items, id=f"menu-dropdown-{menu_id}")
             self._dropdowns[menu_id] = dropdown
@@ -206,7 +206,7 @@ class MenuBar(Static):
         if dropdown is None:
             return
 
-        # Вычисляем позицию под заголовком
+        # Calculate position below the header
         try:
             region = header.content_region
             x = region.x
@@ -234,5 +234,5 @@ class MenuBar(Static):
             self._close_all()
 
     def on_click(self, event) -> None:
-        # Клик вне MenuBar — закрыть (обрабатывается через app)
+        # Click outside MenuBar — close (handled via app)
         pass

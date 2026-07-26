@@ -1,4 +1,4 @@
-"""Главное TUI-приложение Pentool на Textual."""
+"""Main Pentool TUI application built on Textual."""
 
 from __future__ import annotations
 
@@ -66,14 +66,14 @@ from pentool.tui.screens import (
     TerminalScreen,
 )
 from pentool.tui.widgets.menu import ModuleSelected, SideMenu
-# MenuBar убран из DOM (R-12), импорт сохранён для возможной обратной совместимости
+# MenuBar removed from DOM (R-12), import kept for possible backward compatibility
 # from pentool.tui.widgets.menu_bar import MenuBar
 from pentool.tui.widgets.module_tabs import ModuleTabs
 from pentool.tui.widgets.statusbar import StatusBar
 
 logger = get_logger(__name__)
 
-# Маппинг module_id → класс виджета
+# Mapping module_id → widget class
 _SCREEN_MAP: dict[str, type] = {
     "dashboard":  DashboardScreen,
     "proxy":      ProxyScreen,
@@ -91,7 +91,7 @@ _SCREEN_MAP: dict[str, type] = {
 }
 
 class PentoolApp(App):
-    """Главное TUI-приложение Pentool."""
+    """Main Pentool TUI application."""
 
     TITLE = "Pentool"
     SUB_TITLE = "Web Security Testing"
@@ -114,7 +114,7 @@ class PentoolApp(App):
         height: 1fr;
     }
 
-    /* Глобальная строка подсказок горячих клавиш */
+    /* Global hotkey hint bar */
     #status-bar {
         height: 1;
         background: $surface;
@@ -123,7 +123,7 @@ class PentoolApp(App):
         dock: bottom;
     }
 
-    /* Глобальный стиль чекбоксов — компактные, высота 1, без рамки */
+    /* Global checkbox style — compact, height 1, no border */
     Checkbox {
         height: 1;
         border: none;
@@ -155,11 +155,11 @@ class PentoolApp(App):
         Binding("ctrl+s", "save_project", "Save .db", show=False, priority=True),
         Binding("ctrl+o", "open_project", "Open .db", show=False, priority=True),
         Binding("ctrl+n", "new_project",  "New",  show=False, priority=True),
-        # JSON-проект (полный экспорт всех модулей)
+        # JSON project (full export of all modules)
         Binding("ctrl+shift+s", "save_project_json", "Save JSON", show=False, priority=True),
         Binding("ctrl+shift+o", "open_project_json", "Open JSON", show=False, priority=True),
         Binding("ctrl+comma", "switch_module('settings')", "Settings", show=False, priority=True),
-        # Навигация: Shift+буква (работает во всех терминалах)
+        # Navigation: Shift+letter (works in all terminals)
         Binding("H", "switch_module('dashboard')",  "Dashboard",  show=False, priority=True),
         Binding("P", "switch_module('proxy')",      "Proxy",      show=False, priority=True),
         Binding("R", "switch_module('repeater')",   "Repeater",   show=False, priority=True),
@@ -172,7 +172,7 @@ class PentoolApp(App):
         Binding("W", "switch_module('spider')",     "Spider",     show=False, priority=True),
         Binding("E", "switch_module('extensions')", "Extensions", show=False, priority=True),
         Binding("X", "switch_module('terminal')",   "Terminal",   show=False, priority=True),
-        # Алиасы Shift+цифра для совместимости
+        # Shift+digit aliases for compatibility
         Binding("exclamation_mark",   "switch_module('proxy')",      show=False, priority=True),
         Binding("at",                 "switch_module('repeater')",   show=False, priority=True),
         Binding("number_sign",        "switch_module('intruder')",   show=False, priority=True),
@@ -198,22 +198,22 @@ class PentoolApp(App):
         self._proxy_loop: asyncio.AbstractEventLoop | None = None
         self._active_module = "dashboard"
         self._project_path: str | None = None
-        self._project_loaded: bool = False  # Флаг: проект создан или открыт
-        self._skip_project_guard: bool = False  # True в тестах для обхода блокировки
-        # Защита от message storm: множество pending req_id для дедупликации
+        self._project_loaded: bool = False  # Flag: project created or opened
+        self._skip_project_guard: bool = False  # True in tests to bypass the guard
+        # Protection against message storm: set of pending req_ids for deduplication
         self._pending_done_ids: set[str] = set()
-        # Vim-style key sequences: "g" prefix для Proxy sub-tabs
-        # Shift+p затем h/i/w → proxy HTTP/Intercept/WS
+        # Vim-style key sequences: "g" prefix for Proxy sub-tabs
+        # Shift+p then h/i/w → proxy HTTP/Intercept/WS
         self._key_seq_state: str = ""
         import time as _time_mod
         self._key_seq_time: float = 0.0
-        self._key_seq_timeout: float = 1.0  # секунда на ввод второй клавиши
-        # Авто-сохранение проекта (Блок 3.3)
+        self._key_seq_timeout: float = 1.0  # one second to enter the second key
+        # Project auto-save (Block 3.3)
         from textual.timer import Timer as _Timer
         self._auto_save_timer: "_Timer | None" = None
 
     def _handle_exception(self, error: Exception) -> None:
-        """Перехват фатальных ошибок — логируем перед передачей в Textual."""
+        """Catch fatal exceptions — log before passing to Textual."""
         import traceback
         logger.error(
             "FATAL EXCEPTION: %s\n%s",
@@ -224,10 +224,10 @@ class PentoolApp(App):
 
     def compose(self) -> ComposeResult:
         yield ModuleTabs(id="module-tabs")
-        # MenuBar и SideMenu убраны из DOM (R-12: 404 строки мёртвого кода).
-        # Файлы tui/widgets/menu_bar.py и menu.py сохранены как архив.
-        # Единственный зависящий тест — tests/integration/test_navigation.py:58
-        # (интеграционные тесты зависают, отдельная задача).
+        # MenuBar and SideMenu removed from DOM (R-12: 404 lines of dead code).
+        # Files tui/widgets/menu_bar.py and menu.py kept as archive.
+        # Only dependent test — tests/integration/test_navigation.py:58
+        # (integration tests hang, separate task).
         with ContentSwitcher(initial="screen-dashboard"):
             yield DashboardScreen(id="screen-dashboard")
             yield ProxyScreen(id="screen-proxy")
@@ -259,15 +259,15 @@ class PentoolApp(App):
             db_path=self._cfg.db_path,
         )
         self._proxy.intercept_enabled = self._cfg.intercept_enabled
-        # Синхронизируем scope из конфига в ProxyServer
+        # Sync scope from config into ProxyServer
         if self._cfg.scope:
             self._proxy.scope = list(self._cfg.scope)
             logger.info("APP: scope loaded from config: %s", self._cfg.scope)
 
-        # Инжектируем ProxyServer в API-слой
+        # Inject ProxyServer into the API layer
         self._proxy_api.set_proxy(self._proxy)
 
-        # Создаём ProxyService и передаём в ProxyScreen — до init_storage
+        # Create ProxyService and pass it to ProxyScreen — before init_storage
         self._proxy_service = ProxyService(
             proxy_api=self._proxy_api,
             db_path=self._cfg.db_path,
@@ -277,22 +277,22 @@ class PentoolApp(App):
             from pentool.tui.screens.proxy.screen import ProxyScreen
             proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
             proxy_screen._proxy_service = self._proxy_service
-            # Запускаем init_storage здесь — ProxyScreen.on_mount уже отработал
-            # и не мог этого сделать (ProxyService тогда ещё не был создан)
+            # Run init_storage here — ProxyScreen.on_mount has already run
+            # and could not do this (ProxyService was not yet created at that time)
             proxy_screen.run_worker(self._proxy_service.init_storage())
             logger.info("APP: ProxyService injected and init_storage launched")
         except Exception as exc:
             logger.warning("APP: could not inject ProxyService into ProxyScreen: %s", exc)
 
-        # Инициализируем глобальный Event Bus и подписываем app-обработчики
+        # Initialize global Event Bus and subscribe app-level handlers
         bus = get_event_bus()
         bus.subscribe(FindingDiscovered,     self._on_bus_finding_discovered)
         bus.subscribe(ScanStarted,           self._on_bus_scan_started)
         bus.subscribe(ScanFinished,          self._on_bus_scan_finished)
         bus.subscribe(ScanProgressEvent,     self._on_bus_scan_progress)
         bus.subscribe(PassiveScanToggled,    self._on_bus_passive_toggled)
-        # Sprint 3: подписываемся на прокси-события через EventBus
-        # (proxy emitит из своего треда, мы бриджуем через call_from_thread)
+        # Sprint 3: subscribe to proxy events via EventBus
+        # (proxy emits from its own thread, we bridge via call_from_thread)
         bus.subscribe(ProxyRequestCaptured,  self._on_bus_proxy_captured)
         bus.subscribe(ProxyRequestCompleted, self._on_bus_proxy_completed)
         logger.info("APP: EventBus subscribed")
@@ -300,12 +300,12 @@ class PentoolApp(App):
         self._update_status()
         logger.info("Pentool TUI started")
 
-        # Предгенерация CA-сертификата в фоне — чтобы к моменту нажатия
-        # "Start Proxy" он уже был готов и не тормозил запуск (вариант C)
+        # Pre-generate CA certificate in background — so that by the time
+        # "Start Proxy" is pressed it is already ready and doesn't slow startup (option C)
         self.run_worker(self._prewarm_ca(), exclusive=False, thread=False)
 
-        # Разрешаем jemalloc (pyarrow) освобождать фоновый поток немедленно,
-        # иначе он не daemon и блокирует выход процесса
+        # Allow jemalloc (pyarrow) to release the background thread immediately,
+        # otherwise it is non-daemon and blocks process exit
         try:
             import pyarrow as pa
             pa.jemalloc_set_decay_ms(0)
@@ -317,25 +317,25 @@ class PentoolApp(App):
         if warning:
             self.notify(warning, severity="warning", timeout=6)
 
-        # Обработка SIGTERM — корректное завершение при kill/systemd stop (10.2)
+        # Handle SIGTERM — graceful shutdown on kill/systemd stop (10.2)
         self._setup_signal_handlers()
 
-        # R-16: подписываемся на изменения конфига — SettingsScreen уведомит нас
+        # R-16: subscribe to config changes — SettingsScreen will notify us
         self._cfg.add_observer(self._on_config_changed)
 
-        # Авто-сохранение (Блок 3.3) — запускаем если включено в конфиге
+        # Auto-save (Block 3.3) — start if enabled in config
         self._setup_auto_save()
 
-        # Автооткрытие последнего проекта при старте
+        # Auto-open last project at startup
         self.run_worker(self._auto_open_last_project(), exclusive=False, thread=False)
 
-        # Проверка обновлений в фоне (если включено в настройках)
+        # Check for updates in background (if enabled in settings)
         if getattr(self._cfg, "check_updates", True):
             self.run_worker(self._check_for_updates(), exclusive=False, thread=False)
 
     async def _auto_open_last_project(self) -> None:
-        """Открыть последний проект из recent_projects при старте."""
-        await asyncio.sleep(0.2)  # дать Textual отрисовать UI
+        """Open the last project from recent_projects at startup."""
+        await asyncio.sleep(0.2)  # give Textual time to render the UI
         recent = getattr(self._cfg, "recent_projects", [])
         if not recent:
             return
@@ -347,9 +347,9 @@ class PentoolApp(App):
         self._switch_project_db(path, is_new=False)
 
     async def _check_for_updates(self) -> None:
-        """Проверить наличие новой версии в фоне. Показать notify при наличии обновления."""
+        """Check for a new version in the background. Show notify if an update is available."""
         import asyncio as _asyncio
-        await _asyncio.sleep(3.0)  # дать UI прогрузиться полностью
+        await _asyncio.sleep(3.0)  # give the UI time to fully load
         try:
             from pentool.core.updater import check_update_async
             info = await check_update_async()
@@ -364,8 +364,8 @@ class PentoolApp(App):
             logger.debug("APP: update check failed: %s", exc)
 
     def _setup_auto_save(self) -> None:
-        """Настроить / перезапустить таймер авто-сохранения из текущего конфига."""
-        # Останавливаем старый таймер если был
+        """Configure / restart the auto-save timer from the current config."""
+        # Stop the old timer if it exists
         if self._auto_save_timer is not None:
             try:
                 self._auto_save_timer.stop()
@@ -380,14 +380,14 @@ class PentoolApp(App):
             logger.info("APP: auto-save enabled, interval=%d min", interval_min)
 
     def _auto_save_tick(self) -> None:
-        """Периодическое авто-сохранение проекта (тихое, без диалогов)."""
+        """Periodic auto-save of the project (silent, no dialogs)."""
         if not self._project_loaded:
             return
         path = self._project_path or self._cfg.db_path
         if not path:
             return
         try:
-            # БД SQLite уже на месте — просто показываем уведомление
+            # SQLite DB is already in place — just show a notification
             import os as _os
             name = _os.path.basename(path)
             self.notify(f"Auto-saved: {name}", timeout=2)
@@ -396,16 +396,16 @@ class PentoolApp(App):
             logger.debug("_auto_save_tick: %s", exc)
 
     def _on_config_changed(self, changed_fields: dict) -> None:
-        """Колбэк Config Observer — вызывается из любого контекста (R-16).
+        """Config Observer callback — called from any context (R-16).
 
-        Доставляем изменения в TUI через Message Bus (thread-safe).
+        Deliver changes to TUI via Message Bus (thread-safe).
         """
         self.post_message(ConfigChanged(changed_fields))
 
     def on_resize(self, event) -> None:
-        """Адаптивная компоновка в зависимости от ширины терминала."""
+        """Adaptive layout depending on terminal width."""
         width = event.size.width
-        # При ширине < 80 скрываем Inspector по умолчанию
+        # Hide Inspector by default when width < 80
         if width < 80:
             try:
                 from pentool.tui.screens.proxy.screen import ProxyScreen
@@ -451,12 +451,12 @@ class PentoolApp(App):
 
         now = _time_mod.monotonic()
 
-        # Сброс state при таймауте
+        # Reset state on timeout
         if self._key_seq_state and (now - self._key_seq_time) > self._key_seq_timeout:
             self._key_seq_state = ""
 
         if self._key_seq_state == "P":
-            # Второй символ последовательности
+            # Second character of the sequence
             self._key_seq_state = ""
             if key == "h":
                 self.action_proxy_tab("http")
@@ -471,11 +471,11 @@ class PentoolApp(App):
                 event.prevent_default()
                 return
         elif key == "P":
-            # Начало последовательности Shift+P (P уже switch_module, перехватим вторую клавишу)
+            # Start of Shift+P sequence (P already does switch_module, we'll catch the second key)
             self._key_seq_state = "P"
             self._key_seq_time = now
-            # Не preventDefault — Binding с "P" выполнится первым (switch to proxy),
-            # затем если пользователь нажмёт h/i/w — переключится на вкладку
+            # No preventDefault — Binding with "P" will fire first (switch to proxy),
+            # then if the user presses h/i/w — it will switch to the sub-tab
 
     def action_proxy_tab(self, tab: str) -> None:
         self.action_switch_module("proxy")
@@ -500,12 +500,12 @@ class PentoolApp(App):
             pass
 
     def _focus_proxy_table(self, proxy_screen: object, tab_id: str) -> None:
-        """Фокус на DataTable в нужной вкладке Proxy."""
+        """Focus the DataTable in the specified Proxy tab."""
         try:
             from textual_fastdatatable import DataTable
             table_ids = {
                 "tab-http-history": "#request-list",
-                "tab-intercept":    None,  # intercept не имеет таблицы
+                "tab-intercept":    None,  # intercept has no table
                 "tab-ws-history":   "#ws-request-list",
             }
             table_sel = table_ids.get(tab_id)
@@ -517,7 +517,7 @@ class PentoolApp(App):
         except Exception:
             pass
 
-    # Модули, доступные без открытого проекта
+    # Modules available without an open project
     _FREE_MODULES = {"dashboard", "settings"}
 
     def _switch_to(self, module_id: str) -> None:
@@ -527,7 +527,7 @@ class PentoolApp(App):
             return
         if not self._project_loaded and not self._skip_project_guard and module_id not in self._FREE_MODULES:
             self.notify(
-                "Сначала создайте или откройте проект (Ctrl+N / Ctrl+O)",
+                "Please create or open a project first (Ctrl+N / Ctrl+O)",
                 severity="warning",
                 timeout=4,
             )
@@ -557,7 +557,7 @@ class PentoolApp(App):
 
     @property
     def db_path(self) -> str:
-        """Путь к SQLite-базе данных (публичный доступ для экранов)."""
+        """Path to the SQLite database (public access for screens)."""
         return self._cfg.db_path
 
     def action_toggle_proxy(self) -> None:
@@ -572,8 +572,8 @@ class PentoolApp(App):
         if self._proxy is None:
             return
         enabled = not self._proxy.intercept_enabled
-        # Используем thread-safe метод — proxy loop работает в отдельном треде,
-        # прямое присвоение может вызвать race condition (R-fix: intercept bug)
+        # Use thread-safe method — proxy loop runs in a separate thread,
+        # direct assignment can cause a race condition (R-fix: intercept bug)
         self._proxy.set_intercept(enabled)
         logger.info("APP: intercept toggled → %s (thread-safe)", enabled)
         self._update_status()
@@ -583,8 +583,8 @@ class PentoolApp(App):
         if self._proxy is None or self._proxy.is_running:
             return
         logger.info("APP: _start_proxy: starting proxy on %s:%d", self._proxy.host, self._proxy.port)
-        # Sprint 3: коллбэки убраны — proxy emitит через EventBus,
-        # app подписан на ProxyRequestCaptured / ProxyRequestCompleted в on_mount
+        # Sprint 3: callbacks removed — proxy emits via EventBus,
+        # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted in on_mount
 
         def _run_proxy_loop() -> None:
             loop = asyncio.new_event_loop()
@@ -602,45 +602,45 @@ class PentoolApp(App):
         self._proxy_thread.start()
 
     def _setup_signal_handlers(self) -> None:
-        """Регистрируем SIGTERM/SIGINT для корректного завершения (10.2).
+        """Register SIGTERM/SIGINT for graceful shutdown (10.2).
 
-        signal.signal() работает только в главном треде. При получении SIGTERM
-        вызываем action_quit() через loop.call_soon_threadsafe — это безопасно
-        из обработчика сигнала, т.к. он вызывается в контексте asyncio event loop.
+        signal.signal() only works in the main thread. On SIGTERM
+        we call action_quit() via loop.call_soon_threadsafe — this is safe
+        from a signal handler since it is called in the asyncio event loop context.
         """
         def _handle_signal(signum: int, frame: object) -> None:
             sig_name = signal.Signals(signum).name
             logger.info("APP: received %s — initiating graceful shutdown", sig_name)
-            # Используем call_soon_threadsafe — безопасен из любого контекста,
-            # включая обработчики сигналов в главном треде.
+            # Use call_soon_threadsafe — safe from any context,
+            # including signal handlers in the main thread.
             try:
                 loop = asyncio.get_running_loop()
                 loop.call_soon_threadsafe(self.action_quit)
             except Exception:
-                # Крайний случай — просто выходим
+                # Last resort — just exit
                 sys.exit(0)
 
         try:
             signal.signal(signal.SIGTERM, _handle_signal)
-            # SIGINT уже обрабатывается Textual (KeyboardInterrupt → exit),
-            # переопределяем для консистентного поведения
+            # SIGINT is already handled by Textual (KeyboardInterrupt → exit),
+            # override for consistent behavior
             signal.signal(signal.SIGINT, _handle_signal)
             logger.debug("APP: SIGTERM/SIGINT handlers installed")
         except (OSError, ValueError) as e:
-            # ValueError если не главный тред, OSError на Windows
+            # ValueError if not main thread, OSError on Windows
             logger.debug("APP: could not install signal handlers: %s", e)
 
     async def _prewarm_ca(self) -> None:
-        """Предгенерация CA-сертификата при старте приложения (фоново).
+        """Pre-generate CA certificate at application startup (background).
 
-        load_or_create_ca() создаёт файлы если их нет — это может занять 0.5-2с
-        (RSA keygen). Вызывая здесь, мы гарантируем что к моменту нажатия
-        Start Proxy сертификат уже готов и proxy.start() не тормозит.
+        load_or_create_ca() creates files if they don't exist — this can take 0.5-2s
+        (RSA keygen). Calling here ensures the certificate is ready by the time
+        Start Proxy is pressed and proxy.start() doesn't slow down.
         """
         loop = asyncio.get_running_loop()
         try:
             from pentool.utils.cert import load_or_create_ca
-            # Запускаем синхронную генерацию в executor чтобы не блокировать TUI
+            # Run synchronous generation in executor to avoid blocking TUI
             cert_dir = self._cfg.cert_dir
             await loop.run_in_executor(None, load_or_create_ca, cert_dir)
             logger.info("APP: CA certificate pre-warmed from %s", cert_dir)
@@ -648,7 +648,7 @@ class PentoolApp(App):
             logger.warning("APP: CA pre-warm failed: %s", exc)
 
     async def _proxy_main(self) -> None:
-        """Точка входа прокси — запускается в отдельном event loop."""
+        """Proxy entry point — runs in a separate event loop."""
         try:
             await self._proxy.start()
             self.call_from_thread(self._update_status)
@@ -681,12 +681,12 @@ class PentoolApp(App):
         self.call_after_refresh(self._update_status)
         self.call_after_refresh(self._update_proxy_screen_labels)
 
-    # Sprint 3: _on_proxy_request и _proxy_request_done_cb убраны — proxy emit через EventBus,
-    # app подписан на ProxyRequestCaptured / ProxyRequestCompleted → _on_bus_proxy_captured/completed
+    # Sprint 3: _on_proxy_request and _proxy_request_done_cb removed — proxy emits via EventBus,
+    # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted → _on_bus_proxy_captured/completed
 
     @on(ProxyRequestAdded)
     def on_proxy_request_added(self, msg: ProxyRequestAdded) -> None:
-        """Прокси поймал новый запрос → обновляем ProxyScreen."""
+        """Proxy captured a new request → update ProxyScreen."""
         if not (self._proxy and self._proxy.is_running):
             return
         try:
@@ -699,11 +699,11 @@ class PentoolApp(App):
 
     @on(ProxyRequestDone)
     def on_proxy_request_done(self, msg: ProxyRequestDone) -> None:
-        """Прокси завершил цикл запрос/ответ → обновляем строку и SiteMap."""
-        # Снимаем из pending — теперь следующий запрос с этим id пройдёт снова
+        """Proxy completed a request/response cycle → update the row and SiteMap."""
+        # Remove from pending — the next request with this id will pass through again
         req_id = getattr(msg.req, "id", None)
         self._pending_done_ids.discard(req_id)
-        # Guard: msg.req должен быть InterceptedRequest
+        # Guard: msg.req must be InterceptedRequest
         if not isinstance(msg.req, _IR):
             logger.warning("on_proxy_request_done: msg.req is %s, skipping", type(msg.req))
             return
@@ -714,7 +714,7 @@ class PentoolApp(App):
                 screen.show_intercept_response(msg.req)  # type: ignore[arg-type]
         except Exception as e:
             logger.debug("on_proxy_request_done (proxy screen): %s", e)
-        # Автопостроение SiteMap
+        # Auto-build SiteMap
         self.post_message(SendToTarget(msg.req))
 
     @on(SendToTarget)
@@ -741,7 +741,7 @@ class PentoolApp(App):
         try:
             from pentool.tui.screens.repeater.screen import RepeaterScreen
             repeater = self.query_one(SCREEN_REPEATER, RepeaterScreen)
-            # Всегда открываем новую вкладку — не затираем текущую работу пользователя
+            # Always open a new tab — do not overwrite the user's current work
             repeater.load_request_in_new_tab(msg.raw)
             self.action_switch_module("repeater")
             self.notify("Sent to Repeater → new tab", severity="information", timeout=2)
@@ -779,11 +779,11 @@ class PentoolApp(App):
             scanner = self.query_one(SCREEN_SCANNER, ScannerScreen)
             host = msg.host
             url = f"https://{host}" if not host.startswith("http") else host
-            # Передаём url напрямую в action_new_tab — он сохранит в state.pending_target
-            # и применит в _fill_settings, когда Input уже смонтирован
+            # Pass url directly to action_new_tab — it will store in state.pending_target
+            # and apply in _fill_settings when Input is already mounted
             scanner.action_new_tab(initial_url=url)
             self.action_switch_module("scanner")
-            self.notify(f"✓ {host} → Scanner (новая вкладка, F5 to start)", timeout=3)
+            self.notify(f"✓ {host} → Scanner (new tab, F5 to start)", timeout=3)
             logger.info("SendHostToScanner: host=%s url=%s", host, url)
         except Exception as exc:
             logger.error("SendHostToScanner error: %s", exc, exc_info=True)
@@ -794,8 +794,8 @@ class PentoolApp(App):
         try:
             from pentool.tui.screens.scanner.screen import ScannerScreen
             scanner = self.query_one(SCREEN_SCANNER, ScannerScreen)
-            # Каждый "Send to Scanner" открывает новую вкладку, чтобы не затирать
-            # данные уже запущенного сканирования (баг: старые findings грузились).
+            # Each "Send to Scanner" opens a new tab so as not to overwrite
+            # data from an already running scan (bug: old findings were loaded).
             first_url = msg.urls.splitlines()[0].strip() if msg.urls.strip() else msg.urls
             scanner.action_new_tab(initial_url=first_url)
             self.action_switch_module("scanner")
@@ -835,7 +835,7 @@ class PentoolApp(App):
 
     @on(ProxyLoadProject)
     def on_proxy_load_project(self, msg: ProxyLoadProject) -> None:
-        """Перезагрузить таблицу ProxyScreen после загрузки проекта."""
+        """Reload the ProxyScreen table after loading a project."""
         try:
             screen = self.query_one(SCREEN_PROXY, ProxyScreen)
             screen.load_from_project()
@@ -853,11 +853,11 @@ class PentoolApp(App):
 
     @on(ConfigChanged)
     def on_config_changed(self, msg: ConfigChanged) -> None:
-        """Применить изменения конфига к ProxyServer и StatusBar (R-16).
+        """Apply config changes to ProxyServer and StatusBar (R-16).
 
-        Вызывается когда SettingsScreen сохраняет настройки через cfg.update().
-        ProxyServer обновляет port/host — но не перезапускается автоматически,
-        пользователь должен перезапустить прокси вручную.
+        Called when SettingsScreen saves settings via cfg.update().
+        ProxyServer updates port/host — but does not restart automatically,
+        the user must restart the proxy manually.
         """
         fields = msg.fields
         logger.info("APP: config changed: %s", list(fields.keys()))
@@ -872,7 +872,7 @@ class PentoolApp(App):
                 "Proxy settings updated — restart proxy to apply",
                 severity="information", timeout=4,
             )
-        # Перезапустить таймер авто-сохранения если изменились соответствующие поля
+        # Restart the auto-save timer if the relevant fields have changed
         if "auto_save_enabled" in fields or "auto_save_interval" in fields:
             self._setup_auto_save()
 
@@ -905,11 +905,11 @@ class PentoolApp(App):
             logger.debug("_update_proxy_screen_labels: %s", e)
 
     def action_open_settings(self) -> None:
-        """Переключиться на экран настроек."""
+        """Switch to the settings screen."""
         self.action_switch_module("settings")
 
     def action_about(self) -> None:
-        self.notify("PenTool — Быстрее. Удобнее. Умнее.", timeout=3)
+        self.notify("PenTool — Faster. Smarter. Better.", timeout=3)
 
     def action_toggle_theme(self) -> None:
         self.run_worker(self.run_action("toggle_dark"), exclusive=False)
@@ -1039,12 +1039,12 @@ class PentoolApp(App):
         )
 
     def _do_save_project_json(self, path: str) -> None:
-        """Собрать данные из всех API и сохранить в JSON v2."""
+        """Collect data from all APIs and save to JSON v2."""
         from pentool.core.project import save_project
         try:
-            # Proxy (scope, match/replace) — без http_history (читаем из SQLite)
+            # Proxy (scope, match/replace) — without http_history (read from SQLite)
             proxy_export = self._proxy_api.export_project_data()
-            # HTTP history — читаем из SQLite через ProxyService
+            # HTTP history — read from SQLite via ProxyService
             try:
                 if self._proxy_service is not None and self._proxy_service.is_storage_ready():
                     http_history = asyncio.run_coroutine_threadsafe(
@@ -1073,7 +1073,7 @@ class PentoolApp(App):
                 target_export = target_api.export_project_data()
             except Exception:
                 target_export = {"sitemap": {}}
-            # Intruder results — self._api в IntruderScreen
+            # Intruder results — self._api in IntruderScreen
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
                 intruder_screen = self.query_one(SCREEN_INTRUDER, IntruderScreen)
@@ -1081,11 +1081,11 @@ class PentoolApp(App):
                 intruder_export = intruder_api.export_project_data() if intruder_api else {"results": []}
             except Exception:
                 intruder_export = {"results": []}
-            # Spider sessions (из EventBus history)
+            # Spider sessions (from EventBus history)
             spider_export = self._collect_spider_sessions()
 
             data = {
-                **proxy_export,   # proxy + http_history на верхнем уровне
+                **proxy_export,   # proxy + http_history at the top level
                 "scanner":  scanner_export,
                 "intruder": intruder_export,
                 "spider":   spider_export,
@@ -1110,7 +1110,7 @@ class PentoolApp(App):
             loaded_proxy, err_proxy = self._proxy_api.import_project_data(data)
             if err_proxy:
                 logger.warning("import proxy: %s", err_proxy)
-            # Scanner findings — восстанавливаем через engine, потом reload UI
+            # Scanner findings — restore via engine, then reload UI
             scanner_count = 0
             try:
                 from pentool.tui.screens.scanner.screen import ScannerScreen
@@ -1118,9 +1118,9 @@ class PentoolApp(App):
                 db_path = self._cfg.db_path
                 scanner_api = scanner_screen._get_or_create_api(db_path)
                 scanner_count = scanner_api.import_project_data(data.get("scanner", {}))
-                # Перезагружаем UI из БД (import_project_data уже записал в SQLite)
-                scanner_screen._populate_from_db([])   # очищаем таблицу
-                scanner_screen._load_findings_worker()  # загружаем из БД
+                # Reload UI from DB (import_project_data has already written to SQLite)
+                scanner_screen._populate_from_db([])   # clear the table
+                scanner_screen._load_findings_worker()  # load from DB
             except Exception as exc:
                 logger.warning("import scanner: %s", exc)
             # Target sitemap
@@ -1133,7 +1133,7 @@ class PentoolApp(App):
                 target_screen._load_sitemap()
             except Exception as exc:
                 logger.warning("import target: %s", exc)
-            # Intruder results — восстанавливаем в API (self._api)
+            # Intruder results — restore in API (self._api)
             intruder_count = 0
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
@@ -1144,7 +1144,7 @@ class PentoolApp(App):
             except Exception as exc:
                 logger.warning("import intruder: %s", exc)
 
-            # Обновляем ProxyScreen
+            # Update ProxyScreen
             self.post_message(ProxyLoadProject())
             self._update_project_name(path)
 
@@ -1163,7 +1163,7 @@ class PentoolApp(App):
             self.notify(f"Load failed: {exc}", severity="error", timeout=4)
 
     def _collect_spider_sessions(self) -> dict:
-        """Собрать данные Spider-сессий из EventBus history."""
+        """Collect Spider session data from EventBus history."""
         from pentool.core.event_bus import get_event_bus
         from pentool.core.events import SpiderFinished
         sessions = []
@@ -1183,27 +1183,27 @@ class PentoolApp(App):
         return {"sessions": sessions}
 
     def _switch_project_db(self, path: str, is_new: bool = False) -> None:
-        """Переключиться на другой .db файл как активный проект.
+        """Switch to a different .db file as the active project.
 
         Args:
-            path: Путь к .db файлу.
-            is_new: True — создать новую БД (очистить историю), False — открыть существующую.
+            path: Path to the .db file.
+            is_new: True — create a new DB (clear history), False — open an existing one.
         """
 
         if is_new:
-            # Для нового проекта — создаём директорию и инициализируем схему
+            # For a new project — create directory and initialize schema
             Path(path).parent.mkdir(parents=True, exist_ok=True)
 
-        # Обновляем cfg.db_path — это публичный property всего приложения
+        # Update cfg.db_path — this is the public property for the whole app
         self._cfg.db_path = path
         self._project_path = path
-        self._project_loaded = True  # Разблокировать все модули
+        self._project_loaded = True  # Unlock all modules
 
-        # Обновляем ProxyServer.db_path чтобы HttpStorage писал в новую БД
+        # Update ProxyServer.db_path so HttpStorage writes to the new DB
         if self._proxy:
             self._proxy.db_path = path
 
-        # Очистить in-memory историю прокси (для нового проекта или чистого открытия)
+        # Clear in-memory proxy history (for new project or clean open)
         if is_new and self._proxy:
             try:
                 self._proxy.requests.clear()
@@ -1213,12 +1213,12 @@ class PentoolApp(App):
                 pass
 
         if is_new:
-            # Для нового проекта — инициализируем схему и шлём сигнал очистки
+            # For a new project — initialize schema and send clear signal
             self.run_worker(self._init_new_db(path), exclusive=False, thread=False)
             self.post_message(ProxyClearHistory())
         else:
-            # Для существующей БД — сначала переключить storage, потом перезагрузить экраны
-            # Всё в одном воркере чтобы гарантировать последовательность
+            # For an existing DB — switch storage first, then reload screens
+            # All in one worker to guarantee ordering
             self.run_worker(
                 self._open_project_sequence(path),
                 exclusive=False,
@@ -1229,7 +1229,7 @@ class PentoolApp(App):
         action = "Created" if is_new else "Opened"
         self.notify(f"{action}: {os.path.basename(path)}", timeout=3)
 
-        # Обновить дерево проектов на дашборде и записать в Live Feed
+        # Update project tree on dashboard and log to Live Feed
         try:
             dash = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dash._populate_projects()
@@ -1242,8 +1242,8 @@ class PentoolApp(App):
             pass
 
     async def _reload_project_screens(self, path: str) -> None:
-        """Перезагрузить данные из БД во все экраны после смены проекта."""
-        # 1. ProxyScreen — перечитать историю из новой БД
+        """Reload data from DB into all screens after switching project."""
+        # 1. ProxyScreen — re-read history from the new DB
         try:
             screen = self.query_one(SCREEN_PROXY, ProxyScreen)
             screen.load_from_project()
@@ -1251,40 +1251,40 @@ class PentoolApp(App):
         except Exception as exc:
             logger.debug("_reload_project_screens proxy: %s", exc)
 
-        # 2. ScannerScreen — перечитать findings из новой БД
+        # 2. ScannerScreen — re-read findings from the new DB
         try:
             from pentool.tui.screens.scanner.screen import ScannerScreen
             scanner_screen = self.query_one(SCREEN_SCANNER, ScannerScreen)
-            # Обновить API на новый db_path
+            # Update API to the new db_path
             if scanner_screen._scanner_api is not None:
                 scanner_screen._scanner_api._db_path = path
-            scanner_screen._scanner_api = None  # сбросить, пересоздастся с новым path
+            scanner_screen._scanner_api = None  # reset, will be recreated with new path
             scanner_screen._scanner_api = scanner_screen._get_or_create_api(path)
-            scanner_screen._populate_from_db([])      # очистить таблицу
-            scanner_screen._load_findings_worker()     # загрузить из новой БД
+            scanner_screen._populate_from_db([])      # clear table
+            scanner_screen._load_findings_worker()     # load from new DB
             logger.info("_reload_project_screens: scanner reloaded")
         except Exception as exc:
             logger.debug("_reload_project_screens scanner: %s", exc)
 
-        # 3. TargetScreen — сохранить текущий sitemap в старую БД, затем перечитать из новой
+        # 3. TargetScreen — save current sitemap to old DB, then re-read from new
         try:
             from pentool.tui.screens.target.screen import TargetScreen
             target_screen = self.query_one(SCREEN_TARGET, TargetScreen)
-            # Сохранить текущий in-memory sitemap в старую БД перед сменой
+            # Save current in-memory sitemap to old DB before switching
             if target_screen._target_api is not None:
                 try:
                     await target_screen._target_api.save()
                 except Exception:
                     pass
-            # Сбросить API — пересоздастся с новым db_path в _get_api()
+            # Reset API — will be recreated with new db_path in _get_api()
             target_screen._target_api = None
-            target_screen._get_api()  # pre-create с новым db_path
+            target_screen._get_api()  # pre-create with new db_path
             target_screen._load_sitemap()
             logger.info("_reload_project_screens: target reloaded from %s", path)
         except Exception as exc:
             logger.debug("_reload_project_screens target: %s", exc)
 
-        # 4. Dashboard — обновить статистику
+        # 4. Dashboard — update statistics
         try:
             dash = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dash.refresh_stats()
@@ -1306,13 +1306,13 @@ class PentoolApp(App):
             logger.debug("_switch_storage_db error: %s", exc)
 
     async def _open_project_sequence(self, path: str) -> None:
-        # 1. Переключить HttpStorage
+        # 1. Switch HttpStorage
         await self._switch_storage_db(path)
-        # 2. Инициализировать/мигрировать схему
+        # 2. Initialize/migrate schema
         await self._init_new_db(path)
-        # 3. Дать Textual один цикл для обработки любых pending сообщений
+        # 3. Give Textual one cycle to process any pending messages
         await asyncio.sleep(0.05)
-        # 4. Перезагрузить данные во все экраны
+        # 4. Reload data into all screens
         await self._reload_project_screens(path)
 
     def action_open_ca_cert(self) -> None:
@@ -1323,7 +1323,7 @@ class PentoolApp(App):
 
     def _update_project_name(self, path: str, saved: bool = True) -> None:
         name = os.path.basename(path) if path else "new project"
-        # Убираем расширение .db
+        # Strip .db extension
         if name.endswith(".db"):
             name = name[:-3]
         try:
@@ -1332,12 +1332,12 @@ class PentoolApp(App):
             bar.set_project(name, path, saved)
         except Exception:
             pass
-        # Обновляем SUB_TITLE приложения
+        # Update app SUB_TITLE
         try:
             self.sub_title = f"project: {name}"
         except Exception:
             pass
-        # Добавляем в список последних проектов (если реальный файл)
+        # Add to recent projects list (if a real file)
         if path and path != "new project":
             try:
                 self._cfg.add_recent_project(path)
@@ -1345,11 +1345,11 @@ class PentoolApp(App):
                 pass
 
     # ── EventBus handlers ──────────────────────────────────────────────────────
-    # Все обработчики вызываются из основного event loop (через emit или
-    # emit_threadsafe → call_soon_threadsafe), поэтому query_one безопасен.
+    # All handlers are called from the main event loop (via emit or
+    # emit_threadsafe → call_soon_threadsafe), so query_one is safe.
 
     def _on_bus_finding_discovered(self, event: FindingDiscovered) -> None:
-        """Finding из активного или пассивного сканера → Dashboard."""
+        """Finding from active or passive scanner → Dashboard."""
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.add_finding(event.finding)
@@ -1357,7 +1357,7 @@ class PentoolApp(App):
             pass
 
     def _on_bus_scan_started(self, event: ScanStarted) -> None:
-        """Скан запущен → обновить статус на Dashboard."""
+        """Scan started → update status on Dashboard."""
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.update_scan_status(True, 0)
@@ -1365,7 +1365,7 @@ class PentoolApp(App):
             pass
 
     def _on_bus_scan_finished(self, event: ScanFinished) -> None:
-        """Скан завершён → сбросить статус на Dashboard."""
+        """Scan finished → reset status on Dashboard."""
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.update_scan_status(False, 100)
@@ -1373,15 +1373,15 @@ class PentoolApp(App):
             pass
 
     def _on_bus_scan_progress(self, event: ScanProgressEvent) -> None:
-        """Прогресс скана → Dashboard (опционально, для live-обновления)."""
-        # Пока не используем — Dashboard обновляется через ScanStarted/ScanFinished.
+        """Scan progress → Dashboard (optional, for live updates)."""
+        # Not used yet — Dashboard updates via ScanStarted/ScanFinished.
         pass
 
     def _on_bus_proxy_captured(self, event: ProxyRequestCaptured) -> None:
-        """EventBus: прокси перехватил новый запрос.
+        """EventBus: proxy captured a new request.
 
-        Бридж: proxy emit из своего треда → EventBus → этот метод вызывается
-        синхронно в proxy-треде → call_from_thread → Textual Message в TUI-треде.
+        Bridge: proxy emit from its thread → EventBus → this method is called
+        synchronously in the proxy thread → call_from_thread → Textual Message in TUI thread.
         """
         req = event.request
         if req is None or not isinstance(req, _IR):
@@ -1389,22 +1389,22 @@ class PentoolApp(App):
         self.call_from_thread(self.post_message, ProxyRequestAdded(req))
 
     def _on_bus_proxy_completed(self, event: ProxyRequestCompleted) -> None:
-        """EventBus: запрос через прокси завершён.
+        """EventBus: request through proxy completed.
 
-        Бридж: proxy emit из своего треда → EventBus → call_from_thread → Textual Message.
+        Bridge: proxy emit from its thread → EventBus → call_from_thread → Textual Message.
         """
         req = event.request
         if req is None or not isinstance(req, _IR):
             return
         req_id = req.id
-        # Дедупликация: если уже pending, игнорируем
+        # Deduplication: if already pending, ignore
         if req_id in self._pending_done_ids:
             return
         self._pending_done_ids.add(req_id)
         self.call_from_thread(self.post_message, ProxyRequestDone(req))
 
     def _on_bus_passive_toggled(self, event: PassiveScanToggled) -> None:
-        """Пассивный скан включён/выключен — обновляем LED на Dashboard."""
+        """Passive scan enabled/disabled — update LED on Dashboard."""
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.update_passive_status(event.enabled)
@@ -1412,7 +1412,7 @@ class PentoolApp(App):
             pass
 
     async def action_quit(self) -> None:
-        # Отписываемся от EventBus перед выходом
+        # Unsubscribe from EventBus before exiting
         try:
             bus = get_event_bus()
             bus.unsubscribe_all(self._on_bus_finding_discovered)
@@ -1424,16 +1424,16 @@ class PentoolApp(App):
             bus.unsubscribe_all(self._on_bus_proxy_completed)
         except Exception:
             pass
-        # Останавливаем терминал (shell-процесс) через Message Bus
+        # Stop terminal (shell process) via Message Bus
         self.post_message(TerminalStop())
-        # Останавливаем прокси
+        # Stop proxy
         if self._proxy and self._proxy.is_running and self._proxy_loop:
             asyncio.run_coroutine_threadsafe(
                 self._proxy.stop(), self._proxy_loop
             )
         if self._proxy_thread and self._proxy_thread.is_alive():
             self._proxy_thread.join(timeout=2)
-        # Закрываем SQLite-хранилище — сливаем WAL на диск
+        # Close SQLite storage — flush WAL to disk
         try:
             if self._proxy_service is not None:
                 await self._proxy_service._storage.close()
@@ -1441,9 +1441,9 @@ class PentoolApp(App):
         except Exception as e:
             logger.warning("APP: HttpStorage close error on quit: %s", e)
         self.exit()
-        # Принудительно завершаем процесс — убивает не-daemon потоки
-        # (jemalloc_bg_thd от pyarrow), которые иначе блокируют выход.
-        # call_later даёт Textual ~100мс на финальный cleanup экрана.
+        # Force-terminate the process — kills non-daemon threads
+        # (jemalloc_bg_thd from pyarrow) that would otherwise block exit.
+        # call_later gives Textual ~100ms for final screen cleanup.
         try:
             loop = asyncio.get_running_loop()
             loop.call_later(0.1, os._exit, 0)

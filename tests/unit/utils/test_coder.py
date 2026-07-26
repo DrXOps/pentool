@@ -1,6 +1,6 @@
-"""Unit-тесты: utils/coder.py
+"""Unit tests: utils/coder.py
 
-Покрывает: url_encode/decode, base64, html, hex, hashing.
+Covers: url_encode/decode, base64, html, hex, hashing.
 """
 
 from __future__ import annotations
@@ -45,12 +45,12 @@ class TestUrlEncoding:
         assert url_decode_plus("hello%20world") == "hello world"
 
     def test_url_encode_unicode(self) -> None:
-        result = url_encode("тест")
+        result = url_encode("café")
         assert "%" in result
 
     def test_url_decode_unicode(self) -> None:
-        encoded = url_encode("тест")
-        assert url_decode(encoded) == "тест"
+        encoded = url_encode("café")
+        assert url_decode(encoded) == "café"
 
 
 class TestBase64:
@@ -61,11 +61,11 @@ class TestBase64:
         assert base64_decode("aGVsbG8=") == "hello"
 
     def test_roundtrip(self) -> None:
-        original = "PenTool v0.1 — тест"
+        original = "PenTool v0.1 — test"
         assert base64_decode(base64_encode(original)) == original
 
     def test_decode_without_padding(self) -> None:
-        """Декодирование без '=' паддинга."""
+        """Decoding without '=' padding."""
         result = base64_decode("aGVsbG8")
         assert result == "hello"
 

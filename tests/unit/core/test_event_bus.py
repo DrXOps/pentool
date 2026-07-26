@@ -1,4 +1,4 @@
-"""Unit-тесты для core/event_bus.py и core/events.py."""
+"""Unit tests for core/event_bus.py and core/events.py."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def bus() -> EventBus:
 
 @pytest.fixture(autouse=True)
 def reset_global_bus():
-    """Сбрасывает глобальный синглтон после каждого теста."""
+    """Resets the global singleton after each test."""
     yield
     reset_event_bus()
 
@@ -150,7 +150,7 @@ class TestSubscribeUnsubscribe:
 
     def test_unsubscribe_not_subscribed_no_error(self, bus):
         handler = lambda e: None
-        bus.unsubscribe(ScanStarted, handler)  # не должно бросать
+        bus.unsubscribe(ScanStarted, handler)  # should not raise
 
     def test_unsubscribe_all(self, bus):
         handler = lambda e: None
@@ -201,11 +201,11 @@ class TestEmit:
             raise RuntimeError("boom")
         bus.subscribe(ScanStarted, bad_handler)
         bus.subscribe(ScanStarted, received.append)
-        bus.emit(ScanStarted())  # не должно бросать
+        bus.emit(ScanStarted())  # should not raise
         assert len(received) == 1
 
     def test_emit_no_subscribers_no_error(self, bus):
-        bus.emit(ScanStarted())  # просто сохраняет в историю
+        bus.emit(ScanStarted())  # just saves to history
 
     def test_emit_correct_event_type_routing(self, bus):
         scan_calls = []
@@ -239,7 +239,7 @@ class TestEmitThreadsafe:
         t.start()
         t.join()
 
-        # Выполняем один такт event loop чтобы доставить
+        # Run one event loop tick to deliver
         loop.run_until_complete(asyncio.sleep(0))
         loop.close()
 
@@ -256,7 +256,7 @@ class TestEmitThreadsafe:
         t.start()
         t.join()
 
-        # История сохраняется немедленно (под локом), до dispatch
+        # History is saved immediately (under lock), before dispatch
         assert len(bus._history) == 1
         loop.close()
 
@@ -264,9 +264,9 @@ class TestEmitThreadsafe:
         received = []
         bus.subscribe(ScanStarted, received.append)
         loop = asyncio.new_event_loop()
-        loop.close()  # закрытый loop
+        loop.close()  # closed loop
 
-        # Не должно бросать RuntimeError
+        # Should not raise RuntimeError
         bus.emit_threadsafe(ScanStarted(), loop)
 
     def test_emit_threadsafe_concurrent_from_multiple_threads(self, bus):
@@ -346,7 +346,7 @@ class TestGetHistory:
             small_bus.emit(ScanProgressEvent(done=i))
         h = small_bus.get_history()
         assert len(h) == 5
-        # Должны быть последние 5
+        # Should be the last 5
         assert h[0].done == 5
 
     def test_get_history_returns_copy(self, bus):
@@ -379,7 +379,7 @@ class TestReplay:
         bus.emit(ScanStarted())
         def bad(e):
             raise ValueError("oops")
-        bus.replay(bad, ScanStarted)  # не должно бросать
+        bus.replay(bad, ScanStarted)  # should not raise
 
     def test_replay_empty_history_no_calls(self, bus):
         received = []
@@ -422,7 +422,7 @@ class TestStats:
         assert s["total_handlers"] == 2
 
 
-# ── Глобальный синглтон ───────────────────────────────────────────────────────
+# ── Global singleton ───────────────────────────────────────────────────────────
 
 class TestGlobalSingleton:
     def test_get_event_bus_returns_same_instance(self):

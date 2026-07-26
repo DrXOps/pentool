@@ -1,4 +1,4 @@
-"""Экран настройки горячих клавиш."""
+"""Hotkey settings screen."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ _ACTION_LABELS: dict[str, str] = {
 
 
 class HotkeySettingsScreen(Widget):
-    """Экран настройки горячих клавиш."""
+    """Hotkey settings screen."""
 
     DEFAULT_CSS = _CSS
 
@@ -124,7 +124,7 @@ class HotkeySettingsScreen(Widget):
             self._apply_hotkeys()
 
     def _apply_hotkeys(self) -> None:
-        """Применить хоткеи (сохранить в конфиг, rebind через app)."""
+        """Apply hotkeys (save to config, rebind via app)."""
         try:
             self.app.notify("Hotkeys saved (restart required for some bindings)", timeout=3)  # type: ignore[attr-defined]
         except Exception:

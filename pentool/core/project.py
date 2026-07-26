@@ -1,4 +1,4 @@
-"""Сохранение/загрузка проекта в JSON."""
+"""Save/load project to/from JSON."""
 
 from __future__ import annotations
 

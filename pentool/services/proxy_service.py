@@ -162,7 +162,7 @@ class ProxyService(BaseService):
         return self._storage_ready
 
     async def reload_from_proxy(self, proxy_api: "ProxyAPI") -> None:
-        """Синхронизировать storage из in-memory прокси (для случая очистки/сброса истории)."""
+        """Synchronize storage from the in-memory proxy (for history clear/reset scenarios)."""
         if not self._storage_ready:
             return
         proxy = proxy_api.get_proxy() if proxy_api else None

@@ -1,4 +1,4 @@
-"""IntruderService — оркестрирует IntruderAttack → EventBus."""
+"""IntruderService — orchestrates IntruderAttack → EventBus."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ logger = get_logger(__name__)
 
 
 class IntruderService:
-    """Оркестрирует IntruderAttack + emit событий в EventBus.
+    """Orchestrates IntruderAttack + emits events to EventBus.
 
-    Не знает о Textual. Запускается через async @work.
+    Has no knowledge of Textual. Launched via async @work.
 
-    Использование:
+    Usage:
         service = IntruderService(intruder_api, event_bus)
         await service.start_attack(config, on_result, on_progress)
     """

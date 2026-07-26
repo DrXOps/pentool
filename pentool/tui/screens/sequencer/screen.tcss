@@ -71,7 +71,7 @@ SequencerScreen #seq-main-area {
     layout: horizontal;
 }
 
-/* Левая колонка: ввод токенов вручную */
+/* Left column: manual token input */
 SequencerScreen #seq-input-col {
     width: 1fr;
     height: 1fr;
@@ -88,7 +88,7 @@ SequencerScreen #seq-token-area {
     height: 1fr;
 }
 
-/* Правая колонка: анализ */
+/* Right column: analysis */
 SequencerScreen #seq-analysis-col {
     width: 1fr;
     height: 1fr;
@@ -126,7 +126,7 @@ SequencerScreen #seq-bits-label {
     height: 1;
     color: $text-muted;
 }
-/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
 .toolbar-sep { width: auto; }
 /* status-bar */
 #status-bar {

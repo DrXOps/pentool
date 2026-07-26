@@ -1,19 +1,19 @@
-"""Feature flags и лимиты для лицензионной модели Pentool."""
+"""Feature flags and limits for the Pentool licensing model."""
 
 from enum import Enum
 from dataclasses import dataclass
 
 
 class FeatureStatus(str, Enum):
-    """Статус фичи."""
-    STABLE = "stable"    # Стабильная, готова к production
-    BETA = "beta"        # Стабильная, но в beta-тестировании
-    ALPHA = "alpha"      # Экспериментальная, может быть нестабильной
+    """Feature status."""
+    STABLE = "stable"    # Stable, ready for production
+    BETA = "beta"        # Stable, but in beta testing
+    ALPHA = "alpha"      # Experimental, may be unstable
 
 
 @dataclass
 class Feature:
-    """Описание одной фичи."""
+    """Description of a single feature."""
     name: str
     description: str
     status: FeatureStatus
@@ -21,7 +21,7 @@ class Feature:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# FEATURE CONSTANTS — строковые идентификаторы для require_feature
+# FEATURE CONSTANTS — string identifiers for require_feature
 # ═══════════════════════════════════════════════════════════════════════
 
 # Scanner PRO checks
@@ -49,22 +49,22 @@ FEATURE_REPORTS_PRO = "pro_reports"
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# FEATURES — доступность фич по планам
+# FEATURES — feature availability by plan
 # ═══════════════════════════════════════════════════════════════════════
 
 FEATURES = {
     # ────────────────────────────────────────────────────────────────────
-    # FREE PLAN — базовые инструменты
+    # FREE PLAN — basic tools
     # ────────────────────────────────────────────────────────────────────
     "proxy": Feature(
         "proxy",
-        "HTTP/HTTPS Proxy с перехватом",
+        "HTTP/HTTPS Proxy with interception",
         FeatureStatus.STABLE,
         "free"
     ),
     "repeater": Feature(
         "repeater",
-        "Repeater — повтор и модификация запросов",
+        "Repeater — replay and modify requests",
         FeatureStatus.STABLE,
         "free"
     ),
@@ -76,29 +76,29 @@ FEATURES = {
     ),
     "decoder": Feature(
         "decoder",
-        "Decoder — кодирование/декодирование данных",
+        "Decoder — encode/decode data",
         FeatureStatus.STABLE,
         "free"
     ),
     "comparer": Feature(
         "comparer",
-        "Comparer — сравнение запросов/ответов",
+        "Comparer — compare requests/responses",
         FeatureStatus.STABLE,
         "free"
     ),
     "httpql": Feature(
         "httpql",
-        "HTTPQL — фильтрация истории запросов",
+        "HTTPQL — filter request history",
         FeatureStatus.BETA,
         "free"
     ),
 
     # ────────────────────────────────────────────────────────────────────
-    # LITE PLAN — расширенные возможности
+    # LITE PLAN — extended capabilities
     # ────────────────────────────────────────────────────────────────────
     "scanner_extended": Feature(
         "scanner_extended",
-        "Scanner — расширенные проверки безопасности",
+        "Scanner — extended security checks",
         FeatureStatus.ALPHA,
         "lite"
     ),
@@ -110,93 +110,93 @@ FEATURES = {
     ),
     "spider": Feature(
         "spider",
-        "Spider — автоматическое сканирование сайта",
+        "Spider — automatic site crawling",
         FeatureStatus.BETA,
         "lite"
     ),
     "match_replace": Feature(
         "match_replace",
-        "Match & Replace — авто-модификация запросов",
+        "Match & Replace — auto-modify requests",
         FeatureStatus.BETA,
         "lite"
     ),
     "target_scope": Feature(
         "target_scope",
-        "Target Scope — управление областью тестирования",
+        "Target Scope — manage testing scope",
         FeatureStatus.STABLE,
         "lite"
     ),
 
     # ────────────────────────────────────────────────────────────────────
-    # MEDIUM PLAN — профессиональные инструменты
+    # MEDIUM PLAN — professional tools
     # ────────────────────────────────────────────────────────────────────
     "oob_detection": Feature(
         "oob_detection",
-        "Out-of-Band детекция уязвимостей",
+        "Out-of-Band vulnerability detection",
         FeatureStatus.ALPHA,
         "medium"
     ),
     "websocket_intercept": Feature(
         "websocket_intercept",
-        "WebSocket перехват и модификация",
+        "WebSocket interception and modification",
         FeatureStatus.ALPHA,
         "medium"
     ),
     "plugins": Feature(
         "plugins",
-        "Система плагинов",
+        "Plugin system",
         FeatureStatus.ALPHA,
         "medium"
     ),
     "sequencer": Feature(
         "sequencer",
-        "Sequencer — анализ случайности токенов",
+        "Sequencer — token randomness analysis",
         FeatureStatus.BETA,
         "medium"
     ),
     "passive_scanner": Feature(
         "passive_scanner",
-        "Passive Scanner — фоновый анализ трафика",
+        "Passive Scanner — background traffic analysis",
         FeatureStatus.BETA,
         "medium"
     ),
     "turbo_mode": Feature(
         "turbo_mode",
-        "Turbo Mode Intruder (10x ускорение)",
+        "Turbo Mode Intruder (10x speed)",
         FeatureStatus.BETA,
         "medium"
     ),
 
     # ────────────────────────────────────────────────────────────────────
-    # FULL PLAN — enterprise возможности
+    # FULL PLAN — enterprise capabilities
     # ────────────────────────────────────────────────────────────────────
     "ai_analysis": Feature(
         "ai_analysis",
-        "AI-анализ уязвимостей (GPT-4)",
+        "AI vulnerability analysis (GPT-4)",
         FeatureStatus.ALPHA,
         "full"
     ),
     "pro_reports": Feature(
         "pro_reports",
-        "PRO отчёты (HTML/PDF/JSON)",
+        "PRO reports (HTML/PDF/JSON)",
         FeatureStatus.ALPHA,
         "full"
     ),
     "collaboration": Feature(
         "collaboration",
-        "Совместная работа над проектами",
+        "Collaborative project work",
         FeatureStatus.ALPHA,
         "full"
     ),
     "api_access": Feature(
         "api_access",
-        "REST API для автоматизации",
+        "REST API for automation",
         FeatureStatus.BETA,
         "full"
     ),
     "custom_scanner_checks": Feature(
         "custom_scanner_checks",
-        "Кастомные проверки Scanner",
+        "Custom Scanner checks",
         FeatureStatus.ALPHA,
         "full"
     ),
@@ -204,11 +204,11 @@ FEATURES = {
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# LIMITS — лимиты по планам
+# LIMITS — limits by plan
 # ═══════════════════════════════════════════════════════════════════════
 
 LIMITS = {
-    # История запросов
+    # Request history
     "history_max_entries": {
         "free": 500,
         "lite": 5000,
@@ -264,7 +264,7 @@ LIMITS = {
         "full": -1,  # unlimited
     },
 
-    # Проекты
+    # Projects
     "projects_max": {
         "free": 5,
         "lite": 20,
@@ -283,7 +283,7 @@ LIMITS = {
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# PLAN NAMES — человекочитаемые названия планов
+# PLAN NAMES — human-readable plan names
 # ═══════════════════════════════════════════════════════════════════════
 
 PLAN_NAMES = {
@@ -295,10 +295,10 @@ PLAN_NAMES = {
 
 
 PLAN_DESCRIPTIONS = {
-    "free": "Базовые инструменты для тестирования",
-    "lite": "Расширенные возможности для профессионалов",
-    "medium": "Продвинутые инструменты + плагины",
-    "full": "Enterprise функции + AI + API",
+    "free": "Basic tools for testing",
+    "lite": "Extended capabilities for professionals",
+    "medium": "Advanced tools + plugins",
+    "full": "Enterprise features + AI + API",
 }
 
 
@@ -307,23 +307,23 @@ PLAN_DESCRIPTIONS = {
 # ═══════════════════════════════════════════════════════════════════════
 
 def has_feature(feature_name: str, plan: str) -> bool:
-    """Проверить, доступна ли фича для указанного плана.
+    """Check if a feature is available for the given plan.
 
     Args:
-        feature_name: Название фичи (ключ из FEATURES)
-        plan: Название плана ("free", "lite", "medium", "full")
+        feature_name: Feature name (key from FEATURES)
+        plan: Plan name ("free", "lite", "medium", "full")
 
     Returns:
-        True если фича доступна для этого плана
+        True if the feature is available for this plan
     """
     feature = FEATURES.get(feature_name)
     if not feature:
         return False
 
-    # Порядок планов от младшего к старшему
+    # Plan order from lowest to highest
     plan_order = ["free", "lite", "medium", "full"]
 
-    # Если текущий план >= требуемого плана, фича доступна
+    # If current plan >= required plan, feature is available
     try:
         current_level = plan_order.index(plan.lower())
         required_level = plan_order.index(feature.required_plan)

@@ -1,1 +1,1 @@
-"""Пакет core: конфигурация, логирование, БД."""
+"""core package: configuration, logging, DB."""

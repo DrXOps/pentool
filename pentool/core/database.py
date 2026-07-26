@@ -1,4 +1,4 @@
-"""Работа с базой данных SQLite через aiosqlite."""
+"""SQLite database access via aiosqlite."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import AsyncIterator
 import aiosqlite
 
 
-# DDL для создания таблиц
+# DDL for table creation
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,17 +83,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_site_map_host_path ON site_map (host, path
 
 
 async def init_db(db_path: str) -> None:
-    """Создать таблицы БД, если они не существуют.
+    """Create DB tables if they do not exist.
 
     Args:
-        db_path: Путь к файлу SQLite.
+        db_path: Path to the SQLite file.
     """
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(db_path) as db:
         await db.executescript(_SCHEMA)
         await db.commit()
-        # Миграция: добавляем новые колонки в vulnerabilities (для старых БД)
+        # Migration: add new columns to vulnerabilities (for old DBs)
         _new_vuln_cols = [
             ("name",         "TEXT NOT NULL DEFAULT ''"),
             ("payload",      "TEXT DEFAULT ''"),
@@ -110,19 +110,19 @@ async def init_db(db_path: str) -> None:
                     f"ALTER TABLE vulnerabilities ADD COLUMN {col_name} {col_def}"
                 )
             except Exception:
-                pass  # Колонка уже существует — ожидаемо
+                pass  # Column already exists — expected
         await db.commit()
 
 
 @asynccontextmanager
 async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
-    """Контекстный менеджер для получения соединения с БД.
+    """Context manager for obtaining a DB connection.
 
     Args:
-        db_path: Путь к файлу SQLite.
+        db_path: Path to the SQLite file.
 
     Yields:
-        Объект соединения aiosqlite.Connection.
+        aiosqlite.Connection object.
     """
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
@@ -131,9 +131,9 @@ async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
 
 
 def init_db_sync(db_path: str) -> None:
-    """Синхронная обёртка над init_db для использования в CLI.
+    """Synchronous wrapper over init_db for use in CLI.
 
     Args:
-        db_path: Путь к файлу SQLite.
+        db_path: Path to the SQLite file.
     """
     asyncio.run(init_db(db_path))

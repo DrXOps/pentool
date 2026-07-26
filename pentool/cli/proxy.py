@@ -1,4 +1,4 @@
-"""CLI-команды для управления прокси-сервером."""
+"""CLI commands for proxy server management."""
 
 from __future__ import annotations
 
@@ -18,16 +18,16 @@ logger = get_logger(__name__)
 
 @click.group()
 def proxy() -> None:
-    """Управление HTTP/HTTPS прокси-сервером."""
+    """HTTP/HTTPS proxy server management."""
 
 
 @proxy.command("start")
-@click.option("--port", default=8080, show_default=True, help="Порт прокси.")
-@click.option("--host", default="127.0.0.1", show_default=True, help="Адрес для прослушивания.")
-@click.option("--cert-dir", default=None, help="Директория для CA-сертификатов.")
-@click.option("--db", "db_path", default=None, help="Путь к SQLite БД для логирования.")
-@click.option("--intercept", is_flag=True, default=False, help="Включить интерактивный перехват.")
-@click.option("--scope", default="", help="Список хостов через запятую (пусто = все).")
+@click.option("--port", default=8080, show_default=True, help="Proxy port.")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Address to listen on.")
+@click.option("--cert-dir", default=None, help="Directory for CA certificates.")
+@click.option("--db", "db_path", default=None, help="Path to the SQLite database for logging.")
+@click.option("--intercept", is_flag=True, default=False, help="Enable interactive interception.")
+@click.option("--scope", default="", help="Comma-separated list of hosts (empty = all).")
 def proxy_start(
     port: int,
     host: str,
@@ -66,7 +66,7 @@ def proxy_start(
         click.echo("  Scope     : ALL hosts")
     click.echo("Press Ctrl+C to stop.\n")
 
-    # Инициализировать БД если нужно
+    # Initialize database if needed
     from pentool.core.database import init_db_sync
     try:
         init_db_sync(_db_path)
@@ -80,9 +80,9 @@ def proxy_start(
 
 
 @proxy.command("status")
-@click.option("--port", default=8080, show_default=True, help="Порт для проверки.")
+@click.option("--port", default=8080, show_default=True, help="Port to check.")
 def proxy_status(port: int) -> None:
-    """Проверить, слушает ли прокси на указанном порту."""
+    """Check whether the proxy is listening on the specified port."""
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(1.0)
@@ -94,10 +94,10 @@ def proxy_status(port: int) -> None:
 
 
 @proxy.command("history")
-@click.option("--db", "db_path", default=None, help="Путь к SQLite БД.")
-@click.option("--limit", default=20, show_default=True, help="Количество записей.")
-@click.option("--method", default=None, help="Фильтр по методу (GET, POST, ...).")
-@click.option("--host", default=None, help="Фильтр по хосту (подстрока URL).")
+@click.option("--db", "db_path", default=None, help="Path to the SQLite database.")
+@click.option("--limit", default=20, show_default=True, help="Number of records.")
+@click.option("--method", default=None, help="Filter by method (GET, POST, ...).")
+@click.option("--host", default=None, help="Filter by host (URL substring).")
 def proxy_history(
     db_path: str | None,
     limit: int,
@@ -147,7 +147,7 @@ def proxy_history(
 
 
 @proxy.command("ca-info")
-@click.option("--cert-dir", default=None, help="Директория CA-сертификатов.")
+@click.option("--cert-dir", default=None, help="CA certificate directory.")
 def proxy_ca_info(cert_dir: str | None) -> None:
     cfg = get_config()
     _cert_dir = cert_dir or cfg.cert_dir

@@ -1,4 +1,4 @@
-"""SearchBar — полоса поиска, появляющаяся по Ctrl+F."""
+"""SearchBar — search bar that appears on Ctrl+F."""
 
 from __future__ import annotations
 
@@ -12,30 +12,30 @@ _CSS = (Path(__file__).parent / "search_bar.tcss").read_text(encoding="utf-8")
 
 
 class SearchBar(Widget):
-    """Полоса поиска, появляющаяся по Ctrl+F поверх TextArea/RichLog.
+    """Search bar that appears on Ctrl+F over TextArea/RichLog.
 
-    Использование:
+    Usage:
         yield SearchBar(id="search-bar")
 
-    Открыть:
+    Open:
         self.query_one(SearchBar).show()
 
-    Закрыть:
+    Close:
         self.query_one(SearchBar).hide()
     """
 
     DEFAULT_CSS = _CSS
 
     class Search(Message):
-        """Пользователь ввёл поисковый запрос."""
+        """User entered a search query."""
         def __init__(self, query: str, regex: bool = False, direction: int = 1) -> None:
             super().__init__()
             self.query = query
             self.regex = regex
-            self.direction = direction  # 1 = вперёд, -1 = назад
+            self.direction = direction  # 1 = forward, -1 = backward
 
     class Closed(Message):
-        """Поисковая строка закрыта."""
+        """Search bar closed."""
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)

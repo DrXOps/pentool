@@ -1,4 +1,4 @@
-"""LRUCache — кэш полных HTTP-записей в памяти."""
+"""LRUCache — in-memory cache for full HTTP records."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from typing import Any
 
 
 class LRUCache:
-    """In-memory LRU-кэш. Вытеснение по принципу Least Recently Used.
+    """In-memory LRU cache. Eviction follows the Least Recently Used principle.
 
-    Используется в HttpStorage для кеширования get_full_entry():
-    повторный запрос той же строки не идёт в SQLite.
+    Used in HttpStorage to cache get_full_entry() calls:
+    repeated requests for the same row do not hit SQLite.
     """
 
     def __init__(self, max_size: int = 500) -> None:
@@ -30,7 +30,7 @@ class LRUCache:
             return
         self._cache[key] = value
         if len(self._cache) > self._max_size:
-            self._cache.popitem(last=False)  # удаляет самый старый
+            self._cache.popitem(last=False)  # removes the oldest entry
 
     def invalidate(self, key: int) -> None:
         self._cache.pop(key, None)

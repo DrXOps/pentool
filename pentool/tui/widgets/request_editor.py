@@ -1,4 +1,4 @@
-"""Виджет редактора HTTP-запроса/ответа с подсветкой синтаксиса."""
+"""HTTP request/response editor widget with syntax highlighting."""
 
 from __future__ import annotations
 
@@ -36,10 +36,10 @@ _HEADER_TOKEN = {
 
 
 def _build_http_highlights(text: str) -> dict:
-    """Построить карту подсветки для raw HTTP запроса/ответа.
+    """Build a highlight map for raw HTTP request/response.
 
-    Возвращает dict[int, list[(col_start, col_end|None, token_name)]]
-    совместимый с TextArea._highlights.
+    Returns dict[int, list[(col_start, col_end|None, token_name)]]
+    compatible with TextArea._highlights.
     """
     highlights: dict = defaultdict(list)
     lines = text.split("\n")
@@ -54,19 +54,19 @@ def _build_http_highlights(text: str) -> dict:
 
         if in_headers:
             if row == 0:
-                # Статусная строка: метод/протокол
+                # Status line: method/protocol
                 parts = line.split(" ", 2)
                 if parts:
                     token = _METHOD_COLORS.get(parts[0].upper(), "keyword")
                     highlights[row].append((0, len(parts[0]), token))
                     if len(parts) >= 2:
-                        # путь — выделяем параметры как string
+                        # path — highlight query parameters as string
                         path_start = len(parts[0]) + 1
                         path = parts[1]
                         if "?" in path:
                             q = path.index("?")
                             highlights[row].append((path_start, path_start + q + 1, "comment"))
-                            # key=value в query string
+                            # key=value in query string
                             offset = path_start + q + 1
                             for pair in path[q + 1:].split("&"):
                                 if "=" in pair:
@@ -77,13 +77,13 @@ def _build_http_highlights(text: str) -> dict:
                         else:
                             highlights[row].append((path_start, path_start + len(path), "comment"))
             else:
-                # Заголовок: Name: value
+                # Header: Name: value
                 if ":" in line:
                     name, _, value = line.partition(":")
                     token = _HEADER_TOKEN.get(name.strip().lower(), "variable")
                     highlights[row].append((0, len(name), token))
                     highlights[row].append((len(name), len(name) + 1, "operator"))
-                    # Cookie/Set-Cookie: подсвечиваем key=value
+                    # Cookie/Set-Cookie: highlight key=value
                     if name.strip().lower() in ("cookie", "set-cookie"):
                         offset = len(name) + 2  # ": "
                         for pair in value.lstrip().split("; "):
@@ -92,13 +92,13 @@ def _build_http_highlights(text: str) -> dict:
                                 highlights[row].append((offset, offset + len(k), "function"))
                                 highlights[row].append((offset + len(k) + 1, offset + len(pair), "string"))
                             offset += len(pair) + 2
-        # тело — без подсветки (TextArea language обрабатывает его)
+        # body — no highlights (TextArea language handles it)
 
     return highlights
 
 
 def _select_word_at_cursor(area: TextArea) -> None:
-    """Выделить слово под курсором в TextArea (для двойного клика)."""
+    """Select word under cursor in TextArea (for double-click)."""
     try:
         cursor = area.cursor_location
         row, col = cursor
@@ -117,7 +117,7 @@ def _select_word_at_cursor(area: TextArea) -> None:
     except Exception:
         pass
 
-# Языки, поддерживаемые встроенным хайлайтером TextArea
+# Languages supported by the built-in TextArea highlighter
 _SUPPORTED_LANGS = {
     "json", "html", "xml", "javascript", "css",
     "python", "sql", "bash", "yaml", "toml", "markdown",
@@ -189,7 +189,7 @@ def _render_headers_rich(status_line: str, headers: dict) -> str:
 
 
 def _get_content_type(headers: dict) -> str:
-    """Достать Content-Type из заголовков (case-insensitive)."""
+    """Extract Content-Type from headers (case-insensitive)."""
     for k, v in headers.items():
         if k.lower() == "content-type":
             return v
@@ -197,7 +197,7 @@ def _get_content_type(headers: dict) -> str:
 
 
 def _detect_language(content_type: str, body: str) -> str | None:
-    """Определить язык подсветки по Content-Type и телу ответа."""
+    """Detect highlight language from Content-Type and response body."""
     ct = (content_type or "").lower()
     if "json" in ct:
         return "json"
@@ -213,7 +213,7 @@ def _detect_language(content_type: str, body: str) -> str | None:
         return "sql"
     if "yaml" in ct:
         return "yaml"
-    # Определяем по телу (эвристика)
+    # Detect from body (heuristic)
     body_strip = (body or "").lstrip()
     if body_strip.startswith("{") or body_strip.startswith("["):
         return "json"
@@ -225,20 +225,20 @@ def _detect_language(content_type: str, body: str) -> str | None:
 
 
 class _BaseHttpWidget(Widget):
-    """Базовый класс для HTTP-виджетов: общий on_event (двойной клик / Ctrl+клик)
-    и вспомогательные _set_text* методы.
+    """Base class for HTTP widgets: shared on_event (double-click / Ctrl+click)
+    and helper _set_text* methods.
 
-    Подклассы обязаны объявить:
-        _textarea_id: str  — id TextArea внутри compose()
+    Subclasses must declare:
+        _textarea_id: str  — id of TextArea inside compose()
     """
 
     DEFAULT_CSS = _CSS
 
-    _textarea_id: str = ""       # переопределить в подклассе
+    _textarea_id: str = ""       # override in subclass
     _last_click_time: float = 0.0
 
     class ContextMenuRequest(Message):
-        """Ctrl+клик — запрос контекстного меню."""
+        """Ctrl+click — context menu request."""
         def __init__(self, screen_x: int, screen_y: int) -> None:
             super().__init__()
             self.screen_x = screen_x
@@ -249,7 +249,7 @@ class _BaseHttpWidget(Widget):
         self._last_click_time = 0.0
 
     async def on_event(self, event: _tevents.Event) -> None:
-        """Перехват Ctrl+клик и двойного клика."""
+        """Intercept Ctrl+click and double-click."""
         if isinstance(event, _tevents.MouseDown) and event.button == 1:
             now = time.monotonic()
             if not event.ctrl and (now - self._last_click_time) < 0.4:
@@ -316,10 +316,10 @@ def _load_into_textarea(area: TextArea, text: str,
 
 
 class HttpView(_BaseHttpWidget):
-    """Read-only просмотрщик HTTP запроса или ответа.
+    """Read-only viewer of HTTP request or response.
 
-    Весь raw (заголовки + тело) загружается в единый TextArea.
-    Подсветка заголовков — через _highlights, тело — без синтаксического хайлайтера.
+    The full raw (headers + body) is loaded into a single TextArea.
+    Header highlighting — via _highlights; body — without syntax highlighter.
     """
 
     _textarea_id = "http-body"
@@ -343,7 +343,7 @@ class HttpView(_BaseHttpWidget):
 
 
 class RequestEditor(_BaseHttpWidget):
-    """Редактируемое поле HTTP-запроса с подсветкой заголовков и тела."""
+    """Editable HTTP request field with header and body highlighting."""
 
     _textarea_id = "editor-area"
 
@@ -375,7 +375,7 @@ class RequestEditor(_BaseHttpWidget):
         self._raw_full = text
         self._special_chars_mode = False
 
-        # Определяем язык подсветки тела
+        # Determine body highlight language
         if "\n\n" in normalized:
             headers_part, body = normalized.split("\n\n", 1)
             self._headers_part = headers_part
@@ -394,7 +394,7 @@ class RequestEditor(_BaseHttpWidget):
             area = self.query_one("#editor-area", TextArea)
             area.language = None
             area.load_text(normalized)
-            # Применяем HTTP-подсветку заголовков поверх текста
+            # Apply HTTP header highlighting on top of text
             area._highlights = defaultdict(list, _build_http_highlights(normalized))
             area._line_cache.clear()
             area.refresh()
@@ -437,7 +437,7 @@ class RequestEditor(_BaseHttpWidget):
 
 
 class ResponseViewer(_BaseHttpWidget):
-    """Панель просмотра HTTP-ответа с подсветкой заголовков и тела."""
+    """HTTP response viewer panel with header and body highlighting."""
 
     _textarea_id = "viewer-area"
 
@@ -450,15 +450,15 @@ class ResponseViewer(_BaseHttpWidget):
         yield TextArea("", read_only=True, id="viewer-area", soft_wrap=False)
 
     def load_response(self, resp: ParsedResponse) -> None:
-        """Отобразить ParsedResponse: полный raw HTTP в единый TextArea с _highlights."""
+        """Display ParsedResponse: full raw HTTP in a single TextArea with _highlights."""
         body = resp.body or ""
 
-        # Собрать raw HTTP строку
+        # Build raw HTTP string
         status_line = f"HTTP/1.1 {resp.status} {resp.reason}"
         headers_str = "\r\n".join(f"{k}: {v}" for k, v in resp.headers.items())
         raw = f"{status_line}\r\n{headers_str}\r\n\r\n{body}"
 
-        # Обновить label: статус + размер
+        # Update label: status + size
         try:
             size = len(body.encode("utf-8", errors="replace"))
             size_str = f"{size} B" if size < 1024 else f"{size // 1024} KB"

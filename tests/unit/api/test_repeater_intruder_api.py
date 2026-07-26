@@ -1,4 +1,4 @@
-"""Unit-тесты: api/repeater_api.py и api/intruder_api.py"""
+"""Unit tests: api/repeater_api.py and api/intruder_api.py"""
 
 from __future__ import annotations
 

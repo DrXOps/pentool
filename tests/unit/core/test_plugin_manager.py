@@ -1,4 +1,4 @@
-"""Unit-тесты для core/plugin_manager.py — интеграция с лицензией."""
+"""Unit tests for core/plugin_manager.py — license integration."""
 
 from __future__ import annotations
 
@@ -231,24 +231,24 @@ class TestPluginManagerProLicense:
         assert meta[0].loaded is True
 
     def test_pro_plugin_blocked_when_feature_missing(self, tmp_path):
-        """PRO лицензия но без нужной feature."""
+        """PRO license but without the required feature."""
         plugin_file = tmp_path / "pro_reports.py"
         _write_plugin(plugin_file, _pro_plugin_code(feature="reports_pro"))
         pm = PluginManager()
-        # Лицензия PRO но только со scanner_pro, без reports_pro
+        # PRO license but only with scanner_pro, without reports_pro
         with patch("pentool.core.plugin_manager.PluginManager._check_license_feature",
                    return_value=False):
             pm.load_plugins([str(tmp_path)])
         assert len(pm.loaded_plugins()) == 0
 
     def test_multiple_plugins_mixed_license(self, tmp_path):
-        """Free + PRO плагины: free загружается, PRO заблокирован без лицензии."""
+        """Free + PRO plugins: free loads, PRO blocked without license."""
         _write_plugin(tmp_path / "free_plugin.py", _free_plugin_code())
         _write_plugin(tmp_path / "pro_plugin.py", _pro_plugin_code())
         pm = PluginManager()
         # free → OK, pro → blocked
         def check_feature(feature):
-            return False  # нет лицензии
+            return False  # no license
 
         with patch.object(pm, "_check_license_feature", side_effect=check_feature):
             pm.load_plugins([str(tmp_path)])
@@ -273,7 +273,7 @@ class TestPluginManagerProLicense:
             assert pm.is_feature_available("scanner_pro") is False
 
     def test_check_license_feature_no_license_module(self):
-        """Если license модуль недоступен — не падаем, возвращаем False."""
+        """If license module is unavailable — no crash, return False."""
         pm = PluginManager()
         with patch("pentool.core.license.get_session_license", side_effect=RuntimeError("boom")):
             result = pm._check_license_feature("scanner_pro")
@@ -284,7 +284,7 @@ class TestPluginManagerProLicense:
 
 class TestPluginManagerUserPlugins:
     def test_load_user_plugins_nonexistent_dir(self):
-        """Нет ~/.pentool/plugins — не падаем."""
+        """No ~/.pentool/plugins — no crash."""
         pm = PluginManager()
         with patch("pentool.core.plugin_manager.USER_PLUGINS_DIR", Path("/nonexistent/path")):
             pm.load_user_plugins()  # no exception
@@ -356,7 +356,7 @@ class TestBaseClasses:
 
         scanner = MyScanner()
         results = asyncio.run(scanner.scan(None, None))
-        assert results == []  # пустой, не упал
+        assert results == []  # empty, did not crash
 
 
 # ── PluginMeta ─────────────────────────────────────────────────────────────────

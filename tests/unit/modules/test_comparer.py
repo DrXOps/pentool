@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/modules/comparer.py."""
+"""Unit tests for pentool/modules/comparer.py."""
 
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ class TestDiffLines:
             assert dl.tag in ("equal", "insert", "delete", "replace")
 
     def test_no_orphan_lines(self):
-        """Каждая строка diff должна иметь хотя бы один непустой текст."""
+        """Every diff line should have at least one non-empty text."""
         result = compare("foo\nbar\nbaz", "foo\nqux\nbaz")
         for dl in result.lines:
             assert dl.left != "" or dl.right != ""
@@ -103,7 +103,7 @@ class TestRichText:
     def test_rich_text_contains_markup(self):
         result = compare("old", "new")
         text = result.rich_text()
-        # Должен содержать rich markup для цветов
+        # Should contain rich markup for colors
         assert "[green]" in text or "[red]" in text or "[dim]" in text
 
 
@@ -132,7 +132,7 @@ class TestCompareBytes:
         assert result.stats.similarity < 1.0
 
     def test_compare_bytes_with_non_utf8(self):
-        # Не должно бросать исключение
+        # Should not raise an exception
         result = compare_bytes(b"\xff\xfe", b"\x00\x01")
         assert isinstance(result, DiffResult)
 

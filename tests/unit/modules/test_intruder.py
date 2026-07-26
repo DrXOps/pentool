@@ -1,7 +1,7 @@
-"""Unit-тесты: modules/intruder.py
+"""Unit tests: modules/intruder.py
 
-Покрывает: parse_markers, count_markers, substitute_payload,
-           payload-генераторы, AttackType, IntruderConfig.
+Covers: parse_markers, count_markers, substitute_payload,
+           payload-generators, AttackType, IntruderConfig.
 """
 
 from __future__ import annotations
@@ -203,7 +203,7 @@ class TestExtractMarkerDefaults:
 
 
 class TestSniperIterator:
-    """Sniper должен сохранять оригинальные значения незатронутых маркеров."""
+    """Sniper should preserve original values of untouched markers."""
 
     def test_sniper_preserves_original_values(self) -> None:
         from pentool.modules.intruder import IntruderAttack, IntruderConfig, AttackType
@@ -216,18 +216,18 @@ class TestSniperIterator:
         attack = IntruderAttack(config)
         combos = list(attack._iter_sniper())
 
-        # 2 позиции × 2 payload'а = 4 комбинации
+        # 2 positions × 2 payloads = 4 combinations
         assert len(combos) == 4
 
-        # При атаке на позицию 0 (admin) — позиция 1 должна оставаться "secret"
+        # When attacking position 0 (admin) — position 1 should remain "secret"
         pos0_combos = combos[:2]
         for vals in pos0_combos:
-            assert vals[1] == "secret", "Незатронутая позиция должна сохранять оригинал"
+            assert vals[1] == "secret", "Untouched position should preserve original value"
 
-        # При атаке на позицию 1 (secret) — позиция 0 должна оставаться "admin"
+        # When attacking position 1 (secret) — position 0 should remain "admin"
         pos1_combos = combos[2:]
         for vals in pos1_combos:
-            assert vals[0] == "admin", "Незатронутая позиция должна сохранять оригинал"
+            assert vals[0] == "admin", "Untouched position should preserve original value"
 
     def test_sniper_empty_marker_defaults_to_empty(self) -> None:
         from pentool.modules.intruder import IntruderAttack, IntruderConfig, AttackType
@@ -239,11 +239,11 @@ class TestSniperIterator:
         )
         attack = IntruderAttack(config)
         combos = list(attack._iter_sniper())
-        # 2 позиции × 1 payload = 2 комбинации
+        # 2 positions × 1 payload = 2 combinations
         assert len(combos) == 2
-        # Первая: атакуем позицию 0 → ["x", ""]
+        # First: attack position 0 → ["x", ""]
         assert combos[0] == ["x", ""]
-        # Вторая: атакуем позицию 1 → ["", "x"]
+        # Second: attack position 1 → ["", "x"]
         assert combos[1] == ["", "x"]
 
     def test_sniper_single_position(self) -> None:
@@ -262,7 +262,7 @@ class TestSniperIterator:
 
 
 class TestBatteringRamIterator:
-    """Battering Ram: один payload во все позиции одновременно."""
+    """Battering Ram: one payload into all positions simultaneously."""
 
     def test_battering_ram_single_position(self) -> None:
         from pentool.modules.intruder import IntruderAttack, IntruderConfig, AttackType
@@ -287,9 +287,9 @@ class TestBatteringRamIterator:
         )
         attack = IntruderAttack(config)
         combos = list(attack._iter_battering_ram())
-        # 2 payload'а, оба сразу в обе позиции
+        # 2 payloads, both into both positions at once
         assert len(combos) == 2
-        assert combos[0] == ["root", "root"], "Battering Ram ставит один payload во все позиции"
+        assert combos[0] == ["root", "root"], "Battering Ram puts one payload into all positions"
         assert combos[1] == ["admin", "admin"]
 
     def test_battering_ram_count_total(self) -> None:
@@ -300,12 +300,12 @@ class TestBatteringRamIterator:
             payload_sets=[["x", "y", "z"]],
         )
         attack = IntruderAttack(config)
-        # Всегда M запросов (размер payload set), не M×N
+        # Always M requests (payload set size), not M×N
         assert attack._count_total() == 3
 
 
 class TestPitchforkIterator:
-    """Pitchfork: zip по всем наборам — параллельно."""
+    """Pitchfork: zip across all sets — in parallel."""
 
     def test_pitchfork_basic(self) -> None:
         from pentool.modules.intruder import IntruderAttack, IntruderConfig, AttackType
@@ -329,7 +329,7 @@ class TestPitchforkIterator:
         )
         attack = IntruderAttack(config)
         combos = list(attack._iter_pitchfork())
-        # zip останавливается на меньшем наборе
+        # zip stops at the smaller set
         assert len(combos) == 2
         assert combos[0] == ["x1", "y1"]
         assert combos[1] == ["x2", "y2"]
@@ -349,7 +349,7 @@ class TestPitchforkIterator:
 
 
 class TestClusterBombIterator:
-    """Cluster Bomb: декартово произведение всех наборов."""
+    """Cluster Bomb: Cartesian product of all sets."""
 
     def test_cluster_bomb_basic(self) -> None:
         from pentool.modules.intruder import IntruderAttack, IntruderConfig, AttackType
@@ -360,7 +360,7 @@ class TestClusterBombIterator:
         )
         attack = IntruderAttack(config)
         combos = list(attack._iter_cluster_bomb())
-        # 2 × 2 = 4 комбинации
+        # 2 × 2 = 4 combinations
         assert len(combos) == 4
         assert ["admin", "secret"] in combos
         assert ["admin", "toor"] in combos
@@ -376,7 +376,7 @@ class TestClusterBombIterator:
         )
         attack = IntruderAttack(config)
         combos = list(attack._iter_cluster_bomb())
-        # 2 × 2 × 2 = 8 комбинаций
+        # 2 × 2 × 2 = 8 combinations
         assert len(combos) == 8
         assert combos[0] == ["x", "1", "!"]
         assert combos[-1] == ["y", "2", "?"]
@@ -394,7 +394,7 @@ class TestClusterBombIterator:
 
 
 class TestAllAttackTypesSubstitution:
-    """Проверяем что substitute_payload корректно применяется во всех атаках."""
+    """Verify that substitute_payload is applied correctly in all attacks."""
 
     def test_sniper_request_contains_payload(self) -> None:
         from pentool.modules.intruder import IntruderAttack, IntruderConfig, AttackType, substitute_payload
@@ -448,18 +448,18 @@ class TestAllAttackTypesSubstitution:
         combos = list(attack._iter_cluster_bomb())
         for vals in combos:
             result = substitute_payload(config.template, vals)
-            assert "§" not in result, f"Маркеры остались в результате: {result!r}"
+            assert "§" not in result, f"Markers remain in result: {result!r}"
 
 
 class TestIntruderResultPersistence:
-    """Проверяем сохранение результатов атаки в API (export/import)."""
+    """Verify that attack results are saved in the API (export/import)."""
 
     def test_intruder_api_export_results(self) -> None:
-        """export_project_data возвращает результаты восстановленной атаки."""
+        """export_project_data returns results of the restored attack."""
         from pentool.api.intruder_api import IntruderAPI
 
         api = IntruderAPI()
-        # Загружаем через import_project_data чтобы не создавать IntruderAttack напрямую
+        # Load via import_project_data to avoid creating IntruderAttack directly
         data = {
             "results": [
                 {
@@ -480,12 +480,12 @@ class TestIntruderResultPersistence:
         assert count == 2
 
         exported = api.export_project_data()
-        # После import_project_data без активной атаки get_results() возвращает []
-        # Это нормально — restored_results используются только при отображении в TUI
+        # After import_project_data without an active attack, get_results() returns []
+        # This is fine — restored_results are only used when displaying in TUI
         assert "results" in exported
 
     def test_intruder_api_import_results(self) -> None:
-        """import_project_data корректно загружает результаты."""
+        """import_project_data correctly loads results."""
         from pentool.api.intruder_api import IntruderAPI
 
         api = IntruderAPI()
@@ -501,7 +501,7 @@ class TestIntruderResultPersistence:
         }
         count = api.import_project_data(data)
         assert count == 1
-        # Восстановленные результаты доступны через _restored_results
+        # Restored results are available via _restored_results
         assert hasattr(api, "_restored_results")
         assert len(api._restored_results) == 1
         r = api._restored_results[0]
@@ -509,19 +509,19 @@ class TestIntruderResultPersistence:
         assert r.response_status == 200
 
     def test_intruder_api_import_malformed_data_skipped(self) -> None:
-        """Полностью некорректные данные (не dict) пропускаются без исключений."""
+        """Completely invalid data (not dict) is skipped without exceptions."""
         from pentool.api.intruder_api import IntruderAPI
 
         api = IntruderAPI()
-        # Передаём список из строк вместо dict — должно не падать
+        # Pass a list of strings instead of dict — should not crash
         data = {"results": ["not_a_dict", None, 42]}
-        # Не должно вызвать исключение
+        # Should not raise an exception
         count = api.import_project_data(data)
-        # Все некорректные записи пропущены
+        # All invalid records are skipped
         assert count == 0
 
     def test_intruder_api_import_empty_data(self) -> None:
-        """Пустые данные не крашат API."""
+        """Empty data does not crash the API."""
         from pentool.api.intruder_api import IntruderAPI
 
         api = IntruderAPI()

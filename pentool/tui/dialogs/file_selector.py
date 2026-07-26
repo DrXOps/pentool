@@ -1,4 +1,4 @@
-"""FileSelectorDialog — диалог выбора файла/директории с Tree-навигацией."""
+"""FileSelectorDialog — file/directory chooser dialog with tree navigation."""
 
 from __future__ import annotations
 
@@ -21,15 +21,15 @@ from textual.widgets import DataTable, Input, Label, Static
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 class FileSelectorMode(Enum):
-    OPEN = "open"           # выбор существующего файла
-    SAVE = "save"           # ввод имени нового файла
-    DIRECTORY = "dir"       # выбор директории
+    OPEN = "open"           # select existing file
+    SAVE = "save"           # enter new file name
+    DIRECTORY = "dir"       # select directory
 
 class FileSelectorDialog(ModalScreen):
-    """Tree-based навигация по файловой системе.
+    """Tree-based filesystem navigation.
 
-    Returns (через dismiss):
-        Абсолютный путь к выбранному файлу/директории, или None при отмене.
+    Returns (via dismiss):
+        Absolute path to the selected file/directory, or None if cancelled.
     """
 
     DEFAULT_CSS = _CSS
@@ -85,7 +85,7 @@ class FileSelectorDialog(ModalScreen):
         self._entries = []
         self._is_dir_entry = []
 
-        # Обновляем path label
+        # Update path label
         try:
             self.query_one("#path-label", Static).update(str(self._current_dir))
         except Exception:
@@ -99,7 +99,7 @@ class FileSelectorDialog(ModalScreen):
                     is_dir = entry.is_dir()
                     size = "-" if is_dir else _format_size(stat.st_size)
                     modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
-                    # Фильтрация по расширению
+                    # Filter by extension
                     if not is_dir and self._filter_ext:
                         if not any(entry.name.endswith(ext.lstrip("*")) for ext in self._filter_ext):
                             continue
@@ -110,7 +110,7 @@ class FileSelectorDialog(ModalScreen):
         except (PermissionError, OSError):
             pass
 
-        # Сортировка: директории первыми
+        # Sort: directories first
         dirs = [(n, s, m, d, raw) for n, s, m, d, raw in entries if d]
         files = [(n, s, m, d, raw) for n, s, m, d, raw in entries if not d]
 
@@ -121,10 +121,10 @@ class FileSelectorDialog(ModalScreen):
                 self._is_dir_entry.append(is_dir)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Клик — обновить поле filename; двойной клик — войти в папку или выбрать файл."""
+        """Click — update filename field; double-click — enter folder or select file."""
         row_idx = event.cursor_row
         if 0 <= row_idx < len(self._is_dir_entry):
-            entry_name = self._entries[row_idx][0].split(" ", 1)[-1]  # убрать эмодзи
+            entry_name = self._entries[row_idx][0].split(" ", 1)[-1]  # strip emoji
             is_dir = self._is_dir_entry[row_idx]
             entry_path = self._current_dir / entry_name
             self._selected_path = str(entry_path)
@@ -134,7 +134,7 @@ class FileSelectorDialog(ModalScreen):
                 except Exception:
                     pass
 
-            # Двойной клик: та же строка, интервал < 500 мс
+            # Double-click: same row, interval < 500 ms
             now = time.monotonic()
             if row_idx == self._last_click_row and (now - self._last_click_time) < 0.5:
                 if is_dir:
@@ -151,7 +151,7 @@ class FileSelectorDialog(ModalScreen):
         pass
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
-        """Сортировка по заголовку."""
+        """Sort by column header."""
         _col_names = ["Name", "Size", "Modified"]
         col = _col_names[event.column_index] if event.column_index < len(_col_names) else ""
         if not col:
@@ -162,7 +162,7 @@ class FileSelectorDialog(ModalScreen):
 
     def on_key(self, event) -> None:
         if event.key == "enter":
-            # Если выбрана директория — войти в неё
+            # If a directory is selected — enter it
             try:
                 table = self.query_one("#file-table", DataTable)
                 row_idx = table.cursor_row
@@ -196,7 +196,7 @@ class FileSelectorDialog(ModalScreen):
             self._load_directory()
 
     def action_confirm(self) -> None:
-        # Приоритет: ручной ввод > выбранный файл
+        # Priority: manual input > selected file
         try:
             filename = self.query_one("#filename-input", Input).value.strip()
             if filename:
@@ -215,7 +215,7 @@ class FileSelectorDialog(ModalScreen):
         self.dismiss(None)
 
 def _format_size(size_bytes: int) -> str:
-    """Форматировать размер файла в читаемый вид."""
+    """Format file size into human-readable form."""
     if size_bytes < 1024:
         return f"{size_bytes}B"
     elif size_bytes < 1024 * 1024:

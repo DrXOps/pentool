@@ -1,4 +1,4 @@
-"""Unit-тесты для core/license.py."""
+"""Unit tests for core/license.py."""
 
 from __future__ import annotations
 
@@ -94,14 +94,14 @@ class TestGetMachineId:
         assert all(c in "0123456789abcdef" for c in mid)
 
     def test_consistent(self):
-        """Один и тот же machine_id при повторных вызовах."""
+        """Same machine_id on repeated calls."""
         assert get_machine_id() == get_machine_id()
 
     def test_fallback_on_socket_error(self):
-        """Если socket недоступен — используется platform.node()."""
+        """If socket is unavailable — platform.node() is used."""
         with patch("pentool.core.license.uuid") as mock_uuid:
             mock_uuid.getnode.side_effect = OSError("no socket")
-            # Функция должна вернуть 32 символа без exception
+            # Function should return 32 chars without exception
             mid = get_machine_id()
             assert len(mid) == 32
 
@@ -153,7 +153,7 @@ class TestGetLicense:
             "expires": None,
             "machine_id": "abc123",
             "license_key": "DEMO-1234-5678-ABCD",
-            "last_check": time.time(),  # только что
+            "last_check": time.time(),  # just now
         }
         lic_file.parent.mkdir(parents=True)
         lic_file.write_text(json.dumps(data), encoding="utf-8")
@@ -184,7 +184,7 @@ class TestGetLicense:
         assert "Grace period expired" in info.error
 
     def test_grace_period_boundary_still_valid(self, tmp_path):
-        """Ровно за 1 секунду до истечения grace — ещё валидно."""
+        """Exactly 1 second before grace period expiry — still valid."""
         lic_file = tmp_path / ".pentool" / "license.dat"
         almost_expired = time.time() - (_GRACE_PERIOD_DAYS * 24 * 3600 - 1)
         data = {
@@ -224,10 +224,10 @@ class TestActivateLicense:
         """DEMO-XXXX-XXXX-XXXX → PRO offline fallback."""
         lic_file = tmp_path / "license.dat"
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
-            # Имитируем сбой сети чтобы упасть в offline fallback
+            # Simulate network failure to fall into offline fallback
             with patch("pentool.core.license.activate_license", wraps=None) as _:
                 pass
-            # Прямой тест offline пути: патчим aiohttp чтобы он падал
+            # Direct test of offline path: patch aiohttp to fail
             with patch.dict("sys.modules", {"aiohttp": None}):
                 info = await activate_license("DEMO-ABCD-1234-EFGH")
         assert info.valid is True
@@ -236,7 +236,7 @@ class TestActivateLicense:
 
     @pytest.mark.asyncio
     async def test_invalid_key_format_returns_error(self, tmp_path):
-        """Ключ неправильного формата → ошибка."""
+        """Key with wrong format → error."""
         lic_file = tmp_path / "license.dat"
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
             with patch.dict("sys.modules", {"aiohttp": None}):
@@ -246,7 +246,7 @@ class TestActivateLicense:
 
     @pytest.mark.asyncio
     async def test_non_demo_valid_format_without_server_fails(self, tmp_path):
-        """Валидный формат но не DEMO и нет сервера → ошибка."""
+        """Valid format but not DEMO and no server → error."""
         lic_file = tmp_path / "license.dat"
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
             with patch.dict("sys.modules", {"aiohttp": None}):
@@ -255,7 +255,7 @@ class TestActivateLicense:
 
     @pytest.mark.asyncio
     async def test_server_success_saves_cache(self, tmp_path):
-        """Успешный ответ сервера → кэшируется."""
+        """Successful server response → cached."""
         lic_file = tmp_path / "license.dat"
         server_resp = {
             "valid": True,
@@ -292,7 +292,7 @@ class TestActivateLicense:
 
     @pytest.mark.asyncio
     async def test_server_returns_invalid(self, tmp_path):
-        """Сервер вернул valid=False → не кэшируется."""
+        """Server returned valid=False → not cached."""
         lic_file = tmp_path / "license.dat"
         server_resp = {"valid": False, "plan": "free", "features": []}
 
@@ -332,7 +332,7 @@ class TestDeactivateLicense:
     def test_no_error_when_file_missing(self, tmp_path):
         lic_file = tmp_path / "missing.dat"
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
-            deactivate_license()  # не должно падать
+            deactivate_license()  # should not raise
 
 
 # ── Session cache ──────────────────────────────────────────────────────────────
@@ -340,11 +340,11 @@ class TestDeactivateLicense:
 class TestSessionCache:
     def test_get_session_license_caches(self, tmp_path):
         import pentool.core.license as lic_mod
-        lic_mod._session_license = None  # сбрасываем
+        lic_mod._session_license = None  # reset
         with patch("pentool.core.license._LICENSE_FILE", tmp_path / "missing.dat"):
             info1 = get_session_license()
             info2 = get_session_license()
-        assert info1 is info2  # тот же объект из кэша
+        assert info1 is info2  # same object from cache
 
     def test_refresh_session_license_with_info(self):
         import pentool.core.license as lic_mod

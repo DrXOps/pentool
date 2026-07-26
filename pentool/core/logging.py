@@ -1,4 +1,4 @@
-"""Настройка системы логирования."""
+"""Logging system setup."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from pathlib import Path
 
 
 def setup_logging(log_file: str, level: str = "INFO") -> logging.Logger:
-    """Настроить логирование: запись в файл (DEBUG) и в консоль (указанный уровень).
+    """Configure logging: write to file (DEBUG) and to console (given level).
 
     Args:
-        log_file: Путь к лог-файлу.
-        level: Уровень логирования для консоли (DEBUG/INFO/WARNING/ERROR).
+        log_file: Path to the log file.
+        level: Logging level for console (DEBUG/INFO/WARNING/ERROR).
 
     Returns:
-        Настроенный корневой логгер.
+        Configured root logger.
     """
     log_path = Path(log_file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -25,10 +25,10 @@ def setup_logging(log_file: str, level: str = "INFO") -> logging.Logger:
     logger = logging.getLogger("pentool")
     logger.setLevel(logging.DEBUG)
 
-    # Очистить существующие хендлеры, чтобы избежать дублирования
+    # Clear existing handlers to avoid duplication
     logger.handlers.clear()
 
-    # FileHandler — пишет всё (DEBUG и выше), дописывает в лог (не очищает)
+    # FileHandler — writes everything (DEBUG and above), appends to log
     fmt = logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
@@ -37,7 +37,7 @@ def setup_logging(log_file: str, level: str = "INFO") -> logging.Logger:
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(fmt)
 
-    # StreamHandler — пишет в stderr на указанном уровне
+    # StreamHandler — writes to stderr at the given level
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(numeric_level)
     console_handler.setFormatter(

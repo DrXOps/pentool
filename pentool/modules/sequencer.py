@@ -1,4 +1,4 @@
-"""Sequencer — анализ энтропии токенов (сессионных ID, CSRF-токенов и т.д.)."""
+"""Sequencer — token entropy analysis (session IDs, CSRF tokens, etc.)."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ __all__ = [
 
 
 def charset_size(token: str) -> int:
-    """Определить размер алфавита токена."""
+    """Determine the alphabet size of a token."""
     if not token:
         return 2
 
@@ -26,7 +26,7 @@ def charset_size(token: str) -> int:
     has_digit = any(c in string.digits for c in token)
     has_spec  = any(c in "+/=_-" for c in token)
 
-    # Чисто hex-строка (только 0-9, a-f или 0-9, A-F)
+    # Pure hex string (only 0-9, a-f or 0-9, A-F)
     lower_hex = set("0123456789abcdef")
     upper_hex = set("0123456789ABCDEF")
     token_set = set(token)
@@ -41,15 +41,14 @@ def charset_size(token: str) -> int:
     if has_digit:
         cs += 10
     if has_spec:
-        cs += 5  # "+/=_-" — 5 символов
+        cs += 5  # "+/=_-" — 5 characters
     return max(cs, 2)
 
 
 def token_entropy(token: str) -> float:
-    """Вычислить энтропию токена в битах на символ.
+    """Compute token entropy in bits per character.
 
-    Формула: H = log2(charset_size) * len(token) / len(token)
-    Уточнённая: считаем фактическое распределение символов.
+    Formula: H = -sum(p * log2(p)) using actual character distribution.
     """
     if not token:
         return 0.0
@@ -64,14 +63,14 @@ def token_entropy(token: str) -> float:
 
 
 def total_entropy_bits(token: str) -> float:
-    """Общая энтропия токена в битах = H * len."""
+    """Total token entropy in bits = H * len."""
     return token_entropy(token) * len(token)
 
 
 # ── FIPS 140-2 Statistical Tests ─────────────────────────────────────────────
 
 def _tokens_to_bitstring(tokens: list[str]) -> str:
-    """Преобразовать список токенов в битовую строку для FIPS-тестов."""
+    """Convert a list of tokens to a bitstring for FIPS tests."""
     bits = []
     for token in tokens:
         for ch in token:
@@ -82,7 +81,7 @@ def _tokens_to_bitstring(tokens: list[str]) -> str:
 
 @dataclass
 class FIPSTestResult:
-    """Результат одного FIPS 140-2 теста."""
+    """Result of one FIPS 140-2 test."""
     name: str
     passed: bool
     value: float | int
@@ -102,8 +101,8 @@ class FIPSTestResult:
 def fips140_monobit(bits: str) -> FIPSTestResult:
     """FIPS 140-2 Test 1: Monobit Test.
 
-    Подсчитывает количество единиц в 20000 битах.
-    Тест проходит если: 9654 < count_ones < 10346.
+    Counts the number of ones in 20000 bits.
+    Test passes if: 9654 < count_ones < 10346.
     """
     sample = bits[:20000].ljust(20000, "0")
     count_ones = sample.count("1")
@@ -114,15 +113,15 @@ def fips140_monobit(bits: str) -> FIPSTestResult:
         value=count_ones,
         threshold_low=9654,
         threshold_high=10346,
-        description="Count of 1-bits in 20000 bits (FIPS threshold: 9654–10346)",
+        description="Count of 1-bits in 20000 bits (FIPS threshold: 9654-10346)",
     )
 
 
 def fips140_runs(bits: str) -> FIPSTestResult:
     """FIPS 140-2 Test 3: Runs Test.
 
-    Подсчитывает количество серий (runs) единиц и нулей.
-    Тест проходит если количество серий в диапазоне [2267, 2733].
+    Counts the number of runs (consecutive identical bits).
+    Test passes if the number of runs is in [2267, 2733].
     """
     sample = bits[:20000].ljust(20000, "0")
     runs = 1
@@ -143,8 +142,8 @@ def fips140_runs(bits: str) -> FIPSTestResult:
 def fips140_longrun(bits: str) -> FIPSTestResult:
     """FIPS 140-2 Test 4: Long Runs Test.
 
-    Проверяет наличие серий длиной >= 26.
-    Тест проходит если таких серий нет.
+    Checks for runs of length >= 26.
+    Test passes if no such runs exist.
     """
     sample = bits[:20000].ljust(20000, "0")
     max_run = 0
@@ -169,12 +168,12 @@ def fips140_longrun(bits: str) -> FIPSTestResult:
 def fips140_poker(bits: str) -> FIPSTestResult:
     """FIPS 140-2 Test 2: Poker Test.
 
-    Делит 20000 бит на 5000 4-битных групп и проверяет их распределение.
+    Divides 20000 bits into 5000 4-bit groups and checks their distribution.
     X = (16/5000) * sum(ni^2) - 5000
-    Тест проходит если 1.03 < X < 57.4.
+    Test passes if 1.03 < X < 57.4.
     """
     sample = bits[:20000].ljust(20000, "0")
-    # Разбить на 4-битные группы
+    # Split into 4-bit groups
     groups: dict[str, int] = {}
     for i in range(0, 20000, 4):
         nibble = sample[i:i + 4]
@@ -188,7 +187,7 @@ def fips140_poker(bits: str) -> FIPSTestResult:
         value=round(x, 3),
         threshold_low=1.03,
         threshold_high=57.4,
-        description="Poker statistic X for 5000 4-bit groups (FIPS threshold: 1.03–57.4)",
+        description="Poker statistic X for 5000 4-bit groups (FIPS threshold: 1.03-57.4)",
     )
 
 
@@ -197,7 +196,7 @@ def run_fips_tests(tokens: list[str]) -> list[FIPSTestResult]:
         return []
     bits = _tokens_to_bitstring(tokens)
     if len(bits) < 20000:
-        # Повторяем биты циклически до 20000 (для малых наборов токенов)
+        # Repeat bits cyclically up to 20000 (for small token sets)
         reps = math.ceil(20000 / len(bits))
         bits = (bits * reps)[:20000]
     return [
@@ -209,23 +208,23 @@ def run_fips_tests(tokens: list[str]) -> list[FIPSTestResult]:
 
 
 def analyze_position_entropy(tokens: list[str]) -> list[tuple[int, float, int]]:
-    """Анализ энтропии по позиции для fixed-length токенов.
+    """Analyze entropy by position for fixed-length tokens.
 
-    Для каждой позиции вычисляет энтропию (разнообразие символов).
-    Позиции с низкой энтропией — потенциальные аномалии (слабые позиции).
+    For each position computes entropy (character diversity).
+    Positions with low entropy are potential anomalies (weak positions).
 
     Args:
-        tokens: Список токенов одинаковой длины.
+        tokens: List of tokens of equal length.
 
     Returns:
-        Список кортежей (position, entropy_bits, unique_chars).
-        Возвращает пустой список если токены разной длины или < 2 токенов.
+        List of tuples (position, entropy_bits, unique_chars).
+        Returns empty list if tokens have different lengths or < 2 tokens.
     """
     if len(tokens) < 2:
         return []
     lengths = {len(t) for t in tokens}
     if len(lengths) != 1:
-        return []  # Разная длина — анализ по позиции невозможен
+        return []  # Different lengths — position analysis not possible
     token_len = lengths.pop()
     result = []
     for pos in range(token_len):
@@ -235,7 +234,7 @@ def analyze_position_entropy(tokens: list[str]) -> list[tuple[int, float, int]]:
         counter = Counter(chars)
         unique = len(counter)
         total = len(chars)
-        # Энтропия Шеннона по символам в позиции
+        # Shannon entropy over characters at this position
         h = 0.0
         for count in counter.values():
             p = count / total
@@ -247,7 +246,7 @@ def analyze_position_entropy(tokens: list[str]) -> list[tuple[int, float, int]]:
 
 @dataclass
 class SequencerReport:
-    """Результат анализа набора токенов."""
+    """Result of token set analysis."""
 
     tokens: list[str]
     token_count: int
@@ -255,23 +254,23 @@ class SequencerReport:
     min_length: int
     max_length: int
     charset_estimate: int
-    mean_entropy: float         # средняя H бит/символ
-    mean_total_bits: float      # среднее H * len
-    effective_bits: float       # оценка реальной стойкости
+    mean_entropy: float         # mean H bits/char
+    mean_total_bits: float      # mean H * len
+    effective_bits: float       # estimate of real strength
     assessment: str             # WEAK / MODERATE / GOOD / STRONG
-    length_histogram: dict[int, int]     # len → count
-    char_frequency: dict[str, int]       # char → count
+    length_histogram: dict[int, int]     # len -> count
+    char_frequency: dict[str, int]       # char -> count
     duplicates: int
-    fips_results: list[FIPSTestResult] = field(default_factory=list)  # FIPS 140-2 тесты
+    fips_results: list[FIPSTestResult] = field(default_factory=list)  # FIPS 140-2 tests
     position_anomalies: list[tuple[int, float, int]] = field(default_factory=list)
-    # (position, entropy_bits, unique_chars) — для fixed-length токенов
+    # (position, entropy_bits, unique_chars) — for fixed-length tokens
 
     def summary(self) -> str:
-        """Однострочное резюме для UI."""
+        """One-line summary for UI."""
         dup_str = f"  ⚠ {self.duplicates} dupes" if self.duplicates else ""
         return (
             f"Tokens: {self.token_count}  "
-            f"Len: {self.min_length}–{self.max_length} (avg {self.avg_length:.1f})  "
+            f"Len: {self.min_length}-{self.max_length} (avg {self.avg_length:.1f})  "
             f"Charset: ~{self.charset_estimate}  "
             f"Entropy: {self.mean_entropy:.2f} bits/char  "
             f"Total: {self.mean_total_bits:.0f} bits  "
@@ -279,11 +278,11 @@ class SequencerReport:
         )
 
     def rich_histogram(self, width: int = 30) -> str:
-        """Гистограмма длин токенов в Rich markup."""
+        """Token length histogram in Rich markup."""
         if not self.length_histogram:
             return "[dim]No data[/dim]"
         max_count = max(self.length_histogram.values())
-        lines = ["[bold]── Length Distribution ──[/bold]"]
+        lines = ["[bold]-- Length Distribution --[/bold]"]
         for length in sorted(self.length_histogram):
             cnt = self.length_histogram[length]
             bar_len = int((cnt / max_count) * width)
@@ -292,32 +291,32 @@ class SequencerReport:
         return "\n".join(lines)
 
     def rich_fips(self) -> str:
-        """Таблица FIPS 140-2 результатов в Rich markup."""
+        """FIPS 140-2 results table in Rich markup."""
         if not self.fips_results:
             return "[dim]FIPS 140-2: insufficient data (need more tokens)[/dim]"
-        lines = ["[bold]── FIPS 140-2 Statistical Tests ──[/bold]"]
+        lines = ["[bold]-- FIPS 140-2 Statistical Tests --[/bold]"]
         all_pass = all(r.passed for r in self.fips_results)
         for r in self.fips_results:
             color = r.status_color
-            lo = f"{r.threshold_low}" if r.threshold_low is not None else "—"
-            hi = f"{r.threshold_high}" if r.threshold_high is not None else "—"
+            lo = f"{r.threshold_low}" if r.threshold_low is not None else "-"
+            hi = f"{r.threshold_high}" if r.threshold_high is not None else "-"
             lines.append(
                 f"  [{color}]{r.status}[/{color}]  "
                 f"[yellow]{r.name:<22}[/yellow] "
                 f"value=[cyan]{r.value}[/cyan]  "
-                f"range=[dim]{lo}–{hi}[/dim]"
+                f"range=[dim]{lo}-{hi}[/dim]"
             )
         overall = "[bold green]ALL PASS ✓[/bold green]" if all_pass else "[bold red]SOME TESTS FAILED ✗[/bold red]"
         lines.append(f"\n  Overall: {overall}")
         return "\n".join(lines)
 
     def rich_charfreq(self, top_n: int = 20) -> str:
-        """Топ символов по частоте в Rich markup."""
+        """Top characters by frequency in Rich markup."""
         if not self.char_frequency:
             return "[dim]No data[/dim]"
         total = sum(self.char_frequency.values())
         sorted_chars = sorted(self.char_frequency.items(), key=lambda x: -x[1])[:top_n]
-        lines = ["[bold]── Character Frequency (top) ──[/bold]"]
+        lines = ["[bold]-- Character Frequency (top) --[/bold]"]
         for ch, cnt in sorted_chars:
             pct = cnt / total * 100
             bar = "▪" * max(1, int(pct / 2))
@@ -326,23 +325,23 @@ class SequencerReport:
         return "\n".join(lines)
 
     def rich_position_anomalies(self, low_entropy_threshold: float = 1.0) -> str:
-        """Таблица аномалий по позициям (для fixed-length токенов).
+        """Position anomaly table (for fixed-length tokens).
 
         Args:
-            low_entropy_threshold: Порог энтропии в битах ниже которого
-                позиция считается аномальной (мало разнообразия символов).
+            low_entropy_threshold: Entropy threshold in bits below which
+                a position is considered anomalous (low character diversity).
 
         Returns:
-            Rich markup строка с таблиц��й или сообщение что анализ невозможен.
+            Rich markup string with table, or message that analysis is unavailable.
         """
         if not self.position_anomalies:
             return "[dim]Position analysis: not available (tokens have different lengths or insufficient data)[/dim]"
 
         anomalies = [(pos, h, u) for pos, h, u in self.position_anomalies if h < low_entropy_threshold]
         if not anomalies:
-            return "[bold green]── Position Analysis: No anomalies ✓ ──[/bold green]"
+            return "[bold green]-- Position Analysis: No anomalies ✓ --[/bold green]"
 
-        lines = [f"[bold red]── Position Anomalies ({len(anomalies)} weak positions) ──[/bold red]"]
+        lines = [f"[bold red]-- Position Anomalies ({len(anomalies)} weak positions) --[/bold red]"]
         lines.append(f"[dim]Threshold: H < {low_entropy_threshold:.1f} bits (low entropy = predictable chars)[/dim]")
         lines.append("")
         for pos, h, unique in anomalies:
@@ -357,13 +356,13 @@ class SequencerReport:
 
 
 class Sequencer:
-    """Захват и анализ токенов для оценки их стойкости."""
+    """Capture and analyze tokens to assess their strength."""
 
     def __init__(self) -> None:
         self._tokens: list[str] = []
-        self.on_token: Callable[[str | None, None]] = None  # коллбэк при добавлении
+        self.on_token: Callable[[str | None, None]] = None  # callback on add
 
-    # ── Захват токенов ────────────────────────────────────────────────────────
+    # ── Token capture ─────────────────────────────────────────────────────────
 
     def add_token(self, token: str) -> None:
         token = token.strip()
@@ -382,14 +381,14 @@ class Sequencer:
         return added
 
     def add_from_text(self, text: str) -> int:
-        """Извлечь токены из многострочного текста (по одному на строку)."""
+        """Extract tokens from multiline text (one per line)."""
         tokens = [line.strip() for line in text.splitlines() if line.strip()]
         return self.add_tokens_bulk(tokens)
 
     def extract_from_header(self, header_value: str, param: str) -> str | None:
-        """Попытаться извлечь значение параметра из строки заголовка/Cookie.
+        """Try to extract a parameter value from a header/Cookie string.
 
-        Например: 'session=abc123; path=/' с param='session' → 'abc123'
+        Example: 'session=abc123; path=/' with param='session' -> 'abc123'
         """
         # Cookie-style: key=value; ...
         pattern = re.compile(rf"(?:^|[;&\s]){re.escape(param)}=([^;&\s]+)")
@@ -397,7 +396,7 @@ class Sequencer:
         if m:
             self.add_token(m.group(1))
             return m.group(1)
-        # Просто всё значение
+        # Use the entire value
         self.add_token(header_value)
         return header_value
 
@@ -412,10 +411,10 @@ class Sequencer:
     def tokens(self) -> list[str]:
         return list(self._tokens)
 
-    # ── Анализ ───────────────────────────────────────────────────────────────
+    # ── Analysis ──────────────────────────────────────────────────────────────
 
     def analyze(self) -> SequencerReport:
-        """Проанализировать накопленные токены и вернуть отчёт."""
+        """Analyze accumulated tokens and return a report."""
         tokens = self._tokens
         if not tokens:
             return SequencerReport(
@@ -439,11 +438,11 @@ class Sequencer:
         mean_H = sum(entropies) / len(entropies)
         mean_bits = sum(total_bits_list) / len(total_bits_list)
 
-        # Реальная стойкость: min от теоретической и фактической
+        # Real strength: min of theoretical and actual
         theoretical_bits = math.log2(avg_charset) * avg_len if avg_charset > 1 else 0
         effective = min(mean_bits, theoretical_bits)
 
-        # Оценка
+        # Assessment
         if effective < 32:
             assessment = "WEAK ⚠️"
         elif effective < 64:
@@ -453,24 +452,24 @@ class Sequencer:
         else:
             assessment = "STRONG 🔒"
 
-        # Гистограмма длин
+        # Length histogram
         hist: dict[int, int] = {}
         for ln in lengths:
             hist[ln] = hist.get(ln, 0) + 1
 
-        # Частота символов
+        # Character frequency
         char_freq: dict[str, int] = {}
         for t in tokens:
             for ch in t:
                 char_freq[ch] = char_freq.get(ch, 0) + 1
 
-        # Дубликаты
+        # Duplicates
         duplicates = len(tokens) - len(set(tokens))
 
-        # FIPS 140-2 тесты
+        # FIPS 140-2 tests
         fips = run_fips_tests(list(tokens))
 
-        # Анализ аномалий по позициям (только для fixed-length токенов)
+        # Position anomaly analysis (only for fixed-length tokens)
         pos_anomalies = analyze_position_entropy(list(tokens))
 
         return SequencerReport(

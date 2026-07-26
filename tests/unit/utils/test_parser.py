@@ -1,6 +1,6 @@
-"""Unit-тесты: utils/parser.py
+"""Unit tests: utils/parser.py
 
-Покрывает: ParsedRequest, ParsedResponse, parse_http_request,
+Covers: ParsedRequest, ParsedResponse, parse_http_request,
            parse_http_response, build_http_request.
 """
 
@@ -123,7 +123,7 @@ class TestParseHttpRequest:
             parse_http_request("")
 
     def test_lf_only_separator(self) -> None:
-        """Поддержка \\n без \\r."""
+        """Support for \\n without \\r."""
         raw = "GET / HTTP/1.1\nHost: example.com\n\n"
         req = parse_http_request(raw)
         assert req.method == "GET"

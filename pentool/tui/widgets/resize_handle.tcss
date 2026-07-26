@@ -2,7 +2,7 @@ ResizeHandle {
     width: 1;
     height: 100%;
     background: $primary-darken-2;
-    pointer: ew-resize;  /* горизонтальный разделитель — двусторонняя стрелка по горизонтали */
+    pointer: ew-resize;  /* horizontal divider — bidirectional horizontal arrow */
 }
 ResizeHandle:hover {
     background: $primary;
@@ -16,7 +16,7 @@ ResizeHandle.-vertical {
     height: 1;
     background: transparent;
     color: $primary-darken-1;
-    pointer: ns-resize;  /* вертикальный разделитель — двусторонняя стрелка по вертикали */
+    pointer: ns-resize;  /* vertical divider — bidirectional vertical arrow */
 }
 ResizeHandle.-vertical:hover {
     background: transparent;

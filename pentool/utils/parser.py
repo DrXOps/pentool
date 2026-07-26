@@ -1,4 +1,4 @@
-"""Парсинг и сборка HTTP-запросов/ответов из сырых строк."""
+"""Parsing and building HTTP requests/responses from raw strings."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 @dataclass
 class ParsedRequest:
-    """Распарсенный HTTP-запрос."""
+    """A parsed HTTP request."""
 
     method: str
     url: str
@@ -18,7 +18,7 @@ class ParsedRequest:
 
     @property
     def host(self) -> str:
-        """Хост из URL или заголовка Host."""
+        """Host from URL or Host header."""
         parsed = urlparse(self.url)
         if parsed.netloc:
             return parsed.netloc
@@ -26,7 +26,7 @@ class ParsedRequest:
 
     @property
     def path(self) -> str:
-        """Путь из URL (включая query string)."""
+        """Path from URL (including query string)."""
         parsed = urlparse(self.url)
         result = parsed.path or "/"
         if parsed.query:
@@ -35,40 +35,40 @@ class ParsedRequest:
 
     @property
     def is_https(self) -> bool:
-        """True, если URL начинается с https://."""
+        """True if the URL starts with https://."""
         return self.url.lower().startswith("https://")
 
 
 @dataclass
 class ParsedResponse:
-    """Распарсенный HTTP-ответ."""
+    """A parsed HTTP response."""
 
     status: int
     reason: str = ""
     headers: dict[str, str] = field(default_factory=dict)
     body: str = ""
     http_version: str = "HTTP/1.1"
-    # Сырые байты тела — используются при проксировании чтобы не перекодировать
+    # Raw body bytes — used during proxying to avoid re-encoding
     _raw_body: bytes | None = field(default=None, repr=False, compare=False)
 
 
 def parse_http_request(raw: str) -> ParsedRequest:
-    """Распарсить сырую строку HTTP-запроса в ParsedRequest.
+    """Parse a raw HTTP request string into a ParsedRequest.
 
     Args:
-        raw: Сырая строка запроса (например, содержимое перехваченного запроса).
+        raw: Raw request string (e.g. the content of an intercepted request).
 
     Returns:
-        Объект ParsedRequest.
+        A ParsedRequest object.
 
     Raises:
-        ValueError: Если строка не является корректным HTTP-запросом.
+        ValueError: If the string is not a valid HTTP request.
     """
     raw = raw.strip()
     if not raw:
         raise ValueError("Empty HTTP request")
 
-    # Разделить заголовки и тело
+    # Split headers and body
     if "\r\n\r\n" in raw:
         head, body = raw.split("\r\n\r\n", 1)
         lines = head.split("\r\n")
@@ -82,7 +82,7 @@ def parse_http_request(raw: str) -> ParsedRequest:
     if not lines:
         raise ValueError("Empty HTTP request")
 
-    # Первая строка: METHOD PATH HTTP/VERSION
+    # First line: METHOD PATH HTTP/VERSION
     request_line = lines[0].strip()
     parts = request_line.split(" ", 2)
     if len(parts) < 2:
@@ -91,7 +91,7 @@ def parse_http_request(raw: str) -> ParsedRequest:
     method = parts[0].upper()
     path = parts[1]
 
-    # Разобрать заголовки
+    # Parse headers
     headers: dict[str, str] = {}
     for line in lines[1:]:
         line = line.strip()
@@ -101,7 +101,7 @@ def parse_http_request(raw: str) -> ParsedRequest:
             key, _, value = line.partition(":")
             headers[key.strip()] = value.strip()
 
-    # Собрать полный URL
+    # Build full URL
     host = headers.get("Host", headers.get("host", ""))
     if path.startswith("http://") or path.startswith("https://"):
         url = path
@@ -115,16 +115,16 @@ def parse_http_request(raw: str) -> ParsedRequest:
 
 
 def parse_http_response(raw: str) -> ParsedResponse:
-    """Распарсить сырую строку HTTP-ответа в ParsedResponse.
+    """Parse a raw HTTP response string into a ParsedResponse.
 
     Args:
-        raw: Сырая строка ответа.
+        raw: Raw response string.
 
     Returns:
-        Объект ParsedResponse.
+        A ParsedResponse object.
 
     Raises:
-        ValueError: Если строка не является корректным HTTP-ответом.
+        ValueError: If the string is not a valid HTTP response.
     """
     raw = raw.strip()
     if not raw:
@@ -174,13 +174,13 @@ def parse_http_response(raw: str) -> ParsedResponse:
 
 
 def build_http_request(req: ParsedRequest) -> str:
-    """Собрать сырую строку HTTP-запроса из ParsedRequest."""
+    """Build a raw HTTP request string from a ParsedRequest."""
     path = req.path
     lines = [f"{req.method} {path} HTTP/1.1"]
 
     headers_lower = {k.lower(): k for k in req.headers}
 
-    # Host — обязателен, добавляем первым если отсутствует
+    # Host is required; add it first if missing
     if "host" not in headers_lower:
         host = req.host
         if host:
@@ -189,7 +189,7 @@ def build_http_request(req: ParsedRequest) -> str:
     for key, value in req.headers.items():
         lines.append(f"{key}: {value}")
 
-    # Стандартные заголовки если отсутствуют
+    # Standard headers if missing
     if "user-agent" not in headers_lower:
         lines.append("User-Agent: Mozilla/5.0 (compatible; pentool/1.0)")
     if "accept" not in headers_lower:
@@ -207,13 +207,13 @@ def build_http_request(req: ParsedRequest) -> str:
 
 
 def build_http_response(resp: ParsedResponse) -> str:
-    """Собрать сырую строку HTTP-ответа из ParsedResponse.
+    """Build a raw HTTP response string from a ParsedResponse.
 
     Args:
-        resp: Объект ответа.
+        resp: Response object.
 
     Returns:
-        Строка в формате HTTP/1.1.
+        String in HTTP/1.1 format.
     """
     lines = [f"{resp.http_version} {resp.status} {resp.reason}"]
 

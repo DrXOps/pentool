@@ -1,4 +1,4 @@
-"""LargeBodyHandler — хранение тел > 1МБ на диске."""
+"""LargeBodyHandler — stores bodies > 1 MB on disk."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-THRESHOLD = 1 * 1024 * 1024  # 1 МБ
+THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
 
 class LargeBodyHandler:
-    """Сохраняет/загружает тела запросов/ответов > THRESHOLD на диск.
+    """Saves/loads request/response bodies > THRESHOLD to/from disk.
 
-    Формат имени файла: <row_id>_<kind>.bin
-    где kind = 'req' | 'resp'
+    File name format: <row_id>_<kind>.bin
+    where kind = 'req' | 'resp'
     """
 
     BASE_DIR: Path = Path("~/.config/pentool/bodies").expanduser()

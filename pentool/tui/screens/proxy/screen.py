@@ -1,4 +1,4 @@
-"""Полноценный экран прокси-сервера."""
+"""Full-featured proxy server screen."""
 
 from __future__ import annotations
 
@@ -41,11 +41,11 @@ from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 
 logger = get_logger(__name__)
 
-# Колонки таблицы HTTP History
+# HTTP History table columns
 _COL_NAMES = ["ID", "Host", "Method", "URL", "Status", "Size", "Time"]
 
 def _make_empty_table() -> pa.Table:
-    """Пустая Arrow-таблица с нужными колонками."""
+    """Empty Arrow table with the required columns."""
     return pa.table({
         "ID":     pa.array([], type=pa.int64()),
         "Host":   pa.array([], type=pa.string()),
@@ -57,12 +57,12 @@ def _make_empty_table() -> pa.Table:
     })
 
 def _rows_to_arrow(rows: list[dict]) -> pa.Table:
-    """Преобразовать список dict из HttpStorage в Arrow-таблицу."""
+    """Convert a list of dicts from HttpStorage into an Arrow table."""
     ids, hosts, methods, urls, statuses, sizes, times = [], [], [], [], [], [], []
     for r in rows:
         ids.append(r.get("id", 0))
         host = str(r.get("host", "") or "")
-        # Минимальная ширина Host — 30 символов, чтобы колонка не была узкой
+        # Minimum Host column width — 30 chars to keep the column visible
         hosts.append(host)
         methods.append(str(r.get("method", "") or ""))
         url = str(r.get("url", "") or "")
@@ -80,8 +80,7 @@ def _rows_to_arrow(rows: list[dict]) -> pa.Table:
                 times.append("-")
         else:
             times.append("-")
-    # Если таблица пустая — добавляем фиктивную строку-заглушку для ширины колонок,
-    # но только если данных нет вообще
+    # If the table is empty — return empty typed table without placeholder rows
     if not rows:
         return pa.table({
             "ID":     pa.array([], type=pa.int64()),
@@ -107,15 +106,15 @@ from pentool.tui.widgets.toolbar_button import ToolbarButton
 from textual import events as _events, on
 
 class _ProxyDataTable(_BaseDataTable):
-    """DataTable для Proxy HTTP History.
+    """DataTable for Proxy HTTP History.
 
-    Для Ctrl+левой кнопки публикуем собственное сообщение ContextMenuRequest,
-    чтобы ProxyScreen мог открыть контекстное меню без зависимости от пузырения.
-    (Правая кнопка button=3 не доходит до Textual в VTE-терминале.)
+    For Ctrl+left-click we post a custom ContextMenuRequest message so that
+    ProxyScreen can open the context menu without relying on event bubbling.
+    (Right-click button=3 does not reach Textual in a VTE terminal.)
     """
 
     class ContextMenuRequest(Message):
-        """Запрос открытия контекстного меню от DataTable."""
+        """Request to open the context menu from a DataTable."""
         def __init__(self, screen_x: int, screen_y: int) -> None:
             super().__init__()
             self.screen_x = screen_x
@@ -125,9 +124,9 @@ class _ProxyDataTable(_BaseDataTable):
         if isinstance(event, _events.MouseDown) and (
             event.button == 3 or (event.button == 1 and event.ctrl)
         ):
-            # Сначала вызываем базовый обработчик (двигаем курсор к строке)
+            # Call the base handler first (moves cursor to the row)
             await super().on_event(event)
-            # Публикуем собственное сообщение — оно всегда поднимается к родителю
+            # Post our own message — it always bubbles to the parent
             self.post_message(self.ContextMenuRequest(event.screen_x, event.screen_y))
         else:
             await super().on_event(event)
@@ -135,7 +134,7 @@ class _ProxyDataTable(_BaseDataTable):
 DataTable = _ProxyDataTable
 
 class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
-    """Полный экран модуля Proxy."""
+    """Full Proxy module screen."""
 
     DEFAULT_CSS = _CSS
 
@@ -149,10 +148,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         Binding("ctrl+w",  "focus_tab_ws",       "WS History",   show=False),
     ]
 
-    # Для совместимости с тестами (test_stage8_5)
+    # For test compatibility (test_stage8_5)
     _COL_LABELS = ["ID", "Mth", "URL", "St", "Size"]
 
-    # ── RequestContextMenuMixin config (текстовая панель) ────────────────────
+    # ── RequestContextMenuMixin config (text panel) ───────────────────────────
     _cm_show_nmap          = True
     _cm_show_send_intruder = True
     _cm_show_send_scanner  = True
@@ -174,7 +173,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._intercept_pending: list[InterceptedRequest] = []
 
     def compose(self) -> ComposeResult:
-        # Toolbar (снаружи SubTabs — все btn-* ID всегда в DOM)
+        # Toolbar (outside SubTabs — all btn-* IDs are always in the DOM)
         with Horizontal(id="toolbar"):
             yield ToolbarButton("○ Proxy",     "btn-proxy",     classes="inactive")
             yield Static(" │ ", classes="toolbar-sep")
@@ -188,7 +187,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Clear",       "btn-clear")
 
-        # Под-вкладки прокси
+        # Proxy sub-tabs
         with TabbedContent(id="proxy-subtabs"):
             with TabPane("Intercept", id="tab-intercept"):
                 with Horizontal(id="intercept-toolbar"):
@@ -223,7 +222,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             with TabPane("HTTP History", id="tab-http-history"):
                 with Horizontal(id="body"):
                     with Vertical(id="main-panel"):
-                        # Верхняя часть: FilterBar + DataTable
+                        # Top section: FilterBar + DataTable
                         with Vertical(id="table-area"):
                             yield FilterBar(id="filter-bar")
                             yield DataTable(
@@ -234,13 +233,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                                 max_column_content_width=120,
                                 column_widths=[5, 20, 8, 60, 6, 8, 8],
                             )
-                        # ResizeHandle между таблицей и детальной панелью
+                        # ResizeHandle between the table and the detail panel
                         yield ResizeHandle(
                             "table-area", "detail-area",
                             vertical=True,
                             id="resize-table-detail",
                         )
-                        # Нижняя часть: Request | ResizeHandle | Response
+                        # Lower part: Request | ResizeHandle | Response
                         with Horizontal(id="detail-area"):
                             with Vertical(id="req-panel"):
                                 yield Static("Request", classes="panel-title")
@@ -252,7 +251,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                             with Vertical(id="resp-panel"):
                                 yield Static("Response", classes="panel-title")
                                 yield HttpView(id="resp-viewer")
-                    # Inspector (скрыт по умолчанию)
+                    # Inspector (hidden by default)
                     yield InspectorPanel(id="inspector-panel")
 
             with TabPane("WS History", id="tab-ws-history"):
@@ -311,8 +310,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._sync_proxy_button()
         self._sync_intercept_button()
         self._setup_tooltips()
-        # init_storage запускается из app.on_mount после инжекции _proxy_service
-        # Установить начальное состояние ScopeToggle из конфига
+        # init_storage is called from app.on_mount after _proxy_service injection
+        # Set initial ScopeToggle state from config
         try:
             from pentool.core.config import get_config
             from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
@@ -321,7 +320,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             filter_bar.query_one("#fb-scope", ScopeToggle).set_scope_empty(not bool(scope))
         except Exception:
             pass
-        # Подписаться на WS-фреймы
+        # Subscribe to WS frames
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import WebSocketFrameEvent
@@ -330,7 +329,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     def _on_ws_frame_event(self, event) -> None:
-        """Получен WS-фрейм — добавить в лог (thread-safe)."""
+        """WS frame received — append to log (thread-safe)."""
         self.app.call_from_thread(self._append_ws_frame, event)
 
     def _append_ws_frame(self, event) -> None:
@@ -374,7 +373,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     def on_unmount(self) -> None:
-        """Отписаться от EventBus при удалении виджета."""
+        """Unsubscribe from EventBus when the widget is removed."""
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import WebSocketFrameEvent
@@ -383,7 +382,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     async def _reload_table(self, filters: dict | None = None) -> None:
-        """Загрузить/перезагрузить данные в DataTable из storage."""
+        """Load/reload data into the DataTable from storage."""
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         try:
@@ -407,14 +406,14 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             table._clear_caches()
             table._require_update_dimensions = True
             table.refresh()
-            # Скролл к первой строке (новые запросы идут сверху)
+            # Scroll to the first row (newest requests are at the top)
             if rows:
                 table.move_cursor(row=0)
         except Exception as exc:
             logger.error("_reload_table failed: %s", exc)
 
     async def _reload_ws_table(self) -> None:
-        """Загрузить/перезагрузить WebSocket-запросы в WS History таблицу."""
+        """Load/reload WebSocket requests into the WS History table."""
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         try:
@@ -463,7 +462,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 pass
 
     def load_from_project(self) -> None:
-        """Вызывается после смены проекта — перезагружает таблицу из storage (уже переключённого)."""
+        """Called after a project switch — reloads the table from the (already switched) storage."""
         try:
             from pentool.core.config import get_config
             from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
@@ -475,7 +474,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self.run_worker(self._reload_from_storage())
 
     async def _reload_from_proxy(self) -> None:
-        """Синхронизировать storage из in-memory прокси (для случая очистки/сброса истории)."""
+        """Sync storage from the in-memory proxy (for history clear/reset)."""
         if self._proxy_service is None:
             return
         for _ in range(50):
@@ -489,7 +488,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         await self._reload_table()
 
     async def _reload_from_storage(self) -> None:
-        """Перезагрузить таблицу из текущего storage без сброса данных."""
+        """Reload the table from current storage without clearing data."""
         if self._proxy_service is None:
             return
         for _ in range(60):
@@ -503,7 +502,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         await self._reload_ws_table()
 
     def add_request_row(self, req: object) -> None:
-        """Вызывается из app при поступлении нового запроса (без ответа ещё)."""
+        """Called from app when a new request arrives (before a response)."""
         if not isinstance(req, InterceptedRequest):
             return
         if req.id in self._pending_req_ids:
@@ -514,7 +513,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self.run_worker(self._store_request(req))
 
     def update_request_row(self, req: object) -> None:
-        """Вызывается из app когда запрос полностью завершён (с ответом)."""
+        """Called from app when a request is fully complete (with response)."""
         if not isinstance(req, InterceptedRequest):
             return
         status = req.response.status if req.response else None
@@ -530,7 +529,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._pending_req_ids[req.id] = row_id
 
     async def _wait_for_row_id(self, req: InterceptedRequest) -> int | None:
-        """Ждать пока _store_request заменит sentinel -1 на реальный row_id."""
+        """Wait until _store_request replaces the -1 sentinel with a real row_id."""
         for _ in range(50):
             row_id = self._pending_req_ids.get(req.id)
             if row_id is not None and row_id != -1:
@@ -559,7 +558,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             await self._reload_table(None)
 
     def _append_row_to_table(self, req: InterceptedRequest, row_id: int) -> None:
-        """Инкрементально добавить одну строку в таблицу без полного reload."""
+        """Incrementally add a single row to the table without a full reload."""
         parsed = req.to_parsed_request()
         url = parsed.url or ""
         ts = time.time()
@@ -592,7 +591,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self.run_worker(self._load_row_details(self._selected_req_id))
 
     def _select_ws_row(self, row_idx: int) -> None:
-        """Выбор строки в WS History — загружает детали в ws-панели."""
+        """Select a row in WS History — loads details into the WS panels."""
         if 0 <= row_idx < len(self._ws_rows_cache):
             row = self._ws_rows_cache[row_idx]
             row_id = row.get("id")
@@ -612,7 +611,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._select_row(event.cursor_row)
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
-        """Даём фокус DataTable при любом движении курсора — нужно для скролла мышью."""
+        """Give focus to DataTable on any cursor movement — required for mouse scroll."""
         try:
             event.data_table.focus()
         except Exception:
@@ -673,7 +672,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         if col_name:
             direction = "descending" if self._sort_reverse else "ascending"
             event.data_table.sort(by=[(col_name, direction)])
-            # Обновить метки колонок — показать стрелку у активной
+            # Update column labels — show sort arrow on active column
             try:
                 for i, name in enumerate(_COL_NAMES):
                     col = event.data_table.ordered_columns[i]
@@ -702,12 +701,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     def _switch_proxy_tab(self, tab_id: str) -> None:
-        """Переключиться на вкладку Proxy и поставить фокус на таблицу."""
+        """Switch to a Proxy tab and focus the table."""
         try:
             from textual.widgets import TabbedContent
             tabs = self.query_one(TabbedContent)
             tabs.active = tab_id
-            # Ставим фокус на DataTable в нужной вкладке
+            # Focus the DataTable in the target tab
             self.call_after_refresh(self._focus_tab_table, tab_id)
         except Exception:
             pass
@@ -728,15 +727,15 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     def action_focus_tab_history(self) -> None:
-        """Переключиться на HTTP History."""
+        """Switch to HTTP History."""
         self._switch_proxy_tab("tab-http-history")
 
     def action_focus_tab_intercept(self) -> None:
-        """Переключиться на Intercept."""
+        """Switch to Intercept."""
         self._switch_proxy_tab("tab-intercept")
 
     def action_focus_tab_ws(self) -> None:
-        """Переключиться на WS History."""
+        """Switch to WS History."""
         self._switch_proxy_tab("tab-ws-history")
 
     def on_key(self, event) -> None:
@@ -794,7 +793,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self.app.post_message(SendToIntruder(raw))
 
     def _auto_add_host_to_target(self, url: str) -> None:
-        """Автоматически добавить хост из URL в Target sitemap."""
+        """Automatically add the host from a URL to the Target sitemap."""
         try:
             from pentool.utils.parser import ParsedRequest
             parsed = ParsedRequest(method="GET", url=url, headers={}, body="")
@@ -1000,25 +999,25 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             modified = editor.text
         except Exception:
             modified = None
-        # Показать отправленный запрос в левой нижней панели
+        # Display the sent request in the bottom-left panel
         sent_text = modified if modified and modified.strip() else ""
         try:
             self.query_one("#intercept-sent-req", HttpView).load_raw_http(sent_text)
         except Exception:
             pass
-        # Очистить правую панель ответа — ждём ответ от сервера
+        # Clear the response panel — waiting for the server response
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
         except Exception:
             pass
         proxy.forward(req.id, modified if modified and modified.strip() else None)
         self._intercept_req = None
-        # Если есть ожидающие — сразу показать следующий
+        # If there are queued requests — show the next one immediately
         if self._intercept_pending:
             next_req = self._intercept_pending.pop(0)
             self._display_intercept_req(next_req)
         else:
-            # Дизейблим кнопки — ответ появится асинхронно через show_intercept_response
+            # Disable buttons — response will arrive asynchronously via show_intercept_response
             self._disable_intercept_buttons(hint="⏳ Forwarded — waiting for response…")
 
     def action_drop(self) -> None:
@@ -1027,13 +1026,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             return
         proxy.drop(self._intercept_req.id)
         self._intercept_req = None
-        # Если есть ожидающие — сразу показать следующий
+        # If there are queued requests — show the next one immediately
         if self._intercept_pending:
             next_req = self._intercept_pending.pop(0)
             self._display_intercept_req(next_req)
             return
         self._disable_intercept_buttons(hint="✖ Dropped")
-        # При Drop очищаем верхний редактор и обе нижние панели
+        # On Drop: clear the top editor and both bottom panels
         try:
             self.query_one("#intercept-editor", TextArea).load_text(
                 "(No requests waiting for intercept)"
@@ -1056,7 +1055,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     def _disable_intercept_buttons(self, hint: str = "") -> None:
-        """Дизейблить Forward/Drop и обновить подсказку."""
+        """Disable Forward/Drop and update the hint."""
         try:
             self.query_one("#btn-forward", ToolbarButton).disabled = True
             self.query_one("#btn-drop",    ToolbarButton).disabled = True
@@ -1069,14 +1068,14 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 pass
 
     def show_intercepted_request(self, req: InterceptedRequest) -> None:
-        """Вызывается из app при перехвате запроса — показывает в Intercept Tab.
+        """Called from app when a request is intercepted — displays it in the Intercept Tab.
 
-        Если сейчас уже ожидает другой запрос (Forward/Drop ещё не нажато),
-        новый запрос встаёт в очередь. Так пользователь видит запросы по одному,
-        а не теряет их (и proxy корректно блокирует каждый до решения).
+        If another request is already waiting (Forward/Drop not yet pressed),
+        the new request is queued. This way the user sees requests one at a time
+        and none are lost (the proxy correctly blocks each until resolved).
         """
         if self._intercept_req is not None:
-            # Уже показываем запрос — встаём в очередь
+            # Already showing a request — queue the new one
             self._intercept_pending.append(req)
             try:
                 self.query_one("#intercept-hint", Label).update(
@@ -1088,7 +1087,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._display_intercept_req(req)
 
     def _display_intercept_req(self, req: InterceptedRequest) -> None:
-        """Отобразить запрос в Intercept Tab (используется при показе и при переходе к следующему)."""
+        """Display a request in the Intercept Tab (used both for initial display and when moving to the next)."""
         self._intercept_req = req
         try:
             from pentool.utils.parser import build_http_request
@@ -1100,7 +1099,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             editor.load_text(raw)
         except Exception:
             pass
-        # Подсветка заголовков над редактором
+        # Header highlight above the editor
         try:
             from pentool.tui.widgets.request_editor import _render_headers_rich
             parsed = req.to_parsed_request()
@@ -1111,8 +1110,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             preview.display = True
         except Exception:
             pass
-        # Очищаем только панель ответа — Sent Request не трогаем
-        # (он обновляется только в action_forward/action_drop)
+        # Clear only the response panel — leave Sent Request as-is
+        # (it is updated only in action_forward/action_drop)
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
         except Exception:
@@ -1130,7 +1129,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self.query_one("#intercept-hint", Label).update(hint)
         except Exception:
             pass
-        # Переключиться на вкладку Intercept
+        # Switch to the Intercept tab
         try:
             tabs = self.query_one("#proxy-subtabs", TabbedContent)
             tabs.active = "tab-intercept"
@@ -1159,8 +1158,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     def action_toggle_intercept(self) -> None:
         self.app.action_toggle_intercept()  # type: ignore[attr-defined]
         self._sync_intercept_button()
-        # При выключении перехвата — сбросить текущий и очередь,
-        # иначе все накопленные запросы выскочат при следующем включении
+        # When intercept is disabled — reset current request and queue,
+        # otherwise all queued requests will pop up on the next enable
         proxy = self._get_proxy()
         if proxy and not proxy.intercept_enabled:
             self._intercept_req = None
@@ -1169,7 +1168,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
 
     def action_toggle_proxy(self) -> None:
         proxy = self._get_proxy()
-        # Мгновенный визуальный отклик — ещё до того как поток запустится/остановится
+        # Instant visual feedback — before the thread actually starts/stops
         if proxy and not proxy.is_running:
             try:
                 btn = self.query_one("#btn-proxy", ToolbarButton)
@@ -1226,7 +1225,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         def _apply(result: list[str] | None) -> None:
             if result is not None and proxy is not None:
                 proxy.set_scope(result)
-                # Синхронизируем scope в Config и сохраняем на диск
+                # Sync scope into Config and save to disk
                 try:
                     from pentool.core.config import get_config
                     cfg = get_config()
@@ -1234,7 +1233,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                     cfg.save()
                 except Exception as e:
                     logger.warning("action_open_scope: failed to save scope to config: %s", e)
-                # Обновить состояние ScopeToggle в FilterBar
+                # Update ScopeToggle state in FilterBar
                 scope_toggle_was_active = False
                 try:
                     from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
@@ -1244,11 +1243,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                     st.set_scope_empty(not bool(result))
                 except Exception:
                     pass
-                # Если ScopeToggle уже был активен — перезагрузить таблицу с новым scope
+                # If ScopeToggle was already active — reload the table with the new scope
                 if scope_toggle_was_active and result:
                     self.run_worker(self._reload_table({"scope_only": True}))
                 elif not result:
-                    # Scope очищен — снять фильтр и показать всё
+                    # Scope cleared — remove filter and show everything
                     self.run_worker(self._reload_table(None))
                 if result is not None:
                     n = len(result)
@@ -1313,7 +1312,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     def update_intercept_label(self, enabled: bool) -> None:
         self._sync_intercept_button()
 
-    # ID контейнеров, которые относятся к текстовым панелям (Request/Response)
+    # IDs of containers belonging to text panels (Request/Response)
     _TEXT_PANEL_IDS = frozenset({
         "req-panel", "resp-panel",
         "ws-req-panel", "ws-resp-panel",
@@ -1321,12 +1320,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         "ws-req-editor", "ws-resp-viewer",
         "intercept-editor", "intercept-sent-req", "intercept-resp-viewer",
         "intercept-req-area", "intercept-sent-panel", "intercept-resp-panel",
-        # внутренние виджеты HttpView
+        # internal HttpView widgets
         "http-headers", "http-body",
     })
 
     def _is_in_text_panel(self, widget) -> bool:
-        """Проверить: виджет или один из его предков — текстовая панель."""
+        """Check whether the widget or one of its ancestors is a text panel."""
         try:
             from pentool.tui.widgets.request_editor import HttpView
             node = widget
@@ -1334,7 +1333,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 nid = getattr(node, "id", None) or ""
                 if nid in self._TEXT_PANEL_IDS:
                     return True
-                # HttpView — всегда текстовая панель
+                # HttpView — always a text panel
                 if isinstance(node, HttpView):
                     return True
                 node = getattr(node, "parent", None)
@@ -1343,7 +1342,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         return False
 
     def on__proxy_data_table_context_menu_request(self, event: _ProxyDataTable.ContextMenuRequest) -> None:
-        """Обработка запроса контекстного меню от DataTable (Ctrl+click или правая кнопка)."""
+        """Handle a context menu request from the DataTable (Ctrl+click or right-click)."""
         try:
             table = self.query_one("#request-list", DataTable)
             cursor_row = table.cursor_row
@@ -1354,41 +1353,41 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._open_context_menu(event.screen_x, event.screen_y)
 
     def on__base_http_widget_context_menu_request(self, event) -> None:
-        """Ctrl+клик / правая кнопка на любом _BaseHttpWidget → контекстное меню."""
+        """Ctrl+click / right-click on any _BaseHttpWidget → context menu."""
         self.cm_open_text_menu(event.screen_x, event.screen_y)
 
     def on_mouse_down(self, event) -> None:
-        # Правая кнопка (button=3) или Ctrl+левая — контекстное меню
+        # Right-click (button=3) or Ctrl+left — context menu
         if not ((event.button == 3) or (event.button == 1 and event.ctrl)):
             return
 
         widget = event.widget
 
         if self._is_in_text_panel(widget):
-            # Клик в области Request / Response → текстовое меню
+            # Click in Request / Response area → text menu
             self.cm_open_text_menu(event.screen_x, event.screen_y)
             event.stop()
             return
 
-        # Клик в DataTable (#request-list) — обрабатывается через
-        # on__proxy_data_table_context_menu_request, поэтому здесь
-        # открываем меню только если событие пришло НЕ из таблицы
+        # Click in DataTable (#request-list) — handled via
+        # on__proxy_data_table_context_menu_request, so here
+        # we only open the menu if the event did NOT come from the table
         try:
             table = self.query_one("#request-list", DataTable)
             node = widget
             while node is not None:
                 if node is table:
-                    # Это событие из DataTable — игнорируем (обработает ContextMenuRequest)
+                    # This event is from DataTable — ignore it (ContextMenuRequest handles it)
                     return
                 node = getattr(node, "parent", None)
         except Exception:
             pass
-        # Клик вне text panel и вне DataTable — открываем меню таблицы (общее)
+        # Click outside text panel and DataTable — open the table context menu
         self._open_context_menu(event.screen_x, event.screen_y)
         event.stop()
 
     def on_click(self, event) -> None:
-        # Двойной клик — загрузить детали в Request/Response панели
+        # Double-click — load details into Request/Response panels
         if event.chain == 2:
             try:
                 table = self.query_one("#request-list", DataTable)
@@ -1397,7 +1396,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 pass
 
     def _open_context_menu(self, x: int, y: int) -> None:
-        """Контекстное меню для строки в таблице HTTP History."""
+        """Context menu for a row in the HTTP History table."""
         selected_host = self._get_selected_host_sync()
         proxy = self._get_proxy()
         in_scope = proxy.is_in_scope(selected_host) if (proxy and selected_host) else False
@@ -1426,7 +1425,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     # ── RequestContextMenuMixin impl ──────────────────────────────────────────
 
     def _cm_get_raw_request(self) -> str:
-        """Raw HTTP из панели Request (HttpView#req-editor → TextArea#http-body)."""
+        """Raw HTTP from the Request panel (HttpView#req-editor → TextArea#http-body)."""
         try:
             from textual.widgets import TextArea
             view = self.query_one("#req-editor", HttpView)
@@ -1436,8 +1435,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             return ""
 
     def _get_selected_host_sync(self) -> str:
-        """Синхронно получить хост выбранного запроса из кэша."""
-        # Сначала ищем по cursor_row (актуальнее чем _selected_req_id)
+        """Synchronously get the host of the selected request from the cache."""
+        # First search by cursor_row (more up-to-date than _selected_req_id)
         try:
             table = self.query_one("#request-list", DataTable)
             row_idx = table.cursor_row
@@ -1447,7 +1446,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                     return host
         except Exception:
             pass
-        # Запасной вариант — по _selected_req_id
+        # Fallback — look up by _selected_req_id
         if self._selected_req_id is None or not self._rows_cache:
             return ""
         for row in self._rows_cache:
@@ -1481,7 +1480,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._delete_selected_request()
 
     def _scope_action_for_selected(self, add: bool) -> None:
-        """Добавить/убрать хост выбранного запроса из scope."""
+        """Add or remove the selected request's host from scope."""
         if self._selected_req_id is None:
             return
         self.run_worker(self._do_scope_action(add))
@@ -1507,19 +1506,19 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             if host not in scope:
                 scope.append(host)
                 proxy.set_scope(scope)
-                self.app.notify(f"★ {host} добавлен в scope", severity="information", timeout=2)
+                self.app.notify(f"★ {host} added to scope", severity="information", timeout=2)
                 self._sync_target_host_scope(host, True)
             else:
-                self.app.notify(f"{host} уже в scope", timeout=2)
+                self.app.notify(f"{host} is already in scope", timeout=2)
         else:
             if host in scope:
                 scope.remove(host)
                 proxy.set_scope(scope)
-                self.app.notify(f"{host} убран из scope", severity="information", timeout=2)
+                self.app.notify(f"{host} removed from scope", severity="information", timeout=2)
                 self._sync_target_host_scope(host, False)
             else:
-                self.app.notify(f"{host} не в scope", timeout=2)
-        # Обновить состояние кнопки ★ Scope в FilterBar
+                self.app.notify(f"{host} is not in scope", timeout=2)
+        # Update ★ Scope button state in FilterBar
         try:
             from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
             st = self.query_one("#filter-bar", FilterBar).query_one("#fb-scope", ScopeToggle)

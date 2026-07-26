@@ -11,19 +11,19 @@ signatures:
   - "301 Moved"
   - "window.location"
 payloads:
-  # --- Прямой redirect ---
+  # --- Direct redirect ---
   - "https://evil.com"
   - "http://evil.com"
   - "//evil.com"
   - "//evil.com/"
   - "//evil.com/%2F.."
 
-  # --- Protocol-relative (без схемы) ---
+  # --- Protocol-relative (no scheme) ---
   - "//attacker.com"
   - "////attacker.com"
   - "///attacker.com"
 
-  # --- Обход whitelist (example.com в домене) ---
+  # --- Whitelist bypass (example.com in domain) ---
   - "https://evil.com?url=https://legit.com"
   - "https://legit.com.evil.com"
   - "https://evil.com/https://legit.com"
@@ -34,7 +34,7 @@ payloads:
   - "@evil.com"
   - "evil.com"
 
-  # --- Обход с кодированием ---
+  # --- Encoded bypass ---
   - "%2F%2Fevil.com"
   - "%5C%5Cevil.com"
   - "\\\\evil.com"
@@ -44,7 +44,7 @@ payloads:
   - "/%0d/evil.com"
   - "/%0a/evil.com"
 
-  # --- JavaScript-схема (если redirect через JS) ---
+  # --- JavaScript scheme (if redirect is via JS) ---
   - "javascript:alert(1)"
   - "javascript://comment%0aalert(1)"
 
@@ -54,7 +54,7 @@ payloads:
   # --- CRLF + redirect ---
   - "https://evil.com%0d%0aLocation:%20https://attacker.com"
 
-  # --- Обход с субдоменом ---
+  # --- Subdomain bypass ---
   - "https://evil.com.trusted.com"
   - "https://trusted.com.evil.com"
   - "https://evil.comxtrusted.com"

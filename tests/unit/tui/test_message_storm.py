@@ -1,10 +1,10 @@
-"""Unit-тесты: защита от message storm в app.py (Sprint 3: EventBus).
+"""Unit tests: message storm protection in app.py (Sprint 3: EventBus).
 
-Покрывает:
-- _on_bus_proxy_captured: guard на isinstance(req, InterceptedRequest)
-- _on_bus_proxy_completed: guard + дедупликация по req.id
-- on_proxy_request_done: снятие req.id из pending-сета после обработки
-- Типы req в ProxyRequestDone/ProxyRequestAdded всегда InterceptedRequest
+Covers:
+- _on_bus_proxy_captured: guard on isinstance(req, InterceptedRequest)
+- _on_bus_proxy_completed: guard + deduplication by req.id
+- on_proxy_request_done: removing req.id from pending set after handling
+- req types in ProxyRequestDone/ProxyRequestAdded are always InterceptedRequest
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pentool.tui.messages import ProxyRequestAdded, ProxyRequestDone
 
 
 def _make_ireq(req_id: str = "test-id-001") -> InterceptedRequest:
-    """Создать тестовый InterceptedRequest."""
+    """Create a test InterceptedRequest."""
     return InterceptedRequest(
         id=req_id,
         method="GET",
@@ -33,14 +33,14 @@ def _make_ireq(req_id: str = "test-id-001") -> InterceptedRequest:
 
 
 class TestProxyCallbackGuard:
-    """_on_bus_proxy_captured и _on_bus_proxy_completed должны отбрасывать не-IR объекты."""
+    """_on_bus_proxy_captured and _on_bus_proxy_completed should discard non-IR objects."""
 
     def _make_app_stub(self):
-        """Создать минимальный stub PentoolApp для тестирования EventBus handlers."""
+        """Create a minimal PentoolApp stub for testing EventBus handlers."""
         from pentool.tui.app import PentoolApp
-        # Используем object() чтобы не запускать Textual
+        # Use object() to avoid starting Textual
         app = object.__new__(PentoolApp)
-        # Инициализируем только нужные атрибуты
+        # Initialize only the required attributes
         app._thread_id = threading.get_ident()
         app._pending_done_ids = set()
         app._posted_messages = []
@@ -56,7 +56,7 @@ class TestProxyCallbackGuard:
         return app
 
     def test_on_bus_proxy_captured_accepts_intercepted_request(self) -> None:
-        """_on_bus_proxy_captured принимает InterceptedRequest."""
+        """_on_bus_proxy_captured accepts InterceptedRequest."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
         ireq = _make_ireq("req-001")
@@ -69,11 +69,11 @@ class TestProxyCallbackGuard:
         assert app._posted_messages[0].req is ireq
 
     def test_on_bus_proxy_captured_rejects_wrong_type(self) -> None:
-        """_on_bus_proxy_captured отбрасывает не-InterceptedRequest объект."""
+        """_on_bus_proxy_captured discards non-InterceptedRequest object."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
 
-        # Передаём ProxyRequestDone как request — это симуляция бага
+        # Pass ProxyRequestDone as request — this simulates a bug
         bad_obj = ProxyRequestDone(_make_ireq())
         event = ProxyRequestCaptured(request_id="bad", request=bad_obj)
         PentoolApp._on_bus_proxy_captured(app, event)
@@ -81,7 +81,7 @@ class TestProxyCallbackGuard:
         assert len(app._posted_messages) == 0
 
     def test_on_bus_proxy_captured_rejects_string(self) -> None:
-        """_on_bus_proxy_captured отбрасывает строку."""
+        """_on_bus_proxy_captured discards a string."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
 
@@ -91,7 +91,7 @@ class TestProxyCallbackGuard:
         assert len(app._posted_messages) == 0
 
     def test_on_bus_proxy_completed_accepts_intercepted_request(self) -> None:
-        """_on_bus_proxy_completed принимает InterceptedRequest."""
+        """_on_bus_proxy_completed accepts InterceptedRequest."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
         ireq = _make_ireq("req-002")
@@ -104,7 +104,7 @@ class TestProxyCallbackGuard:
         assert app._posted_messages[0].req is ireq
 
     def test_on_bus_proxy_completed_rejects_wrong_type(self) -> None:
-        """_on_bus_proxy_completed отбрасывает не-InterceptedRequest."""
+        """_on_bus_proxy_completed discards non-InterceptedRequest."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
 
@@ -116,7 +116,7 @@ class TestProxyCallbackGuard:
 
 
 class TestProxyRequestDoneDeduplication:
-    """Дедупликация: один ProxyRequestDone на один req.id до обработки."""
+    """Deduplication: one ProxyRequestDone per req.id until handled."""
 
     def _make_app_stub(self):
         from pentool.tui.app import PentoolApp
@@ -136,7 +136,7 @@ class TestProxyRequestDoneDeduplication:
         return app
 
     def test_first_call_passes(self) -> None:
-        """Первый вызов для req.id — проходит."""
+        """First call for req.id — passes."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
         ireq = _make_ireq("req-dedup-001")
@@ -147,37 +147,37 @@ class TestProxyRequestDoneDeduplication:
         assert len(app._posted_messages) == 1
 
     def test_duplicate_call_blocked(self) -> None:
-        """Второй вызов с тем же req.id — блокируется (пока первый не обработан)."""
+        """Second call with same req.id — blocked (until first is handled)."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
         ireq = _make_ireq("req-dedup-002")
         event = ProxyRequestCompleted(request_id=ireq.id, request=ireq, status_code=200)
 
         PentoolApp._on_bus_proxy_completed(app, event)
-        PentoolApp._on_bus_proxy_completed(app, event)  # дубль
+        PentoolApp._on_bus_proxy_completed(app, event)  # duplicate
 
-        assert len(app._posted_messages) == 1  # второй пропущен
+        assert len(app._posted_messages) == 1  # second was skipped
 
     def test_after_discard_next_call_passes(self) -> None:
-        """После снятия req.id из pending — следующий вызов проходит."""
+        """After removing req.id from pending — next call passes."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
         ireq = _make_ireq("req-dedup-003")
         event = ProxyRequestCompleted(request_id=ireq.id, request=ireq, status_code=200)
 
-        # Первый вызов — проходит, req.id попадает в pending
+        # First call — passes, req.id goes into pending
         PentoolApp._on_bus_proxy_completed(app, event)
         assert len(app._posted_messages) == 1
 
-        # Снимаем из pending (симуляция on_proxy_request_done handler)
+        # Remove from pending (simulating on_proxy_request_done handler)
         app._pending_done_ids.discard(ireq.id)
 
-        # Следующий вызов — проходит
+        # Next call — passes
         PentoolApp._on_bus_proxy_completed(app, event)
         assert len(app._posted_messages) == 2
 
     def test_different_req_ids_both_pass(self) -> None:
-        """Разные req.id — оба проходят."""
+        """Different req.id — both pass."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
         ireq1 = _make_ireq("req-a")
@@ -191,7 +191,7 @@ class TestProxyRequestDoneDeduplication:
         assert len(app._posted_messages) == 2
 
     def test_storm_100_calls_same_id_blocked(self) -> None:
-        """100 вызовов с одним req.id → только 1 сообщение."""
+        """100 calls with same req.id → only 1 message."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
         ireq = _make_ireq("req-storm")
@@ -203,18 +203,18 @@ class TestProxyRequestDoneDeduplication:
         assert len(app._posted_messages) == 1
 
     def test_pending_ids_cleared_on_handler(self) -> None:
-        """on_proxy_request_done снимает req.id из pending_done_ids."""
+        """on_proxy_request_done removes req.id from pending_done_ids."""
         from pentool.tui.app import PentoolApp
         app = self._make_app_stub()
         ireq = _make_ireq("req-clear-001")
 
-        # Добавляем req.id в pending (симуляция _on_bus_proxy_completed)
+        # Add req.id to pending (simulating _on_bus_proxy_completed)
         app._pending_done_ids.add(ireq.id)
 
-        # Симулируем on_proxy_request_done handler
+        # Simulate on_proxy_request_done handler
         msg = ProxyRequestDone(ireq)
 
-        # Вызываем только discard-часть (без полного app контекста)
+        # Call only the discard part (without full app context)
         req_id = getattr(msg.req, "id", None)
         app._pending_done_ids.discard(req_id)
 
@@ -222,7 +222,7 @@ class TestProxyRequestDoneDeduplication:
 
 
 class TestProxyRequestMessageTypes:
-    """ProxyRequestAdded/ProxyRequestDone должны хранить InterceptedRequest."""
+    """ProxyRequestAdded/ProxyRequestDone should store InterceptedRequest."""
 
     def test_proxy_request_added_stores_req(self) -> None:
         ireq = _make_ireq("req-msg-001")
@@ -237,15 +237,15 @@ class TestProxyRequestMessageTypes:
         assert isinstance(msg.req, InterceptedRequest)
 
     def test_proxy_request_done_req_has_response_attr(self) -> None:
-        """msg.req.response должен существовать (даже если None)."""
+        """msg.req.response should exist (even if None)."""
         ireq = _make_ireq("req-msg-003")
         msg = ProxyRequestDone(ireq)
-        # Не должно бросать AttributeError
+        # Should not raise AttributeError
         _ = msg.req.response
         assert msg.req.response is None
 
     def test_proxy_request_done_req_has_method_attr(self) -> None:
-        """msg.req.method должен существовать."""
+        """msg.req.method should exist."""
         ireq = _make_ireq("req-msg-004")
         msg = ProxyRequestDone(ireq)
         assert msg.req.method == "GET"

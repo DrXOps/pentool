@@ -1,4 +1,4 @@
-"""Unit-тесты для core/project.py и API export/import_project_data."""
+"""Unit tests for core/project.py and API export/import_project_data."""
 
 from __future__ import annotations
 

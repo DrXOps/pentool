@@ -1,10 +1,10 @@
-"""AppMixin — общие хелперы для TUI-экранов, обращающихся к app-уровню."""
+"""AppMixin — common helpers for TUI screens that access the app level."""
 
 from __future__ import annotations
 
 
 class AppMixin:
-    """Миксин с хелперами для доступа к app-уровню и кросс-модульным отправкам."""
+    """Mixin with helpers for app-level access and cross-module sends."""
 
     def _get_proxy(self):
         try:

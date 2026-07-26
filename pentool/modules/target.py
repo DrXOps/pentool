@@ -1,4 +1,4 @@
-"""Target / SiteMap — дерево целей из прокси-трафика."""
+"""Target / SiteMap — target tree from proxy traffic."""
 
 from __future__ import annotations
 
@@ -20,10 +20,10 @@ logger = get_logger(__name__)
 
 @dataclass
 class SiteNode:
-    """Узел дерева: хост + путь."""
+    """Tree node: host + path."""
 
     host: str
-    path: str                       # "/" для корня, "/api/users" для эндпоинта
+    path: str                       # "/" for root, "/api/users" for endpoint
     methods: set[str] = field(default_factory=set)
     request_count: int = 0
     last_seen: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -60,7 +60,7 @@ class SiteNode:
 
 
 class SiteMap:
-    """Дерево целей, автоматически пополняемое из прокси."""
+    """Target tree, automatically populated from proxy traffic."""
 
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
@@ -113,7 +113,7 @@ class SiteMap:
         return sum(n.request_count for n in self._nodes.get(host, {}).values())
 
     def set_in_scope(self, host: str, in_scope: bool) -> None:
-        """Включить/исключить хост из Scope."""
+        """Include/exclude a host from Scope."""
         if host in self._nodes:
             for node in self._nodes[host].values():
                 node.in_scope = in_scope

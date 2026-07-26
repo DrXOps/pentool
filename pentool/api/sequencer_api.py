@@ -1,4 +1,4 @@
-"""SequencerAPI — публичный интерфейс Sequencer для TUI."""
+"""SequencerAPI — public Sequencer interface for TUI."""
 
 from __future__ import annotations
 

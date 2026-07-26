@@ -1,4 +1,4 @@
-"""Статусная строка: прокси, проект, время."""
+"""Status bar: proxy, project, time."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ _CSS = (Path(__file__).parent / "statusbar.tcss").read_text(encoding="utf-8")
 
 
 class StatusBar(Widget):
-    """Нижняя строка с состоянием прокси, именем проекта и временем."""
+    """Bottom bar with proxy state, project name and time."""
 
     DEFAULT_CSS = _CSS
 

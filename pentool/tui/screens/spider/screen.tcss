@@ -117,5 +117,5 @@ SpiderScreen .section-label {
     color: $text-muted;
     padding: 0 1;
 }
-/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
 .toolbar-sep { width: auto; }

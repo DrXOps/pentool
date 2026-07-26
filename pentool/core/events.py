@@ -1,4 +1,4 @@
-"""Типизированные события приложения для Event Bus."""
+"""Typed application events for the Event Bus."""
 
 from __future__ import annotations
 
@@ -9,30 +9,30 @@ from typing import Any
 
 @dataclass
 class AppEvent:
-    """Базовый класс для всех событий."""
+    """Base class for all events."""
     timestamp: float = field(default_factory=time.time)
-    source: str = ""  # имя модуля-источника, для отладки
+    source: str = ""  # source module name, for debugging
 
 
 # ── Scanner events ─────────────────────────────────────────────────────────────
 
 @dataclass
 class ScanStarted(AppEvent):
-    """Сканирование запущено."""
+    """Scan started."""
     targets: list[str] = field(default_factory=list)
     checks: list[str] = field(default_factory=list)
 
 
 @dataclass
 class ScanFinished(AppEvent):
-    """Сканирование завершено (нормально или по стопу)."""
+    """Scan finished (normally or by stop)."""
     total_findings: int = 0
     stopped_early: bool = False
 
 
 @dataclass
 class ScanProgressEvent(AppEvent):
-    """Прогресс сканирования."""
+    """Scan progress."""
     done: int = 0
     total: int = 0
     scanning: bool = True
@@ -40,7 +40,7 @@ class ScanProgressEvent(AppEvent):
 
 @dataclass
 class FindingDiscovered(AppEvent):
-    """Обнаружена уязвимость (активный или пассивный скан)."""
+    """Vulnerability discovered (active or passive scan)."""
     finding: Any = None
     scan_source: str = "active"  # "active" | "passive"
 
@@ -49,14 +49,14 @@ class FindingDiscovered(AppEvent):
 
 @dataclass
 class UrlCrawled(AppEvent):
-    """Spider нашёл новый URL."""
+    """Spider found a new URL."""
     url: str = ""
     base_target: str = ""
 
 
 @dataclass
 class SpiderFinished(AppEvent):
-    """Краулинг завершён."""
+    """Crawling finished."""
     base_url: str = ""
     pages_count: int = 0
     forms_count: int = 0
@@ -67,13 +67,13 @@ class SpiderFinished(AppEvent):
 
 @dataclass
 class IntruderResultAdded(AppEvent):
-    """Получен результат одного запроса атаки."""
+    """Result of a single attack request received."""
     result: Any = None   # IntruderResult
 
 
 @dataclass
 class IntruderFinished(AppEvent):
-    """Атака завершена."""
+    """Attack finished."""
     total_results: int = 0
     stopped_early: bool = False
 
@@ -82,10 +82,10 @@ class IntruderFinished(AppEvent):
 
 @dataclass
 class ProxyRequestCaptured(AppEvent):
-    """Прокси перехватил новый запрос.
+    """Proxy intercepted a new request.
 
-    request: полный объект InterceptedRequest (Any чтобы не создавать
-    циклических импортов modules → core).
+    request: full InterceptedRequest object (Any to avoid
+    circular imports modules -> core).
     """
     request_id: str = ""
     method: str = ""
@@ -96,17 +96,17 @@ class ProxyRequestCaptured(AppEvent):
 
 @dataclass
 class ProxyRequestCompleted(AppEvent):
-    """Запрос через прокси завершён (получен ответ).
+    """Request through proxy completed (response received).
 
-    request: полный объект InterceptedRequest (Any чтобы не создавать
-    циклических импортов modules → core).
+    request: full InterceptedRequest object (Any to avoid
+    circular imports modules -> core).
     """
     request_id: str = ""
     status_code: int = 0
     request: Any = None  # InterceptedRequest
 
 
-# Алиас для обратной совместимости: Sequencer подписывается на это событие
+# Alias for backward compatibility: Sequencer subscribes to this event
 ProxyRequestDoneEvent = ProxyRequestCompleted
 
 
@@ -114,7 +114,7 @@ ProxyRequestDoneEvent = ProxyRequestCompleted
 
 @dataclass
 class TargetUrlAdded(AppEvent):
-    """URL добавлен в SiteMap/Target."""
+    """URL added to SiteMap/Target."""
     url: str = ""
     host: str = ""
 
@@ -123,23 +123,23 @@ class TargetUrlAdded(AppEvent):
 
 @dataclass
 class ProjectSaved(AppEvent):
-    """Проект сохранён."""
+    """Project saved."""
     path: str = ""
 
 
 @dataclass
 class ProjectLoaded(AppEvent):
-    """Проект загружен."""
+    """Project loaded."""
     path: str = ""
     findings_count: int = 0
     history_count: int = 0
 
 
-# ── Scanner passive events ──────────────────���───────────────────────────────────
+# ── Scanner passive events ─────────────────────────────────────────────────────
 
 @dataclass
 class PassiveScanToggled(AppEvent):
-    """Пассивный скан включён/выключен."""
+    """Passive scan toggled on/off."""
     enabled: bool = False
 
 
@@ -147,14 +147,14 @@ class PassiveScanToggled(AppEvent):
 
 @dataclass
 class WebSocketFrameEvent(AppEvent):
-    """Перехвачен WebSocket-фрейм (отдельное сообщение).
+    """Intercepted WebSocket frame (single message).
 
-    direction: "client→server" или "server→client"
+    direction: "client->server" or "server->client"
     opcode:    0x1=text, 0x2=binary, 0x8=close, 0x9=ping, 0xA=pong
-    payload:   тело фрейма (уже без маски)
+    payload:   frame body (already unmasked)
     """
-    request_id: str = ""   # ID родительского WS-соединения (upgrade-запрос)
-    direction: str = ""    # "client→server" | "server→client"
+    request_id: str = ""   # ID of the parent WS connection (upgrade request)
+    direction: str = ""    # "client->server" | "server->client"
     opcode: int = 0x1      # 1=text, 2=binary, 8=close, 9=ping, 10=pong
     payload: bytes = field(default_factory=bytes)
-    payload_text: str = "" # UTF-8 декодированный payload (для text-фреймов)
+    payload_text: str = "" # UTF-8 decoded payload (for text frames)

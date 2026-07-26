@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Проверка нарушений правила слоёв (Layer Rule) в проекте PenTool.
+"""Check for layer rule violations in the PenTool project.
 
-Правило:
+Rule:
     utils ← core ← modules ← api ← tui / cli / plugins
 
-Запрещённые импорты:
-    - tui/ → modules/  (должно быть через api/)
-    - tui/ → core/     (через api/ или допустимо только get_config/get_logger)
+Forbidden imports:
+    - tui/ → modules/  (must go through api/)
+    - tui/ → core/     (through api/, or only get_config/get_logger are allowed)
     - modules/ → tui/
     - modules/ → api/
     - core/ → modules/
-    - utils/ → любой другой слой pentool
+    - utils/ → any other pentool layer
 """
 
 from __future__ import annotations
@@ -20,31 +20,31 @@ import sys
 from pathlib import Path
 
 
-# Корень пакета
+# Package root
 PACKAGE_ROOT = Path(__file__).parent.parent / "pentool"
 
-# Правила: (слой, запрещённые импорты из этого слоя)
+# Rules: (layer, forbidden imports from that layer)
 FORBIDDEN_IMPORTS: list[tuple[str, list[str]]] = [
-    # tui/ не должен импортировать modules/ напрямую
+    # tui/ must not import modules/ directly
     ("tui", ["pentool.modules"]),
-    # modules/ не должен импортировать tui/, api/, cli/
+    # modules/ must not import tui/, api/, cli/
     ("modules", ["pentool.tui", "pentool.api", "pentool.cli"]),
-    # core/ не должен импортировать modules/, tui/, api/
+    # core/ must not import modules/, tui/, api/
     ("core", ["pentool.modules", "pentool.tui", "pentool.api", "pentool.cli"]),
-    # utils/ не должен импортировать ничего из pentool (кроме utils/ самого себя)
+    # utils/ must not import anything from pentool (except utils/ itself)
     ("utils", ["pentool.modules", "pentool.tui", "pentool.api", "pentool.cli", "pentool.core", "pentool.storage"]),
-    # storage/ не должен импортировать modules/, tui/, api/
+    # storage/ must not import modules/, tui/, api/
     ("storage", ["pentool.modules", "pentool.tui", "pentool.api", "pentool.cli"]),
 ]
 
 
 def get_imports(file_path: Path) -> list[str]:
-    """Извлечь все импортируемые модули из Python-файла."""
+    """Extract all imported modules from a Python file."""
     try:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(file_path))
     except SyntaxError as e:
-        print(f"  ⚠️  SyntaxError в {file_path}: {e}")
+        print(f"  ⚠️  SyntaxError in {file_path}: {e}")
         return []
 
     imports: list[str] = []
@@ -59,19 +59,19 @@ def get_imports(file_path: Path) -> list[str]:
 
 
 def check_file(file_path: Path, forbidden: list[str]) -> list[str]:
-    """Проверить один файл. Вернуть список нарушений."""
+    """Check a single file. Return a list of violations."""
     violations: list[str] = []
     imported = get_imports(file_path)
     for imp in imported:
         for forbidden_prefix in forbidden:
             if imp == forbidden_prefix or imp.startswith(forbidden_prefix + "."):
                 violations.append(f"  ❌ {file_path.relative_to(PACKAGE_ROOT.parent)}: "
-                                   f"запрещённый импорт '{imp}' (нарушает правило слоёв)")
+                                   f"forbidden import '{imp}' (violates layer rule)")
     return violations
 
 
 def main() -> int:
-    """Запустить проверку. Вернуть 0 если нарушений нет, 1 иначе."""
+    """Run the check. Return 0 if no violations found, 1 otherwise."""
     all_violations: list[str] = []
     checked_files = 0
 
@@ -87,16 +87,16 @@ def main() -> int:
             violations = check_file(py_file, forbidden)
             all_violations.extend(violations)
 
-    print(f"🔍 Проверено файлов: {checked_files}")
+    print(f"🔍 Files checked: {checked_files}")
 
     if all_violations:
-        print(f"\n💥 Нарушений правила слоёв: {len(all_violations)}\n")
+        print(f"\n💥 Layer rule violations: {len(all_violations)}\n")
         for v in all_violations:
             print(v)
-        print("\nИсправьте нарушения согласно docs/architecture.md")
+        print("\nFix violations according to docs/architecture.md")
         return 1
     else:
-        print("✅ Нарушений правила слоёв не найдено.")
+        print("✅ No layer rule violations found.")
         return 0
 
 

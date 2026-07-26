@@ -1,4 +1,4 @@
-"""Асинхронный HTTP-клиент на базе aiohttp."""
+"""Async HTTP client based on aiohttp."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ import aiohttp
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
-# Тип коллбэка: вызывается после каждого запроса
+# Callback type: called after each request
 RequestCallback = Callable[[ParsedRequest, ParsedResponse], None]
 
 
 class HTTPClient:
-    """Асинхронный HTTP-клиент для отправки перехваченных запросов.
+    """Async HTTP client for sending intercepted requests.
 
-    Поддерживает прокси, таймауты, перенаправления и коллбэк логирования.
+    Supports proxies, timeouts, redirects, and a logging callback.
     """
 
     def __init__(
@@ -48,14 +48,14 @@ class HTTPClient:
     async def send(self, request: ParsedRequest) -> ParsedResponse:
         session = await self._get_session()
 
-        # Убрать hop-by-hop заголовки + заменить Accept-Encoding чтобы исключить br
+        # Strip hop-by-hop headers + replace Accept-Encoding to exclude br
         send_headers = {}
         for k, v in request.headers.items():
             if k.lower() in ("host", "content-length", "transfer-encoding",
                              "connection", "keep-alive", "proxy-connection"):
                 continue
             if k.lower() == "accept-encoding":
-                # Убрать brotli — aiohttp не умеет его декодировать
+                # Remove brotli — aiohttp cannot decode it
                 encodings = [e.strip() for e in v.split(",")
                              if e.strip().lower() not in ("br", "zstd")]
                 v = ", ".join(encodings) if encodings else "gzip, deflate"
@@ -81,11 +81,11 @@ class HTTPClient:
 
         start = time.monotonic()
         async with session.request(request.method, request.url, **kwargs) as resp:
-            # Читаем сырые байты — aiohttp сам декодирует gzip/deflate через read()
+            # Read raw bytes — aiohttp decodes gzip/deflate automatically via read()
             resp_body_bytes: bytes = await resp.read()
             elapsed_ms = int((time.monotonic() - start) * 1000)
 
-            # Декодируем для хранения в ParsedResponse (для TUI/отчётов)
+            # Decode for storage in ParsedResponse (for TUI/reports)
             try:
                 resp_body = resp_body_bytes.decode(
                     resp.charset or "utf-8", errors="replace"
@@ -117,7 +117,7 @@ class HTTPClient:
             await self._session.close()
 
     async def get(self, url: str, headers: dict | None = None) -> "ParsedResponse":
-        """Удобный метод: GET-запрос по URL."""
+        """Convenience method: GET request by URL."""
         req = ParsedRequest(
             method="GET",
             url=url,
@@ -127,7 +127,7 @@ class HTTPClient:
         return await self.send(req)
 
     async def post(self, url: str, body: str = "", headers: dict | None = None) -> "ParsedResponse":
-        """Удобный метод: POST-запрос по URL."""
+        """Convenience method: POST request by URL."""
         req = ParsedRequest(
             method="POST",
             url=url,
@@ -137,9 +137,9 @@ class HTTPClient:
         return await self.send(req)
 
     async def __aenter__(self) -> "HTTPClient":
-        """Поддержка контекстного менеджера: вернуть self."""
+        """Context manager support: return self."""
         return self
 
     async def __aexit__(self, *_: object) -> None:
-        """Поддержка контекстного менеджера: закрыть сессию при выходе."""
+        """Context manager support: close session on exit."""
         await self.close()

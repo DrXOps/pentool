@@ -1,4 +1,4 @@
-"""Встроенный терминал на базе pty / libtmux."""
+"""Built-in terminal based on pty / libtmux."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from pathlib import Path
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 class TerminalScreen(Widget):
-    """Встроенный терминал с поддержкой pty / libtmux."""
+    """Built-in terminal with pty / libtmux support."""
 
     DEFAULT_CSS = _CSS
 
@@ -48,7 +48,7 @@ class TerminalScreen(Widget):
         self._start_pty()
 
     def _try_tmux(self) -> bool:
-        """Попытаться открыть tmux-сессию через libtmux."""
+        """Try to open a tmux session via libtmux."""
         try:
             import libtmux  # type: ignore[import]
             server = libtmux.Server()
@@ -92,7 +92,7 @@ class TerminalScreen(Widget):
             self._shell_pid = proc.pid
             self._running = True
             self._update_statusbar(f"Shell: {shell} (pid {proc.pid})")
-            # Написать приветствие
+            # Write welcome message
             try:
                 log = self.query_one("#term-log", RichLog)
                 log.write(f"Shell started: {shell}")
@@ -115,7 +115,7 @@ class TerminalScreen(Widget):
             self._update_statusbar("Terminal: not available in this environment")
 
     def _read_pty(self) -> None:
-        """Читать вывод из pty и добавлять в RichLog (в потоке)."""
+        """Read output from pty and append to RichLog (in a thread)."""
         while self._running:
             fd = self._pty_master
             if fd is None:

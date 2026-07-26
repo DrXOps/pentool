@@ -1,4 +1,4 @@
-"""InspectorPanel — правая боковая панель с деталями HTTP-запроса/ответа."""
+"""InspectorPanel — right sidebar with HTTP request/response details."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ _CSS = (Path(__file__).parent / "inspector_panel.tcss").read_text(encoding="utf-
 
 
 class InspectorPanel(Widget):
-    """Правая боковая панель с деталями выбранного запроса и ответа."""
+    """Right sidebar with details of the selected request and response."""
 
     DEFAULT_CSS = _CSS
 
@@ -26,7 +26,7 @@ class InspectorPanel(Widget):
         self.app.call_after_refresh(self._apply, widgets)
 
     def clear(self) -> None:
-        """Сбросить панель."""
+        """Reset the panel."""
         placeholder = [Static("(Select a request)", id="inspector-placeholder")]
         self.app.call_after_refresh(self._apply, placeholder)
 
@@ -38,7 +38,7 @@ class InspectorPanel(Widget):
         widgets: list[Widget] = []
         req_headers = dict(req.headers) if req.headers else {}
 
-        # Восстановить полный URL если он содержит только путь
+        # Reconstruct full URL if it contains only a path
         url = req.url or ""
         if url and not url.startswith("http://") and not url.startswith("https://"):
             host = req_headers.get("Host", req_headers.get("host", ""))

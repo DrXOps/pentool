@@ -1,4 +1,4 @@
-"""MatchReplaceEngine — автоматическая замена в HTTP-трафике."""
+"""MatchReplaceEngine — automatic replacement in HTTP traffic."""
 
 from __future__ import annotations
 
@@ -14,16 +14,16 @@ logger = get_logger(__name__)
 
 @dataclass
 class MatchReplaceRule:
-    """Правило автоматической замены в запросах/ответах.
+    """Automatic replacement rule for requests/responses.
 
-    Атрибуты:
-        match: Строка или regex-паттерн для поиска.
-        replace: Строка замены.
+    Attributes:
+        match: String or regex pattern to search for.
+        replace: Replacement string.
         target: "request" | "response" | "both".
         scope: "headers" | "body" | "all".
-        is_regex: Если True — match интерпретируется как regex.
-        enabled: Активно ли правило.
-        id: Уникальный идентификатор (генерируется автоматически).
+        is_regex: If True — match is interpreted as a regex.
+        enabled: Whether the rule is active.
+        id: Unique identifier (auto-generated).
     """
 
     match: str
@@ -59,11 +59,11 @@ class MatchReplaceRule:
 
 
 class MatchReplaceEngine:
-    """Движок автоматической замены в HTTP-запросах/ответах.
+    """Engine for automatic replacement in HTTP requests/responses.
 
-    Управляет списком правил MatchReplaceRule и применяет их к сырым
-    строкам HTTP-трафика. Разделяет заголовки и тело, фильтрует правила
-    по target (request/response/both) и scope (headers/body/all).
+    Manages a list of MatchReplaceRule objects and applies them to raw
+    HTTP traffic strings. Splits headers and body, filters rules by
+    target (request/response/both) and scope (headers/body/all).
     """
 
     def __init__(self) -> None:
@@ -73,19 +73,19 @@ class MatchReplaceEngine:
         self.rules = rules
 
     def apply_to_request(self, raw: str) -> str:
-        """Применить правила к сырой строке HTTP-запроса (headers + body).
+        """Apply rules to a raw HTTP request string (headers + body).
 
         Args:
-            raw: Сырой HTTP-запрос (заголовки + тело через \\r\\n\\r\\n).
+            raw: Raw HTTP request (headers + body separated by \\r\\n\\r\\n).
 
         Returns:
-            Преобразованная строка.
+            Transformed string.
         """
         req_rules = [r for r in self.rules if r.enabled and r.target in ("request", "both")]
         if not req_rules:
             return raw
 
-        # Разбить на заголовки и тело
+        # Split into headers and body
         if "\r\n\r\n" in raw:
             head, sep, body = raw.partition("\r\n\r\n")
         elif "\n\n" in raw:
@@ -101,13 +101,13 @@ class MatchReplaceEngine:
         return head + sep + body
 
     def apply_to_response(self, raw: str) -> str:
-        """Применить правила к сырой строке HTTP-ответа (headers + body).
+        """Apply rules to a raw HTTP response string (headers + body).
 
         Args:
-            raw: Сырой HTTP-ответ (заголовки + тело через \\r\\n\\r\\n).
+            raw: Raw HTTP response (headers + body separated by \\r\\n\\r\\n).
 
         Returns:
-            Преобразованная строка.
+            Transformed string.
         """
         resp_rules = [r for r in self.rules if r.enabled and r.target in ("response", "both")]
         if not resp_rules:
@@ -128,7 +128,7 @@ class MatchReplaceEngine:
         return head + sep + body
 
     def _apply_rules(self, text: str, rules: list[MatchReplaceRule]) -> str:
-        """Применить список правил к тексту последовательно."""
+        """Apply a list of rules to text sequentially."""
         for rule in rules:
             if not rule.enabled:
                 continue

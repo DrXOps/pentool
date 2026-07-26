@@ -1,1 +1,1 @@
-"""Пакет tui: TUI-приложение на Textual."""
+"""tui package: Textual-based TUI application."""

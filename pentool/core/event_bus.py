@@ -1,4 +1,4 @@
-"""Event Bus — внутренняя шина событий приложения."""
+"""Event Bus — internal application event bus."""
 
 from __future__ import annotations
 
@@ -16,12 +16,12 @@ T = TypeVar("T", bound=AppEvent)
 
 
 class EventBus:
-    """Thread-safe шина событий с историей.
+    """Thread-safe event bus with history.
 
     Attributes:
-        _subscribers:  Словарь type → список обработчиков.
-        _history:      Кольцевой буфер всех эмиченных событий.
-        _lock:         RLock для thread-safe операций.
+        _subscribers:  Dict type -> list of handlers.
+        _history:      Ring buffer of all emitted events.
+        _lock:         RLock for thread-safe operations.
     """
 
     def __init__(self, max_history: int = 10_000) -> None:
@@ -32,21 +32,20 @@ class EventBus:
     # ── subscribe / unsubscribe ────────────────────────────────────────────────
 
     def subscribe(self, event_type: type[T], handler: Callable[[T], None]) -> None:
-        """Подписаться на события заданного типа.
+        """Subscribe to events of the given type.
 
         Args:
-            event_type: Класс события (подкласс AppEvent).
-            handler:    Функция-обработчик, принимающая экземпляр события.
+            event_type: Event class (subclass of AppEvent).
+            handler:    Handler function accepting an event instance.
         """
         with self._lock:
             if handler not in self._subscribers[event_type]:
                 self._subscribers[event_type].append(handler)
 
     def unsubscribe(self, event_type: type, handler: Callable) -> None:
-        """Отписаться от событий.
+        """Unsubscribe from events.
 
-        Безопасен при повторном вызове — не бросает исключение если
-        обработчик не был подписан.
+        Safe on repeated calls — does not raise if the handler was not subscribed.
         """
         with self._lock:
             try:
@@ -55,7 +54,7 @@ class EventBus:
                 pass
 
     def unsubscribe_all(self, handler: Callable) -> None:
-        """Отписать обработчик от всех типов событий сразу."""
+        """Unsubscribe a handler from all event types at once."""
         with self._lock:
             for handlers in self._subscribers.values():
                 try:
@@ -66,13 +65,13 @@ class EventBus:
     # ── emit ──────────────────────────────────────────────────────────────────
 
     def emit(self, event: AppEvent) -> None:
-        """Синхронный emit из основного потока.
+        """Synchronous emit from the main thread.
 
-        Вызывает всех подписчиков немедленно (в том же потоке).
-        Сохраняет событие в историю.
+        Calls all subscribers immediately (in the same thread).
+        Saves the event to history.
 
         Args:
-            event: Экземпляр события (подкласс AppEvent).
+            event: Event instance (subclass of AppEvent).
         """
         with self._lock:
             self._history.append(event)
@@ -92,15 +91,15 @@ class EventBus:
         event: AppEvent,
         loop: asyncio.AbstractEventLoop,
     ) -> None:
-        """Thread-safe emit из worker-потока.
+        """Thread-safe emit from a worker thread.
 
-        Сохраняет событие в историю немедленно (под локом),
-        затем планирует вызов обработчиков в event loop через
+        Saves the event to history immediately (under lock),
+        then schedules handler calls in the event loop via
         call_soon_threadsafe.
 
         Args:
-            event: Экземпляр события.
-            loop:  Event loop основного потока (app._loop).
+            event: Event instance.
+            loop:  Event loop of the main thread (app._loop).
         """
         with self._lock:
             self._history.append(event)
@@ -122,7 +121,7 @@ class EventBus:
         try:
             loop.call_soon_threadsafe(_dispatch)
         except RuntimeError:
-            # loop закрыт — приложение завершается
+            # loop is closed — application is shutting down
             pass
 
     # ── history / replay ──────────────────────────────────────────────────────
@@ -149,16 +148,16 @@ class EventBus:
         event_type: type,
         limit: int = 0,
     ) -> None:
-        """Воспроизвести историю событий для нового подписчика.
+        """Replay event history for a new subscriber.
 
-        Вызывает handler для каждого сохранённого события заданного типа.
-        Полезно при инициализации экрана, который подключился позже
-        (например, Dashboard после запуска сканирования).
+        Calls handler for each saved event of the given type.
+        Useful when initializing a screen that connected late
+        (e.g. Dashboard after a scan has started).
 
         Args:
-            handler:    Функция-обработчик.
-            event_type: Тип событий для replay.
-            limit:      Максимум событий (0 = все).
+            handler:    Handler function.
+            event_type: Event type to replay.
+            limit:      Max events (0 = all).
         """
         events = self.get_history(event_type=event_type, limit=limit)
         for event in events:
@@ -176,7 +175,7 @@ class EventBus:
     # ── stats ─────────────────────────────────────────────────────────────────
 
     def stats(self) -> dict[str, int]:
-        """Статистика для отладки."""
+        """Stats for debugging."""
         with self._lock:
             return {
                 "history_size":    len(self._history),
@@ -185,7 +184,7 @@ class EventBus:
             }
 
 
-# ── Глобальный синглтон ────────────────────────────────────────────────────────
+# ── Global singleton ────────────────────────────────────────────────────────────
 
 _bus: EventBus | None = None
 _bus_lock = threading.Lock()
@@ -201,7 +200,7 @@ def get_event_bus() -> EventBus:
 
 
 def reset_event_bus() -> None:
-    """Сбросить глобальный синглтон (только для тестов)."""
+    """Reset global singleton (tests only)."""
     global _bus
     with _bus_lock:
         _bus = None

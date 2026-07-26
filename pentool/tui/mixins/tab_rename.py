@@ -1,4 +1,4 @@
-"""TabRenameMixin — двойной клик по вкладке → inline переименование."""
+"""TabRenameMixin — double-click on tab → inline rename."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class TabRenameMixin:
     _rename_tabs_widget_id: str = ""
 
     def on_click(self, event: Click) -> None:
-        """Двойной Click на Tab (chain=2) → переименование."""
+        """Double Click on Tab (chain=2) → rename."""
         if event.chain < 2:
             return
 
@@ -28,18 +28,18 @@ class TabRenameMixin:
         if not isinstance(widget, Tab):
             return
 
-        # Определяем pane_id из tab.id: "--content-tab-{pane_id}"
+        # Determine pane_id from tab.id: "--content-tab-{pane_id}"
         tab_widget_id = widget.id or ""
         pane_id = tab_widget_id.removeprefix("--content-tab-")
 
         _log.debug("TabRenameMixin: pane_id=%r prefix=%r", pane_id, self._rename_tab_prefix)
 
-        # Фильтр по префиксу
+        # Filter by prefix
         if self._rename_tab_prefix and not pane_id.startswith(self._rename_tab_prefix):
-            _log.debug("TabRenameMixin: pane_id %r не совпадает с префиксом %r", pane_id, self._rename_tab_prefix)
+            _log.debug("TabRenameMixin: pane_id %r does not match prefix %r", pane_id, self._rename_tab_prefix)
             return
 
-        # Фильтр: Tab должен быть внутри нашего TabbedContent
+        # Filter: Tab must be inside our TabbedContent
         if self._rename_tabs_widget_id:
             try:
                 tc = self.query_one(  # type: ignore[attr-defined]
@@ -53,10 +53,10 @@ class TabRenameMixin:
                         break
                     ancestor = getattr(ancestor, "parent", None)
                 if not found:
-                    _log.debug("TabRenameMixin: Tab не является потомком %r", self._rename_tabs_widget_id)
+                    _log.debug("TabRenameMixin: Tab is not a descendant of %r", self._rename_tabs_widget_id)
                     return
             except Exception as e:
-                _log.debug("TabRenameMixin: ошибка поиска TabbedContent: %s", e)
+                _log.debug("TabRenameMixin: error finding TabbedContent: %s", e)
                 return
 
         _log.debug("TabRenameMixin: DOUBLE CLICK → _start_rename(%r)", pane_id)

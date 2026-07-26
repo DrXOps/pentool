@@ -1,4 +1,4 @@
-"""Unit-тесты для pentool/utils/copy_as.py."""
+"""Unit tests for pentool/utils/copy_as.py."""
 
 from __future__ import annotations
 

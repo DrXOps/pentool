@@ -1,4 +1,4 @@
-"""Диалог загрузки запроса из истории прокси в Repeater."""
+"""Dialog for loading a request from proxy history into Repeater."""
 
 from __future__ import annotations
 
@@ -19,13 +19,13 @@ if TYPE_CHECKING:
 
 
 class LoadFromProxyDialog(ModalScreen[str | None]):
-    """Модальный диалог выбора запроса из истории прокси.
+    """Modal dialog for selecting a request from proxy history.
 
     Args:
-        requests: Список InterceptedRequest из ProxyServer.
+        requests: List of InterceptedRequest from ProxyServer.
 
     Returns:
-        Сырая строка HTTP-запроса при выборе, None при отмене.
+        Raw HTTP request string on selection, None on cancel.
     """
 
     DEFAULT_CSS = _CSS
@@ -64,7 +64,7 @@ class LoadFromProxyDialog(ModalScreen[str | None]):
             table.add_row(req.method, url_s, status, host, key=req.id)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Запомнить выбранный запрос."""
+        """Remember the selected request."""
         row_key = str(event.row_key.value) if event.row_key else None
         if row_key is None:
             return
@@ -73,7 +73,7 @@ class LoadFromProxyDialog(ModalScreen[str | None]):
             self._selected_raw = self._build_raw(req)
 
     def on_data_table_row_activated(self, event: DataTable.RowActivated) -> None:
-        """Двойной клик — сразу загрузить."""
+        """Double-click — load immediately."""
         self.action_select()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -86,14 +86,14 @@ class LoadFromProxyDialog(ModalScreen[str | None]):
         if self._selected_raw:
             self.dismiss(self._selected_raw)
         else:
-            # Взять текущую строку курсора
+            # Take current cursor row
             table = self.query_one("#req-table", DataTable)
             try:
                 row_key = table.get_row_at(table.cursor_row)
             except Exception:
                 self.dismiss(None)
                 return
-            # row_key — ключ строки, ищем соответствующий запрос
+            # row_key — row key, find the corresponding request
             cursor_row_key = None
             for i, (key, _) in enumerate(table._data.items()):
                 if i == table.cursor_row:
@@ -116,7 +116,7 @@ class LoadFromProxyDialog(ModalScreen[str | None]):
         return None
 
     def _build_raw(self, req: object) -> str:
-        """Собрать сырую строку HTTP-запроса из InterceptedRequest."""
+        """Build raw HTTP request string from InterceptedRequest."""
         try:
             parsed = req.to_parsed_request()  # type: ignore[attr-defined]
             from pentool.utils.parser import build_http_request

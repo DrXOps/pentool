@@ -39,5 +39,5 @@ TargetScreen #detail-log {
 TargetScreen .in-scope {
     color: $success;
 }
-/* toolbar-sep fix — Static не наследует DEFAULT_CSS ToolbarButton */
+/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
 .toolbar-sep { width: auto; }
