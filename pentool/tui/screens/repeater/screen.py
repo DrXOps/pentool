@@ -26,8 +26,8 @@ from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.search_bar import SearchBar
 from pentool.tui.mixins.app_mixin import AppMixin
-from pentool.tui.mixins.tab_rename import TabRenameMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
+from pentool.tui.screens.base import BaseModuleScreen
 
 class _TabState:
     """State of a single Repeater tab."""
@@ -39,7 +39,7 @@ class _TabState:
         self.response_text: str = ""
         self.sending: bool = False
 
-class RepeaterScreen(TabRenameMixin, RequestContextMenuMixin, AppMixin, Widget):
+class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     """Repeater module screen."""
 
     DEFAULT_CSS = _CSS

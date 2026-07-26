@@ -171,6 +171,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._pending_req_ids: dict[str, int] = {}
         self._intercept_req: InterceptedRequest | None = None
         self._intercept_pending: list[InterceptedRequest] = []
+        # Debounce: batch rapid row appends into one ArrowBackend rebuild
+        self._pending_append_rows: list[tuple] = []  # (req, row_id) pairs
+        self._debounce_timer = None
 
     def compose(self) -> ComposeResult:
         # Toolbar (outside SubTabs — all btn-* IDs are always in the DOM)
@@ -558,7 +561,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             await self._reload_table(None)
 
     def _append_row_to_table(self, req: InterceptedRequest, row_id: int) -> None:
-        """Incrementally add a single row to the table without a full reload."""
+        """Incrementally add a single row — debounced at 150 ms.
+
+        Multiple rapid row arrivals (e.g. burst traffic) are batched into
+        one ArrowBackend rebuild, avoiding per-request redraws.
+        """
         parsed = req.to_parsed_request()
         url = parsed.url or ""
         ts = time.time()
@@ -572,7 +579,19 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             "timestamp": ts,
             "is_websocket": req.is_websocket,
         }
-        self._rows_cache.insert(0, row)
+        self._pending_append_rows.append(row)
+        if self._debounce_timer is None:
+            self._debounce_timer = self.set_timer(0.15, self._flush_pending_rows)
+
+    def _flush_pending_rows(self) -> None:
+        """Flush all pending rows into the table in one ArrowBackend rebuild."""
+        self._debounce_timer = None
+        if not self._pending_append_rows:
+            return
+        # Prepend new rows (newest first) and rebuild backend
+        for row in reversed(self._pending_append_rows):
+            self._rows_cache.insert(0, row)
+        self._pending_append_rows.clear()
         try:
             arrow = _rows_to_arrow(self._rows_cache)
             table = self.query_one("#request-list", DataTable)
@@ -582,7 +601,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             table._require_update_dimensions = True
             table.refresh()
         except Exception as exc:
-            logger.debug("PROXY SCREEN: _append_row_to_table: %s", exc)
+            logger.debug("PROXY SCREEN: _flush_pending_rows: %s", exc)
 
     def _select_row(self, row_idx: int) -> None:
         if 0 <= row_idx < len(self._rows_cache):

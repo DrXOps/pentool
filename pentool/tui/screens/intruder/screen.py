@@ -31,6 +31,8 @@ from textual.widgets import (
     TextArea,
 )
 
+from textual.message import Message as _Message
+
 from pentool.api.intruder_api import AttackType, IntruderAttack, IntruderConfig, IntruderResult, count_markers, generate_numeric_payloads, process_payload
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
@@ -40,6 +42,132 @@ from pentool.tui.widgets.request_editor import _build_http_highlights, _load_int
 from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class _IntruderFilterBar(Widget):
+    """Filter bar for the Intruder results table.
+
+    Encapsulates status / length-range / grep inputs that were previously
+    scattered as inline widgets inside IntruderScreen._compose_results.
+    Posts FilterChanged when the user applies or resets filters.
+    """
+
+    class FilterChanged(_Message):
+        """Emitted when the user clicks Apply or Reset."""
+        def __init__(self, filters: dict) -> None:
+            super().__init__()
+            self.filters = filters
+
+    DEFAULT_CSS = """
+    _IntruderFilterBar {
+        height: auto;
+        layout: vertical;
+    }
+    _IntruderFilterBar #results-filter-bar,
+    _IntruderFilterBar #grep-bar {
+        height: auto;
+        layout: horizontal;
+        padding: 0;
+    }
+    _IntruderFilterBar Label {
+        width: auto;
+        margin: 0 1;
+        color: $text-muted;
+    }
+    _IntruderFilterBar Input {
+        width: 12;
+        margin: 0 1;
+    }
+    _IntruderFilterBar Button {
+        margin: 0 1;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Horizontal(id="results-filter-bar"):
+            yield Label("Status:")
+            yield Input(id="filter-status", placeholder="e.g. 200", compact=True)
+            yield Label("Length >")
+            yield Input(id="filter-len-gt", placeholder="0", compact=True)
+            yield Label("<")
+            yield Input(id="filter-len-lt", placeholder="∞", compact=True)
+            yield Button("Apply", id="btn-filter-apply")
+            yield Button("Reset filters", id="btn-filter-reset")
+        with Horizontal(id="grep-bar"):
+            yield Label("Grep:")
+            yield Input(id="grep-match-input", placeholder="regex — highlight matching rows", compact=True)
+            yield Label("Extract:")
+            yield Input(id="grep-extract-input", placeholder="regex — add column with extracted value", compact=True)
+            yield Button("Apply", id="btn-grep-apply")
+            yield Button("Clear grep", id="btn-grep-clear")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        bid = event.button.id
+        if bid == "btn-filter-apply":
+            self._emit_filters()
+        elif bid == "btn-filter-reset":
+            self._reset()
+        elif bid == "btn-grep-apply":
+            self._emit_grep()
+        elif bid == "btn-grep-clear":
+            self._clear_grep()
+
+    def _emit_filters(self) -> None:
+        """Build filter dict from current Input values and emit FilterChanged."""
+        filters: dict = {}
+        try:
+            status = self.query_one("#filter-status", Input).value.strip()
+            if status:
+                filters["status"] = status
+        except Exception:
+            pass
+        try:
+            gt = self.query_one("#filter-len-gt", Input).value.strip()
+            if gt:
+                filters["len_gt"] = int(gt)
+        except Exception:
+            pass
+        try:
+            lt = self.query_one("#filter-len-lt", Input).value.strip()
+            if lt:
+                filters["len_lt"] = int(lt)
+        except Exception:
+            pass
+        self.post_message(self.FilterChanged(filters))
+
+    def _reset(self) -> None:
+        try:
+            self.query_one("#filter-status", Input).value = ""
+            self.query_one("#filter-len-gt", Input).value = ""
+            self.query_one("#filter-len-lt", Input).value = ""
+        except Exception:
+            pass
+        self.post_message(self.FilterChanged({}))
+
+    def _emit_grep(self) -> None:
+        filters: dict = {}
+        try:
+            match = self.query_one("#grep-match-input", Input).value.strip()
+            if match:
+                filters["grep_match"] = match
+        except Exception:
+            pass
+        try:
+            extract = self.query_one("#grep-extract-input", Input).value.strip()
+            if extract:
+                filters["grep_extract"] = extract
+        except Exception:
+            pass
+        self.post_message(self.FilterChanged(filters))
+
+    def _clear_grep(self) -> None:
+        try:
+            self.query_one("#grep-match-input", Input).value = ""
+            self.query_one("#grep-extract-input", Input).value = ""
+        except Exception:
+            pass
+        self.post_message(self.FilterChanged({}))
+
 
 # Module constants
 _ATTACK_LABELS = {
@@ -189,23 +317,7 @@ class IntruderScreen(AppMixin, Widget):
 
     def _compose_results(self) -> ComposeResult:
         with Vertical(id="results-area"):
-            # Filters above the table (like HttpHistory)
-            with Horizontal(id="results-filter-bar"):
-                yield Label("Status:")
-                yield Input(id="filter-status", placeholder="e.g. 200", compact=True)
-                yield Label("Length >")
-                yield Input(id="filter-len-gt", placeholder="0", compact=True)
-                yield Label("<")
-                yield Input(id="filter-len-lt", placeholder="∞", compact=True)
-                yield Button("Apply", id="btn-filter-apply")
-                yield Button("Reset filters", id="btn-filter-reset")
-            with Horizontal(id="grep-bar"):
-                yield Label("Grep:")
-                yield Input(id="grep-match-input", placeholder="regex — highlight matching rows", compact=True)
-                yield Label("Extract:")
-                yield Input(id="grep-extract-input", placeholder="regex — add column with extracted value", compact=True)
-                yield Button("Apply", id="btn-grep-apply")
-                yield Button("Clear grep", id="btn-grep-clear")
+            yield _IntruderFilterBar(id="intruder-filter-bar")
             with Horizontal(id="results-toolbar"):
                 pass
             with Horizontal(id="progress-row"):
@@ -337,16 +449,37 @@ class IntruderScreen(AppMixin, Widget):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
-        if bid == "btn-filter-apply":
-            self._apply_filter()
-        elif bid == "btn-filter-reset":
-            self._reset_filter()
-        elif bid in ("btn-export-csv-results", "btn-export-csv"):
+        if bid in ("btn-export-csv-results", "btn-export-csv"):
             self._export_csv()
-        elif bid == "btn-grep-apply":
-            self._apply_grep()
-        elif bid == "btn-grep-clear":
-            self._clear_grep()
+
+    def on__intruder_filter_bar_filter_changed(
+        self, event: _IntruderFilterBar.FilterChanged
+    ) -> None:
+        """React to _IntruderFilterBar posting a FilterChanged message."""
+        f = event.filters
+        if not f:
+            # Reset
+            self._filter_status  = None
+            self._filter_len_gt  = None
+            self._filter_len_lt  = None
+            self._grep_match_patterns   = []
+            self._grep_extract_patterns = []
+        else:
+            if "status" in f or "len_gt" in f or "len_lt" in f:
+                # Filter change
+                self._filter_status = f.get("status")
+                self._filter_len_gt = f.get("len_gt")
+                self._filter_len_lt = f.get("len_lt")
+            if "grep_match" in f or "grep_extract" in f:
+                self._grep_match_patterns   = [f["grep_match"]]   if f.get("grep_match")   else []
+                self._grep_extract_patterns = [f["grep_extract"]] if f.get("grep_extract") else []
+                n_match   = len(self._grep_match_patterns)
+                n_extract = len(self._grep_extract_patterns)
+                self.app.notify(
+                    f"Grep Match: {n_match} pattern(s), Extract: {n_extract} pattern(s)",
+                    timeout=2,
+                )
+        self._redraw_results()
 
     def on_select_changed(self, event) -> None:
         # Kept for compatibility — Select is no longer used
@@ -1024,66 +1157,6 @@ class IntruderScreen(AppMixin, Widget):
         except Exception:
             pass
 
-    def _apply_filter(self) -> None:
-        try:
-            status_val = self.query_one("#filter-status", Input).value.strip()
-            self._filter_status = status_val if status_val else None
-        except Exception:
-            self._filter_status = None
-        try:
-            gt_val = self.query_one("#filter-len-gt", Input).value.strip()
-            self._filter_len_gt = int(gt_val) if gt_val else None
-        except Exception:
-            self._filter_len_gt = None
-        try:
-            lt_val = self.query_one("#filter-len-lt", Input).value.strip()
-            self._filter_len_lt = int(lt_val) if lt_val else None
-        except Exception:
-            self._filter_len_lt = None
-        self._redraw_results()
-
-    def _reset_filter(self) -> None:
-        self._filter_status = None
-        self._filter_len_gt = None
-        self._filter_len_lt = None
-        try:
-            self.query_one("#filter-status", Input).value = ""
-            self.query_one("#filter-len-gt", Input).value = ""
-            self.query_one("#filter-len-lt", Input).value = ""
-        except Exception:
-            pass
-        self._redraw_results()
-
-    def _apply_grep(self) -> None:
-        """Apply Grep Match and Grep Extract patterns."""
-        try:
-            match_val = self.query_one("#grep-match-input", Input).value.strip()
-            self._grep_match_patterns = [match_val] if match_val else []
-        except Exception:
-            self._grep_match_patterns = []
-        try:
-            extract_val = self.query_one("#grep-extract-input", Input).value.strip()
-            self._grep_extract_patterns = [extract_val] if extract_val else []
-        except Exception:
-            self._grep_extract_patterns = []
-        self._redraw_results()
-        n_match = len(self._grep_match_patterns)
-        n_extract = len(self._grep_extract_patterns)
-        self.app.notify(  # type: ignore[attr-defined]
-            f"Grep Match: {n_match} pattern(s), Extract: {n_extract} pattern(s)",
-            timeout=2,
-        )
-
-    def _clear_grep(self) -> None:
-        """Reset Grep Match/Extract."""
-        self._grep_match_patterns = []
-        self._grep_extract_patterns = []
-        try:
-            self.query_one("#grep-match-input", Input).value = ""
-            self.query_one("#grep-extract-input", Input).value = ""
-        except Exception:
-            pass
-        self._redraw_results()
 
     def _passes_filter(self, result: IntruderResult) -> bool:
         if self._filter_status and str(result.response_status) != self._filter_status:

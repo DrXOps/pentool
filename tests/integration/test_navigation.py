@@ -54,16 +54,16 @@ class TestAppCompose:
             assert sb is not None
 
     @pytest.mark.asyncio
-    async def test_menubar_hidden_in_dom(self) -> None:
-        """MenuBar removed from DOM (R-12) — query should return empty list."""
+    async def test_menubar_not_in_dom(self) -> None:
+        """MenuBar removed from DOM (R-12) — ModuleTabs is used instead."""
         from pentool.tui.app import PentoolApp
-        from pentool.tui.widgets.menu_bar import MenuBar
+        from pentool.tui.widgets.module_tabs import ModuleTabs
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            # MenuBar removed from DOM in R-12 — should not be present
-            mb_list = app.query(MenuBar)
-            assert len(mb_list) == 0  # not in DOM
+            # ModuleTabs is the navigation widget, no legacy MenuBar
+            tabs = app.query(ModuleTabs)
+            assert len(tabs) == 1
 
     @pytest.mark.asyncio
     async def test_proxy_screen_default_active(self) -> None:

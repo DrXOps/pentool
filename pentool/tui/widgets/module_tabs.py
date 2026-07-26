@@ -2,13 +2,32 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Tab, Tabs
 
-from pentool.tui.widgets.menu import BASIC_MODULES, MODULES, ModuleSelected
-from pathlib import Path
+from pentool.tui.messages import ModuleSelected
+
+# Module list: (id, display name, hotkey)
+MODULES: list[tuple[str, str, str]] = [
+    ("dashboard",  "Dashboard",  "^H"),
+    ("proxy",      "Proxy",      "^P"),
+    ("repeater",   "Repeater",   "^R"),
+    ("intruder",   "Intruder",   "^I"),
+    ("scanner",    "Scanner",    "^S"),
+    ("target",     "Target",     "^T"),
+    ("decoder",    "Decoder",    "^D"),
+    ("comparer",   "Comparer",   "^C"),
+    ("sequencer",  "Sequencer",  "^Q"),
+    ("extensions", "Extensions", "^E"),
+    ("settings",   "Settings",   "^,"),
+]
+
+# Modules available in basic (no-project) mode
+BASIC_MODULES = {"dashboard", "proxy", "repeater", "intruder", "settings"}
 
 _CSS = (Path(__file__).parent / "module_tabs.tcss").read_text(encoding="utf-8")
 

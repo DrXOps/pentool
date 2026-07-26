@@ -101,3 +101,11 @@ class ConfigChanged(Message):
     def __init__(self, fields: dict) -> None:
         super().__init__()
         self.fields = fields
+
+
+class ModuleSelected(Message):
+    """User selected a module from the navigation widget."""
+
+    def __init__(self, module_id: str) -> None:
+        super().__init__()
+        self.module_id = module_id

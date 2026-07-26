@@ -65,9 +65,7 @@ from pentool.tui.screens import (
     TargetScreen,
     TerminalScreen,
 )
-from pentool.tui.widgets.menu import ModuleSelected, SideMenu
-# MenuBar removed from DOM (R-12), import kept for possible backward compatibility
-# from pentool.tui.widgets.menu_bar import MenuBar
+from pentool.tui.messages import ModuleSelected
 from pentool.tui.widgets.module_tabs import ModuleTabs
 from pentool.tui.widgets.statusbar import StatusBar
 
@@ -211,6 +209,9 @@ class PentoolApp(App):
         # Project auto-save (Block 3.3)
         from textual.timer import Timer as _Timer
         self._auto_save_timer: "_Timer | None" = None
+        # Project management — extracted to keep app.py focused on Textual wiring
+        from pentool.tui.project_manager import ProjectManager
+        self._pm = ProjectManager(self)
 
     def _handle_exception(self, error: Exception) -> None:
         """Catch fatal exceptions — log before passing to Textual."""
@@ -224,10 +225,6 @@ class PentoolApp(App):
 
     def compose(self) -> ComposeResult:
         yield ModuleTabs(id="module-tabs")
-        # MenuBar and SideMenu removed from DOM (R-12: 404 lines of dead code).
-        # Files tui/widgets/menu_bar.py and menu.py kept as archive.
-        # Only dependent test — tests/integration/test_navigation.py:58
-        # (integration tests hang, separate task).
         with ContentSwitcher(initial="screen-dashboard"):
             yield DashboardScreen(id="screen-dashboard")
             yield ProxyScreen(id="screen-proxy")
@@ -421,10 +418,6 @@ class PentoolApp(App):
 
     def action_switch_module(self, module_id: str) -> None:
         self._switch_to(module_id)
-        try:
-            self.query_one(SideMenu).select_module(module_id)
-        except Exception:
-            pass
         try:
             self.query_one(ModuleTabs).select_module(module_id)
         except Exception:
@@ -914,435 +907,40 @@ class PentoolApp(App):
     def action_toggle_theme(self) -> None:
         self.run_worker(self.run_action("toggle_dark"), exclusive=False)
 
-    def action_new_project(self) -> None:
-        from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
-
-        def _on_path(path: str | None) -> None:
-            if not path:
-                return
-            if not path.endswith(".db"):
-                path = path + ".db"
-            self._switch_project_db(path, is_new=True)
-
-        self.push_screen(
-            FileSelectorDialog(
-                mode=FileSelectorMode.SAVE,
-                title="New Project — Choose Location",
-                start_dir=os.path.expanduser("~"),
-            ),
-            _on_path,
-        )
-
-    def action_open_project(self) -> None:
-        from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
-        current = self._project_path
-        start_dir = os.path.dirname(current) if current else os.path.expanduser("~")
-
-        def _on_path(path: str | None) -> None:
-            if not path:
-                return
-            if not os.path.exists(path):
-                self.notify(f"File not found: {path}", severity="error", timeout=4)
-                return
-            self._switch_project_db(path, is_new=False)
-
-        self.push_screen(
-            FileSelectorDialog(
-                mode=FileSelectorMode.OPEN,
-                title="Open Project",
-                start_dir=start_dir,
-                filter_ext=[".db"],
-            ),
-            _on_path,
-        )
-
-    def action_save_project(self) -> None:
-        from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
-        current = self._project_path or self._cfg.db_path
-        start_dir = os.path.dirname(current) if current else os.path.expanduser("~")
-
-        def _on_path(path: str | None) -> None:
-            if not path:
-                return
-            if not path.endswith(".db"):
-                path = path + ".db"
-            import shutil
-            src = self._cfg.db_path
-            try:
-                shutil.copy2(src, path)
-                self._project_path = path
-                self._update_project_name(path, saved=True)
-                self.notify(f"Saved to {os.path.basename(path)}", timeout=3)
-                try:
-                    dash = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
-                    dash.log_activity(
-                        f'Project "{os.path.splitext(os.path.basename(path))[0]}" saved to {path}',
-                        "ok"
-                    )
-                    dash._populate_projects()
-                except Exception:
-                    pass
-            except Exception as e:
-                self.notify(f"Save failed: {e}", severity="error", timeout=4)
-
-        self.push_screen(
-            FileSelectorDialog(
-                mode=FileSelectorMode.SAVE,
-                title="Save Project As",
-                start_dir=start_dir,
-            ),
-            _on_path,
-        )
-
-    def action_save_project_json(self) -> None:
-        from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
-        current = self._project_path or self._cfg.db_path
-        start_dir = os.path.dirname(current) if current else os.path.expanduser("~")
-
-        def _on_path(path: str | None) -> None:
-            if not path:
-                return
-            if not path.endswith(".json"):
-                path = path + ".json"
-            self._do_save_project_json(path)
-
-        self.push_screen(
-            FileSelectorDialog(
-                mode=FileSelectorMode.SAVE,
-                title="Export Project (JSON)",
-                start_dir=start_dir,
-            ),
-            _on_path,
-        )
-
-    def action_open_project_json(self) -> None:
-        from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
-        current = self._project_path or self._cfg.db_path
-        start_dir = os.path.dirname(current) if current else os.path.expanduser("~")
-
-        def _on_path(path: str | None) -> None:
-            if not path:
-                return
-            if not os.path.exists(path):
-                self.notify(f"File not found: {path}", severity="error", timeout=4)
-                return
-            self._do_load_project_json(path)
-
-        self.push_screen(
-            FileSelectorDialog(
-                mode=FileSelectorMode.OPEN,
-                title="Import Project (JSON)",
-                start_dir=start_dir,
-                filter_ext=[".json"],
-            ),
-            _on_path,
-        )
-
-    def _do_save_project_json(self, path: str) -> None:
-        """Collect data from all APIs and save to JSON v2."""
-        from pentool.core.project import save_project
-        try:
-            # Proxy (scope, match/replace) — without http_history (read from SQLite)
-            proxy_export = self._proxy_api.export_project_data()
-            # HTTP history — read from SQLite via ProxyService
-            try:
-                if self._proxy_service is not None and self._proxy_service.is_storage_ready():
-                    http_history = asyncio.run_coroutine_threadsafe(
-                        self._proxy_service._storage.export_all_requests(), self._loop
-                    ).result(timeout=30)
-                    proxy_export["http_history"] = http_history
-                    logger.info(
-                        "_do_save_project_json: exported %d HTTP entries from SQLite",
-                        len(http_history),
-                    )
-            except Exception as exc:
-                logger.warning("_do_save_project_json: http_history export failed: %s", exc)
-            # Scanner findings
-            try:
-                from pentool.tui.screens.scanner.screen import ScannerScreen
-                scanner_screen = self.query_one(SCREEN_SCANNER, ScannerScreen)
-                scanner_api = scanner_screen._scanner_api
-                scanner_export = scanner_api.export_project_data() if scanner_api else {"findings": []}
-            except Exception:
-                scanner_export = {"findings": []}
-            # Target sitemap
-            try:
-                from pentool.tui.screens.target.screen import TargetScreen
-                target_screen = self.query_one(SCREEN_TARGET, TargetScreen)
-                target_api = target_screen._get_api()
-                target_export = target_api.export_project_data()
-            except Exception:
-                target_export = {"sitemap": {}}
-            # Intruder results — self._api in IntruderScreen
-            try:
-                from pentool.tui.screens.intruder.screen import IntruderScreen
-                intruder_screen = self.query_one(SCREEN_INTRUDER, IntruderScreen)
-                intruder_api = getattr(intruder_screen, "_api", None)
-                intruder_export = intruder_api.export_project_data() if intruder_api else {"results": []}
-            except Exception:
-                intruder_export = {"results": []}
-            # Spider sessions (from EventBus history)
-            spider_export = self._collect_spider_sessions()
-
-            data = {
-                **proxy_export,   # proxy + http_history at the top level
-                "scanner":  scanner_export,
-                "intruder": intruder_export,
-                "spider":   spider_export,
-                "target":   target_export,
-            }
-            save_project(path, data)
-            self._update_project_name(path)
-            self.notify(f"Saved → {os.path.basename(path)}", timeout=3)
-            logger.info("APP: project saved to JSON: %s", path)
-        except Exception as exc:
-            logger.error("_do_save_project_json error: %s", exc, exc_info=True)
-            self.notify(f"Save failed: {exc}", severity="error", timeout=4)
-
-    def _do_load_project_json(self, path: str) -> None:
-        from pentool.core.project import load_project
-        data, err = load_project(path)
-        if err:
-            self.notify(f"Load failed: {err}", severity="error", timeout=5)
-            return
-        try:
-            # Proxy
-            loaded_proxy, err_proxy = self._proxy_api.import_project_data(data)
-            if err_proxy:
-                logger.warning("import proxy: %s", err_proxy)
-            # Scanner findings — restore via engine, then reload UI
-            scanner_count = 0
-            try:
-                from pentool.tui.screens.scanner.screen import ScannerScreen
-                scanner_screen = self.query_one(SCREEN_SCANNER, ScannerScreen)
-                db_path = self._cfg.db_path
-                scanner_api = scanner_screen._get_or_create_api(db_path)
-                scanner_count = scanner_api.import_project_data(data.get("scanner", {}))
-                # Reload UI from DB (import_project_data has already written to SQLite)
-                scanner_screen._populate_from_db([])   # clear the table
-                scanner_screen._load_findings_worker()  # load from DB
-            except Exception as exc:
-                logger.warning("import scanner: %s", exc)
-            # Target sitemap
-            target_count = 0
-            try:
-                from pentool.tui.screens.target.screen import TargetScreen
-                target_screen = self.query_one(SCREEN_TARGET, TargetScreen)
-                target_api = target_screen._get_api()
-                target_count = target_api.import_project_data(data.get("target", {}))
-                target_screen._load_sitemap()
-            except Exception as exc:
-                logger.warning("import target: %s", exc)
-            # Intruder results — restore in API (self._api)
-            intruder_count = 0
-            try:
-                from pentool.tui.screens.intruder.screen import IntruderScreen
-                intruder_screen = self.query_one(SCREEN_INTRUDER, IntruderScreen)
-                intruder_api = getattr(intruder_screen, "_api", None)
-                if intruder_api:
-                    intruder_count = intruder_api.import_project_data(data.get("intruder", {}))
-            except Exception as exc:
-                logger.warning("import intruder: %s", exc)
-
-            # Update ProxyScreen
-            self.post_message(ProxyLoadProject())
-            self._update_project_name(path)
-
-            total = loaded_proxy + scanner_count + target_count + intruder_count
-            self.notify(
-                f"Loaded {os.path.basename(path)} — "
-                f"proxy: {loaded_proxy}, scanner: {scanner_count}, "
-                f"target: {target_count}, intruder: {intruder_count}",
-                timeout=5,
-            )
-            logger.info(
-                "APP: project loaded from JSON: %s, total items: %d", path, total
-            )
-        except Exception as exc:
-            logger.error("_do_load_project_json error: %s", exc, exc_info=True)
-            self.notify(f"Load failed: {exc}", severity="error", timeout=4)
-
-    def _collect_spider_sessions(self) -> dict:
-        """Collect Spider session data from EventBus history."""
-        from pentool.core.event_bus import get_event_bus
-        from pentool.core.events import SpiderFinished
-        sessions = []
-        try:
-            bus = get_event_bus()
-            events = bus.get_history(event_type=SpiderFinished, limit=100)
-            for ev in events:
-                sessions.append({
-                    "base_url": getattr(ev, "base_url", ""),
-                    "pages_count": getattr(ev, "pages_count", 0),
-                    "forms_count": getattr(ev, "forms_count", 0),
-                    "endpoints_count": getattr(ev, "endpoints_count", 0),
-                    "timestamp": getattr(ev, "timestamp", 0),
-                })
-        except Exception as exc:
-            logger.debug("_collect_spider_sessions: %s", exc)
-        return {"sessions": sessions}
+    def action_new_project(self)       -> None: self._pm.new_project()
+    def action_open_project(self)      -> None: self._pm.open_project()
+    def action_save_project(self)      -> None: self._pm.save_project()
+    def action_save_project_json(self) -> None: self._pm.save_project_json()
+    def action_open_project_json(self) -> None: self._pm.open_project_json()
 
     def _switch_project_db(self, path: str, is_new: bool = False) -> None:
-        """Switch to a different .db file as the active project.
-
-        Args:
-            path: Path to the .db file.
-            is_new: True — create a new DB (clear history), False — open an existing one.
-        """
-
-        if is_new:
-            # For a new project — create directory and initialize schema
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
-
-        # Update cfg.db_path — this is the public property for the whole app
-        self._cfg.db_path = path
-        self._project_path = path
-        self._project_loaded = True  # Unlock all modules
-
-        # Update ProxyServer.db_path so HttpStorage writes to the new DB
-        if self._proxy:
-            self._proxy.db_path = path
-
-        # Clear in-memory proxy history (for new project or clean open)
-        if is_new and self._proxy:
-            try:
-                self._proxy.requests.clear()
-                self._proxy.scope = []
-                self._proxy.match_replace_rules = []
-            except Exception:
-                pass
-
-        if is_new:
-            # For a new project — initialize schema and send clear signal
-            self.run_worker(self._init_new_db(path), exclusive=False, thread=False)
-            self.post_message(ProxyClearHistory())
-        else:
-            # For an existing DB — switch storage first, then reload screens
-            # All in one worker to guarantee ordering
-            self.run_worker(
-                self._open_project_sequence(path),
-                exclusive=False,
-                thread=False,
-            )
-
-        self._update_project_name(path)
-        action = "Created" if is_new else "Opened"
-        self.notify(f"{action}: {os.path.basename(path)}", timeout=3)
-
-        # Update project tree on dashboard and log to Live Feed
-        try:
-            dash = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
-            dash._populate_projects()
-            verb = "created" if is_new else "loaded"
-            dash.log_activity(
-                f'Project "{os.path.splitext(os.path.basename(path))[0]}" {verb} from {path}',
-                "ok"
-            )
-        except Exception:
-            pass
-
-    async def _reload_project_screens(self, path: str) -> None:
-        """Reload data from DB into all screens after switching project."""
-        # 1. ProxyScreen — re-read history from the new DB
-        try:
-            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
-            screen.load_from_project()
-            logger.info("_reload_project_screens: proxy reloaded from %s", path)
-        except Exception as exc:
-            logger.debug("_reload_project_screens proxy: %s", exc)
-
-        # 2. ScannerScreen — re-read findings from the new DB
-        try:
-            from pentool.tui.screens.scanner.screen import ScannerScreen
-            scanner_screen = self.query_one(SCREEN_SCANNER, ScannerScreen)
-            # Update API to the new db_path
-            if scanner_screen._scanner_api is not None:
-                scanner_screen._scanner_api._db_path = path
-            scanner_screen._scanner_api = None  # reset, will be recreated with new path
-            scanner_screen._scanner_api = scanner_screen._get_or_create_api(path)
-            scanner_screen._populate_from_db([])      # clear table
-            scanner_screen._load_findings_worker()     # load from new DB
-            logger.info("_reload_project_screens: scanner reloaded")
-        except Exception as exc:
-            logger.debug("_reload_project_screens scanner: %s", exc)
-
-        # 3. TargetScreen — save current sitemap to old DB, then re-read from new
-        try:
-            from pentool.tui.screens.target.screen import TargetScreen
-            target_screen = self.query_one(SCREEN_TARGET, TargetScreen)
-            # Save current in-memory sitemap to old DB before switching
-            if target_screen._target_api is not None:
-                try:
-                    await target_screen._target_api.save()
-                except Exception:
-                    pass
-            # Reset API — will be recreated with new db_path in _get_api()
-            target_screen._target_api = None
-            target_screen._get_api()  # pre-create with new db_path
-            target_screen._load_sitemap()
-            logger.info("_reload_project_screens: target reloaded from %s", path)
-        except Exception as exc:
-            logger.debug("_reload_project_screens target: %s", exc)
-
-        # 4. Dashboard — update statistics
-        try:
-            dash = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
-            dash.refresh_stats()
-        except Exception as exc:
-            logger.debug("_reload_project_screens dashboard: %s", exc)
-
-    async def _init_new_db(self, path: str) -> None:
-        try:
-            await init_db(path)
-        except Exception as exc:
-            logger.warning("_init_new_db: %s", exc)
-
-    async def _switch_storage_db(self, path: str) -> None:
-        try:
-            if self._proxy_service is not None:
-                await self._proxy_service.switch_db(path)
-                logger.info("_switch_storage_db: proxy_service switched to %s", path)
-        except Exception as exc:
-            logger.debug("_switch_storage_db error: %s", exc)
-
-    async def _open_project_sequence(self, path: str) -> None:
-        # 1. Switch HttpStorage
-        await self._switch_storage_db(path)
-        # 2. Initialize/migrate schema
-        await self._init_new_db(path)
-        # 3. Give Textual one cycle to process any pending messages
-        await asyncio.sleep(0.05)
-        # 4. Reload data into all screens
-        await self._reload_project_screens(path)
-
-    def action_open_ca_cert(self) -> None:
-        from pentool.core.config import get_config
-        from pentool.tui.dialogs.cert_dialog import CertInstallDialog
-        ca_path = str(get_config().cert_dir) + "/ca.crt"
-        self.push_screen(CertInstallDialog(ca_path))
+        self._pm.switch_project_db(path, is_new)
 
     def _update_project_name(self, path: str, saved: bool = True) -> None:
-        name = os.path.basename(path) if path else "new project"
-        # Strip .db extension
-        if name.endswith(".db"):
-            name = name[:-3]
-        try:
-            from pentool.tui.widgets.statusbar import StatusBar
-            bar = self.query_one(StatusBar)
-            bar.set_project(name, path, saved)
-        except Exception:
-            pass
-        # Update app SUB_TITLE
-        try:
-            self.sub_title = f"project: {name}"
-        except Exception:
-            pass
-        # Add to recent projects list (if a real file)
-        if path and path != "new project":
-            try:
-                self._cfg.add_recent_project(path)
-            except Exception:
-                pass
+        self._pm.update_project_name(path, saved)
+
+    # ── Helpers kept in app.py (used by other app-level methods) ──────────────
+
+    def _do_save_project_json(self, path: str) -> None:
+        self._pm._do_save_json(path)
+
+    def _do_load_project_json(self, path: str) -> None:
+        self._pm._do_load_json(path)
+
+    def _collect_spider_sessions(self) -> dict:
+        return self._pm._collect_spider_sessions()
+
+    async def _reload_project_screens(self, path: str) -> None:
+        await self._pm._reload_project_screens(path)
+
+    async def _init_new_db(self, path: str) -> None:
+        await self._pm._init_new_db(path)
+
+    async def _switch_storage_db(self, path: str) -> None:
+        await self._pm._switch_storage_db(path)
+
+    async def _open_project_sequence(self, path: str) -> None:
+        await self._pm._open_project_sequence(path)
 
     # ── EventBus handlers ──────────────────────────────────────────────────────
     # All handlers are called from the main event loop (via emit or

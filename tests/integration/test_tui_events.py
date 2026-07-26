@@ -31,7 +31,7 @@ class TestModuleTabsEvents:
     async def test_module_selected_event_posted(self) -> None:
         """Click on a tab → ModuleSelected event."""
         from pentool.tui.app import PentoolApp
-        from pentool.tui.widgets.menu import ModuleSelected
+        from pentool.tui.messages import ModuleSelected
 
         received = []
 
