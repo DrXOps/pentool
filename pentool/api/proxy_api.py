@@ -6,6 +6,7 @@ from typing import Callable
 
 from pentool.modules.proxy import InterceptedRequest, MatchReplaceRule, ProxyServer
 from pentool.core.logging import get_logger
+from pentool.api.base_api import ExportableAPI
 
 logger = get_logger(__name__)
 
@@ -13,7 +14,7 @@ logger = get_logger(__name__)
 __all__ = ["ProxyAPI", "InterceptedRequest", "MatchReplaceRule", "ProxyServer"]
 
 
-class ProxyAPI:
+class ProxyAPI(ExportableAPI):
 
     def __init__(self) -> None:
         self._proxy: ProxyServer | None = None

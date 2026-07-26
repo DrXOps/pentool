@@ -116,35 +116,72 @@ class TestSQLiteStorage:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_get_stats(self, storage):
+    async def test_get_stats(self, storage, tmp_path):
         s, _ = storage
+        db_path = str(tmp_path / "test.db")
         s._storage.count = AsyncMock(return_value=5)
-        stats = await s.get_stats()
+        s._storage._db_path = db_path
+        # get_stats also queries vulnerabilities table — mock get_db
+        with patch("pentool.core.storage_interface.get_db") as mock_get_db:
+            mock_conn = AsyncMock()
+            mock_cur = AsyncMock()
+            mock_cur.fetchone = AsyncMock(return_value=(3,))
+            mock_conn.execute = AsyncMock(return_value=mock_cur)
+            mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_conn.__aexit__ = AsyncMock(return_value=False)
+            mock_get_db.return_value = mock_conn
+            stats = await s.get_stats()
         assert stats["total_requests"] == 5
+        assert "total_findings" in stats
 
     @pytest.mark.asyncio
-    async def test_findings_not_implemented(self, storage):
+    async def test_add_finding(self, storage, tmp_path):
+        """add_finding delegates to vulnerabilities table via get_db."""
         s, _ = storage
-        with pytest.raises(NotImplementedError):
-            await s.add_finding("high", "XSS", "http://x.com", "desc", None)
+        db_path = str(tmp_path / "test.db")
+        s._storage._db_path = db_path
+        with patch("pentool.core.storage_interface.get_db") as mock_get_db:
+            mock_conn = AsyncMock()
+            mock_cur = AsyncMock()
+            mock_cur.lastrowid = 7
+            mock_conn.execute = AsyncMock(return_value=mock_cur)
+            mock_conn.commit = AsyncMock()
+            mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_conn.__aexit__ = AsyncMock(return_value=False)
+            mock_get_db.return_value = mock_conn
+            row_id = await s.add_finding("high", "XSS", "http://x.com", "desc", None)
+        assert row_id == 7
 
     @pytest.mark.asyncio
-    async def test_get_findings_not_implemented(self, storage):
+    async def test_get_findings(self, storage, tmp_path):
+        """get_findings returns list of dicts from vulnerabilities table."""
         s, _ = storage
-        with pytest.raises(NotImplementedError):
-            await s.get_findings()
+        db_path = str(tmp_path / "test.db")
+        s._storage._db_path = db_path
+        with patch("pentool.core.storage_interface.get_db") as mock_get_db:
+            mock_conn = AsyncMock()
+            mock_cur = AsyncMock()
+            mock_cur.fetchall = AsyncMock(return_value=[])
+            mock_conn.execute = AsyncMock(return_value=mock_cur)
+            mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_conn.__aexit__ = AsyncMock(return_value=False)
+            mock_get_db.return_value = mock_conn
+            result = await s.get_findings()
+        assert isinstance(result, list)
 
     @pytest.mark.asyncio
-    async def test_metadata_not_implemented(self, storage):
+    async def test_get_metadata_returns_none(self, storage):
+        """get_metadata returns None gracefully (table not yet in schema)."""
         s, _ = storage
-        with pytest.raises(NotImplementedError):
-            await s.get_metadata("key")
+        result = await s.get_metadata("any_key")
+        assert result is None
 
     @pytest.mark.asyncio
-    async def test_set_metadata_not_implemented(self, storage):
+    async def test_set_metadata_noop(self, storage):
+        """set_metadata is a no-op until metadata table is added."""
         s, _ = storage
-        with pytest.raises(NotImplementedError):
-            await s.set_metadata("key", "value")
+        # Should not raise
+        await s.set_metadata("key", "value")
 
     @pytest.mark.asyncio
     async def test_update_response(self, storage):

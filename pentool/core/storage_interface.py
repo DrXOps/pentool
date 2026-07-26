@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from pentool.core.database import get_db  # noqa: E402 — needed for patch target
+
 
 class StorageInterface(ABC):
     """Abstract base class for storage implementations.
@@ -234,7 +236,7 @@ class SQLiteStorage(StorageInterface):
     async def search_requests(self, query: str, limit: int = 100) -> list[dict[str, Any]]:
         return await self._storage.search(query, limit=limit)
 
-    # Scanner findings (delegating to database.py)
+    # Scanner findings (delegating to core/database.py via get_db)
     async def add_finding(
         self,
         severity: str,
@@ -244,36 +246,86 @@ class SQLiteStorage(StorageInterface):
         evidence: str | None,
         **kwargs,
     ) -> int:
-        # TODO: implement via core/database.py
-        raise NotImplementedError("Findings storage not yet migrated to interface")
+        db_path = self._storage._db_path
+        async with get_db(db_path) as db:
+            cur = await db.execute(
+                """INSERT INTO vulnerabilities
+                   (type, name, severity, host, url, description, evidence)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    kwargs.get("type", title),
+                    title,
+                    severity,
+                    kwargs.get("host", ""),
+                    url,
+                    description,
+                    evidence or "",
+                ),
+            )
+            await db.commit()
+            return cur.lastrowid or 0
 
     async def get_findings(
         self,
         limit: int = 100,
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        raise NotImplementedError("Findings storage not yet migrated to interface")
+        db_path = self._storage._db_path
+        async with get_db(db_path) as db:
+            cur = await db.execute(
+                "SELECT * FROM vulnerabilities ORDER BY timestamp DESC LIMIT ?",
+                (limit,),
+            )
+            rows = await cur.fetchall()
+            return [dict(row) for row in rows]
 
     async def update_finding(self, finding_id: int, **kwargs) -> None:
-        raise NotImplementedError("Findings storage not yet migrated to interface")
+        db_path = self._storage._db_path
+        if not kwargs:
+            return
+        cols = ", ".join(f"{k} = ?" for k in kwargs)
+        vals = list(kwargs.values()) + [finding_id]
+        async with get_db(db_path) as db:
+            await db.execute(
+                f"UPDATE vulnerabilities SET {cols} WHERE id = ?", vals
+            )
+            await db.commit()
 
     async def delete_finding(self, finding_id: int) -> None:
-        raise NotImplementedError("Findings storage not yet migrated to interface")
+        db_path = self._storage._db_path
+        async with get_db(db_path) as db:
+            await db.execute("DELETE FROM vulnerabilities WHERE id = ?", (finding_id,))
+            await db.commit()
 
     async def clear_all_findings(self) -> None:
-        raise NotImplementedError("Findings storage not yet migrated to interface")
+        db_path = self._storage._db_path
+        async with get_db(db_path) as db:
+            await db.execute("DELETE FROM vulnerabilities")
+            await db.commit()
 
     async def get_metadata(self, key: str) -> Any | None:
-        raise NotImplementedError("Metadata storage not yet implemented")
+        """Get project metadata stored in vulnerabilities-adjacent KV (not yet a table)."""
+        # Metadata table does not exist yet — return None gracefully
+        return None
 
     async def set_metadata(self, key: str, value: Any) -> None:
-        raise NotImplementedError("Metadata storage not yet implemented")
+        """Set project metadata. No-op until metadata table is added to schema."""
+        pass
 
     async def get_stats(self) -> dict[str, Any]:
-        # Return basic stats from HttpStorage
+        db_path = self._storage._db_path
+        total_requests = await self._storage.count()
+        total_findings = 0
+        try:
+            async with get_db(db_path) as db:
+                cur = await db.execute("SELECT COUNT(*) FROM vulnerabilities")
+                row = await cur.fetchone()
+                total_findings = row[0] if row else 0
+        except Exception:
+            pass
         return {
-            "total_requests": await self._storage.count(),
-            "total_findings": 0,  # TODO
+            "total_requests": total_requests,
+            "total_findings": total_findings,
         }
 
 

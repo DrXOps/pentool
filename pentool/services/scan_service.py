@@ -86,12 +86,37 @@ class ScanService:
             source="scanner",
         ))
 
-        # ── 1. Crawl all targets ───────────────────────────────────────────────
+        all_scan_targets, all_forms = await self._collect_targets(config)
+        if self._stop_requested:
+            self._log("[yellow]STOP[/yellow] Scan stopped after crawl.")
+            self._emit(ScanFinished(total_findings=0, stopped_early=True, source="scanner"))
+            return []
+
+        all_scan_targets = self._filter_targets(all_scan_targets)
+        self._log(
+            f"[cyan]CRAWL[/cyan] Total: [bold]{len(all_scan_targets)}[/bold] URLs + "
+            f"[bold]{len(all_forms)}[/bold] POST forms to test"
+        )
+
+        self._emit(ScanProgressEvent(done=0, total=len(all_scan_targets), scanning=True, source="scanner"))
+
+        all_findings = await self._run_active_scan(config, all_scan_targets)
+
+        self._emit(ScanFinished(
+            total_findings=len(all_findings),
+            stopped_early=self._stop_requested,
+            source="scanner",
+        ))
+        return all_findings
+
+    async def _collect_targets(
+        self, config: ScanConfig
+    ) -> tuple[list[str], list]:
+        """Phase 1: collect scan targets via crawl or resume."""
         all_scan_targets: list[str] = []
         all_forms: list = []
 
         if config.resume and config.resume_targets:
-            # Resume: skip crawling — use previously collected URLs
             all_scan_targets = list(config.resume_targets)
             self._log(
                 f"[yellow]RESUME[/yellow] Skipping crawl — "
@@ -101,21 +126,18 @@ class ScanService:
             for base_url in config.targets:
                 if self._stop_requested:
                     break
-                await self._crawl_target(
-                    base_url, config, all_scan_targets, all_forms
-                )
+                await self._crawl_target(base_url, config, all_scan_targets, all_forms)
 
-        if self._stop_requested:
-            self._log("[yellow]STOP[/yellow] Scan stopped after crawl.")
-            self._emit(ScanFinished(total_findings=0, stopped_early=True, source="scanner"))
-            return []
+        return all_scan_targets, all_forms
 
-        # ── 2. Filter static assets + deduplicate by template ─────────────────
+    def _filter_targets(self, all_scan_targets: list[str]) -> list[str]:
+        """Phase 2: remove static assets and deduplicate by URL template."""
         from pentool.modules.scanner.helpers import is_scannable_url, path_template
         seen_templates: set[str] = set()
         unique: list[str] = []
         skipped_static = 0
         skipped_dedup = 0
+
         for t in all_scan_targets:
             if not is_scannable_url(t):
                 skipped_static += 1
@@ -126,22 +148,21 @@ class ScanService:
                 continue
             seen_templates.add(tmpl)
             unique.append(t)
-        all_scan_targets = unique
+
         if skipped_static or skipped_dedup:
             self._log(
                 f"[dim]FILTER[/dim] Skipped [bold]{skipped_static}[/bold] static, "
                 f"[bold]{skipped_dedup}[/bold] duplicate templates"
             )
+        return unique
 
-        self._log(
-            f"[cyan]CRAWL[/cyan] Total: [bold]{len(all_scan_targets)}[/bold] URLs + "
-            f"[bold]{len(all_forms)}[/bold] POST forms to test"
-        )
+    async def _run_active_scan(
+        self, config: ScanConfig, all_scan_targets: list[str]
+    ) -> list[Finding]:
+        """Phase 3: run active checks on collected targets, return findings."""
+        from pentool.utils.http_client import HTTPClient
+        from pentool.utils.parser import ParsedRequest
 
-        # ── 3. Progress bar and request preparation ────────────────────────────
-        self._emit(ScanProgressEvent(done=0, total=len(all_scan_targets), scanning=True, source="scanner"))
-
-        # ── 4. Active scanning ────────────────────────────────────────────────
         findings: list[Finding] = []
 
         def on_finding(f: Finding) -> None:
@@ -156,11 +177,8 @@ class ScanService:
             pt = f" [{point_name}]" if point_name and point_name != "—" else ""
             self._log(f"[dim]→ {check_name}{pt}[/dim]  {url[:80]}")
 
-        # Pass on_request_sent from config (set by TUI)
         _on_request_sent = getattr(config, "on_request_sent", None)
 
-        from pentool.utils.http_client import HTTPClient
-        from pentool.utils.parser import ParsedRequest
         http_client = HTTPClient(timeout=20.0, follow_redirects=True, verify_ssl=False)
         engine = self._scanner._get_engine()
         engine._http_client = http_client
@@ -169,11 +187,7 @@ class ScanService:
         engine._stop_requested = False
 
         try:
-            # Priority: seed_requests (real requests from Proxy/History)
-            # Fallback: URLs from crawler → bare GET requests
             if config.seed_requests:
-                # For each URL from crawler — create ParsedRequest
-                # preserving headers from the first seed_request (auth context)
                 base_headers = dict(config.seed_requests[0].headers or {})
                 crawled_reqs = [
                     ParsedRequest(method="GET", url=url, headers=base_headers, body="")
@@ -204,15 +218,9 @@ class ScanService:
         finally:
             await http_client.close()
 
-        # ── 5. Save ───────────────────────────────────────────────────────────
         if not self._stop_requested:
             await engine.save_findings(all_findings)
 
-        self._emit(ScanFinished(
-            total_findings=len(all_findings),
-            stopped_early=self._stop_requested,
-            source="scanner",
-        ))
         return all_findings
 
     # ── private methods ────────────────────────────────────────────────────────

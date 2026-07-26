@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 
+from pentool.api.base_api import ExportableAPI
 from pentool.modules.intruder import (
     AttackType,
     IntruderAttack,
@@ -32,7 +33,7 @@ __all__ = [
 ]
 
 
-class IntruderAPI:
+class IntruderAPI(ExportableAPI):
 
     def __init__(self, db_path: str | None = None) -> None:
         self._db_path = db_path

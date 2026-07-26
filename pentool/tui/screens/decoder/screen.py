@@ -166,8 +166,7 @@ class DecoderScreen(Widget):
     def _smart_decode(self) -> None:
         """Auto-detect and chain-decode the input."""
         try:
-            from pentool.api.decoder_api import decode_smart
-            from pentool.modules.decoder import _detect_encoding, encode_op
+            from pentool.api.decoder_api import decode_smart, detect_encoding, encode_op
             inp = self.query_one("#dec-input", TextArea)
             text = inp.text.strip()
             if not text:
@@ -179,7 +178,7 @@ class DecoderScreen(Widget):
             chain: list[str] = []
             steps: list[str] = [current]
             for _ in range(8):
-                op = _detect_encoding(current)
+                op = detect_encoding(current)
                 if op is None:
                     break
                 try:

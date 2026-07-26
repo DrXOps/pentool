@@ -7,6 +7,7 @@ from pentool.modules.decoder import (  # noqa: F401
     OPERATIONS,
     OP_LABELS,
     DecoderChain,
+    _detect_encoding as detect_encoding,  # expose as public API
     decode_op,
     decode_smart,
     encode_op,
@@ -17,6 +18,7 @@ __all__ = [
     "OPERATIONS",
     "OP_LABELS",
     "DecoderChain",
+    "detect_encoding",
     "decode_op",
     "decode_smart",
     "encode_op",

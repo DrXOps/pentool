@@ -12,12 +12,14 @@ from pentool.modules.target import SiteMap, SiteNode
 if TYPE_CHECKING:
     from pentool.utils.parser import ParsedRequest
 
+from pentool.api.base_api import ExportableAPI
+
 logger = get_logger(__name__)
 
 __all__ = ["TargetAPI", "SiteNode", "SiteMap"]
 
 
-class TargetAPI:
+class TargetAPI(ExportableAPI):
 
     def __init__(self, db_path: str = "") -> None:
         self._db_path = db_path

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from pentool.core.logging import get_logger
+from pentool.api.base_api import ExportableAPI
 from pentool.modules.spider import (
     AsyncSpider,
     SpiderEndpoint,
@@ -35,7 +36,7 @@ class SpiderConfig:
     js_render: bool = False  # Playwright JS rendering (if installed)
 
 
-class SpiderAPI:
+class SpiderAPI(ExportableAPI):
 
     def __init__(self, config: SpiderConfig | None = None) -> None:
         self._config = config or SpiderConfig()
@@ -104,3 +105,11 @@ class SpiderAPI:
     def config(self) -> SpiderConfig:
         """Current crawler configuration (max_depth, max_pages, concurrency)."""
         return self._config
+
+    def export_project_data(self) -> dict:
+        """Spider results are transient — no persistent state to serialize."""
+        return {"spider": {}}
+
+    def import_project_data(self, data: dict) -> int:
+        """Spider results are not restored between sessions."""
+        return 0

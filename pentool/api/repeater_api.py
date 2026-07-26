@@ -6,12 +6,13 @@ from __future__ import annotations
 
 from pentool.modules.repeater import Repeater, RepeaterEntry
 from pentool.utils.parser import ParsedRequest, ParsedResponse
+from pentool.api.base_api import ExportableAPI
 
 # Re-export types
 __all__ = ["RepeaterAPI", "RepeaterEntry"]
 
 
-class RepeaterAPI:
+class RepeaterAPI(ExportableAPI):
 
     def __init__(
         self,
@@ -55,3 +56,11 @@ class RepeaterAPI:
 
     async def delete_entry(self, entry_id: int) -> None:
         return await self._repeater.delete_entry(entry_id)
+
+    def export_project_data(self) -> dict:
+        """Export repeater history is handled via DB — no in-memory state to serialize."""
+        return {"repeater": {}}
+
+    def import_project_data(self, data: dict) -> int:
+        """Repeater history is loaded from DB on demand — nothing to restore here."""
+        return 0
