@@ -1,0 +1,23 @@
+# Jekyll config for GitHub Pages
+# Тема Hacker применяется к Markdown-страницам
+theme: jekyll-theme-hacker
+
+title: Pentool
+description: Professional TUI Web Pentesting Toolkit — HTTP proxy, scanner, intruder, repeater in your terminal
+url: "https://pentool.pro"
+
+# index.html — кастомный файл, он имеет приоритет над темой
+# Тема Hacker применится к остальным .md страницам (docs/, INSTALLATION.md и т.д.)
+
+plugins:
+  - jekyll-relative-links
+
+# Exclude non-page files
+exclude:
+  - "*.py"
+  - "memory/"
+  - ".obsidian/"
+  - "SCANNER_MODERNIZATION_PLAN.md"
+  - "ARCHITECTURE_AUDIT.md"
+  - "API_CONTRACTS.md"
+  - "SELF_PROMPT.md"
