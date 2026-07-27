@@ -185,7 +185,7 @@ async def activate_license(key: str) -> LicenseInfo:
             timeout=aiohttp.ClientTimeout(total=10)
         ) as session:
             async with session.post(
-                "https://license.pentool.pro/api/validate",
+                "https://pentool-license.akashtanov2020.workers.dev/api/validate",
                 json={"key": key, "machine_id": machine_id},
                 ssl=False,
             ) as resp:
