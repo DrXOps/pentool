@@ -7,7 +7,7 @@ import pytest
 
 from pentool.core.event_bus import EventBus, get_event_bus, reset_event_bus
 from pentool.core.events import (
-    ScanStarted, ScanFinished, FindingDiscovered,
+    ScanStarted, ScanFinished,
     ProxyRequestCaptured, IntruderFinished,
 )
 
@@ -38,7 +38,7 @@ class TestEventBus:
         """unsubscribe → emit → handler НЕ вызван."""
         bus = EventBus()
         calls = []
-        handler = lambda e: calls.append(e)
+        def handler(e): calls.append(e)
         bus.subscribe(ScanStarted, handler)
         bus.unsubscribe(ScanStarted, handler)
         bus.emit(ScanStarted())
@@ -48,7 +48,7 @@ class TestEventBus:
         """подписаться на 2 типа → unsubscribe_all → emit оба → 0 вызовов."""
         bus = EventBus()
         calls = []
-        handler = lambda e: calls.append(e)
+        def handler(e): calls.append(e)
         bus.subscribe(ScanStarted, handler)
         bus.subscribe(ScanFinished, handler)
         bus.unsubscribe_all(handler)

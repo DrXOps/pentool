@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-import pytest_asyncio
 from aioresponses import aioresponses
 
 from pentool.services.repeater_service import RepeaterService

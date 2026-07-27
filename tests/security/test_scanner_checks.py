@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 import pytest
-import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from pentool.modules.scanner.base import Finding
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 

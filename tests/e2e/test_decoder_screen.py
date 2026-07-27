@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-from textual.widgets import TextArea
 
 from pentool.tui.app import PentoolApp
 from pentool.tui.screens.decoder.screen import DecoderScreen

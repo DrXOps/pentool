@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pentool — Professional TUI Web Pentesting Toolkit</title>
-  <meta name="description" content="Modern terminal-based security toolkit for penetration testers. HTTP proxy, scanner, intruder, repeater, decoder — all in your terminal." />
-  <meta name="keywords" content="pentool, pentesting, TUI, security, burp alternative, proxy, scanner, intruder, CLI" />
-  <meta property="og:title" content="Pentool — Professional TUI Web Pentesting Toolkit" />
-  <meta property="og:description" content="HTTP proxy, scanner, intruder, repeater and more — all in your terminal. Open source + PRO extensions." />
+  <title>Pentool — Async TUI Web Pentesting Toolkit</title>
+  <meta name="description" content="Fully async terminal-based security toolkit. HTTP proxy, scanner, intruder, repeater — keyboard-driven, no browser, no Electron, no Java." />
+  <meta name="keywords" content="pentool, pentesting, TUI, security, burp alternative, async, proxy, scanner, intruder, CLI" />
+  <meta property="og:title" content="Pentool — Async TUI Web Pentesting Toolkit" />
+  <meta property="og:description" content="Fully async pentesting toolkit in your terminal. No browser, no Electron, no Java. pip install pentool." />
   <meta property="og:url" content="https://pentool.pro" />
   <meta property="og:type" content="website" />
   <link rel="canonical" href="https://pentool.pro" />
@@ -212,21 +212,20 @@
     <li><a href="#features">Features</a></li>
     <li><a href="#install">Install</a></li>
     <li><a href="#docs">Docs</a></li>
-    <li><a href="pricing.html">Pricing</a></li>
-    <li><a href="#beta">Beta</a></li>
+    <li><a href="#beta">Trial</a></li>
   </ul>
   <a class="nav-cta" href="https://github.com/docxqwerty/pentool">GitHub</a>
 </nav>
 
 <!-- HERO -->
 <section class="hero">
-  <div class="beta-badge">🧪 Public Beta · v0.1.1</div>
-  <h1>Web pentesting,<br/><em>right in your terminal</em></h1>
-  <p>HTTP proxy, scanner, intruder, repeater, decoder — a full security toolkit as a fast, keyboard-driven TUI. No browser required.</p>
+  <div class="beta-badge">🚀 Demo · 14-day Free Trial · All PRO Features Included</div>
+  <h1>Pentesting toolkit<br/><em>that runs at async speed</em></h1>
+  <p>Burp Suite is slow, heavy, and runs in a browser. Pentool is a fully async, keyboard-driven TUI — hundreds of concurrent requests, zero Java, zero Electron.</p>
   <div class="hero-buttons">
-    <a class="btn btn-primary" href="https://github.com/docxqwerty/pentool">⭐ GitHub</a>
-    <a class="btn btn-secondary" href="#install">📦 Install</a>
-    <a class="btn btn-donate" href="https://donate.trybit.com/KY1ECKA5">☕ Donate</a>
+    <a class="btn btn-primary" href="#install">📦 pip install pentool</a>
+    <a class="btn btn-secondary" href="https://github.com/docxqwerty/pentool">⭐ GitHub</a>
+    <a class="btn btn-donate" href="https://t.me/sudores">💬 Get PRO Trial</a>
   </div>
 </section>
 
@@ -270,69 +269,49 @@
 
 <!-- FEATURES -->
 <section class="section" id="features">
-  <div class="section-label">What's inside</div>
-  <h2 class="section-title">Everything you need for web pentesting</h2>
-  <p class="section-sub">Modular architecture — use what you need, extend what you want.</p>
+  <div class="section-label">Why Pentool</div>
+  <h2 class="section-title">What competitors don't offer</h2>
+  <p class="section-sub">No Java. No Electron. No browser tab eating your RAM. Just a fast async TUI that stays out of your way.</p>
   <div class="features-grid">
     <div class="feature-card">
-      <div class="feature-icon">🌐</div>
-      <h3>Proxy</h3>
-      <p>Intercept and modify HTTP/HTTPS traffic in real time. Match &amp; Replace rules, WebSocket support, scope management.</p>
+      <div class="feature-icon">⚡</div>
+      <h3>Fully Async Engine</h3>
+      <p>Built on asyncio from the ground up — thousands of concurrent connections, hundreds of req/s. Burp queues. Pentool flies.</p>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🔄</div>
-      <h3>Repeater</h3>
-      <p>Replay and tweak requests instantly. Save tabs between sessions, switch scenarios with one keystroke.</p>
+      <div class="feature-icon">⌨️</div>
+      <h3>Keyboard-First TUI</h3>
+      <p>Every action reachable without a mouse. Works over SSH, in tmux, on headless servers — anywhere a terminal runs.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">💥</div>
-      <h3>Intruder</h3>
-      <p>4 attack modes: Sniper, Battering Ram, Pitchfork, Cluster Bomb. Turbo Mode via Keep-Alive for 10× speed.</p>
+      <h3>Intruder Turbo Mode</h3>
+      <p>Keep-Alive + connection pooling = 10× attack speed vs. standard HTTP. Four modes: Sniper, Battering Ram, Pitchfork, Cluster Bomb.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🔍</div>
-      <h3>Scanner<span class="pro-badge">PRO</span></h3>
-      <p>SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT — context-aware payloads, WAF bypass, blind techniques.</p>
+      <h3>Smart Scanner<span class="pro-badge">PRO</span></h3>
+      <p>Context-aware payloads for SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. WAF bypass and blind techniques built in.</p>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🕷</div>
-      <h3>Spider</h3>
-      <p>Auto-crawl pages, forms, API endpoints, JS files. JavaScript rendering via Playwright.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🎯</div>
-      <h3>Target / Site Map</h3>
-      <p>Build a visual site map from proxy traffic. Manage scope and filter hosts without leaving the UI.</p>
+      <div class="feature-icon">🌐</div>
+      <h3>Proxy + WebSockets</h3>
+      <p>Intercept HTTP/HTTPS and WebSocket frames in real time. Match &amp; Replace rules, scope filters, history search.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🔐</div>
-      <h3>Decoder</h3>
-      <p>19 encode/decode/hash operations. Chain them together for complex transformations.</p>
+      <h3>Decoder · Comparer · Sequencer</h3>
+      <p>19 chained encode/decode/hash ops. Side-by-side diff. Entropy + FIPS analysis for sessions, CSRF tokens, JWTs.</p>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">📊</div>
-      <h3>Comparer</h3>
-      <p>Side-by-side diff with change highlighting. Spot differences between responses instantly.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🎲</div>
-      <h3>Sequencer<span class="pro-badge">PRO</span></h3>
-      <p>Entropy analysis of tokens — sessions, CSRF, JWT. FIPS statistical tests included.</p>
+      <div class="feature-icon">📦</div>
+      <h3>pip install — done</h3>
+      <p>One command, no Docker, no JDK, no license server. Linux, macOS, Windows WSL. Python 3.10+.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🧩</div>
-      <h3>Plugin System</h3>
-      <p>Extend without touching core. PRO plugins add advanced scanners, smart payloads, report generators.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">⚡</div>
-      <h3>Async Core</h3>
-      <p>Fully async engine. Thousands of concurrent connections, hundreds of requests per second.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🆓</div>
-      <h3>Open Source</h3>
-      <p>Base version is free and open (AGPL-3.0). PRO extensions coming soon — trial available now.</p>
+      <h3>Plugin API</h3>
+      <p>Extend without touching core. PRO plugins add advanced scanners, smart payloads, and report generators.</p>
     </div>
   </div>
 </section>
@@ -362,14 +341,15 @@
 
 <hr class="divider" />
 
-<!-- BETA NOTICE -->
+<!-- TRIAL NOTICE -->
 <section class="beta-section" id="beta">
   <div class="beta-box">
-    <h2>🧪 Public Beta — what this means</h2>
+    <h2>🚀 Demo Version — 14-Day Free Trial</h2>
     <ul>
-      <li>✅ <div><strong>Free modules</strong> — fully available, no restrictions.</div></li>
-      <li>⏳ <div><strong>PRO plugins</strong> — still in development. A trial version is available now; paid sales will open later.</div></li>
-      <li>🔑 <div><strong>Have a security blog or channel?</strong> Write us in private and get a <strong>free private PRO key</strong> in exchange for promotion. → <a href="https://t.me/sudores">@sudores</a></div></li>
+      <li>⏱ <div><strong>Trial period: 14 days.</strong> Full PRO functionality is available from day one — no feature gates, no paywalls during the trial.</div></li>
+      <li>🔧 <div><strong>PRO features are under active development.</strong> Some advanced modules are still being built. You're getting early access, not a finished product.</div></li>
+      <li>🔑 <div><strong>Ready to go PRO?</strong> Licenses are not sold publicly yet. Reach out personally — <a href="https://t.me/sudores">@sudores</a> on Telegram.</div></li>
+      <li>🎙 <div><strong>Run a security blog, YouTube channel, or Telegram channel?</strong> Write a review and recommend Pentool to your audience — we'll give you a <strong>permanent PRO license, free of charge.</strong> → <a href="https://t.me/sudores">@sudores</a></div></li>
       <li>☕ <div><strong>Want to support development?</strong> → <a href="https://donate.trybit.com/KY1ECKA5">Donate via TryBit (crypto)</a></div></li>
     </ul>
   </div>

@@ -5,11 +5,7 @@ import pytest
 from textual.widgets import ContentSwitcher
 
 from pentool.tui.app import PentoolApp
-from pentool.tui.screens.decoder.screen import DecoderScreen
-from pentool.tui.screens.intruder.screen import IntruderScreen
-from pentool.tui.screens.proxy.screen import ProxyScreen
-from pentool.tui.screens.repeater.screen import RepeaterScreen
-from pentool.tui.screens.scanner.screen import ScannerScreen
+from pentool.tui.screens.scanner.screen import ScannerScreen  # noqa: F401
 
 
 @pytest.mark.e2e

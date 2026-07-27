@@ -15,11 +15,16 @@ pentool.log
 /raw2
 venv/
 .obsidian/
+.claude/
+prompts/
 coverage.json
+.coverage
+.pytest_cache/
 MYPLANS/
 "fix comment"
 pentool/modules/scanner/
 handFIX/
+specs/
 docs/ARCHITECTURE_AUDIT.md
 docs/SCANNER_MODERNIZATION_PLAN.md
 docs/SELF_PROMPT.md
