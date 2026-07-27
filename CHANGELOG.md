@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.4] - 2026-07-27
+
+### 🐛 Fixed
+- **Critical: fresh `pip install pentool` couldn't launch the TUI at all.**
+  Scanner (`pentool/api/scanner_api.py`, `pentool/modules/scanner/`,
+  `pentool/tui/screens/scanner/`) is a PRO-only module distributed
+  separately via `pentool license trial`/`activate` — it's gitignored and
+  never shipped in the PyPI package. But `pentool/tui/app.py` unconditionally
+  imported it at startup, so every FREE user hit `ModuleNotFoundError`
+  before the TUI could even start (confirmed on a real VPS running 0.1.3).
+  Now the import is optional: without the PRO package, the Scanner tab
+  shows a short "Scanner is a PRO feature — run `pentool license trial`"
+  message instead of crashing, and `pentool scan active/report` print the
+  same hint and exit cleanly instead of raising.
+
+---
+
 ## [0.1.3] - 2026-07-27
 
 ### 🐛 Fixed
