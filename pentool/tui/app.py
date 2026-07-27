@@ -634,7 +634,8 @@ class PentoolApp(App):
                 loop.call_soon_threadsafe(self.action_quit)
             except Exception:
                 # Last resort — just exit
-                sys.exit(0)
+                import sys as _sys
+                _sys.exit(0)
 
         try:
             signal.signal(signal.SIGTERM, _handle_signal)
