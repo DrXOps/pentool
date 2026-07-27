@@ -133,3 +133,72 @@ def update_cmd(check_only: bool) -> None:
                 err=True,
             )
             raise SystemExit(1)
+
+
+@cli.group()
+def license() -> None:
+    """License management: trial, activation, status."""
+
+
+@license.command("trial")
+def license_trial() -> None:
+    """Start a 14-day PRO trial (one per machine)."""
+    import asyncio
+    from pentool.core.license import start_trial
+
+    click.echo("Requesting a 14-day PRO trial...")
+    info = asyncio.run(start_trial())
+
+    if not info.valid:
+        click.echo(f"Could not start trial: {info.error}", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Trial started — key: {info.license_key}")
+    click.echo(f"Plan: {info.plan.upper()} | Expires: {info.expires_text}")
+    click.echo(f"Features: {', '.join(info.features) or 'none'}")
+
+
+@license.command("activate")
+@click.argument("key")
+def license_activate(key: str) -> None:
+    """Activate a license key (PROD-XXXX-XXXX-XXXX)."""
+    import asyncio
+    from pentool.core.license import activate_license, invalidate_session_license
+
+    click.echo(f"Activating license key {key}...")
+    info = asyncio.run(activate_license(key))
+    invalidate_session_license()
+
+    if not info.valid:
+        click.echo(f"Activation failed: {info.error}", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"License activated — plan: {info.plan.upper()}")
+    click.echo(f"Expires: {info.expires_text}")
+    click.echo(f"Features: {', '.join(info.features) or 'none'}")
+
+
+@license.command("status")
+def license_status() -> None:
+    """Show the current license status."""
+    from pentool.core.license import get_license
+
+    info = get_license()
+    click.echo(f"Status:  {info.status_text}")
+    click.echo(f"Plan:    {info.plan}")
+    click.echo(f"Expires: {info.expires_text}")
+    click.echo(f"Machine: {info.machine_id}")
+    if info.features:
+        click.echo(f"Features: {', '.join(info.features)}")
+    if info.error:
+        click.echo(f"Note: {info.error}")
+
+
+@license.command("deactivate")
+def license_deactivate() -> None:
+    """Deactivate the current license (delete local cache)."""
+    from pentool.core.license import deactivate_license, invalidate_session_license
+
+    deactivate_license()
+    invalidate_session_license()
+    click.echo("License deactivated.")

@@ -194,6 +194,16 @@ class PluginManager:
         else:
             logger.debug("User plugins dir not found: %s", USER_PLUGINS_DIR)
 
+        # Obfuscated PRO package downloaded via 'pentool license trial'/'activate'
+        # (see pentool.core.license.download_pro_package). Its plugins directory
+        # mirrors the builtin layout: pro/pentool/plugins/builtin/*.py
+        from pentool.core.license import PRO_PACKAGE_DIR
+        pro_plugins_dir = PRO_PACKAGE_DIR / "pentool" / "plugins" / "builtin"
+        if pro_plugins_dir.exists():
+            self.load_plugins([str(pro_plugins_dir)], warn_untrusted=False)
+        else:
+            logger.debug("PRO package plugins dir not found: %s", pro_plugins_dir)
+
     def _load_file(self, path: Path) -> None:
         module_name = f"_pentool_plugin_{path.stem}"
         try:

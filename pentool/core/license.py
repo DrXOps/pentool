@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import platform
+import tarfile
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -14,6 +16,18 @@ from pathlib import Path
 
 _LICENSE_FILE = Path.home() / ".pentool" / "license.dat"
 _GRACE_PERIOD_DAYS = 7
+
+_LICENSE_API_BASE = "https://pentool-license.akashtanov2020.workers.dev"
+
+# PRO package delivery
+PRO_PACKAGE_DIR = Path.home() / ".pentool" / "pro"
+
+# ed25519 public key (base64) matching pentool-pro's PRO_SIGNING_KEY.
+# Only the corresponding private key (held in pentool-pro's CI secret) can
+# produce a signature that verifies against this — a compromised CDN/Worker
+# cannot make the client execute tampered code.
+_PRO_PACKAGE_PUBLIC_KEY_B64 = "MMPAM1xmvGV/CaLlT0doHoUH+Uv2zvVMSmPzNBglgBA="
+
 
 
 @dataclass
@@ -185,7 +199,7 @@ async def activate_license(key: str) -> LicenseInfo:
             timeout=aiohttp.ClientTimeout(total=10)
         ) as session:
             async with session.post(
-                "https://pentool-license.akashtanov2020.workers.dev/api/validate",
+                f"{_LICENSE_API_BASE}/api/validate",
                 json={"key": key, "machine_id": machine_id},
                 ssl=False,
             ) as resp:
@@ -210,6 +224,8 @@ async def activate_license(key: str) -> LicenseInfo:
                             "license_key": key,
                             "last_check": time.time(),
                         })
+                        if info.features:
+                            await download_pro_package(key, machine_id)
                     return info
     except Exception:
         pass  # Server unavailable — fallback to local check
@@ -255,6 +271,151 @@ def deactivate_license() -> None:
             _LICENSE_FILE.unlink()
     except Exception:
         pass
+
+
+async def start_trial() -> LicenseInfo:
+    """Start a 14-day PRO trial (one per machine_id, enforced server-side).
+
+    Returns:
+        LicenseInfo — valid=True with the issued trial key on success,
+        valid=False with .error set if the trial was already used on this
+        machine or the server is unreachable.
+    """
+    machine_id = get_machine_id()
+
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as session:
+            async with session.post(
+                f"{_LICENSE_API_BASE}/api/trial/start",
+                json={"machine_id": machine_id},
+                ssl=False,
+            ) as resp:
+                data = await resp.json()
+
+                if resp.status == 201 and data.get("valid"):
+                    key = data.get("key", "")
+                    info = LicenseInfo(
+                        valid=True,
+                        plan=data.get("plan", "pro"),
+                        features=data.get("features", []),
+                        expires=data.get("expires_at"),
+                        machine_id=machine_id,
+                        license_key=key,
+                        last_check=time.time(),
+                    )
+                    _save_cached({
+                        "valid": True,
+                        "plan": info.plan,
+                        "features": info.features,
+                        "expires": info.expires,
+                        "machine_id": machine_id,
+                        "license_key": key,
+                        "last_check": time.time(),
+                    })
+                    if info.features:
+                        await download_pro_package(key, machine_id)
+                    return info
+
+                return LicenseInfo(
+                    valid=False,
+                    plan="free",
+                    machine_id=machine_id,
+                    error=data.get("message", "Trial could not be started."),
+                )
+    except Exception as exc:
+        return LicenseInfo(
+            valid=False,
+            plan="free",
+            machine_id=machine_id,
+            error=f"License server unreachable: {exc}",
+        )
+
+
+def _verify_pro_package_signature(archive_bytes: bytes, signature_b64: str) -> bool:
+    """Verify the ed25519 detached signature over the raw archive bytes."""
+    try:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        public_key = Ed25519PublicKey.from_public_bytes(
+            base64.b64decode(_PRO_PACKAGE_PUBLIC_KEY_B64)
+        )
+        signature = base64.b64decode(signature_b64.strip())
+        public_key.verify(signature, archive_bytes)
+        return True
+    except InvalidSignature:
+        return False
+    except Exception:
+        return False
+
+
+def _safe_extract_tar(archive_path: Path, dest_dir: Path) -> None:
+    """Extract a tar.gz archive, refusing any member that would escape dest_dir.
+
+    Guards against path traversal (../../) and absolute-path members —
+    the archive is fetched over the network and, even though it is
+    signature-verified, defense in depth costs nothing here.
+    """
+    dest_dir = dest_dir.resolve()
+    with tarfile.open(archive_path, "r:gz") as tar:
+        for member in tar.getmembers():
+            member_path = (dest_dir / member.name).resolve()
+            if not str(member_path).startswith(str(dest_dir)):
+                raise ValueError(f"Unsafe path in PRO package archive: {member.name}")
+        tar.extractall(dest_dir)  # noqa: S202 — members already validated above
+
+
+async def download_pro_package(key: str, machine_id: str) -> bool:
+    """Download, verify, and install the obfuscated PRO package.
+
+    Fetches both the archive and its detached ed25519 signature from
+    /api/download, verifies the signature against the embedded public key
+    (see _PRO_PACKAGE_PUBLIC_KEY_B64) BEFORE ever extracting anything, then
+    unpacks into ~/.pentool/pro/ for plugin_manager to pick up.
+
+    Returns True on success, False otherwise (never raises — a failed PRO
+    package download should not block FREE functionality).
+    """
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=60)
+        ) as session:
+            async with session.post(
+                f"{_LICENSE_API_BASE}/api/download",
+                json={"key": key, "machine_id": machine_id},
+                ssl=False,
+            ) as resp:
+                if resp.status != 200:
+                    return False
+                archive_bytes = await resp.read()
+
+            async with session.post(
+                f"{_LICENSE_API_BASE}/api/download",
+                json={"key": key, "machine_id": machine_id, "sig": "1"},
+                ssl=False,
+            ) as resp:
+                if resp.status != 200:
+                    return False
+                signature_b64 = (await resp.text()).strip()
+
+        if not _verify_pro_package_signature(archive_bytes, signature_b64):
+            return False
+
+        PRO_PACKAGE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp_archive = PRO_PACKAGE_DIR / ".pentool-pro.tar.gz.tmp"
+        tmp_archive.write_bytes(archive_bytes)
+        try:
+            _safe_extract_tar(tmp_archive, PRO_PACKAGE_DIR)
+        finally:
+            tmp_archive.unlink(missing_ok=True)
+
+        return True
+    except Exception:
+        return False
 
 
 # Global license cache for current session

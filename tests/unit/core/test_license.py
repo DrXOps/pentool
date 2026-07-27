@@ -281,7 +281,11 @@ class TestActivateLicense:
 
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
             with patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
-                info = await activate_license("PROD-AAAA-BBBB-CCCC")
+                with patch(
+                    "pentool.core.license.download_pro_package",
+                    AsyncMock(return_value=True),
+                ):
+                    info = await activate_license("PROD-AAAA-BBBB-CCCC")
 
         assert info.valid is True
         assert info.plan == "pro"

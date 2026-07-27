@@ -39,3 +39,5 @@ pentool/modules/intruder_turbo.py
 pentool/plugins/builtin/payloads_pro.py
 pentool/plugins/builtin/reports_pro.py
 pentool/plugins/builtin/scanner_pro.py
+pentool/api/scanner_api.py
+pentool/tui/screens/scanner/
