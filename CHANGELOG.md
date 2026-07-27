@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.3] - 2026-07-27
+
+### 🐛 Fixed
+- **Critical: `pentool` command didn't launch the TUI.** The PyPI package's
+  console_script entry point pointed directly at the Click command group
+  (`pentool.cli.main:cli`) instead of `pentool.__main__:main`, which contains
+  the actual "no args → launch TUI" logic. Running bare `pentool` printed
+  `--help` instead of starting the TUI on every fresh `pip install` —
+  including on headless VPS installs. Now fixed: `pentool` with no
+  arguments launches the TUI as documented.
+- CI: public test workflows no longer attempt to check out the private
+  `pentool-pro` submodule (which the default `GITHUB_TOKEN` can't access).
+
+---
+
 ## [1.0.0] - 2026-08-01
 
 ### 🎉 Initial Release
