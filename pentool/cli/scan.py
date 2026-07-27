@@ -7,6 +7,23 @@ import sys
 
 import click
 
+_SCANNER_UNAVAILABLE_MSG = (
+    "Scanner is a PRO feature and isn't installed.\n"
+    "Start a 14-day free trial (full PRO access):\n"
+    "  pentool license trial\n"
+    "Already have a key?\n"
+    "  pentool license activate KEY"
+)
+
+
+def _import_scanner_api():
+    try:
+        from pentool.api.scanner_api import ScannerAPI
+        return ScannerAPI
+    except ImportError:
+        click.echo(_SCANNER_UNAVAILABLE_MSG, err=True)
+        raise SystemExit(1)
+
 
 @click.group("scan")
 def scan() -> None:
@@ -31,7 +48,7 @@ def scan_active(
     concurrency: int,
     delay: float,
 ) -> None:
-    from pentool.api.scanner_api import ScannerAPI
+    ScannerAPI = _import_scanner_api()
     from pentool.core.config import get_config
 
     cfg = (ctx.obj or {}).get("config") or get_config()
@@ -98,7 +115,7 @@ def scan_passive(ctx: click.Context, scope: str | None) -> None:
 )
 @click.pass_context
 def scan_report(ctx: click.Context, output: str, fmt: str) -> None:
-    from pentool.api.scanner_api import ScannerAPI
+    ScannerAPI = _import_scanner_api()
     from pentool.core.config import get_config
 
     cfg = (ctx.obj or {}).get("config") or get_config()

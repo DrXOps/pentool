@@ -2,7 +2,6 @@
 
 from pentool.api.proxy_api     import ProxyAPI, InterceptedRequest, MatchReplaceRule
 from pentool.api.repeater_api  import RepeaterAPI
-from pentool.api.scanner_api   import ScannerAPI
 from pentool.api.intruder_api  import IntruderAPI, IntruderConfig, IntruderAttack
 from pentool.api.spider_api    import SpiderAPI
 from pentool.api.target_api    import TargetAPI
@@ -18,13 +17,26 @@ from pentool.api.sequencer_api import (  # noqa: F401
     Sequencer, SequencerReport, token_entropy, charset_size,
 )
 
+# Scanner is a PRO-only module (see docs on licensing/trial). Its source
+# ships separately (downloaded via 'pentool license trial'/'activate' into
+# ~/.pentool/pro/) and is absent on a bare `pip install pentool`. Import it
+# defensively so the rest of the app (FREE modules, TUI shell) still works
+# without it — callers should check `SCANNER_AVAILABLE` before using
+# `ScannerAPI`.
+try:
+    from pentool.api.scanner_api import ScannerAPI  # noqa: F401
+    SCANNER_AVAILABLE = True
+except ImportError:
+    ScannerAPI = None  # type: ignore[assignment,misc]
+    SCANNER_AVAILABLE = False
+
 __all__ = [
     # Proxy
     "ProxyAPI", "InterceptedRequest", "MatchReplaceRule",
     # Repeater
     "RepeaterAPI",
-    # Scanner
-    "ScannerAPI",
+    # Scanner (PRO — may be None, see SCANNER_AVAILABLE)
+    "ScannerAPI", "SCANNER_AVAILABLE",
     # Intruder
     "IntruderAPI", "IntruderConfig", "IntruderAttack",
     # Spider
@@ -39,3 +51,4 @@ __all__ = [
     # Sequencer
     "Sequencer", "SequencerReport", "token_entropy", "charset_size",
 ]
+
