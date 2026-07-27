@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.5] - 2026-07-27
+
+### 🐛 Fixed
+- **Critical: fresh `pip install pentool` still couldn't launch the TUI
+  after 0.1.4.** Two separate packaging bugs:
+  - `*.tcss` (Textual CSS) files — 33 of them, one next to nearly every
+    screen/widget — were never included in the built wheel. setuptools
+    only bundles `.py` files by default, so every screen crashed with
+    `FileNotFoundError` on `Path(__file__).parent / "screen.tcss"` the
+    moment it tried to load its own CSS. Added
+    `[tool.setuptools.package-data]` so all `*.tcss` files ship in the
+    wheel.
+  - `pyproject.toml`'s `[project.dependencies]` was missing
+    `textual-fastdatatable` and `pyarrow` (used unconditionally by the
+    Proxy screen's DataTable backend) and `psutil` (used by the
+    Dashboard). They were listed in `requirements.txt` but never made it
+    into the actual PyPI package metadata, so `pip install pentool` alone
+    didn't pull them in.
+  - Verified by building the wheel locally and installing it into a
+    fresh venv: all `.tcss` files are now present in the wheel and the
+    dependency set matches what the code actually imports.
+
+---
+
 ## [0.1.4] - 2026-07-27
 
 ### 🐛 Fixed

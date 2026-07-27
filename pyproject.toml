@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pentool"
-version = "0.1.4"
+version = "0.1.5"
 description = "Modern Web Pentesting TUI - Professional security testing tool"
 authors = [
     {name = "Pentool Team", email = "dev@pentool.pro"}
@@ -29,6 +29,8 @@ classifiers = [
 
 dependencies = [
     "textual>=0.40.0",
+    "textual-fastdatatable>=0.14.0",
+    "pyarrow>=10.0.0",
     "aiohttp>=3.9.0",
     "aiosqlite>=0.19.0",
     "beautifulsoup4>=4.12.0",
@@ -36,6 +38,7 @@ dependencies = [
     "cryptography>=41.0.0",
     "pyyaml>=6.0",
     "rich>=13.0.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
@@ -62,6 +65,14 @@ pentool = "pentool.__main__:main"
 where = ["."]
 include = ["pentool*"]
 exclude = ["tests*", "docs*"]
+
+[tool.setuptools.package-data]
+# Textual CSS files (*.tcss) live next to their screens/widgets and are
+# read at runtime via Path(__file__).parent / "screen.tcss" — setuptools
+# does not include non-.py files by default, so every *.tcss must be
+# listed here or the wheel builds "successfully" but crashes at runtime
+# with FileNotFoundError the moment any screen tries to load its CSS.
+pentool = ["*.tcss", "**/*.tcss"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
