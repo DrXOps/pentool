@@ -56,7 +56,7 @@ Issues = "https://github.com/docxqwerty/pentool/issues"
 Changelog = "https://github.com/docxqwerty/pentool/blob/main/CHANGELOG.md"
 
 [project.scripts]
-pentool = "pentool.cli.main:cli"
+pentool = "pentool.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
