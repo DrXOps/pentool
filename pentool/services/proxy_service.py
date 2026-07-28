@@ -31,6 +31,7 @@ class ProxyService(BaseService):
         self._storage = HttpStorage()
         self._storage_ready = False
         self._pre_storage_queue: list[InterceptedRequest] = []
+        self._pre_storage_queue_max = 2000
 
     async def init_storage(self) -> None:
         try:
@@ -52,6 +53,15 @@ class ProxyService(BaseService):
 
     async def store_request(self, req: InterceptedRequest) -> int | None:
         if not self._storage_ready:
+            # Bound the pre-storage queue — if DB init hangs/never completes,
+            # this list must not grow unbounded (memory leak).
+            if len(self._pre_storage_queue) >= self._pre_storage_queue_max:
+                dropped = self._pre_storage_queue.pop(0)
+                logger.error(
+                    "ProxyService: pre_storage_queue full (%d), dropping oldest "
+                    "queued request id=%s to bound memory",
+                    self._pre_storage_queue_max, getattr(dropped, "id", "?"),
+                )
             self._pre_storage_queue.append(req)
             return None
 
@@ -65,8 +75,29 @@ class ProxyService(BaseService):
             logger.debug("ProxyService: store_request saved row_id=%d req.id=%s", row_id, req.id)
             return row_id
         except Exception as exc:
-            logger.warning("ProxyService: store_request failed: %s", exc)
-            return None
+            # This used to be a silent "logger.warning" — from the user's
+            # perspective the request simply vanished from HTTP History with
+            # no trace. Log at error level (with traceback) and retry once,
+            # since most failures here are transient (e.g. DB busy/locked).
+            logger.error(
+                "ProxyService: store_request failed for req.id=%s, retrying once: %s",
+                req.id, exc, exc_info=True,
+            )
+            try:
+                parsed = req.to_parsed_request()
+                row_id = await self._storage.add_request(
+                    parsed,
+                    req.response,
+                    is_websocket=req.is_websocket,
+                )
+                logger.info("ProxyService: store_request retry succeeded, row_id=%d req.id=%s", row_id, req.id)
+                return row_id
+            except Exception as exc2:
+                logger.error(
+                    "ProxyService: store_request retry failed for req.id=%s — request LOST from history: %s",
+                    req.id, exc2, exc_info=True,
+                )
+                return None
 
     async def get_history(
         self,

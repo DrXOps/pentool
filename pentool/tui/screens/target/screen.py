@@ -9,7 +9,7 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
-from pentool.tui.messages import SendHostToScanner
+from pentool.tui.messages import SendHostToScanner, SyncScopeToProxy
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pathlib import Path
@@ -273,6 +273,8 @@ class TargetScreen(Widget):
             self._build_tree(tree_data)
             msg = f"{'Added' if in_scope else 'Removed'} {host} {'to' if in_scope else 'from'} scope"
             self.app.notify(msg, severity="information")
+            # Mirror the change into ProxyServer.scope — keep both modules in sync
+            self.app.post_message(SyncScopeToProxy(host, in_scope))  # type: ignore[attr-defined]
         except Exception as exc:
             logger.warning("_set_scope_worker: %s", exc)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import ssl
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -163,6 +164,11 @@ class ProxyServer:
         self.intercept_queue: asyncio.Queue[InterceptedRequest] = asyncio.Queue()
 
         # All intercepted requests (in-memory history, max 10000)
+        # Mutated from the proxy's own thread (_add_request) and read from
+        # the TUI thread (get_requests, _find_request, export/import) —
+        # protect with a lock to avoid race conditions (torn reads, list
+        # mutation during iteration).
+        self._requests_lock = threading.Lock()
         self.requests: list[InterceptedRequest] = []
         self._requests_max = 10000
 
@@ -287,9 +293,10 @@ class ProxyServer:
             self.intercept_enabled = enabled
 
     def _find_request(self, req_id: str) -> InterceptedRequest | None:
-        for r in reversed(self.requests):
-            if r.id == req_id:
-                return r
+        with self._requests_lock:
+            for r in reversed(self.requests):
+                if r.id == req_id:
+                    return r
         return None
 
     async def _handle_client(
@@ -714,9 +721,10 @@ class ProxyServer:
         return (headers_raw + body).decode("utf-8", errors="replace")
 
     def _add_request(self, req: InterceptedRequest) -> None:
-        self.requests.append(req)
-        if len(self.requests) > self._requests_max:
-            self.requests = self.requests[-self._requests_max:]
+        with self._requests_lock:
+            self.requests.append(req)
+            if len(self.requests) > self._requests_max:
+                self.requests = self.requests[-self._requests_max:]
 
     def get_requests(
         self,
@@ -724,7 +732,8 @@ class ProxyServer:
         method: str | None = None,
         host: str | None = None,
     ) -> list[InterceptedRequest]:
-        result = list(reversed(self.requests))
+        with self._requests_lock:
+            result = list(reversed(self.requests))
         if method:
             result = [r for r in result if r.method.upper() == method.upper()]
         if host:
@@ -732,7 +741,17 @@ class ProxyServer:
         return result[:limit]
 
     def clear_requests(self) -> None:
-        self.requests.clear()
+        with self._requests_lock:
+            self.requests.clear()
+
+    def replace_requests(self, requests: list[InterceptedRequest]) -> None:
+        """Atomically replace the in-memory request history.
+
+        Used by project import/export code that used to mutate
+        `self.requests` directly (bypassing the lock).
+        """
+        with self._requests_lock:
+            self.requests = list(requests)
 
     @staticmethod
     def _request_to_raw(req: "ParsedRequest") -> str:
@@ -785,13 +804,16 @@ class ProxyServer:
         return header_bytes + body_bytes
 
     def get_status(self) -> dict:
+        with self._requests_lock:
+            requests_count = len(self.requests)
+            waiting_count = sum(1 for r in self.requests if r.state == "waiting")
         return {
             "running": self.is_running,
             "host": self.host,
             "port": self.port,
             "intercept_enabled": self.intercept_enabled,
             "scope": self.scope,
-            "requests_count": len(self.requests),
+            "requests_count": requests_count,
             "rules_count": len(self.match_replace_rules),
-            "waiting_count": sum(1 for r in self.requests if r.state == "waiting"),
+            "waiting_count": waiting_count,
         }

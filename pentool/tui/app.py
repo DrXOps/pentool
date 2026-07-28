@@ -26,6 +26,7 @@ from pentool.tui.messages import (
     SendToTarget,
     SendUrlToTarget,
     SyncScopeToTarget,
+    SyncScopeToProxy,
     TerminalStop,
     ConfigChanged,
 )
@@ -788,6 +789,45 @@ class PentoolApp(App):
             target._load_sitemap()
         except Exception as e:
             logger.debug("on_sync_scope_to_target: %s", e)
+
+    @on(SyncScopeToProxy)
+    def on_sync_scope_to_proxy(self, msg: SyncScopeToProxy) -> None:
+        """Mirror a scope change made in TargetScreen into ProxyServer.scope.
+
+        Symmetric counterpart of on_sync_scope_to_target — without this,
+        adding/removing a host to scope from the Target module never
+        reached ProxyServer.scope (one-way sync bug).
+        """
+        try:
+            proxy = self._proxy
+            if proxy is None:
+                return
+            scope = list(proxy.scope)
+            if msg.in_scope:
+                if msg.host not in scope:
+                    scope.append(msg.host)
+                    proxy.set_scope(scope)
+            else:
+                if msg.host in scope:
+                    scope.remove(msg.host)
+                    proxy.set_scope(scope)
+            # Keep Config.scope (persisted on disk) in sync too
+            try:
+                self._cfg.scope = list(proxy.scope)
+                self._cfg.save()
+            except Exception as e:
+                logger.warning("on_sync_scope_to_proxy: failed to save config: %s", e)
+            # Refresh Proxy screen's ScopeToggle state if mounted
+            try:
+                from pentool.tui.screens.proxy.screen import ProxyScreen
+                from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
+                proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+                st = proxy_screen.query_one("#filter-bar", FilterBar).query_one("#fb-scope", ScopeToggle)
+                st.set_scope_empty(not bool(proxy.scope))
+            except Exception:
+                pass
+        except Exception as e:
+            logger.debug("on_sync_scope_to_proxy: %s", e)
 
     @on(SendHostToScanner)
     def on_send_host_to_scanner(self, msg: SendHostToScanner) -> None:

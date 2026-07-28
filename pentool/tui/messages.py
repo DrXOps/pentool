@@ -35,6 +35,21 @@ class SyncScopeToTarget(Message):
         self.in_scope = in_scope
 
 
+class SyncScopeToProxy(Message):
+    """Synchronize in-scope status of a host with the ProxyServer.
+
+    Sent by TargetScreen when the user adds/removes a host to/from scope
+    there — mirrors the host into ProxyServer.scope (and Config.scope) so
+    both modules agree on what is in scope. Without this, scope changes
+    made in Target never reach Proxy (one-way sync bug).
+    """
+
+    def __init__(self, host: str, in_scope: bool) -> None:
+        super().__init__()
+        self.host = host
+        self.in_scope = in_scope
+
+
 class SendHostToScanner(Message):
 
     def __init__(self, host: str) -> None:

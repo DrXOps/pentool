@@ -321,7 +321,7 @@ class ProjectManager:
 
         if is_new and self._proxy:
             try:
-                self._proxy.requests.clear()
+                self._proxy.clear_requests()
                 self._proxy.scope = []
                 self._proxy.match_replace_rules = []
             except Exception:

@@ -198,14 +198,15 @@ class ProxyAPI(ExportableAPI):
         self._proxy.match_replace_rules = [MatchReplaceRule.from_dict(r) for r in mr_data]
 
         # HTTP History
-        self._proxy.requests.clear()
+        loaded_requests: list[InterceptedRequest] = []
         loaded = 0
         for req_data in data.get("http_history", []):
             try:
                 req = InterceptedRequest.from_dict(req_data)
-                self._proxy.requests.append(req)
+                loaded_requests.append(req)
                 loaded += 1
             except Exception as e:
                 logger.warning("import_project_data: failed to restore request: %s", e)
+        self._proxy.replace_requests(loaded_requests)
 
         return loaded, ""

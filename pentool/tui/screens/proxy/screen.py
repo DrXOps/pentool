@@ -549,8 +549,15 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         actual_row_id = self._pending_req_ids.pop(req.id, None)
         if actual_row_id and actual_row_id != -1 and req.response is not None:
             await self._proxy_service.update_response(actual_row_id, req.response)
-        elif actual_row_id is None and req.response is not None:
-            await self._proxy_service.store_request(req)
+        elif req.response is not None:
+            # Either never stored (actual_row_id is None) or _wait_for_row_id
+            # timed out while _store_request was still in flight, leaving the
+            # -1 sentinel behind (actual_row_id == -1). In both cases the
+            # response would otherwise be silently dropped from HTTP History —
+            # store the full request+response now instead of losing it.
+            new_row_id = await self._proxy_service.store_request(req)
+            if new_row_id is not None:
+                actual_row_id = new_row_id
         if req.is_websocket:
             await self._reload_ws_table()
         elif self._current_filters:
