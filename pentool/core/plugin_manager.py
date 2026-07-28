@@ -320,3 +320,67 @@ class PluginManager:
 
     def is_feature_available(self, feature: str) -> bool:
         return self._check_license_feature(feature)
+
+
+def _candidate_pro_builtin_dirs() -> list[Path]:
+    """Locations where PRO builtin plugin .py files may live.
+
+    Two scenarios are supported:
+    1. Dev checkout: the `pro/` git submodule next to the repo root
+       (pro/pentool/plugins/builtin/*.py).
+    2. Installed/end-user: the obfuscated PRO package downloaded via
+       `pentool license trial`/`activate` into PRO_PACKAGE_DIR
+       (~/.pentool/pro/pentool/plugins/builtin/*.py).
+    """
+    dirs: list[Path] = []
+    try:
+        from pentool.core.license import PRO_PACKAGE_DIR
+        dirs.append(PRO_PACKAGE_DIR / "pentool" / "plugins" / "builtin")
+    except Exception:
+        pass
+    # Dev checkout: pentool/core/plugin_manager.py -> repo_root/pro/...
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    dirs.append(repo_root / "pro" / "pentool" / "plugins" / "builtin")
+    return dirs
+
+
+def load_pro_module(module_stem: str):
+    """Load a single PRO builtin plugin module by filename stem, e.g. "payloads_pro".
+
+    Unlike PluginManager.load_plugins() (which calls register(hook) and
+    only exposes screens/scanners/passive_checks), this is used by code
+    that needs direct access to a plugin's public functions
+    (e.g. Intruder's Smart Payload Generator calling
+    generate_smart_payloads()). A bare `import pentool.plugins.builtin.X`
+    does NOT work here — that package path only exists in the test suite,
+    where conftest.py manually extends __path__; in the running app the
+    PRO plugin is not on any importable namespace, so this loads it the
+    same way PluginManager._load_file() does (importlib.util.spec_from_file_location).
+
+    Raises FileNotFoundError if the module isn't found in any known PRO
+    location (dev submodule or installed package) — callers should show
+    this to the user instead of silently failing.
+    """
+    module_name = f"_pentool_plugin_{module_stem}"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+
+    for plugin_dir in _candidate_pro_builtin_dirs():
+        candidate = plugin_dir / f"{module_stem}.py"
+        if not candidate.exists():
+            continue
+        spec = importlib.util.spec_from_file_location(module_name, candidate)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        logger.info("Loaded PRO module '%s' from %s", module_stem, candidate)
+        return module
+
+    raise FileNotFoundError(
+        f"PRO module '{module_stem}.py' not found in any known location "
+        f"(checked: {[str(d) for d in _candidate_pro_builtin_dirs()]}). "
+        f"Is the PRO package installed (pentool license activate) or the "
+        f"'pro' submodule checked out?"
+    )

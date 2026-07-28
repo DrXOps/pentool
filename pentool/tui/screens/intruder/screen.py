@@ -61,13 +61,14 @@ class _IntruderFilterBar(Widget):
     DEFAULT_CSS = """
     _IntruderFilterBar {
         height: auto;
-        layout: vertical;
+        layout: horizontal;
     }
     _IntruderFilterBar #results-filter-bar,
     _IntruderFilterBar #grep-bar {
         height: auto;
         layout: horizontal;
         padding: 0;
+        width: auto;
     }
     _IntruderFilterBar Label {
         width: auto;
@@ -403,6 +404,18 @@ class IntruderScreen(AppMixin, Widget):
                 # Two cursor-only events in a row — user deselected
                 self._last_editor_selection = None
 
+    @on(TextArea.Changed, "#template-editor")
+    def on_template_text_changed(self, event: TextArea.Changed) -> None:
+        """Recompute payload sets whenever the template text itself changes.
+
+        Previously _update_payload_select() only ran on explicit actions
+        (Add marker/Clear markers/attack type change/load_request) — typing
+        or pasting a raw request directly into the editor (e.g. §marker§
+        pasted by hand) left the "Set N" button and payload-set count stale
+        until some other action happened to trigger a refresh.
+        """
+        self._update_payload_select()
+
     @on(ToolbarButton.Pressed, "#btn-add-marker")
     def on_btn_add_marker(self, _: ToolbarButton.Pressed) -> None:
         self._add_marker_around_selection()
@@ -531,9 +544,8 @@ class IntruderScreen(AppMixin, Widget):
             try:
                 idx = int(action)
                 self._active_set_idx = idx
-                self.query_one("#btn-payload-set", ToolbarButton).label = (
-                    f"Set {idx+1} ▼"
-                )
+                label = f"Set {idx+1} ▼" if n <= 1 else f"Set {idx+1}/{n} ▼"
+                self.query_one("#btn-payload-set", ToolbarButton).label = label
                 self._refresh_payload_list()
                 self._highlight_nth_marker(idx)
             except Exception:
@@ -694,9 +706,14 @@ class IntruderScreen(AppMixin, Widget):
         idx = min(self._active_set_idx, n - 1)
         self._active_set_idx = idx
 
-        # 3) Update the set selection button
+        # 3) Update the set selection button — show total count (e.g. "Set 1/3 ▼")
+        # when there is more than one payload set (Cluster Bomb/Pitchfork use
+        # 2+ markers). Previously the button always read "Set N ▼" with no
+        # indication that other sets existed, which read as "only one
+        # payload set field" even though _payloads already held N lists.
         try:
-            self.query_one("#btn-payload-set", ToolbarButton).label = f"Set {idx+1} ▼"
+            label = f"Set {idx+1} ▼" if n <= 1 else f"Set {idx+1}/{n} ▼"
+            self.query_one("#btn-payload-set", ToolbarButton).label = label
         except Exception:
             pass
 
@@ -1401,27 +1418,47 @@ class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
                 yield Label("Count:")
                 yield Input("50", id="smart-count", compact=True)
             with Horizontal(id="buttons"):
-                yield Button("Generate", id="btn-smart-ok", variant="primary")
-                yield Button("Cancel", id="btn-smart-cancel")
+                yield ToolbarButton("✔ Generate", "btn-smart-ok")
+                yield ToolbarButton("✕ Cancel",   "btn-smart-cancel")
+
+    @on(ToolbarButton.Pressed, "#btn-smart-ok")
+    def _smart_ok(self, _: ToolbarButton.Pressed) -> None:
+        self._generate()
+
+    @on(ToolbarButton.Pressed, "#btn-smart-cancel")
+    def _smart_cancel(self, _: ToolbarButton.Pressed) -> None:
+        self.dismiss(None)
+
+    def _generate(self) -> None:
+        try:
+            from pentool.core.plugin_manager import load_pro_module
+            payloads_pro = load_pro_module("payloads_pro")
+            ctx = str(self.query_one("#smart-context", Select).value or "string")
+            tech = str(self.query_one("#smart-tech", Select).value or "unknown")
+            waf = str(self.query_one("#smart-waf", Select).value or "none")
+            count = int(self.query_one("#smart-count", Input).value or "50")
+            payloads = payloads_pro.generate_smart_payloads(
+                context=ctx,  # type: ignore[arg-type]
+                tech_hint=tech,  # type: ignore[arg-type]
+                waf_profile=waf,  # type: ignore[arg-type]
+                count=max(1, min(count, 500)),
+            )
+            self.dismiss(payloads)
+        except Exception as exc:
+            # Used to silently self.dismiss(None) here — the user just saw
+            # the dialog close with zero payloads and no explanation.
+            logger.error("Smart Payload Generator failed: %s", exc, exc_info=True)
+            try:
+                self.app.notify(  # type: ignore[attr-defined]
+                    f"Smart Payload Generator failed: {exc}",
+                    severity="error", timeout=6,
+                )
+            except Exception:
+                pass
+            self.dismiss(None)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-smart-ok":
-            try:
-                from pentool.plugins.builtin.payloads_pro import generate_smart_payloads
-                ctx = str(self.query_one("#smart-context", Select).value or "string")
-                tech = str(self.query_one("#smart-tech", Select).value or "unknown")
-                waf = str(self.query_one("#smart-waf", Select).value or "none")
-                count = int(self.query_one("#smart-count", Input).value or "50")
-                payloads = generate_smart_payloads(
-                    context=ctx,  # type: ignore[arg-type]
-                    tech_hint=tech,  # type: ignore[arg-type]
-                    waf_profile=waf,  # type: ignore[arg-type]
-                    count=max(1, min(count, 500)),
-                )
-                self.dismiss(payloads)
-            except Exception:
-                self.dismiss(None)
-        elif event.button.id in ("btn-smart-cancel", "btn-close-smart"):
+        if event.button.id == "btn-close-smart":
             self.dismiss(None)
 
     def on_key(self, event) -> None:
