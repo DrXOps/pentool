@@ -163,14 +163,22 @@ class ProxyServer:
         # Queue of requests waiting for decision in interactive mode
         self.intercept_queue: asyncio.Queue[InterceptedRequest] = asyncio.Queue()
 
-        # All intercepted requests (in-memory history, max 10000)
+        # All intercepted requests (in-memory history, bounded ring).
+        # Full HTTP history is persisted to SQLite via HttpStorage — this
+        # in-memory list only backs the legacy proxy.get_requests() API
+        # (Repeater "load from history", project export/import,
+        # reload_from_proxy() reconstruction). Lowered from 10000 to 1000:
+        # each entry holds a full InterceptedRequest (headers + body +
+        # response), and the persistent source of truth is SQLite, not this
+        # list — 1000 is plenty for the legacy in-memory consumers above.
         # Mutated from the proxy's own thread (_add_request) and read from
         # the TUI thread (get_requests, _find_request, export/import) —
         # protect with a lock to avoid race conditions (torn reads, list
         # mutation during iteration).
         self._requests_lock = threading.Lock()
         self.requests: list[InterceptedRequest] = []
-        self._requests_max = 10000
+        self._requests_max = 1000
+
 
         self._server: asyncio.AbstractServer | None = None
         self._ca_cert_path: str | None = None

@@ -13,6 +13,17 @@ class AppEvent:
     timestamp: float = field(default_factory=time.time)
     source: str = ""  # source module name, for debugging
 
+    def for_history(self) -> "AppEvent":
+        """Return the object retained in EventBus._history (ring buffer).
+
+        Default: return self unchanged. Override in event types that carry
+        heavy payloads (e.g. a full request/response object) to strip them
+        before they get retained long-term in the ring buffer — live
+        subscribers still receive the full original event via
+        emit()/emit_threadsafe(), only the *stored* copy is stripped.
+        """
+        return self
+
 
 # ── Scanner events ─────────────────────────────────────────────────────────────
 
@@ -86,12 +97,36 @@ class ProxyRequestCaptured(AppEvent):
 
     request: full InterceptedRequest object (Any to avoid
     circular imports modules -> core).
+
+    NOTE on memory: `request` carries the full InterceptedRequest (headers,
+    body, response). Live subscribers (app.py, PassiveScanner) need the full
+    object and get it via emit()/emit_threadsafe() as before. But EventBus
+    also retains a copy of every event in its `_history` ring buffer
+    (maxlen=10_000) — retaining the full request there too means up to
+    10_000 full HTTP requests/responses held in memory just for history/
+    replay purposes, which nothing actually replays (no code calls
+    `get_history()`/`replay()` for this event type). `for_history()` strips
+    `request` down to None before it enters `_history`, keeping only the
+    lightweight metadata fields already present (request_id/method/url/host).
     """
     request_id: str = ""
     method: str = ""
     url: str = ""
     host: str = ""
     request: Any = None  # InterceptedRequest
+
+    def for_history(self) -> "ProxyRequestCaptured":
+        if self.request is None:
+            return self
+        return ProxyRequestCaptured(
+            timestamp=self.timestamp,
+            source=self.source,
+            request_id=self.request_id,
+            method=self.method,
+            url=self.url,
+            host=self.host,
+            request=None,
+        )
 
 
 @dataclass
@@ -100,10 +135,25 @@ class ProxyRequestCompleted(AppEvent):
 
     request: full InterceptedRequest object (Any to avoid
     circular imports modules -> core).
+
+    See ProxyRequestCaptured.for_history() docstring — same rationale:
+    nothing replays this event type from history, so the full request/
+    response body should not be retained in the ring buffer.
     """
     request_id: str = ""
     status_code: int = 0
     request: Any = None  # InterceptedRequest
+
+    def for_history(self) -> "ProxyRequestCompleted":
+        if self.request is None:
+            return self
+        return ProxyRequestCompleted(
+            timestamp=self.timestamp,
+            source=self.source,
+            request_id=self.request_id,
+            status_code=self.status_code,
+            request=None,
+        )
 
 
 # Alias for backward compatibility: Sequencer subscribes to this event

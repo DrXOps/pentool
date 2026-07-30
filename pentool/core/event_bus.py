@@ -68,13 +68,15 @@ class EventBus:
         """Synchronous emit from the main thread.
 
         Calls all subscribers immediately (in the same thread).
-        Saves the event to history.
+        Saves a (possibly stripped) copy of the event to history — see
+        AppEvent.for_history(). Handlers always receive the original,
+        unstripped event.
 
         Args:
             event: Event instance (subclass of AppEvent).
         """
         with self._lock:
-            self._history.append(event)
+            self._history.append(event.for_history())
             handlers = list(self._subscribers.get(type(event), []))
 
         for handler in handlers:
@@ -93,16 +95,17 @@ class EventBus:
     ) -> None:
         """Thread-safe emit from a worker thread.
 
-        Saves the event to history immediately (under lock),
-        then schedules handler calls in the event loop via
-        call_soon_threadsafe.
+        Saves a (possibly stripped) copy of the event to history immediately
+        (under lock) — see AppEvent.for_history() — then schedules handler
+        calls in the event loop via call_soon_threadsafe. Handlers always
+        receive the original, unstripped event.
 
         Args:
             event: Event instance.
             loop:  Event loop of the main thread (app._loop).
         """
         with self._lock:
-            self._history.append(event)
+            self._history.append(event.for_history())
             handlers = list(self._subscribers.get(type(event), []))
 
         if not handlers:
@@ -168,9 +171,25 @@ class EventBus:
                     "EventBus.replay: handler %s raised %s", handler, exc
                 )
 
-    def clear_history(self) -> None:
+    def clear_history(
+        self,
+        event_type: type | tuple[type, ...] | None = None,
+    ) -> None:
+        """Clear retained history.
+
+        Args:
+            event_type: If given, only events of this type (or tuple of
+                types) are removed from history; other retained events are
+                kept. If omitted (default), the entire history is cleared.
+        """
         with self._lock:
-            self._history.clear()
+            if event_type is None:
+                self._history.clear()
+            else:
+                self._history = deque(
+                    (e for e in self._history if not isinstance(e, event_type)),
+                    maxlen=self._history.maxlen,
+                )
 
     # ── stats ─────────────────────────────────────────────────────────────────
 

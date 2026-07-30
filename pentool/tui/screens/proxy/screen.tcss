@@ -37,6 +37,13 @@ ProxyScreen #filter-bar {
 ProxyScreen #request-list {
     height: 1fr;
 }
+ProxyScreen .history-count {
+    height: 1;
+    background: $panel;
+    color: $text-muted;
+    padding: 0 1;
+    text-align: right;
+}
 ProxyScreen #req-panel {
     width: 50%;
     height: 100%;

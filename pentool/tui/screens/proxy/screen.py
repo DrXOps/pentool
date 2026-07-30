@@ -44,6 +44,12 @@ logger = get_logger(__name__)
 # HTTP History table columns
 _COL_NAMES = ["ID", "Host", "Method", "URL", "Status", "Size", "Time"]
 
+# Page size for HTTP History: initial load + each "scroll up to load more" page.
+# Matches ProxyService.get_history()'s default limit — the full history lives
+# in SQLite (HttpStorage), this only bounds how much is materialized in the
+# TUI table/rows_cache at once.
+_HISTORY_PAGE_SIZE = 1000
+
 def _make_empty_table() -> pa.Table:
     """Empty Arrow table with the required columns."""
     return pa.table({
@@ -56,41 +62,50 @@ def _make_empty_table() -> pa.Table:
         "Time":   pa.array([], type=pa.string()),
     })
 
+def _row_to_record(r: dict) -> tuple:
+    """Convert one HttpStorage metadata dict into a DataTable row tuple.
+
+    Column order matches _COL_NAMES / _rows_to_arrow: ID, Host, Method, URL,
+    Status, Size, Time. Shared by the full rebuild path (_rows_to_arrow) and
+    the incremental append_rows() path (_flush_pending_rows) so both stay
+    in sync.
+    """
+    url = str(r.get("url", "") or "")
+    status = r.get("status_code")
+    length = r.get("length")
+    ts = r.get("timestamp")
+    if ts:
+        try:
+            time_str = datetime.datetime.fromtimestamp(ts).strftime("%H:%M:%S")
+        except Exception:
+            time_str = "-"
+    else:
+        time_str = "-"
+    return (
+        r.get("id", 0),
+        str(r.get("host", "") or ""),
+        str(r.get("method", "") or ""),
+        url[:80] + "…" if len(url) > 80 else url,
+        str(status) if status is not None else "-",
+        str(length) if length is not None else "-",
+        time_str,
+    )
+
+
 def _rows_to_arrow(rows: list[dict]) -> pa.Table:
     """Convert a list of dicts from HttpStorage into an Arrow table."""
+    if not rows:
+        return _make_empty_table()
     ids, hosts, methods, urls, statuses, sizes, times = [], [], [], [], [], [], []
     for r in rows:
-        ids.append(r.get("id", 0))
-        host = str(r.get("host", "") or "")
-        # Minimum Host column width — 30 chars to keep the column visible
+        rid, host, method, url, status, size, tstr = _row_to_record(r)
+        ids.append(rid)
         hosts.append(host)
-        methods.append(str(r.get("method", "") or ""))
-        url = str(r.get("url", "") or "")
-        urls.append(url[:80] + "…" if len(url) > 80 else url)
-        status = r.get("status_code")
-        statuses.append(str(status) if status is not None else "-")
-        length = r.get("length")
-        sizes.append(str(length) if length is not None else "-")
-        ts = r.get("timestamp")
-        if ts:
-            try:
-                dt = datetime.datetime.fromtimestamp(ts)
-                times.append(dt.strftime("%H:%M:%S"))
-            except Exception:
-                times.append("-")
-        else:
-            times.append("-")
-    # If the table is empty — return empty typed table without placeholder rows
-    if not rows:
-        return pa.table({
-            "ID":     pa.array([], type=pa.int64()),
-            "Host":   pa.array([], type=pa.string()),
-            "Method": pa.array([], type=pa.string()),
-            "URL":    pa.array([], type=pa.string()),
-            "Status": pa.array([], type=pa.string()),
-            "Size":   pa.array([], type=pa.string()),
-            "Time":   pa.array([], type=pa.string()),
-        })
+        methods.append(method)
+        urls.append(url)
+        statuses.append(status)
+        sizes.append(size)
+        times.append(tstr)
     return pa.table({
         "ID":     pa.array(ids,      type=pa.int64()),
         "Host":   pa.array(hosts,    type=pa.string()),
@@ -100,6 +115,7 @@ def _rows_to_arrow(rows: list[dict]) -> pa.Table:
         "Size":   pa.array(sizes,    type=pa.string()),
         "Time":   pa.array(times,    type=pa.string()),
     })
+
 
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -120,6 +136,14 @@ class _ProxyDataTable(_BaseDataTable):
             self.screen_x = screen_x
             self.screen_y = screen_y
 
+    class ScrolledToTop(Message):
+        """Posted when the user scrolls to the very top of the table.
+
+        Used by ProxyScreen (HTTP History only, id="request-list") as the
+        trigger to load an older page of history from SQLite — see
+        ProxyScreen._load_more_history().
+        """
+
     async def on_event(self, event: _events.Event) -> None:
         if isinstance(event, _events.MouseDown) and (
             event.button == 3 or (event.button == 1 and event.ctrl)
@@ -130,6 +154,13 @@ class _ProxyDataTable(_BaseDataTable):
             self.post_message(self.ContextMenuRequest(event.screen_x, event.screen_y))
         else:
             await super().on_event(event)
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        super().watch_scroll_y(old_value, new_value)
+        # Only the HTTP History table (id="request-list") supports
+        # scroll-up-to-load-more; WS History has no such feature.
+        if self.id == "request-list" and new_value <= 0 and old_value > 0:
+            self.post_message(self.ScrolledToTop())
 
 DataTable = _ProxyDataTable
 
@@ -162,6 +193,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         super().__init__(**kwargs)
         self._proxy_service: ProxyService | None = proxy_service
         self._selected_req_id: int | None = None
+        # _rows_cache is kept in DISPLAY order: oldest first (top), newest
+        # last (bottom) — matches the table's top-to-bottom rendering, so
+        # new live requests append at the end instead of requiring a prepend
+        # + full backend rebuild (see _append_row_to_table).
         self._rows_cache: list[dict] = []
         self._ws_rows_cache: list[dict] = []
         self._sort_col: int | None = None
@@ -171,9 +206,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._pending_req_ids: dict[str, int] = {}
         self._intercept_req: InterceptedRequest | None = None
         self._intercept_pending: list[InterceptedRequest] = []
-        # Debounce: batch rapid row appends into one ArrowBackend rebuild
+        # Debounce: batch rapid row appends into one incremental add_rows() call
         self._pending_append_rows: list[tuple] = []  # (req, row_id) pairs
         self._debounce_timer = None
+        # "Showing N of M" + scroll-up-to-load-more state (HTTP History only)
+        self._history_total: int = 0       # total rows matching current filters (from COUNT(*))
+        self._history_oldest_offset: int = 0  # how many older rows are NOT yet loaded (above what's in _rows_cache)
+        self._history_loading_more: bool = False
 
     def compose(self) -> ComposeResult:
         # Toolbar (outside SubTabs — all btn-* IDs are always in the DOM)
@@ -236,6 +275,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                                 max_column_content_width=120,
                                 column_widths=[5, 20, 8, 60, 6, 8, 8],
                             )
+                            yield Static("", id="history-count", classes="history-count")
                         # ResizeHandle between the table and the detail panel
                         yield ResizeHandle(
                             "table-area", "detail-area",
@@ -385,15 +425,34 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     async def _reload_table(self, filters: dict | None = None) -> None:
-        """Load/reload data into the DataTable from storage."""
+        """Load/reload data into the DataTable from storage.
+
+        Loads the most recent _HISTORY_PAGE_SIZE rows (newest page) and
+        displays them oldest-first/newest-last, matching how live traffic
+        is appended (see _append_row_to_table) and scrolled (auto-scroll to
+        bottom on new arrivals, like a log viewer). Older rows beyond the
+        page are not loaded here — see _load_more_history() for scroll-up
+        pagination.
+        """
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         try:
             logger.info("PROXY SCREEN: _reload_table called, filters=%s", filters)
-            rows = await self._proxy_service.get_history(filters=filters)
-            logger.info("PROXY SCREEN: _reload_table loaded %d rows", len(rows))
+            newest_first_rows = await self._proxy_service.get_history(
+                limit=_HISTORY_PAGE_SIZE, filters=filters,
+            )
+            total = await self._proxy_service.count_history(filters=filters)
+            logger.info(
+                "PROXY SCREEN: _reload_table loaded %d/%d rows",
+                len(newest_first_rows), total,
+            )
+            # Storage returns newest-first (DESC); display wants oldest-first
+            # (top) / newest-last (bottom), like a log tail.
+            rows = list(reversed(newest_first_rows))
             self._rows_cache = rows
             self._current_filters = filters
+            self._history_total = total
+            self._history_oldest_offset = max(total - len(rows), 0)
             arrow = _rows_to_arrow(rows)
             table = self.query_one("#request-list", DataTable)
             table.backend = ArrowBackend(arrow)
@@ -409,11 +468,77 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             table._clear_caches()
             table._require_update_dimensions = True
             table.refresh()
-            # Scroll to the first row (newest requests are at the top)
+            # Scroll to the last row — newest requests are at the bottom
             if rows:
-                table.move_cursor(row=0)
+                table.move_cursor(row=len(rows) - 1)
+            self._update_history_count_label()
         except Exception as exc:
             logger.error("_reload_table failed: %s", exc)
+
+    def _update_history_count_label(self) -> None:
+        try:
+            label = self.query_one("#history-count", Static)
+        except Exception:
+            return
+        shown = len(self._rows_cache)
+        total = self._history_total
+        if total <= shown:
+            label.update("")
+        else:
+            label.update(f"Showing {shown:,} of {total:,} — scroll up to load more")
+
+    async def _load_more_history(self) -> None:
+        """Load one older page of history when the user scrolls to the top.
+
+        Prepends older rows to _rows_cache/table without touching the rows
+        already displayed — cursor position and any already-scrolled state
+        are preserved by re-anchoring the scroll offset after the prepend.
+        """
+        if self._history_loading_more or self._history_oldest_offset <= 0:
+            return
+        if self._proxy_service is None or not self._proxy_service.is_storage_ready():
+            return
+        self._history_loading_more = True
+        try:
+            page_offset = max(self._history_oldest_offset - _HISTORY_PAGE_SIZE, 0)
+            page_limit = self._history_oldest_offset - page_offset
+            if page_limit <= 0:
+                return
+            older_newest_first = await self._proxy_service.get_history(
+                offset=page_offset, limit=page_limit, filters=self._current_filters,
+            )
+            older_rows = list(reversed(older_newest_first))
+            if not older_rows:
+                return
+            self._rows_cache = older_rows + self._rows_cache
+            self._history_oldest_offset = page_offset
+            try:
+                table = self.query_one("#request-list", DataTable)
+                arrow = _rows_to_arrow(self._rows_cache)
+                table.backend = ArrowBackend(arrow)
+                table._ordered_columns = None
+                table._clear_caches()
+                table._require_update_dimensions = True
+                table.refresh()
+                # Keep the view anchored where the user was — after
+                # prepending N rows, scroll down by N rows worth so the
+                # previously-visible row stays in view instead of jumping
+                # back to the very top.
+                table.scroll_to(y=table.scroll_y + len(older_rows), animate=False)
+            except Exception as exc:
+                logger.debug("PROXY SCREEN: _load_more_history: table update failed: %s", exc)
+            self._update_history_count_label()
+            logger.info(
+                "PROXY SCREEN: _load_more_history loaded %d older rows, oldest_offset now %d",
+                len(older_rows), self._history_oldest_offset,
+            )
+        except Exception as exc:
+            logger.error("_load_more_history failed: %s", exc)
+        finally:
+            self._history_loading_more = False
+
+    def on__proxy_data_table_scrolled_to_top(self, event: _ProxyDataTable.ScrolledToTop) -> None:
+        self.run_worker(self._load_more_history())
 
     async def _reload_ws_table(self) -> None:
         """Load/reload WebSocket requests into the WS History table."""
@@ -591,24 +716,30 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._debounce_timer = self.set_timer(0.15, self._flush_pending_rows)
 
     def _flush_pending_rows(self) -> None:
-        """Flush all pending rows into the table in one ArrowBackend rebuild."""
+        """Flush all pending rows into the table via incremental add_rows().
+
+        Rows are appended at the BOTTOM (matches _rows_cache's oldest-first/
+        newest-last order) using ArrowBackend.append_rows() instead of
+        rebuilding the whole backend from scratch — a full rebuild costs
+        ~11ms per 2000 existing rows (measured), while append_rows() only
+        touches the new rows. Auto-scrolls to the bottom so live traffic
+        stays visible, like `tail -f`/`less -f`.
+        """
         self._debounce_timer = None
         if not self._pending_append_rows:
             return
-        # Prepend new rows (newest first) and rebuild backend
-        for row in reversed(self._pending_append_rows):
-            self._rows_cache.insert(0, row)
-        self._pending_append_rows.clear()
+        new_rows = self._pending_append_rows
+        self._pending_append_rows = []
+        self._rows_cache.extend(new_rows)
+        self._history_total += len(new_rows)
         try:
-            arrow = _rows_to_arrow(self._rows_cache)
             table = self.query_one("#request-list", DataTable)
-            table.backend = ArrowBackend(arrow)
-            table._ordered_columns = None
-            table._clear_caches()
-            table._require_update_dimensions = True
-            table.refresh()
+            records = [_row_to_record(r) for r in new_rows]
+            table.add_rows(records)
+            table.scroll_end(animate=False)
         except Exception as exc:
             logger.debug("PROXY SCREEN: _flush_pending_rows: %s", exc)
+        self._update_history_count_label()
 
     def _select_row(self, row_idx: int) -> None:
         if 0 <= row_idx < len(self._rows_cache):
@@ -1234,14 +1365,27 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     async def _do_clear_table(self) -> None:
         if self._proxy_service is not None and self._proxy_service.is_storage_ready():
             await self._proxy_service.clear_history()
+        # Also drop retained ProxyRequestCaptured/Completed metadata from the
+        # EventBus ring buffer — otherwise "Clear" empties the visible table
+        # but old request records linger in bus._history until they age out
+        # naturally (up to max_history=10_000 entries later).
+        try:
+            from pentool.core.event_bus import get_event_bus
+            from pentool.core.events import ProxyRequestCaptured, ProxyRequestCompleted
+            get_event_bus().clear_history((ProxyRequestCaptured, ProxyRequestCompleted))
+        except Exception as exc:
+            logger.debug("PROXY SCREEN: _do_clear_table: EventBus history purge failed: %s", exc)
         self._rows_cache = []
         self._current_filters = None
+        self._history_total = 0
+        self._history_oldest_offset = 0
         try:
             table = self.query_one("#request-list", DataTable)
             table.backend = ArrowBackend(_make_empty_table())
             table.refresh()
         except Exception:
             pass
+        self._update_history_count_label()
 
     def action_open_scope(self) -> None:
         proxy = self._get_proxy()

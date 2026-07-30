@@ -99,28 +99,30 @@ class ProxyService(BaseService):
                 )
                 return None
 
+    def _effective_filters(self, filters: dict | None) -> dict:
+        """Resolve scope_only/is_websocket defaults shared by get_history/count."""
+        effective_filters = dict(filters) if filters else {}
+        if effective_filters.pop("scope_only", False):
+            proxy = self._proxy_api.get_proxy()
+            scope_hosts = proxy.scope if proxy else []
+            if scope_hosts:
+                effective_filters["hosts"] = scope_hosts
+        # HTTP History shows only non-WebSocket requests by default
+        if "is_websocket" not in effective_filters:
+            effective_filters["is_websocket"] = False
+        return effective_filters
+
     async def get_history(
         self,
         offset: int = 0,
-        limit: int = 2000,
+        limit: int = 1000,
         filters: dict | None = None,
     ) -> list[dict]:
         if not self._storage_ready:
             return []
 
         try:
-            # Handle scope_only filter
-            effective_filters = dict(filters) if filters else {}
-            if effective_filters.pop("scope_only", False):
-                proxy = self._proxy_api.get_proxy()
-                scope_hosts = proxy.scope if proxy else []
-                if scope_hosts:
-                    effective_filters["hosts"] = scope_hosts
-
-            # HTTP History shows only non-WebSocket requests by default
-            if "is_websocket" not in effective_filters:
-                effective_filters["is_websocket"] = False
-
+            effective_filters = self._effective_filters(filters)
             rows = await self._storage.get_metadata_batch(
                 offset=offset,
                 limit=limit,
@@ -130,6 +132,17 @@ class ProxyService(BaseService):
         except Exception as exc:
             logger.warning("ProxyService: get_history failed: %s", exc)
             return []
+
+    async def count_history(self, filters: dict | None = None) -> int:
+        """Total rows matching filters (for 'showing N of M' UI + scroll-load)."""
+        if not self._storage_ready:
+            return 0
+        try:
+            effective_filters = self._effective_filters(filters)
+            return await self._storage.count(effective_filters if effective_filters else None)
+        except Exception as exc:
+            logger.warning("ProxyService: count_history failed: %s", exc)
+            return 0
 
     async def get_request_by_id(self, request_id: int) -> dict | None:
         if not self._storage_ready:
