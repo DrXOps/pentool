@@ -109,7 +109,68 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         yield Static("Ctrl+Space: Send  │  Ctrl+F: Search  │  Double-click tab to rename", id="status-bar")
 
     def on_mount(self) -> None:
-        self.action_new_tab()
+        # Load tabs from database first, then create default tab if empty
+        self._load_tabs_from_db()
+
+    def _load_tabs_from_db(self) -> None:
+        """Load saved tabs from database on mount."""
+        db_path = self._get_db_path()
+        if not db_path:
+            # No DB — create default tab
+            self.action_new_tab()
+            return
+
+        from pentool.api.repeater_api import RepeaterAPI
+        repeater_api = RepeaterAPI(db_path=db_path)
+        self.run_worker(self._do_load_tabs(repeater_api), exclusive=False)
+
+    async def _do_load_tabs(self, repeater_api) -> None:
+        """Async worker to load tabs from DB."""
+        try:
+            entries = await repeater_api.get_history(limit=20)
+            if not entries:
+                # No history — create default tab
+                self.call_after_refresh(self.action_new_tab)
+                return
+
+            # Group entries by tab_name (most recent per tab)
+            tabs_dict = {}
+            for entry in reversed(entries):  # oldest first
+                tabs_dict[entry.tab_name] = entry
+
+            # Create tabs from history
+            for tab_name, entry in tabs_dict.items():
+                self._tab_counter += 1
+                tab_id = f"tab-{self._tab_counter}"
+                from pentool.utils.parser import build_http_request
+                raw = build_http_request(entry.request)
+                state = _TabState(tab_id, tab_name)
+                state.request_text = raw
+                self._tabs.append(state)
+
+                # Mount tab UI
+                self.call_after_refresh(self._create_tab_ui, tab_id, state)
+
+            # If no tabs were created, create default
+            if not self._tabs:
+                self.call_after_refresh(self.action_new_tab)
+
+        except Exception as exc:
+            logger.warning("_do_load_tabs failed: %s", exc)
+            # Fallback — create default tab
+            self.call_after_refresh(self.action_new_tab)
+
+    def _create_tab_ui(self, tab_id: str, state: _TabState) -> None:
+        """Create tab UI and mount widgets."""
+        try:
+            tabs = self.query_one("#repeater-tabs", TabbedContent)
+            pane = TabPane(state.name, id=tab_id)
+            tabs.add_pane(pane)
+            self._active_tab_id = tab_id
+            tabs.active = tab_id
+            self.call_after_refresh(self._mount_tab_widgets, tab_id, state)
+        except Exception as exc:
+            logger.debug("_create_tab_ui failed: %s", exc)
 
     def action_new_tab(self) -> None:
         self._tab_counter += 1
@@ -334,6 +395,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             pass
 
     def _save_current_tab_state(self) -> None:
+        """Save current tab's request text to memory AND database."""
         if self._active_tab_id is None:
             return
         state = self._get_tab_state(self._active_tab_id)
@@ -342,8 +404,37 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         try:
             editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
             state.request_text = editor.get_text()
+            # Auto-save to DB (async, fire-and-forget)
+            self._auto_save_tab_to_db(state)
         except Exception:
             pass
+
+    def _auto_save_tab_to_db(self, state: _TabState) -> None:
+        """Save tab state to database (non-blocking)."""
+        try:
+            from pentool.utils.parser import ParsedRequest, ParsedResponse, parse_http_request
+            # Parse the request text
+            parsed = parse_http_request(state.request_text)
+            if not parsed or not parsed.url:
+                return  # Don't save empty/invalid requests
+
+            # Create a dummy response (we're just saving the tab state, not actual results)
+            response = ParsedResponse(status=0, headers={}, body="")
+
+            db_path = self._get_db_path()
+            if not db_path:
+                return
+
+            from pentool.api.repeater_api import RepeaterAPI
+            repeater_api = RepeaterAPI(db_path=db_path)
+
+            # Save asynchronously
+            self.run_worker(
+                repeater_api.save_to_history(parsed, response, tab_name=state.name),
+                exclusive=False,
+            )
+        except Exception as exc:
+            logger.debug("_auto_save_tab_to_db failed: %s", exc)
 
     def _get_tab_state(self, tab_id: str) -> _TabState | None:
         for t in self._tabs:

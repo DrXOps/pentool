@@ -470,9 +470,15 @@ class PentoolApp(App):
             pass
 
     def on_key(self, event) -> None:
-        """Global key handler: Ctrl+A select-all + vim proxy tab sequences."""
+        """Global key handler: Ctrl+A select-all + vim proxy tab sequences + Ctrl+Space delegation."""
         import time as _time_mod
         key = event.key
+
+        # ── Ctrl+Space: delegate to active screen (Repeater needs this) ────────
+        if key == "ctrl+space":
+            # Don't block — let it bubble to the active screen
+            # RepeaterScreen.on_key will handle it
+            return
 
         # ── Ctrl+A: select all text in focused TextArea or Input ──────────────
         if key == "ctrl+a":
