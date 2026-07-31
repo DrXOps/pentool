@@ -327,7 +327,7 @@ docker run -it -p 8888:8888 pentool
 
 - Read [Quick Start Guide](QUICKSTART.md)
 - Configure your first project
-- Join [Discord community](https://discord.gg/pentool)
+- Join [Discord community](https://t.me/sudores)
 
 ---
 

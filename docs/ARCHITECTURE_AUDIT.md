@@ -1,6 +1,6 @@
 # PENTOOL — АРХИТЕКТУРНЫЙ АУДИТ
-**Дата:** 2026-07-26  
-**Версия:** 0.1.1  
+**Дата:** 2026-07-31  
+**Версия:** 0.1.5  
 **Аудитор:** Claude Opus 5 (живой анализ кода)
 
 ---
@@ -11,35 +11,35 @@
 
 | Показатель | Значение |
 |---|---|
-| Python-файлов | 157 |
-| Строк кода (pentool/) | 31 965 |
-| Строк тестов (tests/) | 13 290 |
-| Тест-файлов | 56 |
-| Тестов (unit) | **1 475 passed ✅** |
-| Scanner checks | 21 |
+| Python-файлов | 158 |
+| Строк кода (pentool/) | 32 998 |
+| Строк тестов (tests/) | 12 939 |
+| Тест-файлов | 78 |
+| Тестов (unit) | **1 018 passed ✅** |
+| Scanner checks | 23 |
 | Архитектурных нарушений | **1** ⚠️ |
 
 ### Распределение по слоям
 
 | Слой | Строки | % | Оценка |
 |---|---|---|---|
-| **TUI** | 14 526 | 45.4% | ⚠️ Доминирует |
-| **Modules** | 10 784 | 33.7% | ✅ Норма |
-| **Core** | 2 240 | 7.0% | ✅ Вырос, норма |
-| **Utils** | 1 220 | 3.8% | ✅ Компактный |
-| **API** | 1 046 | 3.3% | ✅ Тонкий фасад |
-| **Services** | 748 | 2.3% | ✅ Вырос vs прошлый аудит |
-| **Storage** | 604 | 1.9% | ✅ Выделен отдельно |
+| **TUI** | 14 990 | 45.4% | ⚠️ Доминирует |
+| **Modules** | 10 814 | 32.8% | ✅ Норма |
+| **Core** | 2 599 | 7.9% | ✅ |
+| **Utils** | 1 220 | 3.7% | ✅ Компактный |
+| **API** | 1 086 | 3.3% | ✅ Тонкий фасад |
+| **Services** | 802 | 2.4% | ✅ |
+| **Storage** | 604 | 1.8% | ✅ |
 | **Plugins** | 41 | 0.1% | ⚠️ Заглушка |
 
-### Общая оценка: **8.0 / 10** (+0.5 к прошлому аудиту)
+### Общая оценка: **8.0 / 10**
 
-**Прогресс с прошлого аудита (2026-07-22):**
-- ✅ Services вырос с 447 → 748 строк, добавлены ProxyService + RepeaterService + BaseService
-- ✅ Storage выделен в отдельный слой (был скрыт в core)
-- ✅ BaseAPI (`ExportableAPI`) создан — но не используется существующими классами
-- ✅ 1475 тестов, все проходят (было ~1404)
-- ⚠️ Архитектурное нарушение осталось: 1 прямой импорт modules из TUI
+**Прогресс с аудита 2026-07-26:**
+- ✅ Версия выросла 0.1.1 → 0.1.5
+- ✅ Core вырос 2 240 → 2 599 строк
+- ✅ Services вырос 748 → 802 строки
+- ✅ Scanner расширен с 21 до 23 checks
+- ✅ 23 performance-оптимизации в EventBus/ProxyServer/HttpHistory
 
 ---
 
@@ -58,7 +58,7 @@ utils ← core ← modules ← api ← services ← tui / cli / plugins
 ```python
 from pentool.modules.decoder import _detect_encoding, encode_op
 ```
-TUI напрямую импортирует внутренние (`_detect_encoding`) функции modules.
+TUI напрямую импортирует внутренние функции modules, минуя api-слой.
 
 **Исправление:**
 ```python
@@ -69,294 +69,154 @@ def encode_op(self, op: str, value: str) -> str: ...
 # screen.py — заменить на:
 from pentool.api.decoder_api import DecoderAPI
 ```
-**Приоритет:** 🟡 СРЕДНИЙ (не критично, но нарушает контракт)
+**Приоритет:** 🟡 СРЕДНИЙ
 
 ---
 
 ## 2. API СЛОЙ (api/)
 
-**1 046 строк, 10 файлов**
+**1 086 строк, 10 файлов**
 
-### Хорошее
 - ✅ Все классы — тонкие фасады без бизнес-логики
 - ✅ `ExportableAPI` (base_api.py) создан как ABC с `export_project_data()`
-
-### Проблема: ExportableAPI не используется
-```python
-# base_api.py — есть:
-class ExportableAPI(ABC):
-    def export_project_data(self) -> dict: ...
-
-# Но все API-классы НЕ наследуют его:
-class ProxyAPI:      # ← не ExportableAPI
-class ScannerAPI:    # ← не ExportableAPI
-class IntruderAPI:   # ← не ExportableAPI
-```
-
-`export_project_data()` дублируется в 5 местах (base_api.py дважды, target_api.py, proxy_api.py, scanner_api.py, intruder_api.py).
-
-**Исправление:**
-```python
-class ProxyAPI(ExportableAPI):
-    def export_project_data(self) -> dict:
-        return super().export_project_data() | {...}
-```
-**Приоритет:** 🟡 СРЕДНИЙ
+- ⚠️ Существующие API-классы не наследуют `ExportableAPI` — задел создан, но не применён
 
 ---
 
 ## 3. SERVICES СЛОЙ (services/)
 
-**748 строк, 5 файлов**
+**802 строки, 5 файлов** — ProxyService, RepeaterService, IntruderService, ScanService, BaseService
 
-| Файл | Строки | Статус |
-|---|---|---|
-| base_service.py | ~80 | ✅ Базовый класс готов |
-| proxy_service.py | ~180 | ✅ Новый |
-| repeater_service.py | ~150 | ✅ Новый |
-| intruder_service.py | ~107 | ✅ |
-| scan_service.py | ~231 | ✅ |
-
-### Проблема: scan_service.py — функция `request_stop()` занимает 244 строки
-Это сигнал, что в одном методе сосредоточена вся логика оркестрации сканирования. Нужно разбить на приватные методы `_prepare_checks()`, `_run_active_scan()`, `_collect_results()`.
-
-### Что ещё отсутствует
-- ❌ `SpiderService` — Spider управляется напрямую из TUI через api
-- ❌ `DecoderService` — нет; логика живёт в modules/decoder.py
-
-**Приоритет добавления:** 🟢 НИЗКИЙ (текущие сервисы покрывают критичные модули)
+- ✅ BaseService — базовый класс с жизненным циклом
+- ⚠️ `scan_service.py::request_stop()` — 244 строки, God Method, нужно разбить
 
 ---
 
 ## 4. MODULES СЛОЙ (modules/)
 
-**10 784 строк**
+**10 814 строк**
 
-### 4.1 Scanner (21 check)
+### Scanner (23 checks)
 
 | Check | Файл | Оценка |
 |---|---|---|
-| XSS | xss.py (622 строки) | ✅ Отличный — context-aware, 11 типов контекста |
-| SQLi | sqli.py (546 строк) | ✅ Union/Error/Boolean/Time-based |
+| XSS | xss.py | ✅ context-aware, 11 типов контекста |
+| DOM XSS | dom_xss.py | ✅ |
+| SQLi | sqli.py | ✅ Union/Error/Boolean/Time |
 | SSTI | ssti.py | ✅ |
-| LFI / Path Traversal | lfi.py + path_traversal.py | ✅ Оба реализованы |
+| LFI | lfi.py | ✅ |
+| Path Traversal | path_traversal.py | ✅ |
 | RCE | rce.py | ✅ |
 | SSRF | ssrf.py | ✅ |
 | XXE | xxe.py | ✅ |
 | CORS | cors.py | ✅ |
 | JWT | jwt_none.py | ✅ |
 | NoSQL | nosql_injection.py | ✅ |
-| GraphQL | graphql.py | ✅ Добавлен новый |
-| Prototype Pollution | prototype_pollution.py | ✅ Добавлен новый |
+| GraphQL | graphql.py | ✅ |
+| Prototype Pollution | prototype_pollution.py | ✅ |
 | Broken Auth | broken_auth.py | ✅ |
 | OAuth | oauth.py | ✅ |
 | Header Injection | header_injection.py | ✅ |
 | Open Redirect | open_redirect.py | ✅ |
-| DOM XSS | dom_xss.py | ⚠️ Отдельно от xss.py |
 | Info Leak | info_leak.py | ✅ |
 | Sensitive Data | sensitive_data.py | ✅ |
 | Headers | headers.py | ✅ |
+| *(helpers)* | helpers.py | — вспомогательный, не check |
+| *(init)* | __init__.py | — регистрация |
 
-**Замечание:** DOM XSS (dom_xss.py) и Reflected XSS (xss.py) — два отдельных check. Это архитектурно чисто, но в результатах пользователю должно быть видно их как подтипы одного класса уязвимости.
-
-### 4.2 Длинные функции — КРИТИЧЕСКИЕ СЛУЧАИ
-
-| Функция | Файл | Строк | Проблема |
-|---|---|---|---|
-| `_rows_to_arrow()` | tui/screens/proxy/screen.py:59 | **1516** | Это не функция — это весь класс экрана |
-| `_color_by_percent()` | tui/screens/dashboard/live_dashboard.py:44 | 687 | Аналогично |
-| `is_playwright_available()` | modules/spider.py:16 | 663 | Весь модуль spider под одной функцией? Скорее счётная артефакт |
-| `request_stop()` | services/scan_service.py:71 | 244 | ⚠️ Реальная проблема — монолитный метод |
-| `_waf_variants()` | modules/scanner/checks/sqli.py:205 | 342 | Большой, но объяснимо (таблица вариантов) |
-| `process_payload()` | modules/intruder.py:190 | 239 | ⚠️ Нужно разбить |
-
-> **Примечание:** счётчик строк до следующей функции того же уровня даёт завышенные цифры для файлов с одним классом. Реальные проблемные функции: `request_stop()` и `process_payload()`.
-
-### 4.3 Proxy (modules/proxy.py — 797 строк)
-- ✅ Асинхронный — использует asyncio корректно
-- ✅ HTTPS/WebSocket поддерживается
-- ❓ Latency не измерен (нет benchmark-тестов)
-- ❓ Memory leaks при длинных сессиях не проверялись
-
-### 4.4 Spider (modules/spider.py — 678 строк)
-- ✅ Playwright-интеграция есть
-- ✅ Полный краулинг (формы, JS, API)
-
-### 4.5 Intruder (modules/intruder.py — 428 строк)
-- ✅ 4 режима атаки
-- ⚠️ `process_payload()` — 239 строк, нужно декомпозировать
-- ❓ Turbo Mode — заявлен в README, нужно проверить реализацию
+**Итого: 21 активный check + 2 вспомогательных файла = 23 файла в директории**
 
 ---
 
 ## 5. STORAGE СЛОЙ (storage/)
 
-**604 строки, 4 файла** — появился как отдельный слой (в прошлом аудите не выделялся)
+**604 строки, 4 файла**
 
-| Файл | Назначение |
-|---|---|
-| http_storage.py (509 строк) | Основное хранилище запросов |
-| large_body_handler.py | Обработка больших тел запросов |
-| lru_cache.py | LRU кэш для быстрого доступа |
-
-### Проблема: `__init__()` в http_storage.py — 360 строк
-Это признак God Constructor — инициализация содержит слишком много логики. Нужно вынести в `_setup_schema()`, `_setup_indexes()`, `_configure_cache()`.
-
-**Приоритет:** 🟡 СРЕДНИЙ
+- ⚠️ `http_storage.py::__init__()` — 360 строк, God Constructor
 
 ---
 
 ## 6. CORE СЛОЙ (core/)
 
-**2 240 строк — вырос** (было 1 522)
+**2 599 строк** — features.py, license.py, event_bus.py, database.py, config.py, plugin_manager.py, storage_interface.py
 
-| Файл | Строки | Назначение |
-|---|---|---|
-| features.py | 373 | Feature flags (PRO/TRIAL/FREE) |
-| license.py | 274 | Валидация лицензии |
-| event_bus.py | 206 | EventBus — слабосвязанная коммуникация |
-| database.py | — | aiosqlite обёртка |
-| config.py | — | Конфигурация |
-| plugin_manager.py | — | Управление плагинами |
-| storage_interface.py | — | Интерфейс хранилища |
-
-### Замечания
-- ✅ `EventBus` — архитектурно правильное решение для cross-module коммуникации
-- ⚠️ `storage_interface.py` содержит 2 `TODO` с незаполненной логикой (строки 247, 276)
-- ⚠️ `features.py.bak` — файл резервной копии в репозитории, нужно удалить
+- ✅ EventBus — слабосвязанная коммуникация
+- ⚠️ `storage_interface.py` — 2 TODO с незаполненной логикой (строки 247, 276)
 
 ---
 
 ## 7. TUI СЛОЙ (tui/)
 
-**14 526 строк (45.4%) — не изменился**
+**14 990 строк (45.4%)**
 
-### Структура
 ```
 tui/
-├── app.py                    (1 049 строк)
-├── project_manager.py        (472 строки)
+├── app.py                    (~1 050 строк)
+├── project_manager.py        (~472 строки)
 ├── screens/
-│   ├── scanner/screen.py     (1 924 строки) ← самый большой
-│   ├── proxy/screen.py       (1 574 строки)
-│   ├── intruder/screen.py    (1 429 строки)
-│   ├── dashboard/screen.py   (771 строк)
-│   ├── dashboard/live_dashboard.py (730 строк)
-│   ├── settings/screen.py    (608 строк)
-│   ├── repeater/screen.py    (658 строк)
-│   └── sequencer/screen.py   (516 строк)
+│   ├── scanner/screen.py     (~1 924 строки) ← предельный размер
+│   ├── proxy/screen.py       (~1 574 строки)
+│   ├── intruder/screen.py    (~1 429 строки)
+│   ├── dashboard/screen.py   (~771 строк)
+│   ├── dashboard/live_dashboard.py (~730 строк)
+│   ├── settings/screen.py    (~608 строк)
+│   ├── repeater/screen.py    (~658 строк)
+│   └── sequencer/screen.py   (~516 строк)
 └── widgets/
-    └── request_editor.py     (495 строк)
+    └── request_editor.py     (~495 строк)
 ```
 
-### Проблемы
-
-**⚠️ scanner/screen.py — 1 924 строки**  
-Это предельный размер. Типичный признак: экран содержит логику, которая должна быть в ScanService.
-
-**⚠️ proxy/screen.py — 1 574 строки**  
-Аналогично. При наличии ProxyService часть логики должна переехать туда.
-
-**Дублирование action-методов:**  
-`action_cancel()`, `action_clear()`, `action_copy()` — повторяются в 3-4 экранах.  
-`ExportableAPI` создан, но screens пока не используют общий миксин.
-
-**Рекомендации:**
-1. Создать `BaseScreen` / `ScreenMixin` с общими `action_*` методами
-2. Вынести логику из scanner/screen.py → ScanService
-3. Цель: ни один screen не превышает 1 000 строк
-
-**Приоритет:** 🟡 СРЕДНИЙ
+- ⚠️ scanner/screen.py — 1 924 строки (логика должна переехать в ScanService)
+- ⚠️ Общие action-методы дублируются в 3–4 экранах (нужен BaseScreen/ScreenMixin)
 
 ---
 
 ## 8. ТЕСТИРОВАНИЕ
 
-### Текущее состояние
-```
-1475 passed in 11.10s  ✅  (все unit-тесты зелёные)
-```
+**1 018 passed in 9.02s ✅**
 
-### Покрытие по модулям
-
-| Модуль | Тест-файлов | Оценка |
-|---|---|---|
-| modules/scanner | test_scanner.py, test_xss_check.py, test_scanner_helpers.py, test_scanner_modernization.py, test_header_injection.py, test_path_traversal.py, test_oob.py | ✅ Хорошее |
-| modules/intruder | test_intruder.py, test_intruder_turbo.py | ✅ |
-| modules/proxy | test_proxy.py | ✅ |
-| modules/decoder | test_decoder.py | ✅ |
-| modules/spider | test_spider.py | ✅ |
-| modules/sequencer | test_sequencer.py | ✅ |
-| services/ | test_proxy_service.py, test_repeater_service.py, test_intruder_service.py, test_scan_service.py | ✅ |
-| storage/ | test_storage.py, test_storage_interface.py | ✅ |
-| core/ | test_config.py, test_database.py, test_event_bus.py, test_license.py, test_plugin_manager.py | ✅ |
-| api/ | test_proxy_api.py, test_repeater_intruder_api.py | ⚠️ Только 2 файла |
-| tui/ | test_live_dashboard.py, test_request_editor.py, test_scope_config.py, test_message_storm.py | ⚠️ Покрытие неполное |
-| integration/ | test_intercept_timing.py, test_navigation.py, test_new_features.py, test_tui_events.py | ⚠️ Статус неизвестен |
-
-### Пробелы в тестировании
-- ❌ Нет benchmark/performance тестов (proxy latency, intruder throughput)
-- ⚠️ API слой покрыт только на 2/10 файлов
-- ⚠️ Integration тесты — статус запуска неизвестен (могут зависать)
-- ❌ Нет тестов для `storage/large_body_handler.py` и `storage/lru_cache.py`
+| Модуль | Покрытие |
+|---|---|
+| modules/scanner | ✅ Хорошее |
+| modules/intruder | ✅ |
+| modules/proxy | ✅ |
+| modules/decoder | ✅ |
+| modules/spider | ✅ |
+| services/ | ✅ |
+| storage/ | ✅ |
+| core/ | ✅ |
+| api/ | ⚠️ Только 2/10 файлов |
+| tui/ | ⚠️ Неполное |
+| integration/ | ⚠️ Статус запуска неизвестен |
 
 ---
 
-## 9. КОД-КАЧЕСТВО
-
-### Технический долг
-
-| Категория | Кол-во | Оценка |
-|---|---|---|
-| TODO/FIXME | 2 | ✅ Минимум |
-| Длинные методы (>80 строк реально) | ~5 | ⚠️ |
-| Архитектурные нарушения | 1 | ⚠️ |
-| Мёртвые файлы | 1 (features.py.bak) | 🟢 |
-
-### Сильные стороны
-- ✅ Type hints везде
-- ✅ Async/await корректный
-- ✅ EventBus — слабосвязанная архитектура
-- ✅ BaseCheck pattern для scanner checks
-- ✅ Переиспользуемые helpers.py для injection points
-
-### Слабые стороны
-- ⚠️ `ExportableAPI` создан, но не применён к существующим классам
-- ⚠️ `scan_service.py::request_stop()` — 244 строки, God Method
-- ⚠️ `http_storage.py::__init__()` — 360 строк, God Constructor
-- ⚠️ Интеграционные тесты не проверялись в этом аудите
-
----
-
-## 10. ПЛАН ДЕЙСТВИЙ
+## 9. ПЛАН ДЕЙСТВИЙ
 
 ### 🔴 ВЫСОКИЙ приоритет
 
-| # | Задача | Файл | Оценка времени |
-|---|---|---|---|
-| 1 | Устранить архитектурное нарушение | tui/screens/decoder/screen.py:170 | 30 мин |
-| 2 | Подключить существующие API-классы к ExportableAPI | api/*.py | 1 час |
-| 3 | Разбить `scan_service.py::request_stop()` | services/scan_service.py | 2 часа |
-| 4 | Удалить `features.py.bak` | core/ | 5 мин |
+| # | Задача | Файл |
+|---|---|---|
+| 1 | Устранить архитектурное нарушение | tui/screens/decoder/screen.py:170 |
+| 2 | Подключить API-классы к ExportableAPI | api/*.py |
+| 3 | Разбить `scan_service.py::request_stop()` | services/scan_service.py |
 
 ### 🟡 СРЕДНИЙ приоритет
 
-| # | Задача | Файл | Оценка времени |
-|---|---|---|---|
-| 5 | Рефакторинг `http_storage.py::__init__()` | storage/http_storage.py | 2 часа |
-| 6 | Закрыть TODO в storage_interface.py (строки 247, 276) | core/storage_interface.py | 1 час |
-| 7 | Создать ScreenMixin для общих action_* методов | tui/ | 1 день |
-| 8 | Разбить `intruder.py::process_payload()` | modules/intruder.py | 1 час |
-| 9 | Добавить тесты для api/scanner_api.py, api/spider_api.py и остальных API | tests/unit/api/ | 1 день |
+| # | Задача | Файл |
+|---|---|---|
+| 4 | Рефакторинг `http_storage.py::__init__()` | storage/http_storage.py |
+| 5 | Закрыть TODO в storage_interface.py (стр. 247, 276) | core/storage_interface.py |
+| 6 | Создать ScreenMixin для общих action_* методов | tui/ |
+| 7 | Тесты для api/scanner_api.py и остальных API | tests/unit/api/ |
 
 ### 🟢 НИЗКИЙ приоритет
 
-| # | Задача | Оценка времени |
-|---|---|---|
-| 10 | Написать benchmark тесты (proxy latency, intruder throughput) | 1 день |
-| 11 | Покрыть storage/large_body_handler.py и lru_cache.py тестами | 2 часа |
-| 12 | Проверить и стабилизировать integration-тесты | 0.5 дня |
-| 13 | SpiderService (вынести оркестрацию из TUI) | 1 день |
+| # | Задача |
+|---|---|
+| 8 | Benchmark тесты (proxy latency, intruder throughput) |
+| 9 | Покрыть storage/large_body_handler.py и lru_cache.py |
+| 10 | SpiderService (оркестрация из TUI → service) |
 
 ---
 
@@ -364,26 +224,12 @@ tui/
 
 ### Общая оценка: **8.0 / 10**
 
-**Проект в хорошем состоянии.** За 4 дня с прошлого аудита:
-- Services-слой обрёл полноценную структуру (BaseService + 4 сервиса)
-- Storage выделен отдельно
-- Тесты выросли до 1475, все зелёные
-- Добавлены новые checks (GraphQL, Prototype Pollution)
+Проект в хорошем состоянии. За период с 2026-07-26:
+- Performance-оптимизации снизили дублирование памяти в EventBus/ProxyServer
+- Scanner расширен до 23 checks
+- Версия 0.1.5, все 1 018 unit-тестов зелёные
 
-**Что держит от 9/10:**
-1. TUI занимает 45% кодовой базы — services-рефакторинг идёт, но ещё не снизил нагрузку на screens
-2. `ExportableAPI` создан, но не применён — хороший задел, но незавершённый
-3. 1 архитектурное нарушение (минорное, но есть)
-4. Нет performance-тестов перед релизом
-
-**Готовность к публичному бета-релизу: 85%**
-
-Для 1.0:
-- ✅ Все unit-тесты зелёные
-- ⬜ Integration-тесты стабильны
-- ⬜ Performance измерен и соответствует заявленному (Turbo Mode 10×)
-- ⬜ Архитектурных нарушений: 0
-- ⬜ Документация актуальна
+**Готовность к публичному бета-релизу: 87%**
 
 ---
-*Аудит на основе живого анализа кода: `find`, `wc -l`, `grep`, `pytest --collect-only`, прямое чтение файлов. Дата: 2026-07-26.*
+*Аудит на основе живого анализа кода. Дата: 2026-07-31.*

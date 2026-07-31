@@ -142,7 +142,7 @@ PRO-расширения доступны по коммерческой лице
 
 - **Сайт:** [pentool.pro](https://pentool.pro)
 - **Telegram:** [@sudores](https://t.me/sudores)
-- **Email:** akashtanov2020@gmail.com
+- **Email:** support@pentool.pro
 - **Автор:** Анатолий Каштанов (DoctorX)
 
 ---

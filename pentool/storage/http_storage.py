@@ -114,9 +114,17 @@ class HttpStorage:
             self._db = None
 
     async def switch_db(self, path: str) -> None:
+        logger.info("HttpStorage: switch_db called for %s", path)
         await self.close()
         await self.init_db(path)
-        logger.info("HttpStorage: switched to %s", path)
+        # Log the count of existing records after switching
+        try:
+            count = await self._db.execute("SELECT COUNT(*) FROM requests")
+            row = await count.fetchone()
+            total = row[0] if row else 0
+            logger.info("HttpStorage: switched to %s, found %d existing records", path, total)
+        except Exception as exc:
+            logger.warning("HttpStorage: could not count records after switch: %s", exc)
 
     async def add_request(self, req: Any, resp: Any = None, is_websocket: bool = False) -> int:
         assert self._db, "init_db() not called"

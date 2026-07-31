@@ -188,7 +188,7 @@ You'll see the TUI interface with the Dashboard screen.
 
 - Read full [User Guide](USER_GUIDE.md)
 - Check [API Reference](API_CONTRACTS.md)
-- Join [Discord](https://discord.gg/pentool)
+- Join [Discord](https://t.me/sudores)
 
 ---
 

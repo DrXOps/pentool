@@ -11,7 +11,17 @@ import threading
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import ContentSwitcher, Footer
+from textual.widgets import Checkbox, ContentSwitcher, Footer
+
+# Nicer checkbox glyph applied project-wide — Checkbox is a subclass of
+# ToggleButton, whose BUTTON_LEFT/INNER/RIGHT class attributes control the
+# rendered glyph. Overriding them here (once, at import time) changes every
+# Checkbox instance across all screens without touching each screen's CSS —
+# previously every screen used Textual's default "▐X▌" look, which several
+# screens then had to fight with ad-hoc height/margin overrides.
+Checkbox.BUTTON_LEFT = "["
+Checkbox.BUTTON_INNER = "✓"
+Checkbox.BUTTON_RIGHT = "]"
 
 from pentool.tui.messages import (
     ProxyClearHistory,
@@ -122,7 +132,10 @@ class PentoolApp(App):
         dock: bottom;
     }
 
-    /* Global checkbox style — compact, height 1, no border */
+    /* Global checkbox style — compact, height 1, no border.
+       Glyph itself ("[ ]" / "[✓]") is set once in Checkbox.BUTTON_LEFT/
+       INNER/RIGHT above; this just controls color/spacing/hover so every
+       screen gets the same look without per-screen overrides. */
     Checkbox {
         height: 1;
         border: none;
@@ -131,12 +144,21 @@ class PentoolApp(App):
         width: auto;
     }
     Checkbox > .toggle--button {
-        color: $primary;
+        color: $text-muted;
         background: transparent;
+        text-style: bold;
     }
     Checkbox.-on > .toggle--button {
         color: $success;
         background: transparent;
+        text-style: bold;
+    }
+    Checkbox:hover > .toggle--button {
+        color: $primary;
+    }
+    Checkbox.-on:hover > .toggle--button {
+        color: $success;
+        text-style: bold;
     }
     Checkbox:focus {
         border: none;
@@ -534,6 +556,19 @@ class PentoolApp(App):
         except Exception:
             pass
 
+    def _focus_repeater_editor(self, repeater) -> None:
+        """Set focus to the RequestEditor in the active Repeater tab."""
+        try:
+            from pentool.tui.widgets.request_editor import RequestEditor
+            from textual.widgets import TextArea
+            tab_id = repeater._active_tab_id
+            if tab_id:
+                editor = repeater.query_one(f"#req-editor-{tab_id}", RequestEditor)
+                area = editor.query_one("#editor-area", TextArea)
+                area.focus()
+        except Exception:
+            pass
+
     # Modules available without an open project
     _FREE_MODULES = {"dashboard", "settings"}
 
@@ -762,6 +797,8 @@ class PentoolApp(App):
             # Always open a new tab — do not overwrite the user's current work
             repeater.load_request_in_new_tab(msg.raw)
             self.action_switch_module("repeater")
+            # Set focus to the request editor after the tab is mounted
+            self.call_after_refresh(self._focus_repeater_editor, repeater)
             self.notify("Sent to Repeater → new tab", severity="information", timeout=2)
             self._add_raw_to_target(msg.raw)
         except Exception as exc:

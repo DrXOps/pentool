@@ -186,10 +186,11 @@ class ProxyService(BaseService):
 
     async def switch_db(self, new_db_path: str) -> None:
         try:
+            logger.info("ProxyService: switch_db called for %s", new_db_path)
             await self._storage.switch_db(new_db_path)
             self._db_path = new_db_path
             self._storage_ready = True
-            logger.info("ProxyService: switched to %s", new_db_path)
+            logger.info("ProxyService: switched to %s, storage_ready=%s", new_db_path, self._storage_ready)
         except Exception as exc:
             logger.error("ProxyService: switch_db failed: %s", exc)
             self._storage_ready = False

@@ -519,7 +519,10 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             self.app.notify(f"Could not send to Intruder: {exc}", severity="error")
 
     def on_key(self, event) -> None:
-        if event.key == "ctrl+j":
+        if event.key == "ctrl+space":
+            self.action_send()
+            event.prevent_default()
+        elif event.key == "ctrl+j":
             self.action_send()
             event.prevent_default()
 

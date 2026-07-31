@@ -345,7 +345,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                             )
 
         yield Static(
-            "Ctrl+R: Repeater  │  Ctrl+T: Target  │  Ctrl+U: Copy URL  │  M: Context menu  │  I: Inspector  │  H: HTTP History  │  N: Intercept  │  W: WS History",
+            "Ctrl+R: Repeater  │  Ctrl+U: Copy URL  │  M: Context menu  │  I: Inspector  │  H: HTTP History  │  N: Intercept  │  W: WS History",
             id="status-bar",
         )
 
@@ -626,8 +626,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         if not self._proxy_service.is_storage_ready():
             logger.error("_reload_from_storage: storage not ready after 6s")
             return
+        logger.info("PROXY SCREEN: _reload_from_storage: storage ready, loading tables")
         await self._reload_table()
         await self._reload_ws_table()
+        logger.info("PROXY SCREEN: _reload_from_storage: tables reloaded")
 
     def add_request_row(self, req: object) -> None:
         """Called from app when a new request arrives (before a response)."""
@@ -901,9 +903,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             event.prevent_default()
         elif event.key == "ctrl+u":
             self._copy_selected_url()
-            event.prevent_default()
-        elif event.key == "ctrl+t":
-            self._send_to_target()
             event.prevent_default()
         elif event.key == "m":
             self._show_context_menu_at_cursor()

@@ -142,7 +142,7 @@ PRO 扩展采用商业许可证。
 
 - **网站：** [pentool.pro](https://pentool.pro)
 - **Telegram：** [@sudores](https://t.me/sudores)
-- **邮箱：** akashtanov2020@gmail.com
+- **邮箱：** support@pentool.pro
 - **作者：** Anatoly Kashtanov（DoctorX）
 
 ---

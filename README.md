@@ -1,9 +1,11 @@
 # 🔒 Pentool — Professional TUI Web Pentesting Toolkit
 
+> **🚧 Active Development** — Public beta. Core modules are stable and fully usable. PRO features are under active development. Feedback and bug reports are welcome.
+
 [![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
 [![CI](https://github.com/docxqwerty/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/docxqwerty/pentool/actions)
-[![License](https://img.shields.io/github/license/docxqwerty/pentool)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Downloads](https://img.shields.io/pypi/dm/pentool)](https://pypi.org/project/pentool/)
 
 🌐 **Languages:** [English](README.md) · [Русский](README_RU.md) · [中文](README_ZH.md) · [हिन्दी](README_HI.md)
@@ -103,24 +105,28 @@ Full docs: **[pentool.pro](https://pentool.pro)**
 ## 🧪 Beta / Testing Mode
 
 > **Pentool is currently in public beta.**  
-> All **free modules are fully available**. Paid (PRO) plugins are still in development — a **trial version** is provided for now.  
->
-> If you run a **blog or channel in the information security field** and can help promote the project — write to us in private, we'll provide you with a **private PRO key** free of charge.
->
-> 📬 Contact: **[@sudores](https://t.me/sudores)** on Telegram
+> All **free modules are fully functional**. PRO features are actively being built — a **14-day trial** is available so you can evaluate everything upfront.
+
+### 🎙 For Bloggers & Content Creators
+
+Running a **security blog, YouTube channel, or Telegram channel?**  
+Write an honest review and recommend Pentool to your audience — we'll give you a **permanent PRO license, completely free.**
+
+No minimum follower count. We value quality over reach.  
+→ Reach out: **[@sudores](https://t.me/sudores)** on Telegram
 
 ---
 
 ## 💰 Support the Project
 
-Pentool is built and maintained in spare time by a solo developer.  
-If it helps your work, consider supporting — it directly funds new features, bug fixes, and faster releases.
+Pentool is built and maintained by a solo developer in spare time.  
+If it saves you hours on a pentest — consider giving back. Every contribution directly funds new features, fixes, and faster releases.
 
-- ⭐ [Star on GitHub](https://github.com/docxqwerty/pentool) — free and helps a lot
-- ☕ [Donate via TryBit](https://donate.trybit.com/KY1ECKA5) — one-time support in crypto
-- 🔑 PRO license — coming soon; trial available now
+- ⭐ **[Star on GitHub](https://github.com/docxqwerty/pentool)** — free, takes 2 seconds, helps visibility enormously
+- 🔑 **PRO license** — get early access and support development → **[@sudores](https://t.me/sudores)**
+- 💬 **Share** — tell a colleague, post a review, or mention Pentool in your writeups
 
-Every contribution matters. Thank you for supporting open-source security tooling. 🙌
+> Building tools is lonely work. A star or a kind word genuinely matters. Thank you. 🙏
 
 ---
 
@@ -142,7 +148,7 @@ PRO extensions are available under a commercial license.
 
 - **Website:** [pentool.pro](https://pentool.pro)
 - **Telegram:** [@sudores](https://t.me/sudores)
-- **Email:** akashtanov2020@gmail.com
+- **Email:** support@pentool.pro
 - **Author:** Anatoly Kashtanov (DoctorX)
 
 ---

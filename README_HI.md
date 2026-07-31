@@ -142,7 +142,7 @@ PRO एक्सटेंशन कमर्शियल लाइसेंस �
 
 - **वेबसाइट:** [pentool.pro](https://pentool.pro)
 - **Telegram:** [@sudores](https://t.me/sudores)
-- **Email:** akashtanov2020@gmail.com
+- **Email:** support@pentool.pro
 - **Author:** Anatoly Kashtanov (DoctorX)
 
 ---

@@ -157,7 +157,7 @@ First public release of Pentool - Modern Web Pentesting TUI.
 
 ### 🙏 Credits
 - Developed with Claude Opus 4.8 (1M context)
-- Inspired by Burp Suite
+- Inspired by professional web security testing workflows
 - Built with Textual framework
 - Community feedback from beta testers
 

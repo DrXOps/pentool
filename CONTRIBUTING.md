@@ -403,7 +403,7 @@ twine upload dist/*
 
 - **Questions:** Open a Discussion on GitHub
 - **Bugs:** Open an Issue
-- **Chat:** Join Discord
+- **Chat:** Join Telegram
 - **Email:** dev@pentool.pro
 
 ---
