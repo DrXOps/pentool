@@ -297,10 +297,10 @@ class PentoolApp(App):
             from pentool.tui.screens.proxy.screen import ProxyScreen
             proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
             proxy_screen._proxy_service = self._proxy_service
-            # Run init_storage here — ProxyScreen.on_mount has already run
-            # and could not do this (ProxyService was not yet created at that time)
-            proxy_screen.run_worker(self._proxy_service.init_storage())
-            logger.info("APP: ProxyService injected and init_storage launched")
+            # Run init_storage synchronously and WAIT for it to complete
+            # before auto-opening last project (which calls switch_db)
+            await self._proxy_service.init_storage()
+            logger.info("APP: ProxyService injected and init_storage completed")
         except Exception as exc:
             logger.warning("APP: could not inject ProxyService into ProxyScreen: %s", exc)
 
