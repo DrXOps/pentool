@@ -259,6 +259,34 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             self._active_tab_id = self._tabs[-1].tab_id
             tabs.active = self._active_tab_id
 
+    # ── Project lifecycle ──────────────────────────────────────────────────────
+
+    def reset_for_new_project(self) -> None:
+        """Удалить все вкладки и создать одну чистую. Вызывается при Ctrl+N."""
+        self._close_all_tabs()
+        self.action_new_tab()
+
+    def reload_from_project(self, db_path: str) -> None:
+        """Загрузить вкладки из БД. Вызывается при открытии существующего проекта."""
+        self._close_all_tabs()
+        from pentool.api.repeater_api import RepeaterAPI
+        repeater_api = RepeaterAPI(db_path=db_path)
+        self.run_worker(self._do_load_tabs(repeater_api), exclusive=True)
+
+    def _close_all_tabs(self) -> None:
+        """Удалить все существующие вкладки из TabbedContent и сбросить состояние."""
+        try:
+            tabs = self.query_one("#repeater-tabs", TabbedContent)
+            for state in list(self._tabs):
+                try:
+                    tabs.remove_pane(state.tab_id)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        self._tabs = []
+        self._active_tab_id = None
+
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.tabbed_content.id != "repeater-tabs":
             return

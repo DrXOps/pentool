@@ -387,7 +387,6 @@ class ProjectManager:
 
         # 3. Clear in-memory proxy requests for a new project
         if is_new:
-            from pentool.tui.messages import ProxyClearHistory
             try:
                 from pentool.tui.screens.proxy.screen import ProxyScreen
                 screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
@@ -396,10 +395,24 @@ class ProjectManager:
                 pass
 
         # 4. Reload all screens — all awaited, never spawning sub-workers
-        await self._reload_project_screens(path)
+        await self._reload_project_screens(path, is_new=is_new)
 
-    async def _reload_project_screens(self, path: str) -> None:
+    async def _reload_project_screens(self, path: str, is_new: bool = False) -> None:
         """Reload data from DB into all screens. Called from _do_switch only."""
+
+        # 0. RepeaterScreen — сброс или загрузка вкладок
+        try:
+            from pentool.tui.constants import SCREEN_REPEATER
+            from pentool.tui.screens.repeater.screen import RepeaterScreen
+            repeater = self._app.query_one(SCREEN_REPEATER, RepeaterScreen)
+            if is_new:
+                repeater.reset_for_new_project()
+            else:
+                repeater.reload_from_project(path)
+            logger.info("_reload_project_screens: repeater %s",
+                        "reset" if is_new else "reloaded")
+        except Exception as exc:
+            logger.debug("_reload_project_screens repeater: %s", exc)
 
         # 1. ProxyScreen — must come after switch_db is fully done
         try:
