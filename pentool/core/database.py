@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS intruder_results (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id          INTEGER REFERENCES projects(id) ON DELETE CASCADE,
     attack_id           TEXT    NOT NULL,
+    request_number      INTEGER NOT NULL DEFAULT 0,
     payload_values      TEXT    DEFAULT '[]',
     request_raw         TEXT    DEFAULT '',
     response_status     INTEGER DEFAULT NULL,
@@ -45,6 +46,22 @@ CREATE TABLE IF NOT EXISTS intruder_results (
     response_time_ms    INTEGER DEFAULT NULL,
     error               TEXT    DEFAULT NULL,
     timestamp           TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS intruder_state (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tab_name        TEXT    NOT NULL DEFAULT 'Intruder',
+    template        TEXT    NOT NULL DEFAULT '',
+    attack_type     TEXT    NOT NULL DEFAULT 'sniper',
+    payloads_json   TEXT    NOT NULL DEFAULT '[[]]',
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS scanner_tabs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tab_name    TEXT    NOT NULL DEFAULT 'Scan',
+    target_url  TEXT    NOT NULL DEFAULT '',
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS vulnerabilities (
@@ -111,6 +128,15 @@ async def init_db(db_path: str) -> None:
                 )
             except Exception:
                 pass  # Column already exists — expected
+
+        # Migration: add request_number to intruder_results (for old DBs)
+        try:
+            await db.execute(
+                "ALTER TABLE intruder_results ADD COLUMN request_number INTEGER NOT NULL DEFAULT 0"
+            )
+        except Exception:
+            pass  # Column already exists — expected
+
         await db.commit()
 
 

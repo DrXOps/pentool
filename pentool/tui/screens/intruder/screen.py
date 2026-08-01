@@ -214,6 +214,9 @@ class IntruderScreen(AppMixin, Widget):
         # Saved selection in template-editor (for ADD §§ after focus loss)
         self._last_editor_selection: tuple | None = None
         self._last_click_time: float = 0.0
+        # Auto-save state
+        self._state_loaded: bool = False
+        self._tab_name: str = "Intruder"
 
     async def on_event(self, event: _tevents.Event) -> None:
         """Double-click in template-editor — select the word under the cursor."""
@@ -345,6 +348,85 @@ class IntruderScreen(AppMixin, Widget):
         table.add_column("Error",      width=30)
         self._update_payload_select()
         self._setup_tooltips()
+        # Load saved state from DB
+        self._load_state_from_db()
+
+    def _load_state_from_db(self) -> None:
+        """Load saved Intruder state (template, attack type, payloads) from DB."""
+        from pentool.api.intruder_api import IntruderAPI
+        db_path = self._get_db_path()
+        if not db_path:
+            return
+        api = IntruderAPI(db_path=db_path)
+        self.run_worker(self._do_load_state(api), exclusive=False)
+
+    async def _do_load_state(self, api: "IntruderAPI") -> None:
+        """Async worker to load state from DB."""
+        try:
+            state = await api.load_state(self._tab_name)
+            if not state:
+                return
+            # Restore template
+            template = state.get("template", "")
+            if template:
+                editor = self.query_one("#template-editor", TextArea)
+                editor.text = template
+            # Restore attack type
+            attack_type_str = state.get("attack_type", "sniper")
+            try:
+                self._attack_type = AttackType(attack_type_str)
+                btn = self.query_one("#btn-attack-type", ToolbarButton)
+                btn.label = f"⚡ {self._attack_type.value.replace('_', ' ').title()}"
+            except Exception:
+                pass
+            # Restore payloads
+            payloads = state.get("payloads", [[]])
+            if payloads and isinstance(payloads, list):
+                self._payloads = payloads
+                self._update_payload_select()
+            self._state_loaded = True
+        except Exception as exc:
+            from pentool.core.logging import get_logger
+            get_logger(__name__).debug("_do_load_state: %s", exc)
+
+    def _auto_save_state(self) -> None:
+        """Auto-save current state (template, attack type, payloads) to DB."""
+        from pentool.api.intruder_api import IntruderAPI
+        db_path = self._get_db_path()
+        if not db_path:
+            return
+        try:
+            editor = self.query_one("#template-editor", TextArea)
+            template = editor.text
+            api = IntruderAPI(db_path=db_path)
+            self.run_worker(
+                api.save_state(
+                    tab_name=self._tab_name,
+                    template=template,
+                    attack_type=self._attack_type.value,
+                    payloads=self._payloads,
+                ),
+                exclusive=False,
+            )
+        except Exception:
+            pass
+
+    def _auto_save_result(self, result: IntruderResult) -> None:
+        """Auto-save a single intruder result to DB (fire-and-forget)."""
+        from pentool.api.intruder_api import IntruderAPI
+        db_path = self._get_db_path()
+        if not db_path:
+            return
+        try:
+            api = IntruderAPI(db_path=db_path)
+            # Get project_id from app if available
+            project_id = getattr(self.app, "project_id", None)
+            self.run_worker(
+                api.save_result(result, project_id=project_id),
+                exclusive=False,
+            )
+        except Exception:
+            pass
 
     def _setup_tooltips(self) -> None:
         tips = {
@@ -415,6 +497,9 @@ class IntruderScreen(AppMixin, Widget):
         until some other action happened to trigger a refresh.
         """
         self._update_payload_select()
+        # Auto-save state when template changes
+        if self._state_loaded:
+            self._auto_save_state()
 
     @on(ToolbarButton.Pressed, "#btn-add-marker")
     def on_btn_add_marker(self, _: ToolbarButton.Pressed) -> None:
@@ -525,6 +610,8 @@ class IntruderScreen(AppMixin, Widget):
                 except Exception:
                     pass
                 screen._update_payload_select()
+                # Auto-save state when attack type changes
+                screen._auto_save_state()
             except Exception as e:
                 logger.warning("_on_select attack type failed: %s", e)
 
@@ -780,6 +867,8 @@ class IntruderScreen(AppMixin, Widget):
                 self._payloads.append([])
             self._payloads[self._active_set_idx].append(value)
             self._refresh_payload_list()
+            # Auto-save state when payload added
+            self._auto_save_state()
 
         self.app.push_screen(_InputDialog("Add payload", "Enter payload value:", on_add=_on_add))
 
@@ -792,6 +881,8 @@ class IntruderScreen(AppMixin, Widget):
                 if 0 <= idx < len(payloads):
                     payloads.pop(idx)
                     self._refresh_payload_list()
+                    # Auto-save state when payload removed
+                    self._auto_save_state()
         except Exception:
             pass
 
@@ -799,6 +890,8 @@ class IntruderScreen(AppMixin, Widget):
         if self._active_set_idx < len(self._payloads):
             self._payloads[self._active_set_idx] = []
             self._refresh_payload_list()
+            # Auto-save state when payloads cleared
+            self._auto_save_state()
 
     def _load_payloads_from_file(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
@@ -846,6 +939,8 @@ class IntruderScreen(AppMixin, Widget):
             self._refresh_payload_list()
         name = path.split("/")[-1]
         self.app.notify(f"Loaded {len(payloads)} payloads from {name}", timeout=3)
+        # Auto-save state after loading payloads
+        self._auto_save_state()
 
     @staticmethod
     def _read_file_sync(path: str) -> str:
@@ -976,6 +1071,8 @@ class IntruderScreen(AppMixin, Widget):
         self._all_results.append(result)
         if self._passes_filter(result):
             self._add_result_row(result)
+        # Auto-save result to DB
+        self._auto_save_result(result)
 
     def _on_progress(self, done: int, total: int) -> None:
         try:
