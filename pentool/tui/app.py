@@ -729,6 +729,7 @@ class PentoolApp(App):
             self.call_from_thread(self._update_status)
             self.call_from_thread(self._update_proxy_screen_labels)
             self.call_from_thread(self._update_dashboard_proxy_status, True)
+            self.call_from_thread(self.flash, f"● Proxy :{self._proxy.port}", "success")
             logger.info("Proxy started on port %s", self._proxy.port)
             async with self._proxy._server:
                 await self._proxy._server.serve_forever()
@@ -738,6 +739,7 @@ class PentoolApp(App):
             self.call_from_thread(self._update_status)
             self.call_from_thread(self._update_proxy_screen_labels)
             self.call_from_thread(self._update_dashboard_proxy_status, False)
+            self.call_from_thread(self.flash, "○ Proxy остановлен", "warning")
 
     def _stop_proxy(self) -> None:
         logger.info("APP: _stop_proxy called")
@@ -816,12 +818,10 @@ class PentoolApp(App):
         try:
             from pentool.tui.screens.repeater.screen import RepeaterScreen
             repeater = self.query_one(SCREEN_REPEATER, RepeaterScreen)
-            # Always open a new tab — do not overwrite the user's current work
             repeater.load_request_in_new_tab(msg.raw)
             self.action_switch_module("repeater")
-            # Set focus to the request editor after the tab is mounted
             self.call_after_refresh(self._focus_repeater_editor, repeater)
-            self.notify("Sent to Repeater → new tab", severity="information", timeout=2)
+            self.flash("→ Repeater", "information", 2.0)
             self._add_raw_to_target(msg.raw)
         except Exception as exc:
             self.notify(f"Send to Repeater failed: {exc}", severity="error", timeout=4)

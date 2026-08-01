@@ -351,7 +351,9 @@ class ProjectManager:
 
         self.update_project_name(path)
         action = "Создан" if is_new else "Открыт"
+        name = os.path.splitext(os.path.basename(path))[0]
         self._app.notify(f"{action}: {os.path.basename(path)}", timeout=3)
+        self._app.flash(f"{action}: {name}", "success" if is_new else "information")
 
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen
