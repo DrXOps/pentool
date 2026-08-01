@@ -131,16 +131,14 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         try:
             entries = await repeater_api.get_history(limit=20)
             if not entries:
-                # No history — create default tab
                 self.call_after_refresh(self.action_new_tab)
                 return
 
-            # Group entries by tab_name (most recent per tab)
-            tabs_dict = {}
-            for entry in reversed(entries):  # oldest first
+            # Group entries by tab_name — keep the most recent entry per tab
+            tabs_dict: dict = {}
+            for entry in reversed(entries):  # oldest first → newest wins
                 tabs_dict[entry.tab_name] = entry
 
-            # Create tabs from history
             for tab_name, entry in tabs_dict.items():
                 self._tab_counter += 1
                 tab_id = f"tab-{self._tab_counter}"
@@ -149,17 +147,14 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
                 state = _TabState(tab_id, tab_name)
                 state.request_text = raw
                 self._tabs.append(state)
-
-                # Mount tab UI
                 self.call_after_refresh(self._create_tab_ui, tab_id, state)
 
-            # If no tabs were created, create default
             if not self._tabs:
                 self.call_after_refresh(self.action_new_tab)
 
         except Exception as exc:
-            logger.warning("_do_load_tabs failed: %s", exc)
-            # Fallback — create default tab
+            # Table may not exist yet in a brand-new project — that's fine
+            logger.debug("_do_load_tabs: %s", exc)
             self.call_after_refresh(self.action_new_tab)
 
     def _create_tab_ui(self, tab_id: str, state: _TabState) -> None:
@@ -412,15 +407,14 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             pass
 
     def _auto_save_tab_to_db(self, state: _TabState) -> None:
-        """Save tab state to database (non-blocking)."""
+        """Save tab state to database (non-blocking, fire-and-forget)."""
         try:
             from pentool.utils.parser import ParsedRequest, ParsedResponse, parse_http_request
-            # Parse the request text
             parsed = parse_http_request(state.request_text)
-            if not parsed or not parsed.url:
-                return  # Don't save empty/invalid requests
+            # Don't save empty or placeholder requests
+            if not parsed or not parsed.url or not parsed.method:
+                return
 
-            # Create a dummy response (we're just saving the tab state, not actual results)
             response = ParsedResponse(status=0, headers={}, body="")
 
             db_path = self._get_db_path()
@@ -429,14 +423,12 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
             from pentool.api.repeater_api import RepeaterAPI
             repeater_api = RepeaterAPI(db_path=db_path)
-
-            # Save asynchronously
             self.run_worker(
                 repeater_api.save_to_history(parsed, response, tab_name=state.name),
                 exclusive=False,
             )
         except Exception as exc:
-            logger.debug("_auto_save_tab_to_db failed: %s", exc)
+            logger.debug("_auto_save_tab_to_db: %s", exc)
 
     def _get_tab_state(self, tab_id: str) -> _TabState | None:
         for t in self._tabs:
