@@ -45,7 +45,9 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     DEFAULT_CSS = _CSS
 
     BINDINGS = [
-        Binding("ctrl+space", "send", "Send", show=True, priority=True),
+        # ctrl+space arrives as 'ctrl-at' (NUL / ^@) in most terminals
+        Binding("ctrl-at", "send", "Send (Ctrl+Space)", show=True, priority=True),
+        Binding("ctrl+space", "send", "Send", show=False, priority=True),
         Binding("ctrl+f", "toggle_search", "Search", show=False, priority=True),
     ]
 
@@ -610,7 +612,8 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             self.app.notify(f"Could not send to Intruder: {exc}", severity="error")
 
     def on_key(self, event) -> None:
-        if event.key == "ctrl+space":
+        # ctrl+space arrives as 'ctrl-at' (NUL/^@) in most terminals
+        if event.key in ("ctrl-at", "ctrl+space"):
             self.action_send()
             event.prevent_default()
         elif event.key == "ctrl+j":

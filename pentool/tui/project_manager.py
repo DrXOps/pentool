@@ -359,10 +359,11 @@ class ProjectManager:
 
     async def _reload_project_screens(self, path: str) -> None:
         """Reload data from DB into all screens after switching project."""
-        # 1. ProxyScreen
+        # 1. ProxyScreen — await directly so it runs after switch_db is done,
+        # not in a separate run_worker that races with switch_db's close().
         try:
             screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
-            screen.load_from_project()
+            await screen._reload_from_storage()
             logger.info("_reload_project_screens: proxy reloaded from %s", path)
         except Exception as exc:
             logger.debug("_reload_project_screens proxy: %s", exc)

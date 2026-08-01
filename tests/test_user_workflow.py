@@ -99,8 +99,8 @@ async def test_user_workflow_full():
         from pentool.api.repeater_api import RepeaterAPI
         repeater_api = RepeaterAPI(db_path=db_path)
 
-        # Симулируем отправку запроса (Ctrl+Space) и получение ответа
-        print("[USER] Отправляю запрос (Ctrl+Space)...")
+        # Симулируем отправку запроса (Ctrl+Space = ctrl-at в терминале) и получение ответа
+        print("[USER] Отправляю запрос (Ctrl+Space / ctrl-at)...")
         response = ParsedResponse(
             status=200,
             headers={"Content-Type": "text/html"},

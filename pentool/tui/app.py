@@ -475,9 +475,10 @@ class PentoolApp(App):
         key = event.key
 
         # ── Ctrl+Space: delegate to active screen (Repeater needs this) ────────
-        if key == "ctrl+space":
+        # In most terminals ctrl+space arrives as 'ctrl-at' (NUL / ^@)
+        if key in ("ctrl+space", "ctrl-at"):
             # Don't block — let it bubble to the active screen
-            # RepeaterScreen.on_key will handle it
+            # RepeaterScreen.on_key / BINDINGS will handle it
             return
 
         # ── Ctrl+A: select all text in focused TextArea or Input ──────────────
