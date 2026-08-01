@@ -24,8 +24,10 @@ def isolated_config(tmp_path):
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestAppCompose:
     @pytest.mark.asyncio
+    @pytest.mark.usefixtures("patch_tui_io")
     async def test_app_mounts_without_error(self) -> None:
         from pentool.tui.app import PentoolApp
         app = PentoolApp()
@@ -79,6 +81,7 @@ class TestAppCompose:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestModuleNavigation:
     @pytest.mark.asyncio
     async def test_switch_to_repeater(self) -> None:
@@ -132,6 +135,7 @@ class TestModuleNavigation:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestProxyScreenWidgets:
     @pytest.mark.asyncio
     async def test_http_table_in_dom(self) -> None:
@@ -163,6 +167,7 @@ class TestProxyScreenWidgets:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestRepeaterScreenWidgets:
     @pytest.mark.asyncio
     async def test_send_button_always_in_dom(self) -> None:
@@ -191,6 +196,7 @@ class TestRepeaterScreenWidgets:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestIntruderScreenWidgets:
     @pytest.mark.asyncio
     async def test_start_button_in_dom(self) -> None:

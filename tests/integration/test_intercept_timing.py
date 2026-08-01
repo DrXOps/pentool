@@ -41,7 +41,6 @@ def _make_intercepted_req(
 ) -> "InterceptedRequest":
     from pentool.modules.proxy import InterceptedRequest
     from datetime import datetime, timezone
-    import asyncio
 
     ireq = InterceptedRequest(
         id=req_id,
@@ -66,6 +65,7 @@ def _make_response(status: int = 200, body: str = "Hello from server") -> "Parse
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestInterceptTiming:
 
     @pytest.mark.asyncio

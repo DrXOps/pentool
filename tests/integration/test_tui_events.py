@@ -26,6 +26,7 @@ def isolated_config(tmp_path):
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestModuleTabsEvents:
     @pytest.mark.asyncio
     async def test_module_selected_event_posted(self) -> None:
@@ -84,6 +85,7 @@ class TestModuleTabsEvents:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestProxyScreenEvents:
     @pytest.mark.asyncio
     async def test_intercept_toggle(self) -> None:
@@ -115,6 +117,7 @@ class TestProxyScreenEvents:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestStatusBar:
     @pytest.mark.asyncio
     async def test_statusbar_shows_proxy_status(self) -> None:
@@ -130,6 +133,7 @@ class TestStatusBar:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestRepeaterFlow:
     @pytest.mark.asyncio
     async def test_load_request_populates_editor(self) -> None:
@@ -175,6 +179,7 @@ class TestRepeaterFlow:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestIntruderFlow:
     @pytest.mark.asyncio
     async def test_load_request_populates_positions(self) -> None:

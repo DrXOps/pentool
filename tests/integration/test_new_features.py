@@ -25,8 +25,10 @@ def isolated_config(tmp_path):
 # ── Sequencer ─────────────────────────────────────────────────────────────────
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestSequencerScreen:
     @pytest.mark.asyncio
+    @pytest.mark.usefixtures("patch_tui_io")
     async def test_sequencer_in_dom(self) -> None:
         """Sequencer screen mounts without errors."""
         from pentool.tui.app import PentoolApp
@@ -97,6 +99,7 @@ class TestSequencerScreen:
 # ── Target ────────────────────────────────────────────────────────────────────
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestTargetScreen:
     @pytest.mark.asyncio
     async def test_target_in_dom(self) -> None:
@@ -142,6 +145,7 @@ class TestTargetScreen:
 # ── Decoder ───────────────────────────────────────────────────────────────────
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestDecoderScreen:
     @pytest.mark.asyncio
     async def test_decoder_in_dom(self) -> None:
@@ -161,6 +165,7 @@ class TestDecoderScreen:
 # ── Dashboard Live Tab ────────────────────────────────────────────────────────
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestDashboardLiveTab:
     @pytest.mark.asyncio
     async def test_dashboard_in_dom(self) -> None:
@@ -177,22 +182,8 @@ class TestDashboardLiveTab:
             assert len(screens) > 0
 
     @pytest.mark.asyncio
-    async def test_dashboard_tabbed_content_in_dom(self) -> None:
-        """Dashboard contains TabbedContent with Overview and Live tabs."""
-        from pentool.tui.app import PentoolApp
-        from textual.widgets import TabbedContent
-
-        app = PentoolApp()
-        async with app.run_test(size=(120, 30)) as pilot:
-            await pilot.pause()
-            await pilot.press("H")
-            await pilot.pause()
-            tc = app.query("#dashboard-tabs")
-            assert len(tc) > 0
-
-    @pytest.mark.asyncio
-    async def test_live_dashboard_tab_exists(self) -> None:
-        """Live Dashboard tab is present in DOM."""
+    async def test_live_feed_in_dom(self) -> None:
+        """Dashboard live feed log is present."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
@@ -200,13 +191,14 @@ class TestDashboardLiveTab:
             await pilot.pause()
             await pilot.press("H")
             await pilot.pause()
-            live_tab = app.query("#live-dashboard")
-            assert len(live_tab) > 0
+            feed = app.query("#feed-log")
+            assert len(feed) > 0
 
 
 # ── Settings Network Tab ──────────────────────────────────────────────────────
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestSettingsNetworkTab:
     @pytest.mark.asyncio
     async def test_settings_network_tab_in_dom(self) -> None:
@@ -251,6 +243,7 @@ class TestSettingsNetworkTab:
 # ── Grep Match/Extract (Intruder Block 4.4) ────────────────────────────────────
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("patch_tui_io")
 class TestIntruderGrepBar:
     @pytest.mark.asyncio
     async def test_grep_bar_in_dom(self) -> None:
