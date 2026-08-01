@@ -390,9 +390,20 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.proxy.screen import ProxyScreen
                 screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
-                screen.action_clear_list()
-            except Exception:
-                pass
+                # Await directly — do NOT use action_clear_list() here because it
+                # spawns a run_worker that races with _reload_from_storage below.
+                proxy = self._proxy
+                if proxy:
+                    proxy.clear_requests()
+                await screen._do_clear_table()
+                try:
+                    screen.query_one("#req-editor").clear()
+                    screen.query_one("#resp-viewer").clear()
+                except Exception:
+                    pass
+                screen._selected_req_id = None
+            except Exception as exc:
+                logger.debug("_do_switch: clear for new project: %s", exc)
 
         # 4. Reload all screens — all awaited, never spawning sub-workers
         await self._reload_project_screens(path, is_new=is_new)
