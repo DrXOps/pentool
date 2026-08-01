@@ -374,7 +374,8 @@ class PentoolApp(App):
             logger.info("APP: last project not found: %s", path)
             return
         logger.info("APP: auto-opening last project: %s", path)
-        self._switch_project_db(path, is_new=False)
+        # Use the same exclusive worker path as manual open — no races
+        self._pm.switch_project_db(path, is_new=False)
 
     async def _check_for_updates(self) -> None:
         """Check for a new version in the background. Show notify if an update is available."""
@@ -470,16 +471,9 @@ class PentoolApp(App):
             pass
 
     def on_key(self, event) -> None:
-        """Global key handler: Ctrl+A select-all + vim proxy tab sequences + Ctrl+Space delegation."""
+        """Global key handler: Ctrl+A select-all + vim proxy tab sequences."""
         import time as _time_mod
         key = event.key
-
-        # ── Ctrl+Space: delegate to active screen (Repeater needs this) ────────
-        # In most terminals ctrl+space arrives as 'ctrl-at' (NUL / ^@)
-        if key in ("ctrl+space", "ctrl-at"):
-            # Don't block — let it bubble to the active screen
-            # RepeaterScreen.on_key / BINDINGS will handle it
-            return
 
         # ── Ctrl+A: select all text in focused TextArea or Input ──────────────
         if key == "ctrl+a":

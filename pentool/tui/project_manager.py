@@ -308,9 +308,24 @@ class ProjectManager:
     # ── Project switch ────────────────────────────────────────────────────────
 
     def switch_project_db(self, path: str, is_new: bool = False) -> None:
-        """Switch to a different .db file as the active project."""
+        """Switch to a different .db file as the active project.
+
+        If the proxy is running it is stopped first (with a notification),
+        then the DB switch happens in a single exclusive worker so concurrent
+        switch calls cannot race each other.
+        """
         if is_new:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+        # Stop proxy before switching DB — avoids writing to the wrong file
+        # and simplifies the concurrency story (one connection at a time).
+        if self._proxy and self._proxy.is_running:
+            self._app.notify(
+                "Proxy остановлен для переключения проекта",
+                severity="warning",
+                timeout=4,
+            )
+            self._app._stop_proxy()
 
         self._cfg.db_path = path
         self._app._project_path = path
@@ -327,27 +342,22 @@ class ProjectManager:
             except Exception:
                 pass
 
-        if is_new:
-            self._app.run_worker(self._init_new_db(path), exclusive=False, thread=False)
-            self._app.post_message(ProxyClearHistory())
-            # Reload Target and other screens for new project
-            self._app.run_worker(self._reload_project_screens(path), exclusive=False, thread=False)
-        else:
-            self._app.run_worker(
-                self._open_project_sequence(path),
-                exclusive=False,
-                thread=False,
-            )
+        # Single exclusive worker — no two switches can run in parallel.
+        self._app.run_worker(
+            self._do_switch(path, is_new),
+            exclusive=True,
+            thread=False,
+        )
 
         self.update_project_name(path)
-        action = "Created" if is_new else "Opened"
+        action = "Создан" if is_new else "Открыт"
         self._app.notify(f"{action}: {os.path.basename(path)}", timeout=3)
 
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen
             dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dash._populate_projects()
-            verb = "created" if is_new else "loaded"
+            verb = "создан" if is_new else "открыт"
             dash.log_activity(
                 f'Project "{os.path.splitext(os.path.basename(path))[0]}" {verb} from {path}',
                 "ok"
@@ -357,10 +367,41 @@ class ProjectManager:
 
     # ── Internal async helpers ────────────────────────────────────────────────
 
+    async def _do_switch(self, path: str, is_new: bool) -> None:
+        """Single entry point for all project switches.
+
+        Runs in an exclusive worker — no two switches can overlap.
+        Order is strict:
+          1. init_db (CREATE TABLE IF NOT EXISTS, migrations)
+          2. switch_db on ProxyService (close old connection, open new one)
+          3. clear in-memory proxy state if new project
+          4. reload all screens sequentially (no nested run_worker)
+        """
+        # 1. Ensure schema exists (safe for both new and existing DBs)
+        await self._init_new_db(path)
+
+        # 2. Switch HttpStorage to the new DB — sequential, no races
+        if self._proxy_service is not None:
+            await self._proxy_service.switch_db(path)
+            logger.info("_do_switch: storage switched to %s", path)
+
+        # 3. Clear in-memory proxy requests for a new project
+        if is_new:
+            from pentool.tui.messages import ProxyClearHistory
+            try:
+                from pentool.tui.screens.proxy.screen import ProxyScreen
+                screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
+                screen.action_clear_list()
+            except Exception:
+                pass
+
+        # 4. Reload all screens — all awaited, never spawning sub-workers
+        await self._reload_project_screens(path)
+
     async def _reload_project_screens(self, path: str) -> None:
-        """Reload data from DB into all screens after switching project."""
-        # 1. ProxyScreen — await directly so it runs after switch_db is done,
-        # not in a separate run_worker that races with switch_db's close().
+        """Reload data from DB into all screens. Called from _do_switch only."""
+
+        # 1. ProxyScreen — must come after switch_db is fully done
         try:
             screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
             await screen._reload_from_storage()
@@ -412,19 +453,14 @@ class ProjectManager:
         except Exception as exc:
             logger.warning("_init_new_db: %s", exc)
 
+    # _switch_storage_db и _open_project_sequence оставлены для совместимости
+    # с app.py (_reload_project_screens, _switch_storage_db, _open_project_sequence)
     async def _switch_storage_db(self, path: str) -> None:
-        try:
-            if self._proxy_service is not None:
-                await self._proxy_service.switch_db(path)
-                logger.info("_switch_storage_db: proxy_service switched to %s", path)
-        except Exception as exc:
-            logger.debug("_switch_storage_db error: %s", exc)
+        if self._proxy_service is not None:
+            await self._proxy_service.switch_db(path)
 
     async def _open_project_sequence(self, path: str) -> None:
-        await self._switch_storage_db(path)
-        await self._init_new_db(path)
-        await asyncio.sleep(0.05)
-        await self._reload_project_screens(path)
+        await self._do_switch(path, is_new=False)
 
     # ── Spider sessions ───────────────────────────────────────────────────────
 
