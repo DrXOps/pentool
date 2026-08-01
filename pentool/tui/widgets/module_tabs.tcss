@@ -3,7 +3,18 @@ ModuleTabs {
     width: 100%;
     background: $panel;
     border-bottom: solid $primary-darken-2;
+    layout: horizontal;
 }
 ModuleTabs Tabs {
     height: 3;
+    width: 1fr;
+}
+ModuleTabs #tooltip2 {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    dock: right;
+    content-align: right middle;
+    background: $panel;
+    display: none;
 }

@@ -207,6 +207,10 @@ class PentoolApp(App):
         Binding("ctrl+h", "proxy_tab('http')",      "HTTP History", show=False, priority=True),
         Binding("ctrl+i", "proxy_tab('intercept')", "Intercept",    show=False, priority=True),
         Binding("ctrl+w", "proxy_tab('ws')",        "WS History",   show=False, priority=True),
+        # Repeater send — ctrl+space arrives as ctrl-at (NUL/^@) in most terminals
+        # Handled at App level with priority so it fires regardless of focus depth
+        Binding("ctrl-at",    "repeater_send", "Send", show=False, priority=True),
+        Binding("ctrl+space", "repeater_send", "Send", show=False, priority=True),
     ]
 
     def __init__(self) -> None:
@@ -570,6 +574,16 @@ class PentoolApp(App):
         except Exception:
             pass
 
+    def action_repeater_send(self) -> None:
+        """Ctrl+Space / ctrl-at — отправить запрос в Repeater независимо от глубины фокуса."""
+        if self._active_module != "repeater":
+            return
+        try:
+            repeater = self.query_one(SCREEN_REPEATER, RepeaterScreen)
+            repeater.action_send()
+        except Exception:
+            pass
+
     # Modules available without an open project
     _FREE_MODULES = {"dashboard", "settings"}
 
@@ -593,6 +607,13 @@ class PentoolApp(App):
 
     def get_proxy_api(self) -> ProxyAPI:
         return self._proxy_api
+
+    def flash(self, message: str, severity: str = "information", timeout: float = 2.5) -> None:
+        """Краткое сообщение справа в строке модулей (tooltip2)."""
+        try:
+            self.query_one("#module-tabs", ModuleTabs).flash(message, severity, timeout)
+        except Exception:
+            pass
 
     def show_context_menu(
         self,

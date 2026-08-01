@@ -45,9 +45,6 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     DEFAULT_CSS = _CSS
 
     BINDINGS = [
-        # ctrl+space arrives as 'ctrl-at' (NUL / ^@) in most terminals
-        Binding("ctrl-at", "send", "Send (Ctrl+Space)", show=True, priority=True),
-        Binding("ctrl+space", "send", "Send", show=False, priority=True),
         Binding("ctrl+f", "toggle_search", "Search", show=False, priority=True),
     ]
 
@@ -286,6 +283,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             pass
         self._tabs = []
         self._active_tab_id = None
+        self._tab_counter = 0  # сброс счётчика — нумерация всегда с 1
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.tabbed_content.id != "repeater-tabs":
@@ -632,11 +630,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             self.app.notify(f"Could not send to Intruder: {exc}", severity="error")
 
     def on_key(self, event) -> None:
-        # ctrl+space arrives as 'ctrl-at' (NUL/^@) in most terminals
-        if event.key in ("ctrl-at", "ctrl+space"):
-            self.action_send()
-            event.prevent_default()
-        elif event.key == "ctrl+j":
+        if event.key == "ctrl+j":
             self.action_send()
             event.prevent_default()
 

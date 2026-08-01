@@ -7,7 +7,7 @@ from pathlib import Path
 from textual.app import ComposeResult
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Tab, Tabs
+from textual.widgets import Static, Tab, Tabs
 
 from pentool.tui.messages import ModuleSelected
 
@@ -46,6 +46,7 @@ class ModuleTabs(Widget):
     def compose(self) -> ComposeResult:
         tabs = [Tab(label, id=f"tab-{mod_id}") for mod_id, label, _ in MODULES]
         yield Tabs(*tabs, id="module-tabs-inner")
+        yield Static("", id="tooltip2", markup=True)
 
     def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
         if event.tab is None:
@@ -57,11 +58,7 @@ class ModuleTabs(Widget):
             self.post_message(ModuleSelected(module_id))
 
     def select_module(self, module_id: str) -> None:
-        """Programmatically switch tab (without posting event).
-
-        Args:
-            module_id: Module ID from MODULES.
-        """
+        """Programmatically switch tab (without posting event)."""
         self.active_module = module_id
         try:
             tabs = self.query_one("#module-tabs-inner", Tabs)
@@ -85,3 +82,38 @@ class ModuleTabs(Widget):
             tabs.refresh()
         except Exception:
             pass
+
+    def flash(self, message: str, severity: str = "information", timeout: float = 2.5) -> None:
+        """Показать краткое сообщение справа в строке модулей на timeout секунд.
+
+        severity: "information" | "warning" | "error" | "success"
+        """
+        colors = {
+            "information": "$primary",
+            "warning":     "$warning",
+            "error":       "$error",
+            "success":     "$success",
+        }
+        color = colors.get(severity, "$primary")
+        try:
+            tip = self.query_one("#tooltip2", Static)
+            tip.update(f"[{color}]{message}[/{color}]")
+            tip.display = True
+            # Отменяем предыдущий таймер если есть
+            if hasattr(self, "_tooltip2_timer") and self._tooltip2_timer is not None:
+                try:
+                    self._tooltip2_timer.stop()
+                except Exception:
+                    pass
+            self._tooltip2_timer = self.set_timer(timeout, self._hide_tooltip2)
+        except Exception:
+            pass
+
+    def _hide_tooltip2(self) -> None:
+        try:
+            tip = self.query_one("#tooltip2", Static)
+            tip.update("")
+            tip.display = False
+        except Exception:
+            pass
+        self._tooltip2_timer = None
