@@ -386,7 +386,7 @@ class IntruderAttack:
             length = len(body) if isinstance(body, bytes) else len(body.encode("utf-8", errors="replace"))
 
             # Build response_raw
-            from pentool.utils.parser import format_response_raw
+            from pentool.modules.scanner.checks.helpers import format_response_raw
             response_raw = format_response_raw(resp)
         except Exception as exc:
             error_msg = str(exc)
