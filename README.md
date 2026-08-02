@@ -137,6 +137,14 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
 
 ---
 
+## 🙏 Acknowledgments
+
+Special thanks to:
+
+- **[codeby.net](https://codeby.net/)** — For community support and feedback
+
+---
+
 ## 📄 License
 
 Distributed under the **AGPL-3.0** license. See [LICENSE](LICENSE) for details.  
