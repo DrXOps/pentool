@@ -346,10 +346,12 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
 
     def _load_tabs_from_db(self) -> None:
         """Load saved scanner tabs from DB on mount."""
+        # Always create default tab immediately — guarantees the full widget
+        # tree (_fill_results, detail panels) is mounted on the main thread.
+        # Then, if a project is open, patch the target URL from saved tabs.
+        self.action_new_tab()
         db_path = getattr(self.app, "db_path", None) or getattr(self.app, "_db_path", "")
         if not db_path:
-            # No project open — create default tab
-            self.action_new_tab()
             return
         from pentool.api.scanner_api import ScannerAPI
         from pentool.utils.http_client import HTTPClient
@@ -358,33 +360,42 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
         self.run_worker(self._do_load_tabs(scanner_api), exclusive=False)
 
     async def _do_load_tabs(self, scanner_api) -> None:
-        """Async worker to load tabs from DB."""
+        """Async worker — restore target URLs into already-mounted tabs."""
         try:
             tabs_data = await scanner_api.get_tabs()
             if not tabs_data:
-                # No saved tabs — create default tab
-                self.action_new_tab()
                 return
-            # Create tabs from saved data
-            for tab_data in tabs_data:
-                tab_name = tab_data.get("tab_name", "Scan")
-                target_url = tab_data.get("target_url", "")
-                self.action_new_tab(initial_url=target_url)
-                # Update tab name
-                if self._active_tab:
-                    self._active_tab.name = tab_name
+            # Patch the first tab's target URL (most recent save)
+            first = tabs_data[0]
+            target_url = first.get("target_url", "")
+            tab_name   = first.get("tab_name", "Scan")
+            if target_url:
+                def _apply():
+                    t = self._active_tab
+                    if t is None:
+                        return
                     try:
-                        tabs = self.query_one("#scanner-tabs", TabbedContent)
-                        active_pane = tabs.get_pane(self._active_tab_id)
-                        if active_pane:
-                            active_pane.label = tab_name
+                        self.query_one(f"#target-input-{t.tab_id}", Input).value = target_url
                     except Exception:
                         pass
+                    try:
+                        t.name = tab_name
+                        tabs = self.query_one("#scanner-tabs", TabbedContent)
+                        pane = tabs.get_pane(self._active_tab_id)
+                        if pane:
+                            pane.label = tab_name
+                    except Exception:
+                        pass
+                self.call_after_refresh(_apply)
+            # Extra saved tabs — create additional tabs for each beyond the first
+            for tab_data in tabs_data[1:]:
+                extra_url  = tab_data.get("target_url", "")
+                extra_name = tab_data.get("tab_name", "Scan")
+                self.call_after_refresh(
+                    self.action_new_tab, extra_url
+                )
         except Exception as exc:
             logger.debug("_do_load_tabs: %s", exc)
-            # Fallback to default tab
-            if not self._tabs:
-                self.action_new_tab()
 
     def _auto_save_tab(self, state: _ScanTabState) -> None:
         """Auto-save tab state (name, target URL) to DB."""

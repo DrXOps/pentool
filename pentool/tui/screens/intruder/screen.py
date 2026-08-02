@@ -61,14 +61,13 @@ class _IntruderFilterBar(Widget):
     DEFAULT_CSS = """
     _IntruderFilterBar {
         height: auto;
-        layout: horizontal;
+        layout: vertical;
     }
     _IntruderFilterBar #results-filter-bar,
     _IntruderFilterBar #grep-bar {
         height: auto;
         layout: horizontal;
         padding: 0;
-        width: auto;
     }
     _IntruderFilterBar Label {
         width: auto;
@@ -386,6 +385,7 @@ class IntruderScreen(AppMixin, Widget):
             if payloads and isinstance(payloads, list):
                 self._payloads = payloads
                 self._update_payload_select()
+                self._refresh_payload_list()
             self._state_loaded = True
         except Exception as exc:
             from pentool.core.logging import get_logger
