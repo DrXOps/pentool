@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.7] - 2026-08-03
+
+### Added
+- **Intruder**: Детальная панель с полным HTTP request/response при клике на результат
+- **Intruder**: Контекстное меню (правый клик) с опциями: Send to Repeater, Copy as curl, Copy as fetch, Open in Browser, Save as .txt
+- **Intruder**: Escape для скрытия детальной панели и возврата к списку
+- **Intruder**: `response_raw` теперь сохраняется в БД (автоматическая миграция)
+- **License**: FREE/PRO ограничения (FREE: threads max 5, delay min 100ms, Turbo отключен; PRO: threads max 200, delay от 0ms, Turbo активен)
+- **License**: `IntruderConfig` расширен полями для Turbo: `turbo_pipeline`, `turbo_keep_alive`, `turbo_rate_limit`
+- **Docs**: Блок 🙏 Acknowledgments в README (благодарность codeby.net)
+- **Docs**: `SECURITY_CHECKLIST.md` — полный чеклист для проверки лицензирования
+- **Website**: `website_donate_block.html` — готовый блок донатов с криптокошельками
+
+### Fixed
+- **Intruder**: Исправлен импорт `format_response_raw` (был неправильный модуль)
+- **Intruder**: Убран дублированный код после `_cm_get_raw_request()`
+- **Intruder**: Валидация маркеров `§§` перед запуском атаки
+- **Intruder**: `_running` флаг больше не застревает при ошибках
+
+### Changed
+- **Intruder**: Уведомление при старте атаки показывает `[FREE: limited]` для FREE лицензии
+- **Intruder**: Placeholder в Input полях обновляется в зависимости от лицензии
+- **Intruder**: Turbo checkbox disabled для FREE с tooltip "requires PRO license"
+
+---
+
 ## [0.1.5] - 2026-07-27
 
 ### 🐛 Fixed
