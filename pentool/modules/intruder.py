@@ -49,6 +49,10 @@ class IntruderConfig:
     delay_ms: int = 0
     follow_redirects: bool = False
     timeout: int = 30
+    # Turbo mode settings (PRO)
+    turbo_pipeline: bool = False       # HTTP pipelining
+    turbo_keep_alive: bool = True      # connection reuse
+    turbo_rate_limit: int | None = None  # requests per second limit
 
 
 def parse_markers(template: str) -> tuple[str, list[tuple[int, int]]]:

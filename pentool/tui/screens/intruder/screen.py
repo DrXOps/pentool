@@ -192,6 +192,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     BINDINGS = [
         Binding("ctrl+j", "start_attack", "Start Attack", show=False),
         Binding("ctrl+p", "toggle_pause", "Pause/Resume", show=False),
+        Binding("escape", "hide_detail", "Hide Detail", show=False),
     ]
 
     # RequestContextMenuMixin config
@@ -378,6 +379,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             panel.display = False
         except Exception:
             pass
+        # Применить ограничения для FREE лицензии
+        self._apply_license_limits()
 
     def _load_state_from_db(self) -> None:
         """Load saved Intruder state (template, attack type, payloads) from DB."""
@@ -387,6 +390,32 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             return
         api = IntruderAPI(db_path=db_path)
         self.run_worker(self._do_load_state(api), exclusive=False)
+
+    def _apply_license_limits(self) -> None:
+        """Применить ограничения для FREE лицензии."""
+        from pentool.core.license import get_session_license
+        license_info = get_session_license()
+        is_pro = license_info.has_feature("pro") if license_info else False
+
+        try:
+            threads_input = self.query_one("#input-threads", Input)
+            delay_input = self.query_one("#input-delay", Input)
+            turbo_checkbox = self.query_one("#chk-turbo", Checkbox)
+
+            if not is_pro:
+                # FREE: threads max 5, delay min 100ms, Turbo недоступен
+                threads_input.placeholder = "Max 5"
+                delay_input.placeholder = "Min 100"
+                turbo_checkbox.disabled = True
+                turbo_checkbox.tooltip = "⚡ Turbo mode requires PRO license"
+            else:
+                # PRO: без ограничений
+                threads_input.placeholder = "Max 200"
+                delay_input.placeholder = "0"
+                turbo_checkbox.disabled = False
+                turbo_checkbox.tooltip = "⚡ Turbo: HTTP pipelining, connection pooling"
+        except Exception as exc:
+            logger.debug("_apply_license_limits error: %s", exc)
 
     async def _do_load_state(self, api: "IntruderAPI") -> None:
         """Async worker to load state from DB."""
@@ -1039,16 +1068,28 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self.app.notify("No payloads configured", severity="warning", timeout=3)
             return
 
+        # Применить лимиты в зависимости от лицензии
+        from pentool.core.license import get_session_license
+        license_info = get_session_license()
+        is_pro = license_info.has_feature("pro") if license_info else False
+
         try:
             threads = int(self.query_one("#input-threads", Input).value or "10")
-            threads = max(1, min(threads, 200))
+            if not is_pro:
+                threads = max(1, min(threads, 5))  # FREE: max 5
+            else:
+                threads = max(1, min(threads, 200))  # PRO: max 200
         except Exception:
-            threads = 10
+            threads = 5 if not is_pro else 10
+
         try:
             delay_ms = int(self.query_one("#input-delay", Input).value or "0")
-            delay_ms = max(0, delay_ms)
+            if not is_pro:
+                delay_ms = max(100, delay_ms)  # FREE: min 100ms
+            else:
+                delay_ms = max(0, delay_ms)  # PRO: без ограничений
         except Exception:
-            delay_ms = 0
+            delay_ms = 100 if not is_pro else 0
 
         config = IntruderConfig(
             template=template,
@@ -1064,10 +1105,14 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         db_path = self._get_db_path()
         self._api = IntruderAPI(db_path=db_path)
 
-        # Turbo mode — no artificial delay, connection pooling (PRO)
+        # Turbo mode — HTTP pipelining, connection pooling (PRO only)
         turbo_mode = False
         try:
-            turbo_mode = self.query_one("#chk-turbo", Checkbox).value
+            if is_pro:
+                turbo_mode = self.query_one("#chk-turbo", Checkbox).value
+            else:
+                # FREE: принудительно выключить Turbo
+                self.query_one("#chk-turbo", Checkbox).value = False
         except Exception:
             pass
 
@@ -1078,7 +1123,11 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
         total_payloads = sum(len(ps) for ps in payload_sets)
         mode_label = " [⚡ Turbo]" if turbo_mode else ""
-        self.app.notify(f"Attack started: {total_payloads} payload(s){mode_label}", timeout=3)
+        limit_label = "" if is_pro else " [FREE: limited]"
+        self.app.notify(
+            f"Attack started: {total_payloads} payload(s){mode_label}{limit_label}",
+            timeout=3
+        )
         self.run_worker(self._run_attack(config, turbo_mode=turbo_mode), exclusive=False, name="intruder-attack")
 
     async def _run_attack(self, config: IntruderConfig, turbo_mode: bool = False) -> None:
@@ -1301,6 +1350,15 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         except Exception as exc:
             logger.debug("_load_detail_content: resp_view error: %s", exc)
 
+    def action_hide_detail(self) -> None:
+        """Скрыть детальную панель (Escape)."""
+        try:
+            panel = self.query_one("#intruder-detail-panel")
+            panel.display = False
+            self._current_result = None
+        except Exception:
+            pass
+
     def on__base_http_widget_context_menu_request(self, event) -> None:
         """Правый клик на HttpView → контекстное меню."""
         self.cm_open_text_menu(event.screen_x, event.screen_y)
@@ -1310,11 +1368,11 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         if self._current_result:
             return self._current_result.request_raw
         return ""
-        _col_names = ["#", "Payload(s)", "Status", "Length", "Time(ms)", "Error"]
-        col_name = _col_names[event.column_index] if event.column_index < len(_col_names) else ""
-        if not col_name:
+
+    def _apply_sort(self) -> None:
+        """Apply current sort to results table."""
+        if not self._sort_col:
             return
-        self._sort_reverse = (self._sort_col == col_name) and not self._sort_reverse
         self._sort_col = col_name
         event.data_table.sort(col_name, reverse=self._sort_reverse)
 
