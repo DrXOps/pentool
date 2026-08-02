@@ -352,8 +352,8 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
             self.action_new_tab()
             return
         from pentool.api.scanner_api import ScannerAPI
-        from pentool.services.http_client import get_http_client
-        http_client = get_http_client()
+        from pentool.utils.http_client import HTTPClient
+        http_client = HTTPClient(timeout=20.0, follow_redirects=True, verify_ssl=False)
         scanner_api = ScannerAPI(db_path=db_path, http_client=http_client)
         self.run_worker(self._do_load_tabs(scanner_api), exclusive=False)
 
