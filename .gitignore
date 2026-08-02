@@ -34,6 +34,12 @@ docs/modules/
 project.json
 testpayloads.txt
 
+# Временные файлы документации (не в git)
+CHANGELOG.md
+DEPLOY_INSTRUCTIONS.md
+SECURITY_CHECKLIST.md
+website_donate_block.html
+
 # PRO files — live in pro/ submodule (docxqwerty/pentool-pro)
 pentool/modules/intruder_turbo.py
 pentool/plugins/builtin/payloads_pro.py
