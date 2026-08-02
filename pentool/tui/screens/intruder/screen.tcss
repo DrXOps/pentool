@@ -275,3 +275,26 @@ IntruderScreen #toolbar Input {
     padding: 0 1;
     background: $surface;
 }
+
+/* Detail panel for request/response */
+IntruderScreen #intruder-detail-panel {
+    height: 20;
+    layout: horizontal;
+    border-top: solid $primary;
+}
+
+IntruderScreen .detail-col {
+    width: 1fr;
+    layout: vertical;
+}
+
+IntruderScreen .detail-label {
+    height: 1;
+    background: $panel;
+    color: $text;
+    padding: 0 1;
+}
+
+IntruderScreen .detail-view {
+    height: 1fr;
+}

@@ -166,14 +166,15 @@ class IntruderAPI(ExportableAPI):
             await db.execute(
                 """INSERT INTO intruder_results
                    (project_id, attack_id, request_number, payload_values, request_raw,
-                    response_status, response_length, response_time_ms, error, timestamp)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    response_raw, response_status, response_length, response_time_ms, error, timestamp)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     project_id,
                     result.attack_id,
                     result.request_number,
                     json.dumps(result.payload_values),
                     result.request_raw,
+                    result.response_raw,
                     result.response_status,
                     result.response_length,
                     result.response_time_ms,
@@ -199,7 +200,7 @@ class IntruderAPI(ExportableAPI):
             if attack_id:
                 cursor = await db.execute(
                     """SELECT id, attack_id, request_number, payload_values, request_raw,
-                              response_status, response_length, response_time_ms, error, timestamp
+                              response_raw, response_status, response_length, response_time_ms, error, timestamp
                        FROM intruder_results WHERE attack_id = ?
                        ORDER BY request_number LIMIT ?""",
                     (attack_id, limit),
@@ -207,7 +208,7 @@ class IntruderAPI(ExportableAPI):
             else:
                 cursor = await db.execute(
                     """SELECT id, attack_id, request_number, payload_values, request_raw,
-                              response_status, response_length, response_time_ms, error, timestamp
+                              response_raw, response_status, response_length, response_time_ms, error, timestamp
                        FROM intruder_results
                        ORDER BY timestamp DESC LIMIT ?""",
                     (limit,),
@@ -216,7 +217,7 @@ class IntruderAPI(ExportableAPI):
             results = []
             for row in rows:
                 try:
-                    ts = datetime.fromisoformat(row[9])
+                    ts = datetime.fromisoformat(row[10])
                     if ts.tzinfo is None:
                         ts = ts.replace(tzinfo=timezone.utc)
                 except Exception:
@@ -228,10 +229,11 @@ class IntruderAPI(ExportableAPI):
                         request_number=row[2],
                         payload_values=json.loads(row[3]) if row[3] else [],
                         request_raw=row[4],
-                        response_status=row[5],
-                        response_length=row[6],
-                        response_time_ms=row[7],
-                        error=row[8],
+                        response_raw=row[5],
+                        response_status=row[6],
+                        response_length=row[7],
+                        response_time_ms=row[8],
+                        error=row[9],
                         timestamp=ts,
                     )
                 )
@@ -249,6 +251,7 @@ class IntruderAPI(ExportableAPI):
                     "request_number": r.request_number,
                     "payload_values": r.payload_values,
                     "request_raw": r.request_raw,
+                    "response_raw": r.response_raw,
                     "response_status": r.response_status,
                     "response_length": r.response_length,
                     "response_time_ms": r.response_time_ms,
@@ -281,6 +284,7 @@ class IntruderAPI(ExportableAPI):
                     request_number=rd.get("request_number", 0),
                     payload_values=rd.get("payload_values", []),
                     request_raw=rd.get("request_raw", ""),
+                    response_raw=rd.get("response_raw"),
                     response_status=rd.get("response_status"),
                     response_length=rd.get("response_length"),
                     response_time_ms=rd.get("response_time_ms"),

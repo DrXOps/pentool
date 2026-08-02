@@ -36,9 +36,10 @@ from textual.message import Message as _Message
 from pentool.api.intruder_api import AttackType, IntruderAttack, IntruderConfig, IntruderResult, count_markers, generate_numeric_payloads, process_payload
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
-from pentool.tui.widgets.request_editor import _build_http_highlights, _load_into_textarea
+from pentool.tui.widgets.request_editor import _build_http_highlights, _load_into_textarea, HttpView
 from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -183,7 +184,7 @@ _ATTACK_DESCRIPTIONS = {
     AttackType.CLUSTER_BOMB:  "Cartesian product of all sets",
 }
 
-class IntruderScreen(AppMixin, Widget):
+class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     """Intruder module screen."""
 
     DEFAULT_CSS = _CSS
@@ -193,6 +194,12 @@ class IntruderScreen(AppMixin, Widget):
         Binding("ctrl+p", "toggle_pause", "Pause/Resume", show=False),
     ]
 
+    # RequestContextMenuMixin config
+    _cm_show_copy_url = False
+    _cm_show_send_repeater = True
+    _cm_show_send_intruder = False  # не отправляем в себя
+    _cm_show_send_scanner = False
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._payloads: list[list[str]] = [[]]
@@ -200,6 +207,7 @@ class IntruderScreen(AppMixin, Widget):
         self._attack_type: AttackType = AttackType.SNIPER
         self._api = None
         self._all_results: list[IntruderResult] = []
+        self._current_result: IntruderResult | None = None  # для детальной панели
         self._filter_status: str | None = None
         self._filter_len_gt: int | None = None
         self._filter_len_lt: int | None = None
@@ -334,6 +342,16 @@ class IntruderScreen(AppMixin, Widget):
                 zebra_stripes=True,
             )
 
+            # Детальная панель (изначально скрыта)
+            with Horizontal(id="intruder-detail-panel", classes="intruder-detail-panel"):
+                with Vertical(id="detail-request-col", classes="detail-col"):
+                    yield Static("Request", classes="detail-label")
+                    yield HttpView(id="detail-request", classes="detail-view")
+                yield ResizeHandle("detail-request-col", "detail-response-col")
+                with Vertical(id="detail-response-col", classes="detail-col"):
+                    yield Static("Response", classes="detail-label")
+                    yield HttpView(id="detail-response", classes="detail-view")
+
         yield Static(
             "Ctrl+J: Start Attack  │  Ctrl+P: Pause/Resume  │  M: Context menu",
             id="status-bar",
@@ -354,6 +372,12 @@ class IntruderScreen(AppMixin, Widget):
         self._setup_tooltips()
         # Load saved state from DB
         self._load_state_from_db()
+        # Скрыть детальную панель изначально
+        try:
+            panel = self.query_one("#intruder-detail-panel")
+            panel.display = False
+        except Exception:
+            pass
 
     def _load_state_from_db(self) -> None:
         """Load saved Intruder state (template, attack type, payloads) from DB."""
@@ -1233,6 +1257,59 @@ class IntruderScreen(AppMixin, Widget):
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
         if event.data_table.id != "results-table":
             return
+        # Сортировка по колонке (существующая логика)
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """При выборе строки — показать детали."""
+        if event.data_table.id != "results-table":
+            return
+        idx = event.cursor_row
+        if idx < 0 or idx >= len(self._all_results):
+            return
+        self._show_detail(self._all_results[idx])
+
+    def _show_detail(self, result: IntruderResult) -> None:
+        """Показать детальную панель с request/response."""
+        self._current_result = result
+
+        req_raw = result.request_raw or ""
+        resp_raw = result.response_raw or ""
+
+        # Показать панель
+        try:
+            panel = self.query_one("#intruder-detail-panel")
+            panel.display = True
+        except Exception:
+            pass
+
+        # Загрузить контент
+        self.call_after_refresh(self._load_detail_content, req_raw, resp_raw)
+
+    def _load_detail_content(self, req_raw: str, resp_raw: str) -> None:
+        """Загрузить HTTP request/response в виджеты."""
+        try:
+            req_view = self.query_one("#detail-request", HttpView)
+            req_view.load_raw_http(req_raw)
+        except Exception as exc:
+            logger.debug("_load_detail_content: req_view error: %s", exc)
+        try:
+            resp_view = self.query_one("#detail-response", HttpView)
+            if resp_raw:
+                resp_view.load_raw_http(resp_raw)
+            else:
+                resp_view.clear()
+        except Exception as exc:
+            logger.debug("_load_detail_content: resp_view error: %s", exc)
+
+    def on__base_http_widget_context_menu_request(self, event) -> None:
+        """Правый клик на HttpView → контекстное меню."""
+        self.cm_open_text_menu(event.screen_x, event.screen_y)
+
+    def _cm_get_raw_request(self) -> str:
+        """Raw HTTP из текущего результата для контекстного меню."""
+        if self._current_result:
+            return self._current_result.request_raw
+        return ""
         _col_names = ["#", "Payload(s)", "Status", "Length", "Time(ms)", "Error"]
         col_name = _col_names[event.column_index] if event.column_index < len(_col_names) else ""
         if not col_name:

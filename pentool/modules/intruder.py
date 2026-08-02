@@ -32,10 +32,11 @@ class IntruderResult:
     request_number: int
     payload_values: list[str]          # values per position
     request_raw: str
-    response_status: int | None
-    response_length: int | None
-    response_time_ms: int | None
-    error: str | None
+    response_raw: str | None = None    # full HTTP response
+    response_status: int | None = None
+    response_length: int | None = None
+    response_time_ms: int | None = None
+    error: str | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -367,6 +368,7 @@ class IntruderAttack:
         status = None
         length = None
         error_msg = None
+        response_raw = None
 
         try:
             from pentool.utils.parser import parse_http_request
@@ -378,6 +380,10 @@ class IntruderAttack:
             status = resp.status
             body = resp.body if isinstance(resp.body, (bytes, str)) else b""
             length = len(body) if isinstance(body, bytes) else len(body.encode("utf-8", errors="replace"))
+
+            # Build response_raw
+            from pentool.utils.parser import format_response_raw
+            response_raw = format_response_raw(resp)
         except Exception as exc:
             error_msg = str(exc)
             logger.warning("INTRUDER: _send_request #%d error: %s", req_num, exc)
@@ -391,6 +397,7 @@ class IntruderAttack:
             request_number=req_num,
             payload_values=payload_values,
             request_raw=request_raw,
+            response_raw=response_raw,
             response_status=status,
             response_length=length,
             response_time_ms=elapsed_ms,

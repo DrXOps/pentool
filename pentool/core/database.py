@@ -137,6 +137,14 @@ async def init_db(db_path: str) -> None:
         except Exception:
             pass  # Column already exists — expected
 
+        # Migration: add response_raw to intruder_results (for detail panel)
+        try:
+            await db.execute(
+                "ALTER TABLE intruder_results ADD COLUMN response_raw TEXT DEFAULT NULL"
+            )
+        except Exception:
+            pass  # Column already exists — expected
+
         await db.commit()
 
 
