@@ -500,6 +500,12 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
                 Checkbox("HeaderInj",     value=True, id=f"chk-headerinj-{tab_id}",     classes="chk"),
                 Checkbox("BrokenAuth",    value=True, id=f"chk-brokenauth-{tab_id}",    classes="chk"),
                 Checkbox("JWT",           value=True, id=f"chk-jwt-{tab_id}",           classes="chk"),
+                Checkbox("NoSQLi",        value=True, id=f"chk-nosqli-{tab_id}",        classes="chk"),
+                Checkbox("GraphQL",       value=True, id=f"chk-graphql-{tab_id}",       classes="chk"),
+                Checkbox("ProtoPoll",     value=True, id=f"chk-protopoll-{tab_id}",     classes="chk"),
+                Checkbox("DOM XSS",       value=True, id=f"chk-domxss-{tab_id}",        classes="chk"),
+                Checkbox("OAuth",         value=True, id=f"chk-oauth-{tab_id}",         classes="chk"),
+                Checkbox("SensData",      value=True, id=f"chk-sensdata-{tab_id}",      classes="chk"),
                 id=f"checks-row-{tab_id}", classes="tab-checks-row",
             )
             opts_row = Horizontal(
@@ -1334,6 +1340,12 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
             "chk-headerinj":    "header_injection",
             "chk-brokenauth":   "broken_auth",
             "chk-jwt":          "jwt_none",
+            "chk-nosqli":       "nosql_injection",
+            "chk-graphql":      "graphql",
+            "chk-protopoll":    "prototype_pollution",
+            "chk-domxss":       "dom_xss",
+            "chk-oauth":        "oauth",
+            "chk-sensdata":     "sensitive_data",
         }
         selected = []
         for chk_id, check_name in check_map.items():

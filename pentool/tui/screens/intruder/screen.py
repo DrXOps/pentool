@@ -266,6 +266,8 @@ class IntruderScreen(AppMixin, Widget):
             yield Input("10", id="input-threads", placeholder="10", compact=True, type="integer")
             yield Label("Delay(ms):", classes="toolbar-label")
             yield Input("0",  id="input-delay",   placeholder="0",  compact=True, type="integer")
+            yield Static(" │ ", classes="toolbar-sep")
+            yield Checkbox("⚡ Turbo", id="chk-turbo", value=False)
 
         with Horizontal(id="top-area"):
             yield from self._compose_positions()
@@ -1032,26 +1034,46 @@ class IntruderScreen(AppMixin, Widget):
         db_path = self._get_db_path()
         self._api = IntruderAPI(db_path=db_path)
 
+        # Turbo mode — no artificial delay, connection pooling (PRO)
+        turbo_mode = False
+        try:
+            turbo_mode = self.query_one("#chk-turbo", Checkbox).value
+        except Exception:
+            pass
+
         self._running = True
         self._all_results = []
         self._clear_results()
         self._set_running_state(True)
 
         total_payloads = sum(len(ps) for ps in payload_sets)
-        self.app.notify(f"Attack started: {total_payloads} payload(s)", timeout=3)
-        self.run_worker(self._run_attack(config), exclusive=True, name="intruder-attack")
+        mode_label = " [⚡ Turbo]" if turbo_mode else ""
+        self.app.notify(f"Attack started: {total_payloads} payload(s){mode_label}", timeout=3)
+        self.run_worker(self._run_attack(config, turbo_mode=turbo_mode), exclusive=True, name="intruder-attack")
 
-    async def _run_attack(self, config: IntruderConfig) -> None:
-        attack = IntruderAttack(config, db_path=self._get_db_path())
+    async def _run_attack(self, config: IntruderConfig, turbo_mode: bool = False) -> None:
+        if turbo_mode:
+            try:
+                from pentool.modules.intruder_turbo import TurboIntruderAttack
+                attack = TurboIntruderAttack(config)
+                logger.info("INTRUDER: using TurboIntruderAttack")
+            except ImportError:
+                attack = IntruderAttack(config, db_path=self._get_db_path())
+                logger.warning("INTRUDER: Turbo not available, falling back to standard")
+        else:
+            attack = IntruderAttack(config, db_path=self._get_db_path())
         self._current_attack = attack
 
         logger.info("INTRUDER: _run_attack started, type=%s", config.attack_type)
 
         def on_result(result: IntruderResult) -> None:
-            self._on_result(result)
+            # _run_attack runs inside a Textual worker (same event loop),
+            # so call_after_refresh is safe and ensures UI updates on the
+            # correct thread.
+            self.call_after_refresh(self._on_result, result)
 
         def on_progress(done: int, total: int) -> None:
-            self._on_progress(done, total)
+            self.call_after_refresh(self._on_progress, done, total)
 
         try:
             await attack.run(on_result, on_progress)
