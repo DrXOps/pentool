@@ -8,7 +8,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Downloads](https://img.shields.io/pypi/dm/pentool)](https://pypi.org/project/pentool/)
 
-🌐 **Languages:** [English](README.md) · [Русский](README_RU.md) · [中文](README_ZH.md) · [हिन्दी](README_HI.md)
+🌐 **Languages:** [English](README.md) · [Русский](docs/i18n/ru/README.md) · [中文](docs/i18n/zh/README.md) · [हिन्दी](docs/i18n/hi/README.md)
 
 ---
 
