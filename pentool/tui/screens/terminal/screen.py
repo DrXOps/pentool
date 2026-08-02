@@ -7,7 +7,6 @@ import select
 import signal
 import subprocess
 import threading
-import time
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -161,7 +160,6 @@ class TerminalScreen(Widget):
             except Exception:
                 pass
             try:
-                time.sleep(0.3)
                 os.kill(self._shell_pid, signal.SIGKILL)
             except Exception:
                 pass
@@ -172,8 +170,8 @@ class TerminalScreen(Widget):
             except Exception:
                 pass
             self._pty_master = None
-        if self._reader_thread and self._reader_thread.is_alive():
-            self._reader_thread.join(timeout=1.0)
+        # Reader thread is daemon=True — it will exit on its own when _running=False
+        # No join needed; avoids blocking the event loop on unmount
 
     def on_unmount(self) -> None:
         self._stop()

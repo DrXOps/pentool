@@ -10,7 +10,8 @@ from urllib.parse import urlparse, urlencode, urlunparse
 
 from pentool.api.scanner_api import ScannerAPI, Finding
 from pentool.api.spider_api import SpiderAPI
-from pentool.core.event_bus import EventBus, get_event_bus
+from pentool.core.event_bus import EventBus
+from pentool.services.base_service import BaseService
 from pentool.core.events import (
     FindingDiscovered,
     ScanFinished,
@@ -41,7 +42,7 @@ class ScanConfig:
     on_request_sent: Callable | None = None
 
 
-class ScanService:
+class ScanService(BaseService):
     """Orchestrates: Spider → URL collection → ScanEngine → EventBus.
 
     Has no knowledge of Textual. Launched via async @work in ScannerScreen.
@@ -59,11 +60,9 @@ class ScanService:
         tui_loop: asyncio.AbstractEventLoop | None = None,
         on_log: Callable[[str], None] | None = None,
     ) -> None:
+        super().__init__(event_bus=event_bus, tui_loop=tui_loop, on_log=on_log)
         self._scanner = scanner_api
         self._spider = spider_api
-        self._bus = event_bus or get_event_bus()
-        self._tui_loop = tui_loop         # main thread loop for emit_threadsafe
-        self._on_log = on_log             # callback for TUI log (optional)
         self._stop_requested = False
 
     # ── public API ─────────────────────────────────────────────────────────────
@@ -319,20 +318,3 @@ class ScanService:
             self._log(f"[yellow]CRAWL warn:[/yellow] {exc}")
             if base_url not in all_scan_targets:
                 all_scan_targets.append(base_url)
-
-    def _emit(self, event) -> None:
-        """Emit event: via emit_threadsafe if tui_loop is set, otherwise direct emit."""
-        try:
-            if self._tui_loop and not self._tui_loop.is_closed():
-                self._bus.emit_threadsafe(event, self._tui_loop)
-            else:
-                self._bus.emit(event)
-        except Exception as exc:
-            logger.debug("ScanService._emit error: %s", exc)
-
-    def _log(self, msg: str) -> None:
-        if self._on_log:
-            try:
-                self._on_log(msg)
-            except Exception:
-                pass

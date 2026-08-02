@@ -39,9 +39,14 @@ class OptionCycler(Static):
     DEFAULT_CSS = _CSS
 
     class Changed(Message):
-        def __init__(self, value: str) -> None:
+        def __init__(self, cycler: "OptionCycler", value: str) -> None:
             super().__init__()
+            self.option_cycler = cycler
             self.value = value
+
+        @property
+        def control(self):  # type: ignore[override]
+            return self.option_cycler
 
     def __init__(self, options: list[tuple[str, str]], initial: str = "", **kwargs) -> None:
         """options: list of (label, value)"""
@@ -75,7 +80,7 @@ class OptionCycler(Static):
     def on_click(self) -> None:
         self._idx = (self._idx + 1) % len(self._options)
         self._update_label()
-        self.post_message(self.Changed(self.value))
+        self.post_message(self.Changed(self, self.value))
 
 
 class SettingsScreen(Widget):
@@ -393,10 +398,9 @@ class SettingsScreen(Widget):
             self._open_ca_cert()
 
     def on_option_cycler_changed(self, event: OptionCycler.Changed) -> None:
-        # Determine the event source from the widget hierarchy
+        # Determine the event source via event.control (returns the OptionCycler)
         try:
-            # event.control — message source (standard Textual Message attribute)
-            widget = event.control  # type: ignore[attr-defined]
+            widget = event.control
             wid = widget.id if widget else None
         except Exception:
             wid = None

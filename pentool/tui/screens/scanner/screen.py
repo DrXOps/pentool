@@ -820,10 +820,6 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
         if findings:
             self._tab_log(tab_id, f"Loaded [bold]{len(findings)}[/bold] findings from DB.")
 
-    def _setup_table(self) -> None:
-        """Initialize the active tab table — delegates to _setup_tab_table."""
-        self._setup_tab_table(self._active_tab_id)
-
     _FINDINGS_SCHEMA = pa.schema([
         ("_#",       pa.string()),
         ("Source",   pa.string()),
@@ -1791,10 +1787,11 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
                 svc.request_stop()
         except Exception:
             pass
-        # Fallback: stop engine directly if service is not available
+        # Fallback: stop via public API if service is not available
         try:
-            engine = self._scanner_api._get_engine()
-            engine.request_stop()
+            api = self._scanner_api
+            if api is not None:
+                self.run_worker(api.stop_scan(), exclusive=False)
         except Exception:
             pass
         self._log("[yellow]STOP[/yellow] Stop requested — finishing current tasks…")
@@ -2027,3 +2024,12 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
             self.app.notify("Marked as false positive", severity="information")
         except Exception as exc:
             logger.warning("_mark_fp_worker: %s", exc)
+
+    def get_scanner_export(self) -> dict:
+        """Экспорт данных Scanner для сохранения проекта."""
+        if self._scanner_api is None:
+            return {"findings": []}
+        try:
+            return self._scanner_api.export_project_data()
+        except Exception:
+            return {"findings": []}

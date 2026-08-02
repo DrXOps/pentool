@@ -210,6 +210,20 @@ class ScannerAPI(ExportableAPI):
     async def get_stats(self) -> dict:
         return await self._get_engine().get_stats()
 
+    async def get_request_count(self) -> int:
+        """Return total HTTP history request count from storage."""
+        try:
+            from pentool.storage.http_storage import HttpStorage
+            storage = HttpStorage()
+            await storage.init_db(self._db_path)
+            try:
+                return await storage.count()
+            finally:
+                await storage.close()
+        except Exception as exc:
+            logger.debug("ScannerAPI.get_request_count: %s", exc)
+            return 0
+
     async def get_host_count(self) -> int:
         try:
             from pentool.storage.http_storage import HttpStorage

@@ -642,12 +642,8 @@ class AsyncSpider:
         parsed = urlparse(url)
         path = parsed.path
 
-        # Find numbers and UUIDs in path
-        for match in _PATH_SEGMENT_RE.finditer(path):
-            segment = match.group(1)
-            # Create variant with marker instead of segment — for passing to checks
-            variants.append(url)
-
+        # TODO: implement path variants (replace numeric/UUID segments with injection marker)
+        # Currently returns empty list to avoid adding duplicate original URLs to scan targets.
         return variants
 
     # ── utilities ─────────────────────────────────────────────────────────────

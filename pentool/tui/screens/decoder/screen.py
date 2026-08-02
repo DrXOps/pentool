@@ -299,7 +299,4 @@ class DecoderScreen(Widget):
         except Exception as exc:
             logger.debug("load_text: %s", exc)
 
-    # ── Keyboard shortcut ─────────────────────────────────────────────────────
 
-    def action_run_chain_binding(self) -> None:
-        self.action_run_chain()

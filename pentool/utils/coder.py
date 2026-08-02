@@ -19,11 +19,6 @@ def url_decode(text: str) -> str:
     return urllib.parse.unquote(text)
 
 
-def url_encode_all(text: str) -> str:
-    """URL-encode a string, encoding spaces as %20."""
-    return urllib.parse.quote(text, safe="")
-
-
 def url_decode_plus(text: str) -> str:
     """URL-decode a string, treating '+' as a space."""
     return urllib.parse.unquote_plus(text)

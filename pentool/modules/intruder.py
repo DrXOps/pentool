@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import AsyncIterator, Callable, Iterator
+from typing import Callable, Iterator
 
 from pentool.core.logging import get_logger
 

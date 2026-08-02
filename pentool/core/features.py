@@ -200,6 +200,12 @@ FEATURES = {
         FeatureStatus.ALPHA,
         "full"
     ),
+    "payloads_pro": Feature(
+        "payloads_pro",
+        "PRO payload sets for Intruder/Scanner",
+        FeatureStatus.ALPHA,
+        "full"
+    ),
 }
 
 
@@ -291,6 +297,8 @@ PLAN_NAMES = {
     "lite": "Lite",
     "medium": "Medium",
     "full": "Full (PRO)",
+    "pro": "PRO",
+    "enterprise": "Enterprise",
 }
 
 
@@ -299,6 +307,8 @@ PLAN_DESCRIPTIONS = {
     "lite": "Extended capabilities for professionals",
     "medium": "Advanced tools + plugins",
     "full": "Enterprise features + AI + API",
+    "pro": "Full PRO license — all features",
+    "enterprise": "Enterprise license — all features + custom integrations",
 }
 
 
@@ -321,7 +331,7 @@ def has_feature(feature_name: str, plan: str) -> bool:
         return False
 
     # Plan order from lowest to highest
-    plan_order = ["free", "lite", "medium", "full"]
+    plan_order = ["free", "lite", "medium", "full", "pro", "enterprise"]
 
     # If current plan >= required plan, feature is available
     try:
@@ -334,7 +344,11 @@ def has_feature(feature_name: str, plan: str) -> bool:
 
 def get_limit(limit_name: str, plan: str, default: int = 0) -> int | list:
     limits = LIMITS.get(limit_name, {})
-    return limits.get(plan.lower(), default)
+    plan_l = plan.lower()
+    # pro/enterprise inherit "full" limits if not explicitly defined
+    if plan_l not in limits and plan_l in ("pro", "enterprise"):
+        return limits.get("full", default)
+    return limits.get(plan_l, default)
 
 
 def get_feature_status(feature_name: str) -> str:

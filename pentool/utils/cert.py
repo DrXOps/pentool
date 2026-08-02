@@ -283,6 +283,7 @@ def _build_ssl_ctx(cert_pem: bytes, key_pem: bytes) -> ssl.SSLContext:
 
 
 # ── In-memory LRU cache for SSL contexts (1000 domains) ──────────────────────
+# TODO: consolidate with storage/lru_cache.py — key type differs (str vs int)
 
 class _SslCtxLRU:
     """Simple LRU cache for SSLContext objects.

@@ -50,9 +50,9 @@ def intruder_api():
 
     api.start_attack = AsyncMock(return_value=None)
     api.get_results = Mock(return_value=mock_results)
-    api.pause = Mock()
-    api.resume = Mock()
-    api.stop = Mock()
+    api.pause = AsyncMock()
+    api.resume = AsyncMock()
+    api.stop = AsyncMock()
     return api
 
 
@@ -141,19 +141,22 @@ class TestIntruderServiceStartAttack:
 class TestIntruderServiceControl:
     """Test IntruderService control methods."""
 
-    def test_pause(self, service, intruder_api):
+    @pytest.mark.asyncio
+    async def test_pause(self, service, intruder_api):
         """Test pause delegates to API."""
-        service.pause()
+        await service.pause()
         intruder_api.pause.assert_called_once()
 
-    def test_resume(self, service, intruder_api):
+    @pytest.mark.asyncio
+    async def test_resume(self, service, intruder_api):
         """Test resume delegates to API."""
-        service.resume()
+        await service.resume()
         intruder_api.resume.assert_called_once()
 
-    def test_stop(self, service, intruder_api):
+    @pytest.mark.asyncio
+    async def test_stop(self, service, intruder_api):
         """Test stop delegates to API."""
-        service.stop()
+        await service.stop()
         intruder_api.stop.assert_called_once()
 
 

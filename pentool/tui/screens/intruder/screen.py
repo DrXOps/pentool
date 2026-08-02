@@ -340,6 +340,9 @@ class IntruderScreen(AppMixin, Widget):
         )
 
     def on_mount(self) -> None:
+        # Сбросить _running при монтировании (на случай если застрял с прошлой сессии)
+        self._running = False
+        self._paused = False
         table = self.query_one("#results-table", DataTable)
         table.add_column("#",          width=5)
         table.add_column("Payload(s)", width=45)
@@ -581,10 +584,6 @@ class IntruderScreen(AppMixin, Widget):
                     timeout=2,
                 )
         self._redraw_results()
-
-    def on_select_changed(self, event) -> None:
-        # Kept for compatibility — Select is no longer used
-        pass
 
     def _open_attack_type_menu(self, btn: ToolbarButton) -> None:
         items = [
@@ -995,6 +994,12 @@ class IntruderScreen(AppMixin, Widget):
         if not template.strip():
             self.app.notify("Template is empty", severity="warning", timeout=3)
             return
+        if count_markers(template) == 0:
+            self.app.notify(
+                "No §§ markers in template — use Auto §§ or Add §§ to mark positions first",
+                severity="warning", timeout=5,
+            )
+            return
         logger.info("INTRUDER: action_start_attack: attack_type=%s", self._attack_type)
 
         processing_ops = self._get_processing_ops()
@@ -1006,7 +1011,7 @@ class IntruderScreen(AppMixin, Widget):
             payload_sets.append(processed)
 
         logger.info("INTRUDER: payload_sets=%s", [[len(p) for p in ps] for ps in payload_sets])
-        if not any(ps for ps in payload_sets):
+        if not any(p.strip() for ps in payload_sets for p in ps):
             self.app.notify("No payloads configured", severity="warning", timeout=3)
             return
 
@@ -1050,7 +1055,7 @@ class IntruderScreen(AppMixin, Widget):
         total_payloads = sum(len(ps) for ps in payload_sets)
         mode_label = " [⚡ Turbo]" if turbo_mode else ""
         self.app.notify(f"Attack started: {total_payloads} payload(s){mode_label}", timeout=3)
-        self.run_worker(self._run_attack(config, turbo_mode=turbo_mode), exclusive=True, name="intruder-attack")
+        self.run_worker(self._run_attack(config, turbo_mode=turbo_mode), exclusive=False, name="intruder-attack")
 
     async def _run_attack(self, config: IntruderConfig, turbo_mode: bool = False) -> None:
         if turbo_mode:
@@ -1136,6 +1141,17 @@ class IntruderScreen(AppMixin, Widget):
         self._paused = False
         self._set_running_state(False)
         self.app.notify("Attack stopped", severity="warning", timeout=3)
+
+    def on_worker_state_changed(self, event) -> None:
+        """Страховка: сбрасываем _running при любом исходе воркера."""
+        from textual.worker import WorkerState
+        if getattr(event.worker, "name", None) != "intruder-attack":
+            return
+        if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
+            if self._running:
+                logger.info("INTRUDER: on_worker_state_changed — resetting _running=False")
+                self._running = False
+                self._set_running_state(False)
 
     def _set_running_state(self, running: bool) -> None:
         try:
@@ -1364,6 +1380,16 @@ class IntruderScreen(AppMixin, Widget):
             self._highlight_nth_marker(self._active_set_idx)
         except Exception:
             pass
+
+    def get_intruder_export(self) -> dict:
+        """Экспорт данных Intruder для сохранения проекта."""
+        api = getattr(self, "_api", None)
+        if api is None:
+            return {"results": []}
+        try:
+            return api.export_project_data()
+        except Exception:
+            return {"results": []}
 
 
 class _InputDialog(ModalScreen):

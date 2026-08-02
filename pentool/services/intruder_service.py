@@ -5,14 +5,15 @@ from __future__ import annotations
 from typing import Callable
 
 from pentool.api.intruder_api import IntruderAPI, IntruderConfig, IntruderResult
-from pentool.core.event_bus import EventBus, get_event_bus
+from pentool.core.event_bus import EventBus
+from pentool.services.base_service import BaseService
 from pentool.core.events import IntruderFinished, IntruderResultAdded
 from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-class IntruderService:
+class IntruderService(BaseService):
     """Orchestrates IntruderAttack + emits events to EventBus.
 
     Has no knowledge of Textual. Launched via async @work.
@@ -29,10 +30,8 @@ class IntruderService:
         tui_loop=None,
         on_log: Callable[[str], None] | None = None,
     ) -> None:
+        super().__init__(event_bus=event_bus, tui_loop=tui_loop, on_log=on_log)
         self._api = intruder_api
-        self._bus = event_bus or get_event_bus()
-        self._tui_loop = tui_loop
-        self._on_log = on_log
 
     async def start_attack(
         self,
@@ -70,25 +69,16 @@ class IntruderService:
             self._emit(IntruderFinished(total_results=0, stopped_early=True, source="intruder"))
             return []
 
-    def pause(self) -> None:
-        self._api.pause()
+    async def pause(self) -> None:
+        await self._api.pause()
 
-    def resume(self) -> None:
-        self._api.resume()
+    async def resume(self) -> None:
+        await self._api.resume()
 
-    def stop(self) -> None:
-        self._api.stop()
+    async def stop(self) -> None:
+        await self._api.stop()
         self._emit(IntruderFinished(
             total_results=len(self._api.get_results()),
             stopped_early=True,
             source="intruder",
         ))
-
-    def _emit(self, event) -> None:
-        try:
-            if self._tui_loop and not self._tui_loop.is_closed():
-                self._bus.emit_threadsafe(event, self._tui_loop)
-            else:
-                self._bus.emit(event)
-        except Exception as exc:
-            logger.debug("IntruderService._emit error: %s", exc)

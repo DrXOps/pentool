@@ -141,6 +141,13 @@ def invalidate_session_license() -> None:
     _session_license = None
 
 
+def refresh_session_license(info: "LicenseInfo | None" = None) -> "LicenseInfo":
+    """Force-set session license (or re-read from disk if info is None)."""
+    global _session_license
+    _session_license = info or get_license()
+    return _session_license
+
+
 class FeatureNotAvailable(Exception):
     """Feature not available in the current plan."""
     def __init__(self, feature: str, plan_required: str = "pro"):
@@ -418,18 +425,3 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
         return False
 
 
-# Global license cache for current session
-_session_license: LicenseInfo | None = None
-
-
-def get_session_license() -> LicenseInfo:
-    global _session_license
-    if _session_license is None:
-        _session_license = get_license()
-    return _session_license
-
-
-def refresh_session_license(info: LicenseInfo | None = None) -> LicenseInfo:
-    global _session_license
-    _session_license = info or get_license()
-    return _session_license

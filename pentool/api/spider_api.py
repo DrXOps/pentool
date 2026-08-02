@@ -97,7 +97,7 @@ class SpiderAPI(ExportableAPI):
         self._stop_requested = True
         if self._spider is not None:
             try:
-                self._spider._stop_requested = True
+                self._spider._stop = True
             except Exception:
                 pass
 

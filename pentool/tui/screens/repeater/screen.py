@@ -324,6 +324,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
                 tab_widget.label = new_name
         except Exception:
             pass
+        self._auto_save_tab_to_db(state)
 
     def action_toggle_search(self) -> None:
         try:
@@ -481,7 +482,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             self.query_one("#btn-cancel", ToolbarButton).disabled = False
         except Exception:
             pass
-        self.run_worker(self._do_send(tab_id, raw), exclusive=True)
+        self.run_worker(self._do_send(tab_id, raw), exclusive=False, name="repeater-send")
 
     async def _do_send(self, tab_id: str, raw: str) -> None:
         db_path = self._get_db_path()
@@ -517,6 +518,19 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             pass
         self.app.notify(f"HTTP {resp.status} — {elapsed_ms}ms", timeout=2)
         await service.close()
+
+    def on_worker_state_changed(self, event) -> None:
+        from textual.worker import WorkerState
+        if getattr(event.worker, "name", None) != "repeater-send":
+            return
+        if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
+            if self._sending:
+                self._sending = False
+                try:
+                    self.query_one("#btn-send", ToolbarButton).disabled = False
+                    self.query_one("#btn-cancel", ToolbarButton).disabled = True
+                except Exception:
+                    pass
 
     def action_load_from_proxy(self) -> None:
         from pentool.tui.dialogs.load_from_proxy import LoadFromProxyDialog
@@ -603,7 +617,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
                     proxy.set_scope(result)
                 try:
                     from pentool.tui.app import PentoolApp
-                    cfg = getattr(self.app, "_config", None)
+                    cfg = getattr(self.app, "_cfg", None)
                     if cfg is not None:
                         cfg.scope = list(result)
                         cfg.save()

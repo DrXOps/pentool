@@ -510,23 +510,14 @@ class DashboardScreen(Widget):
 
     async def _fetch_stats(self, db_path: str) -> dict:
         from pentool.api.scanner_api import ScannerAPI
-        from pentool.storage.http_storage import HttpStorage
         result: dict = {
             "requests": 0, "hosts": 0,
             "findings": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
             "top_finding": "—",
         }
         try:
-            storage = HttpStorage()
-            await storage.init_db(db_path)
-            try:
-                result["requests"] = await storage.count()
-            finally:
-                await storage.close()
-        except Exception as exc:
-            logger.debug("_fetch_stats http_history: %s", exc)
-        try:
             api = ScannerAPI(db_path=db_path)
+            result["requests"] = await api.get_request_count()
             result["hosts"] = await api.get_host_count()
             scanner_stats = await api.get_stats()
             result["findings"]    = scanner_stats["findings"]

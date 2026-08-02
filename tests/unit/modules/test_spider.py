@@ -660,3 +660,43 @@ class TestPlaywrightFetchPage:
 
         await spider._fetch_page_playwright(page_mock, "https://example.com/page", result)
         assert result.total_requests == 6
+
+
+class TestSpiderAPIStop:
+    def test_spider_api_stop_sets_correct_attribute(self):
+        """SpiderAPI.stop() должен устанавливать правильный атрибут _stop в AsyncSpider."""
+        from pentool.api.spider_api import SpiderAPI
+        from pentool.modules.spider import AsyncSpider
+
+        api = SpiderAPI()
+        # Создаём mock-экземпляр AsyncSpider и подставляем его
+        spider = AsyncSpider()
+        api._spider = spider
+
+        # До вызова stop() флаг равен False
+        assert spider._stop is False
+
+        api.stop()
+
+        # После вызова stop() флаг должен быть True
+        assert spider._stop is True
+        # Флаг SpiderAPI тоже должен быть установлен
+        assert api._stop_requested is True
+
+    def test_spider_api_stop_without_spider(self):
+        """SpiderAPI.stop() не падает, если _spider ещё не создан (None)."""
+        from pentool.api.spider_api import SpiderAPI
+
+        api = SpiderAPI()
+        assert api._spider is None
+        # Не должно вызывать исключений
+        api.stop()
+        assert api._stop_requested is True
+
+    def test_extract_path_variants_no_duplicates(self):
+        """_extract_path_variants не должен возвращать оригинальный URL как вариант."""
+        spider = AsyncSpider()
+        url = "https://example.com/api/users/123/profile"
+        variants = spider._extract_path_variants(url, "example.com")
+        # Ни один вариант не должен совпадать с оригинальным URL (дубль)
+        assert url not in variants

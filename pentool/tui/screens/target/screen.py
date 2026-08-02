@@ -89,10 +89,10 @@ class TargetScreen(Widget):
             if scope_hosts:
                 for host in scope_hosts:
                     try:
-                        await api.set_in_scope(host, True)
+                        api.set_in_scope(host, True)
                     except Exception:
                         pass
-            tree_data = await api.get_tree()
+            tree_data = api.get_tree()
             self._build_tree(tree_data)
         except Exception as exc:
             logger.warning("TargetScreen._load_worker: %s", exc)
@@ -267,9 +267,9 @@ class TargetScreen(Widget):
     async def _set_scope_worker(self, host: str, in_scope: bool) -> None:
         try:
             api = self._get_api()
-            await api.set_in_scope(host, in_scope)
+            api.set_in_scope(host, in_scope)
             await api.save()
-            tree_data = await api.get_tree()
+            tree_data = api.get_tree()
             self._build_tree(tree_data)
             msg = f"{'Added' if in_scope else 'Removed'} {host} {'to' if in_scope else 'from'} scope"
             self.app.notify(msg, severity="information")
@@ -285,7 +285,7 @@ class TargetScreen(Widget):
     async def _clear_worker(self) -> None:
         try:
             api = self._get_api()
-            await api.clear()
+            api.clear()
             self._build_tree({})
             self.app.notify("Site map cleared", severity="information")
         except Exception as exc:
@@ -307,7 +307,7 @@ class TargetScreen(Widget):
     async def _export_worker(self, path: str) -> None:
         try:
             api = self._get_api()
-            await api.export_json(path)
+            api.export_json(path)
             self.app.notify(f"Exported: {path}", severity="information")
         except Exception as exc:
             self.app.notify(f"Export failed: {exc}", severity="error")
@@ -335,14 +335,6 @@ class TargetScreen(Widget):
                 self.run_worker(self._do_save_sitemap())
         except Exception as exc:
             logger.warning("add_request_from_proxy: %s", exc)
-
-    @work
-    async def _save_sitemap_worker(self) -> None:
-        try:
-            api = self._get_api()
-            await api.save()
-        except Exception as exc:
-            logger.debug("_save_sitemap_worker: %s", exc)
 
     async def _do_save_sitemap(self) -> None:
         try:

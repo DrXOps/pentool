@@ -106,7 +106,9 @@ def parse_http_request(raw: str) -> ParsedRequest:
     if path.startswith("http://") or path.startswith("https://"):
         url = path
     elif host:
-        scheme = "https" if "443" in host or headers.get("X-Forwarded-Proto", "") == "https" else "http"
+        _host_parts = host.split(":")
+        _is_https_port = len(_host_parts) > 1 and _host_parts[-1] == "443"
+        scheme = "https" if _is_https_port or headers.get("X-Forwarded-Proto", "") == "https" else "http"
         url = f"{scheme}://{host}{path}"
     else:
         url = path

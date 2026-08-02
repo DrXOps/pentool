@@ -39,7 +39,7 @@ class TargetAPI(ExportableAPI):
     def add_request(self, req: "ParsedRequest") -> None:
         self._sitemap.add_request(req)
 
-    async def get_tree(self) -> dict[str, list[SiteNode]]:
+    def get_tree(self) -> dict[str, list[SiteNode]]:
         return self._sitemap.get_tree()
 
     def get_hosts(self) -> list[str]:
@@ -48,7 +48,7 @@ class TargetAPI(ExportableAPI):
     def get_paths(self, host: str) -> list[SiteNode]:
         return self._sitemap.get_paths(host)
 
-    async def set_in_scope(self, host: str, in_scope: bool) -> None:
+    def set_in_scope(self, host: str, in_scope: bool) -> None:
         """Set the scope flag for a host.
 
         Args:
@@ -57,13 +57,13 @@ class TargetAPI(ExportableAPI):
         """
         self._sitemap.set_in_scope(host, in_scope)
 
-    async def get_scope(self) -> list[str]:
+    def get_scope(self) -> list[str]:
         return self._sitemap.get_scope()
 
-    async def clear(self) -> None:
+    def clear(self) -> None:
         self._sitemap.clear()
 
-    async def export_json(self, path: str) -> None:
+    def export_json(self, path: str) -> None:
         data = self._sitemap.export_json()
         Path(path).write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
         logger.info("SiteMap exported to %s", path)

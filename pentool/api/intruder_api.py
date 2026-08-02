@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-
+import asyncio
 
 from pentool.api.base_api import ExportableAPI
 from pentool.modules.intruder import (
@@ -38,6 +38,8 @@ class IntruderAPI(ExportableAPI):
     def __init__(self, db_path: str | None = None) -> None:
         self._db_path = db_path
         self._attack: IntruderAttack | None = None
+        self._task: asyncio.Task | None = None
+        self._restored_results: list = []
 
     async def start_attack(
         self,
@@ -57,8 +59,7 @@ class IntruderAPI(ExportableAPI):
         _on_result = on_result if on_result else lambda r: None
         _on_progress = on_progress if on_progress else lambda d, t: None
 
-        import asyncio
-        asyncio.create_task(self._attack.run(_on_result, _on_progress))
+        self._task = asyncio.create_task(self._attack.run(_on_result, _on_progress))
         return self._attack.attack_id if hasattr(self._attack, 'attack_id') else "turbo"
 
     async def pause(self) -> None:
@@ -80,7 +81,8 @@ class IntruderAPI(ExportableAPI):
             if hasattr(self._attack, 'get_results'):
                 return self._attack.get_results()
             return self._attack.results
-        return []
+        # Fallback: восстановленные из БД данные
+        return list(getattr(self, '_restored_results', []))
 
     def get_progress(self) -> tuple[int, int]:
         if self._attack:
@@ -262,13 +264,8 @@ class IntruderAPI(ExportableAPI):
         from pentool.modules.intruder import IntruderResult
 
         results_data = data.get("results", [])
-        # Create a dummy attack to store results
-        # without actually running an attack
-        if self._attack is None:
-            # Lazy initialization — just store in attribute
-            self._restored_results: list[IntruderResult] = []
-        else:
-            self._restored_results = []
+        # Reset restored results list
+        self._restored_results = []
 
         loaded = 0
         for rd in results_data:

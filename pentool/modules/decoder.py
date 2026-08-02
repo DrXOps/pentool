@@ -28,9 +28,6 @@ def _url_encode(s: str) -> str:
 def _url_decode(s: str) -> str:
     return urllib.parse.unquote(s)
 
-def _url_encode_all(s: str) -> str:
-    return urllib.parse.quote(s, safe="")
-
 def _base64_encode(s: str) -> str:
     return base64.b64encode(s.encode()).decode()
 
@@ -126,32 +123,32 @@ def _gzip_decode(s: str) -> str:
         return f"[gzip error: {exc}]"
 
 
-# ── Operations: (label, fn, is_hash) ──────────────────────────────────────────
+# ── Operations: (label, fn) ────────────────────────────────────────────────────
 
-OPERATIONS: list[tuple[str, Callable[[str], str], bool]] = [
-    ("URL Encode",       _url_encode,       False),
-    ("URL Decode",       _url_decode,       False),
-    ("Base64 Encode",    _base64_encode,    False),
-    ("Base64 Decode",    _base64_decode,    False),
-    ("Base64URL Encode", _base64url_encode, False),
-    ("Base64URL Decode", _base64url_decode, False),
-    ("HTML Encode",      _html_encode,      False),
-    ("HTML Decode",      _html_decode,      False),
-    ("Hex Encode",       _hex_encode,       False),
-    ("Hex Decode",       _hex_decode,       False),
-    ("Unicode Encode",   _unicode_encode,   False),
-    ("Unicode Decode",   _unicode_decode,   False),
-    ("JWT Decode",       _jwt_decode,       False),
-    ("Gzip+B64 Encode",  _gzip_encode,      False),
-    ("Gzip+B64 Decode",  _gzip_decode,      False),
-    ("MD5",              _md5,              True),
-    ("SHA1",             _sha1,             True),
-    ("SHA256",           _sha256,           True),
-    ("SHA512",           _sha512,           True),
+OPERATIONS: list[tuple[str, Callable[[str], str]]] = [
+    ("URL Encode",       _url_encode),
+    ("URL Decode",       _url_decode),
+    ("Base64 Encode",    _base64_encode),
+    ("Base64 Decode",    _base64_decode),
+    ("Base64URL Encode", _base64url_encode),
+    ("Base64URL Decode", _base64url_decode),
+    ("HTML Encode",      _html_encode),
+    ("HTML Decode",      _html_decode),
+    ("Hex Encode",       _hex_encode),
+    ("Hex Decode",       _hex_decode),
+    ("Unicode Encode",   _unicode_encode),
+    ("Unicode Decode",   _unicode_decode),
+    ("JWT Decode",       _jwt_decode),
+    ("Gzip+B64 Encode",  _gzip_encode),
+    ("Gzip+B64 Decode",  _gzip_decode),
+    ("MD5",              _md5),
+    ("SHA1",             _sha1),
+    ("SHA256",           _sha256),
+    ("SHA512",           _sha512),
 ]
 
-_OP_MAP: dict[str, Callable[[str], str]] = {label: fn for label, fn, _ in OPERATIONS}
-OP_LABELS: list[str] = [label for label, _, _ in OPERATIONS]
+_OP_MAP: dict[str, Callable[[str], str]] = {label: fn for label, fn in OPERATIONS}
+OP_LABELS: list[str] = [label for label, _ in OPERATIONS]
 
 
 def encode_op(operation: str, text: str) -> str:

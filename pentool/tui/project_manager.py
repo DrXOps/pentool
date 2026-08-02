@@ -206,8 +206,7 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.scanner.screen import ScannerScreen
                 scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
-                scanner_api = scanner_screen._scanner_api
-                scanner_export = scanner_api.export_project_data() if scanner_api else {"findings": []}
+                scanner_export = scanner_screen.get_scanner_export()
             except Exception:
                 scanner_export = {"findings": []}
             # Target sitemap
@@ -222,8 +221,7 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
                 intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
-                intruder_api = getattr(intruder_screen, "_api", None)
-                intruder_export = intruder_api.export_project_data() if intruder_api else {"results": []}
+                intruder_export = intruder_screen.get_intruder_export()
             except Exception:
                 intruder_export = {"results": []}
             # Spider sessions (from EventBus history)

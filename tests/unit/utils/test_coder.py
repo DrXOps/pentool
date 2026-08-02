@@ -17,7 +17,6 @@ from pentool.utils.coder import (
     url_decode,
     url_decode_plus,
     url_encode,
-    url_encode_all,
 )
 
 
@@ -35,7 +34,8 @@ class TestUrlEncoding:
         assert url_decode(url_encode(original)) == original
 
     def test_url_encode_all_no_safe(self) -> None:
-        result = url_encode_all("/path/to/resource")
+        # url_encode_all was identical to url_encode — now uses url_encode
+        result = url_encode("/path/to/resource")
         assert "/" not in result
 
     def test_url_decode_plus_converts_plus(self) -> None:

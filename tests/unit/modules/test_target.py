@@ -141,39 +141,35 @@ class TestSiteMap:
 # ─── TestTargetAPI ────────────────────────────────────────────────────────────
 
 class TestTargetAPI:
-    @pytest.mark.asyncio
-    async def test_get_tree(self, test_db: str) -> None:
+    def test_get_tree(self, test_db: str) -> None:
         from pentool.api.target_api import TargetAPI
         api = TargetAPI(db_path=test_db)
         api.add_request(make_req("http://example.com/test"))
-        tree = await api.get_tree()
+        tree = api.get_tree()
         assert "example.com" in tree
 
-    @pytest.mark.asyncio
-    async def test_set_in_scope(self, test_db: str) -> None:
+    def test_set_in_scope(self, test_db: str) -> None:
         from pentool.api.target_api import TargetAPI
         api = TargetAPI(db_path=test_db)
         api.add_request(make_req("http://example.com/"))
-        await api.set_in_scope("example.com", True)
-        scope = await api.get_scope()
+        api.set_in_scope("example.com", True)
+        scope = api.get_scope()
         assert "example.com" in scope
 
-    @pytest.mark.asyncio
-    async def test_clear(self, test_db: str) -> None:
+    def test_clear(self, test_db: str) -> None:
         from pentool.api.target_api import TargetAPI
         api = TargetAPI(db_path=test_db)
         api.add_request(make_req("http://example.com/"))
-        await api.clear()
-        tree = await api.get_tree()
+        api.clear()
+        tree = api.get_tree()
         assert tree == {}
 
-    @pytest.mark.asyncio
-    async def test_export_json(self, test_db: str, tmp_path: Path) -> None:
+    def test_export_json(self, test_db: str, tmp_path: "Path") -> None:
         from pentool.api.target_api import TargetAPI
         api = TargetAPI(db_path=test_db)
         api.add_request(make_req("http://example.com/export"))
         path = str(tmp_path / "sitemap.json")
-        await api.export_json(path)
+        api.export_json(path)
         data = json.loads(Path(path).read_text())
         assert "example.com" in data
 

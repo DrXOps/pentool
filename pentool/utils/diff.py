@@ -69,14 +69,3 @@ def diff_to_rich(diff: list[DiffLine]) -> str:
             lines.append(f" {escaped}")
     return "\n".join(lines)
 
-
-def diff_summary(text1: str, text2: str) -> dict[str, int]:
-    added = removed = unchanged = 0
-    for dl in diff_texts(text1, text2):
-        if dl.type == "+":
-            added += 1
-        elif dl.type == "-":
-            removed += 1
-        elif dl.type == " ":
-            unchanged += 1
-    return {"added": added, "removed": removed, "unchanged": unchanged}
