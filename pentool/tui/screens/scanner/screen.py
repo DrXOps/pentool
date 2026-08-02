@@ -467,15 +467,92 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
             pass
 
     def _fill_tab_body(self, tab_id: str, state: _ScanTabState, body: Vertical) -> None:
-        """Mount settings and results containers, populate settings inline (level 2 of 3).
+        """Mount settings and results containers into body (level 2 of 3).
 
-        Settings widgets are constructed and mounted here directly — no extra defer needed
-        because settings has just been mounted into body in the same refresh cycle.
-        Results sub-sections (upper + detail) need one more defer after `results` mounts.
+        In Textual 8.x widgets must be in the DOM before .mount() can be
+        called on them. We build the settings sub-tree via constructors and
+        pass everything to body.mount() in one shot so `settings` is in the
+        DOM immediately. `results` is mounted empty and filled one refresh
+        later by _fill_results().
         """
         try:
-            settings = Vertical(classes="tab-settings-area", id=f"settings-area-{tab_id}")
-            results  = Vertical(classes="tab-results-area",  id=f"results-area-{tab_id}")
+            pending_target = state.pending_target
+            state.pending_target = ""
+
+            settings = Vertical(
+                # target row
+                Horizontal(
+                    Label("Target:", classes="tab-target-label"),
+                    Input(
+                        placeholder="https://example.com",
+                        id=f"target-input-{tab_id}",
+                        classes="tab-target-input",
+                        value=pending_target,
+                        compact=True,
+                    ),
+                    id=f"target-row-{tab_id}", classes="tab-target-row",
+                ),
+                # checks row
+                Horizontal(
+                    Label("Checks:", classes="tab-checks-label"),
+                    Checkbox("SQLi",          value=True, id=f"chk-sqli-{tab_id}",          classes="chk"),
+                    Checkbox("XSS",           value=True, id=f"chk-xss-{tab_id}",           classes="chk"),
+                    Checkbox("SSTI",          value=True, id=f"chk-ssti-{tab_id}",          classes="chk"),
+                    Checkbox("LFI",           value=True, id=f"chk-lfi-{tab_id}",           classes="chk"),
+                    Checkbox("RCE",           value=True, id=f"chk-rce-{tab_id}",           classes="chk"),
+                    Checkbox("Redirect",      value=True, id=f"chk-redirect-{tab_id}",      classes="chk"),
+                    Checkbox("SSRF",          value=True, id=f"chk-ssrf-{tab_id}",          classes="chk"),
+                    Checkbox("XXE",           value=True, id=f"chk-xxe-{tab_id}",           classes="chk"),
+                    Checkbox("CORS",          value=True, id=f"chk-cors-{tab_id}",          classes="chk"),
+                    Checkbox("PathTraversal", value=True, id=f"chk-pathtraversal-{tab_id}", classes="chk"),
+                    Checkbox("HeaderInj",     value=True, id=f"chk-headerinj-{tab_id}",     classes="chk"),
+                    Checkbox("BrokenAuth",    value=True, id=f"chk-brokenauth-{tab_id}",    classes="chk"),
+                    Checkbox("JWT",           value=True, id=f"chk-jwt-{tab_id}",           classes="chk"),
+                    Checkbox("NoSQLi",        value=True, id=f"chk-nosqli-{tab_id}",        classes="chk"),
+                    Checkbox("GraphQL",       value=True, id=f"chk-graphql-{tab_id}",       classes="chk"),
+                    Checkbox("ProtoPoll",     value=True, id=f"chk-protopoll-{tab_id}",     classes="chk"),
+                    Checkbox("DOM XSS",       value=True, id=f"chk-domxss-{tab_id}",        classes="chk"),
+                    Checkbox("OAuth",         value=True, id=f"chk-oauth-{tab_id}",         classes="chk"),
+                    Checkbox("SensData",      value=True, id=f"chk-sensdata-{tab_id}",      classes="chk"),
+                    id=f"checks-row-{tab_id}", classes="tab-checks-row",
+                ),
+                # options row
+                Horizontal(
+                    Label("Threads:", classes="opt-label"),
+                    Input("5",   id=f"opt-threads-{tab_id}", classes="opt-input", compact=True),
+                    Label("Delay (ms):", classes="opt-label"),
+                    Input("0",   id=f"opt-delay-{tab_id}",   classes="opt-input", compact=True),
+                    Label("Depth:", classes="opt-label"),
+                    Input("3",   id=f"opt-depth-{tab_id}",   classes="opt-input", compact=True),
+                    Label("Pages:", classes="opt-label"),
+                    Input("100", id=f"opt-pages-{tab_id}",   classes="opt-input", compact=True),
+                    id=f"scan-options-row-{tab_id}", classes="tab-opts-row",
+                ),
+                # progress row
+                Horizontal(
+                    ProgressBar(total=100, id=f"scan-progress-{tab_id}", show_eta=False,
+                                classes="tab-progress-bar"),
+                    Static("—", id=f"progress-label-{tab_id}", classes="tab-progress-label"),
+                    id=f"progress-row-{tab_id}", classes="tab-progress-row",
+                ),
+                # live stats row
+                Horizontal(
+                    Static(
+                        "[dim]Requests:[/dim] [bold]0[/bold]"
+                        "  [dim]│[/dim]  [dim]Speed:[/dim] [bold]0[/bold][dim] req/s[/dim]"
+                        "  [dim]│[/dim]  [dim]Threads:[/dim] [bold]0[/bold]"
+                        "  [dim]│[/dim]  [dim]Idle[/dim]",
+                        id=f"scan-live-status-{tab_id}",
+                        classes="tab-live-status",
+                        markup=True,
+                    ),
+                    id=f"live-row-{tab_id}", classes="tab-live-row",
+                ),
+                classes="tab-settings-area", id=f"settings-area-{tab_id}",
+            )
+            results = Vertical(classes="tab-results-area", id=f"results-area-{tab_id}")
+
+            # Mount settings (full tree) + resize handle + empty results into body
             body.mount(settings)
             body.mount(ResizeHandle(
                 f"settings-area-{tab_id}", f"results-area-{tab_id}",
@@ -483,139 +560,73 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
             ))
             body.mount(results)
 
-            # ── Settings: populate inline (no extra defer) ──────────────────
-            target_row = Horizontal(
-                Label("Target:", classes="tab-target-label"),
-                Input(
-                    placeholder="https://example.com",
-                    id=f"target-input-{tab_id}",
-                    classes="tab-target-input",
-                    value=state.pending_target,
-                    compact=True,
-                ),
-                id=f"target-row-{tab_id}", classes="tab-target-row",
-            )
-            state.pending_target = ""
-            checks_row = Horizontal(
-                Label("Checks:", classes="tab-checks-label"),
-                Checkbox("SQLi",          value=True, id=f"chk-sqli-{tab_id}",          classes="chk"),
-                Checkbox("XSS",           value=True, id=f"chk-xss-{tab_id}",           classes="chk"),
-                Checkbox("SSTI",          value=True, id=f"chk-ssti-{tab_id}",          classes="chk"),
-                Checkbox("LFI",           value=True, id=f"chk-lfi-{tab_id}",           classes="chk"),
-                Checkbox("RCE",           value=True, id=f"chk-rce-{tab_id}",           classes="chk"),
-                Checkbox("Redirect",      value=True, id=f"chk-redirect-{tab_id}",      classes="chk"),
-                Checkbox("SSRF",          value=True, id=f"chk-ssrf-{tab_id}",          classes="chk"),
-                Checkbox("XXE",           value=True, id=f"chk-xxe-{tab_id}",           classes="chk"),
-                Checkbox("CORS",          value=True, id=f"chk-cors-{tab_id}",          classes="chk"),
-                Checkbox("PathTraversal", value=True, id=f"chk-pathtraversal-{tab_id}", classes="chk"),
-                Checkbox("HeaderInj",     value=True, id=f"chk-headerinj-{tab_id}",     classes="chk"),
-                Checkbox("BrokenAuth",    value=True, id=f"chk-brokenauth-{tab_id}",    classes="chk"),
-                Checkbox("JWT",           value=True, id=f"chk-jwt-{tab_id}",           classes="chk"),
-                Checkbox("NoSQLi",        value=True, id=f"chk-nosqli-{tab_id}",        classes="chk"),
-                Checkbox("GraphQL",       value=True, id=f"chk-graphql-{tab_id}",       classes="chk"),
-                Checkbox("ProtoPoll",     value=True, id=f"chk-protopoll-{tab_id}",     classes="chk"),
-                Checkbox("DOM XSS",       value=True, id=f"chk-domxss-{tab_id}",        classes="chk"),
-                Checkbox("OAuth",         value=True, id=f"chk-oauth-{tab_id}",         classes="chk"),
-                Checkbox("SensData",      value=True, id=f"chk-sensdata-{tab_id}",      classes="chk"),
-                id=f"checks-row-{tab_id}", classes="tab-checks-row",
-            )
-            opts_row = Horizontal(
-                Label("Threads:", classes="opt-label"),
-                Input("5",   id=f"opt-threads-{tab_id}", classes="opt-input", compact=True),
-                Label("Delay (ms):", classes="opt-label"),
-                Input("0",   id=f"opt-delay-{tab_id}",   classes="opt-input", compact=True),
-                Label("Depth:", classes="opt-label"),
-                Input("3",   id=f"opt-depth-{tab_id}",   classes="opt-input", compact=True),
-                Label("Pages:", classes="opt-label"),
-                Input("100", id=f"opt-pages-{tab_id}",   classes="opt-input", compact=True),
-                id=f"scan-options-row-{tab_id}", classes="tab-opts-row",
-            )
-            prog_row = Horizontal(
-                ProgressBar(total=100, id=f"scan-progress-{tab_id}", show_eta=False,
-                            classes="tab-progress-bar"),
-                Static("—", id=f"progress-label-{tab_id}", classes="tab-progress-label"),
-                id=f"progress-row-{tab_id}", classes="tab-progress-row",
-            )
-            live_row = Horizontal(
-                Static(
-                    "[dim]Requests:[/dim] [bold]0[/bold]"
-                    "  [dim]│[/dim]  [dim]Speed:[/dim] [bold]0[/bold][dim] req/s[/dim]"
-                    "  [dim]│[/dim]  [dim]Threads:[/dim] [bold]0[/bold]"
-                    "  [dim]│[/dim]  [dim]Idle[/dim]",
-                    id=f"scan-live-status-{tab_id}",
-                    classes="tab-live-status",
-                    markup=True,
-                ),
-                id=f"live-row-{tab_id}", classes="tab-live-row",
-            )
-            settings.mount(target_row)
-            settings.mount(checks_row)
-            settings.mount(opts_row)
-            settings.mount(prog_row)
-            settings.mount(live_row)
-
-            # ── Results: need one more defer for sub-sections ───────────────
+            # ── Results: need one more defer — results is now in DOM ───────────
             self.call_after_refresh(self._fill_results, tab_id, state, results)
         except Exception as exc:
             logger.debug("_fill_tab_body: %s", exc)
 
     def _fill_results(self, tab_id: str, state: _ScanTabState, results: Vertical) -> None:
-        """Mount upper + detail panels inline, then table init on next refresh (level 3 of 3)."""
+        """Mount upper + detail panels inline, then table init on next refresh (level 3 of 3).
+
+        In Textual 8.x widgets must be in the DOM before you can call
+        .mount() on them. Build the full tree via constructors and mount
+        everything into `results` (which IS already in the DOM) in one go.
+        """
         try:
             # ── Upper row: findings table + scan log ──────────────────────────
-            findings_panel = Vertical(
-                Static("Findings (passive / active)",
-                       id=f"findings-label-{tab_id}", classes="tab-findings-label"),
-                DataTable(id=f"findings-table-{tab_id}", classes="tab-findings-table"),
-                id=f"findings-panel-{tab_id}", classes="tab-findings-panel",
+            upper = Horizontal(
+                Vertical(
+                    Static("Findings (passive / active)",
+                           id=f"findings-label-{tab_id}", classes="tab-findings-label"),
+                    DataTable(id=f"findings-table-{tab_id}", classes="tab-findings-table"),
+                    id=f"findings-panel-{tab_id}", classes="tab-findings-panel",
+                ),
+                ResizeHandle(
+                    f"findings-panel-{tab_id}", f"log-panel-{tab_id}",
+                    id=f"resize-find-log-{tab_id}",
+                ),
+                Vertical(
+                    Static("Scan Log", id=f"log-label-{tab_id}", classes="tab-log-label"),
+                    RichLog(id=f"scan-log-{tab_id}", highlight=True, markup=True,
+                            wrap=True, max_lines=1000, classes="tab-scan-log"),
+                    id=f"log-panel-{tab_id}", classes="tab-log-panel",
+                ),
+                id=f"upper-row-{tab_id}", classes="tab-upper-row",
             )
-            log_panel = Vertical(
-                Static("Scan Log", id=f"log-label-{tab_id}", classes="tab-log-label"),
-                RichLog(id=f"scan-log-{tab_id}", highlight=True, markup=True,
-                        wrap=True, max_lines=1000, classes="tab-scan-log"),
-                id=f"log-panel-{tab_id}", classes="tab-log-panel",
-            )
-            upper = Horizontal(id=f"upper-row-{tab_id}", classes="tab-upper-row")
-            upper.mount(findings_panel)
-            upper.mount(ResizeHandle(
-                f"findings-panel-{tab_id}", f"log-panel-{tab_id}",
-                id=f"resize-find-log-{tab_id}",
-            ))
-            upper.mount(log_panel)
 
             # ── Detail panel: request / proof / response ──────────────────────
-            req_col = Vertical(
-                Static("Request", id=f"detail-request-label-{tab_id}",
-                       classes="tab-detail-label"),
-                HttpView(id=f"detail-request-{tab_id}", classes="tab-detail-view"),
-                id=f"detail-request-col-{tab_id}", classes="tab-detail-req-col",
+            detail = Horizontal(
+                Vertical(
+                    Static("Request", id=f"detail-request-label-{tab_id}",
+                           classes="tab-detail-label"),
+                    HttpView(id=f"detail-request-{tab_id}", classes="tab-detail-view"),
+                    id=f"detail-request-col-{tab_id}", classes="tab-detail-req-col",
+                ),
+                ResizeHandle(
+                    f"detail-request-col-{tab_id}", f"detail-proof-col-{tab_id}",
+                    id=f"resize-req-proof-{tab_id}",
+                ),
+                Vertical(
+                    Static("Proof", id=f"detail-proof-label-{tab_id}",
+                           classes="tab-detail-label"),
+                    TextArea("", read_only=True, id=f"detail-proof-{tab_id}",
+                             soft_wrap=True, classes="tab-detail-proof"),
+                    id=f"detail-proof-col-{tab_id}", classes="tab-detail-proof-col",
+                ),
+                ResizeHandle(
+                    f"detail-proof-col-{tab_id}", f"detail-response-col-{tab_id}",
+                    id=f"resize-proof-resp-{tab_id}",
+                ),
+                Vertical(
+                    Static("Response", id=f"detail-response-label-{tab_id}",
+                           classes="tab-detail-label"),
+                    HttpView(id=f"detail-response-{tab_id}", classes="tab-detail-view"),
+                    id=f"detail-response-col-{tab_id}", classes="tab-detail-resp-col",
+                ),
+                id=f"detail-panel-{tab_id}", classes="tab-detail-panel",
             )
-            proof_col = Vertical(
-                Static("Proof", id=f"detail-proof-label-{tab_id}",
-                       classes="tab-detail-label"),
-                TextArea("", read_only=True, id=f"detail-proof-{tab_id}",
-                         soft_wrap=True, classes="tab-detail-proof"),
-                id=f"detail-proof-col-{tab_id}", classes="tab-detail-proof-col",
-            )
-            resp_col = Vertical(
-                Static("Response", id=f"detail-response-label-{tab_id}",
-                       classes="tab-detail-label"),
-                HttpView(id=f"detail-response-{tab_id}", classes="tab-detail-view"),
-                id=f"detail-response-col-{tab_id}", classes="tab-detail-resp-col",
-            )
-            detail = Horizontal(id=f"detail-panel-{tab_id}", classes="tab-detail-panel")
-            detail.mount(req_col)
-            detail.mount(ResizeHandle(
-                f"detail-request-col-{tab_id}", f"detail-proof-col-{tab_id}",
-                id=f"resize-req-proof-{tab_id}",
-            ))
-            detail.mount(proof_col)
-            detail.mount(ResizeHandle(
-                f"detail-proof-col-{tab_id}", f"detail-response-col-{tab_id}",
-                id=f"resize-proof-resp-{tab_id}",
-            ))
-            detail.mount(resp_col)
 
+            # Mount both into `results` — it IS already in the DOM
             results.mount(upper)
             results.mount(ResizeHandle(
                 f"upper-row-{tab_id}", f"detail-panel-{tab_id}",

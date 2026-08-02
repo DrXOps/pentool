@@ -385,7 +385,8 @@ class IntruderScreen(AppMixin, Widget):
             if payloads and isinstance(payloads, list):
                 self._payloads = payloads
                 self._update_payload_select()
-                self._refresh_payload_list()
+                # Use call_after_refresh — ListView must be in DOM first
+                self.call_after_refresh(self._refresh_payload_list)
             self._state_loaded = True
         except Exception as exc:
             from pentool.core.logging import get_logger
