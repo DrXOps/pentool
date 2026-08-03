@@ -15,6 +15,34 @@ logger = get_logger(__name__)
 T = TypeVar("T", bound=AppEvent)
 
 
+class Subscription:
+    """Context manager for automatic unsubscribe on exit.
+
+    Usage:
+        with bus.subscription(EventType, handler):
+            # handler is active
+            ...
+        # handler is automatically unsubscribed
+    """
+
+    def __init__(self, bus: "EventBus", event_type: type, handler: Callable):
+        self._bus = bus
+        self._event_type = event_type
+        self._handler = handler
+        self._subscribed = False
+
+    def __enter__(self):
+        self._bus.subscribe(self._event_type, self._handler)
+        self._subscribed = True
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._subscribed:
+            self._bus.unsubscribe(self._event_type, self._handler)
+            self._subscribed = False
+        return False
+
+
 class EventBus:
     """Thread-safe event bus with history.
 
@@ -61,6 +89,17 @@ class EventBus:
                     handlers.remove(handler)
                 except ValueError:
                     pass
+
+    def subscription(self, event_type: type[T], handler: Callable[[T], None]) -> "Subscription":
+        """Create a managed subscription that auto-unsubscribes on exit.
+
+        Usage:
+            with bus.subscription(ScanFinished, on_finished):
+                # handler is active
+                ...
+            # handler is automatically unsubscribed
+        """
+        return Subscription(self, event_type, handler)
 
     # ── emit ──────────────────────────────────────────────────────────────────
 
