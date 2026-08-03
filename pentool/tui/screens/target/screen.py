@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -10,9 +12,8 @@ from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
 from pentool.tui.messages import SendHostToScanner, SyncScopeToProxy
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pathlib import Path
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
@@ -237,7 +238,7 @@ class TargetScreen(Widget):
             self._set_scope_worker(self._selected_host, False)
 
     def action_open_scope_rules(self) -> None:
-        from pentool.tui.dialogs.scope_dialog import ScopeDialog, ScopeConfig
+        from pentool.tui.dialogs.scope_dialog import ScopeConfig, ScopeDialog
 
         current = self._scope_config if self._scope_config is not None else ScopeConfig()
 

@@ -7,7 +7,6 @@ from typing import Callable
 
 from pentool.api.proxy_api import InterceptedRequest, ProxyAPI
 from pentool.core.event_bus import EventBus
-from pentool.core.events import ProxyRequestCaptured, ProxyRequestCompleted
 from pentool.core.logging import get_logger
 from pentool.services.base_service import BaseService
 from pentool.storage.http_storage import HttpStorage

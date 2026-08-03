@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-import os
 from enum import Enum
 from pathlib import Path
 
@@ -19,6 +18,7 @@ from textual.screen import ModalScreen
 from textual.widgets import DataTable, Input, Label, Static
 
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
 
 class FileSelectorMode(Enum):
     OPEN = "open"           # select existing file

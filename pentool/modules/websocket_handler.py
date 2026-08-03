@@ -175,6 +175,7 @@ class WebSocketHandler:
         client_writer: asyncio.StreamWriter,
     ) -> None:
         from urllib.parse import urlparse
+
         from pentool.utils.parser import build_http_request, parse_http_response
 
         parsed = urlparse(req.url)

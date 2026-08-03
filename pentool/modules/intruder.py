@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import csv
 import itertools
-import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -65,7 +64,6 @@ def parse_markers(template: str) -> tuple[str, list[tuple[int, int]]]:
     positions: list[tuple[int, int]] = []
     result = []
     i = 0
-    offset = 0  # offset due to removed §
 
     while i < len(template):
         if template[i] == "§":
@@ -375,8 +373,8 @@ class IntruderAttack:
         response_raw = None
 
         try:
-            from pentool.utils.parser import parse_http_request
             from pentool.utils.http_client import HTTPClient
+            from pentool.utils.parser import parse_http_request
 
             req = parse_http_request(request_raw)
             async with HTTPClient(timeout=self._config.timeout) as client:

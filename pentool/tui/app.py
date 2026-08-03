@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import asyncio
 import os
 import signal
@@ -23,30 +22,8 @@ Checkbox.BUTTON_LEFT = "["
 Checkbox.BUTTON_INNER = "✓"
 Checkbox.BUTTON_RIGHT = "]"
 
-from pentool.tui.messages import (
-    ProxyClearHistory,
-    ProxyLoadProject,
-    ProxyRequestAdded,
-    ProxyRequestDone,
-    SendHostToScanner,
-    SendRequestToScanner,
-    SendToIntruder,
-    SendToRepeater,
-    SendToScanner,
-    SendToTarget,
-    SendUrlToTarget,
-    SyncScopeToTarget,
-    SyncScopeToProxy,
-    TerminalStop,
-    ConfigChanged,
-)
-from pentool.tui.constants import (
-    SCREEN_PROXY, SCREEN_REPEATER, SCREEN_INTRUDER,
-    SCREEN_SCANNER, SCREEN_TARGET, SCREEN_TERMINAL,
-    SCREEN_DASHBOARD,
-)
-
-from pentool.api.proxy_api import ProxyAPI, ProxyServer, InterceptedRequest as _IR
+from pentool.api.proxy_api import InterceptedRequest as _IR
+from pentool.api.proxy_api import ProxyAPI, ProxyServer
 from pentool.core.config import get_config
 from pentool.core.database import init_db
 from pentool.core.event_bus import get_event_bus
@@ -61,6 +38,33 @@ from pentool.core.events import (
 )
 from pentool.core.logging import get_logger, setup_logging
 from pentool.services.proxy_service import ProxyService
+from pentool.tui.constants import (
+    SCREEN_DASHBOARD,
+    SCREEN_INTRUDER,
+    SCREEN_PROXY,
+    SCREEN_REPEATER,
+    SCREEN_SCANNER,
+    SCREEN_TARGET,
+    SCREEN_TERMINAL,
+)
+from pentool.tui.messages import (
+    ConfigChanged,
+    ModuleSelected,
+    ProxyClearHistory,
+    ProxyLoadProject,
+    ProxyRequestAdded,
+    ProxyRequestDone,
+    SendHostToScanner,
+    SendRequestToScanner,
+    SendToIntruder,
+    SendToRepeater,
+    SendToScanner,
+    SendToTarget,
+    SendUrlToTarget,
+    SyncScopeToProxy,
+    SyncScopeToTarget,
+    TerminalStop,
+)
 from pentool.tui.screens import (
     ComparerScreen,
     DashboardScreen,
@@ -76,7 +80,6 @@ from pentool.tui.screens import (
     TargetScreen,
     TerminalScreen,
 )
-from pentool.tui.messages import ModuleSelected
 from pentool.tui.widgets.module_tabs import ModuleTabs
 from pentool.tui.widgets.statusbar import StatusBar
 
@@ -230,7 +233,6 @@ class PentoolApp(App):
         # Vim-style key sequences: "g" prefix for Proxy sub-tabs
         # Shift+p then h/i/w → proxy HTTP/Intercept/WS
         self._key_seq_state: str = ""
-        import time as _time_mod
         self._key_seq_time: float = 0.0
         self._key_seq_timeout: float = 1.0  # one second to enter the second key
         # Project auto-save (Block 3.3)
@@ -564,8 +566,9 @@ class PentoolApp(App):
     def _focus_repeater_editor(self, repeater) -> None:
         """Set focus to the RequestEditor in the active Repeater tab."""
         try:
-            from pentool.tui.widgets.request_editor import RequestEditor
             from textual.widgets import TextArea
+
+            from pentool.tui.widgets.request_editor import RequestEditor
             tab_id = repeater._active_tab_id
             if tab_id:
                 editor = repeater.query_one(f"#req-editor-{tab_id}", RequestEditor)
@@ -1112,7 +1115,6 @@ class PentoolApp(App):
     def _on_bus_scan_progress(self, event: ScanProgressEvent) -> None:
         """Scan progress → Dashboard (optional, for live updates)."""
         # Not used yet — Dashboard updates via ScanStarted/ScanFinished.
-        pass
 
     def _on_bus_proxy_captured(self, event: ProxyRequestCaptured) -> None:
         """EventBus: proxy captured a new request.

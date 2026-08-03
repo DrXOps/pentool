@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import Button, DataTable, Input, Label, Static
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "hotkeys.tcss").read_text(encoding="utf-8")
 

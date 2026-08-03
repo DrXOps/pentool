@@ -7,12 +7,12 @@ import select
 import signal
 import subprocess
 import threading
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
 from textual.widgets import RichLog, Static
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 

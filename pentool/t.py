@@ -14,9 +14,8 @@ After creation, stats are printed:
 - warning if tokens > 128k
 """
 
-import os
-import sys
 import argparse
+import os
 from pathlib import Path
 
 # Directories to be fully excluded from traversal

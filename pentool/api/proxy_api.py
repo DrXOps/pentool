@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Callable
-
-from pentool.modules.proxy import InterceptedRequest, MatchReplaceRule, ProxyServer
-from pentool.core.logging import get_logger
 from pentool.api.base_api import ExportableAPI
+from pentool.core.logging import get_logger
+from pentool.modules.proxy import InterceptedRequest, MatchReplaceRule, ProxyServer
 
 logger = get_logger(__name__)
 
@@ -187,8 +185,6 @@ class ProxyAPI(ExportableAPI):
         if self._proxy is None:
             return 0, "Proxy not initialized"
 
-        from pentool.utils.parser import ParsedResponse
-        from datetime import datetime, timezone
 
         # Scope
         self._proxy.scope = data.get("proxy", {}).get("scope", [])

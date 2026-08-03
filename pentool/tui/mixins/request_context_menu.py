@@ -148,7 +148,7 @@ class RequestContextMenuMixin:
             pass
 
     def _cm_do_copy_url(self, raw: str) -> None:
-        from pentool.utils.copy_as import extract_url_from_raw, copy_to_clipboard
+        from pentool.utils.copy_as import copy_to_clipboard, extract_url_from_raw
         url = extract_url_from_raw(raw)
         if url and copy_to_clipboard(url):
             self.app.notify("URL copied", timeout=2)  # type: ignore[attr-defined]
@@ -160,8 +160,12 @@ class RequestContextMenuMixin:
             self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         from pentool.utils.copy_as import (
-            copy_as_curl, copy_as_fetch, copy_as_ffuf,
-            copy_as_sqlmap, copy_as_nmap, copy_as_jwt_tool,
+            copy_as_curl,
+            copy_as_fetch,
+            copy_as_ffuf,
+            copy_as_jwt_tool,
+            copy_as_nmap,
+            copy_as_sqlmap,
             copy_to_clipboard,
         )
         from pentool.utils.parser import parse_http_request
@@ -202,6 +206,7 @@ class RequestContextMenuMixin:
             self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         import os
+
         from pentool.utils.copy_as import save_request_txt
         from pentool.utils.parser import parse_http_request
         try:
@@ -231,8 +236,8 @@ class RequestContextMenuMixin:
             self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         try:
-            from pentool.utils.parser import parse_http_request
             from pentool.tui.messages import SendRequestToScanner
+            from pentool.utils.parser import parse_http_request
             req = parse_http_request(raw)
             self.app.post_message(SendRequestToScanner(req))  # type: ignore[attr-defined]
         except Exception as exc:

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.events import MouseDown, MouseMove, MouseUp
 from textual.widget import Widget
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "resize_handle.tcss").read_text(encoding="utf-8")
 

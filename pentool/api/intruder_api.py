@@ -121,6 +121,7 @@ class IntruderAPI(ExportableAPI):
         if not self._db_path:
             return
         import json
+
         from pentool.core.database import get_db
 
         async with get_db(self._db_path) as db:
@@ -139,6 +140,7 @@ class IntruderAPI(ExportableAPI):
         if not self._db_path:
             return None
         import json
+
         from pentool.core.database import get_db
 
         async with get_db(self._db_path) as db:
@@ -160,6 +162,7 @@ class IntruderAPI(ExportableAPI):
         if not self._db_path:
             return
         import json
+
         from pentool.core.database import get_db
 
         async with get_db(self._db_path) as db:
@@ -194,6 +197,7 @@ class IntruderAPI(ExportableAPI):
             return []
         import json
         from datetime import datetime, timezone
+
         from pentool.core.database import get_db
 
         async with get_db(self._db_path) as db:
@@ -264,6 +268,7 @@ class IntruderAPI(ExportableAPI):
 
     def import_project_data(self, data: dict) -> int:
         from datetime import datetime, timezone
+
         from pentool.modules.intruder import IntruderResult
 
         results_data = data.get("results", [])

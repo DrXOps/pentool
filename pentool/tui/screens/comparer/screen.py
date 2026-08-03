@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import re
 import os
+import re
 from pathlib import Path
+
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -12,9 +13,9 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import RichLog, Static, TextArea
 
-from pentool.tui.widgets.toolbar_button import ToolbarButton
-from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.core.logging import get_logger
+from pentool.tui.widgets.resize_handle import ResizeHandle
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 

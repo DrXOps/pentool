@@ -6,7 +6,7 @@ import asyncio
 import re
 from dataclasses import dataclass, field
 from typing import Callable
-from urllib.parse import urljoin, urlparse, parse_qs, urlunparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from pentool.core.logging import get_logger
 
@@ -327,7 +327,7 @@ class AsyncSpider:
 
                     # JS files added to queue
                     for js_url in js_links:
-                        norm = self._normalize_url(js_url)
+                        self._normalize_url(js_url)
                         if js_url not in result.js_files:
                             result.js_files.append(js_url)
 
@@ -639,8 +639,7 @@ class AsyncSpider:
         Returns URLs with numeric/UUID segments as potential injection points.
         """
         variants: list[str] = []
-        parsed = urlparse(url)
-        path = parsed.path
+        urlparse(url)
 
         # TODO: implement path variants (replace numeric/UUID segments with injection marker)
         # Currently returns empty list to avoid adding duplicate original URLs to scan targets.

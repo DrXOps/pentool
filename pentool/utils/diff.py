@@ -68,4 +68,3 @@ def diff_to_rich(diff: list[DiffLine]) -> str:
         else:
             lines.append(f" {escaped}")
     return "\n".join(lines)
-

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Tuple
 
 
 @dataclass
@@ -85,7 +84,8 @@ def check_update_sync() -> UpdateInfo:
 
 def do_pip_upgrade() -> bool:
     """Attempt to upgrade via pip. Returns True on success."""
-    import subprocess, sys
+    import subprocess
+    import sys
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--upgrade", "pentool"],

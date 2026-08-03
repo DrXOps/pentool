@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
@@ -11,7 +11,6 @@ from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.timer import Timer
 from textual.widget import Widget
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
@@ -317,7 +316,7 @@ class SettingsScreen(Widget):
 
     def _refresh_license_ui(self) -> None:
         try:
-            from pentool.core.license import get_session_license, get_machine_id
+            from pentool.core.license import get_machine_id, get_session_license
             info = get_session_license()
             mid = get_machine_id()
 

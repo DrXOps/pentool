@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from textual import events
 from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static
-from textual import events
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "context_menu.tcss").read_text(encoding="utf-8")
 

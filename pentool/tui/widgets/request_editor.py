@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
+from pathlib import Path
 
-from textual.app import ComposeResult
 from textual import events as _tevents
+from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static, TextArea
 from textual.widgets.text_area import Selection
 
 from pentool.utils.parser import ParsedRequest, ParsedResponse, build_http_request
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "request_editor.tcss").read_text(encoding="utf-8")
 
@@ -44,12 +44,10 @@ def _build_http_highlights(text: str) -> dict:
     highlights: dict = defaultdict(list)
     lines = text.split("\n")
     in_headers = True
-    header_end_row = 0
 
     for row, line in enumerate(lines):
         if in_headers and line.strip() == "":
             in_headers = False
-            header_end_row = row
             continue
 
         if in_headers:
@@ -388,7 +386,7 @@ class RequestEditor(_BaseHttpWidget):
             if ":" in line:
                 name, _, value = line.partition(":")
                 headers[name.strip()] = value.strip()
-        lang = _detect_language(_get_content_type(headers), body)
+        _detect_language(_get_content_type(headers), body)
 
         try:
             area = self.query_one("#editor-area", TextArea)

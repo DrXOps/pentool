@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
+from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Label
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "load_from_proxy.tcss").read_text(encoding="utf-8")
 
 if TYPE_CHECKING:
-    from pentool.api.proxy_api import InterceptedRequest
+    pass
 
 
 class LoadFromProxyDialog(ModalScreen[str | None]):
@@ -89,7 +89,7 @@ class LoadFromProxyDialog(ModalScreen[str | None]):
             # Take current cursor row
             table = self.query_one("#req-table", DataTable)
             try:
-                row_key = table.get_row_at(table.cursor_row)
+                table.get_row_at(table.cursor_row)
             except Exception:
                 self.dismiss(None)
                 return

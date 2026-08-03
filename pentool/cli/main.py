@@ -144,6 +144,7 @@ def license() -> None:
 def license_trial() -> None:
     """Start a 14-day PRO trial (one per machine)."""
     import asyncio
+
     from pentool.core.license import start_trial
 
     click.echo("Requesting a 14-day PRO trial...")
@@ -163,6 +164,7 @@ def license_trial() -> None:
 def license_activate(key: str) -> None:
     """Activate a license key (PROD-XXXX-XXXX-XXXX)."""
     import asyncio
+
     from pentool.core.license import activate_license, invalidate_session_license
 
     click.echo(f"Activating license key {key}...")

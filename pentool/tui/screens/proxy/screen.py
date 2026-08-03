@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
 import asyncio
 import datetime
-import json as _json
 import os
 import time
+from pathlib import Path
+from urllib.parse import urlparse
 
 import pyarrow as pa
 from textual.app import ComposeResult
@@ -15,29 +15,29 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widget import Widget
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 from textual.widgets import (
     Label,
     Static,
-    TabPane,
     TabbedContent,
+    TabPane,
     TextArea,
 )
-from textual_fastdatatable import DataTable as _BaseDataTable, ArrowBackend
+from textual_fastdatatable import ArrowBackend
+from textual_fastdatatable import DataTable as _BaseDataTable
 
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.core.logging import get_logger
-from pentool.tui.messages import SendToRepeater, SendToIntruder, SendToTarget, SyncScopeToTarget
 from pentool.services.proxy_service import ProxyService
+from pentool.tui.messages import SendToIntruder, SendToRepeater, SendToTarget, SyncScopeToTarget
+from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.context_menu import ContextMenu
 from pentool.tui.widgets.filter_bar import FilterBar
 from pentool.tui.widgets.inspector_panel import InspectorPanel
 from pentool.tui.widgets.request_editor import HttpView
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.mixins.app_mixin import AppMixin
-from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 
 logger = get_logger(__name__)
 
@@ -117,9 +117,11 @@ def _rows_to_arrow(rows: list[dict]) -> pa.Table:
     })
 
 
+from textual import events as _events
+from textual import on
+
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
-from textual import events as _events, on
 
 class _ProxyDataTable(_BaseDataTable):
     """DataTable for Proxy HTTP History.
@@ -793,7 +795,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self.call_after_refresh(self._load_ws_entry_details, entry)
 
     def _load_ws_entry_details(self, entry: dict) -> None:
-        from pentool.utils.parser import ParsedRequest, ParsedResponse
+        from pentool.utils.parser import ParsedRequest
 
         req_headers = entry.get("request_headers") or {}
         parsed_req = ParsedRequest(
@@ -996,8 +998,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         if parsed is None:
             return
         from pentool.utils.copy_as import (
-            copy_as_curl, copy_as_fetch, copy_as_ffuf, copy_as_sqlmap,
-            copy_as_nmap, copy_as_jwt_tool, copy_to_clipboard,
+            copy_as_curl,
+            copy_as_fetch,
+            copy_as_ffuf,
+            copy_as_jwt_tool,
+            copy_as_nmap,
+            copy_as_sqlmap,
+            copy_to_clipboard,
         )
         if action == "copy_curl":
             text, label = copy_as_curl(parsed), "curl"
@@ -1721,4 +1728,3 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
 
     def on_context_menu_item_selected(self, event: ContextMenu.ItemSelected) -> None:
         self._on_ctx_action(event.action)
-

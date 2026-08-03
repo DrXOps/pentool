@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-
-
+from pentool.api.base_api import ExportableAPI
 from pentool.modules.repeater import Repeater, RepeaterEntry
 from pentool.utils.parser import ParsedRequest, ParsedResponse
-from pentool.api.base_api import ExportableAPI
 
 # Re-export types
 __all__ = ["RepeaterAPI", "RepeaterEntry"]

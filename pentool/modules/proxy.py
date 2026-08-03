@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import ssl
 import threading
-import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable, Literal
+from typing import Literal
 
 from pentool.core.logging import get_logger
 from pentool.modules.match_replace import MatchReplaceEngine, MatchReplaceRule
@@ -20,7 +17,6 @@ from pentool.utils.http_client import HTTPClient
 from pentool.utils.parser import (
     ParsedRequest,
     ParsedResponse,
-    build_http_request,
     parse_http_request,
     parse_http_response,
 )
@@ -526,9 +522,10 @@ class ProxyServer:
 
         # Notify subscribers via EventBus (main channel)
         try:
+            from urllib.parse import urlparse as _urlparse
+
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import ProxyRequestCaptured
-            from urllib.parse import urlparse as _urlparse
             _host = _urlparse(ireq.url).hostname or ""
             get_event_bus().emit(ProxyRequestCaptured(
                 source="proxy",

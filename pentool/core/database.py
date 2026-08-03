@@ -9,7 +9,6 @@ from typing import AsyncIterator
 
 import aiosqlite
 
-
 # DDL for table creation
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (

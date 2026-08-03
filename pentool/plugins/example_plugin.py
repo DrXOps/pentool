@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
 from pentool.core.plugin_manager import BasePlugin, PluginHook
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "example_plugin.tcss").read_text(encoding="utf-8")
 

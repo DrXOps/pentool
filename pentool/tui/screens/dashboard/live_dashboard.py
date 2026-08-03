@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from collections import deque
 from typing import Callable
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.reactive import reactive
+from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import RichLog, Static
 
@@ -99,7 +97,7 @@ class TrafficSparkline(Widget):
 
         try:
             self.query_one("#sparkline-title", Static).update(
-                f"[bold]┌─ TRAFFIC (RPS) ─[/bold]"
+                "[bold]┌─ TRAFFIC (RPS) ─[/bold]"
             )
             self.query_one("#sparkline-graph", Static).update(
                 f"[{color}]{spark}[/{color}]"
@@ -508,9 +506,10 @@ class EmergencyStop(Widget):
                 pass
         # Emit EmergencyStop via EventBus
         try:
+            import dataclasses
+
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import AppEvent
-            import dataclasses
 
             @dataclasses.dataclass
             class EmergencyStopEvent(AppEvent):

@@ -1,7 +1,7 @@
 """Feature flags and limits for the Pentool licensing model."""
 
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 
 
 class FeatureStatus(str, Enum):

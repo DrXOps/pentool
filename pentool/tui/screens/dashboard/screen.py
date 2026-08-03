@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 import time
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -14,7 +14,6 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.timer import Timer
 from textual.widget import Widget
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
@@ -24,10 +23,9 @@ from textual.widgets import (
     Tree,
 )
 
-from pentool.tui.widgets.toolbar_button import ToolbarButton
-from pentool.tui.screens.dashboard.live_dashboard import LiveDashboardTab, ResourceMonitor
-
 from pentool.core.logging import get_logger
+from pentool.tui.screens.dashboard.live_dashboard import ResourceMonitor
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
@@ -556,7 +554,6 @@ class DashboardScreen(Widget):
         )
 
         try:
-            fc = self._finding_counts
             self.query_one("#chart-requests", LiveChart).set_summary(
                 f"[dim]Total: [/dim][bold]{total:,}[/bold][dim] reqs · [/dim][bold]{hosts}[/bold][dim] hosts[/dim]"
             )
@@ -637,7 +634,7 @@ class DashboardScreen(Widget):
         if running:
             self._set_led_bar("led-proxy-bar", "bold green", f"Proxy: [bold green]:{port}[/bold green]")
         else:
-            self._set_led_bar("led-proxy-bar", "dim", f"Proxy: [dim]STOPPED[/dim]")
+            self._set_led_bar("led-proxy-bar", "dim", "Proxy: [dim]STOPPED[/dim]")
         msg = f"Proxy {'started' if running else 'stopped'} on :{port}"
         self.log_activity(msg, "ok" if running else "warning")
 

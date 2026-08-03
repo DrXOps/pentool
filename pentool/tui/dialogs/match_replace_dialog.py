@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.screen import ModalScreen
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "match_replace_dialog.tcss").read_text(encoding="utf-8")
 from textual.widgets import (
@@ -21,7 +22,6 @@ from textual.widgets import (
 
 from pentool.api.proxy_api import MatchReplaceRule
 from pentool.tui.widgets.toolbar_button import ToolbarButton
-
 
 _TARGET_OPTIONS = [("request", "Request"), ("response", "Response"), ("both", "Both")]
 _SCOPE_OPTIONS  = [("all", "All"), ("headers", "Headers"), ("body", "Body")]

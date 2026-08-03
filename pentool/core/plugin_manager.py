@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    import click
+    pass
 
 logger = logging.getLogger(__name__)
 

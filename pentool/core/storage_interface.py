@@ -23,12 +23,10 @@ class StorageInterface(ABC):
         Args:
             path_or_conn_string: File path for SQLite, connection string for PostgreSQL
         """
-        pass
 
     @abstractmethod
     async def close(self) -> None:
         """Close database connection."""
-        pass
 
     # ── HTTP History operations ────────────────────────────────────────────────
 
@@ -49,12 +47,10 @@ class StorageInterface(ABC):
         Returns:
             Row ID of inserted record
         """
-        pass
 
     @abstractmethod
     async def get_request(self, row_id: int) -> dict[str, Any] | None:
         """Get HTTP request/response by ID."""
-        pass
 
     @abstractmethod
     async def get_requests(
@@ -65,7 +61,6 @@ class StorageInterface(ABC):
         order_by: str = "timestamp DESC",
     ) -> list[dict[str, Any]]:
         """Get list of HTTP requests with filtering and pagination."""
-        pass
 
     @abstractmethod
     async def update_response(
@@ -76,22 +71,18 @@ class StorageInterface(ABC):
         response_body: str,
     ) -> None:
         """Update response data for existing request."""
-        pass
 
     @abstractmethod
     async def delete_request(self, row_id: int) -> None:
         """Delete HTTP request by ID."""
-        pass
 
     @abstractmethod
     async def clear_all_requests(self) -> None:
         """Delete all HTTP requests."""
-        pass
 
     @abstractmethod
     async def search_requests(self, query: str, limit: int = 100) -> list[dict[str, Any]]:
         """Full-text search in requests (FTS5 for SQLite, tsvector for PostgreSQL)."""
-        pass
 
     # ── Scanner findings operations ────────────────────────────────────────────
 
@@ -106,7 +97,6 @@ class StorageInterface(ABC):
         **kwargs,
     ) -> int:
         """Add vulnerability finding to storage."""
-        pass
 
     @abstractmethod
     async def get_findings(
@@ -115,41 +105,34 @@ class StorageInterface(ABC):
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Get list of findings with filtering."""
-        pass
 
     @abstractmethod
     async def update_finding(self, finding_id: int, **kwargs) -> None:
         """Update finding (e.g., mark as false positive)."""
-        pass
 
     @abstractmethod
     async def delete_finding(self, finding_id: int) -> None:
         """Delete finding."""
-        pass
 
     @abstractmethod
     async def clear_all_findings(self) -> None:
         """Delete all findings."""
-        pass
 
     # ── Project/session metadata ───────────────────────────────────────────────
 
     @abstractmethod
     async def get_metadata(self, key: str) -> Any | None:
         """Get project metadata by key."""
-        pass
 
     @abstractmethod
     async def set_metadata(self, key: str, value: Any) -> None:
         """Set project metadata."""
-        pass
 
     # ── Statistics ─────────────────────────────────────────────────────────────
 
     @abstractmethod
     async def get_stats(self) -> dict[str, Any]:
         """Get storage statistics (counts, sizes, etc.)."""
-        pass
 
 
 class SQLiteStorage(StorageInterface):
@@ -310,7 +293,6 @@ class SQLiteStorage(StorageInterface):
 
     async def set_metadata(self, key: str, value: Any) -> None:
         """Set project metadata. No-op until metadata table is added to schema."""
-        pass
 
     async def get_stats(self) -> dict[str, Any]:
         db_path = self._storage._db_path

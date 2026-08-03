@@ -2,45 +2,52 @@
 
 from __future__ import annotations
 
-import re
 import asyncio
+import re
 import time
+from pathlib import Path
 
-from textual import on
 from textual import events as _tevents
+from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
+from textual.message import Message as _Message
 from textual.widgets import (
     Button,
     Checkbox,
     DataTable,
     Input,
     Label,
-    ListView,
     ListItem,
+    ListView,
     ProgressBar,
     Select,
     Static,
     TextArea,
 )
 
-from textual.message import Message as _Message
-
-from pentool.api.intruder_api import AttackType, IntruderAttack, IntruderConfig, IntruderResult, count_markers, generate_numeric_payloads, process_payload
+from pentool.api.intruder_api import (
+    AttackType,
+    IntruderAttack,
+    IntruderConfig,
+    IntruderResult,
+    count_markers,
+    generate_numeric_payloads,
+    process_payload,
+)
+from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
+from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
-from pentool.tui.widgets.request_editor import _build_http_highlights, _load_into_textarea, HttpView
-from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -1131,17 +1138,34 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self.run_worker(self._run_attack(config, turbo_mode=turbo_mode), exclusive=False, name="intruder-attack")
 
     async def _run_attack(self, config: IntruderConfig, turbo_mode: bool = False) -> None:
-        if turbo_mode:
-            try:
-                from pentool.modules.intruder_turbo import TurboIntruderAttack
-                attack = TurboIntruderAttack(config)
-                logger.info("INTRUDER: using TurboIntruderAttack")
-            except ImportError:
-                attack = IntruderAttack(config, db_path=self._get_db_path())
-                logger.warning("INTRUDER: Turbo not available, falling back to standard")
-        else:
+        # Layer violation fix: delegate turbo/standard selection to API layer
+        from pentool.api.intruder_api import IntruderAPI
+        api = IntruderAPI(db_path=self._get_db_path())
+
+        # IntruderAPI.start_attack handles turbo_mode internally
+        try:
+            await api.start_attack(
+                config,
+                on_result=lambda r: self.call_after_refresh(self._on_result, r),
+                on_progress=lambda done, total: self.call_after_refresh(self._on_progress, done, total),
+                turbo_mode=turbo_mode
+            )
+            self._current_attack = api._attack
+            logger.info("INTRUDER: _run_attack started via IntruderAPI, turbo=%s", turbo_mode)
+        except ImportError:
+            # Fallback if turbo not available
             attack = IntruderAttack(config, db_path=self._get_db_path())
-        self._current_attack = attack
+            self._current_attack = attack
+            logger.warning("INTRUDER: Turbo not available, using standard")
+
+            def on_result(result: IntruderResult) -> None:
+                self.call_after_refresh(self._on_result, result)
+
+            def on_progress(done: int, total: int) -> None:
+                self.call_after_refresh(self._on_progress, done, total)
+
+            await attack.run(on_result, on_progress)
+            return
 
         logger.info("INTRUDER: _run_attack started, type=%s", config.attack_type)
 

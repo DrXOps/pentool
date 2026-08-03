@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.message import Message
 from textual.widgets import Static
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "toolbar_button.tcss").read_text(encoding="utf-8")
 

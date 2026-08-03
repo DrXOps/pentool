@@ -3,31 +3,30 @@
 from __future__ import annotations
 
 import re
-import time
+from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widget import Widget
-from textual.widgets import Input, Static, TabPane, TabbedContent
+from textual.widgets import Input, Static, TabbedContent, TabPane
 from textual.widgets.text_area import Selection
 
 from pentool.core.logging import get_logger
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.services.repeater_service import RepeaterService
-from pathlib import Path
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 logger = get_logger(__name__)
 
-from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
-from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.search_bar import SearchBar
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
+from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
+from pentool.tui.widgets.resize_handle import ResizeHandle
+from pentool.tui.widgets.search_bar import SearchBar
+
 
 class _TabState:
     """State of a single Repeater tab."""
@@ -436,7 +435,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     def _auto_save_tab_to_db(self, state: _TabState) -> None:
         """Save tab state to database (non-blocking, fire-and-forget)."""
         try:
-            from pentool.utils.parser import ParsedRequest, ParsedResponse, parse_http_request
+            from pentool.utils.parser import ParsedResponse, parse_http_request
             parsed = parse_http_request(state.request_text)
             # Don't save empty or placeholder requests
             if not parsed or not parsed.url or not parsed.method:
@@ -616,7 +615,6 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
                 if proxy:
                     proxy.set_scope(result)
                 try:
-                    from pentool.tui.app import PentoolApp
                     cfg = getattr(self.app, "_cfg", None)
                     if cfg is not None:
                         cfg.scope = list(result)

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from urllib.parse import urlparse
+
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 from textual.widgets import (
@@ -19,8 +20,8 @@ from textual.widgets import (
     ProgressBar,
     RichLog,
     Static,
-    TabPane,
     TabbedContent,
+    TabPane,
     Tree,
 )
 

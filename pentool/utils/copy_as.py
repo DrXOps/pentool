@@ -7,7 +7,6 @@ import shlex
 import subprocess
 from pathlib import Path
 
-
 from pentool.utils.parser import ParsedRequest
 
 
@@ -137,7 +136,6 @@ def save_request_txt(req: ParsedRequest, path: str) -> None:
 
 def copy_as_fetch(req: ParsedRequest) -> str:
     """Generate a JavaScript fetch() call for the DevTools Console."""
-    from urllib.parse import urlparse
     import json as _json
 
     headers_dict = {

@@ -21,7 +21,7 @@ from pentool.tui.constants import (
     SCREEN_SCANNER,
     SCREEN_TARGET,
 )
-from pentool.tui.messages import ProxyClearHistory, ProxyLoadProject
+from pentool.tui.messages import ProxyLoadProject
 
 if TYPE_CHECKING:
     from pentool.tui.app import PentoolApp

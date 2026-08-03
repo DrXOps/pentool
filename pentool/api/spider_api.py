@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from pentool.core.logging import get_logger
 from pentool.api.base_api import ExportableAPI
+from pentool.core.logging import get_logger
 from pentool.modules.spider import (
     AsyncSpider,
     SpiderEndpoint,

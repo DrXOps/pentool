@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.message import Message
 from textual.widget import Widget
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "payload_drop_zone.tcss").read_text(encoding="utf-8")
 

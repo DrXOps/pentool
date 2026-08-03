@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import Callable
 
 import aiohttp
 
 from pentool.utils.parser import ParsedRequest, ParsedResponse
-
 
 # Callback type: called after each request
 RequestCallback = Callable[[ParsedRequest, ParsedResponse], None]
@@ -61,14 +59,9 @@ class HTTPClient:
                 v = ", ".join(encodings) if encodings else "gzip, deflate"
             send_headers[k] = v
 
-        # Inject scan marker header if configured
-        try:
-            from pentool.core.config import get_config
-            cfg = get_config()
-            if cfg.scan_marker_enabled and cfg.scan_marker_name:
-                send_headers[cfg.scan_marker_name] = cfg.scan_marker_value
-        except Exception:
-            pass
+        # Note: scan marker injection removed to fix layer violation
+        # (utils cannot import core.config). If needed, pass scan_marker_headers
+        # explicitly via constructor parameter.
 
         body_data = request.body.encode("utf-8") if request.body else None
         kwargs: dict = {
@@ -83,7 +76,7 @@ class HTTPClient:
         async with session.request(request.method, request.url, **kwargs) as resp:
             # Read raw bytes — aiohttp decodes gzip/deflate automatically via read()
             resp_body_bytes: bytes = await resp.read()
-            elapsed_ms = int((time.monotonic() - start) * 1000)
+            int((time.monotonic() - start) * 1000)
 
             # Decode for storage in ParsedResponse (for TUI/reports)
             try:

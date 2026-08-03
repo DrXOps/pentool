@@ -10,9 +10,7 @@ import tarfile
 import time
 import uuid
 from dataclasses import dataclass, field
-
 from pathlib import Path
-
 
 _LICENSE_FILE = Path.home() / ".pentool" / "license.dat"
 _GRACE_PERIOD_DAYS = 7
@@ -109,7 +107,7 @@ def get_license() -> LicenseInfo:
             plan="free",
             machine_id=get_machine_id(),
             license_key=cached.get("license_key", ""),
-            error=f"Grace period expired. Please reconnect to validate license.",
+            error="Grace period expired. Please reconnect to validate license.",
         )
 
     return LicenseInfo(
@@ -162,8 +160,8 @@ class FeatureNotAvailable(Exception):
 def require_feature(feature: str, plan_required: str = "pro"):
     """Decorator: raise FeatureNotAvailable if feature is not licensed."""
     def decorator(func):
-        import functools
         import asyncio as _asyncio
+        import functools
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -423,5 +421,3 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
         return True
     except Exception:
         return False
-
-

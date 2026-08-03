@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Button, Input, Static
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "filter_bar.tcss").read_text(encoding="utf-8")
 
@@ -201,4 +202,3 @@ class FilterBar(Widget):
         self._apply()
         # Returns the last built filters — via message
         return {}
-

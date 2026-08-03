@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
-from pathlib import Path
 
 _CSS = (Path(__file__).parent / "statusbar.tcss").read_text(encoding="utf-8")
 

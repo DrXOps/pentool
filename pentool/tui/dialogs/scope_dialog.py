@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
@@ -11,7 +12,6 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static, TextArea
-from pathlib import Path
 
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 

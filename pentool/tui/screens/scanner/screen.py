@@ -10,7 +10,6 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widget import Widget
 from pathlib import Path
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
@@ -390,7 +389,7 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
             # Extra saved tabs — create additional tabs for each beyond the first
             for tab_data in tabs_data[1:]:
                 extra_url  = tab_data.get("target_url", "")
-                extra_name = tab_data.get("tab_name", "Scan")
+                tab_data.get("tab_name", "Scan")
                 self.call_after_refresh(
                     self.action_new_tab, extra_url
                 )
@@ -1294,7 +1293,7 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
         if len(hosts) == 1:
             label = f"History: {next(iter(hosts))}"
         else:
-            label = f"History ({n})"
+            f"History ({n})"
         first_urls = list({r.url.split('?')[0] for r in reqs[:10]})
         first_url = first_urls[0] if first_urls else ""
         self.app.notify(f"Loaded {n} requests from history", severity="information")

@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from typing import Callable
-from urllib.parse import urlparse, urlencode, urlunparse
+from urllib.parse import urlencode, urlparse, urlunparse
 
-from pentool.api.scanner_api import ScannerAPI, Finding
+from pentool.api.scanner_api import Finding, ScannerAPI
 from pentool.api.spider_api import SpiderAPI
 from pentool.core.event_bus import EventBus
-from pentool.services.base_service import BaseService
 from pentool.core.events import (
     FindingDiscovered,
     ScanFinished,
@@ -21,6 +19,7 @@ from pentool.core.events import (
     UrlCrawled,
 )
 from pentool.core.logging import get_logger
+from pentool.services.base_service import BaseService
 
 logger = get_logger(__name__)
 

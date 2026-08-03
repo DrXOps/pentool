@@ -6,9 +6,9 @@ from typing import Callable
 
 from pentool.api.intruder_api import IntruderAPI, IntruderConfig, IntruderResult
 from pentool.core.event_bus import EventBus
-from pentool.services.base_service import BaseService
 from pentool.core.events import IntruderFinished, IntruderResultAdded
 from pentool.core.logging import get_logger
+from pentool.services.base_service import BaseService
 
 logger = get_logger(__name__)
 

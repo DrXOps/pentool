@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from pentool.modules.comparer import (  # noqa: F401
-    compare,
-    compare_lines,
     CompareStats,
     DiffLine,
     DiffResult,
+    compare,
+    compare_lines,
 )
 
 __all__ = [

@@ -9,7 +9,6 @@ from typing import Any, Callable
 
 import yaml
 
-
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "pentool"
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.yaml"
 

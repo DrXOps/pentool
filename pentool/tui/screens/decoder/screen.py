@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -10,9 +11,9 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Label, RichLog, Static, TextArea
 
-from pentool.tui.widgets.toolbar_button import ToolbarButton
-from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.core.logging import get_logger
+from pentool.tui.widgets.resize_handle import ResizeHandle
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
@@ -38,7 +39,6 @@ class DecoderScreen(Widget):
         self._chain: list[str] = []           # list of operations in the chain
 
     def compose(self) -> ComposeResult:
-        from pentool.api.decoder_api import OP_LABELS
 
         # ── Toolbar ────────────────────────────────────────────────────────────
         with Horizontal(id="dec-toolbar"):
@@ -166,7 +166,7 @@ class DecoderScreen(Widget):
     def _smart_decode(self) -> None:
         """Auto-detect and chain-decode the input."""
         try:
-            from pentool.api.decoder_api import decode_smart, detect_encoding, encode_op
+            from pentool.api.decoder_api import detect_encoding, encode_op
             inp = self.query_one("#dec-input", TextArea)
             text = inp.text.strip()
             if not text:
@@ -224,7 +224,7 @@ class DecoderScreen(Widget):
 
     def action_run_chain(self) -> None:
         try:
-            from pentool.api.decoder_api import run_chain, encode_op
+            from pentool.api.decoder_api import encode_op, run_chain
             inp_text = self.query_one("#dec-input", TextArea).text
             if not inp_text:
                 self.app.notify("Input is empty", severity="warning")
@@ -298,5 +298,3 @@ class DecoderScreen(Widget):
             self.query_one("#dec-steps-log", RichLog).clear()
         except Exception as exc:
             logger.debug("load_text: %s", exc)
-
-
