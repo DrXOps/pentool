@@ -55,6 +55,34 @@ pytest_skip_if_no_scanner = pytest.mark.skipif(
 )
 
 
+def pytest_collection_modifyitems(config, items):
+    """Automatically skip tests that import scanner if module not available."""
+    if has_scanner_module():
+        return
+
+    skip_scanner = pytest.mark.skip(reason="Scanner module (PRO) not available")
+
+    for item in items:
+        # Skip if test file imports from pentool.modules.scanner
+        if "test_spider.py" in str(item.fspath):
+            # test_spider has scanner-dependent tests
+            if any(name in item.nodeid for name in [
+                "TestPayloadsLoader", "TestActiveChecksInit"
+            ]):
+                item.add_marker(skip_scanner)
+
+        # Skip tests that import scanner APIs
+        if "test_project_persistence.py" in str(item.fspath):
+            if "ScannerAPI" in item.nodeid:
+                item.add_marker(skip_scanner)
+
+        # Skip TUI tests that try to load scanner screen.tcss
+        if any(name in str(item.fspath) for name in [
+            "test_live_dashboard.py", "test_message_storm.py"
+        ]):
+            item.add_marker(skip_scanner)
+
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "integration: integration tests (TUI, network)")
