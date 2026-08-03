@@ -96,9 +96,11 @@ class TestBaseServiceEmit:
         """Emit falls back to direct emit if tui_loop is closed."""
         bus = EventBus()
         loop = asyncio.new_event_loop()
-        loop.close()
 
         service = BaseService(event_bus=bus, tui_loop=loop)
+
+        # Close loop after service creation
+        loop.close()
 
         events = []
         def capture(event):
@@ -106,8 +108,8 @@ class TestBaseServiceEmit:
 
         bus.subscribe("test_event", capture)
 
-        from pentool.core.events import ProxyRequestStart
-        event = ProxyRequestStart(request_id=1, method="GET", url="http://example.com")
+        from pentool.core.events import ScanStarted
+        event = ScanStarted(targets=["http://example.com"], checks=[], source="test")
 
         service._emit(event)
 
