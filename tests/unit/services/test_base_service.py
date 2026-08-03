@@ -59,8 +59,8 @@ class TestBaseServiceEmit:
 
         bus.subscribe("test_event", capture)
 
-        from pentool.core.events import ProxyRequestStart
-        event = ProxyRequestStart(request_id=1, method="GET", url="http://example.com")
+        from pentool.core.events import ScanStarted
+        event = ScanStarted(targets=["http://example.com"], checks=[], source="test")
 
         service._emit(event)
 
