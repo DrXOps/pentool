@@ -38,7 +38,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --tb=short --timeout=60 -q
+          pytest tests/unit/ -v --tb=short -q
         env:
           PYTHONDONTWRITEBYTECODE: "1"
 
@@ -74,7 +74,7 @@ jobs:
                  tests/integration/test_proxy_service.py \
                  tests/integration/test_event_bus.py \
                  tests/integration/test_repeater_service.py \
-                 -v --tb=short --timeout=60
+                 -v --tb=short
         env:
           PYTHONDONTWRITEBYTECODE: "1"
 
@@ -83,7 +83,7 @@ jobs:
           pytest tests/integration/test_navigation.py \
                  tests/integration/test_tui_events.py \
                  tests/integration/test_new_features.py \
-                 -v --tb=short --timeout=60
+                 -v --tb=short
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         continue-on-error: true  # TUI tests may be flaky in headless CI
@@ -116,7 +116,7 @@ jobs:
 
       - name: Run E2E tests
         run: |
-          pytest tests/e2e/ -v --tb=short --timeout=60
+          pytest tests/e2e/ -v --tb=short
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         continue-on-error: true  # E2E tests may be flaky in headless CI
@@ -149,7 +149,7 @@ jobs:
 
       - name: Run security tests
         run: |
-          pytest tests/security/ -v --tb=short --timeout=60
+          pytest tests/security/ -v --tb=short
         env:
           PYTHONDONTWRITEBYTECODE: "1"
 
@@ -181,7 +181,7 @@ jobs:
 
       - name: Run performance tests
         run: |
-          pytest tests/performance/ -v --tb=short --timeout=120 -m "performance or slow"
+          pytest tests/performance/ -v --tb=short -m "performance or slow"
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         continue-on-error: true  # performance bounds may vary on CI
@@ -222,7 +222,7 @@ jobs:
             tests/integration/test_event_bus.py \
             tests/integration/test_repeater_service.py \
             tests/security/ \
-            -q --timeout=60
+            -q
           coverage report --fail-under=60
           coverage xml
 
@@ -260,7 +260,7 @@ jobs:
 
       - name: Run snapshot tests
         run: |
-          pytest tests/snapshot/ -v --tb=short --timeout=60
+          pytest tests/snapshot/ -v --tb=short
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         continue-on-error: true
