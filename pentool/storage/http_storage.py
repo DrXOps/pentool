@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS requests (
     request_body      TEXT,
     response_body     TEXT,
     request_body_ref  TEXT,
-    response_body_ref TEXT
+    response_body_ref TEXT,
+    comment           TEXT    DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_host   ON requests(host);
 CREATE INDEX IF NOT EXISTS idx_status ON requests(status_code);
@@ -450,6 +451,24 @@ class HttpStorage:
 
     async def get_request_by_id(self, request_id: int) -> dict | None:
         return await self.get_full_entry(request_id)
+
+    async def update_comment(self, request_id: int, comment: str) -> None:
+        """Update comment for a request."""
+        assert self._db
+        await self._db.execute(
+            "UPDATE requests SET comment = ? WHERE id = ?",
+            (comment, request_id)
+        )
+        await self._db.commit()
+
+    async def get_comment(self, request_id: int) -> str:
+        """Get comment for a request."""
+        assert self._db
+        async with self._db.execute(
+            "SELECT comment FROM requests WHERE id = ?", (request_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        return row[0] if row else ""
 
     def _build_where(self, filters: dict | None) -> tuple[str, list]:
         """Build a WHERE clause from a filter dictionary."""
