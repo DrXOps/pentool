@@ -1768,5 +1768,45 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self.app.post_message(SendToTarget(parsed))
         self.app.notify("Added to Target", severity="information", timeout=2)
 
+    def _add_tag_dialog(self) -> None:
+        """Show dialog to add tag to selected request."""
+        if not self._selected_req_id:
+            return
+        # TODO: Show input dialog to enter tag
+        # For now, just add a default tag
+        self.run_worker(self._add_tag(self._selected_req_id, "important"))
+
+    async def _add_tag(self, request_id: int, tag: str) -> None:
+        """Add tag to request."""
+        try:
+            if self._proxy_service:
+                storage = self._proxy_service._storage
+                existing = await storage.get_tags(request_id)
+                tags = existing.split(",") if existing else []
+                if tag not in tags:
+                    tags.append(tag)
+                await storage.update_tags(request_id, ",".join(tags))
+                self.notify(f"Tag '{tag}' added", timeout=2)
+        except Exception as exc:
+            logger.error("Failed to add tag: %s", exc)
+
+    def _set_color_dialog(self) -> None:
+        """Show dialog to set color for selected request."""
+        if not self._selected_req_id:
+            return
+        # TODO: Show color picker dialog
+        # For now, just set a default color
+        self.run_worker(self._set_color(self._selected_req_id, "red"))
+
+    async def _set_color(self, request_id: int, color: str) -> None:
+        """Set color mark for request."""
+        try:
+            if self._proxy_service:
+                storage = self._proxy_service._storage
+                await storage.update_color(request_id, color)
+                self.notify(f"Color set to {color}", timeout=2)
+        except Exception as exc:
+            logger.error("Failed to set color: %s", exc)
+
     def on_context_menu_item_selected(self, event: ContextMenu.ItemSelected) -> None:
         self._on_ctx_action(event.action)
