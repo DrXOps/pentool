@@ -1,10 +1,13 @@
 name: Sync to Gitee
 
+# ВРЕМЕННО ОТКЛЮЧЕНО (2026-08-03): нет доступа к Gitee-аккаунту для
+# настройки GITEE_TOKEN/GITEE_REPO secrets. Включить обратно, когда
+# доступ появится — снять комментарий с триггеров ниже.
 on:
-  push:
-    branches:
-      - main
-      - master
+  # push:
+  #   branches:
+  #     - main
+  #     - master
   workflow_dispatch:
 
 jobs:
