@@ -20,21 +20,17 @@ Fast, transparent, and built for real-world testing.
 
 ## 📸 Screenshots
 
-| Dashboard | Proxy |
-|:---------:|:-----:|
-| ![Dashboard](screens/screen-dashboard.png) | ![Proxy](screens/screen-proxy.png) |
+| Dashboard | Scanner |
+|:---------:|:-------:|
+| ![Dashboard](screens/dashboard.png) | ![Scanner](screens/scaner.png) |
 
-| Repeater | Scanner |
-|:--------:|:-------:|
-| ![Repeater](screens/screen-repeater.png) | ![Scanner](screens/screen-scanner.png) |
+| Proxy | Repeater |
+|:-----:|:--------:|
+| ![Proxy](screens/proxy.png) | ![Repeater](screens/repeater.png) |
 
-| Intruder | Intruder — Request Detail |
-|:--------:|:-------------------------:|
-| ![Intruder](screens/screen-intruder.png) | ![Intruder Detail](screens/screen-intruder-detail.png) |
-
-| Decoder |
-|:-------:|
-| ![Decoder](screens/screen-decoder.png) |
+| Intruder | Settings |
+|:--------:|:--------:|
+| ![Intruder](screens/intruder.png) | ![Settings](screens/settings.png) |
 
 ---
 
@@ -100,14 +96,6 @@ pentool update --check
 ```
 
 ---
-
-## 📸 Screenshots
-
-> Screenshots and GIFs coming soon.
-
-| Dashboard | Proxy | Intruder |
-|-----------|-------|----------|
-| *(coming soon)* | *(coming soon)* | *(coming soon)* |
 
 ---
 
