@@ -197,9 +197,105 @@
     .footer-links a:hover { color: var(--text); }
     .footer-bottom { text-align: center; padding: 1.5rem 2rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--border); }
 
+    /* SCREENSHOTS */
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 1.5rem;
+    }
+    .screenshot-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color .2s, transform .15s;
+    }
+    .screenshot-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .screenshot-label {
+      padding: .5rem 1rem;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border-bottom: 1px solid var(--border);
+    }
+    .screenshot-card img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    /* DONATE */
+    .donate-section { padding: 5rem 2rem; max-width: 1000px; margin: 0 auto; }
+    .donate-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.25rem;
+      margin-top: 2.5rem;
+    }
+    .donate-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      transition: border-color .2s;
+    }
+    .donate-card:hover { border-color: var(--accent2); }
+    .donate-card-header {
+      display: flex; align-items: center; gap: .6rem;
+      margin-bottom: 1rem;
+    }
+    .donate-coin { font-size: 1.4rem; }
+    .donate-card h3 { font-size: .95rem; font-weight: 700; margin: 0; }
+    .donate-network {
+      font-size: .75rem;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: .35rem;
+      margin-top: .75rem;
+    }
+    .donate-address-row {
+      display: flex; align-items: center; gap: .4rem;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .5rem .75rem;
+    }
+    .donate-address {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .72rem;
+      color: var(--text);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .donate-copy {
+      background: none; border: none;
+      color: var(--muted); cursor: pointer;
+      font-size: .75rem; padding: .1rem .3rem;
+      border-radius: 4px; white-space: nowrap;
+      transition: color .2s, background .2s;
+    }
+    .donate-copy:hover { color: var(--text); background: var(--bg); }
+    .donate-copy.copied { color: var(--accent2); }
+    .donate-note {
+      background: rgba(227,179,65,.06);
+      border: 1px solid rgba(227,179,65,.2);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-size: .85rem;
+      color: var(--muted);
+      margin-top: 2rem;
+    }
+    .donate-note strong { color: var(--warn); }
+
     @media (max-width: 600px) {
       .nav-links { display: none; }
       footer { flex-direction: column; }
+      .screenshots-grid { grid-template-columns: 1fr; }
+      .donate-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -210,8 +306,10 @@
   <a class="nav-logo" href="#"><span>⬛</span> Pentool</a>
   <ul class="nav-links">
     <li><a href="#features">Features</a></li>
+    <li><a href="#screenshots">Screenshots</a></li>
     <li><a href="#install">Install</a></li>
     <li><a href="#docs">Docs</a></li>
+    <li><a href="#donate">Donate</a></li>
     <li><a href="#beta">Trial</a></li>
   </ul>
   <a class="nav-cta" href="https://github.com/docxqwerty/pentool">GitHub</a>
@@ -341,7 +439,58 @@
 
 <hr class="divider" />
 
-<!-- TRIAL NOTICE -->
+<!-- SCREENSHOTS -->
+<section class="section" id="screenshots">
+  <div class="section-label">In action</div>
+  <h2 class="section-title">Screenshots</h2>
+  <p class="section-sub">Pentool running in a real terminal — no mocks, no marketing renders.</p>
+  <div class="screenshots-grid">
+    <div class="screenshot-card">
+      <div class="screenshot-label">Dashboard</div>
+      <a href="screens/screen-dashboard.png" target="_blank">
+        <img src="screens/screen-dashboard.png" alt="Dashboard" loading="lazy" />
+      </a>
+    </div>
+    <div class="screenshot-card">
+      <div class="screenshot-label">Proxy</div>
+      <a href="screens/screen-proxy.png" target="_blank">
+        <img src="screens/screen-proxy.png" alt="Proxy" loading="lazy" />
+      </a>
+    </div>
+    <div class="screenshot-card">
+      <div class="screenshot-label">Repeater</div>
+      <a href="screens/screen-repeater.png" target="_blank">
+        <img src="screens/screen-repeater.png" alt="Repeater" loading="lazy" />
+      </a>
+    </div>
+    <div class="screenshot-card">
+      <div class="screenshot-label">Scanner</div>
+      <a href="screens/screen-scanner.png" target="_blank">
+        <img src="screens/screen-scanner.png" alt="Scanner" loading="lazy" />
+      </a>
+    </div>
+    <div class="screenshot-card">
+      <div class="screenshot-label">Intruder</div>
+      <a href="screens/screen-intruder.png" target="_blank">
+        <img src="screens/screen-intruder.png" alt="Intruder" loading="lazy" />
+      </a>
+    </div>
+    <div class="screenshot-card">
+      <div class="screenshot-label">Intruder — Request Detail</div>
+      <a href="screens/screen-intruder-detail.png" target="_blank">
+        <img src="screens/screen-intruder-detail.png" alt="Intruder detail panel" loading="lazy" />
+      </a>
+    </div>
+    <div class="screenshot-card">
+      <div class="screenshot-label">Decoder</div>
+      <a href="screens/screen-decoder.png" target="_blank">
+        <img src="screens/screen-decoder.png" alt="Decoder" loading="lazy" />
+      </a>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
 <section class="beta-section" id="beta">
   <div class="beta-box">
     <h2>🚀 Demo Version — 14-Day Free Trial</h2>
@@ -350,8 +499,83 @@
       <li>🔧 <div><strong>PRO features are under active development.</strong> Some advanced modules are still being built. You're getting early access, not a finished product.</div></li>
       <li>🔑 <div><strong>Ready to go PRO?</strong> Licenses are not sold publicly yet. Reach out personally — <a href="https://t.me/sudores">@sudores</a> on Telegram.</div></li>
       <li>🎙 <div><strong>Run a security blog, YouTube channel, or Telegram channel?</strong> Write a review and recommend Pentool to your audience — we'll give you a <strong>permanent PRO license, free of charge.</strong> → <a href="https://t.me/sudores">@sudores</a></div></li>
-      <li>☕ <div><strong>Want to support development?</strong> → <a href="https://donate.trybit.com/KY1ECKA5">Donate via TryBit (crypto)</a></div></li>
+      <li>☕ <div><strong>Want to support development?</strong> → <a href="https://t.me/sudores">@sudores</a></div></li>
     </ul>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- DONATE -->
+<section class="donate-section" id="donate">
+  <div class="section-label">Support the project</div>
+  <h2 class="section-title">💝 Donate</h2>
+  <p class="section-sub">Help keep Pentool free and open-source. Any amount is appreciated.</p>
+  <div class="donate-grid">
+
+    <div class="donate-card">
+      <div class="donate-card-header">
+        <span class="donate-coin">₿</span>
+        <h3>Bitcoin (BTC)</h3>
+      </div>
+      <div class="donate-network">BTC · Native SegWit</div>
+      <div class="donate-address-row">
+        <span class="donate-address" id="addr-btc">bc1q3dpyhrllqfj3lh7sppszfp7tqwwczvnnnmqc6u</span>
+        <button class="donate-copy" onclick="copyAddr('addr-btc',this)">Copy</button>
+      </div>
+    </div>
+
+    <div class="donate-card">
+      <div class="donate-card-header">
+        <span class="donate-coin">Ξ</span>
+        <h3>Ethereum (ETH)</h3>
+      </div>
+      <div class="donate-network">ERC-20 · Ethereum</div>
+      <div class="donate-address-row">
+        <span class="donate-address" id="addr-eth-erc20">0x080EF7003e9A2f74a427571882D84053787E57FA</span>
+        <button class="donate-copy" onclick="copyAddr('addr-eth-erc20',this)">Copy</button>
+      </div>
+      <div class="donate-network">BSC · BEP-20</div>
+      <div class="donate-address-row">
+        <span class="donate-address" id="addr-eth-bsc">0x080EF7003e9A2f74a427571882D84053787E57FA</span>
+        <button class="donate-copy" onclick="copyAddr('addr-eth-bsc',this)">Copy</button>
+      </div>
+    </div>
+
+    <div class="donate-card">
+      <div class="donate-card-header">
+        <span class="donate-coin">₮</span>
+        <h3>USDT (Tether)</h3>
+      </div>
+      <div class="donate-network">TRC-20 · TRON</div>
+      <div class="donate-address-row">
+        <span class="donate-address" id="addr-usdt-trc20">THuwFSKVkUjmWVDa8sRwVPdPtWVr4kxTtq</span>
+        <button class="donate-copy" onclick="copyAddr('addr-usdt-trc20',this)">Copy</button>
+      </div>
+      <div class="donate-network">ERC-20 · Ethereum</div>
+      <div class="donate-address-row">
+        <span class="donate-address" id="addr-usdt-erc20">0x080EF7003e9A2f74a427571882D84053787E57FA</span>
+        <button class="donate-copy" onclick="copyAddr('addr-usdt-erc20',this)">Copy</button>
+      </div>
+    </div>
+
+    <div class="donate-card">
+      <div class="donate-card-header">
+        <span class="donate-coin">💎</span>
+        <h3>TON Coin</h3>
+      </div>
+      <div class="donate-network">TON Network</div>
+      <div class="donate-address-row">
+        <span class="donate-address" id="addr-ton">Coming soon</span>
+        <button class="donate-copy" onclick="copyAddr('addr-ton',this)">Copy</button>
+      </div>
+    </div>
+
+  </div>
+  <div class="donate-note">
+    <strong>⚠️ Important:</strong> Always select the correct network before sending.
+    Sending to the wrong network may result in permanent loss of funds.
+    After donating, feel free to reach out on <a href="https://t.me/sudores" style="color:var(--accent);">Telegram</a> — it means a lot!
   </div>
 </section>
 
@@ -383,12 +607,12 @@
       <h4>Plugin API</h4>
       <p>Build your own extensions</p>
     </a>
-    <a class="doc-card" href="https://github.com/docxqwerty/pentool/blob/main/README_RU.md">
+    <a class="doc-card" href="https://github.com/docxqwerty/pentool/blob/main/docs/i18n/ru/README.md">
       <div class="doc-icon">🇷🇺</div>
       <h4>Русский</h4>
       <p>README на русском</p>
     </a>
-    <a class="doc-card" href="https://github.com/docxqwerty/pentool/blob/main/README_ZH.md">
+    <a class="doc-card" href="https://github.com/docxqwerty/pentool/blob/main/docs/i18n/zh/README.md">
       <div class="doc-icon">🇨🇳</div>
       <h4>中文</h4>
       <p>中文 README</p>
@@ -418,7 +642,7 @@
     <ul>
       <li><a href="https://t.me/sudores">Telegram @sudores</a></li>
       <li><a href="mailto:support@pentool.pro">Email</a></li>
-      <li><a href="https://donate.trybit.com/KY1ECKA5">Donate ☕</a></li>
+      <li><a href="#donate">Donate ☕</a></li>
     </ul>
   </div>
   <div class="footer-links">
@@ -431,8 +655,18 @@
   </div>
 </footer>
 <div class="footer-bottom">
-  © 2024–2026 Anatoly Kashtanov (DoctorX) · Pentool v0.1.1 · <a href="https://github.com/docxqwerty/pentool" style="color:var(--muted);">github.com/docxqwerty/pentool</a>
+  © 2024–2026 Anatoly Kashtanov (DoctorX) · Pentool v0.1.7 · <a href="https://github.com/docxqwerty/pentool" style="color:var(--muted);">github.com/docxqwerty/pentool</a>
 </div>
 
 </body>
+<script>
+function copyAddr(id, btn) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
 </html>
