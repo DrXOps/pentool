@@ -11,7 +11,12 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from aioresponses import aioresponses
+
+# aioresponses is only installed via requirements-dev.txt (tests.yml's install
+# step); ci.yml's "test" job runs a bare `pip install -e ".[dev]"` and does
+# not have it. Skip gracefully instead of failing collection there.
+aioresponses_mod = pytest.importorskip("aioresponses")
+aioresponses = aioresponses_mod.aioresponses
 
 from pentool.modules.intruder import AttackType, IntruderAttack, IntruderConfig
 
