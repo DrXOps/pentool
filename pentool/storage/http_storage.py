@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS requests (
     response_body     TEXT,
     request_body_ref  TEXT,
     response_body_ref TEXT,
-    comment           TEXT    DEFAULT ''
+    comment           TEXT    DEFAULT '',
+    tags              TEXT    DEFAULT '',
+    color             TEXT    DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_host   ON requests(host);
 CREATE INDEX IF NOT EXISTS idx_status ON requests(status_code);
@@ -466,6 +468,33 @@ class HttpStorage:
         assert self._db
         async with self._db.execute(
             "SELECT comment FROM requests WHERE id = ?", (request_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        return row[0] if row else ""
+
+    async def update_tags(self, request_id: int, tags: str) -> None:
+        """Update tags for a request (comma-separated)."""
+        assert self._db
+        await self._db.execute(
+            "UPDATE requests SET tags = ? WHERE id = ?",
+            (tags, request_id)
+        )
+        await self._db.commit()
+
+    async def update_color(self, request_id: int, color: str) -> None:
+        """Update color mark for a request."""
+        assert self._db
+        await self._db.execute(
+            "UPDATE requests SET color = ? WHERE id = ?",
+            (color, request_id)
+        )
+        await self._db.commit()
+
+    async def get_tags(self, request_id: int) -> str:
+        """Get tags for a request."""
+        assert self._db
+        async with self._db.execute(
+            "SELECT tags FROM requests WHERE id = ?", (request_id,)
         ) as cur:
             row = await cur.fetchone()
         return row[0] if row else ""
