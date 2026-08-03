@@ -318,6 +318,10 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
             yield ToolbarButton("🗑 Clear",      "btn-clear")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("● Passive: OFF","btn-passive")
+            yield Static(
+                "Пассивный режим: анализ без отправки дополнительных запросов",
+                classes="passive-hint"
+            )
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("⚑ False+",     "btn-fp")
             yield Static(" │ ", classes="toolbar-sep")
