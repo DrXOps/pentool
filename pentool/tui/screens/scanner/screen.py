@@ -354,7 +354,14 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
             return
         from pentool.api.scanner_api import ScannerAPI
         from pentool.utils.http_client import HTTPClient
-        http_client = HTTPClient(timeout=20.0, follow_redirects=True, verify_ssl=False)
+        from pentool.core.config import get_config
+
+        cfg = get_config()
+        extra_headers = {}
+        if cfg.scan_marker_enabled and cfg.scan_marker_name:
+            extra_headers[cfg.scan_marker_name] = cfg.scan_marker_value
+
+        http_client = HTTPClient(timeout=20.0, follow_redirects=True, verify_ssl=False, extra_headers=extra_headers)
         scanner_api = ScannerAPI(db_path=db_path, http_client=http_client)
         self.run_worker(self._do_load_tabs(scanner_api), exclusive=False)
 
