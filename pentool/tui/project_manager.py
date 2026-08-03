@@ -327,7 +327,7 @@ class ProjectManager:
 
         self._cfg.db_path = path
         self._app._project_path = path
-        self._app._project_loaded = True
+        # Note: _project_loaded will be set AFTER _reload_project_screens in _do_switch
 
         if self._proxy:
             self._proxy.db_path = path
@@ -407,6 +407,10 @@ class ProjectManager:
 
         # 4. Reload all screens — all awaited, never spawning sub-workers
         await self._reload_project_screens(path, is_new=is_new)
+
+        # 5. Set flag AFTER all screens are reloaded (fixes race condition)
+        self._app._project_loaded = True
+        logger.info("_do_switch: project loaded flag set")
 
     async def _reload_project_screens(self, path: str, is_new: bool = False) -> None:
         """Reload data from DB into all screens. Called from _do_switch only."""
