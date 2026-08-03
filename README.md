@@ -18,6 +18,26 @@ Fast, transparent, and built for real-world testing.
 
 ---
 
+## 📸 Screenshots
+
+| Dashboard | Proxy |
+|:---------:|:-----:|
+| ![Dashboard](screens/screen-dashboard.png) | ![Proxy](screens/screen-proxy.png) |
+
+| Repeater | Scanner |
+|:--------:|:-------:|
+| ![Repeater](screens/screen-repeater.png) | ![Scanner](screens/screen-scanner.png) |
+
+| Intruder | Intruder — Request Detail |
+|:--------:|:-------------------------:|
+| ![Intruder](screens/screen-intruder.png) | ![Intruder Detail](screens/screen-intruder-detail.png) |
+
+| Decoder |
+|:-------:|
+| ![Decoder](screens/screen-decoder.png) |
+
+---
+
 ## ✨ Features
 
 - **🌐 Proxy**  
