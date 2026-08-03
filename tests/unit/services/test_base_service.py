@@ -68,7 +68,6 @@ class TestBaseServiceEmit:
         assert len(events) == 1
         assert events[0] is event
 
-    @pytest.mark.asyncio
     async def test_emit_with_tui_loop(self):
         """Emit calls bus.emit_threadsafe when tui_loop is set."""
         bus = EventBus()
@@ -81,8 +80,8 @@ class TestBaseServiceEmit:
 
         bus.subscribe("test_event", capture)
 
-        from pentool.core.events import ProxyRequestStart
-        event = ProxyRequestStart(request_id=1, method="GET", url="http://example.com")
+        from pentool.core.events import ScanStarted
+        event = ScanStarted(targets=["http://example.com"], checks=[], source="test")
 
         service._emit(event)
 
