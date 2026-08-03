@@ -16,10 +16,12 @@ from pentool.tui.screens.terminal.screen import TerminalScreen
 # Scanner is a PRO-only module, downloaded separately into ~/.pentool/pro/
 # (see 'pentool license trial'/'activate'). Absent on a bare pip install —
 # import it defensively so the rest of the TUI still works without it.
+# FileNotFoundError: screen.tcss may also be missing on CI runners that
+# do not have the PRO submodule checked out.
 try:
     from pentool.tui.screens.scanner.screen import ScannerScreen
     SCANNER_SCREEN_AVAILABLE = True
-except ImportError:
+except (ImportError, FileNotFoundError):
     from pentool.tui.screens.scanner_unavailable import ScannerUnavailableScreen as ScannerScreen
     SCANNER_SCREEN_AVAILABLE = False
 
