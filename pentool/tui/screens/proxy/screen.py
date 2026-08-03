@@ -1619,6 +1619,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             ("send_scanner",   "Send to Scanner"),
             ("send_target",    "Send to Target"),
             ("-", ""),
+            ("add_tag", "Add Tag"),
+            ("set_color", "Set Color"),
+            ("-", ""),
         ]
         if selected_host and not in_scope:
             items.append(("add_scope", f"Add {selected_host} to Scope"))
@@ -1679,6 +1682,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 self.app.post_message(SendHostToScanner(host))
         elif action == "send_target":
             self._send_to_target()
+        elif action == "add_tag":
+            self._add_tag_dialog()
+        elif action == "set_color":
+            self._set_color_dialog()
         elif action == "add_scope":
             self._scope_action_for_selected(add=True)
         elif action == "remove_scope":
