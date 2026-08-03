@@ -31,6 +31,18 @@ class TestToolbarButtonInit:
 
         assert btn.disabled
 
+    def test_init_with_tooltip(self):
+        """Initialization with tooltip sets Textual tooltip attribute."""
+        btn = ToolbarButton("Stop", "btn-stop", tooltip="Stop the scan")
+
+        assert btn.tooltip == "Stop the scan"
+
+    def test_init_without_tooltip_is_none(self):
+        """No tooltip passed → tooltip stays None (Textual default)."""
+        btn = ToolbarButton("Start", "btn-start")
+
+        assert btn.tooltip is None
+
 
 class TestToolbarButtonLabel:
     """Test label property."""

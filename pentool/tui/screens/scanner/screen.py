@@ -305,9 +305,15 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────
         with Horizontal(id="toolbar"):
-            yield ToolbarButton("▶ Start",       "btn-start")
+            yield ToolbarButton(
+                "▶ Start", "btn-start",
+                tooltip="Запустить сканирование (Ctrl+J). Метка меняется на Resume после паузы."
+            )
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("■ Stop",        "btn-stop",         classes="disabled")
+            yield ToolbarButton(
+                "■ Stop", "btn-stop", classes="disabled",
+                tooltip="Остановить/приостановить текущее сканирование (Ctrl+P)"
+            )
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("→ Repeater",    "btn-send-repeater",classes="disabled")
             yield Static(" │ ", classes="toolbar-sep")
@@ -315,7 +321,10 @@ class ScannerScreen(BaseModuleScreen, RequestContextMenuMixin):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("🔒 PRO Report", "btn-pro-report",   classes="pro-locked")
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("🗑 Clear",      "btn-clear")
+            yield ToolbarButton(
+                "🗑 Clear", "btn-clear",
+                tooltip="Очистить все находки текущей вкладки (нельзя отменить)"
+            )
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("● Passive: OFF","btn-passive")
             yield Static(

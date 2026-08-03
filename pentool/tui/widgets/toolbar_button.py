@@ -37,10 +37,12 @@ class ToolbarButton(Static):
             """Allows @on(ToolbarButton.Pressed, "#btn-id") CSS selector."""
             return self.button
 
-    def __init__(self, label: str, btn_id: str, classes: str = "") -> None:
+    def __init__(self, label: str, btn_id: str, classes: str = "", tooltip: str | None = None) -> None:
         super().__init__(label, id=btn_id, classes=classes)
         self._label = label
         self._disabled = "disabled" in classes.split()
+        if tooltip:
+            self.tooltip = tooltip
 
     @property
     def label(self) -> str:
