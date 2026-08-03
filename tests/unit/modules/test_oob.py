@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from tests.conftest import pytest_skip_if_no_scanner
+
+pytestmark = pytest_skip_if_no_scanner
+
 from pentool.modules.scanner.oob import OOBHelper, get_oob_helper
 
 

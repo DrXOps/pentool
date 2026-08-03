@@ -2,6 +2,11 @@
 
 import pytest
 from unittest.mock import Mock, AsyncMock
+
+from tests.conftest import pytest_skip_if_no_scanner
+
+pytestmark = pytest_skip_if_no_scanner
+
 from pentool.services.scan_service import ScanService, ScanConfig
 from pentool.api.scanner_api import ScannerAPI
 from pentool.api.spider_api import SpiderAPI

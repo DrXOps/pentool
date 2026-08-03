@@ -40,6 +40,21 @@ from pentool.core.database import init_db
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
+def has_scanner_module():
+    """Check if scanner module (PRO) is available."""
+    try:
+        import pentool.modules.scanner  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+pytest_skip_if_no_scanner = pytest.mark.skipif(
+    not has_scanner_module(),
+    reason="Scanner module (PRO) not available"
+)
+
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "integration: integration tests (TUI, network)")
