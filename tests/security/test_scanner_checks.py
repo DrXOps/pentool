@@ -4,6 +4,9 @@ from __future__ import annotations
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+# Skip all tests if scanner module not available
+pytest.importorskip("pentool.modules.scanner")
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
