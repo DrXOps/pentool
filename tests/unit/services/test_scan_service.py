@@ -3,9 +3,8 @@
 import pytest
 from unittest.mock import Mock, AsyncMock
 
-from tests.conftest import pytest_skip_if_no_scanner
-
-pytestmark = pytest_skip_if_no_scanner
+# Skip all tests if scanner module not available
+pytest.importorskip("pentool.modules.scanner")
 
 from pentool.services.scan_service import ScanService, ScanConfig
 from pentool.api.scanner_api import ScannerAPI

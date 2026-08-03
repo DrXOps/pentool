@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tests.conftest import pytest_skip_if_no_scanner
-
-pytestmark = pytest_skip_if_no_scanner
+# Skip all tests if scanner module not available
+pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.oob import OOBHelper, get_oob_helper
 
