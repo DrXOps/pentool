@@ -18,6 +18,7 @@ from textual.widget import Widget
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 from textual.widgets import (
+    Input,
     Label,
     Static,
     TabbedContent,
@@ -289,6 +290,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                             with Vertical(id="req-panel"):
                                 yield Static("Request", classes="panel-title")
                                 yield HttpView(id="req-editor")
+                                with Horizontal(classes="comment-row"):
+                                    yield Label("Comment:", classes="comment-label")
+                                    yield Input(
+                                        placeholder="Add comment...",
+                                        id="req-comment",
+                                        classes="comment-input"
+                                    )
                             yield ResizeHandle(
                                 "req-panel", "resp-panel",
                                 id="resize-req-resp",
@@ -771,6 +779,26 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         else:
             self._select_row(event.cursor_row)
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle comment input submission."""
+        if event.input.id == "req-comment":
+            comment = event.input.value
+            if self._selected_req_id and self._proxy_service:
+                self.run_worker(
+                    self._save_comment(self._selected_req_id, comment),
+                    exclusive=False
+                )
+
+    async def _save_comment(self, request_id: int, comment: str) -> None:
+        """Save comment to database."""
+        try:
+            storage = self._proxy_service._storage
+            await storage.update_comment(request_id, comment)
+            logger.info("PROXY: Comment saved for request %d", request_id)
+        except Exception as exc:
+            logger.error("PROXY: Failed to save comment: %s", exc)
+            self._select_row(event.cursor_row)
+
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
         """Give focus to DataTable on any cursor movement — required for mouse scroll."""
         try:
@@ -1086,6 +1114,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             from pentool.utils.parser import build_http_request
             raw_req = build_http_request(parsed_req)
             self.query_one("#req-editor", HttpView).load_raw_http(raw_req)
+        except Exception:
+            pass
+
+        # Load comment
+        try:
+            comment = entry.get("comment", "")
+            self.query_one("#req-comment", Input).value = comment or ""
         except Exception:
             pass
 
