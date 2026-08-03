@@ -207,6 +207,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._inspector_visible: bool = False
         self._current_filters: dict | None = None
         self._pending_req_ids: dict[str, int] = {}
+        self._pending_req_ids_ts: dict[str, float] = {}  # БАГ-C: timestamps for periodic cleanup
         self._intercept_req: InterceptedRequest | None = None
         self._intercept_pending: list[InterceptedRequest] = []
         # Debounce: batch rapid row appends into one incremental add_rows() call
@@ -364,6 +365,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._sync_intercept_button()
         self._setup_tooltips()
         # init_storage is called from app.on_mount after _proxy_service injection
+        # БАГ-C: periodic cleanup of stale _pending_req_ids entries (memory leak fix)
+        self.set_interval(300, self._cleanup_pending_req_ids)
         # Set initial ScopeToggle state from config
         try:
             from pentool.core.config import get_config
@@ -650,7 +653,33 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             return
         logger.info("PROXY SCREEN: add_request_row: %s %s (id=%s, ws=%s)", req.method, req.url, req.id, req.is_websocket)
         self._pending_req_ids[req.id] = -1
+        self._pending_req_ids_ts[req.id] = time.time()
         self.run_worker(self._store_request(req))
+
+    def _cleanup_pending_req_ids(self) -> None:
+        """БАГ-C: periodic cleanup of stale _pending_req_ids entries.
+
+        Normally every entry is removed in _update_and_reload() once the
+        response arrives. But if a request never completes (client aborts,
+        intercept dropped, proxy restarted mid-flight, etc.) the entry would
+        otherwise stay in the dict forever — unbounded memory growth over a
+        long-running session. Anything older than 10 minutes is stale and
+        safe to drop; _wait_for_row_id already bails out after ~5s so no
+        legitimate in-flight request should ever hit this threshold.
+        """
+        cutoff = time.time() - 600  # 10 minutes
+        stale_ids = [
+            req_id for req_id, ts in self._pending_req_ids_ts.items()
+            if ts < cutoff
+        ]
+        for req_id in stale_ids:
+            self._pending_req_ids.pop(req_id, None)
+            self._pending_req_ids_ts.pop(req_id, None)
+        if stale_ids:
+            logger.debug(
+                "PROXY SCREEN: _cleanup_pending_req_ids: removed %d stale entries",
+                len(stale_ids)
+            )
 
     def update_request_row(self, req: object) -> None:
         """Called from app when a request is fully complete (with response)."""
@@ -684,6 +713,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             return
         await self._wait_for_row_id(req)
         actual_row_id = self._pending_req_ids.pop(req.id, None)
+        self._pending_req_ids_ts.pop(req.id, None)
         if actual_row_id and actual_row_id != -1 and req.response is not None:
             await self._proxy_service.update_response(actual_row_id, req.response)
         elif req.response is not None:
