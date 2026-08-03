@@ -98,14 +98,18 @@ class HttpStorage:
         self._db = await aiosqlite.connect(self._path)
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(_SCHEMA)
-        # Migration: add is_websocket column if missing (for existing databases)
-        try:
-            await self._db.execute(
-                "ALTER TABLE requests ADD COLUMN is_websocket INTEGER NOT NULL DEFAULT 0"
-            )
-            await self._db.commit()
-        except Exception:
-            pass  # column already exists — this is normal, no need to log
+        # Migrations: add new columns if missing (safe to run on each startup)
+        for migration in [
+            "ALTER TABLE requests ADD COLUMN is_websocket INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE requests ADD COLUMN comment TEXT DEFAULT ''",
+            "ALTER TABLE requests ADD COLUMN tags TEXT DEFAULT ''",
+            "ALTER TABLE requests ADD COLUMN color TEXT DEFAULT ''",
+        ]:
+            try:
+                await self._db.execute(migration)
+                await self._db.commit()
+            except Exception:
+                pass  # column already exists
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA synchronous=NORMAL")
         await self._db.execute("PRAGMA cache_size=-32000")  # 32 MB cache
@@ -277,7 +281,9 @@ class HttpStorage:
 
         sql = f"""
             SELECT id, timestamp, host, method, url, has_params, edited,
-                   status_code, length, mime_type, extension
+                   status_code, length, mime_type, extension,
+                   COALESCE(color, '') as color, COALESCE(tags, '') as tags,
+                   COALESCE(comment, '') as comment
             FROM requests
             {where}
             ORDER BY {order_by} {direction}
@@ -559,6 +565,20 @@ class HttpStorage:
         if is_websocket is not None:
             clauses.append("is_websocket = ?")
             params.append(1 if is_websocket else 0)
+
+        tag = filters.get("tag")
+        if tag:
+            # Match comma-separated tags: exact whole tag, not substring
+            # "important" matches "important", "important,urgent" but not "unimportant"
+            clauses.append(
+                "(tags = ? OR tags LIKE ? OR tags LIKE ? OR tags LIKE ?)"
+            )
+            params.extend([tag, f"{tag},%", f"%,{tag},%", f"%,{tag}"])
+
+        color = filters.get("color")
+        if color:
+            clauses.append("color = ?")
+            params.append(color)
 
         if not clauses:
             return "", []

@@ -18,8 +18,10 @@ from textual.widget import Widget
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 from textual.widgets import (
+    Button,
     Input,
     Label,
+    Select,
     Static,
     TabbedContent,
     TabPane,
@@ -63,6 +65,16 @@ def _make_empty_table() -> pa.Table:
         "Time":   pa.array([], type=pa.string()),
     })
 
+_COLOR_DOTS: dict[str, str] = {
+    "red":    "🔴",
+    "orange": "🟠",
+    "yellow": "🟡",
+    "green":  "🟢",
+    "blue":   "🔵",
+    "purple": "🟣",
+}
+
+
 def _row_to_record(r: dict) -> tuple:
     """Convert one HttpStorage metadata dict into a DataTable row tuple.
 
@@ -82,9 +94,16 @@ def _row_to_record(r: dict) -> tuple:
             time_str = "-"
     else:
         time_str = "-"
+
+    # Prepend color dot to Host column if the request has a color mark
+    host = str(r.get("host", "") or "")
+    color = str(r.get("color", "") or "")
+    dot = _COLOR_DOTS.get(color, "")
+    host_display = f"{dot} {host}" if dot else host
+
     return (
         r.get("id", 0),
-        str(r.get("host", "") or ""),
+        host_display,
         str(r.get("method", "") or ""),
         url[:80] + "…" if len(url) > 80 else url,
         str(status) if status is not None else "-",
@@ -1798,35 +1817,124 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self.app.post_message(SendToTarget(parsed))
         self.app.notify("Added to Target", severity="information", timeout=2)
 
+    # ── Colors available for marking requests ─────────────────────────────────
+
+    _COLOR_OPTIONS: list[tuple[str, str]] = [
+        ("🔴 Red",    "red"),
+        ("🟠 Orange", "orange"),
+        ("🟡 Yellow", "yellow"),
+        ("🟢 Green",  "green"),
+        ("🔵 Blue",   "blue"),
+        ("🟣 Purple", "purple"),
+        ("⬜ Clear",  ""),
+    ]
+
     def _add_tag_dialog(self) -> None:
-        """Show dialog to add tag to selected request."""
-        if not self._selected_req_id:
+        """Prompt user for a tag name via a simple overlay Input."""
+        req_id = self._selected_req_id
+        if not req_id:
             return
-        # TODO: Show input dialog to enter tag
-        # For now, just add a default tag
-        self.run_worker(self._add_tag(self._selected_req_id, "important"))
+        from textual.screen import ModalScreen
+
+        class TagInputScreen(ModalScreen):
+            DEFAULT_CSS = """
+            TagInputScreen > Vertical {
+                width: 50;
+                height: auto;
+                border: round $primary;
+                padding: 1 2;
+                background: $panel;
+            }
+            TagInputScreen Input { margin: 1 0; }
+            TagInputScreen Horizontal { align: center middle; height: auto; }
+            TagInputScreen Button { margin: 0 1; }
+            """
+
+            def compose(self) -> ComposeResult:
+                with Vertical():
+                    yield Label("Enter tag name:")
+                    yield Input(placeholder="e.g. important, todo…", id="tag-input")
+                    with Horizontal():
+                        yield Button("Add", id="ok", variant="primary")
+                        yield Button("Cancel", id="cancel")
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                if event.button.id == "ok":
+                    val = self.query_one("#tag-input", Input).value.strip()
+                    self.dismiss(val if val else None)
+                else:
+                    self.dismiss(None)
+
+            def on_input_submitted(self, _) -> None:
+                val = self.query_one("#tag-input", Input).value.strip()
+                self.dismiss(val if val else None)
+
+        def _on_tag(tag: str | None) -> None:
+            if tag:
+                self.run_worker(self._add_tag(req_id, tag))
+
+        self.app.push_screen(TagInputScreen(), _on_tag)
 
     async def _add_tag(self, request_id: int, tag: str) -> None:
-        """Add tag to request."""
+        """Append tag to request (comma-separated, no duplicates)."""
         try:
             if self._proxy_service:
                 storage = self._proxy_service._storage
                 existing = await storage.get_tags(request_id)
-                tags = existing.split(",") if existing else []
+                tags = [t.strip() for t in existing.split(",") if t.strip()] if existing else []
                 if tag not in tags:
                     tags.append(tag)
                 await storage.update_tags(request_id, ",".join(tags))
                 self.notify(f"Tag '{tag}' added", timeout=2)
+                # Refresh row in cache so filter sees new value
+                for row in self._rows_cache:
+                    if row.get("id") == request_id:
+                        row["tags"] = ",".join(tags)
+                        break
         except Exception as exc:
             logger.error("Failed to add tag: %s", exc)
 
     def _set_color_dialog(self) -> None:
-        """Show dialog to set color for selected request."""
-        if not self._selected_req_id:
+        """Show color picker for the selected request."""
+        req_id = self._selected_req_id
+        if not req_id:
             return
-        # TODO: Show color picker dialog
-        # For now, just set a default color
-        self.run_worker(self._set_color(self._selected_req_id, "red"))
+        from textual.screen import ModalScreen
+
+        color_options = self._COLOR_OPTIONS
+
+        class ColorPickScreen(ModalScreen):
+            DEFAULT_CSS = """
+            ColorPickScreen > Vertical {
+                width: 30;
+                height: auto;
+                border: round $primary;
+                padding: 1 2;
+                background: $panel;
+            }
+            ColorPickScreen Button { margin: 0; width: 100%; }
+            """
+
+            def compose(self) -> ComposeResult:
+                with Vertical():
+                    yield Label("Mark color:")
+                    for label, val in color_options:
+                        btn = Button(label, id=f"col-{val or 'clear'}")
+                        yield btn
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                bid = event.button.id or ""
+                if bid.startswith("col-"):
+                    val = bid[4:]
+                    self.dismiss("" if val == "clear" else val)
+                else:
+                    self.dismiss(None)
+
+        def _on_color(color: str | None) -> None:
+            if color is not None:
+                self.run_worker(self._set_color(req_id, color))
+
+        self.app.push_screen(ColorPickScreen(), _on_color)
 
     async def _set_color(self, request_id: int, color: str) -> None:
         """Set color mark for request."""
@@ -1834,7 +1942,16 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             if self._proxy_service:
                 storage = self._proxy_service._storage
                 await storage.update_color(request_id, color)
-                self.notify(f"Color set to {color}", timeout=2)
+                label = next((l for l, v in self._COLOR_OPTIONS if v == color), color)
+                msg = f"Color: {label}" if color else "Color cleared"
+                self.notify(msg, timeout=2)
+                # Update cache
+                for row in self._rows_cache:
+                    if row.get("id") == request_id:
+                        row["color"] = color
+                        break
+                # Visual update: rebuild table to show color dot in Host column
+                await self._reload_table(self._current_filters)
         except Exception as exc:
             logger.error("Failed to set color: %s", exc)
 

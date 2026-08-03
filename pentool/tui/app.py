@@ -362,6 +362,9 @@ class PentoolApp(App):
         # Auto-save (Block 3.3) — start if enabled in config
         self._setup_auto_save()
 
+        # Lock Scanner tab if no valid license with scanner_pro feature
+        self._refresh_scanner_tab_lock()
+
         # Auto-open last project at startup
         self.run_worker(self._auto_open_last_project(), exclusive=False, thread=False)
 
@@ -590,6 +593,19 @@ class PentoolApp(App):
     # Modules available without an open project
     _FREE_MODULES = {"dashboard", "settings"}
 
+    def _refresh_scanner_tab_lock(self) -> None:
+        """Lock or unlock the Scanner tab based on the current license."""
+        try:
+            from pentool.core.license import get_session_license
+            lic = get_session_license()
+            scanner_available = lic.valid and lic.has_feature("scanner_pro")
+        except Exception:
+            scanner_available = False
+        try:
+            self.query_one("#module-tabs", ModuleTabs).set_scanner_locked(not scanner_available)
+        except Exception:
+            pass
+
     def _switch_to(self, module_id: str) -> None:
         if module_id == self._active_module:
             return
@@ -602,6 +618,21 @@ class PentoolApp(App):
                 timeout=4,
             )
             return
+        # Block Scanner if no valid license
+        if module_id == "scanner":
+            try:
+                from pentool.core.license import get_session_license
+                lic = get_session_license()
+                if not (lic.valid and lic.has_feature("scanner_pro")):
+                    self.notify(
+                        "🔒 Scanner — платная функция.\n"
+                        "Активируйте: pentool license trial",
+                        severity="warning",
+                        timeout=5,
+                    )
+                    return
+            except Exception:
+                pass
         self.query_one(ContentSwitcher).current = f"screen-{module_id}"
         self._active_module = module_id
 

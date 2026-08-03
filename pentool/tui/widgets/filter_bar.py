@@ -116,6 +116,9 @@ class FilterBar(Widget):
         yield Static("Status:", classes="fb-label")
         yield Input(placeholder="200-299", id="fb-status", compact=True)
         yield Static(" ", classes="fb-sep")
+        yield Static("Tag:", classes="fb-label")
+        yield Input(placeholder="tag…", id="fb-tag", compact=True)
+        yield Static(" ", classes="fb-sep")
         yield Static("Search:", classes="fb-label")
         yield Input(placeholder="FTS5 query...", id="fb-search", compact=True)
         yield Static(" ", classes="fb-sep")
@@ -170,6 +173,10 @@ class FilterBar(Widget):
                 except ValueError:
                     pass
 
+        tag = self.query_one("#fb-tag", Input).value.strip()
+        if tag:
+            filters["tag"] = tag
+
         search = self.query_one("#fb-search", Input).value.strip()
         if search:
             filters["search"] = search
@@ -187,6 +194,7 @@ class FilterBar(Widget):
     def _reset(self) -> None:
         self.query_one("#fb-host", Input).value = ""
         self.query_one("#fb-status", Input).value = ""
+        self.query_one("#fb-tag", Input).value = ""
         self.query_one("#fb-search", Input).value = ""
         try:
             self.query_one("#fb-method", MethodCycler).reset()

@@ -1138,47 +1138,17 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self.run_worker(self._run_attack(config, turbo_mode=turbo_mode), exclusive=False, name="intruder-attack")
 
     async def _run_attack(self, config: IntruderConfig, turbo_mode: bool = False) -> None:
-        # Layer violation fix: delegate turbo/standard selection to API layer
-        from pentool.api.intruder_api import IntruderAPI
-        api = IntruderAPI(db_path=self._get_db_path())
-
-        # IntruderAPI.start_attack handles turbo_mode internally
-        try:
-            await api.start_attack(
-                config,
-                on_result=lambda r: self.call_after_refresh(self._on_result, r),
-                on_progress=lambda done, total: self.call_after_refresh(self._on_progress, done, total),
-                turbo_mode=turbo_mode
-            )
-            self._current_attack = api._attack
-            logger.info("INTRUDER: _run_attack started via IntruderAPI, turbo=%s", turbo_mode)
-        except ImportError:
-            # Fallback if turbo not available
-            attack = IntruderAttack(config, db_path=self._get_db_path())
-            self._current_attack = attack
-            logger.warning("INTRUDER: Turbo not available, using standard")
-
-            def on_result(result: IntruderResult) -> None:
-                self.call_after_refresh(self._on_result, result)
-
-            def on_progress(done: int, total: int) -> None:
-                self.call_after_refresh(self._on_progress, done, total)
-
-            await attack.run(on_result, on_progress)
-            return
-
-        logger.info("INTRUDER: _run_attack started, type=%s", config.attack_type)
+        logger.info("INTRUDER: _run_attack started, type=%s, turbo=%s", config.attack_type, turbo_mode)
 
         def on_result(result: IntruderResult) -> None:
-            # _run_attack runs inside a Textual worker (same event loop),
-            # so call_after_refresh is safe and ensures UI updates on the
-            # correct thread.
             self.call_after_refresh(self._on_result, result)
 
         def on_progress(done: int, total: int) -> None:
             self.call_after_refresh(self._on_progress, done, total)
 
         try:
+            attack = IntruderAttack(config, db_path=self._get_db_path())
+            self._current_attack = attack
             await attack.run(on_result, on_progress)
         except Exception as exc:
             logger.error("INTRUDER: _run_attack error: %s", exc, exc_info=True)

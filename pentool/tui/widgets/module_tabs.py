@@ -83,6 +83,25 @@ class ModuleTabs(Widget):
         except Exception:
             pass
 
+    def set_scanner_locked(self, locked: bool) -> None:
+        """Grey-out the Scanner tab when no valid license is present.
+
+        locked=True  → tab is disabled (CSS class 'tab-locked'), tooltip shown on hover.
+        locked=False → normal.
+        """
+        try:
+            tabs = self.query_one("#module-tabs-inner", Tabs)
+            tab = tabs.query_one("#tab-scanner", Tab)
+            if locked:
+                tab.add_class("tab-locked")
+                tab.tooltip = "Scanner — платная функция. Активируйте лицензию: pentool license trial"
+            else:
+                tab.remove_class("tab-locked")
+                tab.tooltip = None
+            tabs.refresh()
+        except Exception:
+            pass
+
     def flash(self, message: str, severity: str = "information", timeout: float = 2.5) -> None:
         """Показать краткое сообщение справа в строке модулей на timeout секунд.
 

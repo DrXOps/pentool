@@ -18,3 +18,9 @@ ModuleTabs #tooltip2 {
     background: $panel;
     display: none;
 }
+
+/* Locked tab (Scanner without license) */
+ModuleTabs Tab.tab-locked {
+    color: $text-disabled;
+    text-style: italic;
+}
