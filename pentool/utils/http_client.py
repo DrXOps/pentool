@@ -26,12 +26,14 @@ class HTTPClient:
         follow_redirects: bool = True,
         verify_ssl: bool = False,
         on_request_sent: RequestCallback | None = None,
+        extra_headers: dict | None = None,
     ) -> None:
         self._proxy_url = proxy_url
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._follow_redirects = follow_redirects
         self._verify_ssl = verify_ssl
         self._on_request_sent = on_request_sent
+        self._extra_headers = extra_headers or {}
         self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -59,9 +61,9 @@ class HTTPClient:
                 v = ", ".join(encodings) if encodings else "gzip, deflate"
             send_headers[k] = v
 
-        # Note: scan marker injection removed to fix layer violation
-        # (utils cannot import core.config). If needed, pass scan_marker_headers
-        # explicitly via constructor parameter.
+        # Inject extra headers (e.g., scan markers passed from scanner layer)
+        if self._extra_headers:
+            send_headers.update(self._extra_headers)
 
         body_data = request.body.encode("utf-8") if request.body else None
         kwargs: dict = {
