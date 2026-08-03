@@ -22,7 +22,6 @@ coverage.json
 .pytest_cache/
 MYPLANS/
 "fix comment"
-pentool/modules/scanner/
 handFIX/
 specs/
 docs/ARCHITECTURE_AUDIT.md
@@ -41,6 +40,10 @@ SECURITY_CHECKLIST.md
 website_donate_block.html
 
 # PRO files — live in pro/ submodule (docxqwerty/pentool-pro)
+# These are NOT in the public pentool repo; they are delivered via
+# 'pentool license activate' → downloaded to ~/.pentool/pro/ from
+# the private GitHub Release built by pentool-pro CI.
+pentool/modules/scanner/
 pentool/modules/intruder_turbo.py
 pentool/plugins/builtin/payloads_pro.py
 pentool/plugins/builtin/reports_pro.py

@@ -1,4 +1,6 @@
 """Pentool API layer — public interface between modules/ and TUI/CLI."""
+import pkgutil
+__path__ = pkgutil.extend_path(__path__, __name__)
 
 from pentool.api.comparer_api import (  # noqa: F401
     CompareStats,

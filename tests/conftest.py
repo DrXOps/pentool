@@ -11,26 +11,9 @@ from pathlib import Path
 from typing import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
 
-# PRO submodule: extend pentool package paths so imports like
-# `from pentool.plugins.builtin.payloads_pro import ...` resolve
-# from pro/pentool/... when the submodule is checked out.
-_pro_root = Path(__file__).parent.parent / "pro"
-if _pro_root.exists():
-    import importlib
-    import pentool
-    import pentool.modules
-    import pentool.plugins
-    import pentool.plugins.builtin
-
-    for _pkg, _rel in [
-        (pentool,               "pentool"),
-        (pentool.modules,       "pentool/modules"),
-        (pentool.plugins,       "pentool/plugins"),
-        (pentool.plugins.builtin, "pentool/plugins/builtin"),
-    ]:
-        _extra = str(_pro_root / _rel)
-        if _extra not in _pkg.__path__:
-            _pkg.__path__.append(_extra)
+# PRO package paths are now extended automatically by pentool/__init__.py
+# (_bootstrap_pro) for both dev checkout (pro/ submodule) and the installed
+# end-user package (~/.pentool/pro/). No manual __path__ manipulation needed here.
 
 import pytest
 import pytest_asyncio

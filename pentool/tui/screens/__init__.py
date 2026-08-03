@@ -1,4 +1,6 @@
 """TUI screens package."""
+import pkgutil
+__path__ = pkgutil.extend_path(__path__, __name__)
 
 from pentool.tui.screens.comparer.screen import ComparerScreen
 from pentool.tui.screens.dashboard.screen import DashboardScreen
