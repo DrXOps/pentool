@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from pentool.tui.widgets.request_editor import (
+    _beautify_text,
     _detect_language,
     _get_content_type,
 )
@@ -247,3 +248,57 @@ class TestResponseViewerHelpers:
         ct = _get_content_type(resp.headers)
         lang = _detect_language(ct, resp.body)
         assert lang == "css"
+
+
+# ─── _beautify_text (R-2: Beautify JSON/XML) ────────────────────────────────────
+
+class TestBeautifyText:
+    """Tests for _beautify_text — used by RequestEditor.beautify_body()."""
+
+    def test_beautify_compact_json_object(self) -> None:
+        result = _beautify_text('{"user":"admin","id":1}')
+        assert result is not None
+        assert '"user": "admin"' in result
+        assert "\n" in result  # actually pretty-printed, not one line
+
+    def test_beautify_json_array(self) -> None:
+        result = _beautify_text('[1,2,3]')
+        assert result is not None
+        parsed_back = result
+        assert "1" in parsed_back and "2" in parsed_back and "3" in parsed_back
+
+    def test_beautify_nested_json(self) -> None:
+        result = _beautify_text('{"a":{"b":{"c":1}}}')
+        assert result is not None
+        assert result.count("\n") >= 2  # nested indentation produces multiple lines
+
+    def test_beautify_json_unicode_not_escaped(self) -> None:
+        result = _beautify_text('{"name":"Тест"}')
+        assert result is not None
+        assert "Тест" in result  # ensure_ascii=False keeps Cyrillic readable
+
+    def test_beautify_compact_xml(self) -> None:
+        result = _beautify_text("<root><item>1</item></root>")
+        assert result is not None
+        assert "<root>" in result
+        assert "<item>" in result
+        assert "\n" in result
+
+    def test_beautify_invalid_json_and_xml_returns_none(self) -> None:
+        result = _beautify_text("not json { and not < xml either")
+        assert result is None
+
+    def test_beautify_plain_text_returns_none(self) -> None:
+        result = _beautify_text("user=admin&pass=1234")
+        assert result is None
+
+    def test_beautify_empty_string_returns_none(self) -> None:
+        assert _beautify_text("") is None
+        assert _beautify_text("   ") is None
+
+    def test_beautify_already_pretty_json_idempotent(self) -> None:
+        pretty = '{\n  "a": 1\n}'
+        result = _beautify_text(pretty)
+        assert result is not None
+        assert '"a": 1' in result
+

@@ -94,6 +94,11 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("⏎ Special: OFF", "btn-special-chars")
             yield Static(" │ ", classes="toolbar-sep")
+            yield ToolbarButton(
+                "✨ Beautify", "btn-beautify",
+                tooltip="Отформатировать тело запроса (JSON/XML)"
+            )
+            yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("→ Decoder",  "btn-send-decoder")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("→ Comparer", "btn-send-comparer")
@@ -589,6 +594,22 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     @on(ToolbarButton.Pressed, "#btn-special-chars")
     def on_btn_special_chars(self, event: ToolbarButton.Pressed) -> None:
         self._toggle_special_chars(event.button)
+
+    @on(ToolbarButton.Pressed, "#btn-beautify")
+    def on_btn_beautify(self, _: ToolbarButton.Pressed) -> None:
+        self._beautify_active_request()
+
+    def _beautify_active_request(self) -> None:
+        if self._active_tab_id is None:
+            return
+        try:
+            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+        except Exception:
+            return
+        if editor.beautify_body():
+            self.notify("Body beautified", timeout=2)
+        else:
+            self.notify("Body is not valid JSON/XML — nothing changed", severity="warning", timeout=3)
 
     @on(ToolbarButton.Pressed, "#btn-send-decoder")
     def on_btn_send_decoder(self, _: ToolbarButton.Pressed) -> None:

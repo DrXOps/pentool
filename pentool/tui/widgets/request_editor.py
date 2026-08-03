@@ -433,6 +433,64 @@ class RequestEditor(_BaseHttpWidget):
         self._special_chars_mode = False
         self._set_text("")
 
+    def beautify_body(self) -> bool:
+        """Pretty-print the body (JSON or XML) in place, preserving headers.
+
+        Returns True if the body was reformatted, False if it was left
+        unchanged (unknown/invalid format, or no body present).
+        """
+        try:
+            area = self.query_one("#editor-area", TextArea)
+        except Exception:
+            return False
+
+        text = area.text
+        normalized = text.replace("\r\n", "\n")
+        if "\n\n" in normalized:
+            headers_part, body = normalized.split("\n\n", 1)
+        else:
+            headers_part, body = normalized, ""
+
+        if not body.strip():
+            return False
+
+        pretty = _beautify_text(body)
+        if pretty is None:
+            return False
+
+        new_text = f"{headers_part}\n\n{pretty}"
+        self.load_raw(new_text)
+        return True
+
+
+def _beautify_text(body: str) -> str | None:
+    """Try to pretty-print `body` as JSON, then XML. Returns None on failure."""
+    stripped = body.strip()
+    if not stripped:
+        return None
+
+    # Try JSON first
+    try:
+        import json
+        parsed = json.loads(stripped)
+        return json.dumps(parsed, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+    # Try XML
+    if stripped.startswith("<"):
+        try:
+            import xml.dom.minidom as minidom
+            dom = minidom.parseString(stripped)
+            pretty = dom.toprettyxml(indent="  ")
+            # minidom adds an extra XML declaration + blank lines — clean up
+            lines = [line for line in pretty.split("\n") if line.strip()]
+            return "\n".join(lines)
+        except Exception:
+            pass
+
+    return None
+
 
 class ResponseViewer(_BaseHttpWidget):
     """HTTP response viewer panel with header and body highlighting."""
