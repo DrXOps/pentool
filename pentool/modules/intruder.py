@@ -325,6 +325,16 @@ class IntruderAttack:
 
         sem = asyncio.Semaphore(self._config.threads)
 
+        # БАГ-D: reuse a single HTTPClient (and its aiohttp connection pool)
+        # for the whole attack instead of opening/closing a new TCP+TLS
+        # connection per request. aiohttp.ClientSession is safe to share
+        # across concurrent coroutines. Only close it here if we created
+        # it ourselves — an injected client (self._http_client) is owned
+        # by the caller.
+        from pentool.utils import http_client as _http_client_mod
+        owns_client = self._http_client is None
+        client = self._http_client or _http_client_mod.HTTPClient(timeout=self._config.timeout)
+
         async def _run_one(req_num: int, payload_values: list[str]) -> None:
             if self._stopped:
                 return
@@ -344,26 +354,33 @@ class IntruderAttack:
                 if self._config.delay_ms > 0:
                     await asyncio.sleep(self._config.delay_ms / 1000.0)
 
-                result = await self._send_request(req_num, payload_values, request_raw)
+                result = await self._send_request(req_num, payload_values, request_raw, client)
                 self._results.append(result)
                 on_result(result)
                 self._done += 1
                 on_progress(self._done, self._total)
 
-        tasks = [
-            asyncio.create_task(_run_one(i + 1, vals))
-            for i, vals in enumerate(combinations)
-        ]
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-        self._is_running = False
+        try:
+            tasks = [
+                asyncio.create_task(_run_one(i + 1, vals))
+                for i, vals in enumerate(combinations)
+            ]
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            if owns_client:
+                try:
+                    await client.close()
+                except Exception:
+                    pass
+            self._is_running = False
 
     async def _send_request(
         self,
         req_num: int,
         payload_values: list[str],
         request_raw: str,
+        client=None,
     ) -> IntruderResult:
         import time
         t0 = time.monotonic()
@@ -377,8 +394,14 @@ class IntruderAttack:
             from pentool.utils.parser import parse_http_request
 
             req = parse_http_request(request_raw)
-            async with HTTPClient(timeout=self._config.timeout) as client:
+            if client is not None:
+                # Reused client (БАГ-D) — do not close, owned by run()/caller.
                 resp = await client.send(req)
+            else:
+                # Fallback for direct/standalone calls (e.g. tests) that
+                # don't go through run(): open a short-lived client.
+                async with HTTPClient(timeout=self._config.timeout) as tmp_client:
+                    resp = await tmp_client.send(req)
             status = resp.status
             body = resp.body if isinstance(resp.body, (bytes, str)) else b""
             length = len(body) if isinstance(body, bytes) else len(body.encode("utf-8", errors="replace"))
