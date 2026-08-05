@@ -582,6 +582,32 @@ class ProxyServer:
             await writer.drain()
             ireq.state = "forwarded"
             ireq.response = None
+            # Was a silent early-return — no ProxyRequestCompleted was ever
+            # emitted for network failures (DNS error, connection refused,
+            # timeout, unreachable host, etc). That meant:
+            #   1. on_proxy_request_done() in app.py never fired → the row
+            #      already in HTTP History (from the earlier
+            #      ProxyRequestCaptured/add_request_row on capture) never got
+            #      its status/response, so it looked "stuck"/incomplete.
+            #   2. SendToTarget never posted → TargetScreen.add_request_from_proxy
+            #      was never called for these requests — SiteMap silently
+            #      missed every host that had ANY failed request (very common
+            #      with ad/analytics/CDN domains that time out or get
+            #      DNS-blocked — exactly the "many requests fly past, Target
+            #      doesn't fill up" symptom).
+            # Emit here too so failed requests still show up (with no status)
+            # instead of vanishing from both History and the SiteMap.
+            try:
+                from pentool.core.event_bus import get_event_bus
+                from pentool.core.events import ProxyRequestCompleted
+                get_event_bus().emit(ProxyRequestCompleted(
+                    source="proxy",
+                    request_id=ireq.id,
+                    status_code=0,
+                    request=ireq,
+                ))
+            except Exception as exc:
+                logger.debug("EventBus emit ProxyRequestCompleted (failed request) error: %s", exc)
             return None
 
         # Apply match/replace to response (via engine)

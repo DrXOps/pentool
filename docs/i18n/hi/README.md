@@ -1,18 +1,22 @@
 # 🔒 Pentool — प्रोफेशनल TUI वेब पेनटेस्टिंग टूलकिट
 
+> **🚧 सक्रिय विकास — पब्लिक डेमो/बीटा।** कोर मॉड्यूल स्टेबल और पूरी तरह उपयोग करने योग्य हैं। PRO फीचर्स सक्रिय रूप से विकसित किए जा रहे हैं। फीडबैक और बग रिपोर्ट का स्वागत है।
+
 [![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
 [![CI](https://github.com/docxqwerty/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/docxqwerty/pentool/actions)
-[![License](https://img.shields.io/github/license/docxqwerty/pentool)](LICENSE)
+[![License](https://img.shields.io/github/license/docxqwerty/pentool)](../../../LICENSE)
 [![Downloads](https://img.shields.io/pypi/dm/pentool)](https://pypi.org/project/pentool/)
 
-🌐 **भाषाएँ:** [English](README.md) · [Русский](README_RU.md) · [中文](README_ZH.md) · [हिन्दी](README_HI.md)
+🌐 **भाषाएँ:** [English](../../../README.md) · [Русский](../ru/README.md) · [中文](../zh/README.md) · [हिन्दी](README.md)
 
 ---
 
 **Pentool** एक टर्मिनल-आधारित (TUI) सुरक्षा टूलकिट है, जो पेनेट्रेशन टेस्टर्स और सुरक्षा शोधकर्ताओं के लिए बनाया गया है।  
 यह HTTP इंटरसेप्शन, वल्नेरेबिलिटी स्कैनिंग, ऑटोमेटेड अटैक और डेटा एनालिसिस — सब कुछ एक ही टर्मिनल में जोड़ता है।  
 तेज़, पारदर्शी और वास्तविक परीक्षण के लिए निर्मित।
+
+> ⚠️ **एक आधुनिक टर्मिनल एमुलेटर का उपयोग करें।** Pentool का TUI [Textual](https://github.com/Textualize/textual) फ्रेमवर्क पर बना है और माउस सपोर्ट, ट्रू कलर और आधुनिक रेंडरिंग पर निर्भर करता है। लीगेसी टर्मिनल (जैसे Windows का `cmd.exe`) गलत दिखेंगे। सुझाव: **Windows Terminal**, **iTerm2** (macOS), **GNOME Terminal / Kitty / Alacritty / WezTerm** (Linux)। Windows पर, **WSL** के अंदर चलाने पर सबसे अच्छा अनुभव मिलता है।
 
 ---
 
@@ -81,53 +85,65 @@ pentool update --check
 
 ## 📸 स्क्रीनशॉट
 
-> स्क्रीनशॉट और GIF जल्द आ रहे हैं।
+| Dashboard | Scanner |
+|:---------:|:-------:|
+| ![Dashboard](../../../screens/dashboard.png) | ![Scanner](../../../screens/scaner.png) |
 
-| Dashboard | Proxy | Intruder |
-|-----------|-------|----------|
-| *(जल्द)* | *(जल्द)* | *(जल्द)* |
+| Proxy | Repeater |
+|:-----:|:--------:|
+| ![Proxy](../../../screens/proxy.png) | ![Repeater](../../../screens/repeater.png) |
+
+| Intruder | Settings |
+|:--------:|:--------:|
+| ![Intruder](../../../screens/intruder.png) | ![Settings](../../../screens/settings.png) |
 
 ---
 
 ## 📚 दस्तावेज़ीकरण
 
-- [Quick Start Guide](docs/i18n/en/QUICKSTART.md)
-- [User Guide](docs/i18n/en/USER_GUIDE.md)
-- [Installation](docs/i18n/en/INSTALLATION.md)
-- [Plugin Development](docs/API_CONTRACTS.md)
+- [🚀 पहला रन: सर्टिफिकेट और पहला इंटरसेप्ट](FIRST_RUN.md) — यहाँ से शुरू करें
+- [Quick Start Guide](QUICKSTART.md)
+- [User Guide](USER_GUIDE.md)
+- [Installation](INSTALLATION.md)
+- [Plugin Development](PLUGIN_DEVELOPMENT.md)
+- [Plugin API संदर्भ](../../API_CONTRACTS.md)
 
 पूरा डॉक्यूमेंटेशन: **[pentool.pro](https://pentool.pro)**
 
 ---
 
-## 🧪 टेस्टिंग मोड (Beta)
+## 🧪 डेमो / टेस्टिंग मोड
 
-> **Pentool अभी पब्लिक बीटा में है।**  
-> सभी **फ्री मॉड्यूल पूरी तरह उपलब्ध हैं**। पेड (PRO) प्लगइन्स अभी डेवलपमेंट में हैं — फिलहाल केवल **ट्रायल वर्शन** दिया जाता है।  
->
-> लेकिन अगर आपके पास **इन्फॉर्मेशन सिक्योरिटी के क्षेत्र में ब्लॉग या चैनल** है और आप प्रोजेक्ट को प्रमोट करने में मदद कर सकते हैं — हमें DM करें, हम आपको मुफ्त में **प्राइवेट PRO की** देंगे।
->
-> 📬 संपर्क: **[@sudores](https://t.me/sudores)** (Telegram)
+> **Pentool अभी पब्लिक डेमो/बीटा में है।**  
+> सभी **फ्री मॉड्यूल पूरी तरह फंक्शनल हैं**। PRO फीचर्स सक्रिय रूप से बनाए जा रहे हैं — **14-दिन का ट्रायल** उपलब्ध है ताकि आप सब कुछ पहले से जांच सकें।
+
+### 🎙 ब्लॉगर्स और कंटेंट क्रिएटर्स के लिए
+
+**सिक्योरिटी ब्लॉग, YouTube चैनल, या Telegram चैनल** चलाते हैं?  
+एक ईमानदार रिव्यू लिखें और अपनी ऑडियंस को Pentool रेकमेंड करें — हम आपको **परमानेंट PRO लाइसेंस, बिल्कुल फ्री** देंगे।
+
+कोई मिनिमम फॉलोअर काउंट नहीं। हम रीच से ज़्यादा क्वालिटी को महत्व देते हैं।  
+→ संपर्क करें: **[@sudores](https://t.me/sudores)** Telegram पर
 
 ---
 
 ## 💰 प्रोजेक्ट को सपोर्ट करें
 
 Pentool को एक डेवलपर अपने खाली समय में अकेले बनाता और मेंटेन करता है।  
-अगर यह आपके काम में मदद करता है, तो सपोर्ट करें — इससे सीधे नए फीचर और बग फिक्स में तेज़ी आती है।
+अगर यह आपका पेनटेस्ट में घंटों बचाता है — कुछ वापस देने पर विचार करें। हर योगदान सीधे नए फीचर्स, फिक्स और तेज़ रिलीज़ को फंड करता है।
 
-- ⭐ [GitHub पर Star दें](https://github.com/docxqwerty/pentool) — फ्री है और बहुत मदद करता है
-- ☕ [TryBit से Donate करें](https://donate.trybit.com/KY1ECKA5) — क्रिप्टो में एक बार सपोर्ट
-- 🔑 PRO लाइसेंस — जल्द आ रहा है; अभी ट्रायल उपलब्ध
+- ⭐ **[GitHub पर Star करें](https://github.com/docxqwerty/pentool)** — फ्री, 2 सेकंड लगते हैं, विज़िबिलिटी में बहुत मदद करता है
+- 🔑 **PRO लाइसेंस** — जल्दी एक्सेस पाएँ और डेवलपमेंट सपोर्ट करें → **[@sudores](https://t.me/sudores)**
+- 💬 **शेयर करें** — किसी सहकर्मी को बताएँ, रिव्यू पोस्ट करें, या अपने राइटअप्स में Pentool का ज़िक्र करें
 
-हर योगदान मायने रखता है। ओपन-सोर्स सिक्योरिटी टूलिंग को सपोर्ट करने के लिए धन्यवाद! 🙌
+> टूल्स बनाना एक अकेला काम है। एक Star या एक अच्छा शब्द वाकई मायने रखता है। धन्यवाद। 🙏
 
 ---
 
 ## 🤝 योगदान
 
 योगदान का स्वागत है!  
-PR बनाने से पहले कृपया [CONTRIBUTING.md](CONTRIBUTING.md) पढ़ें।
+PR बनाने से पहले कृपया [CONTRIBUTING.md](../../../CONTRIBUTING.md) पढ़ें।
 
 ---
 
@@ -141,7 +157,7 @@ PR बनाने से पहले कृपया [CONTRIBUTING.md](CONTRIB
 
 ## 📄 लाइसेंस
 
-**AGPL-3.0** लाइसेंस के तहत वितरित। विवरण के लिए [LICENSE](LICENSE) देखें।  
+**AGPL-3.0** लाइसेंस के तहत वितरित। विवरण के लिए [LICENSE](../../../LICENSE) देखें।  
 PRO एक्सटेंशन कमर्शियल लाइसेंस के तहत उपलब्ध हैं।
 
 ---

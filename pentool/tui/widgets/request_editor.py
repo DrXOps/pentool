@@ -544,6 +544,37 @@ class ResponseViewer(_BaseHttpWidget):
         self._reset_label()
         self._set_text("")
 
+    def beautify_body(self) -> bool:
+        """Pretty-print the displayed response body (JSON or XML) in place,
+        preserving the status line + headers. Mirrors RequestEditor.beautify_body()
+        so the Repeater "Beautify" button can format both panels.
+
+        Returns True if the body was reformatted, False if left unchanged
+        (unknown/invalid format, or no body present).
+        """
+        try:
+            area = self.query_one("#viewer-area", TextArea)
+        except Exception:
+            return False
+
+        text = area.text
+        normalized = text.replace("\r\n", "\n")
+        if "\n\n" in normalized:
+            head_part, body = normalized.split("\n\n", 1)
+        else:
+            head_part, body = normalized, ""
+
+        if not body.strip():
+            return False
+
+        pretty = _beautify_text(body)
+        if pretty is None:
+            return False
+
+        new_text = f"{head_part}\n\n{pretty}"
+        _load_into_textarea(area, new_text)
+        return True
+
     def _reset_label(self) -> None:
         try:
             self.query_one("#viewer-label", Static).update(f" {self._label}")

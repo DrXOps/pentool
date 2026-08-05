@@ -75,6 +75,16 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._search_regex: bool = False
         self._tab_click_time: float = 0.0
         self._tab_click_id: str | None = None
+        # Bumped by reset_for_new_project()/reload_from_project()/_close_all_tabs().
+        # on_mount()'s initial _load_tabs_from_db() reads whatever DB was
+        # configured at app startup (before the user creates/opens a
+        # project) and schedules tab creation via call_after_refresh — those
+        # deferred callbacks used to fire even after a project switch had
+        # already reset the screen, resurrecting a stale tab (e.g. one
+        # named "Example" from a previous session) alongside the fresh
+        # project's tab. Each loader captures the generation at call time
+        # and no-ops if it no longer matches when its callback runs.
+        self._tabs_generation: int = 0
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="top-bar"):
@@ -84,19 +94,15 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("↪ Follow: ON", "btn-follow", classes="active")
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("Scope",       "btn-scope")
+            yield ToolbarButton("➕ Tab",   "btn-new-tab")
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("➕ New Tab",   "btn-new-tab")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("➖ Close Tab", "btn-close-tab")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("↩ Load from Proxy", "btn-load-proxy")
+            yield ToolbarButton("➖ Tab", "btn-close-tab")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("⏎ Special: OFF", "btn-special-chars")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton(
                 "✨ Beautify", "btn-beautify",
-                tooltip="Отформатировать тело запроса (JSON/XML)"
+                tooltip="Format request and response body (JSON/XML)"
             )
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("→ Decoder",  "btn-send-decoder")
@@ -117,6 +123,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
     def _load_tabs_from_db(self) -> None:
         """Load saved tabs from database on mount."""
+        generation = self._tabs_generation
         db_path = self._get_db_path()
         if not db_path:
             # No DB — create default tab
@@ -125,14 +132,25 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
         from pentool.api.repeater_api import RepeaterAPI
         repeater_api = RepeaterAPI(db_path=db_path)
-        self.run_worker(self._do_load_tabs(repeater_api), exclusive=False)
+        self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=False)
 
-    async def _do_load_tabs(self, repeater_api) -> None:
-        """Async worker to load tabs from DB."""
+    async def _do_load_tabs(self, repeater_api, generation: int | None = None) -> None:
+        """Async worker to load tabs from DB.
+
+        `generation` pins this call to the _tabs_generation value at the
+        time it was scheduled — if reset_for_new_project()/reload_from_project()
+        bump the counter before this worker's deferred UI callbacks run
+        (e.g. the startup load racing a just-created/opened project), those
+        callbacks silently no-op instead of resurrecting a stale tab.
+        """
+        if generation is None:
+            generation = self._tabs_generation
         try:
             entries = await repeater_api.get_history(limit=20)
+            if generation != self._tabs_generation:
+                return
             if not entries:
-                self.call_after_refresh(self.action_new_tab)
+                self.call_after_refresh(self._new_tab_if_current, generation)
                 return
 
             # Group entries by tab_name — keep the most recent entry per tab
@@ -148,18 +166,28 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
                 state = _TabState(tab_id, tab_name)
                 state.request_text = raw
                 self._tabs.append(state)
-                self.call_after_refresh(self._create_tab_ui, tab_id, state)
+                self.call_after_refresh(self._create_tab_ui, tab_id, state, generation)
 
             if not self._tabs:
-                self.call_after_refresh(self.action_new_tab)
+                self.call_after_refresh(self._new_tab_if_current, generation)
 
         except Exception as exc:
             # Table may not exist yet in a brand-new project — that's fine
             logger.debug("_do_load_tabs: %s", exc)
-            self.call_after_refresh(self.action_new_tab)
+            self.call_after_refresh(self._new_tab_if_current, generation)
 
-    def _create_tab_ui(self, tab_id: str, state: _TabState) -> None:
+    def _new_tab_if_current(self, generation: int) -> None:
+        if generation == self._tabs_generation:
+            self.action_new_tab()
+
+    def _create_tab_ui(self, tab_id: str, state: _TabState, generation: int | None = None) -> None:
         """Create tab UI and mount widgets."""
+        if generation is not None and generation != self._tabs_generation:
+            # Stale — a project switch reset the screen after this was
+            # scheduled. Drop the now-orphaned state too so it doesn't
+            # linger in _tabs from a generation nothing else references.
+            self._tabs = [t for t in self._tabs if t is not state]
+            return
         try:
             tabs = self.query_one("#repeater-tabs", TabbedContent)
             pane = TabPane(state.name, id=tab_id)
@@ -262,25 +290,38 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
     # ── Project lifecycle ──────────────────────────────────────────────────────
 
-    def reset_for_new_project(self) -> None:
+    async def reset_for_new_project(self) -> None:
         """Удалить все вкладки и создать одну чистую. Вызывается при Ctrl+N."""
-        self._close_all_tabs()
+        await self._close_all_tabs()
         self.action_new_tab()
 
-    def reload_from_project(self, db_path: str) -> None:
+    async def reload_from_project(self, db_path: str) -> None:
         """Загрузить вкладки из БД. Вызывается при открытии существующего проекта."""
-        self._close_all_tabs()
+        await self._close_all_tabs()
+        generation = self._tabs_generation
         from pentool.api.repeater_api import RepeaterAPI
         repeater_api = RepeaterAPI(db_path=db_path)
-        self.run_worker(self._do_load_tabs(repeater_api), exclusive=True)
+        self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=True)
 
-    def _close_all_tabs(self) -> None:
-        """Удалить все существующие вкладки из TabbedContent и сбросить состояние."""
+    async def _close_all_tabs(self) -> None:
+        """Удалить все существующие вкладки из TabbedContent и сбросить состояние.
+
+        remove_pane() returns an AwaitComplete (Textual schedules the actual
+        tab/pane removal, it does not happen synchronously) — this was
+        previously called without awaiting it, so action_new_tab() right
+        after could create a new pane with the same id (e.g. "tab-1", since
+        _tab_counter is reset to 0) before the old one had actually been
+        removed from the DOM. That raced with Textual's own ID uniqueness
+        check and produced a stray, blank/unlabeled tab to the left of the
+        first real tab — reproducible specifically right after creating a
+        new project (reset_for_new_project), not after a full app restart.
+        """
+        self._tabs_generation += 1  # invalidate any in-flight _do_load_tabs from on_mount
         try:
             tabs = self.query_one("#repeater-tabs", TabbedContent)
             for state in list(self._tabs):
                 try:
-                    tabs.remove_pane(state.tab_id)
+                    await tabs.remove_pane(state.tab_id)
                 except Exception:
                     pass
         except Exception:
@@ -536,23 +577,6 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
                 except Exception:
                     pass
 
-    def action_load_from_proxy(self) -> None:
-        from pentool.tui.dialogs.load_from_proxy import LoadFromProxyDialog
-
-        def _on_selected(raw: str | None) -> None:
-            if raw and self._active_tab_id:
-                try:
-                    editor = self.query_one(
-                        f"#req-editor-{self._active_tab_id}", RequestEditor
-                    )
-                    editor.load_raw(raw)
-                except Exception:
-                    pass
-
-        proxy = self._get_proxy()
-        requests = proxy.get_requests(limit=100) if proxy else []
-        self.app.push_screen(LoadFromProxyDialog(requests), _on_selected)
-
     def action_clear(self) -> None:
         tab_id = self._active_tab_id
         if tab_id is None:
@@ -587,10 +611,6 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     def on_btn_close_tab(self, _: ToolbarButton.Pressed) -> None:
         self.action_close_tab()
 
-    @on(ToolbarButton.Pressed, "#btn-load-proxy")
-    def on_btn_load_proxy(self, _: ToolbarButton.Pressed) -> None:
-        self.action_load_from_proxy()
-
     @on(ToolbarButton.Pressed, "#btn-special-chars")
     def on_btn_special_chars(self, event: ToolbarButton.Pressed) -> None:
         self._toggle_special_chars(event.button)
@@ -600,16 +620,31 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._beautify_active_request()
 
     def _beautify_active_request(self) -> None:
+        """Beautify both Request and Response panels of the active tab —
+        previously this only reformatted the request body."""
         if self._active_tab_id is None:
             return
+        req_ok = False
+        resp_ok = False
         try:
             editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+            req_ok = editor.beautify_body()
         except Exception:
-            return
-        if editor.beautify_body():
-            self.notify("Body beautified", timeout=2)
+            pass
+        try:
+            viewer = self.query_one(f"#resp-viewer-{self._active_tab_id}", ResponseViewer)
+            resp_ok = viewer.beautify_body()
+        except Exception:
+            pass
+
+        if req_ok and resp_ok:
+            self.notify("Request and response beautified", timeout=2)
+        elif req_ok:
+            self.notify("Request beautified (response body not valid JSON/XML)", timeout=2)
+        elif resp_ok:
+            self.notify("Response beautified (request body not valid JSON/XML)", timeout=2)
         else:
-            self.notify("Body is not valid JSON/XML — nothing changed", severity="warning", timeout=3)
+            self.notify("Nothing to beautify — no valid JSON/XML body found", severity="warning", timeout=3)
 
     @on(ToolbarButton.Pressed, "#btn-send-decoder")
     def on_btn_send_decoder(self, _: ToolbarButton.Pressed) -> None:
@@ -622,33 +657,6 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     @on(ToolbarButton.Pressed, "#btn-send-intruder")
     def on_btn_send_intruder(self, _: ToolbarButton.Pressed) -> None:
         self._send_to_intruder()
-
-    @on(ToolbarButton.Pressed, "#btn-scope")
-    def on_btn_scope(self, _: ToolbarButton.Pressed) -> None:
-        try:
-            proxy = self._get_proxy()
-            current = list(proxy.scope) if proxy else []
-            from pentool.tui.dialogs.scope_dialog import ScopeDialog
-
-            def _on_scope_result(result: list[str] | None) -> None:
-                if result is None:
-                    return
-                if proxy:
-                    proxy.set_scope(result)
-                try:
-                    cfg = getattr(self.app, "_cfg", None)
-                    if cfg is not None:
-                        cfg.scope = list(result)
-                        cfg.save()
-                except Exception:
-                    pass
-                self.app.notify(
-                    f"Scope updated: {len(result)} rule(s)", timeout=2
-                )
-
-            self.app.push_screen(ScopeDialog(current_scope=current), _on_scope_result)
-        except Exception as exc:
-            self.app.notify(f"Scope error: {exc}", severity="error")
 
     def _send_to_intruder(self) -> None:
         try:

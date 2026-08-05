@@ -31,6 +31,18 @@ ScopeToggle.disabled {
     opacity: 0.5;
 }
 
+ColorFilterCycler {
+    height: 1;
+    width: 8;
+    background: $panel;
+    color: $text;
+    padding: 0 1;
+    pointer: pointer;
+}
+ColorFilterCycler:hover {
+    background: $primary-darken-1;
+}
+
 FilterBar {
     height: 1;
     layout: horizontal;

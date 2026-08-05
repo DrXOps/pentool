@@ -40,6 +40,16 @@ class TargetScreen(Widget):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("⚙ Scope Rules",       "btn-scope-rules")
             yield Static(" │ ", classes="toolbar-sep")
+            yield ToolbarButton(
+                "🕷 Crawl Scope", "btn-crawl-scope",
+                tooltip="Crawl every in-scope host with the Spider"
+            )
+            yield Static(" │ ", classes="toolbar-sep")
+            yield ToolbarButton(
+                "🕷 Crawl Host", "btn-crawl-host",
+                tooltip="Crawl the selected host in the tree with the Spider"
+            )
+            yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("↺ Reload from DB",     "btn-refresh")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("🗑 Clear",             "btn-clear")
@@ -74,7 +84,15 @@ class TargetScreen(Widget):
         try:
             api = self._target_api
             if api is not None:
-                for host in api.sitemap.hosts():
+                # Was api.sitemap.hosts() — no such method (only get_hosts()
+                # exists). The AttributeError was swallowed by the bare
+                # except below, so scope_hosts silently stayed empty and
+                # the in-memory scope set by SyncScopeToTarget (Proxy →
+                # Target sync) was wiped by the api.load() reload in
+                # _load_worker() with nothing to restore it — this was the
+                # actual cause of "scope star missing after switching to
+                # Target following an Add to Scope from Proxy".
+                for host in api.sitemap.get_hosts():
                     if api.sitemap.is_in_scope(host):
                         scope_hosts.add(host)
         except Exception:
@@ -217,6 +235,14 @@ class TargetScreen(Widget):
     def on_btn_scope_rules(self, _: ToolbarButton.Pressed) -> None:
         self.action_open_scope_rules()
 
+    @on(ToolbarButton.Pressed, "#btn-crawl-scope")
+    def on_btn_crawl_scope(self, _: ToolbarButton.Pressed) -> None:
+        self.action_crawl_scope()
+
+    @on(ToolbarButton.Pressed, "#btn-crawl-host")
+    def on_btn_crawl_host(self, _: ToolbarButton.Pressed) -> None:
+        self.action_crawl_selected_host()
+
     @on(ToolbarButton.Pressed, "#btn-refresh")
     def on_btn_refresh(self, _: ToolbarButton.Pressed) -> None:
         self._load_sitemap()
@@ -292,6 +318,74 @@ class TargetScreen(Widget):
         except Exception as exc:
             logger.warning("_clear_worker: %s", exc)
 
+    # ── Crawler (uses the same SpiderAPI/AsyncSpider as SpiderScreen) ──────────
+    #
+    # There is no dedicated Crawler module/tab — Spider's functionality lives
+    # inside SpiderScreen only. Rather than duplicating a full crawler UI here,
+    # Target gets two convenience triggers that call SpiderAPI directly and
+    # feed discovered pages back into the SiteMap, matching what Send to
+    # Scanner/context menu users would expect from "crawl this scope".
+
+    def action_crawl_scope(self) -> None:
+        """Crawl every in-scope host (falls back to all known hosts if scope
+        is empty, mirroring ProxyServer.is_in_scope's "empty scope = all in
+        scope" convention)."""
+        api = self._get_api()
+        hosts = [h for h in api.get_hosts() if api.sitemap.is_in_scope(h)]
+        if not hosts:
+            hosts = api.get_hosts()
+        if not hosts:
+            self.app.notify("No hosts to crawl — Site Map is empty", severity="warning")
+            return
+        self._crawl_hosts_worker(hosts)
+
+    def action_crawl_selected_host(self) -> None:
+        """Crawl only the host currently selected in the tree."""
+        if not self._selected_host:
+            self.app.notify("Select a host in the tree first", severity="warning")
+            return
+        self._crawl_hosts_worker([self._selected_host])
+
+    @work
+    async def _crawl_hosts_worker(self, hosts: list[str]) -> None:
+        from pentool.api.spider_api import SpiderAPI, SpiderConfig
+
+        self.app.notify(
+            f"Crawling {len(hosts)} host{'s' if len(hosts) != 1 else ''}…",
+            timeout=3,
+        )
+        total_pages = 0
+        total_errors = 0
+        api = self._get_api()
+        for host in hosts:
+            url = host if "://" in host else f"https://{host}"
+            spider = SpiderAPI(config=SpiderConfig(respect_scope=False))
+            try:
+                result = await spider.crawl(url)
+            except Exception as exc:
+                logger.warning("action_crawl_scope: crawl failed for %s: %s", host, exc)
+                total_errors += 1
+                continue
+            total_pages += len(result.pages)
+            total_errors += len(result.errors)
+            for page_url in result.pages:
+                try:
+                    from pentool.utils.parser import ParsedRequest
+                    api.add_request(ParsedRequest(method="GET", url=page_url))
+                except Exception as exc:
+                    logger.debug("action_crawl_scope: failed to add %s: %s", page_url, exc)
+
+        self.call_after_refresh(self._refresh_tree)
+        try:
+            await api.save()
+        except Exception as exc:
+            logger.debug("action_crawl_scope: save failed: %s", exc)
+
+        msg = f"Crawl done: {total_pages} page(s) found across {len(hosts)} host(s)"
+        if total_errors:
+            msg += f", {total_errors} error(s)"
+        self.app.notify(msg, severity="information")
+
     def action_export_json(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
 
@@ -329,6 +423,10 @@ class TargetScreen(Widget):
                 )
             api = self._get_api()
             api.add_request(parsed_req)
+            logger.debug(
+                "add_request_from_proxy: added %s %s (hosts now: %d)",
+                parsed_req.method, parsed_req.url, len(api.get_hosts()),
+            )
             self.call_after_refresh(self._refresh_tree)
             # Persist to DB (batches of ~20 requests)
             self._save_counter = getattr(self, "_save_counter", 0) + 1
@@ -348,6 +446,7 @@ class TargetScreen(Widget):
         try:
             api = self._get_api()
             tree_data = api.sitemap.get_tree()
+            logger.debug("_refresh_tree: rebuilding tree with %d host(s)", len(tree_data))
             self._build_tree(tree_data)
         except Exception as exc:
             logger.warning("_refresh_tree: %s", exc)

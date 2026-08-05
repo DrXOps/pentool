@@ -421,9 +421,9 @@ class ProjectManager:
             from pentool.tui.screens.repeater.screen import RepeaterScreen
             repeater = self._app.query_one(SCREEN_REPEATER, RepeaterScreen)
             if is_new:
-                repeater.reset_for_new_project()
+                await repeater.reset_for_new_project()
             else:
-                repeater.reload_from_project(path)
+                await repeater.reload_from_project(path)
             logger.info("_reload_project_screens: repeater %s",
                         "reset" if is_new else "reloaded")
         except Exception as exc:

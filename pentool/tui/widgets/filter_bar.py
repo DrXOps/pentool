@@ -13,6 +13,16 @@ _CSS = (Path(__file__).parent / "filter_bar.tcss").read_text(encoding="utf-8")
 
 _METHODS = ["Any", "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
 
+# Same 6 mark colors as ProxyScreen._COLOR_OPTIONS — color IS the tag (variant A).
+_COLOR_DOTS: list[tuple[str, str]] = [
+    ("🔴", "red"),
+    ("🟠", "orange"),
+    ("🟡", "yellow"),
+    ("🟢", "green"),
+    ("🔵", "blue"),
+    ("🟣", "purple"),
+]
+
 
 class MethodCycler(Static):
     """HTTP method toggle button — click cycles through values."""
@@ -92,6 +102,48 @@ class ScopeToggle(Static):
         self.update("★ Scope")
 
 
+class ColorFilterCycler(Static):
+    """Mark-color filter toggle — click cycles through Any/Red/Orange/.../Purple.
+
+    Mirrors MethodCycler's UX: one click steps to the next value instead of
+    a row of independently-clickable dots.
+    """
+
+    DEFAULT_CSS = _CSS
+
+    class Changed(Message):
+        def __init__(self, color: str) -> None:
+            super().__init__()
+            self.color = color  # "" means Any/cleared
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__("", **kwargs)
+        self._idx: int = 0  # 0 = "Any" (no filter)
+        self._update_label()
+
+    def _update_label(self) -> None:
+        if self._idx == 0:
+            self.update("Any ▼")
+        else:
+            dot, _ = _COLOR_DOTS[self._idx - 1]
+            self.update(f"{dot} ▼")
+
+    @property
+    def value(self) -> str:
+        if self._idx == 0:
+            return ""
+        return _COLOR_DOTS[self._idx - 1][1]
+
+    def reset(self) -> None:
+        self._idx = 0
+        self._update_label()
+
+    def on_click(self) -> None:
+        self._idx = (self._idx + 1) % (len(_COLOR_DOTS) + 1)
+        self._update_label()
+        self.post_message(self.Changed(self.value))
+
+
 class FilterBar(Widget):
     """Filter row: Host, Method, Status, Search + Apply/Reset.
 
@@ -116,8 +168,8 @@ class FilterBar(Widget):
         yield Static("Status:", classes="fb-label")
         yield Input(placeholder="200-299", id="fb-status", compact=True)
         yield Static(" ", classes="fb-sep")
-        yield Static("Tag:", classes="fb-label")
-        yield Input(placeholder="tag…", id="fb-tag", compact=True)
+        yield Static("Mark:", classes="fb-label")
+        yield ColorFilterCycler(id="fb-color")
         yield Static(" ", classes="fb-sep")
         yield Static("Search:", classes="fb-label")
         yield Input(placeholder="FTS5 query...", id="fb-search", compact=True)
@@ -139,6 +191,10 @@ class FilterBar(Widget):
 
     def on_method_cycler_changed(self, event: MethodCycler.Changed) -> None:
         """Changing method immediately applies the filter."""
+        self._apply()
+
+    def on_color_filter_cycler_changed(self, event: ColorFilterCycler.Changed) -> None:
+        """Changing color mark filter immediately applies the filter."""
         self._apply()
 
     def on_scope_toggle_toggled(self, event: ScopeToggle.Toggled) -> None:
@@ -173,9 +229,9 @@ class FilterBar(Widget):
                 except ValueError:
                     pass
 
-        tag = self.query_one("#fb-tag", Input).value.strip()
+        tag = self.query_one("#fb-color", ColorFilterCycler).value
         if tag:
-            filters["tag"] = tag
+            filters["color"] = tag
 
         search = self.query_one("#fb-search", Input).value.strip()
         if search:
@@ -194,8 +250,11 @@ class FilterBar(Widget):
     def _reset(self) -> None:
         self.query_one("#fb-host", Input).value = ""
         self.query_one("#fb-status", Input).value = ""
-        self.query_one("#fb-tag", Input).value = ""
         self.query_one("#fb-search", Input).value = ""
+        try:
+            self.query_one("#fb-color", ColorFilterCycler).reset()
+        except Exception:
+            pass
         try:
             self.query_one("#fb-method", MethodCycler).reset()
         except Exception:

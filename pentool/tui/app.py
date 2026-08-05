@@ -835,7 +835,7 @@ class PentoolApp(App):
             target = self.query_one(SCREEN_TARGET, TargetScreen)
             target.add_request_from_proxy(msg.req)
         except Exception as e:
-            logger.debug("on_send_to_target: %s", e)
+            logger.warning("on_send_to_target: failed to forward request to Target: %s", e)
 
     def _add_raw_to_target(self, raw: str) -> None:
         try:

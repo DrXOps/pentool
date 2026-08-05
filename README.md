@@ -1,6 +1,6 @@
 # 🔒 Pentool — Professional TUI Web Pentesting Toolkit
 
-> **🚧 Active Development** — Public beta. Core modules are stable and fully usable. PRO features are under active development. Feedback and bug reports are welcome.
+> **🚧 Active Development — Public Demo/Beta.** Core modules are stable and fully usable. PRO features are under active development. Feedback and bug reports are welcome.
 
 [![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
@@ -15,6 +15,8 @@
 **Pentool** is a terminal-based (TUI) security toolkit for penetration testers and security researchers.  
 It combines HTTP interception, vulnerability scanning, automated attacks, and data analysis — all inside your terminal.  
 Fast, transparent, and built for real-world testing.
+
+> ⚠️ **Use a modern terminal emulator.** Pentool's TUI relies on mouse support, true color, and modern rendering (built on the [Textual](https://github.com/Textualize/textual) framework). Legacy terminals (e.g. Windows `cmd.exe`) will render incorrectly. Recommended: **Windows Terminal**, **iTerm2** (macOS), **GNOME Terminal / Kitty / Alacritty / WezTerm** (Linux). On Windows, running inside **WSL** gives the best experience.
 
 ---
 
@@ -101,10 +103,12 @@ pentool update --check
 
 ## 📚 Documentation
 
+- [🚀 First Run: Certificate & First Intercept](docs/i18n/en/FIRST_RUN.md) — start here
 - [Quick Start Guide](docs/i18n/en/QUICKSTART.md)
 - [User Guide](docs/i18n/en/USER_GUIDE.md)
 - [Installation](docs/i18n/en/INSTALLATION.md)
-- [Plugin Development](docs/API_CONTRACTS.md)
+- [Plugin Development](docs/i18n/en/PLUGIN_DEVELOPMENT.md)
+- [Plugin API Reference](docs/API_CONTRACTS.md)
 
 Full docs: **[pentool.pro](https://pentool.pro)**
 

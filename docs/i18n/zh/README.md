@@ -1,18 +1,22 @@
 # 🔒 Pentool — 专业的 Web 渗透测试 TUI 工具包
 
+> **🚧 积极开发中 — 公开演示/测试版。** 核心模块稳定且完全可用。PRO 功能正在积极开发中。欢迎反馈和错误报告。
+
 [![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
 [![CI](https://github.com/docxqwerty/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/docxqwerty/pentool/actions)
-[![License](https://img.shields.io/github/license/docxqwerty/pentool)](LICENSE)
+[![License](https://img.shields.io/github/license/docxqwerty/pentool)](../../../LICENSE)
 [![Downloads](https://img.shields.io/pypi/dm/pentool)](https://pypi.org/project/pentool/)
 
-🌐 **语言：** [English](README.md) · [Русский](README_RU.md) · [中文](README_ZH.md) · [हिन्दी](README_HI.md)
+🌐 **语言：** [English](../../../README.md) · [Русский](../ru/README.md) · [中文](README.md) · [हिन्दी](../hi/README.md)
 
 ---
 
 **Pentool** 是一款基于终端界面（TUI）的 Web 安全测试工具，专为渗透测试人员和安全研究人员设计。  
 它将 HTTP 拦截、漏洞扫描、自动化攻击和数据分析集成于一个终端中。  
 高效、透明、专为实战设计。
+
+> ⚠️ **请使用现代终端模拟器。** Pentool 的 TUI 基于 [Textual](https://github.com/Textualize/textual) 框架构建，依赖鼠标支持、真彩色和现代渲染。传统终端（如 Windows 的 `cmd.exe`）会显示异常。推荐使用：**Windows Terminal**、**iTerm2**（macOS）、**GNOME Terminal / Kitty / Alacritty / WezTerm**（Linux）。在 Windows 上，在 **WSL** 中运行可获得最佳体验。
 
 ---
 
@@ -81,53 +85,65 @@ pentool update --check
 
 ## 📸 截图
 
-> 截图和 GIF 演示即将推出。
+| 仪表板 | 扫描器 |
+|:---------:|:-------:|
+| ![Dashboard](../../../screens/dashboard.png) | ![Scanner](../../../screens/scaner.png) |
 
-| 仪表板 | 代理 | Intruder |
-|--------|------|----------|
-| *(即将推出)* | *(即将推出)* | *(即将推出)* |
+| 代理 | Repeater |
+|:-----:|:--------:|
+| ![Proxy](../../../screens/proxy.png) | ![Repeater](../../../screens/repeater.png) |
+
+| Intruder | 设置 |
+|:--------:|:--------:|
+| ![Intruder](../../../screens/intruder.png) | ![Settings](../../../screens/settings.png) |
 
 ---
 
 ## 📚 文档
 
-- [快速开始指南](docs/i18n/en/QUICKSTART.md)
-- [用户手册](docs/i18n/en/USER_GUIDE.md)
-- [安装说明](docs/i18n/en/INSTALLATION.md)
-- [插件开发](docs/API_CONTRACTS.md)
+- [🚀 首次运行：证书与首次拦截](FIRST_RUN.md) — 从这里开始
+- [快速开始指南](QUICKSTART.md)
+- [用户手册](USER_GUIDE.md)
+- [安装说明](INSTALLATION.md)
+- [插件开发](PLUGIN_DEVELOPMENT.md)
+- [Plugin API 参考](../../API_CONTRACTS.md)
 
 完整文档：**[pentool.pro](https://pentool.pro)**
 
 ---
 
-## 🧪 测试模式（Beta）
+## 🧪 演示 / 测试模式
 
-> **Pentool 目前处于公开 Beta 测试阶段。**  
-> 所有**免费模块均可正常使用**。付费（PRO）插件仍在开发中——目前仅提供**试用版本**。  
->
-> 但如果你拥有**信息安全领域的博客或频道**，并愿意帮助推广本项目——请私信我们，我们将免费为你提供**私有 PRO 密钥**。
->
-> 📬 联系：**[@sudores](https://t.me/sudores)**（Telegram）
+> **Pentool 目前处于公开演示/测试阶段。**  
+> 所有**免费模块均完全可用**。PRO 功能正在积极开发中——提供 **14 天试用**，让你可以提前评估一切。
+
+### 🎙 面向博主与内容创作者
+
+正在运营**安全博客、YouTube 频道或 Telegram 频道**？  
+写一篇真实的评测并向你的受众推荐 Pentool——我们将免费提供**永久 PRO 许可证**。
+
+无最低粉丝数要求。我们看重质量而非规模。  
+→ 联系我们：**[@sudores](https://t.me/sudores)**（Telegram）
 
 ---
 
 ## 💰 支持项目
 
 Pentool 由一位开发者在业余时间独立开发维护。  
-如果它对你的工作有帮助，欢迎给予支持——这将直接推动新功能的开发和 Bug 修复。
+如果它为你节省了渗透测试的时间——欢迎回馈支持。每一份贡献都直接资助新功能、修复和更快的发布。
 
-- ⭐ [在 GitHub 上加星](https://github.com/docxqwerty/pentool) — 免费且帮助很大
-- ☕ [通过 TryBit 捐款](https://donate.trybit.com/KY1ECKA5) — 加密货币一次性支持
-- 🔑 PRO 许可证 — 即将推出；现可试用
+- ⭐ **[在 GitHub 上加星](https://github.com/docxqwerty/pentool)** — 免费，只需 2 秒，极大提升项目曝光度
+- 🔑 **PRO 许可证** — 获得早期访问权限并支持开发 → **[@sudores](https://t.me/sudores)**
+- 💬 **分享** — 告诉同事、发布评测，或在你的文章中提及 Pentool
 
-每一份支持都意义重大。感谢你对开源安全工具的贡献！🙌
+> 打造工具是一项孤独的工作。一颗星或一句善意的话真的很重要。谢谢。🙏
 
 ---
 
 ## 🤝 参与贡献
 
 欢迎贡献代码！  
-提交 PR 前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+提交 PR 前请阅读 [CONTRIBUTING.md](../../../CONTRIBUTING.md)。
 
 ---
 
@@ -141,7 +157,7 @@ Pentool 由一位开发者在业余时间独立开发维护。
 
 ## 📄 许可证
 
-采用 **AGPL-3.0** 许可证发布。详情见 [LICENSE](LICENSE)。  
+采用 **AGPL-3.0** 许可证发布。详情见 [LICENSE](../../../LICENSE)。  
 PRO 扩展采用商业许可证。
 
 ---

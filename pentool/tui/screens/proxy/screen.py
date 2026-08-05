@@ -96,10 +96,15 @@ def _row_to_record(r: dict) -> tuple:
         time_str = "-"
 
     # Prepend color dot to Host column if the request has a color mark
+    # (color IS the tag — variant A — so one dot covers both concepts).
+    # Also append a 💬 marker if the request has a non-empty comment, so
+    # marked/commented requests are visible in the list without opening them.
     host = str(r.get("host", "") or "")
     color = str(r.get("color", "") or "")
     dot = _COLOR_DOTS.get(color, "")
-    host_display = f"{dot} {host}" if dot else host
+    comment = str(r.get("comment", "") or "")
+    comment_marker = " 💬" if comment.strip() else ""
+    host_display = f"{dot} {host}{comment_marker}" if dot else f"{host}{comment_marker}"
 
     return (
         r.get("id", 0),
@@ -166,6 +171,15 @@ class _ProxyDataTable(_BaseDataTable):
         ProxyScreen._load_more_history().
         """
 
+    class CommentIconClicked(Message):
+        """Posted on a single left-click landing in the Host column — used
+        to open the comment dialog directly when the row has a 💬 marker,
+        without requiring Enter/double-click first."""
+        def __init__(self, row_index: int, column_index: int) -> None:
+            super().__init__()
+            self.row_index = row_index
+            self.column_index = column_index
+
     async def on_event(self, event: _events.Event) -> None:
         if isinstance(event, _events.MouseDown) and (
             event.button == 3 or (event.button == 1 and event.ctrl)
@@ -174,6 +188,15 @@ class _ProxyDataTable(_BaseDataTable):
             await super().on_event(event)
             # Post our own message — it always bubbles to the parent
             self.post_message(self.ContextMenuRequest(event.screen_x, event.screen_y))
+        elif isinstance(event, _events.MouseUp) and event.button == 1 and not event.ctrl:
+            # Plain left-click release — figure out which cell it landed on
+            # via the same style.meta mechanism textual_fastdatatable itself
+            # uses for cursor placement, then let the base class handle the
+            # click as usual (cursor move, RowSelected, etc).
+            meta = getattr(event.style, "meta", None) if event.style else None
+            await super().on_event(event)
+            if meta and "row" in meta and "column" in meta:
+                self.post_message(self.CommentIconClicked(meta["row"], meta["column"]))
         else:
             await super().on_event(event)
 
@@ -236,6 +259,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._history_total: int = 0       # total rows matching current filters (from COUNT(*))
         self._history_oldest_offset: int = 0  # how many older rows are NOT yet loaded (above what's in _rows_cache)
         self._history_loading_more: bool = False
+        self._current_comment: str = ""  # comment of the currently-selected row (for the Comment dialog)
 
     def compose(self) -> ComposeResult:
         # Toolbar (outside SubTabs — all btn-* IDs are always in the DOM)
@@ -247,8 +271,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             yield ToolbarButton("Scope",       "btn-scope")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("M/R",         "btn-mr")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("🔄 Reload",   "btn-load-history")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Clear",       "btn-clear")
 
@@ -310,13 +332,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                             with Vertical(id="req-panel"):
                                 yield Static("Request", classes="panel-title")
                                 yield HttpView(id="req-editor")
-                                with Horizontal(classes="comment-row"):
-                                    yield Label("Comment:", classes="comment-label")
-                                    yield Input(
-                                        placeholder="Add comment...",
-                                        id="req-comment",
-                                        classes="comment-input"
-                                    )
                             yield ResizeHandle(
                                 "req-panel", "resp-panel",
                                 id="resize-req-resp",
@@ -822,30 +837,26 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         else:
             self._select_row(event.cursor_row)
 
+    def on__proxy_data_table_comment_icon_clicked(
+        self, event: "_ProxyDataTable.CommentIconClicked"
+    ) -> None:
+        """Single left-click landing in the Host column opens the comment
+        dialog directly when that row has a comment (💬 marker) — this is
+        the explicit "click the icon" behavior requested, distinct from
+        Enter/double-click which just select the row as usual."""
+        if event.row_index < 0 or event.column_index != 1:  # column 1 = Host
+            return
+        if not (0 <= event.row_index < len(self._rows_cache)):
+            return
+        row = self._rows_cache[event.row_index]
+        comment = str(row.get("comment", "") or "")
+        if comment.strip():
+            self._comment_dialog(initial_comment=comment)
+
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.data_table.id == "ws-request-list":
             self._select_ws_row(event.cursor_row)
         else:
-            self._select_row(event.cursor_row)
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle comment input submission."""
-        if event.input.id == "req-comment":
-            comment = event.input.value
-            if self._selected_req_id and self._proxy_service:
-                self.run_worker(
-                    self._save_comment(self._selected_req_id, comment),
-                    exclusive=False
-                )
-
-    async def _save_comment(self, request_id: int, comment: str) -> None:
-        """Save comment to database."""
-        try:
-            storage = self._proxy_service._storage
-            await storage.update_comment(request_id, comment)
-            logger.info("PROXY: Comment saved for request %d", request_id)
-        except Exception as exc:
-            logger.error("PROXY: Failed to save comment: %s", exc)
             self._select_row(event.cursor_row)
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
@@ -1166,12 +1177,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         except Exception:
             pass
 
-        # Load comment
-        try:
-            comment = entry.get("comment", "")
-            self.query_one("#req-comment", Input).value = comment or ""
-        except Exception:
-            pass
+        # Comment is no longer shown in a persistent field — stash it so the
+        # "View/Edit Comment" dialog (opened via context menu or 💬 click)
+        # has the current value without a re-query.
+        self._current_comment = entry.get("comment", "") or ""
 
         resp_headers = entry.get("response_headers") or {}
         status = entry.get("status_code")
@@ -1224,10 +1233,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     @on(ToolbarButton.Pressed, "#btn-mr")
     def on_btn_mr(self, _: ToolbarButton.Pressed) -> None:
         self.action_open_mr()
-
-    @on(ToolbarButton.Pressed, "#btn-load-history")
-    def on_btn_load_history(self, _: ToolbarButton.Pressed) -> None:
-        self.action_load_history()
 
     @on(ToolbarButton.Pressed, "#btn-clear")
     def on_btn_clear(self, _: ToolbarButton.Pressed) -> None:
@@ -1668,8 +1673,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             ("send_scanner",   "Send to Scanner"),
             ("send_target",    "Send to Target"),
             ("-", ""),
-            ("add_tag", "Add Tag"),
-            ("set_color", "Set Color"),
+            ("mark_req", "Mark color"),
+            ("edit_comment", "View/Edit Comment"),
             ("-", ""),
         ]
         if selected_host and not in_scope:
@@ -1731,10 +1736,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 self.app.post_message(SendHostToScanner(host))
         elif action == "send_target":
             self._send_to_target()
-        elif action == "add_tag":
-            self._add_tag_dialog()
-        elif action == "set_color":
-            self._set_color_dialog()
+        elif action == "mark_req":
+            self._mark_dialog()
+        elif action == "edit_comment":
+            self._comment_dialog()
         elif action == "add_scope":
             self._scope_action_for_selected(add=True)
         elif action == "remove_scope":
@@ -1829,73 +1834,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         ("⬜ Clear",  ""),
     ]
 
-    def _add_tag_dialog(self) -> None:
-        """Prompt user for a tag name via a simple overlay Input."""
-        req_id = self._selected_req_id
-        if not req_id:
-            return
-        from textual.screen import ModalScreen
+    def _mark_dialog(self) -> None:
+        """Show color picker for the selected request.
 
-        class TagInputScreen(ModalScreen):
-            DEFAULT_CSS = """
-            TagInputScreen > Vertical {
-                width: 50;
-                height: auto;
-                border: round $primary;
-                padding: 1 2;
-                background: $panel;
-            }
-            TagInputScreen Input { margin: 1 0; }
-            TagInputScreen Horizontal { align: center middle; height: auto; }
-            TagInputScreen Button { margin: 0 1; }
-            """
-
-            def compose(self) -> ComposeResult:
-                with Vertical():
-                    yield Label("Enter tag name:")
-                    yield Input(placeholder="e.g. important, todo…", id="tag-input")
-                    with Horizontal():
-                        yield Button("Add", id="ok", variant="primary")
-                        yield Button("Cancel", id="cancel")
-
-            def on_button_pressed(self, event: Button.Pressed) -> None:
-                if event.button.id == "ok":
-                    val = self.query_one("#tag-input", Input).value.strip()
-                    self.dismiss(val if val else None)
-                else:
-                    self.dismiss(None)
-
-            def on_input_submitted(self, _) -> None:
-                val = self.query_one("#tag-input", Input).value.strip()
-                self.dismiss(val if val else None)
-
-        def _on_tag(tag: str | None) -> None:
-            if tag:
-                self.run_worker(self._add_tag(req_id, tag))
-
-        self.app.push_screen(TagInputScreen(), _on_tag)
-
-    async def _add_tag(self, request_id: int, tag: str) -> None:
-        """Append tag to request (comma-separated, no duplicates)."""
-        try:
-            if self._proxy_service:
-                storage = self._proxy_service._storage
-                existing = await storage.get_tags(request_id)
-                tags = [t.strip() for t in existing.split(",") if t.strip()] if existing else []
-                if tag not in tags:
-                    tags.append(tag)
-                await storage.update_tags(request_id, ",".join(tags))
-                self.notify(f"Tag '{tag}' added", timeout=2)
-                # Refresh row in cache so filter sees new value
-                for row in self._rows_cache:
-                    if row.get("id") == request_id:
-                        row["tags"] = ",".join(tags)
-                        break
-        except Exception as exc:
-            logger.error("Failed to add tag: %s", exc)
-
-    def _set_color_dialog(self) -> None:
-        """Show color picker for the selected request."""
+        Variant A: color IS the tag — picking a color writes both `color`
+        and `tags` (tag name == color name) in one action, so the mark can
+        be filtered on (ColorFilterDots in FilterBar) and shown as a dot.
+        """
         req_id = self._selected_req_id
         if not req_id:
             return
@@ -1932,28 +1877,118 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
 
         def _on_color(color: str | None) -> None:
             if color is not None:
-                self.run_worker(self._set_color(req_id, color))
+                self.run_worker(self._mark_request(req_id, color))
 
         self.app.push_screen(ColorPickScreen(), _on_color)
 
-    async def _set_color(self, request_id: int, color: str) -> None:
-        """Set color mark for request."""
+    async def _mark_request(self, request_id: int, color: str) -> None:
+        """Set color mark for request — color is written to BOTH `color`
+        and `tags` columns so it doubles as a filterable tag (variant A).
+        """
         try:
             if self._proxy_service:
                 storage = self._proxy_service._storage
                 await storage.update_color(request_id, color)
+                # Color IS the tag: replace any previous color-tag with the
+                # new one, keeping the color name as the sole tag value.
+                await storage.update_tags(request_id, color)
                 label = next((l for l, v in self._COLOR_OPTIONS if v == color), color)
-                msg = f"Color: {label}" if color else "Color cleared"
+                msg = f"Marked: {label}" if color else "Mark cleared"
                 self.notify(msg, timeout=2)
                 # Update cache
                 for row in self._rows_cache:
                     if row.get("id") == request_id:
                         row["color"] = color
+                        row["tags"] = color
                         break
                 # Visual update: rebuild table to show color dot in Host column
                 await self._reload_table(self._current_filters)
         except Exception as exc:
-            logger.error("Failed to set color: %s", exc)
+            logger.error("Failed to mark request: %s", exc)
+
+    def _comment_dialog(self, initial_comment: str | None = None) -> None:
+        """Show a modal to view/edit the comment for the selected request.
+
+        Replaces the old always-visible Comment input field below the
+        Request panel — comments are now edited on demand via context menu
+        or by clicking the 💬 marker in the list, keeping the detail panel
+        uncluttered.
+
+        `initial_comment` lets callers (e.g. the row-click 💬 handler) pass
+        the value straight from the synchronous row cache; falls back to
+        `self._current_comment`, populated by the async detail-load worker.
+        """
+        req_id = self._selected_req_id
+        if not req_id:
+            return
+        from textual.screen import ModalScreen
+
+        initial_comment = initial_comment if initial_comment is not None else self._current_comment
+
+        class CommentDialog(ModalScreen):
+            DEFAULT_CSS = """
+            CommentDialog > Vertical {
+                width: 60;
+                height: auto;
+                border: round $primary;
+                padding: 1 2;
+                background: $panel;
+            }
+            CommentDialog Input { margin: 1 0; }
+            CommentDialog Horizontal { align: center middle; height: auto; }
+            CommentDialog Button { margin: 0 1; }
+            """
+
+            def compose(self) -> ComposeResult:
+                with Vertical():
+                    yield Label("Comment:")
+                    yield Input(
+                        value=initial_comment,
+                        placeholder="Add comment...",
+                        id="comment-dialog-input",
+                    )
+                    with Horizontal():
+                        yield Button("Save", id="save", variant="primary")
+                        yield Button("Cancel", id="cancel")
+
+            def on_mount(self) -> None:
+                self.query_one("#comment-dialog-input", Input).focus()
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                if event.button.id == "save":
+                    self.dismiss(self.query_one("#comment-dialog-input", Input).value)
+                else:
+                    self.dismiss(None)
+
+            def on_input_submitted(self, event: Input.Submitted) -> None:
+                self.dismiss(event.value)
+
+        def _on_comment(comment: str | None) -> None:
+            if comment is not None:
+                self.run_worker(self._save_comment(req_id, comment))
+
+        self.app.push_screen(CommentDialog(), _on_comment)
+
+    async def _save_comment(self, request_id: int, comment: str) -> None:
+        """Save comment to database."""
+        try:
+            storage = self._proxy_service._storage
+            await storage.update_comment(request_id, comment)
+            logger.info("PROXY: Comment saved for request %d", request_id)
+            if request_id == self._selected_req_id:
+                self._current_comment = comment
+            # Keep cache in sync so the list-row indicator (💬) updates
+            # immediately, same as _mark_request does for color/tags.
+            for row in self._rows_cache:
+                if row.get("id") == request_id:
+                    row["comment"] = comment
+                    break
+            # Visual update: rebuild table so the 💬 marker in Host shows up
+            # right away instead of only after the next reload/restart.
+            await self._reload_table(self._current_filters)
+            self.notify("Comment saved" if comment else "Comment cleared", timeout=2)
+        except Exception as exc:
+            logger.error("PROXY: Failed to save comment: %s", exc)
 
     def on_context_menu_item_selected(self, event: ContextMenu.ItemSelected) -> None:
         self._on_ctx_action(event.action)
