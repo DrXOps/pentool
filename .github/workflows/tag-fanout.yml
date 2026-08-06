@@ -1,0 +1,29 @@
+name: Tag Fan-out (trigger PRO rebuild)
+
+# One `git tag vX.Y.Z && git push origin vX.Y.Z` on this repo is the single
+# source of truth for a release. This workflow fires alongside publish.yml
+# (PyPI) and forwards the same tag to the private pentool-pro repo via
+# repository_dispatch, so its build-release.yml rebuilds and republishes
+# the obfuscated PRO package from a matching state — all three surfaces
+# (pentool on PyPI, pentool-pro's GitHub Release, and the pentool-pro repo
+# itself) stay pinned to the same vX.Y.Z tag.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  fanout:
+    name: Dispatch rebuild-pro to pentool-pro
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger pentool-pro build-release.yml
+        env:
+          # PAT with `repo` scope on docxqwerty/pentool-pro — the built-in
+          # GITHUB_TOKEN cannot dispatch workflow events on another repo.
+          GH_TOKEN: ${{ secrets.PRO_REPO_DISPATCH_TOKEN }}
+        run: |
+          gh api repos/docxqwerty/pentool-pro/dispatches \
+            -f event_type=rebuild-pro \
+            -f "client_payload[tag]=${{ github.ref_name }}"
+          echo "Dispatched rebuild-pro (tag=${{ github.ref_name }}) to pentool-pro" >> $GITHUB_STEP_SUMMARY

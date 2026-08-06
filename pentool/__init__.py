@@ -17,6 +17,15 @@ def _bootstrap_pro() -> None:
     pkgutil.extend_path in their own __init__.py files, and importing
     them early would freeze their __path__ before the pro/ directory
     is appended.
+
+    Also adds the PRO package's *root* dir (the parent of pro/pentool/) to
+    sys.path — this is where CodeEnigma's obfuscated build places
+    `codeenigma_runtime/`, a compiled Cython extension package that the
+    obfuscated pentool/**/*.py files import from at module load time
+    (`from codeenigma_runtime import execute_secure_code`). Without this,
+    every obfuscated PRO module fails to import with
+    `ModuleNotFoundError: No module named 'codeenigma_runtime'` even though
+    pentool/ itself resolves fine via __path__ extension above.
     """
     import sys
     from pathlib import Path
@@ -48,6 +57,12 @@ def _bootstrap_pro() -> None:
             _extra = str(_pro_pkg / "api")
             if _extra not in _api.__path__:
                 _api.__path__.append(_extra)
+
+        # 3. Make codeenigma_runtime/ (sibling of pentool/, one level up from
+        #    _pro_pkg) importable — see docstring above.
+        _pro_root = _pro_pkg.parent
+        if str(_pro_root) not in sys.path:
+            sys.path.append(str(_pro_root))
 
 
 _bootstrap_pro()

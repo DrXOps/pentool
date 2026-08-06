@@ -490,6 +490,19 @@ def _safe_extract_tar(archive_path: Path, dest_dir: Path) -> None:
         tar.extractall(dest_dir)  # noqa: S202 — members already validated above
 
 
+def _current_platform() -> str:
+    """Map platform.system() to the pentool-pro release asset naming scheme
+    (pentool-pro-{linux,macos,windows}.tar.gz — see pentool-backend's
+    packageAssetName()). Defaults to "linux" for anything unrecognized
+    (e.g. other POSIX systems), matching the Worker's own fallback."""
+    system = platform.system().lower()
+    if system == "darwin":
+        return "macos"
+    if system == "windows":
+        return "windows"
+    return "linux"
+
+
 async def download_pro_package(key: str, machine_id: str) -> bool:
     """Download, verify, and install the obfuscated PRO package.
 
@@ -498,9 +511,16 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
     (see _PRO_PACKAGE_PUBLIC_KEY_B64) BEFORE ever extracting anything, then
     unpacks into ~/.pentool/pro/ for plugin_manager to pick up.
 
+    Since the CodeEnigma-based build (2026-08), pentool-pro's CI publishes
+    one archive per OS (linux/macos/windows) instead of a single
+    platform-agnostic one — CodeEnigma's runtime package includes a
+    compiled Cython extension (.so/.pyd), which is platform-specific.
+    `platform` is sent to the server so it returns the right asset.
+
     Returns True on success, False otherwise (never raises — a failed PRO
     package download should not block FREE functionality).
     """
+    plat = _current_platform()
     try:
         import aiohttp
         async with aiohttp.ClientSession(
@@ -508,7 +528,7 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
         ) as session:
             async with session.post(
                 f"{_LICENSE_API_BASE}/api/download",
-                json={"key": key, "machine_id": machine_id},
+                json={"key": key, "machine_id": machine_id, "platform": plat},
                 ssl=False,
             ) as resp:
                 if resp.status != 200:
@@ -517,7 +537,7 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
 
             async with session.post(
                 f"{_LICENSE_API_BASE}/api/download",
-                json={"key": key, "machine_id": machine_id, "sig": "1"},
+                json={"key": key, "machine_id": machine_id, "platform": plat, "sig": "1"},
                 ssl=False,
             ) as resp:
                 if resp.status != 200:
