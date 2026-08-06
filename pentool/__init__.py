@@ -34,8 +34,8 @@ def _bootstrap_pro() -> None:
     _repo_root = _pkg_dir.parent                 # .../pentool/
 
     candidates: list[Path] = [
-        Path.home() / ".pentool" / "pro" / "pentool",  # installed PRO package
         _repo_root / "pro" / "pentool",                 # dev submodule
+        Path.home() / ".pentool" / "pro" / "pentool",  # installed PRO package
     ]
 
     import pentool as _self
