@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import time
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from pentool.core.license import (
     LicenseInfo,
     _GRACE_PERIOD_DAYS,
-    _LICENSE_FILE,
+    _canonical_license_payload,
     activate_license,
     deactivate_license,
     get_license,
@@ -22,6 +23,39 @@ from pentool.core.license import (
     _load_cached,
     _save_cached,
 )
+
+# A test-only ed25519 keypair used to sign fixtures in these tests. The real
+# client verifies against the production public key embedded in license.py
+# (_LICENSE_SIGNING_PUBLIC_KEY_B64), so every test that needs a *valid*
+# signature patches that constant to this test key's public half instead.
+_TEST_PRIVATE_KEY = Ed25519PrivateKey.generate()
+_TEST_PUBLIC_KEY_B64 = base64.b64encode(
+    _TEST_PRIVATE_KEY.public_key().public_bytes_raw()
+).decode("ascii") if hasattr(_TEST_PRIVATE_KEY.public_key(), "public_bytes_raw") else base64.b64encode(
+    _TEST_PRIVATE_KEY.public_key().public_bytes(
+        encoding=__import__("cryptography.hazmat.primitives.serialization", fromlist=["Encoding"]).Encoding.Raw,
+        format=__import__("cryptography.hazmat.primitives.serialization", fromlist=["PublicFormat"]).PublicFormat.Raw,
+    )
+).decode("ascii")
+
+
+def _sign(valid: bool, plan: str, features: list[str], expires, machine_id: str, ts: int) -> str:
+    message = _canonical_license_payload(valid, plan, features, expires, machine_id, ts)
+    sig = _TEST_PRIVATE_KEY.sign(message)
+    return base64.b64encode(sig).decode("ascii")
+
+
+def _signed_cache_entry(
+    valid=True, plan="pro", features=None, expires=None,
+    machine_id="abc123", ts=None, license_key="PTOOL-AAAA-BBBB-CCCC",
+) -> dict:
+    features = features if features is not None else ["scanner_pro"]
+    ts = ts if ts is not None else int(time.time() * 1000)
+    sig = _sign(valid, plan, features, expires, machine_id, ts)
+    return {
+        "valid": valid, "plan": plan, "features": features, "expires": expires,
+        "machine_id": machine_id, "license_key": license_key, "sig": sig, "ts": ts,
+    }
 
 
 # ── LicenseInfo ────────────────────────────────────────────────────────────────
@@ -115,7 +149,7 @@ class TestCache:
 
     def test_save_and_load_roundtrip(self, tmp_path):
         lic_file = tmp_path / ".pentool" / "license.dat"
-        data = {"valid": True, "plan": "pro", "last_check": 1234567890.0}
+        data = {"valid": True, "plan": "pro", "ts": 1234567890000}
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
             _save_cached(data)
             loaded = _load_cached()
@@ -134,7 +168,12 @@ class TestCache:
         assert lic_file.exists()
 
 
-# ── get_license ────────────────────────────────────────────────────────────────
+# ── get_license (signature verification) ────────────────────────────────────────
+#
+# Every test in this section patches _LICENSE_SIGNING_PUBLIC_KEY_B64 to the
+# test keypair's public half so _sign()-produced fixtures verify. This
+# exercises the exact same verification code path as production, just
+# against a throwaway key instead of the real one.
 
 class TestGetLicense:
     def test_returns_free_when_no_cache(self, tmp_path):
@@ -144,61 +183,101 @@ class TestGetLicense:
         assert info.valid is False
         assert info.plan == "free"
 
-    def test_returns_cached_info_within_grace(self, tmp_path):
+    def test_returns_cached_info_when_signature_valid(self, tmp_path):
         lic_file = tmp_path / ".pentool" / "license.dat"
-        data = {
-            "valid": True,
-            "plan": "pro",
-            "features": ["scanner_pro"],
-            "expires": None,
-            "machine_id": "abc123",
-            "license_key": "DEMO-1234-5678-ABCD",
-            "last_check": time.time(),  # just now
-        }
+        my_machine_id = get_machine_id()
+        data = _signed_cache_entry(machine_id=my_machine_id)
         lic_file.parent.mkdir(parents=True)
         lic_file.write_text(json.dumps(data), encoding="utf-8")
-        with patch("pentool.core.license._LICENSE_FILE", lic_file):
+        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
+             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
             info = get_license()
         assert info.valid is True
         assert info.plan == "pro"
         assert "scanner_pro" in info.features
 
-    def test_grace_period_expired_returns_free(self, tmp_path):
+    def test_missing_signature_rejected(self, tmp_path):
+        """Cache entries without sig/ts (old format, or stripped) are untrusted."""
         lic_file = tmp_path / ".pentool" / "license.dat"
-        expired_ts = time.time() - (_GRACE_PERIOD_DAYS + 1) * 24 * 3600
         data = {
-            "valid": True,
-            "plan": "pro",
-            "features": ["scanner_pro"],
-            "expires": None,
-            "machine_id": "abc123",
-            "license_key": "DEMO-1234-5678-ABCD",
-            "last_check": expired_ts,
+            "valid": True, "plan": "pro", "features": ["scanner_pro"],
+            "expires": None, "machine_id": "abc123", "license_key": "X",
+            "last_check": time.time(),
         }
         lic_file.parent.mkdir(parents=True)
         lic_file.write_text(json.dumps(data), encoding="utf-8")
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
             info = get_license()
         assert info.valid is False
+        assert "unsigned" in info.error.lower()
+
+    def test_tampered_field_invalidates_signature(self, tmp_path):
+        """Hand-editing any signed field after the fact must be detected —
+        this is the core fix: license.dat can no longer be faked by hand."""
+        lic_file = tmp_path / ".pentool" / "license.dat"
+        my_machine_id = get_machine_id()
+        data = _signed_cache_entry(plan="free", features=[], machine_id=my_machine_id)
+        # Tamper: upgrade to pro + add features after signing, without re-signing.
+        data["plan"] = "pro"
+        data["features"] = ["scanner_pro", "reports_pro", "payloads_pro"]
+        lic_file.parent.mkdir(parents=True)
+        lic_file.write_text(json.dumps(data), encoding="utf-8")
+        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
+             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
+            info = get_license()
+        assert info.valid is False
+        assert "signature" in info.error.lower()
+
+    def test_wrong_public_key_rejected(self, tmp_path):
+        """A signature made with the wrong key (not the real server key)
+        must not verify — this is what stops a self-signed fake license."""
+        lic_file = tmp_path / ".pentool" / "license.dat"
+        data = _signed_cache_entry(machine_id=get_machine_id())
+        lic_file.parent.mkdir(parents=True)
+        lic_file.write_text(json.dumps(data), encoding="utf-8")
+        # Deliberately do NOT patch _LICENSE_SIGNING_PUBLIC_KEY_B64 — the
+        # production public key won't match our test signature.
+        with patch("pentool.core.license._LICENSE_FILE", lic_file):
+            info = get_license()
+        assert info.valid is False
+
+    def test_machine_id_mismatch_rejected(self, tmp_path):
+        """A validly-signed verdict for a different machine must not apply here —
+        prevents copying license.dat between machines."""
+        lic_file = tmp_path / ".pentool" / "license.dat"
+        data = _signed_cache_entry(machine_id="some-other-machine-id")
+        lic_file.parent.mkdir(parents=True)
+        lic_file.write_text(json.dumps(data), encoding="utf-8")
+        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
+             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
+            info = get_license()
+        assert info.valid is False
+        assert "different machine" in info.error.lower()
+
+    def test_grace_period_expired_returns_free(self, tmp_path):
+        lic_file = tmp_path / ".pentool" / "license.dat"
+        my_machine_id = get_machine_id()
+        expired_ts_ms = int((time.time() - (_GRACE_PERIOD_DAYS + 1) * 24 * 3600) * 1000)
+        data = _signed_cache_entry(machine_id=my_machine_id, ts=expired_ts_ms)
+        lic_file.parent.mkdir(parents=True)
+        lic_file.write_text(json.dumps(data), encoding="utf-8")
+        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
+             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
+            info = get_license()
+        assert info.valid is False
         assert info.plan == "free"
         assert "Grace period expired" in info.error
 
     def test_grace_period_boundary_still_valid(self, tmp_path):
-        """Exactly 1 second before grace period expiry — still valid."""
+        """Well within the grace window — still valid."""
         lic_file = tmp_path / ".pentool" / "license.dat"
-        almost_expired = time.time() - (_GRACE_PERIOD_DAYS * 24 * 3600 - 1)
-        data = {
-            "valid": True,
-            "plan": "pro",
-            "features": [],
-            "expires": None,
-            "machine_id": "abc",
-            "license_key": "DEMO-0000-0000-0000",
-            "last_check": almost_expired,
-        }
+        my_machine_id = get_machine_id()
+        almost_expired_ms = int((time.time() - (_GRACE_PERIOD_DAYS * 24 * 3600 - 60)) * 1000)
+        data = _signed_cache_entry(machine_id=my_machine_id, ts=almost_expired_ms, features=[])
         lic_file.parent.mkdir(parents=True)
         lic_file.write_text(json.dumps(data), encoding="utf-8")
-        with patch("pentool.core.license._LICENSE_FILE", lic_file):
+        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
+             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
             info = get_license()
         assert info.valid is True
 
@@ -220,23 +299,19 @@ class TestActivateLicense:
         assert info.valid is False
 
     @pytest.mark.asyncio
-    async def test_demo_key_activates_pro(self, tmp_path):
-        """DEMO-XXXX-XXXX-XXXX → PRO offline fallback."""
+    async def test_no_offline_bypass_when_server_unreachable(self, tmp_path):
+        """Regression test for the removed DEMO- backdoor: with aiohttp
+        unavailable (simulating "server unreachable"), activation must
+        fail — there is no local fallback that grants PRO anymore."""
         lic_file = tmp_path / "license.dat"
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
-            # Simulate network failure to fall into offline fallback
-            with patch("pentool.core.license.activate_license", wraps=None) as _:
-                pass
-            # Direct test of offline path: patch aiohttp to fail
             with patch.dict("sys.modules", {"aiohttp": None}):
                 info = await activate_license("DEMO-ABCD-1234-EFGH")
-        assert info.valid is True
-        assert info.plan == "pro"
-        assert "scanner_pro" in info.features
+        assert info.valid is False
+        assert not lic_file.exists()
 
     @pytest.mark.asyncio
-    async def test_invalid_key_format_returns_error(self, tmp_path):
-        """Key with wrong format → error."""
+    async def test_invalid_key_format_without_server_fails(self, tmp_path):
         lic_file = tmp_path / "license.dat"
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
             with patch.dict("sys.modules", {"aiohttp": None}):
@@ -244,29 +319,11 @@ class TestActivateLicense:
         assert info.valid is False
         assert info.error != ""
 
-    @pytest.mark.asyncio
-    async def test_non_demo_valid_format_without_server_fails(self, tmp_path):
-        """Valid format but not DEMO and no server → error."""
-        lic_file = tmp_path / "license.dat"
-        with patch("pentool.core.license._LICENSE_FILE", lic_file):
-            with patch.dict("sys.modules", {"aiohttp": None}):
-                info = await activate_license("ABCD-1234-EFGH-5678")
-        assert info.valid is False
-
-    @pytest.mark.asyncio
-    async def test_server_success_saves_cache(self, tmp_path):
-        """Successful server response → cached."""
-        lic_file = tmp_path / "license.dat"
-        server_resp = {
-            "valid": True,
-            "plan": "pro",
-            "features": ["scanner_pro"],
-            "expires": "2028-01-01",
-        }
-
+    @staticmethod
+    def _mock_aiohttp_returning(status: int, payload: dict):
         mock_resp = AsyncMock()
-        mock_resp.status = 200
-        mock_resp.json = AsyncMock(return_value=server_resp)
+        mock_resp.status = status
+        mock_resp.json = AsyncMock(return_value=payload)
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_resp.__aexit__ = AsyncMock(return_value=False)
 
@@ -278,14 +335,27 @@ class TestActivateLicense:
         mock_aiohttp = MagicMock()
         mock_aiohttp.ClientSession = MagicMock(return_value=mock_session)
         mock_aiohttp.ClientTimeout = MagicMock(return_value=MagicMock())
+        return mock_aiohttp
 
-        with patch("pentool.core.license._LICENSE_FILE", lic_file):
-            with patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
-                with patch(
-                    "pentool.core.license.download_pro_package",
-                    AsyncMock(return_value=True),
-                ):
-                    info = await activate_license("PROD-AAAA-BBBB-CCCC")
+    @pytest.mark.asyncio
+    async def test_server_success_with_valid_signature_saves_cache(self, tmp_path):
+        """Successful, correctly-signed server response → cached and trusted."""
+        lic_file = tmp_path / "license.dat"
+        machine_id = get_machine_id()
+        ts = int(time.time() * 1000)
+        features = ["scanner_pro"]
+        sig = _sign(True, "pro", features, "2028-01-01", machine_id, ts)
+        server_resp = {
+            "valid": True, "plan": "pro", "features": features,
+            "expires_at": "2028-01-01", "sig": sig, "ts": ts,
+        }
+        mock_aiohttp = self._mock_aiohttp_returning(200, server_resp)
+
+        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
+             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}), \
+             patch("pentool.core.license.download_pro_package", AsyncMock(return_value=True)):
+            info = await activate_license("PROD-AAAA-BBBB-CCCC")
 
         assert info.valid is True
         assert info.plan == "pro"
@@ -293,31 +363,57 @@ class TestActivateLicense:
         cached = json.loads(lic_file.read_text())
         assert cached["valid"] is True
         assert cached["plan"] == "pro"
+        assert cached["sig"] == sig
+
+    @pytest.mark.asyncio
+    async def test_server_success_without_signature_rejected(self, tmp_path):
+        """A valid=True response with no sig/ts must be refused, not trusted —
+        this is the server-compromise / MITM defense, unsigned data is inert."""
+        lic_file = tmp_path / "license.dat"
+        server_resp = {"valid": True, "plan": "pro", "features": ["scanner_pro"]}
+        mock_aiohttp = self._mock_aiohttp_returning(200, server_resp)
+
+        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
+             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+            info = await activate_license("PROD-AAAA-BBBB-CCCC")
+
+        assert info.valid is False
+        assert "unsigned" in info.error.lower()
+        assert not lic_file.exists()
+
+    @pytest.mark.asyncio
+    async def test_server_success_with_bad_signature_rejected(self, tmp_path):
+        """Signature present but doesn't verify (tampered in transit, or
+        signed with an unexpected key) → refused."""
+        lic_file = tmp_path / "license.dat"
+        machine_id = get_machine_id()
+        ts = int(time.time() * 1000)
+        server_resp = {
+            "valid": True, "plan": "pro", "features": ["scanner_pro"],
+            "expires_at": None, "sig": base64.b64encode(b"\x00" * 64).decode(), "ts": ts,
+        }
+        mock_aiohttp = self._mock_aiohttp_returning(200, server_resp)
+
+        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
+             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+            info = await activate_license("PROD-AAAA-BBBB-CCCC")
+
+        assert info.valid is False
+        assert "signature" in info.error.lower()
+        assert not lic_file.exists()
 
     @pytest.mark.asyncio
     async def test_server_returns_invalid(self, tmp_path):
-        """Server returned valid=False → not cached."""
+        """Server returned valid=False → not cached (no signature needed for
+        a negative verdict — nothing to protect)."""
         lic_file = tmp_path / "license.dat"
         server_resp = {"valid": False, "plan": "free", "features": []}
+        mock_aiohttp = self._mock_aiohttp_returning(200, server_resp)
 
-        mock_resp = AsyncMock()
-        mock_resp.status = 200
-        mock_resp.json = AsyncMock(return_value=server_resp)
-        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-        mock_resp.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = AsyncMock()
-        mock_session.post = MagicMock(return_value=mock_resp)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-
-        mock_aiohttp = MagicMock()
-        mock_aiohttp.ClientSession = MagicMock(return_value=mock_session)
-        mock_aiohttp.ClientTimeout = MagicMock(return_value=MagicMock())
-
-        with patch("pentool.core.license._LICENSE_FILE", lic_file):
-            with patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
-                info = await activate_license("XXXX-YYYY-ZZZZ-0000")
+        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
+             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+            info = await activate_license("XXXX-YYYY-ZZZZ-0000")
 
         assert info.valid is False
         assert not lic_file.exists()

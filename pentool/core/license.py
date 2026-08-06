@@ -26,6 +26,19 @@ PRO_PACKAGE_DIR = Path.home() / ".pentool" / "pro"
 # cannot make the client execute tampered code.
 _PRO_PACKAGE_PUBLIC_KEY_B64 = "MMPAM1xmvGV/CaLlT0doHoUH+Uv2zvVMSmPzNBglgBA="
 
+# ed25519 public key (base64) matching pentool-backend's LICENSE_SIGNING_KEY.
+# Every /api/validate and /api/trial/start response is signed server-side —
+# the client verifies the signature (over a canonical payload including
+# machine_id + ts) before trusting valid/plan/features, and persists the
+# signature alongside the cached verdict so ~/.pentool/license.dat itself is
+# tamper-evident: hand-editing it to say {"valid": true, "plan": "pro"} no
+# longer works, because the signature won't match the edited fields.
+_LICENSE_SIGNING_PUBLIC_KEY_B64 = "1yrqLbj5Ei2/NpBBAg/mAn2hSZazTKoq909spi8LqT0="
+
+# How long a signed server verdict remains trusted without re-validating
+# online — same value as the previous unsigned last_check grace period.
+_SIGNATURE_MAX_AGE_SECONDS = _GRACE_PERIOD_DAYS * 24 * 3600
+
 
 
 @dataclass
@@ -93,31 +106,122 @@ def _save_cached(data: dict) -> None:
         pass
 
 
-def get_license() -> LicenseInfo:
-    cached = _load_cached()
-    if cached is None:
-        return LicenseInfo(valid=False, plan="free", machine_id=get_machine_id())
+def _canonical_license_payload(
+    valid: bool, plan: str, features: list[str], expires: str | None,
+    machine_id: str, ts: int,
+) -> bytes:
+    """Reconstruct the exact byte string the server signed.
 
-    last_check = cached.get("last_check", 0)
-    grace_seconds = _GRACE_PERIOD_DAYS * 24 * 3600
-    if (time.time() - last_check) > grace_seconds:
-        # Grace period expired — deactivate
+    MUST match pentool-backend's canonicalLicensePayload() field-for-field —
+    order, separator, and the sorted-features join are part of the contract.
+    """
+    parts = [
+        "1" if valid else "0",
+        plan,
+        ",".join(sorted(features)),
+        expires or "",
+        machine_id,
+        str(ts),
+    ]
+    return "|".join(parts).encode("utf-8")
+
+
+def _verify_license_signature(
+    valid: bool, plan: str, features: list[str], expires: str | None,
+    machine_id: str, ts: int, sig_b64: str,
+) -> bool:
+    """Verify the server's ed25519 signature over a license verdict.
+
+    This is what makes ~/.pentool/license.dat tamper-evident: without the
+    server's private key (held only in pentool-backend's Cloudflare secret),
+    nobody can hand-craft a {"valid": true, "plan": "pro", ...} blob that
+    passes this check — editing any signed field invalidates the signature.
+    """
+    try:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        public_key = Ed25519PublicKey.from_public_bytes(
+            base64.b64decode(_LICENSE_SIGNING_PUBLIC_KEY_B64)
+        )
+        message = _canonical_license_payload(valid, plan, features, expires, machine_id, ts)
+        signature = base64.b64decode(sig_b64.strip())
+        public_key.verify(signature, message)
+        return True
+    except InvalidSignature:
+        return False
+    except Exception:
+        return False
+
+
+def get_license() -> LicenseInfo:
+    """Load and verify the cached license verdict from disk.
+
+    Returns valid=False (downgrades to FREE) unless ALL of the following hold:
+      1. A cached verdict exists and has a signature.
+      2. The signature verifies against the server's public key over the
+         exact cached fields (valid/plan/features/expires/machine_id/ts) —
+         this is what prevents hand-editing license.dat to fake PRO.
+      3. The signature's machine_id matches this machine's current id — a
+         verdict signed for one machine cannot be copied onto another.
+      4. The signature is not older than _SIGNATURE_MAX_AGE_SECONDS — bounds
+         how long a license can be used fully offline before requiring a
+         fresh online check (same grace-period contract as before).
+    """
+    cached = _load_cached()
+    my_machine_id = get_machine_id()
+
+    if cached is None:
+        return LicenseInfo(valid=False, plan="free", machine_id=my_machine_id)
+
+    sig = cached.get("sig")
+    ts = cached.get("ts")
+    if not sig or ts is None:
+        # Pre-signature cache format (or tampered/stripped) — cannot trust it.
+        return LicenseInfo(
+            valid=False, plan="free", machine_id=my_machine_id,
+            license_key=cached.get("license_key", ""),
+            error="License cache is unsigned or corrupted. Please re-activate.",
+        )
+
+    plan = cached.get("plan", "free")
+    features = cached.get("features", [])
+    expires = cached.get("expires")
+    cached_machine_id = cached.get("machine_id", "")
+    valid_flag = bool(cached.get("valid", False))
+
+    if not _verify_license_signature(valid_flag, plan, features, expires, cached_machine_id, ts, sig):
+        return LicenseInfo(
+            valid=False, plan="free", machine_id=my_machine_id,
+            license_key=cached.get("license_key", ""),
+            error="License signature invalid — cache may have been tampered with. Please re-activate.",
+        )
+
+    if cached_machine_id != my_machine_id:
+        return LicenseInfo(
+            valid=False, plan="free", machine_id=my_machine_id,
+            license_key=cached.get("license_key", ""),
+            error="License was issued for a different machine.",
+        )
+
+    age_seconds = time.time() - (ts / 1000.0)
+    if age_seconds > _SIGNATURE_MAX_AGE_SECONDS:
         return LicenseInfo(
             valid=False,
             plan="free",
-            machine_id=get_machine_id(),
+            machine_id=my_machine_id,
             license_key=cached.get("license_key", ""),
             error="Grace period expired. Please reconnect to validate license.",
         )
 
     return LicenseInfo(
-        valid=cached.get("valid", False),
-        plan=cached.get("plan", "free"),
-        features=cached.get("features", []),
-        expires=cached.get("expires"),
-        machine_id=cached.get("machine_id", get_machine_id()),
+        valid=valid_flag,
+        plan=plan,
+        features=features,
+        expires=expires,
+        machine_id=cached_machine_id,
         license_key=cached.get("license_key", ""),
-        last_check=last_check,
+        last_check=ts / 1000.0,
     )
 
 
@@ -184,6 +288,13 @@ def require_feature(feature: str, plan_required: str = "pro"):
 async def activate_license(key: str) -> LicenseInfo:
     """Activate license online (license.pentool.pro/api/validate).
 
+    Requires a valid signed response from the server — there is no offline
+    fallback that grants PRO. (A previous version accepted any key starting
+    with "DEMO-" and matching the XXXX-XXXX-XXXX-XXXX pattern as an
+    always-valid PRO license without ever contacting the server — that was
+    a full authentication bypass and has been removed. Every activation now
+    requires network access to the license server and a verified signature.)
+
     Returns:
         LicenseInfo with activation result.
     """
@@ -197,7 +308,6 @@ async def activate_license(key: str) -> LicenseInfo:
             error="License key is empty",
         )
 
-    # Attempt real online check
     try:
         import aiohttp
         async with aiohttp.ClientSession(
@@ -208,65 +318,59 @@ async def activate_license(key: str) -> LicenseInfo:
                 json={"key": key, "machine_id": machine_id},
                 ssl=False,
             ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    info = LicenseInfo(
-                        valid=data.get("valid", False),
-                        plan=data.get("plan", "free"),
-                        features=data.get("features", []),
-                        expires=data.get("expires"),
-                        machine_id=machine_id,
+                if resp.status != 200:
+                    return LicenseInfo(
+                        valid=False, plan="free", machine_id=machine_id,
                         license_key=key,
-                        last_check=time.time(),
+                        error=f"License server returned HTTP {resp.status}",
                     )
-                    if info.valid:
-                        _save_cached({
-                            "valid": True,
-                            "plan": info.plan,
-                            "features": info.features,
-                            "expires": info.expires,
-                            "machine_id": machine_id,
-                            "license_key": key,
-                            "last_check": time.time(),
-                        })
-                        if info.features:
-                            await download_pro_package(key, machine_id)
-                    return info
-    except Exception:
-        pass  # Server unavailable — fallback to local check
+                data = await resp.json()
 
-    # Offline fallback: check key format
-    # Format: XXXX-XXXX-XXXX-XXXX (16 hex chars with dashes)
-    import re
-    if re.match(r'^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$', key):
-        if key.startswith("DEMO"):
-            info = LicenseInfo(
-                valid=True,
-                plan="pro",
-                features=["scanner_pro", "reports_pro", "payloads_pro"],
-                expires=None,
-                machine_id=machine_id,
-                license_key=key,
-                last_check=time.time(),
-            )
+        valid = bool(data.get("valid", False))
+        plan = data.get("plan", "free")
+        features = data.get("features", [])
+        expires = data.get("expires_at") or data.get("expires")
+        sig = data.get("sig")
+        ts = data.get("ts")
+
+        if valid:
+            if not sig or ts is None:
+                return LicenseInfo(
+                    valid=False, plan="free", machine_id=machine_id, license_key=key,
+                    error="License server response was unsigned — refusing to trust it.",
+                )
+            if not _verify_license_signature(valid, plan, features, expires, machine_id, ts, sig):
+                return LicenseInfo(
+                    valid=False, plan="free", machine_id=machine_id, license_key=key,
+                    error="License server response failed signature verification.",
+                )
             _save_cached({
                 "valid": True,
-                "plan": "pro",
-                "features": ["scanner_pro", "reports_pro", "payloads_pro"],
-                "expires": None,
+                "plan": plan,
+                "features": features,
+                "expires": expires,
                 "machine_id": machine_id,
                 "license_key": key,
-                "last_check": time.time(),
+                "sig": sig,
+                "ts": ts,
             })
-            return info
+            if features:
+                await download_pro_package(key, machine_id)
 
-    return LicenseInfo(
-        valid=False,
-        plan="free",
-        machine_id=machine_id,
-        license_key=key,
-        error="License server unavailable. Key format invalid or not activated.",
-    )
+        return LicenseInfo(
+            valid=valid, plan=plan, features=features, expires=expires,
+            machine_id=machine_id, license_key=key,
+            last_check=(ts / 1000.0) if ts else time.time(),
+            error="" if valid else data.get("message", "Activation failed"),
+        )
+    except Exception as exc:
+        return LicenseInfo(
+            valid=False,
+            plan="free",
+            machine_id=machine_id,
+            license_key=key,
+            error=f"License server unreachable: {exc}",
+        )
 
 
 def deactivate_license() -> None:
@@ -302,25 +406,38 @@ async def start_trial() -> LicenseInfo:
 
                 if resp.status == 201 and data.get("valid"):
                     key = data.get("key", "")
-                    info = LicenseInfo(
-                        valid=True,
-                        plan=data.get("plan", "pro"),
-                        features=data.get("features", []),
-                        expires=data.get("expires_at"),
-                        machine_id=machine_id,
-                        license_key=key,
-                        last_check=time.time(),
-                    )
+                    plan = data.get("plan", "pro")
+                    features = data.get("features", [])
+                    expires = data.get("expires_at")
+                    sig = data.get("sig")
+                    ts = data.get("ts")
+
+                    if not sig or ts is None:
+                        return LicenseInfo(
+                            valid=False, plan="free", machine_id=machine_id,
+                            error="License server response was unsigned — refusing to trust it.",
+                        )
+                    if not _verify_license_signature(True, plan, features, expires, machine_id, ts, sig):
+                        return LicenseInfo(
+                            valid=False, plan="free", machine_id=machine_id,
+                            error="License server response failed signature verification.",
+                        )
+
                     _save_cached({
                         "valid": True,
-                        "plan": info.plan,
-                        "features": info.features,
-                        "expires": info.expires,
+                        "plan": plan,
+                        "features": features,
+                        "expires": expires,
                         "machine_id": machine_id,
                         "license_key": key,
-                        "last_check": time.time(),
+                        "sig": sig,
+                        "ts": ts,
                     })
-                    if info.features:
+                    info = LicenseInfo(
+                        valid=True, plan=plan, features=features, expires=expires,
+                        machine_id=machine_id, license_key=key, last_check=ts / 1000.0,
+                    )
+                    if features:
                         await download_pro_package(key, machine_id)
                     return info
 
