@@ -1,0 +1,28 @@
+ActivityIndicator {
+    /* Rendered as its own "plate" (distinct background) inside StatusBar,
+       between the Saved status and the clock — the user specifically
+       asked for a separate strip rather than blending into the bar. */
+    width: auto;
+    height: 1;
+    layout: horizontal;
+    padding: 0 1;
+    margin: 0 1;
+    background: $panel;
+}
+ActivityIndicator .activity-glyph {
+    width: 3;
+    height: 1;
+    text-align: center;
+    content-align: center middle;
+}
+/* Bright/saturated while the process is running */
+ActivityIndicator .activity-glyph.active {
+    color: $success;
+    text-style: bold;
+}
+/* Dim/greyed-out while idle — same glyph, just muted */
+ActivityIndicator .activity-glyph.idle {
+    color: $text-muted;
+    text-style: dim;
+    opacity: 60%;
+}
