@@ -50,8 +50,6 @@ class TargetScreen(Widget):
                 tooltip="Crawl the selected host in the tree with the Spider"
             )
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("↺ Reload from DB",     "btn-refresh")
-            yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("🗑 Clear",             "btn-clear")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("📄 Export JSON",       "btn-export")
@@ -64,7 +62,7 @@ class TargetScreen(Widget):
                 yield RichLog(id="detail-log", markup=True, highlight=False)
 
         yield Static(
-            "Refresh: Reload site map  │  Scope: Add/Remove Scope  │  M: Context menu",
+            "Scope: Add/Remove Scope  │  M: Context menu",
             id="status-bar",
         )
 
@@ -79,6 +77,17 @@ class TargetScreen(Widget):
         return self._target_api
 
     def _load_sitemap(self) -> None:
+        # Reset selection/details BEFORE the async reload — otherwise a stale
+        # node from the previous project stays shown in the Details panel
+        # until the user clicks something in the new tree (looks like an
+        # artifact "leaking" between projects).
+        self._selected_host = None
+        self._selected_node_data = None
+        try:
+            self.query_one("#detail-log", RichLog).clear()
+        except Exception:
+            pass
+
         # Save current scope hosts before reload
         scope_hosts: set[str] = set()
         try:
@@ -243,10 +252,6 @@ class TargetScreen(Widget):
     def on_btn_crawl_host(self, _: ToolbarButton.Pressed) -> None:
         self.action_crawl_selected_host()
 
-    @on(ToolbarButton.Pressed, "#btn-refresh")
-    def on_btn_refresh(self, _: ToolbarButton.Pressed) -> None:
-        self._load_sitemap()
-
     @on(ToolbarButton.Pressed, "#btn-clear")
     def on_btn_clear(self, _: ToolbarButton.Pressed) -> None:
         self.action_clear()
@@ -314,6 +319,12 @@ class TargetScreen(Widget):
             api = self._get_api()
             api.clear()
             self._build_tree({})
+            self._selected_host = None
+            self._selected_node_data = None
+            try:
+                self.query_one("#detail-log", RichLog).clear()
+            except Exception:
+                pass
             self.app.notify("Site map cleared", severity="information")
         except Exception as exc:
             logger.warning("_clear_worker: %s", exc)

@@ -94,7 +94,7 @@ class ModuleTabs(Widget):
             tab = tabs.query_one("#tab-scanner", Tab)
             if locked:
                 tab.add_class("tab-locked")
-                tab.tooltip = "Scanner — платная функция. Активируйте лицензию: pentool license trial"
+                tab.tooltip = "Scanner is a PRO feature. Activate a license: pentool license trial"
             else:
                 tab.remove_class("tab-locked")
                 tab.tooltip = None
