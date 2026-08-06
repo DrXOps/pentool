@@ -1,6 +1,7 @@
 """Entry point: no arguments — TUI, with arguments — CLI."""
 
 import sys
+import threading
 
 
 def main() -> None:
@@ -8,6 +9,17 @@ def main() -> None:
         from pentool.cli.main import cli
         cli()
     else:
+        # Anonymous install-counter ping (fire-and-forget, one increment per
+        # machine — dedup happens server-side). Runs in a background thread —
+        # send_first_run_ping() opens a network connection with an 8s
+        # timeout, which must never delay the TUI actually starting when
+        # the network is slow/unreachable.
+        try:
+            from pentool.core.crash_reporter import send_first_run_ping
+            threading.Thread(target=send_first_run_ping, daemon=True).start()
+        except Exception:
+            pass
+
         try:
             from pentool.tui.app import PentoolApp
             PentoolApp().run()
