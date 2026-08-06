@@ -10,6 +10,7 @@ import threading
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
 from textual.widgets import Checkbox, ContentSwitcher, Footer
 
 # Nicer checkbox glyph applied project-wide — Checkbox is a subclass of
@@ -133,6 +134,31 @@ class PentoolApp(App):
         padding: 0 1;
         color: $text-muted;
         dock: bottom;
+    }
+
+    /* Wrapper around Footer + StatusBar — see compose()'s comment for why
+       this exists: two independently-docked bottom widgets overlap rather
+       than stack, so both are laid out normally inside one docked container
+       instead. Height 2 = Footer's 1 + StatusBar's 1.
+
+       Both Footer (in its own DEFAULT_CSS) and StatusBar (in statusbar.tcss)
+       hard-code `dock: bottom` themselves — just nesting them inside this
+       wrapper is not enough, they'd still each dock to the bottom of the
+       wrapper and overlap each other exactly as before. Both docks must be
+       explicitly cancelled here so they lay out normally (stacked, one
+       above the other) inside #bottom-dock instead. */
+    #bottom-dock {
+        dock: bottom;
+        height: 2;
+        layout: vertical;
+    }
+    #bottom-dock Footer {
+        dock: none;
+        height: 1;
+    }
+    #bottom-dock StatusBar {
+        dock: none;
+        height: 1;
     }
 
     /* Global checkbox style — compact, height 1, no border.
@@ -268,8 +294,17 @@ class PentoolApp(App):
             yield ExtensionsScreen(id="screen-extensions")
             yield TerminalScreen(id="screen-terminal")
             yield SettingsScreen(id="screen-settings")
-        yield StatusBar(id="statusbar")
-        yield Footer()
+        # Footer and StatusBar both used to `dock: bottom` independently —
+        # in Textual, multiple independently-docked widgets at the same
+        # edge don't stack, they all pin to the same row and overlap each
+        # other (whichever was composed last wins the pixels). That's why
+        # StatusBar (and, inside it, the new ActivityIndicator) never
+        # rendered — Footer, composed after it, was drawn on top and
+        # covered it completely. Wrapping both in one docked container
+        # lets them lay out normally (one above the other) inside it.
+        with Vertical(id="bottom-dock"):
+            yield Footer()
+            yield StatusBar(id="statusbar")
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
