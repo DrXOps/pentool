@@ -1,13 +1,15 @@
 ActivityIndicator {
-    /* Rendered as its own "plate" (distinct background) inside StatusBar,
-       between the Saved status and the clock — the user specifically
-       asked for a separate strip rather than blending into the bar. */
+    /* Match StatusBar's own background ($primary-darken-3) instead of
+       $panel — this sits inside StatusBar, not inside the module tabs
+       row above it, so it must blend with its own row, not the one
+       above. Kept as a distinct block only via the margin gaps on each
+       side, not a contrasting fill. */
     width: auto;
     height: 1;
     layout: horizontal;
     padding: 0 1;
     margin: 0 1;
-    background: $panel;
+    background: $primary-darken-3;
 }
 ActivityIndicator .activity-glyph {
     width: 3;

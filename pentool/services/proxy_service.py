@@ -23,6 +23,7 @@ class ProxyService(BaseService):
         event_bus: EventBus | None = None,
         tui_loop: asyncio.AbstractEventLoop | None = None,
         on_log: Callable[[str], None] | None = None,
+        on_storage_error: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(event_bus=event_bus, tui_loop=tui_loop, on_log=on_log)
         self._proxy_api = proxy_api
@@ -31,6 +32,20 @@ class ProxyService(BaseService):
         self._storage_ready = False
         self._pre_storage_queue: list[InterceptedRequest] = []
         self._pre_storage_queue_max = 2000
+        # Optional callback(message: str) — fired when the DB file can't be
+        # opened (e.g. "database is locked" because another Pentool
+        # instance/process already has it open, or the path is unwritable).
+        # Without this, such failures were logged only — requests silently
+        # stopped being saved with zero indication in the UI of why.
+        self._on_storage_error = on_storage_error
+
+    def _report_storage_error(self, context: str, exc: Exception) -> None:
+        msg = str(exc) or type(exc).__name__
+        if self._on_storage_error:
+            try:
+                self._on_storage_error(f"{context}: {msg}")
+            except Exception:
+                pass
 
     async def init_storage(self) -> None:
         try:
@@ -49,6 +64,7 @@ class ProxyService(BaseService):
                 self._pre_storage_queue.clear()
         except Exception as exc:
             logger.error("ProxyService: storage init failed: %s", exc)
+            self._report_storage_error("Failed to open project database", exc)
 
     async def store_request(self, req: InterceptedRequest) -> int | None:
         if not self._storage_ready:
@@ -193,6 +209,9 @@ class ProxyService(BaseService):
         except Exception as exc:
             logger.error("ProxyService: switch_db failed: %s", exc)
             self._storage_ready = False
+            self._report_storage_error(
+                f"Failed to open project database ({new_db_path})", exc
+            )
 
     async def clear_history(self) -> None:
         if not self._storage_ready:

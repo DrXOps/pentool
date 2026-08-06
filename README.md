@@ -167,6 +167,7 @@ PRO extensions are available under a commercial license.
 ## 📬 Contact
 
 - **Website:** [pentool.pro](https://pentool.pro)
+- **Telegram channel:** [t.me/pentool_pro](https://t.me/pentool_pro)
 - **Telegram:** [@sudores](https://t.me/sudores)
 - **Email:** support@pentool.pro
 - **Author:** Anatoly Kashtanov (DoctorX)

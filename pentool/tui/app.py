@@ -333,6 +333,7 @@ class PentoolApp(App):
             proxy_api=self._proxy_api,
             db_path=self._cfg.db_path,
             event_bus=get_event_bus(),
+            on_storage_error=self._on_storage_error,
         )
         try:
             from pentool.tui.screens.proxy.screen import ProxyScreen
@@ -684,6 +685,24 @@ class PentoolApp(App):
         except Exception:
             pass
 
+    def _on_storage_error(self, message: str) -> None:
+        """ProxyService.init_storage()/switch_db() failed to open the DB.
+
+        Most common cause: the project's .db file is locked by another
+        process (e.g. a second Pentool instance already has it open) or the
+        path is unwritable. Previously this was logged only — requests
+        silently stopped being saved to history with no visible indication
+        why. init_storage()/switch_db() both run on the app's own event
+        loop (awaited directly, never from a worker thread), so a plain
+        notify() here is safe without call_from_thread.
+        """
+        self.notify(
+            f"{message}\n\nRequests will not be saved until this is fixed — "
+            f"check that no other Pentool instance has this project open.",
+            severity="error",
+            timeout=8,
+        )
+
     def show_context_menu(
         self,
         items: list[tuple[str, str]],
@@ -804,11 +823,22 @@ class PentoolApp(App):
                 await self._proxy._server.serve_forever()
         except Exception as exc:
             logger.error("Proxy error: %s", exc)
+            # Surface this to the user — previously only logged, so a
+            # "port already in use" / "another process holds this file"
+            # failure looked like the proxy silently did nothing when the
+            # toolbar button was pressed, with no clue why.
+            msg = str(exc) or type(exc).__name__
+            self.call_from_thread(
+                self.notify,
+                f"Proxy failed to start: {msg}",
+                severity="error",
+                timeout=6,
+            )
         finally:
             self.call_from_thread(self._update_status)
             self.call_from_thread(self._update_proxy_screen_labels)
             self.call_from_thread(self._update_dashboard_proxy_status, False)
-            self.call_from_thread(self.flash, "○ Proxy остановлен", "warning")
+            self.call_from_thread(self.flash, "○ Proxy stopped", "warning")
 
     def _stop_proxy(self) -> None:
         logger.info("APP: _stop_proxy called")
