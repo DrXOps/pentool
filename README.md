@@ -24,15 +24,15 @@ Fast, transparent, and built for real-world testing.
 
 | Dashboard | Scanner |
 |:---------:|:-------:|
-| ![Dashboard](screens/dashboard.png) | ![Scanner](screens/scaner.png) |
+| ![Dashboard](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/dashboard.png) | ![Scanner](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/scaner.png) |
 
 | Proxy | Repeater |
 |:-----:|:--------:|
-| ![Proxy](screens/proxy.png) | ![Repeater](screens/repeater.png) |
+| ![Proxy](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/proxy.png) | ![Repeater](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/repeater.png) |
 
 | Intruder | Settings |
 |:--------:|:--------:|
-| ![Intruder](screens/intruder.png) | ![Settings](screens/settings.png) |
+| ![Intruder](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/intruder.png) | ![Settings](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/settings.png) |
 
 ---
 

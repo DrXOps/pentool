@@ -87,15 +87,15 @@ pentool update --check
 
 | 仪表板 | 扫描器 |
 |:---------:|:-------:|
-| ![Dashboard](../../../screens/dashboard.png) | ![Scanner](../../../screens/scaner.png) |
+| ![Dashboard](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/dashboard.png) | ![Scanner](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/scaner.png) |
 
 | 代理 | Repeater |
 |:-----:|:--------:|
-| ![Proxy](../../../screens/proxy.png) | ![Repeater](../../../screens/repeater.png) |
+| ![Proxy](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/proxy.png) | ![Repeater](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/repeater.png) |
 
 | Intruder | 设置 |
 |:--------:|:--------:|
-| ![Intruder](../../../screens/intruder.png) | ![Settings](../../../screens/settings.png) |
+| ![Intruder](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/intruder.png) | ![Settings](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/settings.png) |
 
 ---
 
