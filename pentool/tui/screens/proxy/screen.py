@@ -95,16 +95,16 @@ def _row_to_record(r: dict) -> tuple:
     else:
         time_str = "-"
 
-    # Prepend color dot to Host column if the request has a color mark
-    # (color IS the tag — variant A — so one dot covers both concepts).
-    # Also append a 💬 marker if the request has a non-empty comment, so
-    # marked/commented requests are visible in the list without opening them.
+    # Prepend color dot and/or 💬 comment marker to Host column — both are
+    # left-aligned prefixes so marked/commented requests are visible in the
+    # list without opening them.
     host = str(r.get("host", "") or "")
     color = str(r.get("color", "") or "")
     dot = _COLOR_DOTS.get(color, "")
     comment = str(r.get("comment", "") or "")
-    comment_marker = " 💬" if comment.strip() else ""
-    host_display = f"{dot} {host}{comment_marker}" if dot else f"{host}{comment_marker}"
+    comment_marker = "💬 " if comment.strip() else ""
+    prefix = f"{dot} " if dot else ""
+    host_display = f"{prefix}{comment_marker}{host}"
 
     return (
         r.get("id", 0),
