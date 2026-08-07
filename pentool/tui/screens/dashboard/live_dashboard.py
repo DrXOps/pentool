@@ -277,8 +277,17 @@ class HeatmapWidget(Widget):
         yield Static("[bold]┌─ HOST HEATMAP ─[/bold]")
         yield Static("", id="heatmap-body")
 
+    _MAX_HOSTS = 500
+
     def increment_host(self, host: str) -> None:
         self._host_counts[host] = self._host_counts.get(host, 0) + 1
+        if len(self._host_counts) > self._MAX_HOSTS:
+            # Only the top 6 are ever displayed — keep a generous top slice
+            # and drop the long tail of one-off hosts.
+            keep = dict(
+                sorted(self._host_counts.items(), key=lambda x: -x[1])[: self._MAX_HOSTS // 2]
+            )
+            self._host_counts = keep
         self._update_display()
 
     def _update_display(self) -> None:
@@ -541,6 +550,8 @@ class MiniSiteMap(Widget):
         yield Static("[bold]┌─ SITE MAP ─[/bold]")
         yield Static("", id="sitemap-body")
 
+    _MAX_PATHS = 500
+
     def add_url(self, url: str) -> None:
         """Add a URL to the mini-map."""
         try:
@@ -550,6 +561,13 @@ class MiniSiteMap(Widget):
             parts = [p for p in parsed.path.split("/") if p]
             key = "/" + "/".join(parts[:2]) if parts else "/"
             self._paths[key] = self._paths.get(key, 0) + 1
+            if len(self._paths) > self._MAX_PATHS:
+                # Only the top 8 are ever displayed — keep a generous top
+                # slice and drop the long tail of one-off paths.
+                keep = dict(
+                    sorted(self._paths.items(), key=lambda x: -x[1])[: self._MAX_PATHS // 2]
+                )
+                self._paths = keep
             self._update_display()
         except Exception:
             pass

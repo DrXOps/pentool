@@ -257,6 +257,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         # Debounce: batch rapid row appends into one incremental add_rows() call
         self._pending_append_rows: list[tuple] = []  # (req, row_id) pairs
         self._debounce_timer = None
+        # Cap on in-memory _rows_cache size — beyond this, oldest loaded rows
+        # are dropped and _history_oldest_offset is bumped so "scroll up to
+        # load more" can re-fetch them from storage on demand instead of
+        # keeping the whole session's history resident in memory forever.
+        self._ROWS_CACHE_MAX = 5000
         # "Showing N of M" + scroll-up-to-load-more state (HTTP History only)
         self._history_total: int = 0       # total rows matching current filters (from COUNT(*))
         self._history_oldest_offset: int = 0  # how many older rows are NOT yet loaded (above what's in _rows_cache)
@@ -837,6 +842,24 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             table.scroll_end(animate=False)
         except Exception as exc:
             logger.debug("PROXY SCREEN: _flush_pending_rows: %s", exc)
+        # Cap unbounded growth of the in-memory cache during very long
+        # sessions: drop the oldest rows once we exceed the cap and mark
+        # them as available again via _history_oldest_offset so scrolling
+        # up re-fetches them from storage instead of leaking memory.
+        if len(self._rows_cache) > self._ROWS_CACHE_MAX:
+            overflow = len(self._rows_cache) - self._ROWS_CACHE_MAX
+            self._rows_cache = self._rows_cache[overflow:]
+            self._history_oldest_offset += overflow
+            try:
+                table = self.query_one("#request-list", DataTable)
+                arrow = _rows_to_arrow(self._rows_cache)
+                table.backend = ArrowBackend(arrow)
+                table._ordered_columns = None
+                table._clear_caches()
+                table._require_update_dimensions = True
+                table.scroll_end(animate=False)
+            except Exception as exc:
+                logger.debug("PROXY SCREEN: _rows_cache trim rebuild failed: %s", exc)
         self._update_history_count_label()
 
     def _select_row(self, row_idx: int) -> None:
