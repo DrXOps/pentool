@@ -1,14 +1,14 @@
 # PENTOOL API CONTRACTS
 
-**Версия:** 1.0  
-**Цель:** Документация всех API-методов для разработчиков модулей и SaaS-интеграции
+**Version:** 1.1
+**Purpose:** Documentation of the public `pentool/api/*` classes used by the TUI, CLI, and SaaS/plugin integrations. TUI screens must import from `pentool.api.*`, never from `pentool.modules.*` directly.
 
 ---
 
-## СОДЕРЖАНИЕ
+## TABLE OF CONTENTS
 
 1. [ProxyAPI](#proxyapi)
-2. [ScannerAPI](#scannerapi)
+2. [ScannerAPI](#scannerapi) *(PRO)*
 3. [IntruderAPI](#intruderapi)
 4. [SpiderAPI](#spiderapi)
 5. [RepeaterAPI](#repeaterapi)
@@ -16,225 +16,200 @@
 7. [DecoderAPI](#decoderapi)
 8. [ComparerAPI](#comparerapi)
 9. [SequencerAPI](#sequencerapi)
+10. [ExportableAPI (base class)](#exportableapi-base-class)
 
 ---
 
 ## ProxyAPI
 
-**Файл:** `pentool/api/proxy_api.py`  
-**Назначение:** Управление HTTP прокси-сервером
+**File:** `pentool/api/proxy_api.py`
+**Purpose:** Thin wrapper around the actual `ProxyServer` instance (`pentool.modules.proxy.ProxyServer`). `ProxyAPI` itself does not start/stop network I/O — it holds a reference to a `ProxyServer` created elsewhere (`create_proxy()`) or injected (`set_proxy()`), and forwards calls to it.
 
-### Методы
+### Methods
 
-#### `start(host: str, port: int) -> None`
-Запустить прокси-сервер.
+#### `create_proxy(host="127.0.0.1", port=8080, cert_dir="/tmp/pentool_certs", db_path=None) -> ProxyServer`
+Create a new `ProxyServer` and store it internally.
 
-**Параметры:**
-- `host` — адрес для прослушивания (обычно "127.0.0.1")
-- `port` — порт (обычно 8080)
+#### `set_proxy(proxy: ProxyServer) -> None`
+Inject an existing `ProxyServer` instance (used by the TUI app, which owns the proxy's lifecycle/thread).
 
-**Исключения:**
-- `OSError` — если порт уже занят
+#### `get_proxy() -> ProxyServer | None`
+Return the underlying `ProxyServer`, or `None` if not yet created/injected.
 
-**Пример:**
+#### `is_running() -> bool`
+`True` if a proxy is set and its `is_running` property is `True`.
+
+⚠️ Note: on `ProxyServer` itself, `is_running` is a **property** (call without parentheses). On `ProxyAPI`, `is_running()` is a regular **method** (call with parentheses).
+
+#### `get_port() -> int` / `get_host() -> str`
+Return the configured port/host, or the defaults (`8080` / `"127.0.0.1"`) if no proxy is set.
+
+#### `get_status() -> dict`
+Returns `{"running", "host", "port", "intercept_enabled", "scope", "rules_count", "requests_count", "waiting_count"}`.
+
+#### `get_requests(limit=100, method=None, host=None) -> list[InterceptedRequest]`
+In-memory request history (bounded ring, see `ProxyServer.requests`) — NOT the full SQLite-backed HTTP History (that's `ProxyService.get_history()` in `pentool/services/proxy_service.py`, used by the TUI's ProxyScreen).
+
+#### `find_request(req_id: str) -> InterceptedRequest | None`
+Find a request by ID (full or partial UUID).
+
+#### `clear_requests() -> None`
+Clear the in-memory request list.
+
+#### `forward(req_id: str, modified_raw: str | None = None) -> None`
+Forward a waiting (intercepted) request to the target server, optionally with modified raw HTTP text.
+Raises `RuntimeError` if no proxy is set.
+
+#### `drop(req_id: str) -> None`
+Drop a waiting request. Raises `RuntimeError` if no proxy is set.
+
+#### `set_intercept(enabled: bool) -> None` / `get_intercept() -> bool`
+Toggle interactive intercept mode. `set_intercept` is thread-safe (uses `call_soon_threadsafe` internally since the proxy loop runs on its own thread).
+
+#### `set_scope(hosts: list[str]) -> None` / `get_scope() -> list[str]`
+Configure the host allowlist used by `ProxyServer.is_in_scope()`. An empty list means "match everything" — see `ProxyServer.enforce_scope` for whether out-of-scope traffic is actually filtered from capture (off by default; toggled via the "Skip out-of-scope" button in the Proxy screen).
+
+#### `get_match_replace_rules() -> list[MatchReplaceRule]` / `set_match_replace_rules(rules) -> None`
+Get/replace the Match & Replace rule set.
+
+#### `export_project_data() -> dict`
+Returns `{"proxy": {"scope": [...], "match_replace": [...]}, "http_history": [...]}` (not async).
+
+#### `import_project_data(data: dict) -> tuple[int, str]`
+Returns `(loaded_count, error_message)` — `error_message` is `""` on success.
+
+**Example:**
 ```python
 from pentool.api.proxy_api import ProxyAPI
 
-proxy = ProxyAPI()
-await proxy.start("127.0.0.1", 8080)
-```
+proxy_api = ProxyAPI()
+proxy = proxy_api.create_proxy(host="127.0.0.1", port=8080)
+await proxy.start()  # actual start() is async, lives on ProxyServer, not ProxyAPI
 
----
-
-#### `stop() -> None`
-Остановить прокси-сервер.
-
-**Пример:**
-```python
-await proxy.stop()
-```
-
----
-
-#### `is_running -> bool` (property)
-Проверить, запущен ли прокси.
-
-**Возвращает:** `True` если запущен, иначе `False`
-
-**Пример:**
-```python
-if proxy.is_running:
+if proxy_api.is_running():
     print("Proxy is running")
-```
 
-⚠️ **Важно:** Это property, вызывать БЕЗ скобок!
-
----
-
-#### `get_requests(limit: int = 100) -> list[dict]`
-Получить историю перехваченных запросов.
-
-**Параметры:**
-- `limit` — максимальное количество записей
-
-**Возвращает:** Список словарей с полями:
-- `id` (int)
-- `method` (str)
-- `url` (str)
-- `status_code` (int)
-- `timestamp` (float)
-- `host` (str)
-- `length` (int)
-
-**Пример:**
-```python
-requests = await proxy.get_requests(limit=50)
+requests = proxy_api.get_requests(limit=50)
 for req in requests:
-    print(f"{req['method']} {req['url']}")
+    print(f"{req.method} {req.url}")
 ```
 
 ---
 
-#### `export_project_data() -> dict`
-Экспортировать данные прокси для сохранения проекта.
+## ScannerAPI *(PRO)*
 
-**Возвращает:** Словарь с ключами:
-- `requests` — список перехваченных запросов
-- `match_replace_rules` — правила Match/Replace
-- `scope` — настройки scope
+**File:** `pro/pentool/api/scanner_api.py` — lives in the `pentool-pro` package (obfuscated, license-gated), not in the FREE `pentool` distribution.
+**Purpose:** Active + passive vulnerability scanning across 22+ checks (SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT, NoSQLi, GraphQL, Prototype Pollution, DOM XSS, OAuth, Sensitive Data, Header Injection, Path Traversal, Open Redirect, Broken Auth, Missing Security Headers, Info Leak).
 
-**Пример:**
-```python
-data = await proxy.export_project_data()
-# Сохранить в JSON
-```
+### Methods
 
----
+#### `async start_active_scan(targets: list[str], check_names: list[str] | None = None, on_finding=None, on_progress=None, on_request=None, concurrency: int = 5, request_delay: float = 0.0) -> str`
+Start an active scan in the background (returns immediately with a scan ID; the scan itself runs as an `asyncio.Task`).
 
-#### `import_project_data(data: dict) -> None`
-Импортировать данные прокси из проекта.
+#### `async stop_scan() -> None`
+Cancel the running active scan.
 
-**Параметры:**
-- `data` — словарь, полученный из `export_project_data()`
+#### `is_scanning() -> bool`
+Whether an active scan task is currently running.
 
-**Пример:**
-```python
-await proxy.import_project_data(saved_data)
-```
+#### `async get_findings(limit: int = 200) -> list[Finding]`
+Findings persisted so far for this project.
 
----
+#### `async mark_false_positive(finding_id: str) -> None`
 
-## ScannerAPI
+#### `async attach_passive(proxy_api=None) -> None` / `async detach_passive() -> None`
+Attach/detach the passive scanner to the EventBus (analyzes traffic captured by Proxy).
 
-**Файл:** `pentool/api/scanner_api.py`  
-**Назначение:** Управление сканером уязвимостей
+#### `set_passive_callback(callback: Callable[[Finding], None]) -> None`
 
-### Методы
+#### `async generate_report(path: str, fmt: str = "html") -> None`
+`fmt` is one of `"html"`, `"json"`, `"csv"`.
 
-#### `start_scan(targets: list[str], checks: list[str] | None = None) -> None`
-Запустить сканирование.
+#### `register_check(check: BaseCheck) -> None` / `get_registered_checks() -> list[BaseCheck]`
 
-**Параметры:**
-- `targets` — список URL для сканирования
-- `checks` — список имён checks (None = все)
+#### `export_project_data() -> dict` / `import_project_data(data: dict) -> int`
 
-**Пример:**
+**Example:**
 ```python
 from pentool.api.scanner_api import ScannerAPI
 
-scanner = ScannerAPI()
-await scanner.start_scan(
+scanner = ScannerAPI(db_path="/path/to/project.db")
+scan_id = await scanner.start_active_scan(
     targets=["https://example.com"],
-    checks=["xss", "sqli", "ssti"]
+    check_names=["xss", "sqli", "ssti"],
 )
-```
-
----
-
-#### `get_findings() -> list[Finding]`
-Получить найденные уязвимости.
-
-**Возвращает:** Список объектов `Finding` с полями:
-- `severity` (str): "critical", "high", "medium", "low", "info"
-- `title` (str)
-- `url` (str)
-- `description` (str)
-- `evidence` (str)
-- `confidence` (str): "certain", "firm", "tentative"
-
-**Пример:**
-```python
-findings = scanner.get_findings()
+findings = await scanner.get_findings(limit=100)
 for f in findings:
     print(f"{f.severity.upper()}: {f.title} at {f.url}")
 ```
 
 ---
 
-#### `get_stats() -> dict`
-Получить статистику сканирования.
-
-**Возвращает:** Словарь:
-- `total_findings` (int)
-- `by_severity` (dict): подсчёт по критичности
-- `scanned_urls` (int)
-- `duration_seconds` (float)
-
----
-
 ## IntruderAPI
 
-**Файл:** `pentool/api/intruder_api.py`  
-**Назначение:** Управление атаками Intruder
+**File:** `pentool/api/intruder_api.py`
+**Purpose:** Automated attacks (Sniper / Battering Ram / Pitchfork / Cluster Bomb) with an optional Turbo mode (connection pooling + keep-alive, PRO).
 
-### Типы данных
+### Types
 
-#### `AttackType` (Enum)
 ```python
 class AttackType(str, Enum):
-    SNIPER = "sniper"              # Один payload set, по очереди
-    BATTERING_RAM = "battering_ram"  # Один payload set, во все позиции
-    PITCHFORK = "pitchfork"        # N payload sets, синхронно
-    CLUSTER_BOMB = "cluster_bomb"  # N payload sets, все комбинации
-```
+    SNIPER = "sniper"
+    BATTERING_RAM = "battering_ram"
+    PITCHFORK = "pitchfork"
+    CLUSTER_BOMB = "cluster_bomb"
 
-#### `IntruderConfig` (dataclass)
-```python
 @dataclass
 class IntruderConfig:
-    template: str           # Шаблон запроса с маркерами §§
+    template: str            # request template with §marker§ positions
     attack_type: AttackType
-    payloads: list[list[str]]  # Один список на каждую позицию
+    payloads: list[list[str]]
     threads: int = 10
     delay_ms: int = 0
-```
 
-#### `IntruderResult` (dataclass)
-```python
 @dataclass
 class IntruderResult:
-    payload: str | tuple[str, ...]  # Один или несколько payloads
-    status_code: int
-    length: int
-    response_time_ms: float
-    response_body: str
+    payload_values: list[str]
+    request_number: int
+    response_status: int | None
+    response_length: int | None
+    response_time_ms: float | None
+    request_raw: str
+    response_raw: str | None
+    error: str | None
+    timestamp: datetime
 ```
 
-### Методы
+### Methods
 
-#### `start_attack(config: IntruderConfig) -> list[IntruderResult]`
-Запустить атаку.
+#### `async start_attack(config: IntruderConfig, on_result=None, on_progress=None, turbo_mode: bool = False) -> str`
+Returns the attack ID (or `"turbo"` in Turbo mode).
 
-**Параметры:**
-- `config` — конфигурация атаки
+#### `async pause() -> None` / `async resume() -> None` / `async stop() -> None`
 
-**Возвращает:** Список результатов
+#### `get_results() -> list[IntruderResult]`
+Not async.
 
-**Пример:**
+#### `get_progress() -> tuple[int, int]`
+`(done, total)`.
+
+#### `is_running -> bool` (property)
+
+#### `async load_payloads(path: str) -> list[str]`
+#### `async generate_numeric(start: int, end: int, step: int = 1) -> list[str]`
+#### `async generate_chars(charset: str, min_len: int, max_len: int) -> list[str]`
+#### `export_csv(path: str) -> None`
+
+#### Tab / result persistence (SQLite-backed, not project-JSON)
+`async save_state(tab_name, template, attack_type, payloads)`, `async load_state(tab_name) -> dict | None`, `async save_result(result, project_id=None)`, `async get_results_from_db(attack_id=None, limit=1000) -> list[IntruderResult]`.
+
+#### `export_project_data() -> dict` / `import_project_data(data: dict) -> int`
+
+**Example:**
 ```python
 from pentool.api.intruder_api import IntruderAPI, IntruderConfig, AttackType
 
-intruder = IntruderAPI()
+intruder = IntruderAPI(db_path="/path/to/project.db")
 
 config = IntruderConfig(
     template="GET /search?q=§payload§ HTTP/1.1\r\nHost: example.com\r\n\r\n",
@@ -243,97 +218,90 @@ config = IntruderConfig(
     threads=5,
 )
 
-results = await intruder.start_attack(config)
-for r in results:
-    print(f"{r.payload}: {r.status_code} ({r.length} bytes)")
+attack_id = await intruder.start_attack(config)
+# ... wait / poll get_progress() ...
+for r in intruder.get_results():
+    print(f"{r.payload_values}: {r.response_status} ({r.response_length} bytes)")
 ```
-
----
-
-#### `pause() -> None`
-Приостановить атаку.
-
-#### `resume() -> None`
-Возобновить атаку.
-
-#### `stop() -> None`
-Остановить атаку.
 
 ---
 
 ## SpiderAPI
 
-**Файл:** `pentool/api/spider_api.py`  
-**Назначение:** Краулинг веб-приложений
+**File:** `pentool/api/spider_api.py`
+**Purpose:** Async web crawler.
 
-### Типы данных
+### Types
 
-#### `SpiderResult` (dataclass)
 ```python
 @dataclass
-class SpiderResult:
-    pages: list[str]           # Найденные URL
-    forms: list[FormData]      # Найденные формы
-    endpoints: list[Endpoint]  # Найденные эндпоинты
-    js_files: list[str]        # Найденные JS-файлы
+class SpiderConfig:
+    max_depth: int = 3
+    max_pages: int = 100
+    concurrency: int = 5
+    timeout: float = 10.0
+    user_agent: str = "pentool/1.0"
+    respect_scope: bool = False
+    js_render: bool = False  # requires Playwright
 ```
 
-### Методы
+### Methods
 
-#### `crawl(base_url: str, max_depth: int = 3, max_pages: int = 100) -> SpiderResult`
-Краулить сайт.
+#### `SpiderAPI(config: SpiderConfig | None = None)` / `SpiderAPI.from_params(max_depth=3, max_pages=100, concurrency=5, timeout=10.0) -> SpiderAPI`
 
-**Параметры:**
-- `base_url` — начальный URL
-- `max_depth` — максимальная глубина
-- `max_pages` — максимум страниц
+#### `async crawl(url: str, on_page=None, on_progress=None, extra_headers: dict | None = None) -> SpiderResult`
+Returns a `SpiderResult` with `.pages`, `.forms`, `.endpoints`, `.js_files`, `.errors`. Never raises — crawl errors are captured into `.errors`.
 
-**Возвращает:** `SpiderResult`
+#### `stop() -> None`
+Request the running crawl to stop.
 
-**Пример:**
+#### `config -> SpiderConfig` (property)
+
+#### `export_project_data() -> dict` / `import_project_data(data: dict) -> int`
+Spider results are transient by design — both are no-ops (`{"spider": {}}` / `0`).
+
+**Example:**
 ```python
-from pentool.api.spider_api import SpiderAPI
+from pentool.api.spider_api import SpiderAPI, SpiderConfig
 
-spider = SpiderAPI()
-result = await spider.crawl("https://example.com", max_depth=2)
-
-print(f"Found {len(result.pages)} pages")
-print(f"Found {len(result.forms)} forms")
+spider = SpiderAPI(SpiderConfig(max_depth=2, max_pages=50))
+result = await spider.crawl("https://example.com")
+print(f"Found {len(result.pages)} pages, {len(result.forms)} forms")
 ```
 
 ---
 
 ## RepeaterAPI
 
-**Файл:** `pentool/api/repeater_api.py`  
-**Назначение:** Отправка модифицированных HTTP-запросов
+**File:** `pentool/api/repeater_api.py`
+**Purpose:** Send a single modified HTTP request, optionally saving it to the project's history.
 
-### Методы
+### Methods
 
-#### `send_request(raw_request: str) -> ParsedResponse`
-Отправить HTTP-запрос.
+#### `RepeaterAPI(db_path: str, project_id: int | None = None, timeout: float = 30.0, verify_ssl: bool = False)`
 
-**Параметры:**
-- `raw_request` — полный HTTP-запрос (заголовки + тело)
+#### `async send(request: ParsedRequest, tab_name: str = "Tab", save: bool = True) -> ParsedResponse`
+Takes a **`ParsedRequest`** object (from `pentool.utils.parser`), not a raw string — build one with `pentool.utils.parser.parse_http_request(raw_text)` first.
 
-**Возвращает:** `ParsedResponse` с полями:
-- `status` (int)
-- `headers` (dict)
-- `body` (str)
+#### `async save_to_history(request: ParsedRequest, response: ParsedResponse, tab_name: str = "Tab") -> int`
+#### `async get_history(limit: int = 50, project_id: int | None = None) -> list[RepeaterEntry]`
+#### `async get_entry(entry_id: int) -> RepeaterEntry | None`
+#### `async delete_entry(entry_id: int) -> None`
 
-**Пример:**
+#### `export_project_data() -> dict` / `import_project_data(data: dict) -> int`
+Repeater history lives in SQLite (`repeater_entries` table) and is loaded on demand — both are no-ops.
+
+**Example:**
 ```python
 from pentool.api.repeater_api import RepeaterAPI
+from pentool.utils.parser import parse_http_request
 
-repeater = RepeaterAPI()
+repeater = RepeaterAPI(db_path="/path/to/project.db")
 
-request = """GET /api/users HTTP/1.1
-Host: example.com
-User-Agent: Pentool/1.0
+raw = "GET /api/users HTTP/1.1\r\nHost: example.com\r\nUser-Agent: Pentool\r\n\r\n"
+request = parse_http_request(raw)
 
-"""
-
-response = await repeater.send_request(request)
+response = await repeater.send(request, tab_name="Users")
 print(f"Status: {response.status}")
 print(f"Body: {response.body}")
 ```
@@ -342,262 +310,229 @@ print(f"Body: {response.body}")
 
 ## TargetAPI
 
-**Файл:** `pentool/api/target_api.py`  
-**Назначение:** Управление site map
+**File:** `pentool/api/target_api.py`
+**Purpose:** Manage the project's site map (`SiteMap`) — discovered hosts/paths and their in-scope flag.
 
-### Методы
+### Methods
 
-#### `add_url(url: str) -> None`
-Добавить URL в site map.
+#### `TargetAPI(db_path: str = "")`
+#### `sitemap -> SiteMap` (property) — direct access to the underlying `SiteMap` object.
+#### `async load() -> None` / `async save() -> None`
+#### `add_request(req: ParsedRequest) -> None`
+Register a request into the site map (called by the Proxy screen for every captured request).
+#### `get_tree() -> dict[str, list[SiteNode]]`
+#### `get_hosts() -> list[str]` / `get_paths(host: str) -> list[SiteNode]`
+#### `set_in_scope(host: str, in_scope: bool) -> None`
+Set the scope flag for a single host in the site map — this is the mechanism that drives the ★ marker in the Target tree, and what the `SyncScopeToTarget` message (posted from the Proxy screen's Scope dialog and context menu) ultimately calls.
+#### `get_scope() -> list[str]`
+Hosts currently flagged `in_scope=True` in the site map.
+#### `clear() -> None`
+#### `export_json(path: str) -> None`
+#### `export_project_data() -> dict` / `import_project_data(data: dict) -> int`
 
-#### `add_request_from_proxy(request_id: int) -> None`
-Добавить запрос из истории прокси в site map.
-
-#### `get_site_map() -> dict`
-Получить дерево site map.
-
-**Возвращает:** Вложенный словарь вида:
+**Example:**
 ```python
-{
-    "example.com": {
-        "": ["/", "/about"],  # Корневая директория
-        "api": ["/api/users", "/api/posts"],
-        "admin": ["/admin/login"]
-    }
-}
+from pentool.api.target_api import TargetAPI
+
+target = TargetAPI(db_path="/path/to/project.db")
+await target.load()
+
+target.set_in_scope("example.com", True)
+tree = target.get_tree()
+print(f"Hosts: {target.get_hosts()}")
+await target.save()
 ```
 
 ---
 
 ## DecoderAPI
 
-**Файл:** `pentool/api/decoder_api.py`  
-**Назначение:** Кодирование/декодирование данных
+**File:** `pentool/api/decoder_api.py` — a thin re-export of `pentool/modules/decoder.py` functions, not a class.
+**Purpose:** Encode/decode/hash text data (19 operations).
 
-### Методы
+### Functions
 
-#### `encode(data: str, operation: str) -> str`
-Закодировать данные.
+#### `encode_op(operation: str, text: str) -> str`
+Apply an operation by its label (see `OP_LABELS`). Note the argument order: **operation name first, then text.**
 
-**Параметры:**
-- `data` — исходные данные
-- `operation` — имя операции (см. список ниже)
+#### `decode_op(operation: str, text: str) -> str`
+Alias for `encode_op` — operation labels already encode direction (e.g. `"Base64 Decode"` vs `"Base64 Encode"`), there is no separate decode/encode dispatch.
 
-**Возвращает:** Закодированная строка
+**Available operations (`OP_LABELS`):** `URL Encode`, `URL Decode`, `Base64 Encode`, `Base64 Decode`, `Base64URL Encode`, `Base64URL Decode`, `HTML Encode`, `HTML Decode`, `Hex Encode`, `Hex Decode`, `Unicode Encode`, `Unicode Decode`, `JWT Decode`, `Gzip+B64 Encode`, `Gzip+B64 Decode`, `MD5`, `SHA1`, `SHA256`, `SHA512`.
 
-**Поддерживаемые операции:**
-- `"base64"` — Base64
-- `"url"` — URL encoding
-- `"html"` — HTML entities
-- `"hex"` — Hex encoding
-- `"rot13"` — ROT13
-- `"md5"` — MD5 hash
-- `"sha1"` — SHA1 hash
-- `"sha256"` — SHA256 hash
-- `"jwt_decode"` — JWT decode (без проверки подписи)
-- ... (всего 19 операций)
+#### `run_chain(operations: list[str], text: str) -> tuple[str, list[str]]`
+Apply a sequence of operations, returning `(final_text, per_step_texts)`.
 
-**Пример:**
+#### `decode_smart(text: str, max_depth: int = 8) -> str`
+Auto-detect the encoding and decode (tries multiple methods, up to `max_depth` layers).
+
+#### `detect_encoding(text: str) -> str | None`
+Best-guess encoding detection without decoding.
+
+#### `class DecoderChain`
+Stateful multi-step chain helper used by the Decoder screen's "chain" mode.
+
+**Example:**
 ```python
-from pentool.api.decoder_api import DecoderAPI
+from pentool.api.decoder_api import decode_op, decode_smart
 
-decoder = DecoderAPI()
+result = decode_op("Base64 Decode", "SGVsbG8gV29ybGQ=")
+print(result)  # "Hello World"
 
-encoded = decoder.encode("Hello World", "base64")
-print(encoded)  # "SGVsbG8gV29ybGQ="
-
-decoded = decoder.decode(encoded, "base64")
-print(decoded)  # "Hello World"
+result = decode_smart("%48%65%6C%6C%6F")  # auto-detects URL encoding
+print(result)  # "Hello"
 ```
 
 ---
 
 ## ComparerAPI
 
-**Файл:** `pentool/api/comparer_api.py`  
-**Назначение:** Сравнение текстов (diff)
+**File:** `pentool/api/comparer_api.py` — re-exports from `pentool/modules/comparer.py`, not a class.
+**Purpose:** Line-level diff between two texts.
 
-### Методы
+### Functions
 
-#### `compare(text1: str, text2: str, mode: str = "unified") -> str`
-Сравнить два текста.
+#### `compare(left: str, right: str) -> DiffResult`
+#### `compare_lines(left_lines: list[str], right_lines: list[str]) -> DiffResult`
 
-**Параметры:**
-- `text1` — первый текст
-- `text2` — второй текст
-- `mode` — режим diff: "unified", "context", "html"
+`DiffResult` has `.lines: list[DiffLine]` and `.stats: CompareStats`.
 
-**Возвращает:** Diff в выбранном формате
-
-**Пример:**
+**Example:**
 ```python
-from pentool.api.comparer_api import ComparerAPI
+from pentool.api.comparer_api import compare
 
-comparer = ComparerAPI()
-
-diff = comparer.compare(
-    "Hello World",
-    "Hello Pentool",
-    mode="unified"
-)
-print(diff)
+result = compare("Hello World", "Hello Pentool")
+for line in result.lines:
+    print(line)
 ```
 
 ---
 
 ## SequencerAPI
 
-**Файл:** `pentool/api/sequencer_api.py`  
-**Назначение:** Анализ энтропии токенов
+**File:** `pentool/api/sequencer_api.py` — re-exports from `pentool/modules/sequencer.py`.
+**Purpose:** Token randomness/entropy analysis (session tokens, CSRF tokens, etc.).
 
-### Методы
+### Functions
 
-#### `analyze(tokens: list[str]) -> SequencerReport`
-Проанализировать последовательность токенов.
+#### `token_entropy(token: str) -> float`
+Shannon entropy of a single token, in bits.
 
-**Параметры:**
-- `tokens` — список токенов для анализа
+#### `charset_size(token: str) -> int`
+Detected character-set size for a token (used to normalize entropy).
 
-**Возвращает:** `SequencerReport` с полями:
-- `entropy` (float) — энтропия в битах
-- `is_predictable` (bool) — предсказуема ли последовательность
-- `patterns` (list[str]) — найденные паттерны
+### `class Sequencer`
+Stateful token collector used by the Sequencer screen.
 
-**Пример:**
+#### `add_token(token: str) -> None` / `add_tokens_bulk(tokens: list[str]) -> int` / `add_from_text(text: str) -> int`
+#### `extract_from_header(header_value: str, param: str) -> str | None`
+Extract a parameter value from a Cookie-style header string.
+
+`SequencerReport` (built by the Sequencer screen from the collected tokens) includes entropy, FIPS 140-2 statistical test results, and per-position entropy — see `pentool/modules/sequencer.py` for the full dataclass.
+
+**Example:**
 ```python
-from pentool.api.sequencer_api import SequencerAPI
+from pentool.api.sequencer_api import Sequencer, token_entropy
 
-sequencer = SequencerAPI()
-
-tokens = ["abc123", "abc124", "abc125", "abc126"]
-report = sequencer.analyze(tokens)
-
-print(f"Entropy: {report.entropy:.2f} bits")
-print(f"Predictable: {report.is_predictable}")
+seq = Sequencer()
+seq.add_tokens_bulk(["abc123", "abc124", "abc125", "abc126"])
+print(f"Entropy of first token: {token_entropy('abc123'):.2f} bits")
 ```
 
 ---
 
-## ОБЩИЕ ПРИНЦИПЫ
+## ExportableAPI (base class)
 
-### 1. Асинхронность
-Все методы, выполняющие I/O операции, являются `async` и должны вызываться с `await`:
+**File:** `pentool/api/base_api.py`
+**Purpose:** Common interface every `*API` class implements so `core.project.save_project()`/`load_project()` can serialize/restore all modules uniformly.
+
 ```python
-result = await api.method()  # ✅ Правильно
-result = api.method()         # ❌ Неправильно
+class ExportableAPI(ABC):
+    @abstractmethod
+    def export_project_data(self) -> dict:
+        """Return a JSON-serializable dict (no datetime — use .isoformat())."""
+
+    @abstractmethod
+    def import_project_data(self, data: dict) -> int | tuple[int, str]:
+        """Restore state from a project.json block. Returns a count, or
+        (count, error_message) if the API needs to report failures."""
 ```
 
-### 2. Обработка ошибок
-API методы могут выбрасывать исключения:
-- `ValueError` — некорректные параметры
-- `RuntimeError` — ошибка во время выполнения
-- `TimeoutError` — таймаут операции
+Modules whose real state lives in SQLite (Repeater, Spider, Intruder tab state) implement these as no-ops or thin wrappers — the DB *is* the source of truth, not the project JSON blob.
 
-Пример обработки:
+---
+
+## Common Patterns
+
+### Async vs. sync
+Most I/O-bound methods are `async` and must be awaited. A few pure in-memory accessors (`get_requests`, `get_results`, `get_scope`, `compare`, `token_entropy`, …) are plain synchronous methods/functions — check the signature above rather than assuming.
+
+```python
+result = await api.some_async_method()   # ✅
+result = api.some_sync_method()          # ✅ — no await needed
+```
+
+### Error handling
 ```python
 try:
-    result = await scanner.start_scan(targets)
-except ValueError as e:
-    print(f"Invalid parameters: {e}")
+    proxy.forward(req_id)
 except RuntimeError as e:
-    print(f"Runtime error: {e}")
+    print(f"Proxy not initialized: {e}")
 ```
 
-### 3. Type Hints
-Все API методы аннотированы типами. Используйте mypy для проверки:
-```bash
-mypy pentool/api/
-```
-
-### 4. Import Paths
-Всегда импортируйте из `pentool.api.*`, а не из `pentool.modules.*`:
+### Import paths
+Always import from `pentool.api.*`, never `pentool.modules.*`:
 ```python
-from pentool.api.scanner_api import ScannerAPI  # ✅ Правильно
-from pentool.modules.scanner import Scanner    # ❌ Неправильно
+from pentool.api.target_api import TargetAPI       # ✅
+from pentool.modules.target import SiteMap         # ❌ (internal, no stability guarantee)
 ```
 
----
-
-## СОБЫТИЯ (EventBus)
-
-API-методы могут генерировать события через `EventBus`. Подписаться можно так:
+### EventBus
+Several API-driven actions also emit events on the process-wide EventBus (`pentool.core.event_bus`), independent of any particular API's return value — e.g. `ProxyRequestCaptured`/`ProxyRequestCompleted` (Proxy), `FindingDiscovered` (Scanner), `ScanStarted`/`ScanFinished`, `SpiderFinished`.
 
 ```python
 from pentool.core.event_bus import get_event_bus
 from pentool.core.events import FindingDiscovered
 
-bus = get_event_bus()
-
-def on_finding(event: FindingDiscovered):
+def on_finding(event: FindingDiscovered) -> None:
     print(f"New finding: {event.finding.title}")
 
-bus.subscribe(FindingDiscovered, on_finding)
+get_event_bus().subscribe(FindingDiscovered, on_finding)
 ```
 
-### Основные события:
-
-- `ProxyRequestDoneEvent` — перехвачен HTTP-запрос
-- `FindingDiscovered` — найдена уязвимость
-- `ScanStarted`, `ScanFinished` — сканирование начато/завершено
-- `IntruderResultAdded`, `IntruderFinished` — результаты атаки
-- `SpiderFinished`, `UrlCrawled` — краулинг
-
----
-
-## ЛИЦЕНЗИРОВАНИЕ
-
-Некоторые API-методы требуют лицензии. Проверка:
-
+### Licensing (PRO features)
 ```python
 from pentool.core.license import get_session_license
 
 lic = get_session_license()
-
-if lic.has_feature("scanner_extended"):
-    # Запустить расширенные checks
-    pass
+if lic.has_feature("scanner_pro"):
+    ...
 else:
-    print("Extended scanner requires PRO license")
+    print("Scanner requires an active PRO license/trial")
 ```
-
-Методы с ограничениями:
-- `ScannerAPI.start_scan()` — расширенные checks требуют `scanner_extended`
-- `IntruderAPI.start_attack()` — все типы атак требуют `intruder_all_types`
-- Лимиты (threads, max_pages) берутся из `lic.get_limit()`
 
 ---
 
-## ТЕСТИРОВАНИЕ API
+## Testing
 
-Все API имеют unit-тесты в `tests/api/`:
-
+API classes have unit tests under `tests/unit/api/`:
 ```bash
-pytest tests/api/test_scanner_api.py -v
-pytest tests/api/test_intruder_api.py -v
-```
-
-Пример теста:
-```python
-import pytest
-from pentool.api.scanner_api import ScannerAPI
-
-@pytest.mark.asyncio
-async def test_scanner_start():
-    scanner = ScannerAPI()
-    await scanner.start_scan(["https://httpbin.org"])
-    findings = scanner.get_findings()
-    assert isinstance(findings, list)
+pytest tests/unit/api/test_proxy_api.py -v
 ```
 
 ---
 
 ## CHANGELOG
 
+### v1.1 (2026-08-08)
+- Rewritten in English (was previously Russian at the repo root, inconsistent with the other `docs/*.md` files, which are all English-first).
+- Corrected method signatures across all sections to match the current code — the v1.0 draft had drifted significantly from `pentool/api/*` (invented methods like `ProxyAPI.start()`/`ScannerAPI.scan()`/`TargetAPI.add_to_scope()` that do not exist; wrong parameter names/order in several places).
+- Added `ExportableAPI` base-class section.
+- Noted that `ScannerAPI` ships in the separate PRO package (`pentool-pro`), not the FREE `pentool` distribution.
+
 ### v1.0 (2026-07-22)
-- Начальная версия контрактов
-- Документация всех основных API
-- Добавлен StorageInterface для SaaS-готовности
+- Initial contract draft, all core APIs documented, `StorageInterface` mentioned for SaaS-readiness.
 
 ---
 
-**Для разработчиков:** При добавлении новых методов в API, обязательно обновите этот документ!
+**For developers:** when you add a new public method to any `pentool/api/*` class, update this document in the same change — a signature drift here is easy to miss and directly misleads anyone (including future you) integrating against these APIs.
