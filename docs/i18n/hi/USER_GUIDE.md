@@ -50,14 +50,14 @@ Proxy आपके ब्राउज़र और लक्ष्य के ब
 ### Proxy प्रारंभ करना
 
 1. Proxy (`Shift+P`) पर जाएं
-2. **Start Proxy** बटन क्लिक करें
-3. डिफ़ॉल्ट `127.0.0.1:8888` पर सुनता है
+2. **○ Proxy** बटन क्लिक करें
+3. डिफ़ॉल्ट `127.0.0.1:8080` पर सुनता है
 
 ### ब्राउज़र कॉन्फ़िगर करना
 
 **Firefox:**
 - Settings → Network → Manual proxy configuration
-- HTTP Proxy: `127.0.0.1` Port: `8888`
+- HTTP Proxy: `127.0.0.1` Port: `8080`
 - "Also use this proxy for HTTPS" सक्षम करें
 
 **Chrome/Chromium:**

@@ -51,35 +51,46 @@ The Proxy intercepts HTTP/HTTPS traffic between your browser and target.
 
 1. Open Proxy screen (`Ctrl+X` → Proxy)
 2. Configure settings:
-   - **Port:** Default 8888
+   - **Port:** Default 8080
    - **Interface:** 127.0.0.1 (localhost) or 0.0.0.0 (all interfaces)
-3. Click "Start Proxy"
+3. Click "○ Proxy" to start it
 
 ### Browser Configuration
 
 **Firefox:**
 1. Settings → Network Settings → Manual proxy
-2. HTTP Proxy: `127.0.0.1`, Port: `8888`
+2. HTTP Proxy: `127.0.0.1`, Port: `8080`
 3. Check "Use this proxy for HTTPS"
 
 **Chrome:**
 ```bash
 # Linux/Mac
-google-chrome --proxy-server="127.0.0.1:8888"
+google-chrome --proxy-server="127.0.0.1:8080"
 
 # Windows
-chrome.exe --proxy-server="127.0.0.1:8888"
+chrome.exe --proxy-server="127.0.0.1:8080"
 ```
 
 ### Installing CA Certificate
 
-For HTTPS interception:
+Pentool generates a local Certificate Authority the first time the proxy
+starts, so it can decrypt HTTPS traffic for you. Nothing leaves your
+machine — the CA is generated locally in `~/.config/pentool/certs/ca.crt`.
 
-1. With Proxy running, navigate to: `http://burp` or `http://127.0.0.1:8888`
-2. Download `cacert.pem`
-3. Install in browser:
-   - **Firefox:** Preferences → Privacy & Security → Certificates → Import
-   - **Chrome/System:** Settings → Manage certificates → Authorities → Import
+1. In the Proxy screen, click **"Install CA cert"** (or **Settings → Proxy
+   → Install CA cert**) — a dialog shows the certificate path and
+   step-by-step instructions for Firefox, Chrome, and system-wide
+   installation (Ubuntu/Debian, Fedora/RHEL).
+2. Follow the instructions for your browser:
+   - **Firefox:** `about:preferences#privacy` → Certificates → View
+     Certificates → **Authorities** tab (not "Your Certificates") → Import →
+     select `ca.crt` → check "Trust this CA to identify websites" → restart
+     Firefox.
+   - **Chrome/Chromium:** `chrome://settings/certificates` → Authorities →
+     Import → select `ca.crt` → check "Trust for identifying websites" →
+     restart Chrome.
+   - **System-wide (Linux):** commands are shown directly in the dialog for
+     your distro.
 
 ### Intercept Mode
 
@@ -607,10 +618,10 @@ Create payload files for common attacks:
 
 ### Integration with Other Tools
 
-**Burp Compatibility:**
-- Import/export requests
-- Similar UI concepts
-- Familiar workflow
+**Import/Export:**
+- Import/export raw requests
+- Familiar Proxy/Repeater/Intruder workflow for anyone coming from another
+  web pentesting toolkit
 
 **With curl:**
 ```bash

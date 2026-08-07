@@ -37,18 +37,23 @@ pentool
 
 **चरण 1:** Pentool Proxy प्रारंभ करें
 - `Ctrl+X` दबाएं → "Proxy" चुनें
-- "Start Proxy" बटन क्लिक करें
-- डिफ़ॉल्ट: `127.0.0.1:8888`
+- इसे शुरू करने के लिए "○ Proxy" क्लिक करें
+- डिफ़ॉल्ट: `127.0.0.1:8080` (Settings में कॉन्फ़िगर करने योग्य)
 
 **चरण 2:** ब्राउज़र कॉन्फ़िगर करें
 - Firefox: Settings → Network → Manual proxy configuration
-- HTTP Proxy सेट करें: `127.0.0.1` पोर्ट `8888`
+- HTTP Proxy सेट करें: `127.0.0.1` पोर्ट `8080`
 - "Also use this proxy for HTTPS" सक्षम करें
 
 **चरण 3:** CA प्रमाणपत्र इंस्टॉल करें (HTTPS के लिए)
-- यहां जाएं: http://burp (या http://127.0.0.1:8888)
-- `cacert.pem` डाउनलोड करें
-- ब्राउज़र या सिस्टम में आयात करें
+- Pentool प्रॉक्सी के पहली बार शुरू होने पर एक लोकल CA जनरेट करता है
+  (`~/.config/pentool/certs/ca.crt`) — प्रमाणपत्र आपकी मशीन नहीं छोड़ता
+- Proxy स्क्रीन पर "Install CA cert" क्लिक करें (या **Settings → Proxy →
+  Install CA cert**) — इससे प्रमाणपत्र पथ और Firefox, Chrome व सिस्टम-वाइड
+  इंस्टॉलेशन के लिए चरण-दर-चरण निर्देशों वाला डायलॉग खुलेगा
+- Firefox: `about:preferences#privacy` → Certificates → View
+  Certificates → **Authorities** टैब → Import → `ca.crt` चुनें →
+  "Trust this CA to identify websites" चेक करें
 
 ---
 

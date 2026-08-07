@@ -50,14 +50,14 @@ Proxy 拦截浏览器和目标之间的 HTTP/HTTPS 流量。
 ### 启动 Proxy
 
 1. 进入 Proxy（`Shift+P`）
-2. 点击 **Start Proxy** 按钮
-3. 默认监听 `127.0.0.1:8888`
+2. 点击 **○ Proxy** 按钮
+3. 默认监听 `127.0.0.1:8080`
 
 ### 配置浏览器
 
 **Firefox:**
 - Settings → Network → Manual proxy configuration
-- HTTP Proxy: `127.0.0.1` Port: `8888`
+- HTTP Proxy: `127.0.0.1` Port: `8080`
 - 启用 "Also use this proxy for HTTPS"
 
 **Chrome/Chromium:**

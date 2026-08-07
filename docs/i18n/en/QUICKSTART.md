@@ -37,18 +37,23 @@ You'll see the TUI interface with the Dashboard screen.
 
 **Step 1:** Start Pentool Proxy
 - Press `Ctrl+X` → Select "Proxy"
-- Click "Start Proxy" button
-- Default: `127.0.0.1:8888`
+- Click "○ Proxy" to start it
+- Default: `127.0.0.1:8080` (configurable in Settings)
 
 **Step 2:** Configure your browser
 - Firefox: Settings → Network → Manual proxy
-- Set HTTP Proxy: `127.0.0.1` port `8888`
+- Set HTTP Proxy: `127.0.0.1` port `8080`
 - Enable "Use this proxy for HTTPS"
 
 **Step 3:** Install CA Certificate (for HTTPS)
-- Navigate to: http://burp (or http://127.0.0.1:8888)
-- Download `cacert.pem`
-- Firefox: Settings → Privacy → Certificates → Import
+- Pentool generates a local CA the first time the proxy starts
+  (`~/.config/pentool/certs/ca.crt`) — nothing leaves your machine
+- In the Proxy screen, click "Install CA cert" (or **Settings → Proxy →
+  Install CA cert**) — this opens a dialog with the certificate path and
+  step-by-step instructions for Firefox, Chrome, and system-wide install
+- Firefox: `about:preferences#privacy` → Certificates → View Certificates →
+  **Authorities** tab → Import → select `ca.crt` → check "Trust this CA to
+  identify websites"
 
 ---
 
@@ -170,7 +175,7 @@ You'll see the TUI interface with the Dashboard screen.
 ## Troubleshooting
 
 ### Proxy not starting
-- Check if port 8888 is already in use
+- Check if port 8080 is already in use
 - Try different port in settings
 
 ### HTTPS errors
@@ -188,7 +193,7 @@ You'll see the TUI interface with the Dashboard screen.
 
 - Read full [User Guide](USER_GUIDE.md)
 - Check [API Reference](API_CONTRACTS.md)
-- Join [Discord](https://t.me/sudores)
+- Join our [Telegram channel](https://t.me/pentool_pro) for news and releases
 
 ---
 

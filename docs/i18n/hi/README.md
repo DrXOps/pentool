@@ -165,6 +165,7 @@ PRO एक्सटेंशन कमर्शियल लाइसेंस �
 ## 📬 संपर्क
 
 - **वेबसाइट:** [pentool.pro](https://pentool.pro)
+- **Telegram चैनल:** [t.me/pentool_pro](https://t.me/pentool_pro)
 - **Telegram:** [@sudores](https://t.me/sudores)
 - **Email:** support@pentool.pro
 - **Author:** Anatoly Kashtanov (DoctorX)

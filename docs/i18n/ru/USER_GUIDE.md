@@ -50,14 +50,14 @@ Proxy перехватывает HTTP/HTTPS трафик между вашим �
 ### Запуск Proxy
 
 1. Перейдите в Proxy (`Shift+P`)
-2. Нажмите кнопку **Start Proxy**
-3. По умолчанию слушает на `127.0.0.1:8888`
+2. Нажмите кнопку **○ Proxy**
+3. По умолчанию слушает на `127.0.0.1:8080`
 
 ### Настройка браузера
 
 **Firefox:**
 - Settings → Network → Manual proxy configuration
-- HTTP Proxy: `127.0.0.1` Port: `8888`
+- HTTP Proxy: `127.0.0.1` Port: `8080`
 - Включите "Also use this proxy for HTTPS"
 
 **Chrome/Chromium:**

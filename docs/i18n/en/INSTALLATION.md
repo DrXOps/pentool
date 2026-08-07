@@ -318,7 +318,7 @@ CMD ["pentool"]
 
 ```bash
 docker build -t pentool .
-docker run -it -p 8888:8888 pentool
+docker run -it -p 8080:8080 pentool
 ```
 
 ---

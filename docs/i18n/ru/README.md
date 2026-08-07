@@ -165,6 +165,7 @@ PRO-расширения доступны по коммерческой лице
 ## 📬 Контакты
 
 - **Сайт:** [pentool.pro](https://pentool.pro)
+- **Telegram-канал:** [t.me/pentool_pro](https://t.me/pentool_pro)
 - **Telegram:** [@sudores](https://t.me/sudores)
 - **Email:** support@pentool.pro
 - **Автор:** Анатолий Каштанов (DoctorX)

@@ -37,18 +37,23 @@ pentool
 
 **步骤 1：** 启动 Pentool Proxy
 - 按 `Ctrl+X` → 选择 "Proxy"
-- 点击 "Start Proxy" 按钮
-- 默认：`127.0.0.1:8888`
+- 点击 "○ Proxy" 启动它
+- 默认：`127.0.0.1:8080`（可在 Settings 中配置）
 
 **步骤 2：** 配置浏览器
 - Firefox：设置 → 网络 → 手动代理配置
-- 设置 HTTP 代理：`127.0.0.1` 端口 `8888`
+- 设置 HTTP 代理：`127.0.0.1` 端口 `8080`
 - 启用 "同时用于 HTTPS"
 
 **步骤 3：** 安装 CA 证书（用于 HTTPS）
-- 访问：http://burp（或 http://127.0.0.1:8888）
-- 下载 `cacert.pem`
-- 导入到浏览器或系统
+- Pentool 在代理首次启动时会在本地生成 CA
+  （`~/.config/pentool/certs/ca.crt`）——证书不会离开你的机器
+- 在 Proxy 界面点击 "Install CA cert"（或 **Settings → Proxy →
+  Install CA cert**）——会打开一个对话框，显示证书路径以及 Firefox、
+  Chrome 和系统级安装的分步说明
+- Firefox：`about:preferences#privacy` → 证书 → 查看证书 →
+  **证书颁发机构** 标签页 → 导入 → 选择 `ca.crt` →
+  勾选 "信任由此证书颁发机构颁发的网站证书"
 
 ---
 
