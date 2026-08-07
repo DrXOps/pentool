@@ -66,6 +66,20 @@ class SiteMap:
         self._db_path = db_path
     # host -> path -> SiteNode
         self._nodes: dict[str, dict[str, SiteNode]] = {}
+        # Scope is tracked independently of _nodes (normalized, port-stripped
+        # host names) so that adding a host to scope from Proxy works even
+        # if Target hasn't seen any traffic for it yet (or saw it under a
+        # host:port key that doesn't match the port-less host the user/Proxy
+        # refers to). Previously set_in_scope() was a no-op unless the exact
+        # host string already existed as a node — a host added to scope
+        # before any matching traffic arrived (or under a different
+        # host:port key) silently never got flagged, with no error raised.
+        self._scope_hosts: set[str] = set()
+
+    @staticmethod
+    def _norm_host(host: str) -> str:
+        """Normalize a host for scope comparisons: lowercase, no port."""
+        return host.split(":")[0].strip().lower()
 
     def add_request(self, req: "ParsedRequest") -> None:
         try:
@@ -79,6 +93,7 @@ class SiteMap:
 
         now = datetime.now(timezone.utc)
         host_map = self._nodes.setdefault(host, {})
+        in_scope = self._norm_host(host) in self._scope_hosts
 
         if path in host_map:
             node = host_map[path]
@@ -92,6 +107,7 @@ class SiteMap:
                 methods={req.method},
                 request_count=1,
                 last_seen=now,
+                in_scope=in_scope,
             )
 
     def get_tree(self) -> dict[str, list[SiteNode]]:
@@ -107,18 +123,38 @@ class SiteMap:
         return sorted(self._nodes.get(host, {}).values(), key=lambda n: n.path)
 
     def get_scope(self) -> list[str]:
-        return [h for h, paths in self._nodes.items() if any(n.in_scope for n in paths.values())]
+        # Union of hosts flagged via nodes (legacy/DB-loaded state) and hosts
+        # registered in _scope_hosts before any matching node existed.
+        node_hosts = {h for h, paths in self._nodes.items() if any(n.in_scope for n in paths.values())}
+        explicit_hosts = {h for h in self._nodes if self._norm_host(h) in self._scope_hosts}
+        return sorted(node_hosts | explicit_hosts)
 
     def get_request_count(self, host: str) -> int:
         return sum(n.request_count for n in self._nodes.get(host, {}).values())
 
     def set_in_scope(self, host: str, in_scope: bool) -> None:
-        """Include/exclude a host from Scope."""
-        if host in self._nodes:
-            for node in self._nodes[host].values():
-                node.in_scope = in_scope
+        """Include/exclude a host from Scope.
+
+        Tracks the (normalized, port-stripped) host in `_scope_hosts`
+        independently of whether a matching node already exists in
+        `_nodes` — a host added to scope before any traffic for it has
+        been seen (or seen under a different host:port key) is still
+        remembered and will be applied to any node for that host,
+        present now or added later via add_request().
+        """
+        norm = self._norm_host(host)
+        if in_scope:
+            self._scope_hosts.add(norm)
+        else:
+            self._scope_hosts.discard(norm)
+        for h, paths in self._nodes.items():
+            if self._norm_host(h) == norm:
+                for node in paths.values():
+                    node.in_scope = in_scope
 
     def is_in_scope(self, host: str) -> bool:
+        if self._norm_host(host) in self._scope_hosts:
+            return True
         paths = self._nodes.get(host, {})
         return any(n.in_scope for n in paths.values())
 
@@ -172,11 +208,14 @@ class SiteMap:
                     in_scope=bool(row["in_scope"]),
                 )
                 self._nodes.setdefault(node.host, {})[node.path] = node
+                if node.in_scope:
+                    self._scope_hosts.add(self._norm_host(node.host))
         except Exception as exc:
             logger.error("SiteMap.load error: %s", exc)
 
     def clear(self) -> None:
         self._nodes.clear()
+        self._scope_hosts.clear()
 
     def export_json(self) -> dict:
         return {

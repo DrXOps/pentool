@@ -104,6 +104,34 @@ class TestSiteMap:
         assert "a.com" in scope
         assert "b.com" not in scope
 
+    def test_set_in_scope_before_any_traffic(self, sitemap: SiteMap) -> None:
+        """Scope added for a host with no traffic yet must not be a no-op.
+
+        Regression test: previously set_in_scope() only flagged existing
+        nodes, so a host added to scope from Proxy before Target had seen
+        any matching traffic silently lost the scope flag.
+        """
+        sitemap.set_in_scope("not-seen-yet.com", True)
+        assert sitemap.is_in_scope("not-seen-yet.com")
+        # Traffic arriving afterwards must inherit the scope flag.
+        sitemap.add_request(make_req("http://not-seen-yet.com/api"))
+        node = sitemap.get_paths("not-seen-yet.com")[0]
+        assert node.in_scope is True
+        assert "not-seen-yet.com" in sitemap.get_scope()
+
+    def test_set_in_scope_ignores_port_mismatch(self, sitemap: SiteMap) -> None:
+        """A host:port node must be recognized as in-scope by its bare host.
+
+        Regression test: SiteMap keys nodes by netloc (host:port), while
+        Proxy/the Scope dialog compare port-less host names — previously
+        this mismatch made set_in_scope() a silent no-op for such hosts.
+        """
+        sitemap.add_request(make_req("http://example.com:8443/api"))
+        sitemap.set_in_scope("example.com", True)
+        assert sitemap.is_in_scope("example.com:8443")
+        node = sitemap.get_paths("example.com:8443")[0]
+        assert node.in_scope is True
+
     def test_clear(self, sitemap: SiteMap) -> None:
         sitemap.add_request(make_req("http://example.com/"))
         sitemap.clear()

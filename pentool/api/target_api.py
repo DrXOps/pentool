@@ -83,6 +83,8 @@ class TargetAPI(ExportableAPI):
                 try:
                     node = SiteNode.from_dict(node_dict)
                     self._sitemap._nodes.setdefault(host, {})[node.path] = node
+                    if node.in_scope:
+                        self._sitemap._scope_hosts.add(self._sitemap._norm_host(host))
                     loaded += 1
                 except Exception as exc:
                     logger.warning("TargetAPI.import_project_data: skip node: %s", exc)

@@ -93,14 +93,14 @@ class TargetScreen(Widget):
         try:
             api = self._target_api
             if api is not None:
-                # Was api.sitemap.hosts() — no such method (only get_hosts()
-                # exists). The AttributeError was swallowed by the bare
-                # except below, so scope_hosts silently stayed empty and
-                # the in-memory scope set by SyncScopeToTarget (Proxy →
-                # Target sync) was wiped by the api.load() reload in
-                # _load_worker() with nothing to restore it — this was the
-                # actual cause of "scope star missing after switching to
-                # Target following an Add to Scope from Proxy".
+                # Defense in depth: SiteMap now tracks scope in its own
+                # _scope_hosts set (independent of whether a node exists
+                # yet) and load() re-seeds it from the DB's in_scope
+                # column — so this manual save/restore is no longer the
+                # only thing keeping scope alive across a reload. Kept
+                # anyway in case _target_api is swapped for a fresh
+                # instance (whose _scope_hosts would start empty) between
+                # scope changes and the reload.
                 for host in api.sitemap.get_hosts():
                     if api.sitemap.is_in_scope(host):
                         scope_hosts.add(host)
