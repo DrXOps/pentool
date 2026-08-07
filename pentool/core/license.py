@@ -503,6 +503,13 @@ def _current_platform() -> str:
     return "linux"
 
 
+# File recording which PRO build is currently unpacked into PRO_PACKAGE_DIR —
+# lets check_and_update_pro_package() tell "same build as last time" apart
+# from "a new build was published" without re-downloading the archive to
+# compare it. See _fetch_pro_build_id() / /api/pro/version on the Worker.
+_PRO_BUILD_MARKER = PRO_PACKAGE_DIR / ".build_id"
+
+
 async def download_pro_package(key: str, machine_id: str) -> bool:
     """Download, verify, and install the obfuscated PRO package.
 
@@ -555,6 +562,85 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
         finally:
             tmp_archive.unlink(missing_ok=True)
 
+        # Record which build this is, so a later check_and_update_pro_package()
+        # can tell "nothing changed" from "a new build was published" without
+        # re-downloading the archive just to compare it.
+        try:
+            build_id = await _fetch_pro_build_id(plat)
+            if build_id:
+                _PRO_BUILD_MARKER.write_text(build_id, encoding="utf-8")
+        except Exception:
+            pass  # non-fatal — worst case, next check just re-downloads once more
+
         return True
     except Exception:
         return False
+
+
+async def _fetch_pro_build_id(plat: str) -> str | None:
+    """Query /api/pro/version for the current PRO release's build_id.
+
+    No license key needed — this only identifies which build is published,
+    not whether the caller is entitled to it (that's still enforced by
+    /api/download re-validating the key server-side). Returns None on any
+    failure (network, missing asset, etc.) — callers should treat that as
+    "couldn't check, don't act on it" rather than "no update available".
+    """
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=8)
+        ) as session:
+            async with session.get(
+                f"{_LICENSE_API_BASE}/api/pro/version",
+                params={"platform": plat},
+                ssl=False,
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                return data.get("build_id")
+    except Exception:
+        return None
+
+
+async def check_and_update_pro_package() -> bool:
+    """Re-download the PRO package if a newer build has been published.
+
+    Called on TUI startup (background worker, same pattern as
+    _check_for_updates for the pip package) and after `pentool update` — this
+    is what closes the gap where pentool-pro ships a fix but a machine that
+    already activated its license keeps running the stale code from
+    ~/.pentool/pro/ forever, because download_pro_package() otherwise only
+    ever runs once, at initial activation/trial-start.
+
+    Silently does nothing (returns False) if:
+      - there's no active PRO license (nothing to update)
+      - the PRO package was never downloaded in the first place (that's
+        activate_license's job, not this one)
+      - the version check or download fails for any reason
+
+    Returns True if a new build was found and successfully installed.
+    """
+    info = get_license()
+    if not info.valid or not info.features:
+        return False
+    if not PRO_PACKAGE_DIR.exists():
+        return False  # never activated on this machine — nothing to refresh
+
+    plat = _current_platform()
+    remote_build_id = await _fetch_pro_build_id(plat)
+    if not remote_build_id:
+        return False  # couldn't reach the server — don't touch anything
+
+    local_build_id = None
+    try:
+        if _PRO_BUILD_MARKER.exists():
+            local_build_id = _PRO_BUILD_MARKER.read_text(encoding="utf-8").strip()
+    except Exception:
+        pass
+
+    if local_build_id == remote_build_id:
+        return False  # already on the latest build
+
+    return await download_pro_package(info.license_key, info.machine_id)

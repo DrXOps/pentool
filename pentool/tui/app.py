@@ -408,6 +408,12 @@ class PentoolApp(App):
         if getattr(self._cfg, "check_updates", True):
             self.run_worker(self._check_for_updates(), exclusive=False, thread=False)
 
+        # Check for a newer PRO build in background (if a PRO license is
+        # active) — closes the gap where pentool-pro ships a fix but an
+        # already-activated machine keeps running the stale code forever,
+        # since the PRO package otherwise only downloads once, at activation.
+        self.run_worker(self._check_for_pro_update(), exclusive=False, thread=False)
+
     async def _auto_open_last_project(self) -> None:
         """Open the last project from recent_projects at startup."""
         await asyncio.sleep(0.2)  # give Textual time to render the UI
@@ -438,6 +444,30 @@ class PentoolApp(App):
                 logger.info("APP: update available: %s", info.latest_version)
         except Exception as exc:
             logger.debug("APP: update check failed: %s", exc)
+
+    async def _check_for_pro_update(self) -> None:
+        """Re-download the PRO package in the background if a newer build
+        has been published, then notify so the user knows to restart.
+
+        No-op (silently) if there's no active PRO license or the package was
+        never downloaded in the first place — see
+        pentool.core.license.check_and_update_pro_package for the actual
+        build_id comparison logic.
+        """
+        import asyncio as _asyncio
+        await _asyncio.sleep(4.0)  # after the pip-update check, UI settled
+        try:
+            from pentool.core.license import check_and_update_pro_package
+            updated = await check_and_update_pro_package()
+            if updated:
+                self.notify(
+                    "PRO package updated to the latest build — restart Pentool to use it.",
+                    severity="information",
+                    timeout=10,
+                )
+                logger.info("APP: PRO package updated to a newer build")
+        except Exception as exc:
+            logger.debug("APP: PRO update check failed: %s", exc)
 
     def _setup_auto_save(self) -> None:
         """Configure / restart the auto-save timer from the current config.

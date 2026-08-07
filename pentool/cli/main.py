@@ -126,6 +126,7 @@ def update_cmd(check_only: bool) -> None:
         click.echo("Upgrading via pip...")
         if do_pip_upgrade():
             click.echo("Upgrade successful. Restart Pentool to use the new version.")
+            _sync_pro_package_after_upgrade()
         else:
             click.echo(
                 "pip upgrade failed. You can update manually:\n"
@@ -133,6 +134,32 @@ def update_cmd(check_only: bool) -> None:
                 err=True,
             )
             raise SystemExit(1)
+
+
+def _sync_pro_package_after_upgrade() -> None:
+    """Re-download the PRO package too, if one is active on this machine.
+
+    `pip install --upgrade pentool` only touches the FREE package — the PRO
+    package lives separately in ~/.pentool/pro/ and is otherwise only ever
+    (re)downloaded by check_and_update_pro_package(), which normally runs in
+    the background on TUI startup. Doing it here too means a CLI-driven
+    upgrade doesn't leave a stale PRO build around until the next TUI launch.
+    Best-effort — never fails the overall upgrade if this part doesn't work.
+    """
+    import asyncio
+
+    from pentool.core.license import PRO_PACKAGE_DIR, check_and_update_pro_package
+
+    if not PRO_PACKAGE_DIR.exists():
+        return  # PRO was never activated on this machine — nothing to sync
+
+    try:
+        click.echo("Checking for a newer PRO build...")
+        updated = asyncio.run(check_and_update_pro_package())
+        if updated:
+            click.echo("PRO package updated to the latest build.")
+    except Exception as exc:
+        click.echo(f"Could not check for a PRO update: {exc}", err=True)
 
 
 @cli.group()
