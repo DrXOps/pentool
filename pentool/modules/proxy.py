@@ -150,6 +150,14 @@ class ProxyServer:
 
         self.intercept_enabled: bool = False
         self.scope: list[str] = []  # Empty = intercept everything
+        # When False (default), scope is informational only — ALL traffic is
+        # captured/shown regardless of self.scope. Scope filtering (dropping
+        # out-of-scope requests from capture) only takes effect when this is
+        # explicitly turned on via the "Skip out-of-scope" toggle button.
+        # Without this flag, a leftover/stale `scope` list (e.g. saved from a
+        # previous project) would silently blackhole all non-matching traffic
+        # the moment the proxy starts, with no visible indication why.
+        self.enforce_scope: bool = False
 
         # Match/Replace via dedicated engine
         self._match_replace_engine = MatchReplaceEngine()
@@ -205,7 +213,10 @@ class ProxyServer:
         self._running = False
         if self._server:
             self._server.close()
-            await self._server.wait_closed()
+            try:
+                await asyncio.wait_for(self._server.wait_closed(), timeout=2.0)
+            except asyncio.TimeoutError:
+                logger.debug("ProxyServer.stop: wait_closed timeout, continuing")
             self._server = None
         # Close singleton HTTP client
         if self._http_client:
@@ -214,6 +225,25 @@ class ProxyServer:
             except Exception as e:
                 logger.warning("ProxyServer.stop: http_client.close() error: %s", e)
             self._http_client = None
+        # Cancel all remaining active tasks (open TLS tunnels, keep-alive
+        # connections, intercept waits) so the event loop can exit promptly.
+        # Without this, _handle_connect loops on _READ_TIMEOUT=30s and
+        # _INTERCEPT_TIMEOUT=300s — the proxy thread would not exit for up to
+        # 5 minutes after stop(), blocking project switches and restarts.
+        loop = asyncio.get_running_loop()
+        current = asyncio.current_task()
+        pending = [t for t in asyncio.all_tasks(loop) if t is not current and not t.done()]
+        if pending:
+            logger.debug("ProxyServer.stop: cancelling %d active task(s)", len(pending))
+            for task in pending:
+                task.cancel()
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*pending, return_exceptions=True),
+                    timeout=2.0,
+                )
+            except asyncio.TimeoutError:
+                logger.debug("ProxyServer.stop: task cancellation timed out")
         logger.info("Proxy stopped")
 
     async def serve_forever(self) -> None:
@@ -296,6 +326,19 @@ class ProxyServer:
         else:
             self.intercept_enabled = enabled
 
+    def set_enforce_scope(self, enabled: bool) -> None:
+        """Thread-safe setting of enforce_scope flag from any thread.
+
+        Same rationale as set_intercept — the proxy loop reads this flag
+        in _handle_http/_handle_connect, so writes from the TUI thread must
+        go through call_soon_threadsafe to avoid a torn read.
+        """
+        loop = self._loop
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(setattr, self, "enforce_scope", enabled)
+        else:
+            self.enforce_scope = enabled
+
     def _find_request(self, req_id: str) -> InterceptedRequest | None:
         with self._requests_lock:
             for r in reversed(self.requests):
@@ -367,7 +410,8 @@ class ProxyServer:
         await writer.drain()
 
         # If host is out of scope — just tunnel without interception
-        if not self.is_in_scope(domain):
+        # (only enforced when the user turned on "Skip out-of-scope")
+        if self.enforce_scope and not self.is_in_scope(domain):
             await self._tunnel_raw(domain, host_port, reader, writer)
             return
 
@@ -491,7 +535,8 @@ class ProxyServer:
                     req.method, req.url, is_https, self.intercept_enabled, self.is_in_scope(host))
 
         # Check scope (for HTTP; HTTPS already checked in _handle_connect)
-        if not is_https and not self.is_in_scope(host):
+        # (only enforced when the user turned on "Skip out-of-scope")
+        if self.enforce_scope and not is_https and not self.is_in_scope(host):
             logger.debug("PROXY: _handle_http: host %s out of scope, forwarding direct", host)
             return await self._forward_direct(req, writer)
 

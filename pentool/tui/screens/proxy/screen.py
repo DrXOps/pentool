@@ -252,6 +252,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._pending_req_ids_ts: dict[str, float] = {}  # БАГ-C: timestamps for periodic cleanup
         self._intercept_req: InterceptedRequest | None = None
         self._intercept_pending: list[InterceptedRequest] = []
+        self._intercept_show_special_chars: bool = False
+        self._intercept_raw_full: str = ""
         # Debounce: batch rapid row appends into one incremental add_rows() call
         self._pending_append_rows: list[tuple] = []  # (req, row_id) pairs
         self._debounce_timer = None
@@ -270,6 +272,17 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Scope",       "btn-scope")
             yield Static(" │ ", classes="toolbar-sep")
+            yield ToolbarButton(
+                "☐ Skip out-of-scope", "btn-enforce-scope",
+                tooltip=(
+                    "When ON: requests to hosts NOT listed in Scope are "
+                    "tunneled straight through and never captured/shown in "
+                    "History. When OFF (default): Scope is informational "
+                    "only — ALL traffic is captured regardless of Scope. "
+                    "Saved per-project."
+                ),
+            )
+            yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("M/R",         "btn-mr")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Clear",       "btn-clear")
@@ -281,9 +294,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                     yield ToolbarButton("⏩ Forward", "btn-forward", classes="disabled")
                     yield ToolbarButton("✖ Drop",    "btn-drop",    classes="disabled")
                     yield Static(" │ ", classes="toolbar-sep")
+                    yield ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars")
+                    yield Static(" │ ", classes="toolbar-sep")
                     yield Label("(enable Intercept to capture requests)", id="intercept-hint")
                 with Vertical(id="intercept-req-area"):
-                    yield Static("", id="intercept-headers-preview", markup=True)
                     yield TextArea(
                         "(No requests waiting for intercept)",
                         id="intercept-editor",
@@ -397,6 +411,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     def on_mount(self) -> None:
         self._sync_proxy_button()
         self._sync_intercept_button()
+        self._sync_enforce_scope_button()
         self._setup_tooltips()
         # init_storage is called from app.on_mount after _proxy_service injection
         # БАГ-C: periodic cleanup of stale _pending_req_ids entries (memory leak fix)
@@ -410,6 +425,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             filter_bar.query_one("#fb-scope", ScopeToggle).set_scope_empty(not bool(scope))
         except Exception:
             pass
+        # Load the per-project "Skip out-of-scope" flag (defaults to OFF for
+        # a fresh mount — _reload_from_storage reloads it again after any
+        # subsequent project switch)
+        self.run_worker(self._load_enforce_scope_setting())
         # Subscribe to WS frames
         try:
             from pentool.core.event_bus import get_event_bus
@@ -676,6 +695,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         logger.info("PROXY SCREEN: _reload_from_storage: storage ready, loading tables")
         await self._reload_table()
         await self._reload_ws_table()
+        # Reload the per-project "Skip out-of-scope" flag for the DB we just
+        # switched to — it must not leak from whatever project was open before.
+        await self._load_enforce_scope_setting()
         logger.info("PROXY SCREEN: _reload_from_storage: tables reloaded")
 
     def add_request_row(self, req: object) -> None:
@@ -1222,6 +1244,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     def on_btn_drop(self, _: ToolbarButton.Pressed) -> None:
         self.action_drop()
 
+    @on(ToolbarButton.Pressed, "#btn-intercept-special-chars")
+    def on_btn_intercept_special_chars(self, event: ToolbarButton.Pressed) -> None:
+        self._toggle_intercept_special_chars(event.button)
+
     @on(ToolbarButton.Pressed, "#btn-intercept")
     def on_btn_intercept(self, _: ToolbarButton.Pressed) -> None:
         self.action_toggle_intercept()
@@ -1229,6 +1255,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     @on(ToolbarButton.Pressed, "#btn-scope")
     def on_btn_scope(self, _: ToolbarButton.Pressed) -> None:
         self.action_open_scope()
+
+    @on(ToolbarButton.Pressed, "#btn-enforce-scope")
+    def on_btn_enforce_scope(self, _: ToolbarButton.Pressed) -> None:
+        self.action_toggle_enforce_scope()
 
     @on(ToolbarButton.Pressed, "#btn-mr")
     def on_btn_mr(self, _: ToolbarButton.Pressed) -> None:
@@ -1251,6 +1281,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             modified = editor.text
         except Exception:
             modified = None
+        if modified is not None and self._intercept_show_special_chars:
+            try:
+                from pentool.tui.widgets.request_editor import decode_special_chars
+                modified = decode_special_chars(modified)
+            except Exception:
+                pass
         # Display the sent request in the bottom-left panel
         sent_text = modified if modified and modified.strip() else ""
         try:
@@ -1292,17 +1328,54 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         except Exception:
             pass
         try:
-            preview = self.query_one("#intercept-headers-preview", Static)
-            preview.update("")
-            preview.display = False
-        except Exception:
-            pass
-        try:
             self.query_one("#intercept-sent-req", HttpView).clear()
         except Exception:
             pass
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
+        except Exception:
+            pass
+
+    def _toggle_intercept_special_chars(self, btn: ToolbarButton) -> None:
+        """Toggle display of literal \\r\\n / \\n special chars in the Intercept editor."""
+        try:
+            from pentool.tui.widgets.request_editor import (
+                decode_special_chars,
+                visualize_special_chars,
+            )
+            editor = self.query_one("#intercept-editor", TextArea)
+        except Exception:
+            return
+        # Commit the current text before switching mode representation
+        current = editor.text
+        if self._intercept_show_special_chars:
+            # Currently showing literal escapes — decode back to raw control chars
+            decoded = decode_special_chars(current)
+            self._intercept_raw_full = decoded
+        else:
+            self._intercept_raw_full = current
+
+        self._intercept_show_special_chars = not self._intercept_show_special_chars
+        if self._intercept_show_special_chars:
+            btn.update("⏎ Special: ON")
+            btn.add_class("active")
+            editor.load_text(visualize_special_chars(self._intercept_raw_full))
+        else:
+            btn.update("⏎ Special: OFF")
+            btn.remove_class("active")
+            editor.load_text(self._intercept_raw_full)
+            self._apply_intercept_highlight(self._intercept_raw_full)
+
+    def _apply_intercept_highlight(self, raw: str) -> None:
+        """Apply HTTP header syntax highlighting directly on the (full-text) intercept editor."""
+        try:
+            from collections import defaultdict
+            from pentool.tui.widgets.request_editor import _build_http_highlights
+            editor = self.query_one("#intercept-editor", TextArea)
+            normalized = raw.replace("\r\n", "\n")
+            editor._highlights = defaultdict(list, _build_http_highlights(normalized))
+            editor._line_cache.clear()
+            editor.refresh()
         except Exception:
             pass
 
@@ -1346,20 +1419,15 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             raw = build_http_request(req.to_parsed_request())
         except Exception:
             raw = f"{req.method} {req.url}\n\n(could not render request)"
+        self._intercept_raw_full = raw
         try:
+            from pentool.tui.widgets.request_editor import visualize_special_chars
             editor = self.query_one("#intercept-editor", TextArea)
-            editor.load_text(raw)
-        except Exception:
-            pass
-        # Header highlight above the editor
-        try:
-            from pentool.tui.widgets.request_editor import _render_headers_rich
-            parsed = req.to_parsed_request()
-            request_line = f"{parsed.method} {parsed.path} HTTP/1.1"
-            markup = _render_headers_rich(request_line, parsed.headers)
-            preview = self.query_one("#intercept-headers-preview", Static)
-            preview.update(markup)
-            preview.display = True
+            if self._intercept_show_special_chars:
+                editor.load_text(visualize_special_chars(raw))
+            else:
+                editor.load_text(raw)
+                self._apply_intercept_highlight(raw)
         except Exception:
             pass
         # Clear only the response panel — leave Sent Request as-is
@@ -1485,10 +1553,22 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     def action_open_scope(self) -> None:
         proxy = self._get_proxy()
         current = proxy.scope if proxy else []
+
+        def _norm_host(pattern: str) -> str:
+            """Strip a wildcard prefix ('*.example.com' -> 'example.com') so
+            the plain host can be sent to Target's per-host in_scope flag.
+            Target's site map is keyed by concrete hostnames, not patterns —
+            a wildcard entry has no single matching node to flag/unflag, so
+            we sync the base domain it implies. Best-effort only."""
+            p = pattern.strip().lstrip("*.")
+            return p
+
         from pentool.tui.dialogs.scope_dialog import ScopeDialog
 
         def _apply(result: list[str] | None) -> None:
             if result is not None and proxy is not None:
+                old_scope = set(current or [])
+                new_scope = set(result)
                 proxy.set_scope(result)
                 # Sync scope into Config and save to disk
                 try:
@@ -1498,6 +1578,21 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                     cfg.save()
                 except Exception as e:
                     logger.warning("action_open_scope: failed to save scope to config: %s", e)
+                # Mirror the diff into TargetScreen's in_scope flags — the
+                # same SyncScopeToTarget message the context-menu "Add/Remove
+                # to Scope" actions already use. Without this, editing Scope
+                # via this dialog (bulk text edit) never reached Target,
+                # while the per-host context-menu action did — an
+                # inconsistency the user could see: the ★ marker in Target
+                # updated for one path but not the other.
+                for pattern in new_scope - old_scope:
+                    host = _norm_host(pattern)
+                    if host:
+                        self._sync_target_host_scope(host, True)
+                for pattern in old_scope - new_scope:
+                    host = _norm_host(pattern)
+                    if host:
+                        self._sync_target_host_scope(host, False)
                 # Update ScopeToggle state in FilterBar
                 scope_toggle_was_active = False
                 try:
@@ -1522,6 +1617,77 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                     )
 
         self.app.push_screen(ScopeDialog(current), _apply)
+
+    def action_toggle_enforce_scope(self) -> None:
+        """Toggle the 'Skip out-of-scope' capture filter (per-project, persisted to DB)."""
+        proxy = self._get_proxy()
+        if proxy is None:
+            return
+        enabled = not proxy.enforce_scope
+        proxy.set_enforce_scope(enabled)
+        self._sync_enforce_scope_button()
+        self.run_worker(self._save_enforce_scope_setting(enabled))
+        if enabled and not proxy.scope:
+            # Scope host list is empty — is_in_scope() treats an empty list as
+            # "everything matches", so there is nothing to tunnel yet. Without
+            # this, turning the toggle on looks like it silently does nothing.
+            self.app.notify(
+                "Skip out-of-scope: ON, but Scope has no hosts yet — "
+                "everything still counts as in-scope. Add hosts via the "
+                "'Scope' button to actually filter traffic.",
+                severity="warning",
+                timeout=5,
+            )
+        else:
+            self.app.notify(
+                "Skip out-of-scope: ON — non-scope traffic will be tunneled, not captured"
+                if enabled else
+                "Skip out-of-scope: OFF — all traffic is captured regardless of Scope",
+                timeout=3,
+            )
+
+    async def _save_enforce_scope_setting(self, enabled: bool) -> None:
+        try:
+            from pentool.core.database import set_project_setting
+            db_path = self._get_db_path()
+            if db_path:
+                await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
+        except Exception as exc:
+            logger.debug("_save_enforce_scope_setting: %s", exc)
+
+    async def _load_enforce_scope_setting(self) -> None:
+        """Load the persisted 'Skip out-of-scope' flag for the current project's DB.
+
+        Called after a project switch (and on initial mount) — the flag is
+        stored per-project so it doesn't leak between different projects the
+        way the global Scope host list could.
+        """
+        proxy = self._get_proxy()
+        if proxy is None:
+            return
+        try:
+            from pentool.core.database import get_project_setting
+            db_path = self._get_db_path()
+            value = await get_project_setting(db_path, "proxy.enforce_scope", "0") if db_path else "0"
+            enabled = value == "1"
+        except Exception as exc:
+            logger.debug("_load_enforce_scope_setting: %s", exc)
+            enabled = False
+        proxy.set_enforce_scope(enabled)
+        self._sync_enforce_scope_button()
+
+    def _sync_enforce_scope_button(self) -> None:
+        proxy = self._get_proxy()
+        try:
+            btn = self.query_one("#btn-enforce-scope", ToolbarButton)
+        except Exception:
+            return
+        if proxy and proxy.enforce_scope:
+            btn.label = "☑ Skip out-of-scope"
+            btn.add_class("active")
+        else:
+            btn.label = "☐ Skip out-of-scope"
+            btn.remove_class("active")
 
     def action_open_mr(self) -> None:
         proxy = self._get_proxy()

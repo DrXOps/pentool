@@ -14,7 +14,6 @@ from textual.widget import Widget
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 from textual.widgets import (
     Button,
-    Checkbox,
     Input,
     Label,
     ProgressBar,
@@ -26,6 +25,7 @@ from textual.widgets import (
 )
 
 from pentool.core.logging import get_logger
+from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 
 logger = get_logger(__name__)
 

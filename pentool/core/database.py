@@ -95,6 +95,14 @@ CREATE TABLE IF NOT EXISTS site_map (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_site_map_host_path ON site_map (host, path);
+
+-- Generic per-project key/value settings (e.g. "proxy.enforce_scope").
+-- Lives in the project .db file itself so it travels with the project,
+-- unlike pentool's global ~/.config/pentool/config.yaml.
+CREATE TABLE IF NOT EXISTS project_settings (
+    key     TEXT PRIMARY KEY,
+    value   TEXT NOT NULL DEFAULT ''
+);
 """
 
 
@@ -170,3 +178,31 @@ def init_db_sync(db_path: str) -> None:
         db_path: Path to the SQLite file.
     """
     asyncio.run(init_db(db_path))
+
+
+async def get_project_setting(db_path: str, key: str, default: str | None = None) -> str | None:
+    """Read a single per-project key/value setting from `project_settings`.
+
+    Returns `default` if the key is missing or the table/column doesn't
+    exist yet (e.g. a brand-new .db before init_db() has run).
+    """
+    try:
+        async with aiosqlite.connect(db_path) as db:
+            async with db.execute(
+                "SELECT value FROM project_settings WHERE key = ?", (key,)
+            ) as cur:
+                row = await cur.fetchone()
+                return row[0] if row else default
+    except Exception:
+        return default
+
+
+async def set_project_setting(db_path: str, key: str, value: str) -> None:
+    """Upsert a single per-project key/value setting into `project_settings`."""
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "INSERT INTO project_settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+        await db.commit()

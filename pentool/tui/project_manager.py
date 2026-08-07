@@ -325,9 +325,14 @@ class ProjectManager:
             )
             self._app._stop_proxy()
 
+        # Gate Start Proxy (action_toggle_proxy) until _do_switch flips this
+        # back to True once HttpStorage.switch_db() has actually completed —
+        # otherwise a Start Proxy click during the switch could race the
+        # storage connection being closed/reopened underneath it.
+        self._app._project_loaded = False
+
         self._cfg.db_path = path
         self._app._project_path = path
-        # Note: _project_loaded will be set AFTER _reload_project_screens in _do_switch
 
         if self._proxy:
             self._proxy.db_path = path
@@ -337,6 +342,10 @@ class ProjectManager:
                 self._proxy.clear_requests()
                 self._proxy.scope = []
                 self._proxy.match_replace_rules = []
+                # New project's DB has no project_settings row yet — reset to
+                # the documented default (OFF) rather than carrying over
+                # whatever the previous project had in memory.
+                self._proxy.set_enforce_scope(False)
             except Exception:
                 pass
 
@@ -371,12 +380,44 @@ class ProjectManager:
         """Single entry point for all project switches.
 
         Runs in an exclusive worker — no two switches can overlap.
-        Order is strict:
+        Order:
+          0. Wait for the proxy thread to fully exit (if _stop_proxy was
+             called but the thread didn't die within join(timeout) — the
+             old loop may still hold the SQLite WAL lock or the TCP port).
           1. init_db (CREATE TABLE IF NOT EXISTS, migrations)
           2. switch_db on ProxyService (close old connection, open new one)
           3. clear in-memory proxy state if new project
-          4. reload all screens sequentially (no nested run_worker)
+          4. set _project_loaded — DB is ready, Start Proxy is now safe,
+             even though the other screens (Repeater/Scanner/Target/Dashboard)
+             may still be reloading in the background (step 5). Proxy only
+             depends on the HttpStorage connection from step 2, not on any
+             of those screens, so there is no reason to make the user wait
+             for all of them before allowing Start Proxy.
+          5. reload the remaining screens — run concurrently (they read
+             independent tables/state), not sequentially.
         """
+        # 0. Wait for the proxy thread to die before touching the DB.
+        # _stop_proxy() already called join(timeout=5), but if the thread
+        # is still alive (e.g. a 30-second _READ_TIMEOUT blocked task didn't
+        # get cancelled in time) we must not open a new SQLite connection
+        # while the old proxy event loop might still be writing to it.
+        proxy_thread = self._app._proxy_thread
+        if proxy_thread is not None and proxy_thread.is_alive():
+            logger.info("_do_switch: waiting for proxy thread to exit before DB switch…")
+            loop = asyncio.get_running_loop()
+            # Poll in the async event loop so we don't block the TUI thread
+            for _ in range(50):  # up to 5 seconds in 100ms steps
+                alive = await loop.run_in_executor(
+                    None, lambda: proxy_thread.is_alive()
+                )
+                if not alive:
+                    break
+                await asyncio.sleep(0.1)
+            if proxy_thread.is_alive():
+                logger.warning("_do_switch: proxy thread still alive after extra 5s — proceeding anyway")
+            else:
+                logger.info("_do_switch: proxy thread exited, proceeding with DB switch")
+
         # 1. Ensure schema exists (safe for both new and existing DBs)
         await self._init_new_db(path)
 
@@ -405,75 +446,91 @@ class ProjectManager:
             except Exception as exc:
                 logger.debug("_do_switch: clear for new project: %s", exc)
 
-        # 4. Reload all screens — all awaited, never spawning sub-workers
-        await self._reload_project_screens(path, is_new=is_new)
-
-        # 5. Set flag AFTER all screens are reloaded (fixes race condition)
+        # 4. Set flag as soon as the DB itself is ready — Start Proxy only
+        # needs HttpStorage (step 2) done, not the other screens below.
         self._app._project_loaded = True
-        logger.info("_do_switch: project loaded flag set")
+        logger.info("_do_switch: project loaded flag set (DB ready)")
+
+        # 5. Reload the remaining screens concurrently — independent of
+        # each other and of the flag above.
+        await self._reload_project_screens(path, is_new=is_new)
+        logger.info("_do_switch: all screens reloaded")
 
     async def _reload_project_screens(self, path: str, is_new: bool = False) -> None:
-        """Reload data from DB into all screens. Called from _do_switch only."""
+        """Reload data from DB into all screens. Called from _do_switch only.
 
-        # 0. RepeaterScreen — сброс или загрузка вкладок
-        try:
-            from pentool.tui.constants import SCREEN_REPEATER
-            from pentool.tui.screens.repeater.screen import RepeaterScreen
-            repeater = self._app.query_one(SCREEN_REPEATER, RepeaterScreen)
-            if is_new:
-                await repeater.reset_for_new_project()
-            else:
-                await repeater.reload_from_project(path)
-            logger.info("_reload_project_screens: repeater %s",
-                        "reset" if is_new else "reloaded")
-        except Exception as exc:
-            logger.debug("_reload_project_screens repeater: %s", exc)
+        Each screen's reload is independent (different tables/state), so they
+        run concurrently via asyncio.gather instead of one after another —
+        total time is bounded by the slowest single reload, not the sum.
+        """
 
-        # 1. ProxyScreen — must come after switch_db is fully done
-        try:
-            screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
-            await screen._reload_from_storage()
-            logger.info("_reload_project_screens: proxy reloaded from %s", path)
-        except Exception as exc:
-            logger.debug("_reload_project_screens proxy: %s", exc)
+        async def _reload_repeater() -> None:
+            try:
+                from pentool.tui.constants import SCREEN_REPEATER
+                from pentool.tui.screens.repeater.screen import RepeaterScreen
+                repeater = self._app.query_one(SCREEN_REPEATER, RepeaterScreen)
+                if is_new:
+                    await repeater.reset_for_new_project()
+                else:
+                    await repeater.reload_from_project(path)
+                logger.info("_reload_project_screens: repeater %s",
+                            "reset" if is_new else "reloaded")
+            except Exception as exc:
+                logger.debug("_reload_project_screens repeater: %s", exc)
 
-        # 2. ScannerScreen
-        try:
-            from pentool.tui.screens.scanner.screen import ScannerScreen
-            scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
-            if scanner_screen._scanner_api is not None:
-                scanner_screen._scanner_api._db_path = path
-            scanner_screen._scanner_api = None
-            scanner_screen._scanner_api = scanner_screen._get_or_create_api(path)
-            scanner_screen._populate_from_db([])
-            scanner_screen._load_findings_worker()
-            logger.info("_reload_project_screens: scanner reloaded")
-        except Exception as exc:
-            logger.debug("_reload_project_screens scanner: %s", exc)
+        async def _reload_proxy() -> None:
+            try:
+                screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
+                await screen._reload_from_storage()
+                logger.info("_reload_project_screens: proxy reloaded from %s", path)
+            except Exception as exc:
+                logger.debug("_reload_project_screens proxy: %s", exc)
 
-        # 3. TargetScreen
-        try:
-            from pentool.tui.screens.target.screen import TargetScreen
-            target_screen = self._app.query_one(SCREEN_TARGET, TargetScreen)
-            if target_screen._target_api is not None:
-                try:
-                    await target_screen._target_api.save()
-                except Exception:
-                    pass
-            target_screen._target_api = None
-            target_screen._get_api()
-            target_screen._load_sitemap()
-            logger.info("_reload_project_screens: target reloaded from %s", path)
-        except Exception as exc:
-            logger.debug("_reload_project_screens target: %s", exc)
+        async def _reload_scanner() -> None:
+            try:
+                from pentool.tui.screens.scanner.screen import ScannerScreen
+                scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
+                if scanner_screen._scanner_api is not None:
+                    scanner_screen._scanner_api._db_path = path
+                scanner_screen._scanner_api = None
+                scanner_screen._scanner_api = scanner_screen._get_or_create_api(path)
+                scanner_screen._populate_from_db([])
+                scanner_screen._load_findings_worker()
+                logger.info("_reload_project_screens: scanner reloaded")
+            except Exception as exc:
+                logger.debug("_reload_project_screens scanner: %s", exc)
 
-        # 4. Dashboard
-        try:
-            from pentool.tui.screens.dashboard.screen import DashboardScreen
-            dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
-            dash.refresh_stats()
-        except Exception as exc:
-            logger.debug("_reload_project_screens dashboard: %s", exc)
+        async def _reload_target() -> None:
+            try:
+                from pentool.tui.screens.target.screen import TargetScreen
+                target_screen = self._app.query_one(SCREEN_TARGET, TargetScreen)
+                if target_screen._target_api is not None:
+                    try:
+                        await target_screen._target_api.save()
+                    except Exception:
+                        pass
+                target_screen._target_api = None
+                target_screen._get_api()
+                target_screen._load_sitemap()
+                logger.info("_reload_project_screens: target reloaded from %s", path)
+            except Exception as exc:
+                logger.debug("_reload_project_screens target: %s", exc)
+
+        async def _reload_dashboard() -> None:
+            try:
+                from pentool.tui.screens.dashboard.screen import DashboardScreen
+                dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
+                dash.refresh_stats()
+            except Exception as exc:
+                logger.debug("_reload_project_screens dashboard: %s", exc)
+
+        await asyncio.gather(
+            _reload_repeater(),
+            _reload_proxy(),
+            _reload_scanner(),
+            _reload_target(),
+            _reload_dashboard(),
+        )
 
     async def _init_new_db(self, path: str) -> None:
         try:

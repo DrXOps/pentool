@@ -749,11 +749,12 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             return
         try:
             from textual.widgets import TextArea
+            from pentool.tui.widgets.request_editor import visualize_special_chars
             editor = self.query_one(f"#req-editor-{tab_id}", RequestEditor)
             area = editor.query_one("#editor-area", TextArea)
             if self._show_special_chars:
                 raw = editor._raw_full or editor.get_text()
-                displayed = self._visualize_special_chars(raw)
+                displayed = visualize_special_chars(raw)
                 editor._special_chars_mode = True
                 area.load_text(displayed)
             else:
@@ -764,26 +765,6 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         except Exception:
             pass
 
-    @staticmethod
-    def _visualize_special_chars(text: str) -> str:
-        """Replace \r and \n with the literal strings \\r\\n, keeping the real \n for line breaks."""
-        result = []
-        i = 0
-        while i < len(text):
-            ch = text[i]
-            if ch == '\r' and i + 1 < len(text) and text[i + 1] == '\n':
-                result.append("\\r\\n\n")
-                i += 2
-            elif ch == '\r':
-                result.append("\\r\n")
-                i += 1
-            elif ch == '\n':
-                result.append("\\n\n")
-                i += 1
-            else:
-                result.append(ch)
-                i += 1
-        return "".join(result)
 
     def _set_status(self, msg: str) -> None:
         try:

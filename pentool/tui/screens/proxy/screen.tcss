@@ -119,14 +119,6 @@ ProxyScreen #intercept-hint {
     padding: 0 1;
     height: 1;
 }
-ProxyScreen #intercept-headers-preview {
-    height: auto;
-    max-height: 10;
-    background: $panel;
-    padding: 0 1;
-    border-bottom: dashed $primary-darken-3;
-    display: none;
-}
 ProxyScreen .stub-label {
     padding: 1 2;
     color: $text-muted;

@@ -16,7 +16,6 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 from textual.widgets import (
     Button,
-    Checkbox,
     Input,
     Static,
     TabbedContent,
@@ -24,6 +23,7 @@ from textual.widgets import (
 )
 
 from pentool.tui.screens.settings.hotkeys import HotkeySettingsScreen
+from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
@@ -564,9 +564,12 @@ class SettingsScreen(Widget):
 
     def _open_ca_cert(self) -> None:
         try:
-            self.app.action_open_ca_cert()  # type: ignore[attr-defined]
-        except Exception:
-            pass
+            from pentool.tui.constants import SCREEN_PROXY
+            from pentool.tui.screens.proxy.screen import ProxyScreen
+            proxy_screen = self.app.query_one(SCREEN_PROXY, ProxyScreen)
+            proxy_screen.action_open_ca_cert()
+        except Exception as e:
+            self.app.notify(f"Install CA cert failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
     def _save_network_settings(self) -> None:
         try:

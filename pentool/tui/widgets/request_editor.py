@@ -287,6 +287,49 @@ class _BaseHttpWidget(Widget):
             pass
 
 
+def visualize_special_chars(text: str) -> str:
+    """Replace \\r and \\n with the literal strings \\r\\n / \\n, keeping the real \\n for line breaks.
+
+    Shared between Repeater and Proxy (Intercept) "Special chars" toggle buttons.
+    """
+    result = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == '\r' and i + 1 < len(text) and text[i + 1] == '\n':
+            result.append("\\r\\n\n")
+            i += 2
+        elif ch == '\r':
+            result.append("\\r\n")
+            i += 1
+        elif ch == '\n':
+            result.append("\\n\n")
+            i += 1
+        else:
+            result.append(ch)
+            i += 1
+    return "".join(result)
+
+
+def decode_special_chars(text: str) -> str:
+    """Inverse of `visualize_special_chars` — turns literal \\r\\n/\\n back into real control chars."""
+    lines = text.split("\n")
+    result = []
+    for i, line in enumerate(lines):
+        if line.endswith("\\r\\n"):
+            result.append(line[:-4] + "\r\n")
+        elif line.endswith("\\r"):
+            result.append(line[:-2] + "\r")
+        elif line.endswith("\\n"):
+            result.append(line[:-2] + "\n")
+        else:
+            if i < len(lines) - 1:
+                result.append(line + "\n")
+            else:
+                result.append(line)
+    return "".join(result)
+
+
 def _load_into_textarea(area: TextArea, text: str,
                         highlight_terms: list[str] | None = None) -> None:
     normalized = text.replace("\r\n", "\n")
@@ -411,21 +454,7 @@ class RequestEditor(_BaseHttpWidget):
 
     @staticmethod
     def _decode_special_chars(text: str) -> str:
-        lines = text.split("\n")
-        result = []
-        for i, line in enumerate(lines):
-            if line.endswith("\\r\\n"):
-                result.append(line[:-4] + "\r\n")
-            elif line.endswith("\\r"):
-                result.append(line[:-2] + "\r")
-            elif line.endswith("\\n"):
-                result.append(line[:-2] + "\n")
-            else:
-                if i < len(lines) - 1:
-                    result.append(line + "\n")
-                else:
-                    result.append(line)
-        return "".join(result)
+        return decode_special_chars(text)
 
     def clear(self) -> None:
         self._raw_full = ""

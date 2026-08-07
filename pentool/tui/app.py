@@ -701,6 +701,14 @@ class PentoolApp(App):
                 pass
         self.query_one(ContentSwitcher).current = f"screen-{module_id}"
         self._active_module = module_id
+        # _update_proxy_screen_labels() only refreshes the ProxyScreen label
+        # when it IS the active module — so if the proxy was stopped/started
+        # while the user was on a different tab (e.g. right after creating a
+        # new project, which force-stops the proxy while Dashboard is shown),
+        # the label update was skipped and stayed stale until the next actual
+        # start/stop toggle. Refresh it explicitly on every switch into Proxy.
+        if module_id == "proxy":
+            self._update_proxy_screen_labels()
 
     def get_proxy(self) -> ProxyServer | None:
         return self._proxy
@@ -758,6 +766,21 @@ class PentoolApp(App):
         if self._proxy.is_running:
             self._stop_proxy()
         else:
+            if not self._project_loaded:
+                # Project DB switch/open (auto-open at startup, New/Open
+                # Project) is still finishing in the background — starting
+                # the proxy now would race HttpStorage.switch_db() (its
+                # connection may be mid-close/reopen) and silently lose or
+                # fail to persist the first captured requests. _project_loaded
+                # is set as soon as the DB switch itself completes (see
+                # ProjectManager._do_switch) — the other screens may still be
+                # reloading, but that's independent of Proxy.
+                self.notify(
+                    "Проект ещё открывается — подождите пару секунд перед запуском Proxy",
+                    severity="warning",
+                    timeout=4,
+                )
+                return
             self._start_proxy()
 
     def action_toggle_intercept(self) -> None:
@@ -877,13 +900,25 @@ class PentoolApp(App):
                 self._proxy.stop(), self._proxy_loop
             )
             try:
-                future.result(timeout=5)
+                # stop() now cancels all active tasks and waits up to ~4s
+                # internally, so 6s here is generous headroom
+                future.result(timeout=6)
             except Exception as e:
                 logger.warning("APP: proxy.stop() error or timeout: %s", e)
+                # Force-cancel anything still running in the proxy loop so
+                # the thread can exit even if stop() itself timed out
+                if self._proxy_loop and not self._proxy_loop.is_closed():
+                    try:
+                        def _cancel_all():
+                            for t in asyncio.all_tasks(self._proxy_loop):
+                                t.cancel()
+                        self._proxy_loop.call_soon_threadsafe(_cancel_all)
+                    except Exception:
+                        pass
         if self._proxy_thread and self._proxy_thread.is_alive():
-            self._proxy_thread.join(timeout=3)
+            self._proxy_thread.join(timeout=5)
             if self._proxy_thread.is_alive():
-                logger.warning("APP: proxy thread did not stop in 3s")
+                logger.warning("APP: proxy thread did not stop in 5s — port 8080 may still be in use")
         self.call_after_refresh(self._update_status)
         self.call_after_refresh(self._update_proxy_screen_labels)
 
@@ -974,7 +1009,14 @@ class PentoolApp(App):
             target = self.query_one(SCREEN_TARGET, TargetScreen)
             api = target._get_api()
             api.sitemap.set_in_scope(msg.host, msg.in_scope)
-            target._load_sitemap()
+            # Rebuild the tree from the in-memory sitemap only — NOT
+            # target._load_sitemap(), which does a full api.load() from
+            # the DB. The sitemap is persisted in batches of 20 rows
+            # (see target/screen.py _do_save_sitemap), so any host/path
+            # added in-memory since the last batch save would be wiped
+            # out by that reload, making a simple "Add to Scope" click
+            # from Proxy appear to clear the whole Target tree.
+            target._refresh_tree()
         except Exception as e:
             logger.debug("on_sync_scope_to_target: %s", e)
 

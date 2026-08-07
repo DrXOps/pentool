@@ -20,7 +20,6 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 from textual.message import Message as _Message
 from textual.widgets import (
     Button,
-    Checkbox,
     DataTable,
     Input,
     Label,
@@ -45,6 +44,7 @@ from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
+from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton

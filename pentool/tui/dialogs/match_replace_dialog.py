@@ -13,7 +13,6 @@ from textual.screen import ModalScreen
 _CSS = (Path(__file__).parent / "match_replace_dialog.tcss").read_text(encoding="utf-8")
 from textual.widgets import (
     Button,
-    Checkbox,
     DataTable,
     Input,
     Label,
@@ -21,6 +20,7 @@ from textual.widgets import (
 )
 
 from pentool.api.proxy_api import MatchReplaceRule
+from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _TARGET_OPTIONS = [("request", "Request"), ("response", "Response"), ("both", "Both")]
