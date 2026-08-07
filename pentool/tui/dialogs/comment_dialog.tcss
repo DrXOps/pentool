@@ -1,0 +1,25 @@
+CommentDialog {
+    align: center middle;
+}
+CommentDialog #dialog {
+    width: 60;
+    height: auto;
+    border: round $primary;
+    background: $surface;
+    padding: 1 2;
+}
+CommentDialog #comment-label {
+    margin-bottom: 1;
+}
+CommentDialog #comment-dialog-input {
+    margin-bottom: 1;
+}
+CommentDialog #buttons {
+    layout: horizontal;
+    height: 1;
+    align: right middle;
+    margin-top: 1;
+}
+CommentDialog #buttons ToolbarButton {
+    margin-left: 1;
+}

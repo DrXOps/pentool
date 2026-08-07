@@ -2110,53 +2110,15 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         req_id = self._selected_req_id
         if not req_id:
             return
-        from textual.screen import ModalScreen
+        from pentool.tui.dialogs.comment_dialog import CommentDialog
 
         initial_comment = initial_comment if initial_comment is not None else self._current_comment
-
-        class CommentDialog(ModalScreen):
-            DEFAULT_CSS = """
-            CommentDialog > Vertical {
-                width: 60;
-                height: auto;
-                border: round $primary;
-                padding: 1 2;
-                background: $panel;
-            }
-            CommentDialog Input { margin: 1 0; }
-            CommentDialog Horizontal { align: center middle; height: auto; }
-            CommentDialog Button { margin: 0 1; }
-            """
-
-            def compose(self) -> ComposeResult:
-                with Vertical():
-                    yield Label("Comment:")
-                    yield Input(
-                        value=initial_comment,
-                        placeholder="Add comment...",
-                        id="comment-dialog-input",
-                    )
-                    with Horizontal():
-                        yield Button("Save", id="save", variant="primary")
-                        yield Button("Cancel", id="cancel")
-
-            def on_mount(self) -> None:
-                self.query_one("#comment-dialog-input", Input).focus()
-
-            def on_button_pressed(self, event: Button.Pressed) -> None:
-                if event.button.id == "save":
-                    self.dismiss(self.query_one("#comment-dialog-input", Input).value)
-                else:
-                    self.dismiss(None)
-
-            def on_input_submitted(self, event: Input.Submitted) -> None:
-                self.dismiss(event.value)
 
         def _on_comment(comment: str | None) -> None:
             if comment is not None:
                 self.run_worker(self._save_comment(req_id, comment))
 
-        self.app.push_screen(CommentDialog(), _on_comment)
+        self.app.push_screen(CommentDialog(initial_comment), _on_comment)
 
     async def _save_comment(self, request_id: int, comment: str) -> None:
         """Save comment to database."""
