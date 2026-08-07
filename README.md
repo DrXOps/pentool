@@ -84,6 +84,11 @@ Fast, transparent, and built for real-world testing.
 # Install
 pip install pentool
 
+# Start a 14-day PRO trial (unlocks Scanner + other PRO features)
+# Run this BEFORE first launching the TUI — if the TUI is already open,
+# restart it afterwards so it picks up the new license.
+pentool license trial
+
 # Launch TUI
 pentool
 

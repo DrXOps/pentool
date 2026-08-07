@@ -68,6 +68,11 @@
 # 安装
 pip install pentool
 
+# 开始 14 天 PRO 试用（解锁 Scanner 及其他 PRO 功能）
+# 请在首次启动 TUI 之前运行此命令 — 如果 TUI 已经打开，
+# 激活后请重启它以加载新的许可证。
+pentool license trial
+
 # 启动 TUI
 pentool
 
