@@ -1017,6 +1017,12 @@ class PentoolApp(App):
             # out by that reload, making a simple "Add to Scope" click
             # from Proxy appear to clear the whole Target tree.
             target._refresh_tree()
+            # Persist the scope change right away — without this, the
+            # in-memory-only mutation above can be silently discarded by a
+            # later full api.load() from the DB (e.g. on project import),
+            # making the scope change from Proxy appear to have never
+            # happened once the project is reloaded.
+            self.run_worker(api.save(), exclusive=False)
         except Exception as e:
             logger.debug("on_sync_scope_to_target: %s", e)
 
