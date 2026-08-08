@@ -365,26 +365,41 @@ class TargetScreen(Widget):
             f"Crawling {len(hosts)} host{'s' if len(hosts) != 1 else ''}…",
             timeout=3,
         )
+        # Keeps ActivityIndicator's Spider glyph lit for the duration of this
+        # crawl too — this path builds its own SpiderAPI instead of going
+        # through SpiderScreen, so without this the indicator would stay
+        # idle even while a real crawl is running (see
+        # PentoolApp.spider_crawl_started/_finished).
+        try:
+            self.app.spider_crawl_started()  # type: ignore[attr-defined]
+        except Exception:
+            pass
         total_pages = 0
         total_errors = 0
         api = self._get_api()
-        for host in hosts:
-            url = host if "://" in host else f"https://{host}"
-            spider = SpiderAPI(config=SpiderConfig(respect_scope=False))
-            try:
-                result = await spider.crawl(url)
-            except Exception as exc:
-                logger.warning("action_crawl_scope: crawl failed for %s: %s", host, exc)
-                total_errors += 1
-                continue
-            total_pages += len(result.pages)
-            total_errors += len(result.errors)
-            for page_url in result.pages:
+        try:
+            for host in hosts:
+                url = host if "://" in host else f"https://{host}"
+                spider = SpiderAPI(config=SpiderConfig(respect_scope=False))
                 try:
-                    from pentool.utils.parser import ParsedRequest
-                    api.add_request(ParsedRequest(method="GET", url=page_url))
+                    result = await spider.crawl(url)
                 except Exception as exc:
-                    logger.debug("action_crawl_scope: failed to add %s: %s", page_url, exc)
+                    logger.warning("action_crawl_scope: crawl failed for %s: %s", host, exc)
+                    total_errors += 1
+                    continue
+                total_pages += len(result.pages)
+                total_errors += len(result.errors)
+                for page_url in result.pages:
+                    try:
+                        from pentool.utils.parser import ParsedRequest
+                        api.add_request(ParsedRequest(method="GET", url=page_url))
+                    except Exception as exc:
+                        logger.debug("action_crawl_scope: failed to add %s: %s", page_url, exc)
+        finally:
+            try:
+                self.app.spider_crawl_finished()  # type: ignore[attr-defined]
+            except Exception:
+                pass
 
         self.call_after_refresh(self._refresh_tree)
         try:

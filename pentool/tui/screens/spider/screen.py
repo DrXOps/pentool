@@ -43,7 +43,14 @@ class SpiderScreen(Widget):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._spider = None
-        self._running = False
+        # NOT named `_running` — that name collides with
+        # textual.message_pump.MessagePump._running, an internal attribute
+        # every Widget already has (True while its own message loop is
+        # active, which is essentially always once mounted — nothing to do
+        # with whether a crawl is in progress). Shadowing it here used to
+        # make ActivityIndicator's Spider glyph read "active" almost
+        # immediately after startup, before Start was ever pressed.
+        self._crawl_running = False
         self._result = None
         self._pages_count = 0
         self._max_pages = 100
@@ -154,7 +161,11 @@ class SpiderScreen(Widget):
 
         self._max_pages = max_pages
         self._pages_count = 0
-        self._running = True
+        self._crawl_running = True
+        try:
+            self.app.spider_crawl_started()  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
         self.query_one("#btn-spider-start", Button).disabled = True
         self.query_one("#btn-spider-stop", Button).disabled = False
@@ -169,7 +180,6 @@ class SpiderScreen(Widget):
     def action_stop_spider(self) -> None:
         if self._spider is not None:
             self._spider.stop()
-        self._running = False
         self._set_idle_ui()
 
     def action_clear_spider(self) -> None:
@@ -350,8 +360,20 @@ class SpiderScreen(Widget):
             pass
 
     def _set_idle_ui(self) -> None:
-        """Reset UI to idle state."""
-        self._running = False
+        """Reset UI to idle state.
+
+        Guards the app-level counter decrement with the current
+        _crawl_running value so repeated calls (Stop button, then the
+        worker's own completion/error path also calling this) don't
+        decrement spider_crawl_started()'s counter more than once per
+        actual start.
+        """
+        if self._crawl_running:
+            self._crawl_running = False
+            try:
+                self.app.spider_crawl_finished()  # type: ignore[attr-defined]
+            except Exception:
+                pass
         try:
             self.query_one("#btn-spider-start", Button).disabled = False
             self.query_one("#btn-spider-stop", Button).disabled = True

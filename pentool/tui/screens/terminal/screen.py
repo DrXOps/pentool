@@ -30,7 +30,12 @@ class TerminalScreen(Widget):
         self._pty_master: int | None = None
         self._shell_pid: int | None = None
         self._reader_thread: threading.Thread | None = None
-        self._running: bool = False
+        # NOT named `_running` — that name collides with
+        # textual.message_pump.MessagePump._running, an internal attribute
+        # every Widget already has (True while its own message loop is
+        # active — essentially always once mounted, nothing to do with
+        # whether the pty reader thread should keep going).
+        self._pty_running: bool = False
         self._tmux_session: str | None = None
 
     def compose(self) -> ComposeResult:
@@ -89,7 +94,7 @@ class TerminalScreen(Widget):
             os.close(slave_fd)
             self._pty_master = master_fd
             self._shell_pid = proc.pid
-            self._running = True
+            self._pty_running = True
             self._update_statusbar(f"Shell: {shell} (pid {proc.pid})")
             # Write welcome message
             try:
@@ -115,7 +120,7 @@ class TerminalScreen(Widget):
 
     def _read_pty(self) -> None:
         """Read output from pty and append to RichLog (in a thread)."""
-        while self._running:
+        while self._pty_running:
             fd = self._pty_master
             if fd is None:
                 break
@@ -153,7 +158,7 @@ class TerminalScreen(Widget):
         self._start_terminal()
 
     def _stop(self) -> None:
-        self._running = False
+        self._pty_running = False
         if self._shell_pid:
             try:
                 os.kill(self._shell_pid, signal.SIGTERM)
@@ -170,7 +175,7 @@ class TerminalScreen(Widget):
             except Exception:
                 pass
             self._pty_master = None
-        # Reader thread is daemon=True — it will exit on its own when _running=False
+        # Reader thread is daemon=True — it will exit on its own when _pty_running=False
         # No join needed; avoids blocking the event loop on unmount
 
     def on_unmount(self) -> None:

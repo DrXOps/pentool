@@ -12,19 +12,52 @@ ActivityIndicator {
     background: $primary-darken-3;
 }
 ActivityIndicator .activity-glyph {
-    width: 3;
+    /* 2 cells wide, not 3 — every tracked emoji (after the VS16 fix on
+       Spider) renders as a 2-cell-wide glyph. A 3-wide cell with 2-wide
+       content and `text-align: center` can't split the 1 leftover column
+       evenly, so it always pads one side by a full column more than the
+       other — that's what read as "a gap to the right of the emoji" and
+       made the separator look off-center. Matching the width to the
+       actual rendered content removes the extra column entirely. */
+    width: 2;
     height: 1;
-    text-align: center;
     content-align: center middle;
 }
-/* Bright/saturated while the process is running */
-ActivityIndicator .activity-glyph.active {
-    color: $success;
-    text-style: bold;
+/* Static, non-blinking separator between glyphs — fixed width so the gap
+   between every pair of icons is identical regardless of how wide the
+   terminal renders each individual emoji (some render 1-cell "narrow",
+   others 2-cell "wide" — see the VS16 note on Spider's emoji in
+   activity_indicator.py). Never blinks and never dims; it's punctuation,
+   not a state indicator. */
+ActivityIndicator .activity-sep {
+    width: 1;
+    height: 1;
+    content-align: center middle;
+    color: $text-muted;
 }
-/* Dim/greyed-out while idle — same glyph, just muted */
+/* Idle — dim/greyed-out, same glyph, just muted. Most terminals render
+   emoji from their own emoji font and mostly ignore text color/opacity, so
+   this alone is subtle by design — the "active" states below rely on a
+   background swap instead, which is visible regardless of emoji coloring. */
 ActivityIndicator .activity-glyph.idle {
     color: $text-muted;
     text-style: dim;
     opacity: 60%;
 }
+/* Active, "on" phase of the blink — highlighted cell background so the
+   glyph visibly flashes even though the emoji glyph itself won't take the
+   $success foreground color on most terminals. */
+ActivityIndicator .activity-glyph.active-on {
+    background: $success;
+    color: $text;
+    text-style: bold;
+}
+/* Active, "off" phase of the blink — same glyph, no highlight, but NOT the
+   dimmed/idle look either, so a paused blink still reads as "active, mid-
+   cycle" rather than snapping back to idle every other tick. */
+ActivityIndicator .activity-glyph.active-off {
+    background: $primary-darken-3;
+    color: $success;
+    text-style: bold;
+}
+

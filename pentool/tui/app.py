@@ -267,6 +267,31 @@ class PentoolApp(App):
         # Project management — extracted to keep app.py focused on Textual wiring
         from pentool.tui.project_manager import ProjectManager
         self._pm = ProjectManager(self)
+        # Shared "is a crawl in progress" state — Spider's functionality is
+        # driven from two places (SpiderScreen's own Start button, and
+        # TargetScreen's "Crawl scope"/"Crawl selected host" convenience
+        # triggers, which build their own SpiderAPI instance rather than
+        # going through SpiderScreen — see TargetScreen._crawl_hosts_worker).
+        # ActivityIndicator used to read only SpiderScreen._crawl_running,
+        # so a crawl started from Target never lit up the Spider glyph. A
+        # counter (not a bool) because _crawl_hosts_worker can in principle
+        # be re-triggered while a previous one is still finishing up.
+        self._spider_active_count: int = 0
+
+    def spider_crawl_started(self) -> None:
+        """Call when any crawl (Spider tab or Target's convenience triggers)
+        begins — keeps ActivityIndicator's Spider glyph in sync regardless
+        of which screen initiated the crawl."""
+        self._spider_active_count += 1
+
+    def spider_crawl_finished(self) -> None:
+        """Call when a crawl started via spider_crawl_started() ends (success,
+        error, or stop) — never let the counter go negative even if start/end
+        calls end up mismatched somewhere."""
+        self._spider_active_count = max(0, self._spider_active_count - 1)
+
+    def is_spider_active(self) -> bool:
+        return self._spider_active_count > 0
 
     def _handle_exception(self, error: Exception) -> None:
         """Catch fatal exceptions — log before passing to Textual."""
@@ -450,22 +475,31 @@ class PentoolApp(App):
         has been published, then notify so the user knows to restart.
 
         No-op (silently) if there's no active PRO license or the package was
-        never downloaded in the first place — see
-        pentool.core.license.check_and_update_pro_package for the actual
-        build_id comparison logic.
+        never downloaded in the first place. If the check/refresh couldn't
+        reach the server AND the PRO package on disk is stale/version-
+        mismatched, warns the user via notify() instead of staying silent —
+        see pentool.core.license.check_and_update_pro_package /
+        is_pro_package_compatible. (The TUI itself already refused to start
+        at all in this situation — see __main__.main() — this notify only
+        fires for the "was fine at startup, went stale mid-session" case,
+        e.g. FREE got upgraded via a separate `pentool update` invocation
+        while this TUI instance kept running.)
         """
         import asyncio as _asyncio
         await _asyncio.sleep(4.0)  # after the pip-update check, UI settled
         try:
             from pentool.core.license import check_and_update_pro_package
-            updated = await check_and_update_pro_package()
-            if updated:
+            result = await check_and_update_pro_package()
+            if result.updated:
                 self.notify(
                     "PRO package updated to the latest build — restart Pentool to use it.",
                     severity="information",
                     timeout=10,
                 )
                 logger.info("APP: PRO package updated to a newer build")
+            elif result.warning:
+                self.notify(result.warning, severity="warning", timeout=15)
+                logger.warning("APP: PRO package incompatible: %s", result.warning)
         except Exception as exc:
             logger.debug("APP: PRO update check failed: %s", exc)
 

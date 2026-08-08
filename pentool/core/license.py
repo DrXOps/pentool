@@ -503,11 +503,129 @@ def _current_platform() -> str:
     return "linux"
 
 
-# File recording which PRO build is currently unpacked into PRO_PACKAGE_DIR —
-# lets check_and_update_pro_package() tell "same build as last time" apart
-# from "a new build was published" without re-downloading the archive to
-# compare it. See _fetch_pro_build_id() / /api/pro/version on the Worker.
+# File recording which PRO build is currently unpacked into PRO_PACKAGE_DIR,
+# together with the FREE (pip) pentool version it was downloaded for — lets
+# check_and_update_pro_package() tell "same build as last time" apart from "a
+# new build was published" without re-downloading the archive to compare it,
+# and lets is_pro_package_compatible() detect a FREE/PRO version mismatch.
+# See _fetch_pro_build_id() / /api/pro/version on the Worker.
+_PRO_META_FILE = PRO_PACKAGE_DIR / ".build_meta.json"
+
+# Legacy pre-2026-08 marker: plain text build_id, no version recorded. Still
+# read (as "unknown version" -> treated as incompatible/stale, see
+# is_pro_package_compatible()) so an old install isn't mistaken for corrupt.
 _PRO_BUILD_MARKER = PRO_PACKAGE_DIR / ".build_id"
+
+
+@dataclass
+class ProSyncResult:
+    """Outcome of a check_and_update_pro_package() call.
+
+    `warning` is meant to be shown to the user verbatim (TUI notify / CLI
+    stderr) whenever the locally installed PRO package is stale or was built
+    for a different FREE version than the one currently running — silently
+    running on a mismatched PRO package is what risks a hard crash (it ships
+    a compiled Cython extension; an ABI/version mismatch there can segfault
+    instead of raising a catchable Python exception).
+    """
+    updated: bool = False
+    warning: str = ""
+
+
+def _read_pro_meta() -> dict:
+    """Read the PRO package's build metadata (build_id + the FREE pentool
+    version it was downloaded for). Falls back to the legacy plain-text
+    .build_id file with an empty free_version if the JSON meta file isn't
+    there yet — is_pro_package_compatible() then correctly treats that as
+    "unknown version, don't trust it" rather than crashing on missing data.
+    """
+    try:
+        if _PRO_META_FILE.exists():
+            data = json.loads(_PRO_META_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    try:
+        if _PRO_BUILD_MARKER.exists():
+            return {"build_id": _PRO_BUILD_MARKER.read_text(encoding="utf-8").strip(), "free_version": ""}
+    except Exception:
+        pass
+    return {}
+
+
+def _write_pro_meta(build_id: str) -> None:
+    """Record which build_id is now unpacked, and which FREE version it was
+    fetched for — called right after a successful extract in
+    download_pro_package()."""
+    try:
+        from pentool import __version__ as free_version
+    except Exception:
+        free_version = ""
+    try:
+        _PRO_META_FILE.write_text(
+            json.dumps({"build_id": build_id, "free_version": free_version}),
+            encoding="utf-8",
+        )
+        _PRO_BUILD_MARKER.unlink(missing_ok=True)  # migrate off the legacy marker
+    except Exception:
+        pass
+
+
+def is_pro_package_compatible() -> tuple[bool, str]:
+    """Check whether the PRO package in PRO_PACKAGE_DIR matches the FREE
+    (pip) version of pentool currently running.
+
+    This is the guard against a stale/incompatible PRO package: the FREE
+    package updates via `pip install --upgrade pentool`, but the PRO package
+    (a separately downloaded, platform-specific compiled Cython extension)
+    only updates when check_and_update_pro_package() successfully reaches
+    the server — e.g. `pentool update`'s own version-check step failing
+    (network down, GitHub 404, ...) does NOT stop the FREE upgrade, but DOES
+    leave PRO on its old build. Loading that mismatched PRO build can
+    segfault the whole process instead of raising a catchable exception,
+    so every call site that would otherwise import from the PRO package
+    (plugin_manager, __init__._bootstrap_pro) checks this FIRST and refuses
+    to load it rather than relying on try/except around the import.
+
+    Returns:
+        (True, "") — nothing installed, or the installed PRO package matches
+            the running FREE version.
+        (False, message) — a PRO package is installed but was built for a
+            different (or unknown) FREE version. `message` is a
+            user-facing explanation of what to do.
+    """
+    if not PRO_PACKAGE_DIR.exists():
+        return True, ""
+
+    try:
+        from pentool import __version__ as current_version
+    except Exception:
+        current_version = ""
+
+    meta = _read_pro_meta()
+    pro_free_version = meta.get("free_version", "")
+
+    if not pro_free_version:
+        return False, (
+            "A PRO package is installed, but its build metadata doesn't record "
+            "which Pentool version it was built for (a previous PRO update "
+            "likely didn't finish). PRO features are disabled to avoid a "
+            "crash from a version mismatch — run "
+            "'pentool license activate <key>' to re-download the PRO package."
+        )
+
+    if pro_free_version != current_version:
+        return False, (
+            f"Version mismatch: Pentool {current_version} is installed, but "
+            f"the PRO package was built for version {pro_free_version}. "
+            f"Running it as-is could crash the app. PRO features are "
+            f"disabled until this is resynced — run "
+            f"'pentool license activate <key>' or wait for the background "
+            f"PRO update to complete."
+        )
+
+    return True, ""
 
 
 async def download_pro_package(key: str, machine_id: str) -> bool:
@@ -562,13 +680,15 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
         finally:
             tmp_archive.unlink(missing_ok=True)
 
-        # Record which build this is, so a later check_and_update_pro_package()
-        # can tell "nothing changed" from "a new build was published" without
-        # re-downloading the archive just to compare it.
+        # Record which build this is (and which FREE version it was fetched
+        # for — see is_pro_package_compatible()), so a later
+        # check_and_update_pro_package() can tell "nothing changed" from "a
+        # new build was published" without re-downloading the archive just
+        # to compare it.
         try:
             build_id = await _fetch_pro_build_id(plat)
             if build_id:
-                _PRO_BUILD_MARKER.write_text(build_id, encoding="utf-8")
+                _write_pro_meta(build_id)
         except Exception:
             pass  # non-fatal — worst case, next check just re-downloads once more
 
@@ -604,8 +724,9 @@ async def _fetch_pro_build_id(plat: str) -> str | None:
         return None
 
 
-async def check_and_update_pro_package() -> bool:
-    """Re-download the PRO package if a newer build has been published.
+async def check_and_update_pro_package() -> "ProSyncResult":
+    """Re-download the PRO package if a newer build has been published, or if
+    the currently-installed one no longer matches the running FREE version.
 
     Called on TUI startup (background worker, same pattern as
     _check_for_updates for the pip package) and after `pentool update` — this
@@ -614,33 +735,51 @@ async def check_and_update_pro_package() -> bool:
     ~/.pentool/pro/ forever, because download_pro_package() otherwise only
     ever runs once, at initial activation/trial-start.
 
-    Silently does nothing (returns False) if:
-      - there's no active PRO license (nothing to update)
-      - the PRO package was never downloaded in the first place (that's
-        activate_license's job, not this one)
-      - the version check or download fails for any reason
+    Crucially, this is also the ONLY place that re-syncs PRO after a FREE
+    upgrade (`pip install --upgrade pentool` / `pentool update`) — if this
+    step can't reach the license server (network down, or the *unrelated*
+    FREE-side GitHub version check already failed and the caller never even
+    got here), the PRO package silently stays on its old build while FREE
+    moves on. Since the PRO package ships a compiled Cython extension, that
+    mismatch can segfault the process instead of raising a Python exception.
+    So on every "couldn't sync" path below, this now also checks
+    is_pro_package_compatible() and returns a non-empty `warning` if the
+    installed PRO build is stale/unknown — callers (TUI, CLI) must surface
+    that warning to the user rather than silently doing nothing.
 
-    Returns True if a new build was found and successfully installed.
+    Returns a ProSyncResult:
+      - updated=True  — a new build was found and successfully installed.
+      - updated=False, warning=""    — nothing to do (no PRO license, PRO
+        never installed, or already on the latest compatible build).
+      - updated=False, warning="..." — could not verify/refresh the PRO
+        package AND the installed one is stale or version-mismatched;
+        `warning` is a user-facing message to display.
     """
     info = get_license()
     if not info.valid or not info.features:
-        return False
+        return ProSyncResult(updated=False, warning="")
     if not PRO_PACKAGE_DIR.exists():
-        return False  # never activated on this machine — nothing to refresh
+        return ProSyncResult(updated=False, warning="")  # never activated — nothing to refresh
 
     plat = _current_platform()
     remote_build_id = await _fetch_pro_build_id(plat)
     if not remote_build_id:
-        return False  # couldn't reach the server — don't touch anything
+        # Couldn't reach the server to check — don't touch the package, but
+        # DO tell the user if what's on disk is already known-stale/mismatched.
+        _compatible, warning = is_pro_package_compatible()
+        return ProSyncResult(updated=False, warning=warning)
 
-    local_build_id = None
-    try:
-        if _PRO_BUILD_MARKER.exists():
-            local_build_id = _PRO_BUILD_MARKER.read_text(encoding="utf-8").strip()
-    except Exception:
-        pass
+    meta = _read_pro_meta()
+    local_build_id = meta.get("build_id", "")
 
     if local_build_id == remote_build_id:
-        return False  # already on the latest build
+        _compatible, warning = is_pro_package_compatible()
+        return ProSyncResult(updated=False, warning=warning)
 
-    return await download_pro_package(info.license_key, info.machine_id)
+    updated = await download_pro_package(info.license_key, info.machine_id)
+    if updated:
+        return ProSyncResult(updated=True, warning="")
+
+    # Download of the newer build failed — warn if what's left on disk is stale.
+    _compatible, warning = is_pro_package_compatible()
+    return ProSyncResult(updated=False, warning=warning)

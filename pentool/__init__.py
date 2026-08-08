@@ -1,6 +1,6 @@
 """Pentool — professional web security testing toolkit with Textual TUI."""
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 __author__ = "pentool"
 
 
@@ -26,6 +26,22 @@ def _bootstrap_pro() -> None:
     every obfuscated PRO module fails to import with
     `ModuleNotFoundError: No module named 'codeenigma_runtime'` even though
     pentool/ itself resolves fine via __path__ extension above.
+
+    The installed (~/.pentool/pro/) PRO package is skipped entirely — not
+    even added to __path__ — if it was built for a different FREE version
+    than this one (core.license.is_pro_package_compatible()). This is the
+    scenario where a FREE upgrade (`pip install --upgrade pentool` /
+    `pentool update`) succeeded but the PRO package's own re-sync
+    afterwards failed or never ran (e.g. offline, or an unrelated version
+    check like the GitHub release lookup errored out first and stopped the
+    whole `pentool update` command before it got to the PRO sync step).
+    Loading a mismatched PRO build there risks a hard-to-diagnose crash: it
+    ships a compiled Cython extension, and an ABI/version mismatch can
+    segfault the process instead of raising a catchable Python exception.
+    The dev `pro/` submodule checkout is never version-mismatched (same
+    source tree as the running FREE code) and is always loaded normally.
+    A warning is printed to stderr so the user isn't left with unexplained
+    missing PRO features and no context.
     """
     import sys
     from pathlib import Path
@@ -33,9 +49,10 @@ def _bootstrap_pro() -> None:
     _pkg_dir = Path(__file__).resolve().parent   # .../pentool/pentool/
     _repo_root = _pkg_dir.parent                 # .../pentool/
 
+    _installed_pro_pkg = Path.home() / ".pentool" / "pro" / "pentool"
     candidates: list[Path] = [
         _repo_root / "pro" / "pentool",                 # dev submodule
-        Path.home() / ".pentool" / "pro" / "pentool",  # installed PRO package
+        _installed_pro_pkg,                              # installed PRO package
     ]
 
     import pentool as _self
@@ -43,6 +60,16 @@ def _bootstrap_pro() -> None:
     for _pro_pkg in candidates:
         if not _pro_pkg.exists():
             continue
+
+        if _pro_pkg == _installed_pro_pkg:
+            try:
+                from pentool.core.license import is_pro_package_compatible
+                _compatible, _warning = is_pro_package_compatible()
+            except Exception:
+                _compatible, _warning = True, ""  # never block startup over this check itself
+            if not _compatible:
+                print(f"[pentool] {_warning}", file=sys.stderr)
+                continue
 
         # 1. Extend top-level pentool.__path__ so that sub-packages
         #    resolved via pkgutil.extend_path below will find pro/pentool/XXX.

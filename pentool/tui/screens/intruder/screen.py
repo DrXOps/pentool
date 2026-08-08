@@ -221,7 +221,14 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self._filter_len_lt: int | None = None
         self._sort_col: str | None = None
         self._sort_reverse: bool = False
-        self._running: bool = False
+        # NOT named `_running` — that name collides with
+        # textual.message_pump.MessagePump._running, an internal attribute
+        # every Widget already has (True while its own message loop is
+        # active — essentially always once mounted, nothing to do with
+        # whether an attack is in progress). This module used to reset it
+        # to False in on_mount() as a workaround for exactly that collision;
+        # renaming removes the need for the workaround.
+        self._attack_running: bool = False
         self._paused: bool = False
         # Grep Match/Extract (Block 4.4)
         self._grep_match_patterns: list[str] = []   # patterns for highlighting rows
@@ -366,8 +373,12 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         )
 
     def on_mount(self) -> None:
-        # Сбросить _running при монтировании (на случай если застрял с прошлой сессии)
-        self._running = False
+        # Reset on mount in case a previous session left this mid-attack
+        # (e.g. app crashed/restarted). No longer strictly needed for the
+        # MessagePump._running collision this used to guard against (see the
+        # rename note on _attack_running's declaration above), but still a
+        # reasonable safety net against stale state from a prior session.
+        self._attack_running = False
         self._paused = False
         table = self.query_one("#results-table", DataTable)
         table.add_column("#",          width=5)
@@ -1041,8 +1052,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self.app.notify(f"🧠 Smart: added {len(payloads)} payloads", timeout=3)  # type: ignore[attr-defined]
 
     def action_start_attack(self) -> None:
-        logger.info("INTRUDER: action_start_attack called, _running=%s", self._running)
-        if self._running:
+        logger.info("INTRUDER: action_start_attack called, _attack_running=%s", self._attack_running)
+        if self._attack_running:
             logger.info("INTRUDER: already running, skip")
             return
         try:
@@ -1123,7 +1134,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         except Exception:
             pass
 
-        self._running = True
+        self._attack_running = True
         self._all_results = []
         self._clear_results()
         self._set_running_state(True)
@@ -1154,7 +1165,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             logger.error("INTRUDER: _run_attack error: %s", exc, exc_info=True)
             self.app.notify(f"Attack error: {exc}", severity="error", timeout=5)
         finally:
-            self._running = False
+            self._attack_running = False
             logger.info("INTRUDER: _run_attack finished, results=%d", len(self._all_results))
             self._set_running_state(False)
             self.app.notify(
@@ -1186,7 +1197,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def action_toggle_pause(self) -> None:
-        if not self._running:
+        if not self._attack_running:
             return
         attack = getattr(self, "_current_attack", None)
         if attack is None:
@@ -1204,20 +1215,20 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         attack = getattr(self, "_current_attack", None)
         if attack:
             self.run_worker(attack.stop())
-        self._running = False
+        self._attack_running = False
         self._paused = False
         self._set_running_state(False)
         self.app.notify("Attack stopped", severity="warning", timeout=3)
 
     def on_worker_state_changed(self, event) -> None:
-        """Страховка: сбрасываем _running при любом исходе воркера."""
+        """Safety net: reset _attack_running on any attack-worker outcome."""
         from textual.worker import WorkerState
         if getattr(event.worker, "name", None) != "intruder-attack":
             return
         if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
-            if self._running:
-                logger.info("INTRUDER: on_worker_state_changed — resetting _running=False")
-                self._running = False
+            if self._attack_running:
+                logger.info("INTRUDER: on_worker_state_changed — resetting _attack_running=False")
+                self._attack_running = False
                 self._set_running_state(False)
 
     def _set_running_state(self, running: bool) -> None:

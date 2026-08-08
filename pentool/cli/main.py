@@ -110,16 +110,30 @@ def update_cmd(check_only: bool) -> None:
 
     if info.error:
         click.echo(f"Could not check for updates: {info.error}", err=True)
+        # The FREE-version check above failing (network down, GitHub API
+        # rate-limited/404, ...) is unrelated to the PRO package, but it
+        # used to make this command bail out here BEFORE ever reaching
+        # _sync_pro_package_after_upgrade() below — silently leaving an
+        # already-installed PRO package on a stale build with no warning.
+        # Since PRO ships a compiled Cython extension, running a stale
+        # build against a since-upgraded FREE version can segfault the
+        # process with no log output — exactly the "just crashed, no idea
+        # why" report this is meant to prevent. So: still check/warn about
+        # PRO staleness before exiting, even though we can't do the FREE
+        # upgrade itself right now.
+        _warn_if_pro_incompatible()
         raise SystemExit(1)
 
     if not info.has_update:
         click.echo(f"Already up to date (version {info.latest_version}).")
+        _warn_if_pro_incompatible()
         return
 
     click.echo(f"New version available: {info.latest_version}")
     click.echo(f"Release notes: {info.url}")
 
     if check_only:
+        _warn_if_pro_incompatible()
         return
 
     if click.confirm(f"Install {info.latest_version} now?", default=True):
@@ -134,6 +148,25 @@ def update_cmd(check_only: bool) -> None:
                 err=True,
             )
             raise SystemExit(1)
+    else:
+        _warn_if_pro_incompatible()
+
+
+def _warn_if_pro_incompatible() -> None:
+    """Print a warning to the terminal if the installed PRO package (if any)
+    was built for a different FREE version than the one currently running.
+
+    Called from every exit path of `pentool update` that does NOT go through
+    _sync_pro_package_after_upgrade() below — so a user is never left with a
+    stale/incompatible PRO package and zero indication of it, regardless of
+    which branch (FREE check failed, already up to date, --check, declined
+    to install) the command took.
+    """
+    from pentool.core.license import is_pro_package_compatible
+
+    compatible, warning = is_pro_package_compatible()
+    if not compatible:
+        click.echo(f"Warning: {warning}", err=True)
 
 
 def _sync_pro_package_after_upgrade() -> None:
@@ -144,7 +177,10 @@ def _sync_pro_package_after_upgrade() -> None:
     (re)downloaded by check_and_update_pro_package(), which normally runs in
     the background on TUI startup. Doing it here too means a CLI-driven
     upgrade doesn't leave a stale PRO build around until the next TUI launch.
-    Best-effort — never fails the overall upgrade if this part doesn't work.
+    Best-effort for the FREE upgrade's sake — a failure here never raises
+    SystemExit — but always surfaces a warning to the terminal if the PRO
+    package ends up (or remains) incompatible with the just-upgraded FREE
+    version, since that combination risks a crash on next launch.
     """
     import asyncio
 
@@ -155,11 +191,14 @@ def _sync_pro_package_after_upgrade() -> None:
 
     try:
         click.echo("Checking for a newer PRO build...")
-        updated = asyncio.run(check_and_update_pro_package())
-        if updated:
+        result = asyncio.run(check_and_update_pro_package())
+        if result.updated:
             click.echo("PRO package updated to the latest build.")
+        elif result.warning:
+            click.echo(f"Warning: {result.warning}", err=True)
     except Exception as exc:
         click.echo(f"Could not check for a PRO update: {exc}", err=True)
+        _warn_if_pro_incompatible()
 
 
 @cli.group()

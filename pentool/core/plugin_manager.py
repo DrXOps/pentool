@@ -161,6 +161,12 @@ class PluginManager:
         self._passive_checks: list[type[BaseCheck]] = []
         self._loaded: list[str] = []
         self._meta: list[PluginMeta] = []
+        # Set by load_user_plugins() when a PRO package is present on disk
+        # but was built for a different (or unknown) FREE version — see
+        # pentool.core.license.is_pro_package_compatible(). Empty string
+        # means no incompatibility was detected. Callers (TUI startup, CLI)
+        # should surface this to the user rather than silently ignoring it.
+        self.pro_incompatible_warning: str = ""
 
     # ── Loading ───────────────────────────────────────────────────────────────
 
@@ -197,7 +203,21 @@ class PluginManager:
         # Obfuscated PRO package downloaded via 'pentool license trial'/'activate'
         # (see pentool.core.license.download_pro_package). Its plugins directory
         # mirrors the builtin layout: pro/pentool/plugins/builtin/*.py
-        from pentool.core.license import PRO_PACKAGE_DIR
+        #
+        # Refuse to import it if it was built for a different FREE version
+        # than the one currently running (e.g. FREE was upgraded via
+        # `pip install --upgrade pentool` but the PRO re-sync afterwards
+        # failed/never ran) — the PRO package bundles a compiled Cython
+        # extension, and importing a mismatched build there can segfault the
+        # whole process instead of raising a catchable Python exception. See
+        # pentool.core.license.is_pro_package_compatible().
+        from pentool.core.license import PRO_PACKAGE_DIR, is_pro_package_compatible
+        compatible, warning = is_pro_package_compatible()
+        if not compatible:
+            logger.warning("PRO package skipped — %s", warning)
+            self.pro_incompatible_warning = warning
+            return
+
         pro_plugins_dir = PRO_PACKAGE_DIR / "pentool" / "plugins" / "builtin"
         if pro_plugins_dir.exists():
             self.load_plugins([str(pro_plugins_dir)], warn_untrusted=False)
@@ -360,10 +380,23 @@ def load_pro_module(module_stem: str):
     Raises FileNotFoundError if the module isn't found in any known PRO
     location (dev submodule or installed package) — callers should show
     this to the user instead of silently failing.
+
+    Raises RuntimeError if the installed PRO package (PRO_PACKAGE_DIR) was
+    built for a different FREE version than the one currently running — see
+    pentool.core.license.is_pro_package_compatible(). Refusing to import it
+    is deliberate: it's a compiled Cython extension, and importing a
+    mismatched build can segfault the process instead of raising a
+    catchable Python exception. Does NOT apply to the dev `pro/` submodule
+    checkout, which is always the same source tree as the running FREE code.
     """
     module_name = f"_pentool_plugin_{module_stem}"
     if module_name in sys.modules:
         return sys.modules[module_name]
+
+    from pentool.core.license import PRO_PACKAGE_DIR, is_pro_package_compatible
+    compatible, warning = is_pro_package_compatible()
+    if not compatible:
+        raise RuntimeError(warning)
 
     for plugin_dir in _candidate_pro_builtin_dirs():
         candidate = plugin_dir / f"{module_stem}.py"
