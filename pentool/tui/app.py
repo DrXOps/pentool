@@ -681,7 +681,7 @@ class PentoolApp(App):
             pass
 
     def action_repeater_send(self) -> None:
-        """Ctrl+Space / ctrl-at — отправить запрос в Repeater независимо от глубины фокуса."""
+        """Ctrl+Space / ctrl-at — send the request to Repeater regardless of focus depth."""
         if self._active_module != "repeater":
             return
         try:
@@ -725,8 +725,8 @@ class PentoolApp(App):
                 lic = get_session_license()
                 if not (lic.valid and lic.has_feature("scanner_pro")):
                     self.notify(
-                        "🔒 Scanner — платная функция.\n"
-                        "Активируйте: pentool license trial",
+                        "🔒 Scanner — paid feature.\n"
+                        "Activate: pentool license trial",
                         severity="warning",
                         timeout=5,
                     )
@@ -751,7 +751,7 @@ class PentoolApp(App):
         return self._proxy_api
 
     def flash(self, message: str, severity: str = "information", timeout: float = 2.5) -> None:
-        """Краткое сообщение справа в строке модулей (tooltip2)."""
+        """Short message on the right side of the module bar (tooltip2)."""
         try:
             self.query_one("#module-tabs", ModuleTabs).flash(message, severity, timeout)
         except Exception:
@@ -810,7 +810,7 @@ class PentoolApp(App):
                 # ProjectManager._do_switch) — the other screens may still be
                 # reloading, but that's independent of Proxy.
                 self.notify(
-                    "Проект ещё открывается — подождите пару секунд перед запуском Proxy",
+                    "Project is still opening — wait a couple of seconds before starting Proxy",
                     severity="warning",
                     timeout=4,
                 )

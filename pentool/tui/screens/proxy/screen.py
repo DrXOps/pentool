@@ -1860,7 +1860,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             ("send_repeater",  "Send to Repeater"),
             ("send_intruder",  "Send to Intruder"),
             ("send_scanner",   "Send to Scanner"),
-            ("send_target",    "Send to Target"),
             ("-", ""),
             ("mark_req", "Mark color"),
             ("edit_comment", "View/Edit Comment"),
@@ -1923,8 +1922,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             if host:
                 from pentool.tui.messages import SendHostToScanner
                 self.app.post_message(SendHostToScanner(host))
-        elif action == "send_target":
-            self._send_to_target()
         elif action == "mark_req":
             self._mark_dialog()
         elif action == "edit_comment":
@@ -1989,27 +1986,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
 
     def _sync_target_host_scope(self, host: str, in_scope: bool) -> None:
         self.app.post_message(SyncScopeToTarget(host, in_scope))  # type: ignore[attr-defined]
-
-    def _send_to_target(self) -> None:
-        if self._selected_req_id is None:
-            return
-        self.run_worker(self._do_send_to_target())
-
-    async def _do_send_to_target(self) -> None:
-        if self._proxy_service is None or not self._proxy_service.is_storage_ready() or self._selected_req_id is None:
-            return
-        entry = await self._proxy_service.get_full_entry(self._selected_req_id)
-        if entry is None:
-            return
-        from pentool.utils.parser import ParsedRequest
-        parsed = ParsedRequest(
-            method=entry.get("method", "GET"),
-            url=entry.get("url", ""),
-            headers=entry.get("request_headers") or {},
-            body=entry.get("request_body", "") or "",
-        )
-        self.app.post_message(SendToTarget(parsed))
-        self.app.notify("Added to Target", severity="information", timeout=2)
 
     # ── Colors available for marking requests ─────────────────────────────────
 
