@@ -4,8 +4,8 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
-[![CI](https://github.com/docxqwerty/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/docxqwerty/pentool/actions)
-[![License](https://img.shields.io/github/license/docxqwerty/pentool)](../../../LICENSE)
+[![CI](https://github.com/DrXOps/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/DrXOps/pentool/actions)
+[![License](https://img.shields.io/github/license/DrXOps/pentool)](../../../LICENSE)
 [![Downloads](https://img.shields.io/pypi/dm/pentool)](https://pypi.org/project/pentool/)
 
 🌐 **भाषाएँ:** [English](../../../README.md) · [Русский](../ru/README.md) · [中文](../zh/README.md) · [हिन्दी](README.md)
@@ -92,15 +92,15 @@ pentool update --check
 
 | Dashboard | Scanner |
 |:---------:|:-------:|
-| ![Dashboard](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/dashboard.png) | ![Scanner](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/scaner.png) |
+| ![Dashboard](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/dashboard.png) | ![Scanner](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/scaner.png) |
 
 | Proxy | Repeater |
 |:-----:|:--------:|
-| ![Proxy](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/proxy.png) | ![Repeater](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/repeater.png) |
+| ![Proxy](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/proxy.png) | ![Repeater](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/repeater.png) |
 
 | Intruder | Settings |
 |:--------:|:--------:|
-| ![Intruder](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/intruder.png) | ![Settings](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/settings.png) |
+| ![Intruder](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/intruder.png) | ![Settings](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/settings.png) |
 
 ---
 
@@ -137,7 +137,7 @@ pentool update --check
 Pentool को एक डेवलपर अपने खाली समय में अकेले बनाता और मेंटेन करता है।  
 अगर यह आपका पेनटेस्ट में घंटों बचाता है — कुछ वापस देने पर विचार करें। हर योगदान सीधे नए फीचर्स, फिक्स और तेज़ रिलीज़ को फंड करता है।
 
-- ⭐ **[GitHub पर Star करें](https://github.com/docxqwerty/pentool)** — फ्री, 2 सेकंड लगते हैं, विज़िबिलिटी में बहुत मदद करता है
+- ⭐ **[GitHub पर Star करें](https://github.com/DrXOps/pentool)** — फ्री, 2 सेकंड लगते हैं, विज़िबिलिटी में बहुत मदद करता है
 - 🔑 **PRO लाइसेंस** — जल्दी एक्सेस पाएँ और डेवलपमेंट सपोर्ट करें → **[@sudores](https://t.me/sudores)**
 - 💬 **शेयर करें** — किसी सहकर्मी को बताएँ, रिव्यू पोस्ट करें, या अपने राइटअप्स में Pentool का ज़िक्र करें
 

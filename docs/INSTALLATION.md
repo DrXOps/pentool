@@ -42,7 +42,7 @@ pentool --version
 
 ```bash
 # Clone repository
-git clone https://github.com/docxqwerty/pentool.git
+git clone https://github.com/DrXOps/pentool.git
 cd pentool
 
 # Create virtual environment
@@ -162,7 +162,7 @@ For contributing to Pentool:
 
 ```bash
 # Clone with dev dependencies
-git clone https://github.com/docxqwerty/pentool.git
+git clone https://github.com/DrXOps/pentool.git
 cd pentool
 
 # Create venv
@@ -331,4 +331,4 @@ docker run -it -p 8080:8080 pentool
 
 ---
 
-**Need help?** Open an issue on [GitHub](https://github.com/docxqwerty/pentool/issues)
+**Need help?** Open an issue on [GitHub](https://github.com/DrXOps/pentool/issues)

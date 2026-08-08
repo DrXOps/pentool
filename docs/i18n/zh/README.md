@@ -4,8 +4,8 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
-[![CI](https://github.com/docxqwerty/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/docxqwerty/pentool/actions)
-[![License](https://img.shields.io/github/license/docxqwerty/pentool)](../../../LICENSE)
+[![CI](https://github.com/DrXOps/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/DrXOps/pentool/actions)
+[![License](https://img.shields.io/github/license/DrXOps/pentool)](../../../LICENSE)
 [![Downloads](https://img.shields.io/pypi/dm/pentool)](https://pypi.org/project/pentool/)
 
 🌐 **语言：** [English](../../../README.md) · [Русский](../ru/README.md) · [中文](README.md) · [हिन्दी](../hi/README.md)
@@ -92,15 +92,15 @@ pentool update --check
 
 | 仪表板 | 扫描器 |
 |:---------:|:-------:|
-| ![Dashboard](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/dashboard.png) | ![Scanner](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/scaner.png) |
+| ![Dashboard](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/dashboard.png) | ![Scanner](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/scaner.png) |
 
 | 代理 | Repeater |
 |:-----:|:--------:|
-| ![Proxy](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/proxy.png) | ![Repeater](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/repeater.png) |
+| ![Proxy](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/proxy.png) | ![Repeater](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/repeater.png) |
 
 | Intruder | 设置 |
 |:--------:|:--------:|
-| ![Intruder](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/intruder.png) | ![Settings](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/settings.png) |
+| ![Intruder](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/intruder.png) | ![Settings](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/settings.png) |
 
 ---
 
@@ -137,7 +137,7 @@ pentool update --check
 Pentool 由一位开发者在业余时间独立开发维护。  
 如果它为你节省了渗透测试的时间——欢迎回馈支持。每一份贡献都直接资助新功能、修复和更快的发布。
 
-- ⭐ **[在 GitHub 上加星](https://github.com/docxqwerty/pentool)** — 免费，只需 2 秒，极大提升项目曝光度
+- ⭐ **[在 GitHub 上加星](https://github.com/DrXOps/pentool)** — 免费，只需 2 秒，极大提升项目曝光度
 - 🔑 **PRO 许可证** — 获得早期访问权限并支持开发 → **[@sudores](https://t.me/sudores)**
 - 💬 **分享** — 告诉同事、发布评测，或在你的文章中提及 Pentool
 

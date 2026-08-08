@@ -42,7 +42,7 @@ pentool --version
 
 ```bash
 # Клонировать репозиторий
-git clone https://github.com/docxqwerty/pentool.git
+git clone https://github.com/DrXOps/pentool.git
 cd pentool
 
 # Создать виртуальное окружение
@@ -217,8 +217,8 @@ pip install pentool
 
 - [Быстрый старт](QUICKSTART.md) — начните за 5 минут
 - [Руководство пользователя](USER_GUIDE.md) — полная документация
-- [GitHub](https://github.com/docxqwerty/pentool) — исходный код
+- [GitHub](https://github.com/DrXOps/pentool) — исходный код
 
 ---
 
-**Нужна помощь?** Создайте issue на GitHub: https://github.com/docxqwerty/pentool/issues
+**Нужна помощь?** Создайте issue на GitHub: https://github.com/DrXOps/pentool/issues

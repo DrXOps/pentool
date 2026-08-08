@@ -19,11 +19,11 @@ jobs:
     steps:
       - name: Trigger pentool-pro build-release.yml
         env:
-          # PAT with `repo` scope on docxqwerty/pentool-pro — the built-in
+          # PAT with `repo` scope on DrXOps/pentool-pro — the built-in
           # GITHUB_TOKEN cannot dispatch workflow events on another repo.
           GH_TOKEN: ${{ secrets.PRO_REPO_DISPATCH_TOKEN }}
         run: |
-          gh api repos/docxqwerty/pentool-pro/dispatches \
+          gh api repos/DrXOps/pentool-pro/dispatches \
             -f event_type=rebuild-pro \
             -f "client_payload[tag]=${{ github.ref_name }}"
           echo "Dispatched rebuild-pro (tag=${{ github.ref_name }}) to pentool-pro" >> $GITHUB_STEP_SUMMARY

@@ -4,7 +4,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
-[![CI](https://github.com/docxqwerty/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/docxqwerty/pentool/actions)
+[![CI](https://github.com/DrXOps/pentool/actions/workflows/tests.yml/badge.svg)](https://github.com/DrXOps/pentool/actions)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Downloads](https://img.shields.io/pypi/dm/pentool)](https://pypi.org/project/pentool/)
 
@@ -24,15 +24,15 @@ Fast, transparent, and built for real-world testing.
 
 | Dashboard | Scanner |
 |:---------:|:-------:|
-| ![Dashboard](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/dashboard.png) | ![Scanner](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/scaner.png) |
+| ![Dashboard](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/dashboard.png) | ![Scanner](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/scaner.png) |
 
 | Proxy | Repeater |
 |:-----:|:--------:|
-| ![Proxy](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/proxy.png) | ![Repeater](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/repeater.png) |
+| ![Proxy](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/proxy.png) | ![Repeater](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/repeater.png) |
 
 | Intruder | Settings |
 |:--------:|:--------:|
-| ![Intruder](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/intruder.png) | ![Settings](https://raw.githubusercontent.com/docxqwerty/pentool/main/screens/settings.png) |
+| ![Intruder](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/intruder.png) | ![Settings](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/settings.png) |
 
 ---
 
@@ -139,7 +139,7 @@ No minimum follower count. We value quality over reach.
 Pentool is built and maintained by a solo developer in spare time.  
 If it saves you hours on a pentest — consider giving back. Every contribution directly funds new features, fixes, and faster releases.
 
-- ⭐ **[Star on GitHub](https://github.com/docxqwerty/pentool)** — free, takes 2 seconds, helps visibility enormously
+- ⭐ **[Star on GitHub](https://github.com/DrXOps/pentool)** — free, takes 2 seconds, helps visibility enormously
 - 🔑 **PRO license** — get early access and support development → **[@sudores](https://t.me/sudores)**
 - 💬 **Share** — tell a colleague, post a review, or mention Pentool in your writeups
 

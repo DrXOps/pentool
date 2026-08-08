@@ -53,10 +53,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/docxqwerty/pentool"
-Repository = "https://github.com/docxqwerty/pentool"
-Issues = "https://github.com/docxqwerty/pentool/issues"
-Changelog = "https://github.com/docxqwerty/pentool/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/DrXOps/pentool"
+Repository = "https://github.com/DrXOps/pentool"
+Issues = "https://github.com/DrXOps/pentool/issues"
+Changelog = "https://github.com/DrXOps/pentool/blob/main/CHANGELOG.md"
 
 [project.scripts]
 pentool = "pentool.__main__:main"

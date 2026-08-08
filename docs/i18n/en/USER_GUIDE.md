@@ -665,7 +665,7 @@ curl -X POST http://example.com/api ...
 ## Getting Help
 
 - **Documentation:** https://pentool.pro/docs
-- **GitHub Issues:** https://github.com/docxqwerty/pentool/issues
+- **GitHub Issues:** https://github.com/DrXOps/pentool/issues
 - **Telegram:** https://t.me/sudores
 - **Email:** support@pentool.pro
 
