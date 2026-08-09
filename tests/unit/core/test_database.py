@@ -145,3 +145,136 @@ class TestGetDb:
             count = (await cursor.fetchone())[0]
 
         assert count == 0
+
+
+class TestScannerTabsSchema:
+    """scanner_tabs.tab_uid — stable identity for a Scanner tab.
+
+    Introduced to replace upserting by tab_name (cosmetic, resets every
+    app restart) which could silently merge/overwrite an unrelated tab's
+    saved row across restarts.
+    """
+
+    @pytest.mark.asyncio
+    async def test_scanner_tabs_has_tab_uid_column(self, tmp_path: Path) -> None:
+        from pentool.core.database import init_db, get_db
+        db_path = str(tmp_path / "test.db")
+        await init_db(db_path)
+
+        async with get_db(db_path) as db:
+            cursor = await db.execute("PRAGMA table_info(scanner_tabs)")
+            cols = {row[1] for row in await cursor.fetchall()}
+
+        assert "tab_uid" in cols
+
+    @pytest.mark.asyncio
+    async def test_tab_uid_unique_index_enforced(self, tmp_path: Path) -> None:
+        """Inserting two rows with the same tab_uid must fail — upsert-by-uid
+        (ScannerAPI.save_tab) relies on this to detect existing vs new rows."""
+        from pentool.core.database import init_db, get_db
+        import aiosqlite
+        db_path = str(tmp_path / "test.db")
+        await init_db(db_path)
+
+        async with get_db(db_path) as db:
+            await db.execute(
+                "INSERT INTO scanner_tabs (tab_uid, tab_name, target_url) "
+                "VALUES ('uid-1', 'Scan 1', 'http://a.com')"
+            )
+            await db.commit()
+            with pytest.raises(aiosqlite.IntegrityError):
+                await db.execute(
+                    "INSERT INTO scanner_tabs (tab_uid, tab_name, target_url) "
+                    "VALUES ('uid-1', 'Scan 2', 'http://b.com')"
+                )
+
+    @pytest.mark.asyncio
+    async def test_migration_adds_tab_uid_to_legacy_table(self, tmp_path: Path) -> None:
+        """A pre-migration scanner_tabs table (no tab_uid column) gets the
+        column added by init_db()'s ALTER TABLE migration, without losing
+        existing rows."""
+        from pentool.core.database import init_db, get_db
+        import aiosqlite
+        db_path = str(tmp_path / "test.db")
+
+        # Simulate an old DB: create scanner_tabs without tab_uid.
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                """CREATE TABLE scanner_tabs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tab_name TEXT NOT NULL DEFAULT 'Scan',
+                    target_url TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )"""
+            )
+            await db.execute(
+                "INSERT INTO scanner_tabs (tab_name, target_url) VALUES ('Old Scan', 'http://old.com')"
+            )
+            await db.commit()
+
+        # init_db() should migrate it in place.
+        await init_db(db_path)
+
+        async with get_db(db_path) as db:
+            cursor = await db.execute("PRAGMA table_info(scanner_tabs)")
+            cols = {row[1] for row in await cursor.fetchall()}
+            assert "tab_uid" in cols
+
+            cursor = await db.execute("SELECT tab_name, target_url FROM scanner_tabs")
+            row = await cursor.fetchone()
+            assert tuple(row) == ("Old Scan", "http://old.com")
+
+
+class TestVulnerabilitiesScopingSchema:
+    """vulnerabilities.scan_tab_uid / scan_session_id — scope findings to
+    the Scanner tab/run that discovered them, instead of every tab showing
+    every finding ever saved to the project DB."""
+
+    @pytest.mark.asyncio
+    async def test_vulnerabilities_has_scoping_columns(self, tmp_path: Path) -> None:
+        from pentool.core.database import init_db, get_db
+        db_path = str(tmp_path / "test.db")
+        await init_db(db_path)
+
+        async with get_db(db_path) as db:
+            cursor = await db.execute("PRAGMA table_info(vulnerabilities)")
+            cols = {row[1] for row in await cursor.fetchall()}
+
+        assert "scan_tab_uid" in cols
+        assert "scan_session_id" in cols
+
+    @pytest.mark.asyncio
+    async def test_migration_adds_scoping_columns_to_legacy_table(self, tmp_path: Path) -> None:
+        """A pre-migration vulnerabilities table (no scan_tab_uid/
+        scan_session_id) gets both columns added without losing rows."""
+        from pentool.core.database import init_db, get_db
+        import aiosqlite
+        db_path = str(tmp_path / "test.db")
+
+        async with aiosqlite.connect(db_path) as db:
+            await db.execute(
+                """CREATE TABLE vulnerabilities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT NOT NULL,
+                    severity TEXT NOT NULL DEFAULT 'info',
+                    host TEXT NOT NULL,
+                    url TEXT NOT NULL
+                )"""
+            )
+            await db.execute(
+                "INSERT INTO vulnerabilities (type, severity, host, url) "
+                "VALUES ('xss', 'high', 'old.com', 'http://old.com/x')"
+            )
+            await db.commit()
+
+        await init_db(db_path)
+
+        async with get_db(db_path) as db:
+            cursor = await db.execute("PRAGMA table_info(vulnerabilities)")
+            cols = {row[1] for row in await cursor.fetchall()}
+            assert "scan_tab_uid" in cols
+            assert "scan_session_id" in cols
+
+            cursor = await db.execute("SELECT type, url FROM vulnerabilities")
+            row = await cursor.fetchone()
+            assert tuple(row) == ("xss", "http://old.com/x")

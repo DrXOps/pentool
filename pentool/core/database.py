@@ -64,7 +64,13 @@ CREATE TABLE IF NOT EXISTS scanner_tabs (
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_scanner_tabs_uid ON scanner_tabs (tab_uid);
+-- NOTE: the unique index on scanner_tabs.tab_uid is NOT created here.
+-- For a legacy DB (table already exists without the tab_uid column),
+-- CREATE TABLE IF NOT EXISTS above is a no-op, so an index on tab_uid
+-- run at this point would fail with "no such column: tab_uid" — the
+-- ALTER TABLE migration that adds the column hasn't run yet (it runs
+-- after this executescript, below). The index is created once, after
+-- that migration, near the bottom of init_db().
 
 CREATE TABLE IF NOT EXISTS vulnerabilities (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
