@@ -58,14 +58,19 @@ CREATE TABLE IF NOT EXISTS intruder_state (
 
 CREATE TABLE IF NOT EXISTS scanner_tabs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tab_uid     TEXT    NOT NULL DEFAULT '',
     tab_name    TEXT    NOT NULL DEFAULT 'Scan',
     target_url  TEXT    NOT NULL DEFAULT '',
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scanner_tabs_uid ON scanner_tabs (tab_uid);
+
 CREATE TABLE IF NOT EXISTS vulnerabilities (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id      INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    scan_tab_uid    TEXT    DEFAULT '',
+    scan_session_id TEXT    DEFAULT '',
     type            TEXT    NOT NULL,
     name            TEXT    NOT NULL DEFAULT '',
     severity        TEXT    NOT NULL DEFAULT 'info',
@@ -151,6 +156,38 @@ async def init_db(db_path: str) -> None:
             )
         except Exception:
             pass  # Column already exists — expected
+
+        # Migration: add scan_tab_uid/scan_session_id to vulnerabilities (for
+        # old DBs) — scopes findings to the scan tab/run that discovered them,
+        # instead of every tab showing every finding ever saved to this DB.
+        for col_name, col_def in (
+            ("scan_tab_uid",    "TEXT DEFAULT ''"),
+            ("scan_session_id", "TEXT DEFAULT ''"),
+        ):
+            try:
+                await db.execute(
+                    f"ALTER TABLE vulnerabilities ADD COLUMN {col_name} {col_def}"
+                )
+            except Exception:
+                pass  # Column already exists — expected
+
+        # Migration: add tab_uid to scanner_tabs (for old DBs) — stable
+        # identity for a tab across app restarts, instead of upserting by
+        # tab_name (which resets to "Scan 1", "Scan 2"... every restart and
+        # can silently overwrite/merge a different tab's saved row).
+        try:
+            await db.execute(
+                "ALTER TABLE scanner_tabs ADD COLUMN tab_uid TEXT DEFAULT ''"
+            )
+        except Exception:
+            pass  # Column already exists — expected
+        try:
+            await db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_scanner_tabs_uid "
+                "ON scanner_tabs (tab_uid)"
+            )
+        except Exception:
+            pass
 
         await db.commit()
 
