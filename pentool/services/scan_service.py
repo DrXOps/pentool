@@ -39,6 +39,18 @@ class ScanConfig:
     resume_targets: list[str] = field(default_factory=list)  # URLs to scan on resume
     # on_request_sent(requests_sent, threads_active, check_name, param_name, url)
     on_request_sent: Callable | None = None
+    # Stable identity of the Scanner tab / scan run this scan belongs to —
+    # persisted on each Finding so a tab only ever shows findings from its
+    # own scans (see ScanEngine.get_findings(tab_uid=...)), instead of every
+    # tab showing every finding ever saved to the project DB.
+    scan_tab_uid: str = ""
+    scan_session_id: str = ""
+    # Called once, before active-scan work starts, with a rough estimate of
+    # the total number of HTTP requests the scan will make — drives a
+    # progress bar off request volume instead of (req, point, check) task
+    # count, since one pipeline-check task (e.g. XSS) can be hundreds of
+    # real requests.
+    on_total_estimate: Callable[[int], None] | None = None
 
 
 class ScanService(BaseService):
@@ -165,6 +177,8 @@ class ScanService(BaseService):
 
         def on_finding(f: Finding) -> None:
             if not self._stop_requested:
+                f.scan_tab_uid = config.scan_tab_uid
+                f.scan_session_id = config.scan_session_id
                 findings.append(f)
                 self._emit(FindingDiscovered(finding=f, scan_source="active", source="scanner"))
 
@@ -176,6 +190,7 @@ class ScanService(BaseService):
             self._log(f"[dim]→ {check_name}{pt}[/dim]  {url[:80]}")
 
         _on_request_sent = getattr(config, "on_request_sent", None)
+        _on_total_estimate = getattr(config, "on_total_estimate", None)
 
         http_client = HTTPClient(timeout=20.0, follow_redirects=True, verify_ssl=False)
         engine = self._scanner._get_engine()
@@ -211,7 +226,12 @@ class ScanService(BaseService):
                 on_progress=on_progress,
                 on_request=on_request,
                 on_request_sent=_on_request_sent,
+                resume=config.resume,
+                on_total_estimate=_on_total_estimate,
             )
+            for f in active_findings:
+                f.scan_tab_uid = config.scan_tab_uid
+                f.scan_session_id = config.scan_session_id
             all_findings = list({id(f): f for f in findings + active_findings}.values())
         finally:
             await http_client.close()
