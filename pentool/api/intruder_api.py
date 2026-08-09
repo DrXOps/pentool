@@ -95,12 +95,22 @@ class IntruderAPI(ExportableAPI):
         return self._attack.attack_id if hasattr(self._attack, 'attack_id') else "turbo"
 
     async def pause(self) -> None:
-        if self._attack:
+        """Pause the running attack, if supported.
+
+        TurboIntruderAttack has no pause/resume — Turbo mode intentionally
+        runs to completion or stop() only (see modules/intruder_turbo.py).
+        Before this API method was actually reachable from IntruderScreen,
+        turbo_mode was silently never honored there (a pre-existing bug —
+        see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7),
+        so Pause/Resume during a real Turbo run was never exercised. Guard
+        with hasattr so enabling real Turbo mode doesn't crash Pause.
+        """
+        if self._attack and hasattr(self._attack, "pause"):
             await self._attack.pause()
 
     async def resume(self) -> None:
-        """Resume the attack after a pause."""
-        if self._attack:
+        """Resume the attack after a pause, if supported (see pause() note)."""
+        if self._attack and hasattr(self._attack, "resume"):
             await self._attack.resume()
 
     async def stop(self) -> None:

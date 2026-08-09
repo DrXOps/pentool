@@ -33,7 +33,6 @@ from textual.widgets import (
 
 from pentool.api.intruder_api import (
     AttackType,
-    IntruderAttack,
     IntruderConfig,
     IntruderResult,
     count_markers,
@@ -1158,9 +1157,14 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self.call_after_refresh(self._on_progress, done, total)
 
         try:
-            attack = IntruderAttack(config, db_path=self._get_db_path())
-            self._current_attack = attack
-            await attack.run(on_result, on_progress)
+            # Go through IntruderAPI instead of instantiating IntruderAttack
+            # directly — the screen previously bypassed both the API and
+            # Service layers (TUI -> Modules directly), which also meant
+            # turbo_mode was silently ignored here (IntruderAttack is always
+            # non-Turbo; only IntruderAPI.start_attack() picks
+            # TurboIntruderAttack vs IntruderAttack based on the flag). See
+            # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7.
+            await self._api.start_attack(config, on_result, on_progress, turbo_mode=turbo_mode)
         except Exception as exc:
             logger.error("INTRUDER: _run_attack error: %s", exc, exc_info=True)
             self.app.notify(f"Attack error: {exc}", severity="error", timeout=5)
@@ -1199,22 +1203,20 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     def action_toggle_pause(self) -> None:
         if not self._attack_running:
             return
-        attack = getattr(self, "_current_attack", None)
-        if attack is None:
+        if self._api is None:
             return
         if self._paused:
-            self.run_worker(attack.resume())
+            self.run_worker(self._api.resume())
             self._paused = False
             self.app.notify("Resumed", timeout=2)
         else:
-            self.run_worker(attack.pause())
+            self.run_worker(self._api.pause())
             self._paused = True
             self.app.notify("Paused", timeout=2)
 
     def action_stop_attack(self) -> None:
-        attack = getattr(self, "_current_attack", None)
-        if attack:
-            self.run_worker(attack.stop())
+        if self._api is not None:
+            self.run_worker(self._api.stop())
         self._attack_running = False
         self._paused = False
         self._set_running_state(False)
@@ -1482,9 +1484,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             if not path.endswith(".csv"):
                 path += ".csv"
             try:
-                attack = getattr(self, "_current_attack", None)
-                if attack:
-                    attack.export_csv(path)
+                if self._api is not None:
+                    self._api.export_csv(path)
                     self.app.notify(f"Exported to {path}", timeout=4)
             except Exception as exc:
                 self.app.notify(f"Export failed: {exc}", severity="error", timeout=5)
