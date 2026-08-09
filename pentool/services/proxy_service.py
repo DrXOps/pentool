@@ -24,11 +24,17 @@ class ProxyService(BaseService):
         tui_loop: asyncio.AbstractEventLoop | None = None,
         on_log: Callable[[str], None] | None = None,
         on_storage_error: Callable[[str], None] | None = None,
+        storage: HttpStorage | None = None,
     ) -> None:
         super().__init__(event_bus=event_bus, tui_loop=tui_loop, on_log=on_log)
         self._proxy_api = proxy_api
         self._db_path = db_path
-        self._storage = HttpStorage()
+        # DIP — accept an injected HttpStorage (e.g. a test double) instead
+        # of always constructing a real one internally. Optional with a
+        # factory default, matching the pattern already used for
+        # ScannerAPI(http_client=None)/IntruderAPI(http_client=None) — see
+        # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.2.
+        self._storage = storage if storage is not None else HttpStorage()
         self._storage_ready = False
         self._pre_storage_queue: list[InterceptedRequest] = []
         self._pre_storage_queue_max = 2000

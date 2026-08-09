@@ -35,8 +35,21 @@ __all__ = [
 
 class IntruderAPI(ExportableAPI):
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, http_client=None) -> None:
         self._db_path = db_path
+        # Optional injected HTTPClient (DIP — see
+        # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.2).
+        # IntruderAttack already accepted this as an optional constructor
+        # param (reusing one HTTPClient/connection pool across the whole
+        # attack — see the БАГ-D fix in modules/intruder.py) but IntruderAPI
+        # had no way to pass one in — it always let IntruderAttack create
+        # its own from scratch. Threading it through here just extends the
+        # existing `http_client=None` pattern one layer up, matching how
+        # ScannerAPI(db_path, http_client) already works. Does not apply to
+        # Turbo mode — TurboIntruderAttack manages its own aiohttp session
+        # pool internally by design (Keep-Alive tuning specific to Turbo),
+        # unrelated to this DI change.
+        self._http_client = http_client
         self._attack: IntruderAttack | None = None
         self._task: asyncio.Task | None = None
         self._restored_results: list = []
@@ -69,7 +82,7 @@ class IntruderAPI(ExportableAPI):
             self._attack = TurboIntruderAttack(config)
         else:
             # Standard mode
-            self._attack = IntruderAttack(config, db_path=self._db_path)
+            self._attack = IntruderAttack(config, db_path=self._db_path, http_client=self._http_client)
 
         _on_result = on_result if on_result else lambda r: None
         _on_progress = on_progress if on_progress else lambda d, t: None
