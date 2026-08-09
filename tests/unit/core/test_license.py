@@ -15,12 +15,15 @@ from pentool.core.license import (
     _GRACE_PERIOD_DAYS,
     _canonical_license_payload,
     activate_license,
+    check_and_update_pro_package,
     deactivate_license,
+    download_pro_package,
     get_license,
     get_machine_id,
     get_session_license,
     refresh_session_license,
     _load_cached,
+    _read_pro_meta,
     _save_cached,
 )
 
@@ -417,6 +420,271 @@ class TestActivateLicense:
 
         assert info.valid is False
         assert not lic_file.exists()
+
+
+# ── download_pro_package ────────────────────────────────────────────────────────
+
+class TestDownloadProPackage:
+    """Regression tests for the .build_meta.json race that could leave a
+    fully-installed PRO package stuck reporting "doesn't record which
+    version" — see pentool-backend's /api/download X-Pro-Build-Id header
+    and the synthetic-build_id fallback in download_pro_package()."""
+
+    @staticmethod
+    def _make_tar_bytes() -> bytes:
+        import io
+        import tarfile
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            info = tarfile.TarInfo(name="pentool/__init__.py")
+            data = b"# stub\n"
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+        return buf.getvalue()
+
+    @classmethod
+    def _mock_aiohttp_for_download(cls, archive_headers: dict | None = None):
+        """Build a mock aiohttp module for two sequential session.post() calls:
+        1) the archive (with optional response headers), 2) the signature."""
+        archive_bytes = cls._make_tar_bytes()
+        signature = base64.b64encode(
+            _TEST_PRIVATE_KEY.sign(archive_bytes)
+        ).decode("ascii")
+
+        archive_resp = AsyncMock()
+        archive_resp.status = 200
+        archive_resp.read = AsyncMock(return_value=archive_bytes)
+        archive_resp.headers = archive_headers or {}
+        archive_resp.__aenter__ = AsyncMock(return_value=archive_resp)
+        archive_resp.__aexit__ = AsyncMock(return_value=False)
+
+        sig_resp = AsyncMock()
+        sig_resp.status = 200
+        sig_resp.text = AsyncMock(return_value=signature)
+        sig_resp.__aenter__ = AsyncMock(return_value=sig_resp)
+        sig_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = AsyncMock()
+        mock_session.post = MagicMock(side_effect=[archive_resp, sig_resp])
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        mock_aiohttp = MagicMock()
+        mock_aiohttp.ClientSession = MagicMock(return_value=mock_session)
+        mock_aiohttp.ClientTimeout = MagicMock(return_value=MagicMock())
+        return mock_aiohttp
+
+    @pytest.mark.asyncio
+    async def test_build_id_from_header_written_immediately_no_extra_request(self, tmp_path, monkeypatch):
+        """Worker sends X-Pro-Build-Id on the archive response — must be used
+        directly, with NO follow-up call to _fetch_pro_build_id (the removed
+        third request that used to race with network hiccups)."""
+        pro_dir = tmp_path / "pro"
+        mock_aiohttp = self._mock_aiohttp_for_download(
+            archive_headers={"X-Pro-Build-Id": "12345:2026-08-09T00:00:00Z"}
+        )
+        fetch_build_id_called = False
+
+        async def _fail_if_called(plat):
+            nonlocal fetch_build_id_called
+            fetch_build_id_called = True
+            return "should-not-be-used"
+
+        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
+             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
+             patch("pentool.core.license._PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch("pentool.core.license._fetch_pro_build_id", _fail_if_called), \
+             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+            ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
+
+        assert ok is True
+        assert fetch_build_id_called is False
+        meta = _read_pro_meta_from(pro_dir)
+        assert meta["build_id"] == "12345:2026-08-09T00:00:00Z"
+        assert meta["free_version"]  # non-empty — recorded successfully
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_fetch_when_header_missing(self, tmp_path):
+        """Older Worker deploy without the header — falls back to the
+        separate /api/pro/version call, same as before this fix."""
+        pro_dir = tmp_path / "pro"
+        mock_aiohttp = self._mock_aiohttp_for_download(archive_headers={})
+
+        async def _fake_fetch(plat):
+            return "fallback-build-id"
+
+        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
+             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
+             patch("pentool.core.license._PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch("pentool.core.license._fetch_pro_build_id", _fake_fetch), \
+             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+            ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
+
+        assert ok is True
+        meta = _read_pro_meta_from(pro_dir)
+        assert meta["build_id"] == "fallback-build-id"
+        assert meta["free_version"]
+
+    @pytest.mark.asyncio
+    async def test_synthetic_build_id_when_header_and_fetch_both_fail(self, tmp_path):
+        """This is the actual regression: header missing AND the fallback
+        network call also fails. Before this fix, .build_meta.json was never
+        written at all even though the archive extracted successfully — the
+        user was stuck seeing "doesn't record which version" forever despite
+        having a perfectly working PRO install. Now a synthetic build_id is
+        always recorded so free_version is never empty after a successful
+        extract."""
+        pro_dir = tmp_path / "pro"
+        mock_aiohttp = self._mock_aiohttp_for_download(archive_headers={})
+
+        async def _fake_fetch_fails(plat):
+            raise RuntimeError("network down")
+
+        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
+             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
+             patch("pentool.core.license._PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch("pentool.core.license._fetch_pro_build_id", _fake_fetch_fails), \
+             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+            ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
+
+        assert ok is True  # install succeeded — must not be reported as failed
+        meta = _read_pro_meta_from(pro_dir)
+        assert meta["build_id"]  # some non-empty synthetic id was recorded
+        assert meta["free_version"]  # the critical field — must not be empty
+
+    @pytest.mark.asyncio
+    async def test_bad_signature_does_not_write_meta(self, tmp_path):
+        """Signature verification failure must still refuse the install
+        entirely — the synthetic-build_id fallback only applies after a
+        verified, successfully-extracted archive, never as a way to bypass
+        signature checking."""
+        pro_dir = tmp_path / "pro"
+        archive_bytes = self._make_tar_bytes()
+        archive_resp = AsyncMock()
+        archive_resp.status = 200
+        archive_resp.read = AsyncMock(return_value=archive_bytes)
+        archive_resp.headers = {}
+        archive_resp.__aenter__ = AsyncMock(return_value=archive_resp)
+        archive_resp.__aexit__ = AsyncMock(return_value=False)
+
+        sig_resp = AsyncMock()
+        sig_resp.status = 200
+        sig_resp.text = AsyncMock(return_value=base64.b64encode(b"\x00" * 64).decode())
+        sig_resp.__aenter__ = AsyncMock(return_value=sig_resp)
+        sig_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = AsyncMock()
+        mock_session.post = MagicMock(side_effect=[archive_resp, sig_resp])
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        mock_aiohttp = MagicMock()
+        mock_aiohttp.ClientSession = MagicMock(return_value=mock_session)
+        mock_aiohttp.ClientTimeout = MagicMock(return_value=MagicMock())
+
+        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
+             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
+             patch("pentool.core.license._PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+            ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
+
+        assert ok is False
+        assert not (pro_dir / ".build_meta.json").exists()
+
+
+def _read_pro_meta_from(pro_dir) -> dict:
+    """Read .build_meta.json from a specific PRO_PACKAGE_DIR override used in
+    these tests (avoids depending on the real ~/.pentool path)."""
+    meta_file = pro_dir / ".build_meta.json"
+    return json.loads(meta_file.read_text(encoding="utf-8"))
+
+
+# ── check_and_update_pro_package ────────────────────────────────────────────────
+
+class TestCheckAndUpdateProPackage:
+    """Regression tests for the second half of the .build_meta.json bug: even
+    after download_pro_package() started recording free_version reliably (see
+    TestDownloadProPackage above), a package that was ALREADY broken from
+    before that fix — same build_id as the current release, but incompatible
+    metadata — must still be re-downloaded and repaired. Before this fix,
+    matching build_id short-circuited the whole function and the same
+    "doesn't record which version" warning repeated forever, since
+    download_pro_package() was only reached when build_id differed."""
+
+    @staticmethod
+    def _valid_license_info():
+        return LicenseInfo(
+            valid=True, plan="pro", features=["scanner_pro"],
+            license_key="PTOOL-AAAA-BBBB-CCCC", machine_id="machine-1",
+        )
+
+    @pytest.mark.asyncio
+    async def test_matching_build_id_but_incompatible_meta_triggers_redownload(self, tmp_path):
+        pro_dir = tmp_path / "pro"
+        pro_dir.mkdir()
+        # Simulate the exact broken state: PRO package physically present,
+        # but .build_meta.json missing (never got written) — this is what
+        # is_pro_package_compatible() treats as incompatible.
+        assert not (pro_dir / ".build_meta.json").exists()
+
+        redownload_called = False
+
+        async def _fake_download(key, machine_id):
+            nonlocal redownload_called
+            redownload_called = True
+            return True
+
+        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
+             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
+             patch("pentool.core.license._PRO_BUILD_MARKER", pro_dir / ".build_id"), \
+             patch("pentool.core.license.get_license", return_value=self._valid_license_info()), \
+             patch("pentool.core.license._fetch_pro_build_id", AsyncMock(return_value="same-build-id")), \
+             patch("pentool.core.license.download_pro_package", _fake_download):
+            result = await check_and_update_pro_package()
+
+        assert redownload_called is True, (
+            "download_pro_package() must be called to repair a package "
+            "that's incompatible even when build_id matches the remote — "
+            "otherwise the same warning repeats forever with no path to fix it"
+        )
+        assert result.updated is True
+        assert result.warning == ""
+
+    @pytest.mark.asyncio
+    async def test_matching_build_id_and_compatible_meta_skips_redownload(self, tmp_path):
+        """Sanity check for the common case: nothing wrong, don't re-download
+        needlessly just because we now also check compatibility."""
+        pro_dir = tmp_path / "pro"
+        pro_dir.mkdir()
+        (pro_dir / ".build_meta.json").write_text(
+            json.dumps({"build_id": "same-build-id", "free_version": "0.2.6"}),
+            encoding="utf-8",
+        )
+
+        redownload_called = False
+
+        async def _fake_download(key, machine_id):
+            nonlocal redownload_called
+            redownload_called = True
+            return True
+
+        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
+             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
+             patch("pentool.core.license._PRO_BUILD_MARKER", pro_dir / ".build_id"), \
+             patch("pentool.core.license.get_license", return_value=self._valid_license_info()), \
+             patch("pentool.core.license._fetch_pro_build_id", AsyncMock(return_value="same-build-id")), \
+             patch("pentool.core.license.download_pro_package", _fake_download), \
+             patch("pentool.core.plugin_manager.PRO_PACKAGE_DIR", pro_dir, create=True):
+            # is_pro_package_compatible() compares against pentool's own
+            # __version__, which in this test environment is whatever the
+            # dev checkout reports — patch it directly for a deterministic match.
+            import pentool
+            with patch.object(pentool, "__version__", "0.2.6", create=True):
+                result = await check_and_update_pro_package()
+
+        assert redownload_called is False
+        assert result.updated is False
+        assert result.warning == ""
 
 
 # ── deactivate_license ─────────────────────────────────────────────────────────

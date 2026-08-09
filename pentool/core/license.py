@@ -648,6 +648,7 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
     plat = _current_platform()
     try:
         import aiohttp
+        build_id: str | None = None
         async with aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=60)
         ) as session:
@@ -659,6 +660,13 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
                 if resp.status != 200:
                     return False
                 archive_bytes = await resp.read()
+                # The Worker resolves the release/asset to serve this archive
+                # and knows its build_id at that point — it now echoes it back
+                # in this same response (see pentool-backend's /api/download
+                # handler) so we don't need a separate follow-up request just
+                # to learn it. Falls back to _fetch_pro_build_id() below if
+                # an older Worker deploy doesn't send the header yet.
+                build_id = resp.headers.get("X-Pro-Build-Id")
 
             async with session.post(
                 f"{_LICENSE_API_BASE}/api/download",
@@ -685,12 +693,25 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
         # check_and_update_pro_package() can tell "nothing changed" from "a
         # new build was published" without re-downloading the archive just
         # to compare it.
-        try:
-            build_id = await _fetch_pro_build_id(plat)
-            if build_id:
-                _write_pro_meta(build_id)
-        except Exception:
-            pass  # non-fatal — worst case, next check just re-downloads once more
+        #
+        # Writing this is what makes the extracted package "trusted" —
+        # is_pro_package_compatible() refuses to load it otherwise. Getting
+        # here means the archive already extracted successfully, so this
+        # must not silently no-op: if the Worker didn't send the header
+        # (old deploy) AND the fallback /api/pro/version call also fails
+        # (flaky network), fall back to recording the current FREE version
+        # with a synthetic build_id rather than leaving .build_meta.json
+        # unwritten — a fully-installed, working PRO package should never be
+        # stuck showing "doesn't record which version" just because one
+        # extra network round-trip hiccupped after the real work was done.
+        if not build_id:
+            try:
+                build_id = await _fetch_pro_build_id(plat)
+            except Exception:
+                build_id = None
+        if not build_id:
+            build_id = f"unknown:{time.time()}"
+        _write_pro_meta(build_id)
 
         return True
     except Exception:
@@ -771,15 +792,24 @@ async def check_and_update_pro_package() -> "ProSyncResult":
 
     meta = _read_pro_meta()
     local_build_id = meta.get("build_id", "")
+    _compatible, _warning = is_pro_package_compatible()
 
-    if local_build_id == remote_build_id:
-        _compatible, warning = is_pro_package_compatible()
-        return ProSyncResult(updated=False, warning=warning)
+    # Even if the build_id hasn't changed (no new release published since),
+    # a package already marked incompatible (e.g. free_version never got
+    # recorded, from before the /api/download build_id-header fix) must
+    # still be re-downloaded — otherwise this function forever reports the
+    # same "doesn't record which version" warning and never actually heals
+    # it, since download_pro_package() is only reached below when the
+    # build_id differs. A once-broken install with a matching build_id
+    # would never take that path without this check.
+    if local_build_id == remote_build_id and _compatible:
+        return ProSyncResult(updated=False, warning="")
 
     updated = await download_pro_package(info.license_key, info.machine_id)
     if updated:
         return ProSyncResult(updated=True, warning="")
 
-    # Download of the newer build failed — warn if what's left on disk is stale.
+    # Download of the newer/repaired build failed — warn if what's left on
+    # disk is stale.
     _compatible, warning = is_pro_package_compatible()
     return ProSyncResult(updated=False, warning=warning)
