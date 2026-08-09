@@ -48,6 +48,21 @@ class IntruderAPI(ExportableAPI):
         on_progress=None,
         turbo_mode: bool = False,
     ) -> str:
+        """Run the attack to completion and return its attack_id.
+
+        NOTE: this method awaits the whole attack — it does NOT return as
+        soon as the attack starts. Before this fix it fired the attack via
+        `asyncio.create_task(...)` and returned immediately without
+        awaiting it, so a caller doing `await api.start_attack(...)` got
+        control back right after the attack merely started, not when it
+        finished — `get_results()` called right after would see a near-
+        empty/partial result set (see IntruderService.start_attack, which
+        relies on start_attack() having completed the attack before it
+        reads get_results() and emits IntruderFinished). The task handle is
+        still kept on self._task so stop()/pause()/resume() and callers
+        that want to cancel mid-attack (via self._task) keep working the
+        same way as before.
+        """
         if turbo_mode:
             # Turbo Mode: connection pooling + Keep-Alive
             from pentool.modules.intruder_turbo import TurboIntruderAttack
@@ -60,6 +75,10 @@ class IntruderAPI(ExportableAPI):
         _on_progress = on_progress if on_progress else lambda d, t: None
 
         self._task = asyncio.create_task(self._attack.run(_on_result, _on_progress))
+        try:
+            await self._task
+        except asyncio.CancelledError:
+            pass
         return self._attack.attack_id if hasattr(self._attack, 'attack_id') else "turbo"
 
     async def pause(self) -> None:

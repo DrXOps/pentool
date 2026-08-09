@@ -14,6 +14,7 @@ from pentool.modules.match_replace import MatchReplaceEngine, MatchReplaceRule
 from pentool.modules.websocket_handler import WebSocketHandler
 from pentool.utils.cert import create_ssl_context_for_domain, load_or_create_ca
 from pentool.utils.http_client import HTTPClient
+from pentool.utils.scope import host_in_scope
 from pentool.utils.parser import (
     ParsedRequest,
     ParsedResponse,
@@ -272,19 +273,12 @@ class ProxyServer:
 
         If scope is empty — all hosts are in scope.
         Supports wildcards: *.example.com
+
+        Delegates to the shared pentool.utils.scope.host_in_scope() —
+        also used by AsyncSpider (modules/spider.py) so both modules
+        implement scope matching once instead of twice.
         """
-        if not self.scope:
-            return True
-        host = host.lower().split(":")[0]  # remove port
-        for pattern in self.scope:
-            pattern = pattern.split(":")[0]
-            if pattern.startswith("*."):
-                suffix = pattern[1:]  # ".example.com"
-                if host.endswith(suffix) or host == suffix[1:]:
-                    return True
-            elif pattern == host:
-                return True
-        return False
+        return host_in_scope(host, self.scope)
 
     def forward(self, req_id: str, modified_raw: str | None = None) -> None:
         req = self._find_request(req_id)
@@ -748,7 +742,9 @@ class ProxyServer:
         try:
             # Use singleton client for connection pooling
             if self._http_client is None:
-                self._http_client = HTTPClient(verify_ssl=False, timeout=30.0)
+                from pentool.core.config import get_config
+                cfg = get_config()
+                self._http_client = HTTPClient(verify_ssl=cfg.verify_ssl, timeout=cfg.request_timeout)
             return await self._http_client.send(req)
         except Exception as exc:
             logger.warning("Request failed %s %s: %s", req.method, req.url, exc)

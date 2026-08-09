@@ -57,9 +57,12 @@ class RepeaterService(BaseService):
             else:
                 # Fallback: direct request via HTTPClient (no history)
                 if self._http_client is None:
+                    from pentool.core.config import get_config
+                    cfg = get_config()
                     self._http_client = HTTPClient(
                         follow_redirects=follow_redirects,
-                        verify_ssl=False,
+                        verify_ssl=cfg.verify_ssl,
+                        timeout=cfg.request_timeout,
                     )
                 resp = await self._http_client.send(req)
 

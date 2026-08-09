@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -51,9 +52,43 @@ class ScanProgressEvent(AppEvent):
 
 @dataclass
 class FindingDiscovered(AppEvent):
-    """Vulnerability discovered (active or passive scan)."""
+    """Vulnerability discovered (active or passive scan).
+
+    finding: full Finding object (Any to avoid a modules -> core import —
+    Finding lives in pentool.modules.scanner.base).
+
+    NOTE on memory: like ProxyRequestCaptured/ProxyRequestCompleted, this
+    event's `finding` carries heavy payloads (request_raw/response_raw —
+    full HTTP request/response text). Nothing replays FindingDiscovered
+    from EventBus history (no get_history(event_type=FindingDiscovered)
+    caller in the codebase) — the only consumers are live subscribers
+    (Dashboard, ScannerScreen), which already get the full event via
+    emit()/emit_threadsafe(). Without for_history(), up to `max_history`
+    (10_000) full Finding objects — each with its own request/response
+    bodies — could accumulate in the ring buffer on a long/noisy scan
+    session, retained purely for a replay feature nothing uses.
+    for_history() keeps the lightweight identifying fields and drops the
+    heavy raw text.
+    """
     finding: Any = None
     scan_source: str = "active"  # "active" | "passive"
+
+    def for_history(self) -> "FindingDiscovered":
+        f = self.finding
+        if f is None:
+            return self
+        stripped = copy.copy(f)
+        try:
+            stripped.request_raw = ""
+            stripped.response_raw = ""
+        except Exception:
+            pass
+        return FindingDiscovered(
+            timestamp=self.timestamp,
+            source=self.source,
+            finding=stripped,
+            scan_source=self.scan_source,
+        )
 
 
 # ── Spider events ──────────────────────────────────────────────────────────────

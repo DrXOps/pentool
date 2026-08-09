@@ -9,6 +9,7 @@ from typing import Callable
 from urllib.parse import parse_qs, urljoin, urlparse
 
 from pentool.core.logging import get_logger
+from pentool.utils.scope import domain_in_scope
 
 logger = get_logger(__name__)
 
@@ -658,14 +659,15 @@ class AsyncSpider:
             return url
 
     def _in_scope(self, url: str, base_domain: str) -> bool:
-        """Check that a URL is in scope (same domain or subdomain)."""
+        """Check that a URL is in scope (same domain or subdomain).
+
+        Delegates to the shared pentool.utils.scope.domain_in_scope() —
+        also used by ProxyServer.is_in_scope (modules/proxy.py) so both
+        modules implement scope matching once instead of twice.
+        """
         try:
             parsed = urlparse(url)
-            netloc = parsed.netloc
-            if not netloc:
-                return True
-            # Exact match or subdomain
-            return netloc == base_domain or netloc.endswith(f".{base_domain}")
+            return domain_in_scope(parsed.netloc, base_domain)
         except Exception:
             return False
 

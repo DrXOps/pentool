@@ -323,8 +323,6 @@ class IntruderAttack:
         logger.info("INTRUDER: run() started, total=%d, type=%s, threads=%d", self._total, self._config.attack_type, self._config.threads)
         on_progress(0, self._total)
 
-        sem = asyncio.Semaphore(self._config.threads)
-
         # БАГ-D: reuse a single HTTPClient (and its aiohttp connection pool)
         # for the whole attack instead of opening/closing a new TCP+TLS
         # connection per request. aiohttp.ClientSession is safe to share
@@ -343,30 +341,53 @@ class IntruderAttack:
             if self._stopped:
                 return
 
-            async with sem:
+            # Substitute payloads
+            request_raw = substitute_payload(self._config.template, payload_values)
+
+            # Delay
+            if self._config.delay_ms > 0:
+                await asyncio.sleep(self._config.delay_ms / 1000.0)
+
+            result = await self._send_request(req_num, payload_values, request_raw, client)
+            self._results.append(result)
+            on_result(result)
+            self._done += 1
+            on_progress(self._done, self._total)
+
+        # ── Bounded worker pool instead of eager fan-out ──────────────────────
+        # BEFORE: tasks = [asyncio.create_task(_run_one(...)) for i, vals in
+        # enumerate(combinations)] created ALL len(combinations) asyncio.Task
+        # objects up front (for Cluster Bomb this is the cartesian product of
+        # every payload set — can be hundreds of thousands of live tasks),
+        # each holding a live coroutine frame. `sem = asyncio.Semaphore(threads)`
+        # only throttled how many of those already-created tasks could reach
+        # the actual HTTP-send section concurrently — it did nothing to stop
+        # every task from existing in memory at once. Identical pattern to the
+        # one found and fixed in ScanEngine.run_active_on_requests (see
+        # MYPLANS/MEMORY_LEAK_INVESTIGATION_PLAN_2026-08-08.md, H1/H2).
+        #
+        # AFTER: a fixed pool of `threads` worker coroutines pulls the next
+        # (req_num, payload_values) tuple off a single shared iterator and
+        # runs it to completion before pulling the next one. `next(task_iter)`
+        # is synchronous (no `await` inside it), so sharing one iterator
+        # across concurrently-running worker coroutines is safe under
+        # asyncio's cooperative scheduling — no lock needed. At most
+        # `threads` _run_one() calls (and their live coroutine frames) exist
+        # at any given moment, regardless of how large `combinations` is. The
+        # semaphore is no longer needed — the worker count itself bounds
+        # concurrency to exactly `threads`.
+        task_iter = iter(enumerate(combinations, start=1))
+
+        async def _worker() -> None:
+            for req_num, vals in task_iter:
                 if self._stopped:
                     return
-
-                # Substitute payloads
-                request_raw = substitute_payload(self._config.template, payload_values)
-
-                # Delay
-                if self._config.delay_ms > 0:
-                    await asyncio.sleep(self._config.delay_ms / 1000.0)
-
-                result = await self._send_request(req_num, payload_values, request_raw, client)
-                self._results.append(result)
-                on_result(result)
-                self._done += 1
-                on_progress(self._done, self._total)
+                await _run_one(req_num, vals)
 
         try:
-            tasks = [
-                asyncio.create_task(_run_one(i + 1, vals))
-                for i, vals in enumerate(combinations)
-            ]
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+            n_workers = min(self._config.threads, self._total) if self._total else 0
+            if n_workers:
+                await asyncio.gather(*[_worker() for _ in range(n_workers)])
         finally:
             if owns_client:
                 try:

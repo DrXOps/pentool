@@ -192,7 +192,13 @@ class ScanService(BaseService):
         _on_request_sent = getattr(config, "on_request_sent", None)
         _on_total_estimate = getattr(config, "on_total_estimate", None)
 
-        http_client = HTTPClient(timeout=20.0, follow_redirects=True, verify_ssl=False)
+        from pentool.core.config import get_config
+        cfg = get_config()
+        http_client = HTTPClient(
+            timeout=cfg.request_timeout,
+            follow_redirects=True,
+            verify_ssl=cfg.verify_ssl,
+        )
         engine = self._scanner._get_engine()
         engine._http_client = http_client
         engine._concurrency = config.threads

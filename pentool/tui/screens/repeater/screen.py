@@ -131,7 +131,9 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             return
 
         from pentool.api.repeater_api import RepeaterAPI
-        repeater_api = RepeaterAPI(db_path=db_path)
+        from pentool.core.config import get_config
+        cfg = get_config()
+        repeater_api = RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=False)
 
     async def _do_load_tabs(self, repeater_api, generation: int | None = None) -> None:
@@ -300,7 +302,9 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         await self._close_all_tabs()
         generation = self._tabs_generation
         from pentool.api.repeater_api import RepeaterAPI
-        repeater_api = RepeaterAPI(db_path=db_path)
+        from pentool.core.config import get_config
+        cfg = get_config()
+        repeater_api = RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=True)
 
     async def _close_all_tabs(self) -> None:
@@ -494,7 +498,9 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
                 return
 
             from pentool.api.repeater_api import RepeaterAPI
-            repeater_api = RepeaterAPI(db_path=db_path)
+            from pentool.core.config import get_config
+            cfg = get_config()
+            repeater_api = RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
             self.run_worker(
                 repeater_api.save_to_history(parsed, response, tab_name=state.name),
                 exclusive=False,
@@ -532,7 +538,12 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     async def _do_send(self, tab_id: str, raw: str) -> None:
         db_path = self._get_db_path()
         from pentool.api.repeater_api import RepeaterAPI
-        repeater_api = RepeaterAPI(db_path=db_path) if db_path else None
+        from pentool.core.config import get_config
+        cfg = get_config()
+        repeater_api = (
+            RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
+            if db_path else None
+        )
         service = RepeaterService(repeater_api=repeater_api)
 
         state = self._get_tab_state(tab_id)
