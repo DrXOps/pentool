@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pentool"
-version = "0.2.6"
+version = "0.2.7"
 description = "Modern Web Pentesting TUI - Professional security testing tool"
 authors = [
     {name = "Pentool Team", email = "dev@pentool.pro"}
