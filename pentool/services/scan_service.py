@@ -83,8 +83,7 @@ class ScanService(BaseService):
         self._stop_requested = True
         self._spider.stop()
         try:
-            engine = self._scanner._get_engine()
-            engine.request_stop()
+            self._scanner.request_active_stop()
         except Exception:
             pass
 
@@ -199,11 +198,11 @@ class ScanService(BaseService):
             follow_redirects=True,
             verify_ssl=cfg.verify_ssl,
         )
-        engine = self._scanner._get_engine()
-        engine._http_client = http_client
-        engine._concurrency = config.threads
-        engine._request_delay = config.delay_sec
-        engine._stop_requested = False
+        self._scanner.configure_engine(
+            http_client=http_client,
+            concurrency=config.threads,
+            request_delay=config.delay_sec,
+        )
 
         try:
             if config.seed_requests:
@@ -225,7 +224,7 @@ class ScanService(BaseService):
                 f"[bold]{len(all_reqs)}[/bold] requests…"
             )
 
-            active_findings = await engine.run_active_on_requests(
+            active_findings = await self._scanner.run_active_on_requests(
                 seed_requests=all_reqs,
                 check_names=config.check_names,
                 on_finding=on_finding,
@@ -243,7 +242,7 @@ class ScanService(BaseService):
             await http_client.close()
 
         if not self._stop_requested:
-            await engine.save_findings(all_findings)
+            await self._scanner.save_findings(all_findings)
 
         return all_findings
 
