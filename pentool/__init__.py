@@ -1,6 +1,6 @@
 """Pentool — professional web security testing toolkit with Textual TUI."""
 
-__version__ = "0.2.7"
+__version__ = "0.2.8"
 __author__ = "pentool"
 
 
