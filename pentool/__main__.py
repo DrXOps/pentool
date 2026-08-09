@@ -51,6 +51,37 @@ def main() -> None:
             compatible, warning = True, ""  # never block startup over this check itself
 
         if not compatible:
+            # Try to self-heal BEFORE deciding to exit. check_and_update_pro_
+            # package() is normally only reached from inside a running TUI
+            # session (on_mount's background worker) or from `pentool
+            # update`/`--upgrade` — but a bare `pentool` launch with an
+            # incompatible package used to bail out via SystemExit below
+            # before ever getting a chance to call it, so a broken install
+            # could never repair itself from a plain `pentool` invocation:
+            # the user was stuck needing `pentool license activate <key>`
+            # even though the exact same license key/machine_id could have
+            # fixed it automatically. Attempt one repair pass here first.
+            try:
+                import asyncio
+
+                from pentool.core.license import check_and_update_pro_package
+                result = asyncio.run(check_and_update_pro_package())
+                if result.updated:
+                    print(
+                        "[pentool] PRO package was out of sync — "
+                        "re-downloaded successfully.",
+                        file=sys.stderr,
+                    )
+                    compatible, warning = True, ""
+                elif not result.warning:
+                    # No warning back means check_and_update_pro_package()
+                    # itself now considers things fine (e.g. it just healed
+                    # a previously-broken package with a matching build_id).
+                    compatible, warning = is_pro_package_compatible()
+            except Exception:
+                pass  # fall through to the original warning/exit below
+
+        if not compatible:
             if unsafe_skip_pro_check:
                 print(
                     "[pentool] UNSAFE: --unsafe-skip-pro-compat-check set — "
