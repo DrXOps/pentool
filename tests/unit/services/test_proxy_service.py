@@ -209,3 +209,69 @@ class TestProxyServiceUpdateResponse:
         resp = MagicMock()
         await service.update_response(1, resp)
         service._storage.update_response.assert_called_once_with(1, resp)
+
+
+class TestProxyServiceUpdateColorTagsComment:
+    """Public wrappers added so ProxyScreen no longer reaches into
+    ProxyService._storage directly (layer-violation audit, see
+    MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7)."""
+
+    @pytest.mark.asyncio
+    async def test_update_color_noop_when_not_ready(self, service):
+        service._storage.update_color = AsyncMock()
+        await service.update_color(1, "red")
+        service._storage.update_color.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_color_when_ready(self, service):
+        service._storage_ready = True
+        service._storage.update_color = AsyncMock()
+        await service.update_color(1, "red")
+        service._storage.update_color.assert_called_once_with(1, "red")
+
+    @pytest.mark.asyncio
+    async def test_update_color_handles_exception(self, service):
+        service._storage_ready = True
+        service._storage.update_color = AsyncMock(side_effect=Exception("fail"))
+        await service.update_color(1, "red")
+        # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_update_tags_noop_when_not_ready(self, service):
+        service._storage.update_tags = AsyncMock()
+        await service.update_tags(1, "red")
+        service._storage.update_tags.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_tags_when_ready(self, service):
+        service._storage_ready = True
+        service._storage.update_tags = AsyncMock()
+        await service.update_tags(1, "red")
+        service._storage.update_tags.assert_called_once_with(1, "red")
+
+    @pytest.mark.asyncio
+    async def test_update_tags_handles_exception(self, service):
+        service._storage_ready = True
+        service._storage.update_tags = AsyncMock(side_effect=Exception("fail"))
+        await service.update_tags(1, "red")
+        # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_update_comment_noop_when_not_ready(self, service):
+        service._storage.update_comment = AsyncMock()
+        await service.update_comment(1, "note")
+        service._storage.update_comment.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_comment_when_ready(self, service):
+        service._storage_ready = True
+        service._storage.update_comment = AsyncMock()
+        await service.update_comment(1, "note")
+        service._storage.update_comment.assert_called_once_with(1, "note")
+
+    @pytest.mark.asyncio
+    async def test_update_comment_handles_exception(self, service):
+        service._storage_ready = True
+        service._storage.update_comment = AsyncMock(side_effect=Exception("fail"))
+        await service.update_comment(1, "note")
+        # Should not raise

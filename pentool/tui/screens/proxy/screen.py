@@ -2052,11 +2052,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         """
         try:
             if self._proxy_service:
-                storage = self._proxy_service._storage
-                await storage.update_color(request_id, color)
+                await self._proxy_service.update_color(request_id, color)
                 # Color IS the tag: replace any previous color-tag with the
                 # new one, keeping the color name as the sole tag value.
-                await storage.update_tags(request_id, color)
+                await self._proxy_service.update_tags(request_id, color)
                 label = next((l for l, v in self._COLOR_OPTIONS if v == color), color)
                 msg = f"Marked: {label}" if color else "Mark cleared"
                 self.notify(msg, timeout=2)
@@ -2099,8 +2098,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     async def _save_comment(self, request_id: int, comment: str) -> None:
         """Save comment to database."""
         try:
-            storage = self._proxy_service._storage
-            await storage.update_comment(request_id, comment)
+            if self._proxy_service:
+                await self._proxy_service.update_comment(request_id, comment)
             logger.info("PROXY: Comment saved for request %d", request_id)
             if request_id == self._selected_req_id:
                 self._current_comment = comment

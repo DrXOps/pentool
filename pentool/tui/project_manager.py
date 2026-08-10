@@ -490,8 +490,6 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.scanner.screen import ScannerScreen
                 scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
-                if scanner_screen._scanner_api is not None:
-                    scanner_screen._scanner_api._db_path = path
                 scanner_screen._scanner_api = None
                 scanner_screen._scanner_api = scanner_screen._get_or_create_api(path)
                 scanner_screen._populate_from_db([])
