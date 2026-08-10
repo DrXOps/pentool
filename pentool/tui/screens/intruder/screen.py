@@ -412,7 +412,15 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         """Применить ограничения для FREE лицензии."""
         from pentool.core.license import get_session_license
         license_info = get_session_license()
-        is_pro = license_info.has_feature("pro") if license_info else False
+        # NOTE: "pro" is not a feature name — the backend's feature lists
+        # (see pentool-backend/worker/src/index.ts PLANS/TRIAL_FEATURES) only
+        # ever contain "scanner_pro"/"reports_pro"/"payloads_pro"/"team_collab".
+        # has_feature("pro") therefore never matched, silently keeping Turbo
+        # disabled even with a valid PRO license. is_pro() checks
+        # valid + plan in ("pro", "enterprise") instead, which is what a
+        # license-tier gate (as opposed to a specific named feature) should
+        # use.
+        is_pro = license_info.is_pro() if license_info else False
 
         try:
             threads_input = self.query_one("#input-threads", Input)
@@ -845,6 +853,39 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self._update_payload_select()
             n = new_text.count("§") // 2
             self.app.notify(f"Marked {n} parameter(s)", timeout=2)
+            # Auto §§ commonly marks several parameters at once (query
+            # string + form body + Cookie header). Sniper only substitutes
+            # ONE marked position per request — every other marked position
+            # in that same request keeps its ORIGINAL template value (see
+            # IntruderAttack._iter_sniper in modules/intruder.py; this is the
+            # standard Burp-compatible Sniper semantics: N positions × M
+            # payloads = N×M requests, not a full combinatorial sweep). With
+            # 2+ positions marked this reads as "Intruder is sending the same
+            # payload/hash to every point" in the Results table, because all-
+            # but-one column shows the untouched original value (e.g. a
+            # cookie/token) — confusing when the user didn't deliberately
+            # pick Sniper for that. Battering Ram sends the SAME payload into
+            # ALL marked positions simultaneously, which is what "mark
+            # several points, attack them all" actually implies, so switch to
+            # it automatically (with a heads-up notification) instead of
+            # silently leaving Sniper selected for a multi-position template.
+            if n > 1 and self._attack_type == AttackType.SNIPER:
+                self._attack_type = AttackType.BATTERING_RAM
+                try:
+                    btn = self.query_one("#btn-attack-type", ToolbarButton)
+                    btn.label = f"{_ATTACK_LABELS[AttackType.BATTERING_RAM]} ▼"
+                    self.query_one("#attack-type-desc", Static).update(
+                        _ATTACK_DESCRIPTIONS[AttackType.BATTERING_RAM]
+                    )
+                except Exception:
+                    pass
+                self.app.notify(
+                    f"Marked {n} positions — switched to Battering Ram "
+                    "(Sniper only fills one position per request; change "
+                    "back via the attack-type menu if you really want Sniper)",
+                    severity="warning", timeout=6,
+                )
+                self._auto_save_state()
             # Highlight the first position (Set 1) right after auto-marking
             self._highlight_nth_marker(self._active_set_idx)
         except Exception:
@@ -1086,9 +1127,14 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             return
 
         # Применить лимиты в зависимости от лицензии
+        # (see _apply_license_limits above for why is_pro() and not
+        # has_feature("pro") — "pro" is not one of the backend's feature
+        # names, so has_feature("pro") always returned False even for a
+        # valid PRO license, silently forcing FREE thread/delay limits and
+        # Turbo=off here too.)
         from pentool.core.license import get_session_license
         license_info = get_session_license()
-        is_pro = license_info.has_feature("pro") if license_info else False
+        is_pro = license_info.is_pro() if license_info else False
 
         try:
             threads = int(self.query_one("#input-threads", Input).value or "10")
