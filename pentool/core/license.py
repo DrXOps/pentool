@@ -15,6 +15,29 @@ from pathlib import Path
 _LICENSE_FILE = Path.home() / ".pentool" / "license.dat"
 _GRACE_PERIOD_DAYS = 7
 
+
+def _base_version(v: str) -> str:
+    """Strip a dev/pre/post/local suffix so version comparison only cares
+    about the X.Y.Z release line (e.g. "0.2.8.dev6" -> "0.2.8").
+
+    Needed because __version__ now reflects the exact installed package
+    metadata (via importlib.metadata), which for CI dev-builds includes a
+    ".devN" suffix. The PRO package is built once per FREE release and is
+    compatible with every dev build of that same release, so compatibility
+    checks must compare base versions, not exact strings — otherwise every
+    dev build looks like a version mismatch even though nothing actually
+    changed release-wise.
+    """
+    try:
+        from packaging.version import Version
+        return Version(v).base_version
+    except Exception:
+        # Fallback: strip everything from the first non X.Y.Z separator.
+        import re
+        m = re.match(r"^\d+(\.\d+)*", v)
+        return m.group(0) if m else v
+
+
 _LICENSE_API_BASE = "https://pentool-license.akashtanov2020.workers.dev"
 
 # PRO package delivery
@@ -615,7 +638,7 @@ def is_pro_package_compatible() -> tuple[bool, str]:
             "'pentool license activate <key>' to re-download the PRO package."
         )
 
-    if pro_free_version != current_version:
+    if _base_version(pro_free_version) != _base_version(current_version):
         return False, (
             f"Version mismatch: Pentool {current_version} is installed, but "
             f"the PRO package was built for version {pro_free_version}. "
