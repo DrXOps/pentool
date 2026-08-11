@@ -82,6 +82,7 @@ from pentool.tui.screens import (
     TerminalScreen,
 )
 from pentool.tui.widgets.module_tabs import ModuleTabs
+from pentool.tui.widgets.notification_center import NotificationCenter
 from pentool.tui.widgets.statusbar import StatusBar
 
 logger = get_logger(__name__)
@@ -330,6 +331,7 @@ class PentoolApp(App):
         with Vertical(id="bottom-dock"):
             yield Footer()
             yield StatusBar(id="statusbar")
+        yield NotificationCenter(id="notification-center")
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
@@ -756,6 +758,44 @@ class PentoolApp(App):
             self.query_one("#module-tabs", ModuleTabs).flash(message, severity, timeout)
         except Exception:
             pass
+
+    def notify2(
+        self,
+        message: str,
+        severity: str = "information",
+        title: str | None = None,
+        timeout: float | None = None,
+        sound: bool = True,
+    ) -> None:
+        """ICQ-style stacked toast notification (top-right corner).
+
+        Separate from `flash()` (single-line tooltip2 in the module bar,
+        kept as-is for existing lightweight status messages) and from the
+        standard Textual `app.notify()` toast. Use this for events that
+        deserve a more visible, dismissible, optionally-audible alert —
+        e.g. a finished attack, a high-severity Scanner finding, a dropped
+        connection.
+
+        severity: "information" | "success" | "warning" | "error" | "critical"
+        sound: play a short notification sound (see
+            pentool.core.notification_sound) — respects the user's
+            `notifications_sound_enabled` config toggle regardless of this
+            argument's default.
+        """
+        try:
+            self.query_one("#notification-center", NotificationCenter).push(
+                message, severity=severity, title=title, timeout=timeout
+            )
+        except Exception as exc:
+            logger.debug("notify2: could not show toast: %s", exc)
+
+        if sound:
+            try:
+                if self._cfg.notifications_sound_enabled:
+                    from pentool.core.notification_sound import play_notification_sound
+                    play_notification_sound(severity)
+            except Exception as exc:
+                logger.debug("notify2: sound failed: %s", exc)
 
     def _on_storage_error(self, message: str) -> None:
         """ProxyService.init_storage()/switch_db() failed to open the DB.

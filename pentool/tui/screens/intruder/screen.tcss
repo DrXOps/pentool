@@ -112,6 +112,11 @@ IntruderScreen #payload-buttons .pro-locked {
     color: $text-muted;
     text-style: dim;
 }
+IntruderScreen #payload-count-label {
+    height: 1;
+    padding: 0 1;
+    background: $panel;
+}
 IntruderScreen #processing-bar {
     height: 1;
     layout: horizontal;

@@ -8,9 +8,12 @@ from pentool.api.base_api import ExportableAPI
 from pentool.api.intruder_repository import IntruderRepository
 from pentool.modules.intruder import (
     AttackType,
+    FilePayloadSource,
     IntruderAttack,
     IntruderConfig,
     IntruderResult,
+    ProcessedPayloads,
+    count_lines_with_progress,
     count_markers,
     extract_marker_defaults,
     generate_char_payloads,
@@ -25,6 +28,9 @@ __all__ = [
     "IntruderAttack",
     "IntruderConfig",
     "IntruderResult",
+    "FilePayloadSource",
+    "ProcessedPayloads",
+    "count_lines_with_progress",
     "count_markers",
     "extract_marker_defaults",
     "generate_char_payloads",
@@ -32,6 +38,7 @@ __all__ = [
     "load_payloads_from_file",
     "process_payload",
 ]
+
 
 
 class IntruderAPI(ExportableAPI):
@@ -165,25 +172,37 @@ class IntruderAPI(ExportableAPI):
         template: str,
         attack_type: str,
         payloads: list[list[str]],
+        tab_uid: str = "",
     ) -> None:
         """Save Intruder tab state (template, attack type, payloads) to DB."""
-        await self._repo.save_state(tab_name, template, attack_type, payloads)
+        await self._repo.save_state(tab_name, template, attack_type, payloads, tab_uid=tab_uid)
 
-    async def load_state(self, tab_name: str) -> dict | None:
+    async def load_state(self, tab_name: str, tab_uid: str = "") -> dict | None:
         """Load Intruder tab state from DB."""
-        return await self._repo.load_state(tab_name)
+        return await self._repo.load_state(tab_name, tab_uid=tab_uid)
 
-    async def save_result(self, result: IntruderResult, project_id: int | None = None) -> None:
+    async def get_tabs(self) -> list[dict]:
+        """List all Intruder tabs with saved state, most recently updated first."""
+        return await self._repo.get_tabs()
+
+    async def delete_tab(self, tab_uid: str) -> None:
+        """Delete a tab's saved state and results by its stable tab_uid."""
+        await self._repo.delete_tab(tab_uid)
+
+    async def save_result(
+        self, result: IntruderResult, project_id: int | None = None, tab_uid: str = ""
+    ) -> None:
         """Save a single intruder result to DB."""
-        await self._repo.save_result(result, project_id)
+        await self._repo.save_result(result, project_id, tab_uid=tab_uid)
 
     async def get_results_from_db(
         self,
         attack_id: str | None = None,
         limit: int = 1000,
+        tab_uid: str = "",
     ) -> list[IntruderResult]:
         """Load intruder results from DB."""
-        return await self._repo.get_results(attack_id, limit)
+        return await self._repo.get_results(attack_id, limit, tab_uid=tab_uid)
 
     # ── Project persistence ────────────────────────────────────────────────────
 

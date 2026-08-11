@@ -1,0 +1,20 @@
+DiffPanel {
+    width: 30%;
+    height: 100%;
+    display: none;
+    background: $panel;
+    border-left: solid $primary-darken-2;
+    layout: vertical;
+}
+DiffPanel.-visible {
+    display: block;
+}
+DiffPanel #diff-panel-title {
+    height: 1;
+    background: $primary-darken-3;
+    color: $text-muted;
+    padding: 0 1;
+}
+DiffPanel #diff-panel-log {
+    height: 1fr;
+}

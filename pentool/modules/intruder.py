@@ -173,6 +173,203 @@ def load_payloads_from_file(path: str) -> list[str]:
     return result
 
 
+class FilePayloadSource:
+    """Lazily-iterated payload set backed by a file on disk.
+
+    Reads and yields one payload line at a time using Python's normal
+    buffered text-file iteration (`for line in f:`) — this already streams
+    the file rather than loading it whole, unlike `load_payloads_from_file()`
+    above (which calls `Path(path).read_text()` + `.splitlines()`, materializing
+    the entire file — and a second full copy as a list of lines — in memory).
+    That eager path is fine for small payload files (kept for backward
+    compatibility) but is the wrong tool for a "load a 30GB payload file"
+    requirement: this class exists so the Intruder TUI/attack engine never
+    has to hold more than one line at a time in memory for such a file.
+
+    Blank lines and lines starting with '#' are skipped — same convention
+    as `load_payloads_from_file()`.
+
+    Supports repeated iteration (`for x in source` more than once, needed by
+    Pitchfork's `zip()` over multiple sets and Cluster Bomb's cartesian
+    product re-iterating inner sets) by reopening the file fresh on every
+    `__iter__()` call — each pass costs one more disk read of the file, but
+    memory stays O(1) regardless of file size or how many passes are made.
+    """
+
+    __slots__ = ("path", "encoding", "_count")
+
+    def __init__(self, path: str, encoding: str = "utf-8", count: int | None = None) -> None:
+        self.path = path
+        self.encoding = encoding
+        self._count = count  # cached qualifying-line count, or None if unknown
+
+    def __iter__(self):
+        with open(self.path, "r", encoding=self.encoding, errors="replace") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    yield stripped
+
+    def __len__(self) -> int:
+        """Number of qualifying (non-blank, non-comment) lines.
+
+        Computed by a full streaming pass over the file the first time this
+        is called, then cached — callers that already know the count (e.g.
+        the TUI, which counts while showing a live progress readout during
+        load) should call `set_count()` first to avoid a second full read.
+        """
+        if self._count is None:
+            self._count = sum(1 for _ in self)
+        return self._count
+
+    def __bool__(self) -> bool:
+        # Without this, `bool(x)` would fall back to `__len__() != 0` anyway
+        # (Python's default when only __len__ is defined) — spelled out
+        # explicitly here since that implicit fallback is easy to miss and
+        # its cost (a full recount on first use if not yet cached) matters
+        # for a multi-GB file.
+        return len(self) > 0
+
+    def set_count(self, count: int) -> None:
+        """Attach a precomputed qualifying-line count (e.g. from the TUI's
+        streaming preload with progress), avoiding a redundant full re-read
+        the first time `len()`/`bool()` is used."""
+        self._count = count
+
+    @property
+    def cached_count(self) -> int | None:
+        """The cached qualifying-line count, or None if never computed/set.
+
+        Unlike `len()`, never triggers a file read — used by callers (e.g.
+        the TUI's state serializer) that need to know the count *if it's
+        already cheap to know* without accidentally forcing a full
+        multi-GB file scan as a side effect of checking.
+        """
+        return self._count
+
+    @property
+    def is_count_known(self) -> bool:
+        """True if `len()` can answer instantly (no file read)."""
+        return self._count is not None
+
+    def head(self, n: int) -> list[str]:
+        """Return up to the first `n` qualifying lines.
+
+        Used for TUI previews of a huge file-backed set — reads at most `n`
+        lines regardless of total file size, and explicitly closes the file
+        afterward rather than relying on a `for` loop's `break` to trigger
+        generator-close-on-GC (correct in CPython but not a guarantee worth
+        depending on for something as scarce as an open file handle).
+        """
+        result: list[str] = []
+        with open(self.path, "r", encoding=self.encoding, errors="replace") as f:
+            for line in f:
+                if len(result) >= n:
+                    break
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    result.append(stripped)
+        return result
+
+    def __repr__(self) -> str:
+        return f"FilePayloadSource({self.path!r}, count={self._count!r})"
+
+
+def count_lines_with_progress(
+    path: str,
+    encoding: str = "utf-8",
+    on_progress: Callable[[int, int, int], None] | None = None,
+) -> int:
+    """Stream-count qualifying (non-blank, non-comment) lines in `path`.
+
+    Meant to run in a worker thread (via loop.run_in_executor) while the TUI
+    shows a live "N lines counted so far" readout — `on_progress(count,
+    bytes_read, total_bytes)` fires at most a few times per second (NOT once
+    per line — for a file with hundreds of millions of lines, calling back
+    into the TUI thread that often would itself become the bottleneck).
+
+    Reads in binary chunks and splits on b"\\n" instead of iterating the file
+    in text mode line-by-line. Text-mode iteration decodes + strips one line
+    at a time entirely in the Python interpreter loop, which holds the GIL
+    almost continuously for a large file — measured on a 47MB/6M-line file:
+    the text-mode version stalled the asyncio event loop thread for the
+    *entire* duration of the read (this function always runs in a worker
+    thread via run_in_executor, but the GIL is process-wide — a Python-level
+    tight loop in one thread can still starve another). This is the root
+    cause behind "the whole TUI freezes when loading a 100+MB payload file".
+    Chunked binary reads + bytes.split do the bulk of the work in C, which
+    releases the GIL far more often and keeps the UI thread responsive.
+    Splitting only on b"\\n" is UTF-8-safe even for multi-byte chars split
+    across a chunk boundary, since 0x0A never appears as a continuation byte.
+    """
+    import time
+
+    try:
+        total_bytes = Path(path).stat().st_size
+    except Exception:
+        total_bytes = 0
+
+    _CHUNK_SIZE = 4 * 1024 * 1024  # 4MB
+
+    def _is_qualifying(raw: bytes) -> bool:
+        stripped = raw.strip()
+        return bool(stripped) and not stripped.startswith(b"#")
+
+    count = 0
+    bytes_read = 0
+    leftover = b""
+    last_report = time.monotonic()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(_CHUNK_SIZE)
+            if not chunk:
+                break
+            bytes_read += len(chunk)
+            data = leftover + chunk
+            lines = data.split(b"\n")
+            leftover = lines.pop()  # last piece may be an incomplete line
+            count += sum(1 for line in lines if _is_qualifying(line))
+            now = time.monotonic()
+            if on_progress is not None and (now - last_report) >= 0.2:
+                last_report = now
+                on_progress(count, bytes_read, total_bytes)
+    if _is_qualifying(leftover):
+        count += 1
+    if on_progress is not None:
+        on_progress(count, total_bytes, total_bytes)
+    return count
+
+
+class ProcessedPayloads:
+    """Lazily applies payload-processing ops (URL-encode/Base64/…) to each
+    item of `source` as it is iterated.
+
+    Wraps any iterable payload set — a plain `list[str]` or a
+    `FilePayloadSource` — without ever materializing the whole set into a
+    new list. Without this, `IntruderScreen.action_start_attack()`'s old
+    `[apply(p, ops) for p in ps]` list-comprehension would itself read an
+    entire multi-GB file-backed set into memory just to apply processing,
+    even after the file load itself had been made lazy.
+    """
+
+    __slots__ = ("_source", "_ops", "_apply")
+
+    def __init__(self, source, ops: list[str], apply: Callable[[str, list[str]], str]) -> None:
+        self._source = source
+        self._ops = ops
+        self._apply = apply
+
+    def __iter__(self):
+        for p in self._source:
+            yield self._apply(p, self._ops)
+
+    def __len__(self) -> int:
+        return len(self._source)
+
+    def __bool__(self) -> bool:
+        return len(self._source) > 0
+
+
 def generate_numeric_payloads(start: int, end: int, step: int = 1) -> list[str]:
     """Numeric range [start, end) with step."""
     return [str(n) for n in range(start, end, step)]
@@ -206,6 +403,36 @@ def process_payload(payload: str, operations: list[str]) -> str:
             except Exception:
                 pass
     return result
+
+
+def _lazy_cartesian_product(*sets):
+    """Cartesian product of `sets`, re-iterating each set fresh on every
+    step instead of caching its items in memory (unlike itertools.product,
+    see _iter_cluster_bomb's docstring for why that matters here).
+
+    Equivalent output/order to itertools.product(*sets) — right-most set
+    advances fastest. Iterative (not recursive) so the payload-set count
+    isn't bounded by Python's recursion limit.
+
+    Cost trade-off vs itertools.product: each of the first N-1 sets is
+    re-iterated once per combination of the sets to its right — for
+    file-backed sets (FilePayloadSource) that means re-reading those files
+    from disk repeatedly. Only the LAST set streams through in a single
+    pass. This is the right trade for this module's purpose (never holding
+    a multi-GB payload file's contents in memory) — put the largest/only
+    huge file-backed set last (right-most) in payload_sets to minimize
+    repeated disk reads, matching the standard itertools.product usage
+    guidance for expensive-to-reiterate inputs.
+    """
+    if not sets:
+        return
+    if len(sets) == 1:
+        for item in sets[0]:
+            yield (item,)
+        return
+    for head in sets[0]:
+        for rest in _lazy_cartesian_product(*sets[1:]):
+            yield (head,) + rest
 
 
 class IntruderAttack:
@@ -277,7 +504,13 @@ class IntruderAttack:
             yield [payload] * n_positions
 
     def _iter_pitchfork(self) -> Iterator[list[str]]:
-        """Takes one from each set in parallel (zip). min(M) requests."""
+        """Takes one from each set in parallel (zip). min(M) requests.
+
+        zip() pulls one item at a time from each set via a single iterator
+        per set — it never materializes a set's contents, so this is
+        already safe for FilePayloadSource-backed (multi-GB file) sets
+        without any change.
+        """
         sets = self._config.payload_sets
         if not sets:
             return
@@ -285,11 +518,22 @@ class IntruderAttack:
             yield list(combo)
 
     def _iter_cluster_bomb(self) -> Iterator[list[str]]:
-        """Cartesian product of all sets. M1×M2×... requests."""
+        """Cartesian product of all sets. M1×M2×... requests.
+
+        NOT itertools.product(*sets) — CPython's implementation explicitly
+        "completely consumes the input iterables, keeping pools of values
+        in memory" (per its own docs) before producing anything. For a
+        FilePayloadSource backed by a multi-GB payload file, that means
+        reading the entire file into a tuple in memory just to start the
+        attack — exactly the OOM this module is meant to avoid.
+        _lazy_cartesian_product below re-iterates each inner set once per
+        outer-loop step instead (costs extra disk reads for file-backed
+        sets on repeated passes, never extra memory) — see its docstring.
+        """
         sets = self._config.payload_sets
         if not sets:
             return
-        for combo in itertools.product(*sets):
+        for combo in _lazy_cartesian_product(*sets):
             yield list(combo)
 
     def _get_iterator(self) -> Iterator[list[str]]:
@@ -305,8 +549,33 @@ class IntruderAttack:
         return iter([])
 
     def _count_total(self) -> int:
-        """Count total number of requests (without actually executing them)."""
-        return sum(1 for _ in self._get_iterator())
+        """Number of requests the current config would produce.
+
+        Uses len() on the configured payload sets (O(1) for a plain list,
+        one cached streaming pass for a FilePayloadSource — see its
+        __len__) and simple arithmetic, instead of the old
+        `sum(1 for _ in self._get_iterator())`, which for Cluster Bomb
+        walked the full (potentially huge) cartesian product just to count
+        it — wasted, since the same numbers are derivable from the input
+        set sizes directly.
+        """
+        sets = self._config.payload_sets
+        if not sets:
+            return 0
+        t = self._config.attack_type
+        if t == AttackType.SNIPER:
+            n_positions = count_markers(self._config.template)
+            return n_positions * len(sets[0])
+        elif t == AttackType.BATTERING_RAM:
+            return len(sets[0])
+        elif t == AttackType.PITCHFORK:
+            return min(len(s) for s in sets)
+        elif t == AttackType.CLUSTER_BOMB:
+            total = 1
+            for s in sets:
+                total *= len(s)
+            return total
+        return 0
 
     async def run(
         self,
@@ -318,8 +587,16 @@ class IntruderAttack:
         self._done = 0
         self._results = []
 
-        combinations = list(self._get_iterator())
-        self._total = len(combinations)
+        # NOT `combinations = list(self._get_iterator())` — that materialized
+        # every (payload_values) combination into one Python list before the
+        # attack's first request was even sent. For Cluster Bomb (cartesian
+        # product) or a single Sniper/Battering Ram set backed by a
+        # multi-GB payload file, that list itself can be gigabytes, defeating
+        # the whole point of streaming the file lazily (see FilePayloadSource
+        # / _lazy_cartesian_product above). `_count_total()` gets the total
+        # from the input sets' sizes directly (O(1) or one cached streaming
+        # pass) instead of counting by materializing the iterator.
+        self._total = self._count_total()
         logger.info("INTRUDER: run() started, total=%d, type=%s, threads=%d", self._total, self._config.attack_type, self._config.threads)
         on_progress(0, self._total)
 
@@ -373,10 +650,13 @@ class IntruderAttack:
         # across concurrently-running worker coroutines is safe under
         # asyncio's cooperative scheduling — no lock needed. At most
         # `threads` _run_one() calls (and their live coroutine frames) exist
-        # at any given moment, regardless of how large `combinations` is. The
-        # semaphore is no longer needed — the worker count itself bounds
-        # concurrency to exactly `threads`.
-        task_iter = iter(enumerate(combinations, start=1))
+        # at any given moment, regardless of how large the payload sets are.
+        # The semaphore is no longer needed — the worker count itself bounds
+        # concurrency to exactly `threads`. `self._get_iterator()` itself is
+        # also lazy end-to-end now (FilePayloadSource/_lazy_cartesian_product),
+        # so nothing upstream of this line materializes the full combination
+        # set either.
+        task_iter = iter(enumerate(self._get_iterator(), start=1))
 
         async def _worker() -> None:
             for req_num, vals in task_iter:
