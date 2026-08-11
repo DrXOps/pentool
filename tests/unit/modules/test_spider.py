@@ -276,6 +276,55 @@ class TestSpiderInternals:
         # submit has no name → fields empty → form is not added
         assert len(forms) == 0
 
+    def test_parse_html_get_form_auto_submitted_into_links(self):
+        """GET forms with default field values are auto-submitted as a link
+        so pages only reachable through a search/filter form still get
+        crawled."""
+        spider = AsyncSpider()
+        html = """<html><body>
+        <form action="/search" method="GET">
+            <input name="q" type="text" value="test">
+            <input name="category" type="text" value="books">
+        </form>
+        </body></html>"""
+        links, forms, js = spider._parse_html(html, "https://example.com/", "example.com")
+        assert len(forms) == 1
+        assert any(
+            "/search?" in u and "q=test" in u and "category=books" in u
+            for u in links
+        )
+
+    def test_parse_html_get_form_without_values_not_auto_submitted(self):
+        """GET form whose fields all have empty default values produces an
+        empty query string — nothing useful to add as a link."""
+        spider = AsyncSpider()
+        html = """<html><body>
+        <form action="/search" method="GET">
+            <input name="q" type="text">
+        </form>
+        </body></html>"""
+        links, forms, js = spider._parse_html(html, "https://example.com/", "example.com")
+        assert len(forms) == 1
+        assert not any("/search?" in u for u in links)
+
+    def test_parse_html_post_form_not_auto_submitted(self):
+        """POST forms must never be auto-submitted with a query string
+        (side effects on target). Note: the bare action URL itself may still
+        appear in `links` via the generic data-attribute scanner (action is
+        in _URL_ATTRIBUTES) — that's pre-existing behavior unrelated to
+        auto-submit and just means the plain POST endpoint gets visited as
+        a GET with no params, not that the form was "submitted"."""
+        spider = AsyncSpider()
+        html = """<html><body>
+        <form action="/delete-account" method="POST">
+            <input name="confirm" type="text" value="yes">
+        </form>
+        </body></html>"""
+        links, forms, js = spider._parse_html(html, "https://example.com/", "example.com")
+        assert len(forms) == 1
+        assert forms[0].method == "POST"
+        assert not any("confirm=yes" in u for u in links)
+
     def test_parse_html_extracts_js(self):
         spider = AsyncSpider()
         html = """<html><head>

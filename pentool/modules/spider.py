@@ -6,7 +6,7 @@ import asyncio
 import re
 from dataclasses import dataclass, field
 from typing import Callable
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from pentool.core.logging import get_logger
 from pentool.utils.scope import domain_in_scope
@@ -583,6 +583,20 @@ class AsyncSpider:
                     fields=fields,
                     page_url=page_url,
                 ))
+                # Auto-submit GET forms with their default field values so
+                # pages only reachable through a form (search boxes,
+                # filters, ...) still get crawled — a common cause of
+                # "the crawler misses pages" complaints in other scanners.
+                # Deliberately GET-only: submitting POST forms could trigger
+                # real side effects on the target (create/delete/state
+                # changes), which needs explicit user opt-in and CSRF
+                # handling — not something to do silently during a crawl.
+                # See MYPLANS inbox note for future POST-form consideration.
+                if method == "GET" and any(f.value for f in fields):
+                    query = urlencode([(f.name, f.value) for f in fields])
+                    if query:
+                        sep = "&" if urlparse(action).query else "?"
+                        _add_link(f"{action}{sep}{query}")
 
         return links, forms, js_links
 
