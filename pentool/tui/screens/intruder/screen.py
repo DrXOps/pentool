@@ -476,6 +476,19 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         instance's underlying connection instead of leaking the old one.
         """
         from pentool.api.intruder_api import IntruderAPI
+        # Cancel any in-flight _do_load_state / _do_load_results workers
+        # from a previous on_mount or project-switch BEFORE calling
+        # switch_db(). switch_db() closes the old connection (close() →
+        # self._db = None), and any worker still running against the old
+        # connection would hit ProgrammingError('Cannot operate on a closed
+        # database.') — which, with exit_on_error=True (the default),
+        # propagated as a FATAL EXCEPTION that crashed the whole TUI.
+        # Cancelling them first lets CancelledError propagate through the
+        # worker instead, which Textual handles silently.
+        try:
+            self.workers.cancel_node(self)
+        except Exception:
+            pass
         # Clear in-memory results from the previous project FIRST — before
         # touching the DB connection. Without this, self._all_results (and
         # the #results-table it feeds) kept showing whatever attack results
@@ -529,7 +542,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         api = self._get_api()
         if api is None:
             return
-        self.run_worker(self._do_load_results(api), exclusive=False)
+        self.run_worker(self._do_load_results(api), exclusive=False, exit_on_error=False)
 
     async def _do_load_results(self, api: "IntruderAPI") -> None:
         # _auto_save_result() (see below) saves with no tab_uid — this
@@ -559,7 +572,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         api = self._get_api()
         if api is None:
             return
-        self.run_worker(self._do_load_state(api), exclusive=False)
+        self.run_worker(self._do_load_state(api), exclusive=False, exit_on_error=False)
 
     def _apply_license_limits(self) -> None:
         """Применить ограничения для FREE лицензии."""

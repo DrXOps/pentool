@@ -488,7 +488,17 @@ class ProjectManager:
 
         async def _reload_scanner() -> None:
             try:
-                from pentool.tui.screens.scanner.screen import ScannerScreen
+                # Use SCANNER_SCREEN_AVAILABLE from screens/__init__.py —
+                # it already wraps the import in a try/except and falls back
+                # to ScannerUnavailableScreen when the PRO package is absent.
+                # Importing scanner.screen directly here (without the guard)
+                # raised ImportError when PRO wasn't installed, which surfaced
+                # as an ugly "No module named 'pentool.tui.screens.scanner'"
+                # DEBUG log and silently left the scanner screen stale.
+                from pentool.tui.screens import ScannerScreen, SCANNER_SCREEN_AVAILABLE
+                if not SCANNER_SCREEN_AVAILABLE:
+                    logger.debug("_reload_project_screens scanner: PRO not available — skip")
+                    return
                 scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
                 scanner_screen._scanner_api = None
                 scanner_screen._scanner_api = scanner_screen._get_or_create_api(path)
