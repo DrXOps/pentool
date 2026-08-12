@@ -66,10 +66,10 @@ Legend:
 ```markdown
 # Installation
 
-Install Pentool using pip:
+Install Pentool using uv:
 
 \`\`\`bash
-pip install pentool
+uv tool install pentool
 \`\`\`
 ```
 
@@ -77,10 +77,10 @@ pip install pentool
 ```markdown
 # Установка
 
-Установите Pentool используя pip:
+Установите Pentool через uv:
 
 \`\`\`bash
-pip install pentool
+uv tool install pentool
 \`\`\`
 ```
 

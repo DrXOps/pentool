@@ -22,14 +22,31 @@ Complete installation instructions for all platforms.
 
 ## Installation Methods
 
-### Method 1: PyPI (Recommended)
+### Method 1: uv tool (Recommended)
+
+[uv](https://docs.astral.sh/uv/) installs pentool in an isolated environment —
+no virtual environment setup, no conflicts with system Python.
 
 ```bash
-# Create virtual environment (recommended)
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh   # Linux/macOS
+# Windows: winget install --id=astral-sh.uv -e
+
+# Install pentool
+uv tool install pentool
+
+# Verify
+pentool --version
+```
+
+### Method 2: pip (Alternative)
+
+```bash
+# Create virtual environment (recommended to avoid conflicts)
 python3 -m venv pentool-env
 source pentool-env/bin/activate  # Linux/macOS
 # or
-pentool-env\Scripts\activate  # Windows
+pentool-env\Scripts\activate     # Windows
 
 # Install
 pip install pentool
@@ -38,37 +55,21 @@ pip install pentool
 pentool --version
 ```
 
-### Method 2: From Source
+### Method 3: From Source (Development)
 
 ```bash
 # Clone repository
 git clone https://github.com/DrXOps/pentool.git
 cd pentool
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # Linux/macOS
-# or
-venv\Scripts\activate  # Windows
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install in editable mode
-pip install -e ".[dev]"
+# Install all dependencies (uv creates .venv automatically)
+uv sync
 
 # Verify
-pentool --version
-```
-
-### Method 3: pipx (Isolated Install)
-
-```bash
-# Install pipx
-pip install pipx
-
-# Install pentool
-pipx install pentool
-
-# Run
-pentool
+uv run pentool --version
 ```
 
 ---
@@ -78,12 +79,15 @@ pentool
 ### Linux (Ubuntu/Debian)
 
 ```bash
-# Install system dependencies
+# Install system Python (if needed)
 sudo apt update
-sudo apt install python3 python3-pip python3-venv
+sudo apt install python3
+
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install pentool
-pip3 install pentool
+uv tool install pentool
 
 # Run
 pentool
@@ -95,11 +99,13 @@ pentool
 # Install Homebrew (if not installed)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Install Python
-brew install python@3.11
+# Install uv via Homebrew
+brew install uv
+# or directly:
+# curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install pentool
-pip3 install pentool
+uv tool install pentool
 
 # Run
 pentool
@@ -108,50 +114,16 @@ pentool
 ### Windows
 
 ```powershell
-# Download Python from python.org (3.10+)
-# Check "Add Python to PATH" during installation
+# Install uv
+winget install --id=astral-sh.uv -e
+# or via PowerShell:
+# powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
-# Open PowerShell or CMD
-python -m pip install pentool
+# Install pentool
+uv tool install pentool
 
 # Run
 pentool
-```
-
----
-
-## Virtual Environment Setup
-
-### Why use venv?
-- Isolate dependencies
-- Avoid conflicts with system Python
-- Easy to remove (just delete folder)
-
-### Create venv
-
-```bash
-# Linux/macOS
-python3 -m venv ~/.pentool-venv
-source ~/.pentool-venv/bin/activate
-
-# Windows
-python -m venv %USERPROFILE%\.pentool-venv
-%USERPROFILE%\.pentool-venv\Scripts\activate
-```
-
-### Auto-activate (optional)
-
-**Linux/macOS (.bashrc or .zshrc):**
-```bash
-alias pentool="source ~/.pentool-venv/bin/activate && pentool"
-```
-
-**Windows (PowerShell profile):**
-```powershell
-function pentool {
-    & $env:USERPROFILE\.pentool-venv\Scripts\Activate.ps1
-    & pentool
-}
 ```
 
 ---
@@ -165,21 +137,20 @@ For contributing to Pentool:
 git clone https://github.com/DrXOps/pentool.git
 cd pentool
 
-# Create venv
-python3 -m venv venv
-source venv/bin/activate
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install with dev tools
-pip install -e ".[dev]"
+# Install project + all dev tools (.venv is created automatically)
+uv sync
 
 # Install pre-commit hooks
-pre-commit install
+uv run pre-commit install
 
 # Run tests
-pytest tests/unit/
+uv run pytest tests/unit/
 
 # Run with coverage
-pytest tests/ --cov=pentool --cov-report=html
+uv run pytest tests/ --cov=pentool --cov-report=html
 ```
 
 ---
@@ -189,7 +160,7 @@ pytest tests/ --cov=pentool --cov-report=html
 Pentool installs these automatically:
 
 ### Core Dependencies
-- `textual>=0.40.0` — TUI framework
+- `textual>=8.0.0` — TUI framework
 - `aiohttp>=3.9.0` — Async HTTP client
 - `aiosqlite>=0.19.0` — Async SQLite
 - `cryptography>=41.0.0` — SSL/TLS support
@@ -207,98 +178,98 @@ Pentool installs these automatically:
 
 ### ImportError: No module named 'textual'
 
-**Solution:**
 ```bash
+uv tool upgrade pentool   # upgrades pentool and its dependencies
+# or with pip:
 pip install --upgrade textual
 ```
 
 ### Permission denied
 
-**Linux/macOS:**
 ```bash
-pip install --user pentool
-# or use venv (recommended)
-```
+# Use uv tool install — it never touches system Python
+uv tool install pentool
 
-**Windows (Admin):**
-Run PowerShell as Administrator
-
-### SSL certificate verify failed
-
-**Solution:**
-```bash
-pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org pentool
+# Or with pip: use a virtual environment
+python3 -m venv venv
+source venv/bin/activate
+pip install pentool
 ```
 
 ### Command not found: pentool
 
-**Check PATH:**
-```bash
-# Linux/macOS
-echo $PATH
-# Should include ~/.local/bin or venv/bin
+After `uv tool install`, ensure `~/.local/bin` is on your PATH:
 
-# Add to PATH if needed
+```bash
+# Linux/macOS — add to ~/.bashrc or ~/.zshrc
 export PATH="$HOME/.local/bin:$PATH"
+
+# Or let uv manage it:
+uv tool update-shell
 ```
 
-**Windows:**
-```powershell
-# Check PATH
-$env:PATH
+### SSL certificate verify failed
 
-# Add to PATH (Control Panel → System → Environment Variables)
+```bash
+# With uv:
+uv tool install pentool --no-cache
+
+# With pip:
+pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org pentool
 ```
 
 ### Performance issues
 
-**Increase buffer sizes:**
 ```bash
-# Set environment variable
 export PENTOOL_BUFFER_SIZE=8192
 pentool
-```
-
-**Disable animations:**
-```bash
-pentool --no-animations
 ```
 
 ---
 
 ## Updating
 
-### PyPI install
+### uv install
+
+```bash
+uv tool upgrade pentool
+```
+
+### pip install
+
 ```bash
 pip install --upgrade pentool
 ```
 
 ### Source install
+
 ```bash
 cd pentool
 git pull
-pip install -e ".[dev]"
+uv sync
 ```
 
 ---
 
 ## Uninstallation
 
-### PyPI install
+### uv tool
+
 ```bash
-pip uninstall pentool
+uv tool uninstall pentool
 ```
 
-### Source install
+### pip
+
 ```bash
 pip uninstall pentool
-rm -rf ~/pentool  # Remove source directory
 ```
 
 ### Remove all data
+
 ```bash
-rm -rf ~/.config/pentool  # Config
-rm -rf ~/.local/share/pentool  # Projects
+rm -rf ~/.config/pentool        # Config
+rm -rf ~/.local/share/pentool   # Projects
 ```
 
 ---
@@ -308,12 +279,15 @@ rm -rf ~/.local/share/pentool  # Projects
 ```dockerfile
 FROM python:3.11-slim
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 COPY . /app
 
-RUN pip install -e .
+RUN uv sync --frozen
 
-CMD ["pentool"]
+CMD ["uv", "run", "pentool"]
 ```
 
 ```bash

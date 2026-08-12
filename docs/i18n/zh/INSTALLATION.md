@@ -22,14 +22,31 @@
 
 ## 安装方法
 
-### 方法 1：PyPI（推荐）
+### 方法 1：uv tool（推荐）
+
+[uv](https://docs.astral.sh/uv/) 将 pentool 安装到隔离环境中 ——
+无需手动创建虚拟环境，不会与系统 Python 冲突。
+
+```bash
+# 安装 uv（如果尚未安装）
+curl -LsSf https://astral.sh/uv/install.sh | sh   # Linux/macOS
+# Windows: winget install --id=astral-sh.uv -e
+
+# 安装 pentool
+uv tool install pentool
+
+# 验证
+pentool --version
+```
+
+### 方法 2：pip（备选）
 
 ```bash
 # 创建虚拟环境（推荐）
 python3 -m venv pentool-env
 source pentool-env/bin/activate  # Linux/macOS
 # 或
-pentool-env\Scripts\activate  # Windows
+pentool-env\Scripts\activate     # Windows
 
 # 安装
 pip install pentool
@@ -38,37 +55,21 @@ pip install pentool
 pentool --version
 ```
 
-### 方法 2：从源代码安装
+### 方法 3：从源代码安装（开发者）
 
 ```bash
 # 克隆仓库
 git clone https://github.com/DrXOps/pentool.git
 cd pentool
 
-# 创建虚拟环境
-python3 -m venv venv
-source venv/bin/activate  # Linux/macOS
-# 或
-venv\Scripts\activate  # Windows
+# 安装 uv（如果尚未安装）
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 以可编辑模式安装
-pip install -e ".[dev]"
+# 安装所有依赖（uv 自动创建 .venv）
+uv sync
 
 # 验证
-pentool --version
-```
-
-### 方法 3：pipx（隔离安装）
-
-```bash
-# 安装 pipx
-pip install pipx
-
-# 安装 pentool
-pipx install pentool
-
-# 运行
-pentool
+uv run pentool --version
 ```
 
 ---
@@ -78,12 +79,15 @@ pentool
 ### Linux (Ubuntu/Debian)
 
 ```bash
-# 安装系统依赖
+# 安装系统 Python（如有需要）
 sudo apt update
-sudo apt install python3 python3-pip python3-venv
+sudo apt install python3
+
+# 安装 uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 安装 pentool
-pip3 install pentool
+uv tool install pentool
 
 # 运行
 pentool
@@ -95,11 +99,13 @@ pentool
 # 安装 Homebrew（如果未安装）
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# 安装 Python
-brew install python@3.11
+# 通过 Homebrew 安装 uv
+brew install uv
+# 或直接安装：
+# curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 安装 pentool
-pip3 install pentool
+uv tool install pentool
 
 # 运行
 pentool
@@ -108,14 +114,90 @@ pentool
 ### Windows
 
 ```powershell
-# 从 python.org 安装 Python
-# https://www.python.org/downloads/
+# 安装 uv
+winget install --id=astral-sh.uv -e
+# 或通过 PowerShell：
+# powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
 # 安装 pentool
-pip install pentool
+uv tool install pentool
 
 # 运行
 pentool
+```
+
+---
+
+## 开发者安装
+
+```bash
+git clone https://github.com/DrXOps/pentool.git
+cd pentool
+
+# 安装 uv（如果尚未安装）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 安装项目 + 所有开发工具（自动创建 .venv）
+uv sync
+
+# 安装 pre-commit 钩子
+uv run pre-commit install
+
+# 运行测试
+uv run pytest tests/unit/
+
+# 带覆盖率运行
+uv run pytest tests/ --cov=pentool --cov-report=html
+```
+
+---
+
+## 故障排除
+
+### 找不到 pentool 命令
+
+```bash
+# Linux/macOS — 添加到 ~/.bashrc 或 ~/.zshrc
+export PATH="$HOME/.local/bin:$PATH"
+
+# 或让 uv 自动配置 PATH：
+uv tool update-shell
+```
+
+### 包安装错误
+
+```bash
+uv tool install pentool --no-cache
+# 或使用 pip：
+pip install pentool --no-cache-dir
+```
+
+---
+
+## 更新
+
+```bash
+# uv
+uv tool upgrade pentool
+
+# pip
+pip install --upgrade pentool
+```
+
+---
+
+## 卸载
+
+```bash
+# uv
+uv tool uninstall pentool
+
+# pip
+pip uninstall pentool
+
+# 删除所有数据
+rm -rf ~/.config/pentool
+rm -rf ~/.local/share/pentool
 ```
 
 ---
@@ -127,98 +209,31 @@ pentool
 ### Linux (Ubuntu/Debian)
 
 ```bash
-# 复制证书
 sudo mkdir -p /usr/local/share/ca-certificates/pentool
 sudo cp ~/.config/pentool/ca.crt /usr/local/share/ca-certificates/pentool/
-
-# 更新证书存储
 sudo update-ca-certificates
 ```
 
 ### macOS
 
 ```bash
-# 添加到 Keychain
 sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/.config/pentool/ca.crt
 ```
 
 ### Windows
 
 ```powershell
-# 导入证书
 certutil -addstore -f "ROOT" %USERPROFILE%\.config\pentool\ca.crt
-```
-
-### 浏览器
-
-**Firefox:**
-1. Settings → Privacy & Security → Certificates → View Certificates
-2. Import → 选择 `~/.config/pentool/ca.crt`
-3. 勾选 "Trust this CA to identify websites"
-
-**Chrome/Chromium:**
-1. Settings → Privacy and security → Security → Manage certificates
-2. Authorities → Import
-3. 选择 `~/.config/pentool/ca.crt`
-
----
-
-## 验证安装
-
-```bash
-# 检查版本
-pentool --version
-
-# 启动 TUI
-pentool
-
-# 查看选项
-pentool --help
-```
-
----
-
-## 故障排除
-
-### 找不到 Python
-
-```bash
-# Linux/macOS
-which python3
-python3 --version
-
-# Windows
-where python
-python --version
-```
-
-### 包安装错误
-
-```bash
-# 升级 pip
-pip install --upgrade pip
-
-# 无缓存安装
-pip install pentool --no-cache-dir
-```
-
-### 权限问题
-
-```bash
-# Linux/macOS - 使用虚拟环境
-python3 -m venv venv
-source venv/bin/activate
-pip install pentool
 ```
 
 ---
 
 ## 下一步
 
-- [快速入门](QUICKSTART.md) — 5 分钟开始使用
-- [用户指南](USER_GUIDE.md) — 完整文档
+- [快速开始](QUICKSTART.md) — 5 分钟入门
+- [用户手册](USER_GUIDE.md) — 完整文档
 - [GitHub](https://github.com/DrXOps/pentool) — 源代码
 
 ---
 
-**需要帮助？** 在 GitHub 上创建 issue：https://github.com/DrXOps/pentool/issues
+**需要帮助？** 在 GitHub 上提交 issue：https://github.com/DrXOps/pentool/issues

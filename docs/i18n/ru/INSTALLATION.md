@@ -22,14 +22,31 @@
 
 ## Методы установки
 
-### Метод 1: PyPI (рекомендуется)
+### Метод 1: uv tool (рекомендуется)
+
+[uv](https://docs.astral.sh/uv/) устанавливает pentool в изолированное окружение —
+не нужно создавать venv вручную, нет конфликтов с системным Python.
+
+```bash
+# Установить uv (если ещё не установлен)
+curl -LsSf https://astral.sh/uv/install.sh | sh   # Linux/macOS
+# Windows: winget install --id=astral-sh.uv -e
+
+# Установить pentool
+uv tool install pentool
+
+# Проверить
+pentool --version
+```
+
+### Метод 2: pip (альтернатива)
 
 ```bash
 # Создать виртуальное окружение (рекомендуется)
 python3 -m venv pentool-env
 source pentool-env/bin/activate  # Linux/macOS
 # или
-pentool-env\Scripts\activate  # Windows
+pentool-env\Scripts\activate     # Windows
 
 # Установить
 pip install pentool
@@ -38,37 +55,21 @@ pip install pentool
 pentool --version
 ```
 
-### Метод 2: Из исходников
+### Метод 3: Из исходников (разработка)
 
 ```bash
 # Клонировать репозиторий
 git clone https://github.com/DrXOps/pentool.git
 cd pentool
 
-# Создать виртуальное окружение
-python3 -m venv venv
-source venv/bin/activate  # Linux/macOS
-# или
-venv\Scripts\activate  # Windows
+# Установить uv (если ещё не установлен)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Установить в режиме разработки
-pip install -e ".[dev]"
+# Установить все зависимости (uv создаёт .venv автоматически)
+uv sync
 
 # Проверить
-pentool --version
-```
-
-### Метод 3: pipx (изолированная установка)
-
-```bash
-# Установить pipx
-pip install pipx
-
-# Установить pentool
-pipx install pentool
-
-# Запустить
-pentool
+uv run pentool --version
 ```
 
 ---
@@ -78,12 +79,15 @@ pentool
 ### Linux (Ubuntu/Debian)
 
 ```bash
-# Установить системные зависимости
+# Установить Python (если нужно)
 sudo apt update
-sudo apt install python3 python3-pip python3-venv
+sudo apt install python3
+
+# Установить uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Установить pentool
-pip3 install pentool
+uv tool install pentool
 
 # Запустить
 pentool
@@ -95,11 +99,13 @@ pentool
 # Установить Homebrew (если не установлен)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Установить Python
-brew install python@3.11
+# Установить uv через Homebrew
+brew install uv
+# или напрямую:
+# curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Установить pentool
-pip3 install pentool
+uv tool install pentool
 
 # Запустить
 pentool
@@ -108,11 +114,13 @@ pentool
 ### Windows
 
 ```powershell
-# Установить Python с python.org
-# https://www.python.org/downloads/
+# Установить uv
+winget install --id=astral-sh.uv -e
+# или через PowerShell:
+# powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
 # Установить pentool
-pip install pentool
+uv tool install pentool
 
 # Запустить
 pentool
@@ -120,95 +128,100 @@ pentool
 
 ---
 
-## Установка CA сертификата
-
-Для перехвата HTTPS трафика необходимо установить CA сертификат Pentool.
-
-### Linux (Ubuntu/Debian)
+## Установка для разработки
 
 ```bash
-# Скопировать сертификат
-sudo mkdir -p /usr/local/share/ca-certificates/pentool
-sudo cp ~/.config/pentool/ca.crt /usr/local/share/ca-certificates/pentool/
+# Клонировать репозиторий
+git clone https://github.com/DrXOps/pentool.git
+cd pentool
 
-# Обновить хранилище сертификатов
-sudo update-ca-certificates
+# Установить uv (если ещё не установлен)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Установить проект + все dev-инструменты (.venv создаётся автоматически)
+uv sync
+
+# Установить pre-commit хуки
+uv run pre-commit install
+
+# Запустить тесты
+uv run pytest tests/unit/
+
+# Запустить с покрытием
+uv run pytest tests/ --cov=pentool --cov-report=html
 ```
-
-### macOS
-
-```bash
-# Добавить в Keychain
-sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/.config/pentool/ca.crt
-```
-
-### Windows
-
-```powershell
-# Импортировать сертификат
-certutil -addstore -f "ROOT" %USERPROFILE%\.config\pentool\ca.crt
-```
-
-### Браузеры
-
-**Firefox:**
-1. Settings → Privacy & Security → Certificates → View Certificates
-2. Import → выбрать `~/.config/pentool/ca.crt`
-3. Отметить "Trust this CA to identify websites"
-
-**Chrome/Chromium:**
-1. Settings → Privacy and security → Security → Manage certificates
-2. Authorities → Import
-3. Выбрать `~/.config/pentool/ca.crt`
 
 ---
 
-## Проверка установки
+## Зависимости
 
-```bash
-# Проверить версию
-pentool --version
+Pentool устанавливает их автоматически:
 
-# Запустить TUI
-pentool
-
-# Запустить с опциями
-pentool --help
-```
+### Основные
+- `textual>=8.0.0` — TUI-фреймворк
+- `aiohttp>=3.9.0` — Async HTTP клиент
+- `aiosqlite>=0.19.0` — Async SQLite
+- `cryptography>=41.0.0` — SSL/TLS
+- `click>=8.1.0` — CLI-фреймворк
+- `pyyaml>=6.0` — Конфиг-файлы
 
 ---
 
 ## Устранение неполадок
 
-### Python не найден
+### Команда pentool не найдена
 
 ```bash
-# Linux/macOS
-which python3
-python3 --version
+# Linux/macOS — добавить в ~/.bashrc или ~/.zshrc
+export PATH="$HOME/.local/bin:$PATH"
 
-# Windows
-where python
-python --version
+# Или пусть uv настроит PATH автоматически:
+uv tool update-shell
 ```
 
 ### Ошибка установки пакетов
 
 ```bash
-# Обновить pip
-pip install --upgrade pip
+# uv
+uv tool install pentool --no-cache
 
-# Установить с зависимостями сборки
+# pip
 pip install pentool --no-cache-dir
 ```
 
 ### Проблемы с правами доступа
 
 ```bash
-# Linux/macOS - использовать виртуальное окружение
-python3 -m venv venv
-source venv/bin/activate
-pip install pentool
+# uv tool install не трогает системный Python
+uv tool install pentool
+```
+
+---
+
+## Обновление
+
+```bash
+# uv
+uv tool upgrade pentool
+
+# pip
+pip install --upgrade pentool
+```
+
+---
+
+## Удаление
+
+```bash
+# uv
+uv tool uninstall pentool
+
+# pip
+pip uninstall pentool
+
+# Удалить все данные
+rm -rf ~/.config/pentool
+rm -rf ~/.local/share/pentool
 ```
 
 ---

@@ -1,6 +1,6 @@
 # 🚀 पहला रन — सर्टिफिकेट और पहला इंटरसेप्ट
 
-`pip install pentool` से लेकर पहला इंटरसेप्ट किया गया HTTPS रिक्वेस्ट देखने तक
+`uv tool install pentool` से लेकर पहला इंटरसेप्ट किया गया HTTPS रिक्वेस्ट देखने तक
 की एक न्यूनतम गाइड। पूरी जानकारी के लिए [Quick Start Guide](QUICKSTART.md) और
 [User Guide](USER_GUIDE.md) देखें।
 
@@ -16,7 +16,8 @@
 ## 1. इंस्टॉल करें और लॉन्च करें
 
 ```bash
-pip install pentool
+uv tool install pentool   # अनुशंसित
+# या: pip install pentool
 pentool
 ```
 

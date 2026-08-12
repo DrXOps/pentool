@@ -90,7 +90,7 @@ Fast, transparent, and built for real-world testing.
   Fully async engine handles thousands of concurrent connections and hundreds of requests per second.
 
 - **📦 One-line Install**  
-  `pip install pentool` — no complex setup, works on Linux, macOS, and Windows (WSL).
+  `uv tool install pentool` — no complex setup, works on Linux, macOS, and Windows (WSL).
 
 - **🆓 Open Source + PRO Extensions**  
   The base version is free and open. PRO extensions unlock exclusive features and support the project.
@@ -100,8 +100,11 @@ Fast, transparent, and built for real-world testing.
 ## 🚀 Quick Start
 
 ```bash
-# Install
-pip install pentool
+# Install (recommended — isolated, single command)
+uv tool install pentool
+
+# Alternative: pip still works
+# pip install pentool
 
 # Start a 14-day PRO trial (unlocks Scanner + other PRO features)
 # Run this BEFORE first launching the TUI — if the TUI is already open,

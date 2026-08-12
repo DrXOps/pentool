@@ -7,7 +7,7 @@
   <meta name="description" content="Fully async terminal-based security toolkit. HTTP proxy, scanner, intruder, repeater — keyboard-driven, no browser, no Electron, no Java." />
   <meta name="keywords" content="pentool, pentesting, TUI, security, burp alternative, async, proxy, scanner, intruder, CLI" />
   <meta property="og:title" content="Pentool — Async TUI Web Pentesting Toolkit" />
-  <meta property="og:description" content="Fully async pentesting toolkit in your terminal. No browser, no Electron, no Java. pip install pentool." />
+  <meta property="og:description" content="Fully async pentesting toolkit in your terminal. No browser, no Electron, no Java. uv tool install pentool." />
   <meta property="og:url" content="https://pentool.pro" />
   <meta property="og:type" content="website" />
   <link rel="canonical" href="https://pentool.pro" />
@@ -321,7 +321,7 @@
   <h1>Pentesting toolkit<br/><em>that runs at async speed</em></h1>
   <p>Pentool is a fully async, keyboard-driven TUI for web security testing — hundreds of concurrent requests, zero Java, zero Electron.</p>
   <div class="hero-buttons">
-    <a class="btn btn-primary" href="#install">📦 pip install pentool</a>
+    <a class="btn btn-primary" href="#install">📦 uv tool install pentool</a>
     <a class="btn btn-secondary" href="https://github.com/DrXOps/pentool">⭐ GitHub</a>
     <a class="btn btn-donate" href="https://t.me/sudores">💬 Get PRO Trial</a>
   </div>
@@ -346,9 +346,9 @@
       <span class="terminal-title">bash — pentool</span>
     </div>
     <div class="terminal-body">
-      <div><span class="t-comment"># Install</span></div>
-      <div><span class="t-cmd">$</span> pip install pentool</div>
-      <div style="color:var(--muted);margin:.25rem 0">Successfully installed pentool-0.1.1</div>
+      <div><span class="t-comment"># Install (recommended — isolated, fast)</span></div>
+      <div><span class="t-cmd">$</span> uv tool install pentool</div>
+      <div style="color:var(--muted);margin:.25rem 0">Resolved 12 packages in 0.3s — Installed pentool-0.2.11</div>
       <br/>
       <div><span class="t-comment"># Launch TUI</span></div>
       <div><span class="t-cmd">$</span> pentool</div>
@@ -403,7 +403,7 @@
     </div>
     <div class="feature-card">
       <div class="feature-icon">📦</div>
-      <h3>pip install — done</h3>
+      <h3>uv tool install — done</h3>
       <p>One command, no Docker, no JDK, no license server. Linux, macOS, Windows WSL. Python 3.10+.</p>
     </div>
     <div class="feature-card">
@@ -423,15 +423,16 @@
     <h2 class="section-title">Get started in seconds</h2>
     <p class="section-sub" style="margin:0 auto 2rem;">Works on Linux, macOS, and Windows (WSL). Python 3.10+.</p>
     <div class="code-block">
-      <span>$ pip install pentool</span>
-      <span class="copy-hint" onclick="navigator.clipboard.writeText('pip install pentool')">copy</span>
+      <span>$ uv tool install pentool</span>
+      <span class="copy-hint" onclick="navigator.clipboard.writeText('uv tool install pentool')">copy</span>
     </div>
     <div class="code-block">
       <span>$ pentool</span>
       <span class="copy-hint" onclick="navigator.clipboard.writeText('pentool')">copy</span>
     </div>
     <p style="font-size:.85rem;color:var(--muted);margin-top:1rem;">
-      Requires Python 3.10+ ·
+      Don't have uv? <code style="background:var(--bg3);padding:.1rem .3rem;border-radius:3px;">curl -LsSf https://astral.sh/uv/install.sh | sh</code> ·
+      pip still works too: <code style="background:var(--bg3);padding:.1rem .3rem;border-radius:3px;">pip install pentool</code> ·
       <a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/INSTALLATION.md" style="color:var(--accent);text-decoration:none;">Full installation guide →</a>
     </p>
   </div>

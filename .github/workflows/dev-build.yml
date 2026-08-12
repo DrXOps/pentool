@@ -5,6 +5,8 @@ name: Dev Build (TestPyPI)
 # .devN version suffix (N = this run's number), smoke-tests it in a clean
 # venv, uploads it as a downloadable Actions artifact, and — only if the
 # smoke test passes — publishes it to TestPyPI so it can be installed with:
+#   uv tool install --index-url https://test.pypi.org/simple/ pentool==<version>
+#   # или по старинке:
 #   pip install -i https://test.pypi.org/simple/ pentool==<version>
 #
 # This never touches the real PyPI release (that's publish.yml, triggered
@@ -21,15 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
+          version: "latest"
           python-version: '3.11'
-
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine
+          enable-cache: true
 
       - name: Set dev version suffix
         id: version
@@ -41,10 +40,10 @@ jobs:
           echo "Dev build version: ${DEV_VERSION}"
 
       - name: Build package
-        run: python -m build
+        run: uv build
 
       - name: Check package metadata
-        run: twine check dist/*
+        run: uvx twine check dist/*
 
       - name: Smoke test (install wheel in clean venv, import + CLI check)
         run: bash scripts/smoke_test.sh
@@ -60,7 +59,7 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        run: twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+        run: uvx twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 
       - name: Summary
         run: |
@@ -70,10 +69,10 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Install from TestPyPI:" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ pentool==${{ steps.version.outputs.dev_version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "uv tool install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ pentool==${{ steps.version.outputs.dev_version }}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Or download the \`dist/\` artifact from this run and:" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "pip install dist/*.whl" >> "$GITHUB_STEP_SUMMARY"
+          echo "uv tool install dist/*.whl" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
