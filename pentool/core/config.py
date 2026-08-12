@@ -52,6 +52,7 @@ class Config:
     check_updates: bool = True        # check for updates on startup
     # ── UI ────────────────────────────────────────────────────────────────────────
     theme: str = "textual-dark"       # Textual theme name
+    notifications_sound_enabled: bool = True  # play a short sound with notify2() toasts
 
     # Observer list — not serialized
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)
@@ -121,6 +122,7 @@ class Config:
             "send_crash_reports": self.send_crash_reports,
             "check_updates": self.check_updates,
             "theme": self.theme,
+            "notifications_sound_enabled": self.notifications_sound_enabled,
         }
 
     def add_recent_project(self, path: str) -> None:

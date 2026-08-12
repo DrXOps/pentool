@@ -8,9 +8,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-import aiosqlite
-
 from pentool.core.logging import get_logger
+from pentool.storage.base_sqlite_storage import BaseSqliteStorage
 
 logger = get_logger(__name__)
 
@@ -75,7 +74,7 @@ END;
 _LARGE_BODY_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
 
-class HttpStorage:
+class HttpStorage(BaseSqliteStorage):
     """Async SQLite storage for HTTP records.
 
     Lifecycle:
@@ -86,17 +85,14 @@ class HttpStorage:
         await storage.close()
     """
 
-    def __init__(self) -> None:
-        self._db: aiosqlite.Connection | None = None
-        self._path: str = ""
-
     async def init_db(self, path: str) -> None:
         """Open/create the database and apply the schema."""
-        self._path = str(Path(path).expanduser())
-        logger.debug("HttpStorage: init_db at %s", self._path)
-        Path(self._path).parent.mkdir(parents=True, exist_ok=True)
-        self._db = await aiosqlite.connect(self._path)
-        self._db.row_factory = aiosqlite.Row
+        # BaseSqliteStorage._connect() opens self._db, sets self._db_path,
+        # and applies the shared PRAGMAs (foreign_keys/WAL/busy_timeout)
+        # common to every storage class — schema/migrations below are
+        # HttpStorage-specific on top of that.
+        await self._connect(path)
+        logger.debug("HttpStorage: init_db at %s", self._db_path)
         await self._db.executescript(_SCHEMA)
         # Migrations: add new columns if missing (safe to run on each startup)
         for migration in [
@@ -110,20 +106,13 @@ class HttpStorage:
                 await self._db.commit()
             except Exception:
                 pass  # column already exists
-        await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA synchronous=NORMAL")
         await self._db.execute("PRAGMA cache_size=-32000")  # 32 MB cache
         await self._db.commit()
 
-    async def close(self) -> None:
-        if self._db:
-            await self._db.close()
-            self._db = None
-
     async def switch_db(self, path: str) -> None:
         logger.info("HttpStorage: switch_db called for %s", path)
-        await self.close()
-        await self.init_db(path)
+        await super().switch_db(path)
         # Log the count of existing records after switching
         try:
             count = await self._db.execute("SELECT COUNT(*) FROM requests")

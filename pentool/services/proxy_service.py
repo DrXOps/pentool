@@ -24,11 +24,17 @@ class ProxyService(BaseService):
         tui_loop: asyncio.AbstractEventLoop | None = None,
         on_log: Callable[[str], None] | None = None,
         on_storage_error: Callable[[str], None] | None = None,
+        storage: HttpStorage | None = None,
     ) -> None:
         super().__init__(event_bus=event_bus, tui_loop=tui_loop, on_log=on_log)
         self._proxy_api = proxy_api
         self._db_path = db_path
-        self._storage = HttpStorage()
+        # DIP — accept an injected HttpStorage (e.g. a test double) instead
+        # of always constructing a real one internally. Optional with a
+        # factory default, matching the pattern already used for
+        # ScannerAPI(http_client=None)/IntruderAPI(http_client=None) — see
+        # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.2.
+        self._storage = storage if storage is not None else HttpStorage()
         self._storage_ready = False
         self._pre_storage_queue: list[InterceptedRequest] = []
         self._pre_storage_queue_max = 2000
@@ -212,6 +218,40 @@ class ProxyService(BaseService):
             self._report_storage_error(
                 f"Failed to open project database ({new_db_path})", exc
             )
+
+    async def update_color(self, request_id: int, color: str) -> None:
+        """Set the color mark for a request.
+
+        Public wrapper — before this, ProxyScreen._mark_request() and
+        _save_comment() reached past ProxyService into its private
+        `_storage` attribute directly (a layer violation identical to the
+        one found in ScanService._get_engine() usage, see
+        MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.4/2.7).
+        """
+        if not self._storage_ready:
+            return
+        try:
+            await self._storage.update_color(request_id, color)
+        except Exception as exc:
+            logger.warning("ProxyService: update_color(%d) failed: %s", request_id, exc)
+
+    async def update_tags(self, request_id: int, tags: str) -> None:
+        """Set the tags for a request (comma-separated)."""
+        if not self._storage_ready:
+            return
+        try:
+            await self._storage.update_tags(request_id, tags)
+        except Exception as exc:
+            logger.warning("ProxyService: update_tags(%d) failed: %s", request_id, exc)
+
+    async def update_comment(self, request_id: int, comment: str) -> None:
+        """Set the comment for a request."""
+        if not self._storage_ready:
+            return
+        try:
+            await self._storage.update_comment(request_id, comment)
+        except Exception as exc:
+            logger.warning("ProxyService: update_comment(%d) failed: %s", request_id, exc)
 
     async def clear_history(self) -> None:
         if not self._storage_ready:

@@ -14,6 +14,7 @@ from textual.widgets.text_area import Selection
 
 from pentool.core.logging import get_logger
 from pentool.services.repeater_service import RepeaterService
+from pentool.tui.widgets.diff_panel import DiffPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
@@ -37,6 +38,11 @@ class _TabState:
         self.request_text: str = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
         self.response_text: str = ""
         self.sending: bool = False
+        # Snapshot of request_text at the moment of the last successful
+        # Send. None means "never sent yet" — used both for the "*" dirty
+        # marker on the tab label and for the Ctrl+D diff panel.
+        self.last_sent_text: str | None = None
+        self.is_dirty: bool = False
 
 class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     """Repeater module screen."""
@@ -45,6 +51,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
     BINDINGS = [
         Binding("ctrl+f", "toggle_search", "Search", show=False, priority=True),
+        Binding("ctrl+d", "toggle_diff", "Diff vs last sent", show=False, priority=True),
     ]
 
     _sort_col_idx: int | None = None
@@ -111,11 +118,16 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("→ Intruder", "btn-send-intruder")
 
-        with Vertical(id="tabs-area"):
-            yield TabbedContent(id="repeater-tabs")
+        with Horizontal(id="content-row"):
+            with Vertical(id="tabs-area"):
+                yield TabbedContent(id="repeater-tabs")
+            yield DiffPanel(id="repeater-diff-panel")
 
         yield SearchBar(id="repeater-search-bar")
-        yield Static("Ctrl+Space: Send  │  Ctrl+F: Search  │  Double-click tab to rename", id="status-bar")
+        yield Static(
+            "Ctrl+Space: Send  │  Ctrl+F: Search  │  Ctrl+D: Diff vs last sent  │  Double-click tab to rename",
+            id="status-bar",
+        )
 
     def on_mount(self) -> None:
         # Load tabs from database first, then create default tab if empty
@@ -276,6 +288,17 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             editor.load_raw(state.request_text)
         except Exception:
             pass
+        # load_raw() -> TextArea.load_text() posts a Changed event; this
+        # initial load must NOT mark the tab dirty. Clear it back to False
+        # after the (already-scheduled) Changed handler has run.
+        self.call_after_refresh(self._clear_dirty, tab_id)
+
+    def _clear_dirty(self, tab_id: str) -> None:
+        state = self._get_tab_state(tab_id)
+        if state is None:
+            return
+        state.is_dirty = False
+        self._update_tab_label(state)
 
     def action_close_tab(self) -> None:
         if len(self._tabs) <= 1:
@@ -342,6 +365,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             return
         self._save_current_tab_state()
         self._active_tab_id = pane.id
+        self._refresh_diff_panel_if_visible()
 
     def _start_rename(self, tab_id: str) -> None:
         state = self._get_tab_state(tab_id)
@@ -366,14 +390,90 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         if state is None:
             return
         state.name = new_name
+        self._update_tab_label(state)
+        self._auto_save_tab_to_db(state)
+
+    def _update_tab_label(self, state: _TabState) -> None:
+        """Refresh the Tab widget's label to reflect state.name + dirty marker.
+
+        Called after rename, after a successful Send (clears "*"), and after
+        an edit is detected (adds "*") — see on_text_area_changed.
+        """
         try:
             tabs = self.query_one("#repeater-tabs", TabbedContent)
-            tab_widget = tabs.get_tab(tab_id)
+            tab_widget = tabs.get_tab(state.tab_id)
             if tab_widget is not None:
-                tab_widget.label = new_name
+                suffix = "*" if state.is_dirty else ""
+                tab_widget.label = f"{state.name}{suffix}"
         except Exception:
             pass
-        self._auto_save_tab_to_db(state)
+
+    def on_text_area_changed(self, event) -> None:
+        """Mark the active tab dirty ("*") when its request text changes.
+
+        Only reacts to the editor of the CURRENTLY active tab — inactive
+        tabs' TextAreas aren't edited by the user, but load_raw() on a
+        background tab (e.g. project reload) would otherwise also fire this.
+        """
+        tab_id = self._active_tab_id
+        if tab_id is None:
+            return
+        try:
+            editor = self.query_one(f"#req-editor-{tab_id}", RequestEditor)
+        except Exception:
+            return
+        try:
+            from textual.widgets import TextArea
+            area = editor.query_one("#editor-area", TextArea)
+        except Exception:
+            return
+        if event.text_area is not area:
+            return
+        state = self._get_tab_state(tab_id)
+        if state is None:
+            return
+        was_dirty = state.is_dirty
+        if state.last_sent_text is None:
+            # Never sent yet — nothing to compare against, no "*" needed.
+            new_dirty = False
+        else:
+            new_dirty = editor.get_text() != state.last_sent_text
+        if new_dirty != was_dirty:
+            state.is_dirty = new_dirty
+            self._update_tab_label(state)
+        # If the diff panel is currently open, keep it live-updated as the
+        # user types (cheap: compare() runs on small HTTP request texts).
+        self._refresh_diff_panel_if_visible()
+
+    def action_toggle_diff(self) -> None:
+        """Ctrl+D — toggle the side diff panel: current editor text vs. the
+        text of the tab's last successful Send."""
+        try:
+            panel = self.query_one("#repeater-diff-panel", DiffPanel)
+        except Exception:
+            return
+        now_visible = panel.toggle()
+        if now_visible:
+            self._refresh_diff_panel_if_visible()
+
+    def _refresh_diff_panel_if_visible(self) -> None:
+        try:
+            panel = self.query_one("#repeater-diff-panel", DiffPanel)
+        except Exception:
+            return
+        if "-visible" not in panel.classes:
+            return
+        tab_id = self._active_tab_id
+        state = self._get_tab_state(tab_id) if tab_id else None
+        if state is None:
+            panel.clear()
+            return
+        if state.last_sent_text is None:
+            panel.clear()
+            self.app.notify("This tab has not been sent yet — nothing to diff", severity="warning", timeout=3)
+            return
+        current_text = self._get_active_text()
+        panel.show_diff(state.last_sent_text, current_text)
 
     def action_toggle_search(self) -> None:
         try:
@@ -563,6 +663,12 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             viewer.load_response(resp)
         except Exception:
             pass
+
+        # Successful send — snapshot the sent text and clear the "*" marker.
+        if state is not None:
+            state.last_sent_text = raw
+            state.is_dirty = False
+            self._update_tab_label(state)
 
         self._set_status(
             f"[green]HTTP {resp.status}[/green] — {len(resp.body)} bytes — {elapsed_ms}ms"

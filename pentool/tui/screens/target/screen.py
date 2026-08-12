@@ -377,12 +377,13 @@ class TargetScreen(Widget):
         total_pages = 0
         total_errors = 0
         api = self._get_api()
+        db_path = getattr(self.app, "db_path", "") or getattr(self.app, "_db_path", "")
         try:
             for host in hosts:
                 url = host if "://" in host else f"https://{host}"
                 spider = SpiderAPI(config=SpiderConfig(respect_scope=False))
                 try:
-                    result = await spider.crawl(url)
+                    result = await spider.crawl(url, db_path=db_path)
                 except Exception as exc:
                     logger.warning("action_crawl_scope: crawl failed for %s: %s", host, exc)
                     total_errors += 1

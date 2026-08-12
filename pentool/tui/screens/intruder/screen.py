@@ -14,6 +14,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widget import Widget
+from rich.text import Text
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
@@ -33,11 +34,15 @@ from textual.widgets import (
 
 from pentool.api.intruder_api import (
     AttackType,
-    IntruderAttack,
+    ChainedPayloadSource,
+    CharPayloadSource,
+    FilePayloadSource,
     IntruderConfig,
     IntruderResult,
+    NumericPayloadSource,
+    ProcessedPayloads,
+    count_lines_with_progress,
     count_markers,
-    generate_numeric_payloads,
     process_payload,
 )
 from pentool.core.logging import get_logger
@@ -45,6 +50,7 @@ from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
+from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
@@ -191,6 +197,28 @@ _ATTACK_DESCRIPTIONS = {
     AttackType.CLUSTER_BOMB:  "Cartesian product of all sets",
 }
 
+# Base results-table columns, in order (matches on_mount's add_column calls).
+# The optional "Extract" column is appended dynamically when a Grep Extract
+# pattern is active — see _add_result_row / on_data_table_header_selected.
+_RESULTS_COL_NAMES = ["#", "Payload(s)", "Status", "Length", "Time(ms)", "Error"]
+
+# Payload-list UI is a PREVIEW only for large/file-backed sets — rendering
+# one ListItem per payload for a multi-GB file (potentially hundreds of
+# millions of lines) would itself hang the TUI and exhaust memory, entirely
+# independent of how the file is read. Only the first N items are ever
+# mounted; the panel shows a "showing first N of TOTAL" label instead of
+# trying to virtualize/paginate the full set (out of scope for a preview —
+# nothing needs random access into the middle of the set, only Add/Remove/
+# Clear/Start Attack, none of which require every item to be rendered).
+_PAYLOAD_LIST_PREVIEW_LIMIT = 500
+
+# Lazy payload-set types — all support head()/len()/__bool__/__iter__ without
+# ever materializing their full contents (a file, a numeric range, or a
+# charset brute-force product can all be far too large to hold as a
+# plain list). _refresh_payload_list() caps rendering to a preview for any
+# of these instead of iterating the whole set into ListItem widgets.
+_LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
+
 class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     """Intruder module screen."""
 
@@ -210,7 +238,12 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._payloads: list[list[str]] = [[]]
+        # Each entry is either a plain list[str] (small/manual/generated
+        # sets) or a FilePayloadSource (large file-backed set, streamed —
+        # see _load_payloads_from_file). Both support len()/bool()/iteration,
+        # so the rest of the screen (and the attack engine) treats them
+        # uniformly — see _update_payload_select, action_start_attack.
+        self._payloads: list = [[]]
         self._active_set_idx: int = 0
         self._attack_type: AttackType = AttackType.SNIPER
         self._api = None
@@ -219,7 +252,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self._filter_status: str | None = None
         self._filter_len_gt: int | None = None
         self._filter_len_lt: int | None = None
-        self._sort_col: str | None = None
+        self._sort_col: int | None = None
         self._sort_reverse: bool = False
         # NOT named `_running` — that name collides with
         # textual.message_pump.MessagePump._running, an internal attribute
@@ -239,6 +272,10 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         # Auto-save state
         self._state_loaded: bool = False
         self._tab_name: str = "Intruder"
+        # True while a file-based payload set is being counted/loaded —
+        # blocks starting a new load and disables edits on that set until
+        # the streaming count finishes (see _load_payloads_from_file).
+        self._payload_load_in_progress: bool = False
 
     async def on_event(self, event: _tevents.Event) -> None:
         """Double-click in template-editor — select the word under the cursor."""
@@ -335,6 +372,12 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                 yield ToolbarButton("Load from file…", "btn-payload-load")
                 yield ToolbarButton("Generate…",     "btn-payload-generate")
                 yield ToolbarButton("🧠 Smart…",     "btn-payload-smart", classes="pro-locked")
+            # Line-count readout for the active set — shows a live counter
+            # while a large file is being streamed/counted (see
+            # _load_payloads_from_file), then the final "N lines" total.
+            # Kept separate from the "Set N ▼" button label so it can update
+            # every ~200ms during a big load without touching that button.
+            yield Static("", id="payload-count-label", classes="payload-count-label")
             yield ListView(id="payload-list")
             with Horizontal(id="processing-bar"):
                 yield Label("Processing:")
@@ -368,7 +411,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                     yield HttpView(id="detail-response", classes="detail-view")
 
         yield Static(
-            "Ctrl+J: Start Attack  │  Ctrl+P: Pause/Resume  │  M: Context menu",
+            "Ctrl+J: Start Attack  │  Ctrl+P: Pause/Resume  │  M: Context menu  │  Esc: Close detail",
             id="status-bar",
         )
 
@@ -400,20 +443,137 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         # Применить ограничения для FREE лицензии
         self._apply_license_limits()
 
+    def _get_api(self) -> "IntruderAPI | None":
+        """Return this screen's single persistent IntruderAPI instance.
+
+        Created lazily on first use and reused for every subsequent call
+        (state load/save, result save, attacks) — mirrors ProxyService
+        holding one HttpStorage for the app's lifetime. Previously each of
+        _load_state_from_db/_auto_save_state/_auto_save_result/
+        action_start_attack constructed its own `IntruderAPI(db_path=...)`,
+        which opened+closed a fresh SQLite connection to the project DB on
+        every call — for _auto_save_result specifically, once per attack
+        result (thousands/sec during a fast attack), which is what caused
+        the connection-exhaustion crash this refactor fixes. See
+        reload_from_project() for how this instance follows project
+        switches instead of being recreated.
+        """
+        from pentool.api.intruder_api import IntruderAPI
+        if self._api is None:
+            db_path = self._get_db_path()
+            if not db_path:
+                return None
+            self._api = IntruderAPI(db_path=db_path)
+        return self._api
+
+    async def reload_from_project(self, db_path: str) -> None:
+        """Point the persistent IntruderAPI at a different project DB file.
+
+        Called from project_manager._reload_project_screens() on project
+        switch — mirrors RepeaterScreen.reload_from_project /
+        ProxyService.switch_db. Creates the API if this is the first
+        project opened this session, otherwise switches the existing
+        instance's underlying connection instead of leaking the old one.
+        """
+        from pentool.api.intruder_api import IntruderAPI
+        # Clear in-memory results from the previous project FIRST — before
+        # touching the DB connection. Without this, self._all_results (and
+        # the #results-table it feeds) kept showing whatever attack results
+        # were left over from the project that was open before, since
+        # nothing here ever reset them: switching to a brand-new project and
+        # sending a host to Intruder would show old results mixed in with
+        # (or entirely obscuring, if no new attack was run yet) the new
+        # project's data.
+        self._all_results = []
+        self._clear_results()
+        # Reset template/payloads/attack-type to their defaults BEFORE
+        # loading the new project's state — _do_load_state() only
+        # overwrites these if the NEW project's DB has its own saved
+        # intruder_state row. If it doesn't (a brand-new/empty project),
+        # _do_load_state() returns early and, without this reset, the
+        # screen kept showing the PREVIOUS project's template/payloads/
+        # attack type — the same class of leftover-artifact bug already
+        # fixed above for _all_results.
+        self._payloads = [[]]
+        self._active_set_idx = 0
+        self._attack_type = AttackType.SNIPER
+        try:
+            self.query_one("#template-editor", TextArea).text = (
+                "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+            )
+        except Exception:
+            pass
+        try:
+            btn = self.query_one("#btn-attack-type", ToolbarButton)
+            btn.label = "Sniper ▼"
+        except Exception:
+            pass
+        try:
+            desc = self.query_one("#attack-type-desc", Static)
+            desc.update(_ATTACK_DESCRIPTIONS[AttackType.SNIPER])
+        except Exception:
+            pass
+        self._update_payload_select()
+        if self._api is None:
+            self._api = IntruderAPI(db_path=db_path)
+        else:
+            await self._api.switch_db(db_path)
+        self._state_loaded = False
+        self._load_state_from_db()
+        # Restore this project's own saved results for the current tab (if
+        # any were auto-saved from a previous session against this same DB).
+        self._load_results_from_db()
+
+    def _load_results_from_db(self) -> None:
+        """Load saved Intruder results (this tab, this project's DB) from DB."""
+        api = self._get_api()
+        if api is None:
+            return
+        self.run_worker(self._do_load_results(api), exclusive=False)
+
+    async def _do_load_results(self, api: "IntruderAPI") -> None:
+        # _auto_save_result() (see below) saves with no tab_uid — this
+        # screen only ever has one Intruder "tab" (self._tab_name is a
+        # fixed constant, not a per-tab identity), so results are not
+        # filtered by tab_uid here either; get_results_from_db() with no
+        # attack_id/tab_uid returns the most recent results in whatever DB
+        # file is currently open, which — after reload_from_project()
+        # switched IntruderAPI to the new project's DB — are exactly this
+        # project's own results, not the previous project's.
+        try:
+            results = await api.get_results_from_db()
+        except Exception as exc:
+            logger.debug("_do_load_results: %s", exc)
+            return
+        if not results:
+            return
+        # get_results_from_db()'s no-filter branch orders by timestamp DESC
+        # (newest first) — reverse so the table reads oldest-to-newest, same
+        # as results appended live during an attack (_on_result appends in
+        # increasing request_number order).
+        self._all_results = list(reversed(results))
+        self._redraw_results()
+
     def _load_state_from_db(self) -> None:
         """Load saved Intruder state (template, attack type, payloads) from DB."""
-        from pentool.api.intruder_api import IntruderAPI
-        db_path = self._get_db_path()
-        if not db_path:
+        api = self._get_api()
+        if api is None:
             return
-        api = IntruderAPI(db_path=db_path)
         self.run_worker(self._do_load_state(api), exclusive=False)
 
     def _apply_license_limits(self) -> None:
         """Применить ограничения для FREE лицензии."""
         from pentool.core.license import get_session_license
         license_info = get_session_license()
-        is_pro = license_info.has_feature("pro") if license_info else False
+        # NOTE: "pro" is not a feature name — the backend's feature lists
+        # (see pentool-backend/worker/src/index.ts PLANS/TRIAL_FEATURES) only
+        # ever contain "scanner_pro"/"reports_pro"/"payloads_pro"/"team_collab".
+        # has_feature("pro") therefore never matched, silently keeping Turbo
+        # disabled even with a valid PRO license. is_pro() checks
+        # valid + plan in ("pro", "enterprise") instead, which is what a
+        # license-tier gate (as opposed to a specific named feature) should
+        # use.
+        is_pro = license_info.is_pro() if license_info else False
 
         try:
             threads_input = self.query_one("#input-threads", Input)
@@ -454,10 +614,16 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                 btn.label = f"⚡ {self._attack_type.value.replace('_', ' ').title()}"
             except Exception:
                 pass
-            # Restore payloads
+            # Restore payloads — each entry is either a plain list[str] (old
+            # format, still supported) or {"__file__": path, "count": N}
+            # (see _serialize_payloads) for a file-backed set. The file
+            # itself is NOT re-read here — only a fresh FilePayloadSource
+            # pointing at it is recreated, with the previously-known count
+            # reattached so opening the tab doesn't force a full re-scan of
+            # a multi-GB file just to restore state.
             payloads = state.get("payloads", [[]])
             if payloads and isinstance(payloads, list):
-                self._payloads = payloads
+                self._payloads = self._deserialize_payloads(payloads)
                 self._update_payload_select()
                 # Use call_after_refresh — ListView must be in DOM first
                 self.call_after_refresh(self._refresh_payload_list)
@@ -466,22 +632,93 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             from pentool.core.logging import get_logger
             get_logger(__name__).debug("_do_load_state: %s", exc)
 
+    @staticmethod
+    def _deserialize_payloads(raw_sets: list) -> list:
+        """Inverse of _serialize_payloads — see its docstring."""
+        result = []
+        for entry in raw_sets:
+            if isinstance(entry, dict) and "__file__" in entry:
+                result.append(FilePayloadSource(entry["__file__"], count=entry.get("count")))
+            elif isinstance(entry, dict) and "__numeric__" in entry:
+                result.append(NumericPayloadSource(
+                    entry.get("start", 0), entry.get("end", 0), entry.get("step", 1)
+                ))
+            elif isinstance(entry, dict) and "__charset__" in entry:
+                result.append(CharPayloadSource(
+                    entry.get("__charset__", ""), entry.get("min_len", 1), entry.get("max_len", 1)
+                ))
+            elif isinstance(entry, dict) and "__chained__" in entry:
+                result.append(ChainedPayloadSource(
+                    *IntruderScreen._deserialize_payloads(entry["__chained__"])
+                ))
+            elif isinstance(entry, list):
+                result.append(entry)
+            else:
+                result.append([])
+        return result
+
+    @staticmethod
+    def _serialize_payloads(sets: list) -> list:
+        """JSON-serializable form of self._payloads for save_state().
+
+        A plain list[str] set serializes as-is. A FilePayloadSource set
+        serializes as {"__file__": path, "count": N} — its file path and
+        (if already known) line count, NOT its contents. Writing out every
+        line of a multi-GB payload file into the intruder_state.payloads_json
+        column on every auto-save would itself be the same "load a 30GB file
+        into memory/into a DB column" problem this feature exists to avoid;
+        the file already lives on disk at `path` and is re-streamed from
+        there on demand (attack start, or re-opening this tab — see
+        _deserialize_payloads).
+
+        NumericPayloadSource/CharPayloadSource serialize the same way — as
+        their small constructor params (a range or a charset+lengths),
+        never their (potentially huge) enumerated contents — and are
+        reconstructed fresh (still lazy) on load, same rationale.
+
+        A ChainedPayloadSource (result of appending Generate…/Smart onto an
+        existing set — see _append_to_active_set) serializes as a
+        {"__chained__": [...]} envelope wrapping each inner source's own
+        serialized form recursively, so it never materializes either —
+        only a plain `list[str]` (the base case) is ever actually iterated
+        into a JSON array here.
+        """
+        result = []
+        for entry in sets:
+            if isinstance(entry, FilePayloadSource):
+                result.append({"__file__": entry.path, "count": entry.cached_count})
+            elif isinstance(entry, NumericPayloadSource):
+                result.append({
+                    "__numeric__": True,
+                    "start": entry.start, "end": entry.end, "step": entry.step,
+                })
+            elif isinstance(entry, CharPayloadSource):
+                result.append({
+                    "__charset__": entry.charset,
+                    "min_len": entry.min_len, "max_len": entry.max_len,
+                })
+            elif isinstance(entry, ChainedPayloadSource):
+                result.append({
+                    "__chained__": IntruderScreen._serialize_payloads(list(entry._sources)),
+                })
+            else:
+                result.append(list(entry))
+        return result
+
     def _auto_save_state(self) -> None:
         """Auto-save current state (template, attack type, payloads) to DB."""
-        from pentool.api.intruder_api import IntruderAPI
-        db_path = self._get_db_path()
-        if not db_path:
+        api = self._get_api()
+        if api is None:
             return
         try:
             editor = self.query_one("#template-editor", TextArea)
             template = editor.text
-            api = IntruderAPI(db_path=db_path)
             self.run_worker(
                 api.save_state(
                     tab_name=self._tab_name,
                     template=template,
                     attack_type=self._attack_type.value,
-                    payloads=self._payloads,
+                    payloads=self._serialize_payloads(self._payloads),
                 ),
                 exclusive=False,
             )
@@ -490,12 +727,10 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def _auto_save_result(self, result: IntruderResult) -> None:
         """Auto-save a single intruder result to DB (fire-and-forget)."""
-        from pentool.api.intruder_api import IntruderAPI
-        db_path = self._get_db_path()
-        if not db_path:
+        api = self._get_api()
+        if api is None:
             return
         try:
-            api = IntruderAPI(db_path=db_path)
             # Get project_id from app if available
             project_id = getattr(self.app, "project_id", None)
             self.run_worker(
@@ -846,19 +1081,67 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self._update_payload_select()
             n = new_text.count("§") // 2
             self.app.notify(f"Marked {n} parameter(s)", timeout=2)
+            # Auto §§ commonly marks several parameters at once (query
+            # string + form body + Cookie header). Sniper only substitutes
+            # ONE marked position per request — every other marked position
+            # in that same request keeps its ORIGINAL template value (see
+            # IntruderAttack._iter_sniper in modules/intruder.py; this is the
+            # standard Burp-compatible Sniper semantics: N positions × M
+            # payloads = N×M requests, not a full combinatorial sweep). With
+            # 2+ positions marked this reads as "Intruder is sending the same
+            # payload/hash to every point" in the Results table, because all-
+            # but-one column shows the untouched original value (e.g. a
+            # cookie/token) — confusing when the user didn't deliberately
+            # pick Sniper for that. Battering Ram sends the SAME payload into
+            # ALL marked positions simultaneously, which is what "mark
+            # several points, attack them all" actually implies, so switch to
+            # it automatically (with a heads-up notification) instead of
+            # silently leaving Sniper selected for a multi-position template.
+            if n > 1 and self._attack_type == AttackType.SNIPER:
+                self._attack_type = AttackType.BATTERING_RAM
+                try:
+                    btn = self.query_one("#btn-attack-type", ToolbarButton)
+                    btn.label = f"{_ATTACK_LABELS[AttackType.BATTERING_RAM]} ▼"
+                    self.query_one("#attack-type-desc", Static).update(
+                        _ATTACK_DESCRIPTIONS[AttackType.BATTERING_RAM]
+                    )
+                except Exception:
+                    pass
+                self.app.notify(
+                    f"Marked {n} positions — switched to Battering Ram "
+                    "(Sniper only fills one position per request; change "
+                    "back via the attack-type menu if you really want Sniper)",
+                    severity="warning", timeout=6,
+                )
+                self._auto_save_state()
             # Highlight the first position (Set 1) right after auto-marking
             self._highlight_nth_marker(self._active_set_idx)
         except Exception:
             pass
 
     def _update_payload_select(self) -> None:
-        """Sync the «Set N» button and payload list with the current state."""
-        # 1) Number of positions in the template = number of sets needed
+        """Sync the «Set N» button and payload list with the current state.
+
+        Number of payload sets needed depends on the ATTACK TYPE, not just
+        the marker count — Sniper and Battering Ram only ever read from
+        Set 1 (see IntruderAttack._iter_sniper/_iter_battering_ram, which
+        both do `payloads = self._config.payload_sets[0]`), while Pitchfork
+        and Cluster Bomb need one set per marked position. Previously this
+        always used `max(1, count_markers(template))` regardless of
+        self._attack_type, so switching attack type never changed the
+        Set 1/2/3 selector shown to the user — e.g. marking 3 positions then
+        picking Sniper still showed "Set 1/3" even though the attack only
+        ever substitutes from Set 1, and switching from Cluster Bomb back to
+        Sniper didn't collapse the selector back down either.
+        """
         try:
             template = self.query_one("#template-editor", TextArea).text
         except Exception:
             template = ""
-        n = max(1, count_markers(template))
+        if self._attack_type in (AttackType.SNIPER, AttackType.BATTERING_RAM):
+            n = 1
+        else:
+            n = max(1, count_markers(template))
         while len(self._payloads) < n:
             self._payloads.append([])
 
@@ -884,15 +1167,85 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         try:
             lv = self.query_one("#payload-list", ListView)
             lv.clear()
-            payloads = (
+            active = (
                 self._payloads[self._active_set_idx]
                 if self._active_set_idx < len(self._payloads)
                 else []
             )
-            for p in payloads:
-                lv.append(ListItem(Label(p)))
+            if isinstance(active, FilePayloadSource):
+                # Preview only — never render one ListItem per line for a
+                # potentially multi-GB file (see _PAYLOAD_LIST_PREVIEW_LIMIT).
+                # head() reads at most that many lines regardless of file size.
+                preview = active.head(_PAYLOAD_LIST_PREVIEW_LIMIT)
+                for p in preview:
+                    lv.append(ListItem(Label(p)))
+                if active.is_count_known and active.cached_count > len(preview):
+                    lv.append(ListItem(Label(
+                        f"… {active.cached_count - len(preview)} more line(s) "
+                        f"not shown (file: {Path(active.path).name})"
+                    )))
+                elif not active.is_count_known:
+                    # Count still streaming in the background — see
+                    # _load_payloads_from_file's progress worker, which
+                    # calls this again once it finishes.
+                    lv.append(ListItem(Label("(counting lines…)")))
+            elif isinstance(active, (NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)):
+                # Same preview-only rendering as FilePayloadSource — a
+                # generated range/brute-force set (or a chain of appended
+                # sets) can be just as large (millions+ of values), and
+                # head()/len() are both O(1) or cheap here, never
+                # enumerating the full set.
+                total = len(active)
+                preview = active.head(_PAYLOAD_LIST_PREVIEW_LIMIT)
+                for p in preview:
+                    lv.append(ListItem(Label(p)))
+                if total > len(preview):
+                    lv.append(ListItem(Label(
+                        f"… {total - len(preview):,} more value(s) not shown"
+                    )))
+            else:
+                for p in active:
+                    lv.append(ListItem(Label(p)))
+            self._update_payload_count_label()
         except Exception:
             pass
+
+    def _update_payload_count_label(self) -> None:
+        """Refresh the line-count readout above the payload list.
+
+        For a FilePayloadSource this reads the cached count only — NEVER
+        `len(source)` directly, which for an unknown count triggers a full
+        synchronous streaming pass over the file and would freeze the TUI
+        for however long that file takes to read (potentially minutes for
+        30GB). The count is instead computed by a background worker (see
+        _load_payloads_from_file) which calls back into this method as it
+        progresses and once finished.
+
+        NumericPayloadSource/CharPayloadSource are safe to call `len()` on
+        directly here — both compute their count via closed-form arithmetic
+        (range length / sum-of-powers), never by enumerating values, so it's
+        always O(1) regardless of how many values the set represents.
+        """
+        try:
+            label = self.query_one("#payload-count-label", Static)
+        except Exception:
+            return
+        active = (
+            self._payloads[self._active_set_idx]
+            if self._active_set_idx < len(self._payloads)
+            else []
+        )
+        if isinstance(active, FilePayloadSource):
+            if active.is_count_known:
+                label.update(f"[dim]{active.cached_count:,} line(s) — {Path(active.path).name}[/dim]")
+            else:
+                label.update(f"[dim]counting… — {Path(active.path).name}[/dim]")
+        elif isinstance(active, (NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)):
+            n = len(active)
+            label.update(f"[dim]{n:,} value(s)[/dim]" if n else "")
+        else:
+            n = len(active)
+            label.update(f"[dim]{n:,} line(s)[/dim]" if n else "")
 
     def _highlight_nth_marker(self, n: int) -> None:
         """Highlight the N-th §...§ pair in the positions TextArea editor."""
@@ -935,6 +1288,16 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def _add_payload_manual(self) -> None:
+        if self._active_set_idx < len(self._payloads) and isinstance(
+            self._payloads[self._active_set_idx], _LAZY_SOURCE_TYPES
+        ):
+            self.app.notify(
+                "This set is generated/loaded from a file — click Clear first "
+                "to switch it to a manually-edited list.",
+                severity="warning", timeout=4,
+            )
+            return
+
         def _on_add(value: str) -> None:
             while self._active_set_idx >= len(self._payloads):
                 self._payloads.append([])
@@ -946,6 +1309,15 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self.app.push_screen(_InputDialog("Add payload", "Enter payload value:", on_add=_on_add))
 
     def _remove_selected_payload(self) -> None:
+        if self._active_set_idx < len(self._payloads) and isinstance(
+            self._payloads[self._active_set_idx], _LAZY_SOURCE_TYPES
+        ):
+            self.app.notify(
+                "This set is generated/loaded from a file — individual lines "
+                "can't be removed. Click Clear to remove the whole set.",
+                severity="warning", timeout=4,
+            )
+            return
         try:
             lv = self.query_one("#payload-list", ListView)
             idx = lv.index
@@ -966,7 +1338,20 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             # Auto-save state when payloads cleared
             self._auto_save_state()
 
+    # Files at or below this size are loaded the old, simple way — fully
+    # into memory as a list[str] in one go. It's simpler (existing
+    # add/remove/manual-edit UX keeps working unmodified) and for anything
+    # this small the memory/latency cost is negligible. Only files bigger
+    # than this switch to the streaming FilePayloadSource path with a live
+    # line-count readout. 20MB is comfortably above any hand-curated
+    # wordlist someone would want to still hand-edit, comfortably below
+    # "noticeable pause" territory.
+    _EAGER_LOAD_MAX_BYTES = 20 * 1024 * 1024
+
     def _load_payloads_from_file(self) -> None:
+        if self._payload_load_in_progress:
+            self.app.notify("A payload file is already loading — please wait", severity="warning", timeout=3)
+            return
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
         # Capture the current index BEFORE opening the dialog
         captured_idx = self._active_set_idx
@@ -989,14 +1374,38 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         )
 
     async def _load_file_async(self, path: str, target_idx: int) -> None:
-        """Asynchronous payload-file loading (does not block the TUI)."""
-        payloads: list[str] = []
+        """Load a payload file — eagerly for small files, streamed (lazy,
+        with a live line-count readout) for anything above
+        _EAGER_LOAD_MAX_BYTES, up to and including a 30GB+ wordlist.
+
+        Either way this never blocks the Textual event loop: the actual
+        file I/O runs in a worker thread via run_in_executor, and the
+        streaming-count path reports progress back to the UI every ~200ms
+        instead of only once at the very end.
+        """
         try:
-            # Read file in executor to avoid blocking the event loop
+            size = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: Path(path).stat().st_size
+            )
+        except Exception as exc:
+            self.app.notify(f"Failed to load: {exc}", severity="error", timeout=4)
+            return
+
+        while target_idx >= len(self._payloads):
+            self._payloads.append([])
+
+        if size <= self._EAGER_LOAD_MAX_BYTES:
+            await self._load_file_eager(path, target_idx)
+        else:
+            await self._load_file_streamed(path, target_idx, size)
+
+    async def _load_file_eager(self, path: str, target_idx: int) -> None:
+        """Small file — read fully into memory as list[str] (old behavior)."""
+        try:
             loop = asyncio.get_running_loop()
             content = await loop.run_in_executor(None, self._read_file_sync, path)
-            lines = content.splitlines()
-            for line in lines:
+            payloads: list[str] = []
+            for line in content.splitlines():
                 line = line.strip()
                 if line and not line.startswith("#"):
                     payloads.append(line)
@@ -1004,32 +1413,124 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self.app.notify(f"Failed to load: {exc}", severity="error", timeout=4)
             return
 
-        while target_idx >= len(self._payloads):
-            self._payloads.append([])
-        self._payloads[target_idx].extend(payloads)
-        # Update UI only if we loaded into the active set
+        existing = self._payloads[target_idx]
+        if isinstance(existing, _LAZY_SOURCE_TYPES):
+            # Switching a lazy-backed slot (file/numeric/charset) back to a
+            # plain list — start fresh (extend() isn't supported on these).
+            self._payloads[target_idx] = payloads
+        else:
+            existing.extend(payloads)
         if target_idx == self._active_set_idx:
             self._refresh_payload_list()
-        name = path.split("/")[-1]
+        name = Path(path).name
         self.app.notify(f"Loaded {len(payloads)} payloads from {name}", timeout=3)
-        # Auto-save state after loading payloads
         self._auto_save_state()
+
+    async def _load_file_streamed(self, path: str, target_idx: int, size_bytes: int) -> None:
+        """Large file (> _EAGER_LOAD_MAX_BYTES, up to 30GB+) — install a
+        FilePayloadSource immediately (usable right away for Start Attack —
+        the attack engine streams it lazily, see IntruderAttack in
+        modules/intruder.py) and count its lines in the background with a
+        live progress readout, entirely off the UI thread.
+        """
+        self._payload_load_in_progress = True
+        source = FilePayloadSource(path)
+        self._payloads[target_idx] = source
+        if target_idx == self._active_set_idx:
+            self._refresh_payload_list()
+
+        size_mb = size_bytes / (1024 * 1024)
+        name = Path(path).name
+        self.app.notify(
+            f"Loading {name} ({size_mb:.0f} MB) — streaming, counting lines in background…",
+            timeout=4,
+        )
+
+        def _on_progress(count: int, bytes_read: int, total_bytes: int) -> None:
+            # Called from the executor thread — bounce to the UI thread.
+            self.app.call_from_thread(self._on_payload_count_progress, target_idx, count, bytes_read, total_bytes)
+
+        try:
+            loop = asyncio.get_running_loop()
+            final_count = await loop.run_in_executor(
+                None, count_lines_with_progress, path, "utf-8", _on_progress
+            )
+            source.set_count(final_count)
+        except Exception as exc:
+            self.app.notify(f"Line count failed (payload set still usable): {exc}", severity="warning", timeout=4)
+        finally:
+            self._payload_load_in_progress = False
+            if target_idx == self._active_set_idx:
+                self._update_payload_count_label()
+            self._auto_save_state()
+
+    def _on_payload_count_progress(self, target_idx: int, count: int, bytes_read: int, total_bytes: int) -> None:
+        """UI-thread callback for the streaming line-count worker."""
+        active = (
+            self._payloads[target_idx]
+            if target_idx < len(self._payloads)
+            else None
+        )
+        if not isinstance(active, FilePayloadSource):
+            return
+        # Don't call set_count() here — that's reserved for the final,
+        # authoritative count once the full pass completes (see
+        # _load_file_streamed) — this is only a live readout of progress.
+        try:
+            label = self.query_one("#payload-count-label", Static)
+            pct = f" ({bytes_read / total_bytes * 100:.0f}%)" if total_bytes else ""
+            if target_idx == self._active_set_idx:
+                label.update(f"[dim]{count:,} line(s) counted so far{pct}…[/dim]")
+        except Exception:
+            pass
 
     @staticmethod
     def _read_file_sync(path: str) -> str:
         """Synchronous file read (runs in executor)."""
         return Path(path).read_text(encoding="utf-8", errors="replace")
 
+    def _append_to_active_set(self, new_source) -> int:
+        """Append `new_source` (a plain list or a lazy source) to the active
+        payload set, without forcing either side to materialize.
+
+        - list + list -> plain list.extend() (unchanged fast path).
+        - existing set is empty (nothing manually entered yet — the common
+          case for a first Generate…/Smart Payloads call on a fresh set)
+          -> `new_source` replaces it directly, no wrapper. Keeps a single
+          NumericPayloadSource/CharPayloadSource as itself instead of an
+          unnecessary ChainedPayloadSource([], source).
+        - otherwise (existing set has content, and either side is lazy)
+          -> wrap both in ChainedPayloadSource instead of eagerly reading/
+          enumerating the existing set just to concatenate. This is what
+          makes a second Generate… onto an existing Numeric/Char set (or a
+          manual add after generating) lazy too.
+
+        Returns the count of newly added items (O(1) for lazy sources,
+        cheap for lists) for the caller's notify() message.
+        """
+        while self._active_set_idx >= len(self._payloads):
+            self._payloads.append([])
+        existing = self._payloads[self._active_set_idx]
+        added = len(new_source)
+        if isinstance(existing, list) and isinstance(new_source, list):
+            existing.extend(new_source)
+        elif isinstance(existing, list) and not existing:
+            self._payloads[self._active_set_idx] = new_source
+        else:
+            self._payloads[self._active_set_idx] = ChainedPayloadSource(existing, new_source)
+        return added
+
     def _open_generate_dialog(self) -> None:
         self.app.push_screen(_GenerateDialog(), self._on_payloads_generated)
 
-    def _on_payloads_generated(self, payloads: list[str] | None) -> None:
-        if payloads:
-            while self._active_set_idx >= len(self._payloads):
-                self._payloads.append([])
-            self._payloads[self._active_set_idx].extend(payloads)
+    def _on_payloads_generated(self, source) -> None:
+        """Callback from _GenerateDialog — `source` is a lazy
+        NumericPayloadSource/CharPayloadSource (or None if cancelled/invalid),
+        never a materialized list. See _append_to_active_set."""
+        if source:
+            added = self._append_to_active_set(source)
             self._refresh_payload_list()
-            self.app.notify(f"Generated {len(payloads)} payloads", timeout=2)
+            self.app.notify(f"Generated {added:,} payload(s)", timeout=2)
 
     def _open_smart_payloads_dialog(self) -> None:
         from pentool.core.license import get_session_license
@@ -1045,16 +1546,21 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def _on_smart_payloads_generated(self, payloads: list[str] | None) -> None:
         if payloads:
-            while self._active_set_idx >= len(self._payloads):
-                self._payloads.append([])
-            self._payloads[self._active_set_idx].extend(payloads)
+            added = self._append_to_active_set(payloads)
             self._refresh_payload_list()
-            self.app.notify(f"🧠 Smart: added {len(payloads)} payloads", timeout=3)  # type: ignore[attr-defined]
+            self.app.notify(f"🧠 Smart: added {added:,} payloads", timeout=3)  # type: ignore[attr-defined]
+
 
     def action_start_attack(self) -> None:
         logger.info("INTRUDER: action_start_attack called, _attack_running=%s", self._attack_running)
         if self._attack_running:
             logger.info("INTRUDER: already running, skip")
+            return
+        if self._payload_load_in_progress:
+            self.app.notify(
+                "A payload file is still being counted — wait for it to finish before starting",
+                severity="warning", timeout=4,
+            )
             return
         try:
             template = self.query_one("#template-editor", TextArea).text
@@ -1076,20 +1582,43 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         processing_ops = self._get_processing_ops()
         payload_sets = []
         for ps in self._payloads:
-            processed = [
-                self._apply_processing(p, processing_ops) for p in ps
-            ] if ps else [""]
+            # NOT `[apply(p, ops) for p in ps] if ps else [""]` — the old
+            # list-comprehension eagerly materialized every item of `ps` and
+            # `if ps` on a FilePayloadSource would itself force a full
+            # blocking file scan if the line count wasn't known yet (see
+            # FilePayloadSource.__bool__). ProcessedPayloads wraps `ps`
+            # (plain list or FilePayloadSource) so processing is applied
+            # lazily as the attack engine iterates it — a multi-GB
+            # file-backed set is never fully materialized here or anywhere
+            # downstream. `len(ps) == 0` uses the already-known/cached
+            # count (0 for an empty list; for FilePayloadSource this was
+            # populated by the loader's background count pass before
+            # _payload_load_in_progress cleared, checked above) instead of
+            # the old plain-list-only truthiness check.
+            if len(ps) == 0:
+                processed = [""]
+            else:
+                processed = ProcessedPayloads(ps, processing_ops, self._apply_processing)
             payload_sets.append(processed)
 
-        logger.info("INTRUDER: payload_sets=%s", [[len(p) for p in ps] for ps in payload_sets])
+        logger.info("INTRUDER: payload_sets sizes=%s", [len(ps) for ps in payload_sets])
+        # any() short-circuits on the first non-blank payload — for a huge
+        # file-backed set this reads at most a handful of lines before
+        # finding one, not the whole file (unless every single line is
+        # blank, an existing edge case unrelated to file size).
         if not any(p.strip() for ps in payload_sets for p in ps):
             self.app.notify("No payloads configured", severity="warning", timeout=3)
             return
 
         # Применить лимиты в зависимости от лицензии
+        # (see _apply_license_limits above for why is_pro() and not
+        # has_feature("pro") — "pro" is not one of the backend's feature
+        # names, so has_feature("pro") always returned False even for a
+        # valid PRO license, silently forcing FREE thread/delay limits and
+        # Turbo=off here too.)
         from pentool.core.license import get_session_license
         license_info = get_session_license()
-        is_pro = license_info.has_feature("pro") if license_info else False
+        is_pro = license_info.is_pro() if license_info else False
 
         try:
             threads = int(self.query_one("#input-threads", Input).value or "10")
@@ -1119,9 +1648,10 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             timeout=30,
         )
 
-        from pentool.api.intruder_api import IntruderAPI
-        db_path = self._get_db_path()
-        self._api = IntruderAPI(db_path=db_path)
+        api = self._get_api()
+        if api is None:
+            self.app.notify("No project open", severity="warning", timeout=3)
+            return
 
         # Turbo mode — HTTP pipelining, connection pooling (PRO only)
         turbo_mode = False
@@ -1158,9 +1688,14 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self.call_after_refresh(self._on_progress, done, total)
 
         try:
-            attack = IntruderAttack(config, db_path=self._get_db_path())
-            self._current_attack = attack
-            await attack.run(on_result, on_progress)
+            # Go through IntruderAPI instead of instantiating IntruderAttack
+            # directly — the screen previously bypassed both the API and
+            # Service layers (TUI -> Modules directly), which also meant
+            # turbo_mode was silently ignored here (IntruderAttack is always
+            # non-Turbo; only IntruderAPI.start_attack() picks
+            # TurboIntruderAttack vs IntruderAttack based on the flag). See
+            # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7.
+            await self._api.start_attack(config, on_result, on_progress, turbo_mode=turbo_mode)
         except Exception as exc:
             logger.error("INTRUDER: _run_attack error: %s", exc, exc_info=True)
             self.app.notify(f"Attack error: {exc}", severity="error", timeout=5)
@@ -1199,22 +1734,28 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     def action_toggle_pause(self) -> None:
         if not self._attack_running:
             return
-        attack = getattr(self, "_current_attack", None)
-        if attack is None:
+        if self._api is None:
             return
+        try:
+            btn = self.query_one("#btn-pause", ToolbarButton)
+        except Exception:
+            btn = None
         if self._paused:
-            self.run_worker(attack.resume())
+            self.run_worker(self._api.resume())
             self._paused = False
+            if btn is not None:
+                btn.label = "⏸ Pause"
             self.app.notify("Resumed", timeout=2)
         else:
-            self.run_worker(attack.pause())
+            self.run_worker(self._api.pause())
             self._paused = True
+            if btn is not None:
+                btn.label = "▶ Resume"
             self.app.notify("Paused", timeout=2)
 
     def action_stop_attack(self) -> None:
-        attack = getattr(self, "_current_attack", None)
-        if attack:
-            self.run_worker(attack.stop())
+        if self._api is not None:
+            self.run_worker(self._api.stop())
         self._attack_running = False
         self._paused = False
         self._set_running_state(False)
@@ -1234,7 +1775,15 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     def _set_running_state(self, running: bool) -> None:
         try:
             self.query_one("#btn-start", ToolbarButton).disabled = running
-            self.query_one("#btn-pause", ToolbarButton).disabled = not running
+            pause_btn = self.query_one("#btn-pause", ToolbarButton)
+            pause_btn.disabled = not running
+            if not running:
+                # Attack stopped/finished (possibly while paused) — reset
+                # the Pause/Resume label back to its "fresh attack" state,
+                # otherwise the NEXT Start Attack would show "▶ Resume"
+                # left over from the previous run instead of "⏸ Pause".
+                self._paused = False
+                pause_btn.label = "⏸ Pause"
             self.query_one("#btn-stop",  ToolbarButton).disabled = not running
         except Exception:
             pass
@@ -1308,19 +1857,77 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         except Exception:
             pass
 
+    def _result_at_row(self, table: DataTable, row_index: int) -> IntruderResult | None:
+        """Resolve an IntruderResult for a table row index, independent of
+        sort order. table.add_row(..., key=result.id) means the row_key's
+        string value always equals the result's id — cursor_row alone is
+        NOT reliable once the table has been sorted (sort() reorders row
+        _display_ position without touching self._all_results, which stays
+        in insertion order)."""
+        try:
+            from textual.coordinate import Coordinate
+            row_key = table.coordinate_to_cell_key(Coordinate(row_index, 0)).row_key
+        except Exception:
+            return None
+        target_id = row_key.value
+        for result in self._all_results:
+            if result.id == target_id:
+                return result
+        return None
+
+    # Columns that hold numeric data even though the DataTable stores every
+    # cell as a string — # (request number), Status, Length, Time(ms). Error
+    # and Payload(s) sort correctly as plain strings already.
+    _NUMERIC_SORT_COLS = {0, 2, 3, 4}
+
+    @staticmethod
+    def _numeric_sort_key(raw) -> int:
+        """Extract a comparable int from a results-table cell.
+
+        Cells are plain strings (`str(result.response_length)`, etc.), some
+        wrapped in Rich markup (Status uses `[bold yellow]200✓[/bold yellow]`
+        for matched rows) or "-" for a missing value. Without this,
+        DataTable.sort()'s default key (the raw string) sorts
+        lexicographically — "1024" < "2048" < "512" — which reads as
+        "sorting doesn't work" for any numeric column. Non-numeric/missing
+        cells sort first (treated as the lowest possible value).
+        """
+        text = re.sub(r"\[/?[^\]]+\]", "", str(raw)).replace("✓", "").strip()
+        m = re.search(r"-?\d+", text)
+        return int(m.group(0)) if m else -1
+
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
         if event.data_table.id != "results-table":
             return
-        # Сортировка по колонке (существующая логика)
+        idx = event.column_index
+        self._sort_reverse = (self._sort_col == idx) and not self._sort_reverse
+        self._sort_col = idx
+        table = event.data_table
+        if idx in self._NUMERIC_SORT_COLS:
+            table.sort(event.column_key, key=self._numeric_sort_key, reverse=self._sort_reverse)
+        else:
+            table.sort(event.column_key, reverse=self._sort_reverse)
+        # Update column labels — show sort arrow on active column
+        try:
+            for i, col in enumerate(table.ordered_columns):
+                name = _RESULTS_COL_NAMES[i] if i < len(_RESULTS_COL_NAMES) else str(col.label).split(" ")[0]
+                if i == idx:
+                    arrow = "▼" if self._sort_reverse else "▲"
+                    col.label = Text(f"{name} {arrow}")
+                else:
+                    col.label = Text(name)
+            table.refresh()
+        except Exception:
+            pass
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """При выборе строки — показать детали."""
         if event.data_table.id != "results-table":
             return
-        idx = event.cursor_row
-        if idx < 0 or idx >= len(self._all_results):
+        result = self._result_at_row(event.data_table, event.cursor_row)
+        if result is None:
             return
-        self._show_detail(self._all_results[idx])
+        self._show_detail(result)
 
     def _show_detail(self, result: IntruderResult) -> None:
         """Показать детальную панель с request/response."""
@@ -1374,13 +1981,6 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             return self._current_result.request_raw
         return ""
 
-    def _apply_sort(self) -> None:
-        """Apply current sort to results table."""
-        if not self._sort_col:
-            return
-        self._sort_col = col_name
-        event.data_table.sort(col_name, reverse=self._sort_reverse)
-
     def on_mouse_down(self, event) -> None:
         if not (event.button == 1 and event.ctrl):
             return
@@ -1408,9 +2008,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     def _send_selected_to_repeater(self) -> None:
         try:
             table = self.query_one("#results-table", DataTable)
-            cursor_row = table.cursor_row
-            if 0 <= cursor_row < len(self._all_results):
-                result = self._all_results[cursor_row]
+            result = self._result_at_row(table, table.cursor_row)
+            if result is not None:
                 self.app.post_message(SendToRepeater(result.request_raw))  # type: ignore[attr-defined]
         except Exception:
             pass
@@ -1419,9 +2018,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         try:
             from pentool.tui.messages import SendHostToScanner
             table = self.query_one("#results-table", DataTable)
-            cursor_row = table.cursor_row
-            if 0 <= cursor_row < len(self._all_results):
-                result = self._all_results[cursor_row]
+            result = self._result_at_row(table, table.cursor_row)
+            if result is not None:
                 # Parse URL from raw request
                 raw = result.request_raw or ""
                 host = ""
@@ -1440,9 +2038,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     def _copy_selected_payload(self) -> None:
         try:
             table = self.query_one("#results-table", DataTable)
-            cursor_row = table.cursor_row
-            if 0 <= cursor_row < len(self._all_results):
-                result = self._all_results[cursor_row]
+            result = self._result_at_row(table, table.cursor_row)
+            if result is not None:
                 payload_str = " | ".join(result.payload_values)
                 from pentool.utils.copy_as import copy_to_clipboard
                 copy_to_clipboard(payload_str)
@@ -1482,9 +2079,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             if not path.endswith(".csv"):
                 path += ".csv"
             try:
-                attack = getattr(self, "_current_attack", None)
-                if attack:
-                    attack.export_csv(path)
+                if self._api is not None:
+                    self._api.export_csv(path)
                     self.app.notify(f"Exported to {path}", timeout=4)
             except Exception as exc:
                 self.app.notify(f"Export failed: {exc}", severity="error", timeout=5)
@@ -1580,32 +2176,110 @@ class _InputDialog(ModalScreen):
             self._do_add()
 
 class _GenerateDialog(ModalScreen):
+    """Generate… dialog — Numeric range or Char (alphabet brute-force) mode.
+
+    Returns a lazy NumericPayloadSource/CharPayloadSource (never a
+    materialized list) via dismiss() — see _on_payloads_generated, which
+    appends it to the active payload set without enumerating it. This
+    matters most for Char mode: a modest charset/length is already a
+    combinatorial explosion (see CharPayloadSource's docstring), and even
+    Numeric mode used to freeze the UI once _refresh_payload_list() tried
+    to render tens of thousands of ListItem widgets for an eagerly
+    generated range.
+    """
+
     DEFAULT_CSS = _CSS
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             with Horizontal(classes="row"):
-                yield Label("From:")
-                yield Input("0", id="gen-start", compact=True)
-            with Horizontal(classes="row"):
-                yield Label("To:")
-                yield Input("100", id="gen-end", compact=True)
-            with Horizontal(classes="row"):
-                yield Label("Step:")
-                yield Input("1", id="gen-step", compact=True)
+                yield Label("Mode:")
+                yield OptionCycler(
+                    [("Numeric range", "numeric"), ("Char brute-force", "char")],
+                    initial="numeric", id="mode-select",
+                )
+            with Vertical(id="numeric-fields"):
+                with Horizontal(classes="row"):
+                    yield Label("From:")
+                    yield Input("0", id="gen-start", compact=True)
+                with Horizontal(classes="row"):
+                    yield Label("To:")
+                    yield Input("100", id="gen-end", compact=True)
+                with Horizontal(classes="row"):
+                    yield Label("Step:")
+                    yield Input("1", id="gen-step", compact=True)
+            with Vertical(id="char-fields"):
+                with Horizontal(classes="row"):
+                    yield Label("Charset:")
+                    yield Input("abcdefghijklmnopqrstuvwxyz0123456789", id="gen-charset", compact=True)
+                with Horizontal(classes="row"):
+                    yield Label("Min len:")
+                    yield Input("1", id="gen-minlen", compact=True)
+                with Horizontal(classes="row"):
+                    yield Label("Max len:")
+                    yield Input("3", id="gen-maxlen", compact=True)
+            yield Static("", id="preview-label")
             with Horizontal(id="buttons"):
                 yield ToolbarButton("✔ Generate", "btn-gen-ok")
                 yield ToolbarButton("✕ Cancel",   "btn-gen-cancel")
 
+    def on_mount(self) -> None:
+        self._sync_mode_visibility()
+        self._update_preview()
+
+    def _sync_mode_visibility(self) -> None:
+        mode = self.query_one("#mode-select", OptionCycler).value
+        try:
+            self.query_one("#numeric-fields").display = (mode == "numeric")
+            self.query_one("#char-fields").display = (mode == "char")
+        except Exception:
+            pass
+
+    def _build_source(self):
+        """Build the lazy source for the currently-selected mode, or None
+        if the current field values don't parse (never raises)."""
+        mode = self.query_one("#mode-select", OptionCycler).value
+        try:
+            if mode == "numeric":
+                start = int(self.query_one("#gen-start", Input).value or "0")
+                end   = int(self.query_one("#gen-end",   Input).value or "100")
+                step  = int(self.query_one("#gen-step",  Input).value or "1")
+                return NumericPayloadSource(start, end, step)
+            else:
+                charset = self.query_one("#gen-charset", Input).value or ""
+                min_len = int(self.query_one("#gen-minlen", Input).value or "1")
+                max_len = int(self.query_one("#gen-maxlen", Input).value or "1")
+                return CharPayloadSource(charset, min_len, max_len)
+        except Exception:
+            return None
+
+    def _update_preview(self) -> None:
+        """Show the resulting count — computed via len() (O(1)/closed-form
+        for both source types, see their docstrings) so previewing a huge
+        range/charset never enumerates it."""
+        try:
+            label = self.query_one("#preview-label", Static)
+        except Exception:
+            return
+        source = self._build_source()
+        if source is None:
+            label.update("[dim]invalid input[/dim]")
+            return
+        n = len(source)
+        label.update(f"[dim]→ {n:,} payload(s)[/dim]")
+
+    @on(OptionCycler.Changed, "#mode-select")
+    def _mode_changed(self, _: OptionCycler.Changed) -> None:
+        self._sync_mode_visibility()
+        self._update_preview()
+
+    @on(Input.Changed)
+    def _field_changed(self, _: Input.Changed) -> None:
+        self._update_preview()
+
     @on(ToolbarButton.Pressed, "#btn-gen-ok")
     def _gen_ok(self, _: ToolbarButton.Pressed) -> None:
-        try:
-            start = int(self.query_one("#gen-start", Input).value or "0")
-            end   = int(self.query_one("#gen-end",   Input).value or "100")
-            step  = int(self.query_one("#gen-step",  Input).value or "1")
-            self.dismiss(generate_numeric_payloads(start, end, step))
-        except Exception:
-            self.dismiss(None)
+        self.dismiss(self._build_source())
 
     @on(ToolbarButton.Pressed, "#btn-gen-cancel")
     def _gen_cancel(self, _: ToolbarButton.Pressed) -> None:

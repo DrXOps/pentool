@@ -12,6 +12,25 @@
 
 ---
 
+## 💸 Support & Pricing
+
+> Pentool is open-source and free to use. If it saves you time on a pentest — consider supporting development.  
+> Full pricing details and sponsorship options: **[pentool.pro](https://pentool.pro)**
+
+| | | |
+|---|---|---|
+| ⭐ **Sponsor (individual)** | **$5** one-time or /month | [Sponsor on GitHub](https://github.com/sponsors/DrXOps) |
+| 🏢 **Sponsor (company)** | **$50** one-time or /month | Logo in README + website · [pentool.pro/sponsor](https://pentool.pro/sponsor) |
+| 🔑 **PRO License — Early Access** | **$29** *(beta price, until Dec 31 2026)* | After release: $99/year |
+
+> **🎁 Beta loyalty discount:** Everyone who buys PRO for $29 gets a **lifetime 50% discount on annual renewal** (i.e. $49.50/year instead of $99).  
+> This discount applies **only to first buyers during the beta — until December 31, 2026**.
+
+**PRO license is issued manually during beta.**  
+To purchase, contact: **[@sudores](https://t.me/sudores)** (Telegram) · **dev@pentool.pro**
+
+---
+
 **Pentool** is a terminal-based (TUI) security toolkit for penetration testers and security researchers.  
 It combines HTTP interception, vulnerability scanning, automated attacks, and data analysis — all inside your terminal.  
 Fast, transparent, and built for real-world testing.
@@ -140,7 +159,8 @@ Pentool is built and maintained by a solo developer in spare time.
 If it saves you hours on a pentest — consider giving back. Every contribution directly funds new features, fixes, and faster releases.
 
 - ⭐ **[Star on GitHub](https://github.com/DrXOps/pentool)** — free, takes 2 seconds, helps visibility enormously
-- 🔑 **PRO license** — get early access and support development → **[@sudores](https://t.me/sudores)**
+- 💸 **[Sponsor the project](https://pentool.pro/sponsor)** — $5 (individual) or $50 (company, includes logo placement)
+- 🔑 **[PRO license — $29 beta price](https://pentool.pro)** — early access + lifetime loyalty discount
 - 💬 **Share** — tell a colleague, post a review, or mention Pentool in your writeups
 
 > Building tools is lonely work. A star or a kind word genuinely matters. Thank you. 🙏

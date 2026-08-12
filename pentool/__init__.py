@@ -1,6 +1,17 @@
 """Pentool — professional web security testing toolkit with Textual TUI."""
 
-__version__ = "0.2.8"
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
+try:
+    # Single source of truth: the version pip actually installed (matches
+    # `pentool --version` / `pip show pentool`), including dev-build suffixes
+    # like "0.2.8.dev5" that CI stamps only into the package metadata, not
+    # into this file. Falls back to the literal below for editable/dev
+    # checkouts where the package isn't registered in the environment.
+    __version__ = _pkg_version("pentool")
+except PackageNotFoundError:
+    __version__ = "0.2.9"
+
 __author__ = "pentool"
 
 

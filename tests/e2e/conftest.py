@@ -34,6 +34,12 @@ def patch_slow_io():
     - check_update_async      : HTTP + sleep(3) → мгновенный результат
     - _setup_signal_handlers  : регистрирует SIGTERM → вызывает sys.exit при teardown pytest
     - ProxyService.init_storage: создаёт aiosqlite non-daemon поток → блокирует exit
+    - BaseSqliteStorage.ensure_open: то же самое для IntruderRepository (и любого
+      другого BaseSqliteStorage-потомка с ленивым connect) — IntruderScreen
+      теперь держит один persistent aiosqlite-коннекшн на весь app lifecycle
+      (см. IntruderScreen._get_api()/reload_from_project(), фикс краша от
+      open/close-на-каждый-результат), но e2e-тесты не проходят через
+      action_quit()/close(), поэтому поток аналогично зависал бы на выходе.
     """
     from pentool.core.updater import UpdateInfo
 
@@ -46,6 +52,10 @@ def patch_slow_io():
         """Мок init_storage — не создаёт aiosqlite поток."""
         self._storage_ready = False  # storage disabled in E2E tests
 
+    async def _noop_ensure_open(self):
+        """Мок BaseSqliteStorage.ensure_open — не создаёт aiosqlite поток."""
+        return False
+
     def _noop_signals(self):
         """Не регистрировать SIGTERM/SIGINT — иначе pytest получает сигнал при выходе."""
         pass
@@ -55,5 +65,6 @@ def patch_slow_io():
         patch("pentool.core.updater.check_update_async", side_effect=_instant_update_check),
         patch("pentool.tui.app.PentoolApp._setup_signal_handlers", _noop_signals),
         patch("pentool.services.proxy_service.ProxyService.init_storage", _noop_init_storage),
+        patch("pentool.storage.base_sqlite_storage.BaseSqliteStorage.ensure_open", _noop_ensure_open),
     ):
         yield

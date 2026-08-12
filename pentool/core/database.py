@@ -56,6 +56,13 @@ CREATE TABLE IF NOT EXISTS intruder_state (
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- NOTE: tab_uid columns on intruder_state/intruder_results are NOT created
+-- here for the same reason as scanner_tabs.tab_uid below — CREATE TABLE IF
+-- NOT EXISTS is a no-op against a pre-existing (legacy) table, so an index
+-- referencing tab_uid at this point could fail with "no such column". Both
+-- columns are added via ALTER TABLE migrations further down, before their
+-- indexes are created.
+
 CREATE TABLE IF NOT EXISTS scanner_tabs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     tab_uid     TEXT    NOT NULL DEFAULT '',
@@ -195,12 +202,49 @@ async def init_db(db_path: str) -> None:
         except Exception:
             pass
 
+        # Migration: add tab_uid to intruder_state/intruder_results (for old
+        # DBs) — Intruder becomes multi-tab (mirrors Scanner's tab_uid
+        # pattern above): a stable identity generated once per tab and kept
+        # for its lifetime, persisted/restored independently of tab_name
+        # (which is cosmetic and user-renameable). Upserting intruder_state
+        # by tab_name alone (the old single-tab behavior) would let two
+        # differently-uid'd tabs sharing a name silently overwrite each
+        # other's saved template/payloads.
+        try:
+            await db.execute(
+                "ALTER TABLE intruder_state ADD COLUMN tab_uid TEXT DEFAULT ''"
+            )
+        except Exception:
+            pass  # Column already exists — expected
+        try:
+            await db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_intruder_state_uid "
+                "ON intruder_state (tab_uid)"
+            )
+        except Exception:
+            pass
+        try:
+            await db.execute(
+                "ALTER TABLE intruder_results ADD COLUMN tab_uid TEXT DEFAULT ''"
+            )
+        except Exception:
+            pass  # Column already exists — expected
+
         await db.commit()
 
 
 @asynccontextmanager
 async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
     """Context manager for obtaining a DB connection.
+
+    Sets WAL journal mode + a busy_timeout so a short overlap with another
+    writer to the same file (e.g. HttpStorage committing a captured Proxy
+    request while an Intruder attack result is being saved) waits and
+    retries instead of immediately raising "database is locked" — WAL lets
+    one writer + many readers proceed concurrently rather than serializing
+    on the default rollback-journal locking. HttpStorage already sets WAL
+    itself; this makes every other get_db() caller (Intruder/Scanner/
+    Repeater repositories) consistent with it against the same file.
 
     Args:
         db_path: Path to the SQLite file.
@@ -211,6 +255,8 @@ async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA foreign_keys = ON")
+        await db.execute("PRAGMA journal_mode = WAL")
+        await db.execute("PRAGMA busy_timeout = 5000")
         yield db
 
 

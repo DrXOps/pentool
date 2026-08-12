@@ -5,11 +5,18 @@ from __future__ import annotations
 import asyncio
 
 from pentool.api.base_api import ExportableAPI
+from pentool.api.intruder_repository import IntruderRepository
 from pentool.modules.intruder import (
     AttackType,
+    ChainedPayloadSource,
+    CharPayloadSource,
+    FilePayloadSource,
     IntruderAttack,
     IntruderConfig,
     IntruderResult,
+    NumericPayloadSource,
+    ProcessedPayloads,
+    count_lines_with_progress,
     count_markers,
     extract_marker_defaults,
     generate_char_payloads,
@@ -24,6 +31,12 @@ __all__ = [
     "IntruderAttack",
     "IntruderConfig",
     "IntruderResult",
+    "ChainedPayloadSource",
+    "CharPayloadSource",
+    "FilePayloadSource",
+    "NumericPayloadSource",
+    "ProcessedPayloads",
+    "count_lines_with_progress",
     "count_markers",
     "extract_marker_defaults",
     "generate_char_payloads",
@@ -33,13 +46,33 @@ __all__ = [
 ]
 
 
+
 class IntruderAPI(ExportableAPI):
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, http_client=None) -> None:
         self._db_path = db_path
+        # Optional injected HTTPClient (DIP — see
+        # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.2).
+        # IntruderAttack already accepted this as an optional constructor
+        # param (reusing one HTTPClient/connection pool across the whole
+        # attack — see the БАГ-D fix in modules/intruder.py) but IntruderAPI
+        # had no way to pass one in — it always let IntruderAttack create
+        # its own from scratch. Threading it through here just extends the
+        # existing `http_client=None` pattern one layer up, matching how
+        # ScannerAPI(db_path, http_client) already works. Does not apply to
+        # Turbo mode — TurboIntruderAttack manages its own aiohttp session
+        # pool internally by design (Keep-Alive tuning specific to Turbo),
+        # unrelated to this DI change.
+        self._http_client = http_client
         self._attack: IntruderAttack | None = None
         self._task: asyncio.Task | None = None
         self._restored_results: list = []
+        # SQL for tab state / attack results lives in IntruderRepository
+        # (see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.6)
+        # — mirrors ScannerTabRepository, the same extraction already done
+        # for Scanner. IntruderAPI keeps its existing public method names
+        # as a thin facade so no caller needs to change.
+        self._repo = IntruderRepository(db_path=db_path)
 
     async def start_attack(
         self,
@@ -69,7 +102,7 @@ class IntruderAPI(ExportableAPI):
             self._attack = TurboIntruderAttack(config)
         else:
             # Standard mode
-            self._attack = IntruderAttack(config, db_path=self._db_path)
+            self._attack = IntruderAttack(config, db_path=self._db_path, http_client=self._http_client)
 
         _on_result = on_result if on_result else lambda r: None
         _on_progress = on_progress if on_progress else lambda d, t: None
@@ -82,12 +115,22 @@ class IntruderAPI(ExportableAPI):
         return self._attack.attack_id if hasattr(self._attack, 'attack_id') else "turbo"
 
     async def pause(self) -> None:
-        if self._attack:
+        """Pause the running attack, if supported.
+
+        TurboIntruderAttack has no pause/resume — Turbo mode intentionally
+        runs to completion or stop() only (see modules/intruder_turbo.py).
+        Before this API method was actually reachable from IntruderScreen,
+        turbo_mode was silently never honored there (a pre-existing bug —
+        see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7),
+        so Pause/Resume during a real Turbo run was never exercised. Guard
+        with hasattr so enabling real Turbo mode doesn't crash Pause.
+        """
+        if self._attack and hasattr(self._attack, "pause"):
             await self._attack.pause()
 
     async def resume(self) -> None:
-        """Resume the attack after a pause."""
-        if self._attack:
+        """Resume the attack after a pause, if supported (see pause() note)."""
+        if self._attack and hasattr(self._attack, "resume"):
             await self._attack.resume()
 
     async def stop(self) -> None:
@@ -116,11 +159,24 @@ class IntruderAPI(ExportableAPI):
         return load_payloads_from_file(path)
 
     async def generate_numeric(self, start: int, end: int, step: int = 1) -> list[str]:
+        """Eager numeric generation — kept for backward compatibility.
+
+        Prefer constructing `NumericPayloadSource(start, end, step)` directly
+        for anything the UI will hold onto (see IntruderScreen._GenerateDialog),
+        since this materializes the whole range into a list immediately.
+        """
         return generate_numeric_payloads(start, end, step)
 
     async def generate_chars(
         self, charset: str, min_len: int, max_len: int
     ) -> list[str]:
+        """Eager charset brute-force generation — kept for backward
+        compatibility. Prefer constructing
+        `CharPayloadSource(charset, min_len, max_len)` directly — this
+        materializes every combination into a list immediately, which for
+        even a modest charset/length is a combinatorial explosion (see
+        CharPayloadSource's docstring).
+        """
         return generate_char_payloads(charset, min_len, max_len)
 
     def export_csv(self, path: str) -> None:
@@ -135,132 +191,52 @@ class IntruderAPI(ExportableAPI):
         template: str,
         attack_type: str,
         payloads: list[list[str]],
+        tab_uid: str = "",
     ) -> None:
         """Save Intruder tab state (template, attack type, payloads) to DB."""
-        if not self._db_path:
-            return
-        import json
+        await self._repo.save_state(tab_name, template, attack_type, payloads, tab_uid=tab_uid)
 
-        from pentool.core.database import get_db
-
-        async with get_db(self._db_path) as db:
-            # Delete old state for this tab
-            await db.execute("DELETE FROM intruder_state WHERE tab_name = ?", (tab_name,))
-            # Insert new state
-            await db.execute(
-                """INSERT INTO intruder_state (tab_name, template, attack_type, payloads_json, updated_at)
-                   VALUES (?, ?, ?, ?, datetime('now'))""",
-                (tab_name, template, attack_type, json.dumps(payloads)),
-            )
-            await db.commit()
-
-    async def load_state(self, tab_name: str) -> dict | None:
+    async def load_state(self, tab_name: str, tab_uid: str = "") -> dict | None:
         """Load Intruder tab state from DB."""
-        if not self._db_path:
-            return None
-        import json
+        return await self._repo.load_state(tab_name, tab_uid=tab_uid)
 
-        from pentool.core.database import get_db
+    async def get_tabs(self) -> list[dict]:
+        """List all Intruder tabs with saved state, most recently updated first."""
+        return await self._repo.get_tabs()
 
-        async with get_db(self._db_path) as db:
-            cursor = await db.execute(
-                "SELECT template, attack_type, payloads_json FROM intruder_state WHERE tab_name = ?",
-                (tab_name,),
-            )
-            row = await cursor.fetchone()
-            if not row:
-                return None
-            return {
-                "template": row[0],
-                "attack_type": row[1],
-                "payloads": json.loads(row[2]),
-            }
+    async def delete_tab(self, tab_uid: str) -> None:
+        """Delete a tab's saved state and results by its stable tab_uid."""
+        await self._repo.delete_tab(tab_uid)
 
-    async def save_result(self, result: IntruderResult, project_id: int | None = None) -> None:
+    async def switch_db(self, db_path: str) -> None:
+        """Point this API's repository at a different project DB file.
+
+        Lets IntruderScreen keep ONE persistent IntruderAPI/IntruderRepository
+        instance for the app's lifetime (mirrors ProxyService/HttpStorage)
+        instead of constructing a new one — and therefore a new SQLite
+        connection — on every single call. See BaseSqliteStorage.switch_db.
+        """
+        self._db_path = db_path
+        await self._repo.switch_db(db_path)
+
+    async def close(self) -> None:
+        """Close the underlying persistent SQLite connection, if open."""
+        await self._repo.close()
+
+    async def save_result(
+        self, result: IntruderResult, project_id: int | None = None, tab_uid: str = ""
+    ) -> None:
         """Save a single intruder result to DB."""
-        if not self._db_path:
-            return
-        import json
-
-        from pentool.core.database import get_db
-
-        async with get_db(self._db_path) as db:
-            await db.execute(
-                """INSERT INTO intruder_results
-                   (project_id, attack_id, request_number, payload_values, request_raw,
-                    response_raw, response_status, response_length, response_time_ms, error, timestamp)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    project_id,
-                    result.attack_id,
-                    result.request_number,
-                    json.dumps(result.payload_values),
-                    result.request_raw,
-                    result.response_raw,
-                    result.response_status,
-                    result.response_length,
-                    result.response_time_ms,
-                    result.error,
-                    result.timestamp.isoformat(),
-                ),
-            )
-            await db.commit()
+        await self._repo.save_result(result, project_id, tab_uid=tab_uid)
 
     async def get_results_from_db(
         self,
         attack_id: str | None = None,
         limit: int = 1000,
+        tab_uid: str = "",
     ) -> list[IntruderResult]:
         """Load intruder results from DB."""
-        if not self._db_path:
-            return []
-        import json
-        from datetime import datetime, timezone
-
-        from pentool.core.database import get_db
-
-        async with get_db(self._db_path) as db:
-            if attack_id:
-                cursor = await db.execute(
-                    """SELECT id, attack_id, request_number, payload_values, request_raw,
-                              response_raw, response_status, response_length, response_time_ms, error, timestamp
-                       FROM intruder_results WHERE attack_id = ?
-                       ORDER BY request_number LIMIT ?""",
-                    (attack_id, limit),
-                )
-            else:
-                cursor = await db.execute(
-                    """SELECT id, attack_id, request_number, payload_values, request_raw,
-                              response_raw, response_status, response_length, response_time_ms, error, timestamp
-                       FROM intruder_results
-                       ORDER BY timestamp DESC LIMIT ?""",
-                    (limit,),
-                )
-            rows = await cursor.fetchall()
-            results = []
-            for row in rows:
-                try:
-                    ts = datetime.fromisoformat(row[10])
-                    if ts.tzinfo is None:
-                        ts = ts.replace(tzinfo=timezone.utc)
-                except Exception:
-                    ts = datetime.now(timezone.utc)
-                results.append(
-                    IntruderResult(
-                        id=str(row[0]),
-                        attack_id=row[1],
-                        request_number=row[2],
-                        payload_values=json.loads(row[3]) if row[3] else [],
-                        request_raw=row[4],
-                        response_raw=row[5],
-                        response_status=row[6],
-                        response_length=row[7],
-                        response_time_ms=row[8],
-                        error=row[9],
-                        timestamp=ts,
-                    )
-                )
-            return results
+        return await self._repo.get_results(attack_id, limit, tab_uid=tab_uid)
 
     # ── Project persistence ────────────────────────────────────────────────────
 

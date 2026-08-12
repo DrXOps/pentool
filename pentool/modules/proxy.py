@@ -528,9 +528,26 @@ class ProxyServer:
         logger.debug("PROXY: _handle_http: %s %s (https=%s, intercept=%s, in_scope=%s)",
                     req.method, req.url, is_https, self.intercept_enabled, self.is_in_scope(host))
 
-        # Check scope (for HTTP; HTTPS already checked in _handle_connect)
+        # Check scope on every request, HTTP and HTTPS alike.
         # (only enforced when the user turned on "Skip out-of-scope")
-        if self.enforce_scope and not is_https and not self.is_in_scope(host):
+        #
+        # BEFORE: `not is_https` meant HTTPS requests were only scope-checked
+        # once, at CONNECT time (_handle_connect), before the TLS tunnel was
+        # established. A browser's keep-alive HTTPS connection can carry many
+        # requests over its lifetime — if that connection was opened (and
+        # deemed in-scope at the time, e.g. because enforce_scope was still
+        # OFF, or the domain hadn't been added to Scope yet) before the user
+        # turned "Skip out-of-scope" on / edited Scope, every subsequent
+        # request on that already-open connection kept sailing straight
+        # through here (is_https=True skipped the check entirely) and into
+        # History, with no way to filter it out short of closing the
+        # connection. This is exactly the reported symptom: enabling
+        # "Skip out-of-scope" with only dvwa.local:7474 in Scope still let
+        # already-open github.com keep-alive traffic keep appearing in
+        # History. Checking scope per-request here (not just per-connection
+        # in _handle_connect) makes each individual HTTPS request honor the
+        # current enforce_scope/Scope state, the same as HTTP already did.
+        if self.enforce_scope and not self.is_in_scope(host):
             logger.debug("PROXY: _handle_http: host %s out of scope, forwarding direct", host)
             return await self._forward_direct(req, writer)
 

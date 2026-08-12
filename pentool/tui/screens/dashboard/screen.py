@@ -29,16 +29,38 @@ from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
+
+def _build_logo() -> str:
+    """Build the ASCII logo with the real installed pentool version.
+
+    Version line is centered within the same width as the other dashed
+    lines in the logo (kept fixed regardless of version string length,
+    so e.g. "0.2.8" vs "0.2.10" vs "0.2.8.dev4" don't visibly misalign
+    the block).
+    """
+    from pentool import __version__
+
+    inner_width = 77
+    label = f" Web Security Testing Platform v{__version__} "
+    dashes_total = max(inner_width - len(label), 0)
+    left = dashes_total // 2
+    right = dashes_total - left
+    version_line = "─" * left + label + "─" * right
+
+    return (
+        "[bold green] ██████╗ [/][bold cyan]███████╗[/][bold green]███╗   ██╗[/][bold cyan]████████╗[/][bold green] ██████╗  ██████╗ ██╗[/]\n"
+        "[bold green] ██╔══██╗[/][bold cyan]██╔════╝[/][bold green]████╗  ██║[/][bold cyan]╚══██╔══╝[/][bold green]██╔═══██╗██╔═══██╗██║[/]\n"
+        "[bold green] ██████╔╝[/][bold cyan]█████╗  [/][bold green]██╔██╗ ██║[/][bold cyan]   ██║   [/][bold green]██║   ██║██║   ██║██║[/]\n"
+        "[bold green] ██╔═══╝ [/][bold cyan]██╔══╝  [/][bold green]██║╚██╗██║[/][bold cyan]   ██║   [/][bold green]██║   ██║██║   ██║██║[/]\n"
+        "[bold green] ██║     [/][bold cyan]███████╗[/][bold green]██║ ╚████║[/][bold cyan]   ██║   [/][bold green]╚██████╔╝╚██████╔╝███████╗[/]\n"
+        "[bold green] ╚═╝     [/][bold cyan]╚══════╝[/][bold green]╚═╝  ╚═══╝[/][bold cyan]   ╚═╝   [/][bold green] ╚═════╝  ╚═════╝ ╚══════╝[/]\n"
+        f"[dim green]{version_line}[/]\n"
+        "[dim]                           by @sudores (aka DoctorX)                           [/]"
+    )
+
+
 # Module constants
-_LOGO = """\
-[bold green] ██████╗ [/][bold cyan]███████╗[/][bold green]███╗   ██╗[/][bold cyan]████████╗[/][bold green] ██████╗  ██████╗ ██╗[/]
-[bold green] ██╔══██╗[/][bold cyan]██╔════╝[/][bold green]████╗  ██║[/][bold cyan]╚══██╔══╝[/][bold green]██╔═══██╗██╔═══██╗██║[/]
-[bold green] ██████╔╝[/][bold cyan]█████╗  [/][bold green]██╔██╗ ██║[/][bold cyan]   ██║   [/][bold green]██║   ██║██║   ██║██║[/]
-[bold green] ██╔═══╝ [/][bold cyan]██╔══╝  [/][bold green]██║╚██╗██║[/][bold cyan]   ██║   [/][bold green]██║   ██║██║   ██║██║[/]
-[bold green] ██║     [/][bold cyan]███████╗[/][bold green]██║ ╚████║[/][bold cyan]   ██║   [/][bold green]╚██████╔╝╚██████╔╝███████╗[/]
-[bold green] ╚═╝     [/][bold cyan]╚══════╝[/][bold green]╚═╝  ╚═══╝[/][bold cyan]   ╚═╝   [/][bold green] ╚═════╝  ╚═════╝ ╚══════╝[/]
-[dim green]──────────────────── Web Security Testing Platform v1.0 ─────────────────────[/]
-[dim]                           by @sudores (aka DoctorX)                           [/]"""
+_LOGO = _build_logo()
 
 _BOOT_LINES = [
     ("[dim green]", "> Mounting kernel modules..."),

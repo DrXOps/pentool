@@ -20,6 +20,7 @@ from pentool.core.events import (
 )
 from pentool.core.logging import get_logger
 from pentool.services.base_service import BaseService
+from pentool.utils.auth_headers import extract_auth_headers
 
 logger = get_logger(__name__)
 
@@ -83,8 +84,7 @@ class ScanService(BaseService):
         self._stop_requested = True
         self._spider.stop()
         try:
-            engine = self._scanner._get_engine()
-            engine.request_stop()
+            self._scanner.request_active_stop()
         except Exception:
             pass
 
@@ -199,11 +199,11 @@ class ScanService(BaseService):
             follow_redirects=True,
             verify_ssl=cfg.verify_ssl,
         )
-        engine = self._scanner._get_engine()
-        engine._http_client = http_client
-        engine._concurrency = config.threads
-        engine._request_delay = config.delay_sec
-        engine._stop_requested = False
+        self._scanner.configure_engine(
+            http_client=http_client,
+            concurrency=config.threads,
+            request_delay=config.delay_sec,
+        )
 
         try:
             if config.seed_requests:
@@ -225,7 +225,7 @@ class ScanService(BaseService):
                 f"[bold]{len(all_reqs)}[/bold] requests…"
             )
 
-            active_findings = await engine.run_active_on_requests(
+            active_findings = await self._scanner.run_active_on_requests(
                 seed_requests=all_reqs,
                 check_names=config.check_names,
                 on_finding=on_finding,
@@ -243,7 +243,7 @@ class ScanService(BaseService):
             await http_client.close()
 
         if not self._stop_requested:
-            await engine.save_findings(all_findings)
+            await self._scanner.save_findings(all_findings)
 
         return all_findings
 
@@ -265,17 +265,17 @@ class ScanService(BaseService):
             elif parsed.port == 80 and parsed.scheme == "http":
                 base_url = urlunparse(parsed._replace(netloc=parsed.hostname))
 
-            # Pass auth headers (Cookie, Authorization) from seed_requests
+            # Pass auth headers (Cookie, Authorization) from seed_requests —
+            # explicit ones win; SpiderAPI.crawl() also auto-discovers a
+            # session from Proxy History via db_path as a fallback when no
+            # seed_requests were supplied (see utils/auth_headers.py).
             auth_headers: dict = {}
             if config.seed_requests:
                 raw_hdrs = dict(config.seed_requests[0].headers or {})
-                _AUTH_KEYS = {"cookie", "authorization", "x-auth-token", "x-api-key",
-                              "x-access-token", "bearer", "session"}
-                auth_headers = {
-                    k: v for k, v in raw_hdrs.items()
-                    if k.lower() in _AUTH_KEYS
-                }
-            result = await self._spider.crawl(base_url, extra_headers=auth_headers)
+                auth_headers = extract_auth_headers(raw_hdrs)
+            result = await self._spider.crawl(
+                base_url, extra_headers=auth_headers, db_path=config.db_path,
+            )
             base_host = urlparse(base_url).netloc
 
             self._log(

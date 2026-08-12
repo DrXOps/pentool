@@ -6,7 +6,7 @@ import asyncio
 import re
 from dataclasses import dataclass, field
 from typing import Callable
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from pentool.core.logging import get_logger
 from pentool.utils.scope import domain_in_scope
@@ -148,6 +148,28 @@ class AsyncSpider:
         else:
             # Regular aiohttp crawling
             import aiohttp
+
+            # Callers (Target's "Crawl Scope"/"Crawl selected host", Spider's
+            # own URL input when the user typed a bare host) default a
+            # scheme-less host to https:// unconditionally. That's wrong for
+            # a plain-HTTP target on a non-standard port (e.g. a local
+            # dvwa.local:7474 test box) — TLS ClientHello sent to a plain
+            # HTTP listener comes back as "SSL: WRONG_VERSION_NUMBER" and the
+            # crawl silently produces 0 pages/0 forms/0 endpoints with no
+            # obvious explanation in the UI (see log:
+            # "SpiderAPI.crawl: https://dvwa.local:7474 -> 0 pages, 0 forms,
+            # 0 endpoints" right after a WRONG_VERSION_NUMBER debug line).
+            # Probe once and fall back to http:// on that specific failure
+            # before doing anything else — cheap (single GET, short timeout)
+            # and never runs for a URL the caller already gave an explicit
+            # scheme for with a working TLS listener.
+            base_scheme, start_url = await self._resolve_scheme(
+                start_url, base_scheme, base_domain,
+            )
+            parsed = urlparse(start_url)
+            base_domain = parsed.netloc
+            queue = [(start_url, 0)]
+
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             headers = {
                 "User-Agent": self.user_agent,
@@ -203,6 +225,49 @@ class AsyncSpider:
         result.js_files = list(dict.fromkeys(result.js_files))
         result.total_requests = len(visited)
         return result
+
+    async def _resolve_scheme(
+        self, start_url: str, scheme: str, domain: str,
+    ) -> tuple[str, str]:
+        """If `scheme` is https and the target actually only speaks plain
+        HTTP (common on internal/test targets with non-standard ports —
+        e.g. dvwa.local:7474), fall back to http:// after one quick probe.
+
+        Only probes when scheme == "https" — an explicit http:// URL is
+        never "corrected" to https, and a working https target pays only
+        one extra GET (same host, already about to be crawled anyway).
+        Any failure other than the specific SSL handshake mismatch (timeout,
+        DNS error, connection refused, real cert error, ...) is left alone
+        so the existing crawl (and its own error reporting) still runs and
+        surfaces the real problem instead of masking it as a scheme issue.
+        """
+        if scheme != "https" or not domain:
+            return scheme, start_url
+
+        import aiohttp
+        import ssl
+
+        try:
+            probe_timeout = aiohttp.ClientTimeout(total=min(self.timeout, 5.0))
+            async with aiohttp.ClientSession(timeout=probe_timeout) as session:
+                async with session.get(start_url, ssl=False, allow_redirects=False):
+                    pass
+            return scheme, start_url
+        except (aiohttp.ClientConnectorSSLError, ssl.SSLError) as exc:
+            if "WRONG_VERSION_NUMBER" not in str(exc):
+                return scheme, start_url
+            http_url = start_url.replace("https://", "http://", 1)
+            logger.info(
+                "AsyncSpider: %s speaks plain HTTP, not HTTPS (WRONG_VERSION_NUMBER) "
+                "— retrying crawl as %s",
+                domain, http_url,
+            )
+            return "http", http_url
+        except Exception:
+            # Any other failure (timeout, DNS, connection refused, real TLS
+            # cert error, ...) — leave scheme as-is, let the real crawl hit
+            # (and report) the same error itself.
+            return scheme, start_url
 
     # ── robots.txt + sitemap.xml ─────────────────────────────────────────────
 
@@ -583,6 +648,20 @@ class AsyncSpider:
                     fields=fields,
                     page_url=page_url,
                 ))
+                # Auto-submit GET forms with their default field values so
+                # pages only reachable through a form (search boxes,
+                # filters, ...) still get crawled — a common cause of
+                # "the crawler misses pages" complaints in other scanners.
+                # Deliberately GET-only: submitting POST forms could trigger
+                # real side effects on the target (create/delete/state
+                # changes), which needs explicit user opt-in and CSRF
+                # handling — not something to do silently during a crawl.
+                # See MYPLANS inbox note for future POST-form consideration.
+                if method == "GET" and any(f.value for f in fields):
+                    query = urlencode([(f.name, f.value) for f in fields])
+                    if query:
+                        sep = "&" if urlparse(action).query else "?"
+                        _add_link(f"{action}{sep}{query}")
 
         return links, forms, js_links
 

@@ -490,8 +490,6 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.scanner.screen import ScannerScreen
                 scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
-                if scanner_screen._scanner_api is not None:
-                    scanner_screen._scanner_api._db_path = path
                 scanner_screen._scanner_api = None
                 scanner_screen._scanner_api = scanner_screen._get_or_create_api(path)
                 scanner_screen._populate_from_db([])
@@ -524,12 +522,22 @@ class ProjectManager:
             except Exception as exc:
                 logger.debug("_reload_project_screens dashboard: %s", exc)
 
+        async def _reload_intruder() -> None:
+            try:
+                from pentool.tui.screens.intruder.screen import IntruderScreen
+                intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
+                await intruder_screen.reload_from_project(path)
+                logger.info("_reload_project_screens: intruder reloaded from %s", path)
+            except Exception as exc:
+                logger.debug("_reload_project_screens intruder: %s", exc)
+
         await asyncio.gather(
             _reload_repeater(),
             _reload_proxy(),
             _reload_scanner(),
             _reload_target(),
             _reload_dashboard(),
+            _reload_intruder(),
         )
 
     async def _init_new_db(self, path: str) -> None:

@@ -13,6 +13,13 @@ RepeaterScreen #tabs-area {
     height: 1fr;
     layout: vertical;
 }
+RepeaterScreen #content-row {
+    height: 1fr;
+    layout: horizontal;
+}
+RepeaterScreen #content-row > #tabs-area {
+    width: 1fr;
+}
 RepeaterScreen TabbedContent {
     height: 1fr;
 }

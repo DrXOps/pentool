@@ -223,9 +223,12 @@ class SpiderScreen(Widget):
             respect_scope=scope,
         )
         self._spider = SpiderAPI(config=cfg)
+        db_path = getattr(self.app, "db_path", "") or getattr(self.app, "_db_path", "")
 
         try:
-            result = await self._spider.crawl(url, on_page=on_page, on_progress=on_progress)
+            result = await self._spider.crawl(
+                url, on_page=on_page, on_progress=on_progress, db_path=db_path,
+            )
             self._result = result
             self._on_spider_done(result)
         except Exception as exc:

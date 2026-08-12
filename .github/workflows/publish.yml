@@ -28,6 +28,9 @@ jobs:
     - name: Check package
       run: twine check dist/*
 
+    - name: Smoke test (install wheel in clean venv, import + CLI check)
+      run: bash scripts/smoke_test.sh
+
     - name: Publish to PyPI
       env:
         TWINE_USERNAME: __token__

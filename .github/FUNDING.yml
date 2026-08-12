@@ -1,0 +1,6 @@
+# GitHub Sponsors button configuration.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-github-repository/displaying-a-sponsor-button-in-your-repository
+
+github: [DrXOps]
+custom:
+  - https://pentool.pro/sponsor

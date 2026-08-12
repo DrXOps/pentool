@@ -36,6 +36,11 @@ def patch_tui_io():
     - check_update_async     : HTTP + sleep(3) → мгновенный результат
     - _setup_signal_handlers : не регистрировать SIGTERM/SIGINT
     - ProxyService.init_storage: aiosqlite non-daemon поток → блокирует exit
+    - BaseSqliteStorage.ensure_open: то же самое для IntruderRepository —
+      IntruderScreen теперь держит один persistent aiosqlite-коннекшн на
+      весь app lifecycle (см. IntruderScreen._get_api()), но интеграционные
+      TUI-тесты не закрывают его явно — без мока поток зависает между
+      тестами так же, как ProxyService's до этого мока.
     """
     from pentool.core.updater import UpdateInfo
 
@@ -44,6 +49,9 @@ def patch_tui_io():
 
     async def _noop_init_storage(self):
         self._storage_ready = False
+
+    async def _noop_ensure_open(self):
+        return False
 
     def _noop_signals(self):
         pass
@@ -61,6 +69,7 @@ def patch_tui_io():
         patch("pentool.core.updater.check_update_async", side_effect=_instant_update_check),
         patch("pentool.tui.app.PentoolApp._setup_signal_handlers", _noop_signals),
         patch("pentool.services.proxy_service.ProxyService.init_storage", _noop_init_storage),
+        patch("pentool.storage.base_sqlite_storage.BaseSqliteStorage.ensure_open", _noop_ensure_open),
         patch("pentool.tui.app.PentoolApp._start_proxy", _noop_start_proxy),
         patch("pentool.tui.app.PentoolApp._auto_open_last_project", _noop_auto_open),
     ):
