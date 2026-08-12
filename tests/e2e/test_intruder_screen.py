@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import pytest
+from textual.widgets import TextArea
 
 from pentool.tui.app import PentoolApp
 from pentool.tui.screens.intruder.screen import IntruderScreen
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.utils.parser import ParsedRequest
 
 
@@ -211,5 +213,122 @@ class TestIntruderScreen:
             assert isinstance(screen._payloads[0], ChainedPayloadSource)
             assert len(screen._payloads[0]) == 10
             assert list(screen._payloads[0]) == [str(n) for n in range(10)]
+
+    async def test_reload_from_project_resets_template_when_new_project_has_no_state(
+        self, tmp_path
+    ) -> None:
+        """Regression: switching to a brand-new project (with no saved
+        intruder_state row) must reset the template/payloads/attack type to
+        their defaults — not keep showing whatever the PREVIOUS project had.
+
+        Before the fix, reload_from_project() only cleared
+        self._all_results/#results-table up front; _do_load_state() then
+        called api.load_state(...), found no row for the new project, and
+        returned early WITHOUT resetting anything else — so the template
+        text, payload sets, and attack type from the previous project stayed
+        on screen as stale artifacts.
+
+        DB calls (switch_db / load_state / get_results) are mocked so no
+        real aiosqlite connection is opened — the e2e conftest already mocks
+        BaseSqliteStorage.ensure_open, but reload_from_project() also calls
+        api.switch_db() which bypasses ensure_open and directly calls
+        _connect(), leaving a background aiosqlite thread that blocks
+        process exit. Mocking at the IntruderAPI level avoids the thread.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        app = PentoolApp()
+        app._skip_project_guard = True
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("I")
+            await pilot.pause()
+            await pilot.pause()
+
+            screen = app.query_one(IntruderScreen)
+
+            # Simulate "previous project" state: a custom template and a
+            # non-default payload set, as if the user had been working here.
+            editor = screen.query_one("#template-editor", TextArea)
+            editor.text = "GET /leftover-from-old-project HTTP/1.1\r\n\r\n"
+            screen._payloads = [["leftover-payload-1", "leftover-payload-2"]]
+
+            # Mock DB calls so no real aiosqlite connection is opened.
+            # load_state returns None → simulates an empty/brand-new project DB.
+            with patch.object(screen, "_get_api", return_value=None), \
+                 patch("pentool.api.intruder_api.IntruderAPI.switch_db", AsyncMock()), \
+                 patch("pentool.api.intruder_api.IntruderAPI.load_state",
+                       AsyncMock(return_value=None)), \
+                 patch("pentool.api.intruder_api.IntruderAPI.get_results_from_db",
+                       AsyncMock(return_value=[])):
+                await screen.reload_from_project("brand_new_project.db")
+                await pilot.pause()
+                await pilot.pause()
+
+            assert "leftover-from-old-project" not in editor.text
+            assert screen._payloads == [[]]
+
+    async def test_pause_resume_button_label_toggles(self) -> None:
+        """Regression: '#btn-pause' label must switch between "⏸ Pause" and
+        "▶ Resume" as action_toggle_pause() is called — before the fix, the
+        label never changed from its initial "⏸ Pause" text regardless of
+        the actual paused/running state.
+        """
+        from unittest.mock import AsyncMock
+
+        app = PentoolApp()
+        app._skip_project_guard = True
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("I")
+            await pilot.pause()
+            await pilot.pause()
+
+            screen = app.query_one(IntruderScreen)
+            btn = screen.query_one("#btn-pause", ToolbarButton)
+
+            # Simulate an attack in progress with a fake API (no real HTTP).
+            screen._attack_running = True
+            screen._api = AsyncMock()
+            assert btn.label == "⏸ Pause"
+
+            screen.action_toggle_pause()
+            await pilot.pause()
+            assert screen._paused is True
+            assert btn.label == "▶ Resume"
+
+            screen.action_toggle_pause()
+            await pilot.pause()
+            assert screen._paused is False
+            assert btn.label == "⏸ Pause"
+
+    async def test_stop_attack_resets_pause_label_even_when_paused(self) -> None:
+        """Regression: stopping an attack while it's paused must reset
+        '#btn-pause' back to "⏸ Pause" — otherwise the NEXT Start Attack
+        would show "▶ Resume" left over from the stopped run."""
+        from unittest.mock import AsyncMock
+
+        app = PentoolApp()
+        app._skip_project_guard = True
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("I")
+            await pilot.pause()
+            await pilot.pause()
+
+            screen = app.query_one(IntruderScreen)
+            btn = screen.query_one("#btn-pause", ToolbarButton)
+
+            screen._attack_running = True
+            screen._api = AsyncMock()
+            screen.action_toggle_pause()
+            await pilot.pause()
+            assert btn.label == "▶ Resume"
+
+            screen.action_stop_attack()
+            await pilot.pause()
+
+            assert screen._paused is False
+            assert btn.label == "⏸ Pause"
 
 

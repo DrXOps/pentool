@@ -421,15 +421,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         # init_storage is called from app.on_mount after _proxy_service injection
         # БАГ-C: periodic cleanup of stale _pending_req_ids entries (memory leak fix)
         self.set_interval(300, self._cleanup_pending_req_ids)
-        # Set initial ScopeToggle state from config
-        try:
-            from pentool.core.config import get_config
-            from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
-            scope = get_config().scope
-            filter_bar = self.query_one("#filter-bar", FilterBar)
-            filter_bar.query_one("#fb-scope", ScopeToggle).set_scope_empty(not bool(scope))
-        except Exception:
-            pass
+        # Load the per-project Scope host list (falls back to the global
+        # Config.scope only if this project's DB has nothing saved yet —
+        # see _load_scope_setting). Replaces the old "set initial
+        # ScopeToggle state from Config" block, which read Config.scope
+        # directly and never re-synced proxy.scope itself — the bug behind
+        # "★ Scope button stops working after reopening an older project".
+        self.run_worker(self._load_scope_setting())
         # Load the per-project "Skip out-of-scope" flag (defaults to OFF for
         # a fresh mount — _reload_from_storage reloads it again after any
         # subsequent project switch)
@@ -662,14 +660,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
 
     def load_from_project(self) -> None:
         """Called after a project switch — reloads the table from the (already switched) storage."""
-        try:
-            from pentool.core.config import get_config
-            from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
-            scope = get_config().scope
-            filter_bar = self.query_one("#filter-bar", FilterBar)
-            filter_bar.query_one("#fb-scope", ScopeToggle).set_scope_empty(not bool(scope))
-        except Exception:
-            pass
         self.run_worker(self._reload_from_storage())
 
     async def _reload_from_proxy(self) -> None:
@@ -700,8 +690,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         logger.info("PROXY SCREEN: _reload_from_storage: storage ready, loading tables")
         await self._reload_table()
         await self._reload_ws_table()
-        # Reload the per-project "Skip out-of-scope" flag for the DB we just
-        # switched to — it must not leak from whatever project was open before.
+        # Reload the per-project Scope host list AND "Skip out-of-scope" flag
+        # for the DB we just switched to — neither must leak from whatever
+        # project was open before (see _load_scope_setting docstring for the
+        # "★ Scope button stops working after reopening an older project"
+        # bug this fixes).
+        await self._load_scope_setting()
         await self._load_enforce_scope_setting()
         logger.info("PROXY SCREEN: _reload_from_storage: tables reloaded")
 
@@ -1593,7 +1587,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 old_scope = set(current or [])
                 new_scope = set(result)
                 proxy.set_scope(result)
-                # Sync scope into Config and save to disk
+                # Persist scope per-project (DB) — this is the source of
+                # truth restored on project switch (see _load_scope_setting).
+                self.run_worker(self._save_scope_setting(result))
+                # Also mirror into the global Config so a brand-new project
+                # (no project_settings row yet) starts from the last-used
+                # scope instead of empty — see _load_scope_setting fallback.
                 try:
                     from pentool.core.config import get_config
                     cfg = get_config()
@@ -1648,7 +1647,16 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             return
         enabled = not proxy.enforce_scope
         proxy.set_enforce_scope(enabled)
-        self._sync_enforce_scope_button()
+        # Pass `enabled` explicitly instead of letting _sync_enforce_scope_button
+        # re-read proxy.enforce_scope — set_enforce_scope() defers the actual
+        # attribute write via call_soon_threadsafe onto the proxy's own event
+        # loop (a different thread) when the proxy is running, so reading it
+        # back immediately here could still see the OLD value. That's what
+        # made the button's checkbox lag one click behind the real state:
+        # click 1 flips the real flag (eventually) but the button re-read the
+        # stale value and showed unchecked; click 2 then showed the PREVIOUS
+        # click's real state while flipping the flag again for next time.
+        self._sync_enforce_scope_button(enabled)
         self.run_worker(self._save_enforce_scope_setting(enabled))
         if enabled and not proxy.scope:
             # Scope host list is empty — is_in_scope() treats an empty list as
@@ -1683,7 +1691,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
 
         Called after a project switch (and on initial mount) — the flag is
         stored per-project so it doesn't leak between different projects the
-        way the global Scope host list could.
+        way the global Scope host list used to (see _load_scope_setting,
+        which now fixes that too).
         """
         proxy = self._get_proxy()
         if proxy is None:
@@ -1697,15 +1706,92 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             logger.debug("_load_enforce_scope_setting: %s", exc)
             enabled = False
         proxy.set_enforce_scope(enabled)
-        self._sync_enforce_scope_button()
+        # Pass `enabled` explicitly — same rationale as in
+        # action_toggle_enforce_scope: set_enforce_scope() defers the actual
+        # attribute write onto the proxy's own event loop when it's running,
+        # so re-reading proxy.enforce_scope right after calling it could
+        # still observe the pre-call value.
+        self._sync_enforce_scope_button(enabled)
 
-    def _sync_enforce_scope_button(self) -> None:
+    async def _save_scope_setting(self, hosts: list[str]) -> None:
+        """Persist the Scope host list into the current project's DB.
+
+        Mirrors _save_enforce_scope_setting — before this, the host list
+        was only ever saved to the GLOBAL ~/.config/pentool/config.yaml
+        (Config.scope), never per-project. That meant reopening an older
+        project after working in a different one restored the wrong scope
+        (whatever Config.scope happened to hold last), which both left the
+        '★ Scope' filter button looking stuck/inactive (ScopeToggle synced
+        off Config.scope, not proxy.scope) and made "Skip out-of-scope"
+        appear to do nothing (enforce_scope=True but proxy.scope didn't
+        match what the user actually configured for THIS project).
+        """
+        try:
+            import json
+            from pentool.core.database import set_project_setting
+            db_path = self._get_db_path()
+            if db_path:
+                await set_project_setting(db_path, "proxy.scope", json.dumps(hosts))
+        except Exception as exc:
+            logger.debug("_save_scope_setting: %s", exc)
+
+    async def _load_scope_setting(self) -> None:
+        """Load the persisted Scope host list for the current project's DB.
+
+        Called after a project switch (and on initial mount), alongside
+        _load_enforce_scope_setting — same per-project rationale. Falls
+        back to the global Config.scope only if this project's DB has no
+        saved scope yet (e.g. a DB created before this fix, or a brand-new
+        project that hasn't had Scope configured), so behavior for
+        pre-existing single-project setups doesn't regress.
+        """
         proxy = self._get_proxy()
+        if proxy is None:
+            return
+        hosts: list[str] | None = None
+        try:
+            import json
+            from pentool.core.database import get_project_setting
+            db_path = self._get_db_path()
+            raw = await get_project_setting(db_path, "proxy.scope", None) if db_path else None
+            if raw is not None:
+                hosts = json.loads(raw)
+        except Exception as exc:
+            logger.debug("_load_scope_setting: %s", exc)
+            hosts = None
+        if hosts is None:
+            try:
+                from pentool.core.config import get_config
+                hosts = list(get_config().scope)
+            except Exception:
+                hosts = []
+        proxy.set_scope(hosts)
+        try:
+            from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
+            filter_bar = self.query_one("#filter-bar", FilterBar)
+            filter_bar.query_one("#fb-scope", ScopeToggle).set_scope_empty(not bool(hosts))
+        except Exception:
+            pass
+
+    def _sync_enforce_scope_button(self, enabled: bool | None = None) -> None:
+        """Sync the '☐/☑ Skip out-of-scope' button label/class.
+
+        `enabled` lets a caller that just called `proxy.set_enforce_scope()`
+        pass the value it's setting explicitly, instead of this method
+        re-reading `proxy.enforce_scope` — which may not have been written
+        yet if the proxy loop is running (see set_enforce_scope's
+        call_soon_threadsafe). Callers that run after the write is known to
+        have landed (on_mount, after awaiting _load_enforce_scope_setting)
+        can omit it and this falls back to reading the live value.
+        """
+        proxy = self._get_proxy()
+        if enabled is None:
+            enabled = bool(proxy and proxy.enforce_scope)
         try:
             btn = self.query_one("#btn-enforce-scope", ToolbarButton)
         except Exception:
             return
-        if proxy and proxy.enforce_scope:
+        if enabled:
             btn.label = "☑ Skip out-of-scope"
             btn.add_class("active")
         else:
@@ -1976,6 +2062,17 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 self._sync_target_host_scope(host, False)
             else:
                 self.app.notify(f"{host} is not in scope", timeout=2)
+        # Persist per-project (DB) so it survives a project switch, plus
+        # mirror into the global Config as the last-used fallback — same
+        # two writes as action_open_scope._apply.
+        await self._save_scope_setting(list(proxy.scope))
+        try:
+            from pentool.core.config import get_config
+            cfg = get_config()
+            cfg.scope = list(proxy.scope)
+            cfg.save()
+        except Exception as e:
+            logger.warning("_do_scope_action: failed to save scope to config: %s", e)
         # Update ★ Scope button state in FilterBar
         try:
             from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle

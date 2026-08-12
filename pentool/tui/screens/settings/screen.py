@@ -8,7 +8,6 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.message import Message
 from textual.timer import Timer
 from textual.widget import Widget
 
@@ -24,62 +23,13 @@ from textual.widgets import (
 
 from pentool.tui.screens.settings.hotkeys import HotkeySettingsScreen
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
+from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
 class UIMode(str, Enum):
     BASIC = "basic"
     ADVANCED = "advanced"
-
-
-class OptionCycler(Static):
-    """Option toggle button — each click cycles through values."""
-
-    DEFAULT_CSS = _CSS
-
-    class Changed(Message):
-        def __init__(self, cycler: "OptionCycler", value: str) -> None:
-            super().__init__()
-            self.option_cycler = cycler
-            self.value = value
-
-        @property
-        def control(self):  # type: ignore[override]
-            return self.option_cycler
-
-    def __init__(self, options: list[tuple[str, str]], initial: str = "", **kwargs) -> None:
-        """options: list of (label, value)"""
-        super().__init__("", **kwargs)
-        self._options = options  # [(label, value), ...]
-        self._idx = 0
-        for i, (_, v) in enumerate(options):
-            if v == initial:
-                self._idx = i
-                break
-
-    def on_mount(self) -> None:
-        self._update_label()
-
-    def _update_label(self) -> None:
-        label, _ = self._options[self._idx]
-        self.update(label)
-
-    @property
-    def value(self) -> str:
-        _, v = self._options[self._idx]
-        return v
-
-    def set_value(self, value: str) -> None:
-        for i, (_, v) in enumerate(self._options):
-            if v == value:
-                self._idx = i
-                self._update_label()
-                return
-
-    def on_click(self) -> None:
-        self._idx = (self._idx + 1) % len(self._options)
-        self._update_label()
-        self.post_message(self.Changed(self, self.value))
 
 
 class SettingsScreen(Widget):

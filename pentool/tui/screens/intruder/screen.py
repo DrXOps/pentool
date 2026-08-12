@@ -50,6 +50,7 @@ from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
+from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
@@ -475,12 +476,83 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         instance's underlying connection instead of leaking the old one.
         """
         from pentool.api.intruder_api import IntruderAPI
+        # Clear in-memory results from the previous project FIRST — before
+        # touching the DB connection. Without this, self._all_results (and
+        # the #results-table it feeds) kept showing whatever attack results
+        # were left over from the project that was open before, since
+        # nothing here ever reset them: switching to a brand-new project and
+        # sending a host to Intruder would show old results mixed in with
+        # (or entirely obscuring, if no new attack was run yet) the new
+        # project's data.
+        self._all_results = []
+        self._clear_results()
+        # Reset template/payloads/attack-type to their defaults BEFORE
+        # loading the new project's state — _do_load_state() only
+        # overwrites these if the NEW project's DB has its own saved
+        # intruder_state row. If it doesn't (a brand-new/empty project),
+        # _do_load_state() returns early and, without this reset, the
+        # screen kept showing the PREVIOUS project's template/payloads/
+        # attack type — the same class of leftover-artifact bug already
+        # fixed above for _all_results.
+        self._payloads = [[]]
+        self._active_set_idx = 0
+        self._attack_type = AttackType.SNIPER
+        try:
+            self.query_one("#template-editor", TextArea).text = (
+                "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+            )
+        except Exception:
+            pass
+        try:
+            btn = self.query_one("#btn-attack-type", ToolbarButton)
+            btn.label = "Sniper ▼"
+        except Exception:
+            pass
+        try:
+            desc = self.query_one("#attack-type-desc", Static)
+            desc.update(_ATTACK_DESCRIPTIONS[AttackType.SNIPER])
+        except Exception:
+            pass
+        self._update_payload_select()
         if self._api is None:
             self._api = IntruderAPI(db_path=db_path)
         else:
             await self._api.switch_db(db_path)
         self._state_loaded = False
         self._load_state_from_db()
+        # Restore this project's own saved results for the current tab (if
+        # any were auto-saved from a previous session against this same DB).
+        self._load_results_from_db()
+
+    def _load_results_from_db(self) -> None:
+        """Load saved Intruder results (this tab, this project's DB) from DB."""
+        api = self._get_api()
+        if api is None:
+            return
+        self.run_worker(self._do_load_results(api), exclusive=False)
+
+    async def _do_load_results(self, api: "IntruderAPI") -> None:
+        # _auto_save_result() (see below) saves with no tab_uid — this
+        # screen only ever has one Intruder "tab" (self._tab_name is a
+        # fixed constant, not a per-tab identity), so results are not
+        # filtered by tab_uid here either; get_results_from_db() with no
+        # attack_id/tab_uid returns the most recent results in whatever DB
+        # file is currently open, which — after reload_from_project()
+        # switched IntruderAPI to the new project's DB — are exactly this
+        # project's own results, not the previous project's.
+        try:
+            results = await api.get_results_from_db()
+        except Exception as exc:
+            logger.debug("_do_load_results: %s", exc)
+            return
+        if not results:
+            return
+        # get_results_from_db()'s no-filter branch orders by timestamp DESC
+        # (newest first) — reverse so the table reads oldest-to-newest, same
+        # as results appended live during an attack (_on_result appends in
+        # increasing request_number order).
+        self._all_results = list(reversed(results))
+        self._redraw_results()
 
     def _load_state_from_db(self) -> None:
         """Load saved Intruder state (template, attack type, payloads) from DB."""
@@ -1664,13 +1736,21 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             return
         if self._api is None:
             return
+        try:
+            btn = self.query_one("#btn-pause", ToolbarButton)
+        except Exception:
+            btn = None
         if self._paused:
             self.run_worker(self._api.resume())
             self._paused = False
+            if btn is not None:
+                btn.label = "⏸ Pause"
             self.app.notify("Resumed", timeout=2)
         else:
             self.run_worker(self._api.pause())
             self._paused = True
+            if btn is not None:
+                btn.label = "▶ Resume"
             self.app.notify("Paused", timeout=2)
 
     def action_stop_attack(self) -> None:
@@ -1695,7 +1775,15 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     def _set_running_state(self, running: bool) -> None:
         try:
             self.query_one("#btn-start", ToolbarButton).disabled = running
-            self.query_one("#btn-pause", ToolbarButton).disabled = not running
+            pause_btn = self.query_one("#btn-pause", ToolbarButton)
+            pause_btn.disabled = not running
+            if not running:
+                # Attack stopped/finished (possibly while paused) — reset
+                # the Pause/Resume label back to its "fresh attack" state,
+                # otherwise the NEXT Start Attack would show "▶ Resume"
+                # left over from the previous run instead of "⏸ Pause".
+                self._paused = False
+                pause_btn.label = "⏸ Pause"
             self.query_one("#btn-stop",  ToolbarButton).disabled = not running
         except Exception:
             pass
@@ -2106,9 +2194,9 @@ class _GenerateDialog(ModalScreen):
         with Vertical(id="dialog"):
             with Horizontal(classes="row"):
                 yield Label("Mode:")
-                yield Select(
+                yield OptionCycler(
                     [("Numeric range", "numeric"), ("Char brute-force", "char")],
-                    id="mode-select", value="numeric", allow_blank=False,
+                    initial="numeric", id="mode-select",
                 )
             with Vertical(id="numeric-fields"):
                 with Horizontal(classes="row"):
@@ -2140,7 +2228,7 @@ class _GenerateDialog(ModalScreen):
         self._update_preview()
 
     def _sync_mode_visibility(self) -> None:
-        mode = self.query_one("#mode-select", Select).value
+        mode = self.query_one("#mode-select", OptionCycler).value
         try:
             self.query_one("#numeric-fields").display = (mode == "numeric")
             self.query_one("#char-fields").display = (mode == "char")
@@ -2150,7 +2238,7 @@ class _GenerateDialog(ModalScreen):
     def _build_source(self):
         """Build the lazy source for the currently-selected mode, or None
         if the current field values don't parse (never raises)."""
-        mode = self.query_one("#mode-select", Select).value
+        mode = self.query_one("#mode-select", OptionCycler).value
         try:
             if mode == "numeric":
                 start = int(self.query_one("#gen-start", Input).value or "0")
@@ -2180,8 +2268,8 @@ class _GenerateDialog(ModalScreen):
         n = len(source)
         label.update(f"[dim]→ {n:,} payload(s)[/dim]")
 
-    @on(Select.Changed, "#mode-select")
-    def _mode_changed(self, _: Select.Changed) -> None:
+    @on(OptionCycler.Changed, "#mode-select")
+    def _mode_changed(self, _: OptionCycler.Changed) -> None:
         self._sync_mode_visibility()
         self._update_preview()
 
