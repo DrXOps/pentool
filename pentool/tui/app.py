@@ -1127,6 +1127,17 @@ class PentoolApp(App):
                 self._cfg.save()
             except Exception as e:
                 logger.warning("on_sync_scope_to_proxy: failed to save config: %s", e)
+            # Persist per-project (DB) too — otherwise a scope change made
+            # from Target only lived in Config (global) and proxy.scope
+            # (in-memory), and got silently overwritten by whatever the
+            # project's own project_settings row said on the next project
+            # switch (see ProxyScreen._load_scope_setting).
+            try:
+                from pentool.tui.screens.proxy.screen import ProxyScreen
+                proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+                self.run_worker(proxy_screen._save_scope_setting(list(proxy.scope)))
+            except Exception as e:
+                logger.debug("on_sync_scope_to_proxy: failed to persist scope per-project: %s", e)
             # Refresh Proxy screen's ScopeToggle state if mounted
             try:
                 from pentool.tui.screens.proxy.screen import ProxyScreen

@@ -225,6 +225,85 @@ class TestScannerTabsSchema:
             assert tuple(row) == ("Old Scan", "http://old.com")
 
 
+class TestProjectSettings:
+    """project_settings — generic per-project key/value store.
+
+    Used for "proxy.enforce_scope" (bool as "0"/"1") and, since the
+    "Scope host list stops working after reopening an older project" fix,
+    also "proxy.scope" (JSON-encoded host list) — both must round-trip
+    per-project instead of leaking through the global Config.
+    """
+
+    @pytest.mark.asyncio
+    async def test_set_then_get_roundtrip(self, tmp_path: Path) -> None:
+        from pentool.core.database import init_db, get_project_setting, set_project_setting
+        db_path = str(tmp_path / "test.db")
+        await init_db(db_path)
+
+        await set_project_setting(db_path, "proxy.enforce_scope", "1")
+        value = await get_project_setting(db_path, "proxy.enforce_scope", "0")
+
+        assert value == "1"
+
+    @pytest.mark.asyncio
+    async def test_get_missing_key_returns_default(self, tmp_path: Path) -> None:
+        from pentool.core.database import init_db, get_project_setting
+        db_path = str(tmp_path / "test.db")
+        await init_db(db_path)
+
+        value = await get_project_setting(db_path, "proxy.scope", None)
+
+        assert value is None
+
+    @pytest.mark.asyncio
+    async def test_upsert_overwrites_existing_value(self, tmp_path: Path) -> None:
+        from pentool.core.database import init_db, get_project_setting, set_project_setting
+        db_path = str(tmp_path / "test.db")
+        await init_db(db_path)
+
+        await set_project_setting(db_path, "proxy.enforce_scope", "1")
+        await set_project_setting(db_path, "proxy.enforce_scope", "0")
+        value = await get_project_setting(db_path, "proxy.enforce_scope", None)
+
+        assert value == "0"
+
+    @pytest.mark.asyncio
+    async def test_scope_json_roundtrip(self, tmp_path: Path) -> None:
+        """proxy.scope stores a JSON-encoded host list — the exact mechanism
+        ProxyScreen._save_scope_setting/_load_scope_setting use so the Scope
+        host list is restored per-project instead of from the global Config
+        (which used to go stale after switching projects)."""
+        import json
+        from pentool.core.database import init_db, get_project_setting, set_project_setting
+        db_path = str(tmp_path / "test.db")
+        await init_db(db_path)
+
+        hosts = ["example.com", "*.internal.test"]
+        await set_project_setting(db_path, "proxy.scope", json.dumps(hosts))
+        raw = await get_project_setting(db_path, "proxy.scope", None)
+
+        assert raw is not None
+        assert json.loads(raw) == hosts
+
+    @pytest.mark.asyncio
+    async def test_settings_isolated_per_db_file(self, tmp_path: Path) -> None:
+        """Two different project .db files must not share project_settings
+        rows — each project's Scope/enforce_scope is independent."""
+        from pentool.core.database import init_db, get_project_setting, set_project_setting
+        db_a = str(tmp_path / "a.db")
+        db_b = str(tmp_path / "b.db")
+        await init_db(db_a)
+        await init_db(db_b)
+
+        await set_project_setting(db_a, "proxy.enforce_scope", "1")
+
+        value_a = await get_project_setting(db_a, "proxy.enforce_scope", "0")
+        value_b = await get_project_setting(db_b, "proxy.enforce_scope", "0")
+
+        assert value_a == "1"
+        assert value_b == "0"
+
+
 class TestVulnerabilitiesScopingSchema:
     """vulnerabilities.scan_tab_uid / scan_session_id — scope findings to
     the Scanner tab/run that discovered them, instead of every tab showing
