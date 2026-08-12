@@ -1,0 +1,254 @@
+<!-- =====================================================================
+     Pentool — Pricing & Support section
+     Drop into pentool.pro wherever the pricing page lives.
+     Links back to GitHub repo as required.
+     ===================================================================== -->
+
+<section id="pricing" class="pricing-section">
+  <div class="container">
+
+    <h2>Support &amp; Pricing</h2>
+    <p class="subtitle">
+      Pentool is open-source and free to use.
+      Sponsorship and PRO licenses fund active development.
+      <a href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">
+        View on GitHub ↗
+      </a>
+    </p>
+
+    <!-- ── Sponsorship tiers ────────────────────────────────────────── -->
+    <div class="pricing-grid">
+
+      <div class="pricing-card">
+        <div class="pricing-icon">⭐</div>
+        <h3>Individual Sponsor</h3>
+        <div class="pricing-price">$5</div>
+        <div class="pricing-period">one-time or / month</div>
+        <ul class="pricing-features">
+          <li>Support solo open-source development</li>
+          <li>Name in contributor list (on request)</li>
+          <li>Warm fuzzy feeling 🙏</li>
+        </ul>
+        <a class="btn btn-outline"
+           href="https://github.com/sponsors/DrXOps"
+           target="_blank" rel="noopener">
+          Sponsor on GitHub
+        </a>
+      </div>
+
+      <div class="pricing-card">
+        <div class="pricing-icon">🏢</div>
+        <h3>Company Sponsor</h3>
+        <div class="pricing-price">$50</div>
+        <div class="pricing-period">one-time or / month</div>
+        <ul class="pricing-features">
+          <li>Logo on <strong>pentool.pro</strong> homepage</li>
+          <li>Logo in <strong>README.md</strong> on GitHub</li>
+          <li>Link to your website</li>
+          <li>Priority mention in release notes</li>
+        </ul>
+        <a class="btn btn-outline"
+           href="https://github.com/sponsors/DrXOps"
+           target="_blank" rel="noopener">
+          Become a Sponsor
+        </a>
+      </div>
+
+      <div class="pricing-card pricing-card--featured">
+        <div class="pricing-badge">🔥 Beta Price</div>
+        <div class="pricing-icon">🔑</div>
+        <h3>PRO License</h3>
+        <div class="pricing-price">$29</div>
+        <div class="pricing-period">
+          early access · valid until Dec 31, 2026
+        </div>
+        <div class="pricing-after">
+          After release: <strong>$99 / year</strong>
+        </div>
+        <ul class="pricing-features">
+          <li>Active &amp; passive Scanner (SQLi, XSS, SSRF, …)</li>
+          <li>Intruder Turbo Mode (10× speed)</li>
+          <li>Smart context-aware payload generator</li>
+          <li>Advanced HTML / JSON / CSV reports</li>
+          <li>All future PRO features</li>
+          <li class="feature-highlight">
+            🎁 <strong>50% lifetime renewal discount</strong>
+            for all early buyers — pay $49.50/year instead of $99
+          </li>
+        </ul>
+        <p class="pricing-note">
+          ⚠️ <strong>Discount applies only to beta buyers (before Dec 31, 2026).</strong>
+          After that date the full $99/year price applies to new purchases.
+        </p>
+        <p class="pricing-manual">
+          PRO licenses are issued manually during the beta period.<br>
+          Contact to purchase:
+        </p>
+        <div class="pricing-contacts">
+          <a class="btn btn-primary"
+             href="https://t.me/sudores"
+             target="_blank" rel="noopener">
+            Telegram: @sudores
+          </a>
+          <a class="btn btn-secondary"
+             href="mailto:dev@pentool.pro">
+            dev@pentool.pro
+          </a>
+        </div>
+      </div>
+
+    </div><!-- /.pricing-grid -->
+
+    <!-- ── GitHub link (mutual) ─────────────────────────────────────── -->
+    <p class="pricing-footer">
+      Pentool is open-source under AGPL-3.0.
+      <a href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">
+        ⭐ Star on GitHub
+      </a>
+      — it helps more people discover the project.
+    </p>
+
+  </div><!-- /.container -->
+</section>
+
+
+<!-- =====================================================================
+     Minimal styles — integrate or replace with your site's CSS.
+     ===================================================================== -->
+<style>
+.pricing-section {
+  padding: 4rem 1rem;
+  background: #0d1117;
+  color: #e6edf3;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.pricing-section .container {
+  max-width: 980px;
+  margin: 0 auto;
+}
+.pricing-section h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+.pricing-section .subtitle {
+  text-align: center;
+  color: #8b949e;
+  margin-bottom: 2.5rem;
+}
+.pricing-section .subtitle a {
+  color: #58a6ff;
+}
+
+/* Grid */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+.pricing-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pricing-card--featured {
+  border-color: #388bfd;
+  position: relative;
+}
+.pricing-badge {
+  position: absolute;
+  top: -0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #388bfd;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.pricing-icon { font-size: 2rem; }
+.pricing-card h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0;
+}
+.pricing-price {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #58a6ff;
+  line-height: 1;
+}
+.pricing-period { font-size: 0.85rem; color: #8b949e; }
+.pricing-after  { font-size: 0.85rem; color: #8b949e; margin-top: -0.25rem; }
+.pricing-features {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  flex: 1;
+}
+.pricing-features li {
+  padding: 0.25rem 0;
+  font-size: 0.9rem;
+  color: #c9d1d9;
+}
+.pricing-features li::before { content: "✓  "; color: #3fb950; }
+.feature-highlight { color: #f0883e !important; font-size: 0.9rem !important; }
+.feature-highlight::before { color: #f0883e !important; }
+.pricing-note {
+  font-size: 0.78rem;
+  color: #f0883e;
+  background: rgba(240, 136, 62, 0.1);
+  border: 1px solid rgba(240, 136, 62, 0.3);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.25rem 0;
+}
+.pricing-manual {
+  font-size: 0.85rem;
+  color: #8b949e;
+  margin: 0.25rem 0 0;
+}
+.pricing-contacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* Buttons */
+.btn {
+  display: inline-block;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+  transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn-primary  { background: #388bfd; color: #fff; }
+.btn-secondary { background: #21262d; color: #e6edf3; border: 1px solid #30363d; }
+.btn-outline  {
+  background: transparent;
+  color: #58a6ff;
+  border: 1px solid #388bfd;
+  margin-top: auto;
+}
+
+/* Footer note */
+.pricing-footer {
+  text-align: center;
+  color: #8b949e;
+  font-size: 0.9rem;
+}
+.pricing-footer a { color: #58a6ff; }
+</style>
