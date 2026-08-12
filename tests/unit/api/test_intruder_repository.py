@@ -26,10 +26,16 @@ async def db_path(tmp_path: Path) -> str:
     return path
 
 
-@pytest.fixture
-def repo(db_path):
+@pytest_asyncio.fixture
+async def repo(db_path):
     from pentool.api.intruder_repository import IntruderRepository
-    return IntruderRepository(db_path=db_path)
+    r = IntruderRepository(db_path=db_path)
+    yield r
+    # IntruderRepository now holds a persistent aiosqlite connection (see
+    # BaseSqliteStorage) instead of the old open/close-per-call get_db()
+    # pattern — must be closed explicitly or its background thread leaks
+    # past the test (PytestUnhandledThreadExceptionWarning on teardown).
+    await r.close()
 
 
 def _make_result(attack_id: str = "atk-1", request_number: int = 1) -> IntruderResult:
@@ -134,3 +140,57 @@ class TestResultPersistence:
         await repo.save_result(_make_result(attack_id="atk-1", request_number=2))
         results = await repo.get_results(attack_id="atk-1")
         assert [r.request_number for r in results] == [1, 2, 3]
+
+
+class TestPersistentConnection:
+    """Regression coverage for the connection-consolidation fix.
+
+    IntruderRepository used to open a brand-new aiosqlite connection (via
+    core.database.get_db()) on every single call — save_result() is called
+    once per HTTP response during an attack, so a fast attack opened/closed
+    thousands of connections a second to the same file HttpStorage already
+    holds open, which crashed under load. IntruderRepository now inherits
+    BaseSqliteStorage: one connection, opened lazily on first use via
+    ensure_open(), reused for the object's lifetime.
+    """
+
+    @pytest.mark.asyncio
+    async def test_repeated_calls_reuse_same_connection(self, repo):
+        await repo.save_result(_make_result(request_number=1))
+        conn_after_first = repo._db
+        assert conn_after_first is not None
+
+        for i in range(2, 22):
+            await repo.save_result(_make_result(request_number=i))
+            assert repo._db is conn_after_first
+
+        results = await repo.get_results(limit=100)
+        assert len(results) == 21
+        assert repo._db is conn_after_first
+
+    @pytest.mark.asyncio
+    async def test_switch_db_moves_to_new_file(self, tmp_path: Path):
+        from pentool.api.intruder_repository import IntruderRepository
+        from pentool.core.database import init_db
+
+        db1 = str(tmp_path / "a.db")
+        db2 = str(tmp_path / "b.db")
+        await init_db(db1)
+        await init_db(db2)
+
+        repo = IntruderRepository(db_path=db1)
+        try:
+            await repo.save_result(_make_result(attack_id="atk-a"))
+            assert len(await repo.get_results()) == 1
+
+            await repo.switch_db(db2)
+            assert repo._db_path == db2
+            # New file is empty — old attack's result did not follow the switch
+            assert await repo.get_results() == []
+
+            await repo.save_result(_make_result(attack_id="atk-b"))
+            results = await repo.get_results()
+            assert len(results) == 1
+            assert results[0].attack_id == "atk-b"
+        finally:
+            await repo.close()

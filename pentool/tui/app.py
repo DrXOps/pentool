@@ -1427,6 +1427,16 @@ class PentoolApp(App):
                 logger.info("APP: HttpStorage closed on quit")
         except Exception as e:
             logger.warning("APP: HttpStorage close error on quit: %s", e)
+        # Close Intruder's persistent SQLite connection (see IntruderScreen
+        # _get_api()/reload_from_project() — mirrors HttpStorage above).
+        try:
+            from pentool.tui.screens.intruder.screen import IntruderScreen
+            intruder_screen = self.query_one(SCREEN_INTRUDER, IntruderScreen)
+            if intruder_screen._api is not None:
+                await intruder_screen._api.close()
+                logger.info("APP: Intruder storage closed on quit")
+        except Exception as e:
+            logger.warning("APP: Intruder storage close error on quit: %s", e)
         self.exit()
         # Force-terminate the process — kills non-daemon threads
         # (jemalloc_bg_thd from pyarrow) that would otherwise block exit.

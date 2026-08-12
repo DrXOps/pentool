@@ -235,7 +235,7 @@ _GenerateDialog {
     align: center middle;
 }
 _GenerateDialog #dialog {
-    width: 40;
+    width: 44;
     height: auto;
     border: solid $primary;
     background: $surface;
@@ -254,6 +254,19 @@ _GenerateDialog .row Label {
 _GenerateDialog Input {
     width: 12;
     background: $surface-darken-1;
+}
+_GenerateDialog #mode-select {
+    width: 26;
+}
+_GenerateDialog #numeric-fields,
+_GenerateDialog #char-fields {
+    height: auto;
+    layout: vertical;
+}
+_GenerateDialog #preview-label {
+    height: 1;
+    color: $text-muted;
+    margin-bottom: 1;
 }
 _GenerateDialog #buttons {
     height: 1;

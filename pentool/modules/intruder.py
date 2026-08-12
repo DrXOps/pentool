@@ -275,6 +275,165 @@ class FilePayloadSource:
         return f"FilePayloadSource({self.path!r}, count={self._count!r})"
 
 
+class NumericPayloadSource:
+    """Lazily-iterated numeric range payload set — same contract/pattern as
+    `FilePayloadSource` (iterable, `len()`/`bool()` O(1), `head()` for
+    previews) but backed by a `range()` instead of a file.
+
+    Before this class, "Generate…" (numeric mode) called
+    `generate_numeric_payloads()`, which eagerly built a `list[str]` of
+    every value in the range — for a small range (hundreds) that's fine,
+    but `_refresh_payload_list()` used to render one `ListItem`/`Label`
+    Textual widget PER element of a plain list with no cap (unlike
+    `FilePayloadSource`, whose preview is already capped at
+    `_PAYLOAD_LIST_PREVIEW_LIMIT`) — generating/loading tens of thousands of
+    numeric payloads froze the UI while thousands of widgets were mounted
+    synchronously. Wrapping the range in this lazy source instead means the
+    list-view preview path (which already special-cases anything that
+    isn't a plain `list`/`FilePayloadSource` via `head()`) caps rendering
+    the same way a file-backed set does, and `range(start, end, step)`
+    itself is already O(1) memory regardless of how many values it spans.
+    """
+
+    __slots__ = ("start", "end", "step")
+
+    def __init__(self, start: int, end: int, step: int = 1) -> None:
+        self.start = start
+        self.end = end
+        self.step = step or 1
+
+    def __iter__(self):
+        for n in range(self.start, self.end, self.step):
+            yield str(n)
+
+    def __len__(self) -> int:
+        return len(range(self.start, self.end, self.step))
+
+    def __bool__(self) -> bool:
+        return len(self) > 0
+
+    def head(self, n: int) -> list[str]:
+        """Return up to the first `n` values — never materializes the rest."""
+        result: list[str] = []
+        for value in self:
+            if len(result) >= n:
+                break
+            result.append(value)
+        return result
+
+    def __repr__(self) -> str:
+        return f"NumericPayloadSource(start={self.start}, end={self.end}, step={self.step})"
+
+
+class CharPayloadSource:
+    """Lazily-iterated charset brute-force payload set — same contract as
+    `FilePayloadSource`/`NumericPayloadSource` (iterable, O(1) `len()`,
+    `head()` for previews), backed by `itertools.product` over `charset`
+    for each length in `[min_len, max_len]`.
+
+    `generate_char_payloads()` (kept for backward compatibility/tests) is
+    eager: `itertools.product(charset, repeat=length)` materialized into a
+    growing `list[str]` — for even a modest charset/length this is a
+    combinatorial explosion (e.g. 26 lowercase letters, max_len=5 is
+    26**5 ≈ 11.9M strings) computed and held in memory all at once before
+    the dialog could even close. This class streams the same sequence
+    on demand and computes its count via the closed-form
+    sum(len(charset)**length for length in range(min_len, max_len+1))
+    instead of actually enumerating anything to answer `len()`.
+    """
+
+    __slots__ = ("charset", "min_len", "max_len")
+
+    def __init__(self, charset: str, min_len: int, max_len: int) -> None:
+        self.charset = charset
+        self.min_len = min_len
+        self.max_len = max_len
+
+    def __iter__(self):
+        if not self.charset or self.min_len > self.max_len:
+            return
+        for length in range(self.min_len, self.max_len + 1):
+            for combo in itertools.product(self.charset, repeat=length):
+                yield "".join(combo)
+
+    def __len__(self) -> int:
+        if not self.charset or self.min_len > self.max_len:
+            return 0
+        base = len(self.charset)
+        return sum(base ** length for length in range(self.min_len, self.max_len + 1))
+
+    def __bool__(self) -> bool:
+        return len(self) > 0
+
+    def head(self, n: int) -> list[str]:
+        """Return up to the first `n` values — never enumerates the rest."""
+        result: list[str] = []
+        for value in self:
+            if len(result) >= n:
+                break
+            result.append(value)
+        return result
+
+    def __repr__(self) -> str:
+        return (
+            f"CharPayloadSource(charset={self.charset!r}, "
+            f"min_len={self.min_len}, max_len={self.max_len})"
+        )
+
+
+class ChainedPayloadSource:
+    """Lazily concatenates several payload sets (plain lists and/or lazy
+    sources like FilePayloadSource/NumericPayloadSource/CharPayloadSource)
+    into one, without ever materializing any of them.
+
+    Exists for "Generate…"/"🧠 Smart…" appending to a payload set that
+    already holds a lazy source — e.g. the active set is a
+    NumericPayloadSource from a previous Generate, and the user generates
+    again or manually adds one more value. Before this class, appending to
+    a lazy source had no representation: the old eager code did
+    `self._payloads[idx].extend(payloads)`, which only works on a plain
+    `list`. Wraps the pair as `ChainedPayloadSource(existing, [new_values])`
+    instead of forcing a re-materialization of `existing` (which, if it was
+    e.g. a CharPayloadSource over a large charset, would defeat the whole
+    point of it being lazy in the first place).
+    """
+
+    __slots__ = ("_sources",)
+
+    def __init__(self, *sources) -> None:
+        # Flatten nested ChainedPayloadSource instances so repeated
+        # appends don't build up a deep wrapper chain.
+        flat: list = []
+        for s in sources:
+            if isinstance(s, ChainedPayloadSource):
+                flat.extend(s._sources)
+            else:
+                flat.append(s)
+        self._sources = tuple(flat)
+
+    def __iter__(self):
+        for source in self._sources:
+            yield from source
+
+    def __len__(self) -> int:
+        return sum(len(s) for s in self._sources)
+
+    def __bool__(self) -> bool:
+        return any(bool(s) for s in self._sources)
+
+    def head(self, n: int) -> list[str]:
+        """Return up to the first `n` values across all chained sources."""
+        result: list[str] = []
+        for value in self:
+            if len(result) >= n:
+                break
+            result.append(value)
+        return result
+
+    def __repr__(self) -> str:
+        return f"ChainedPayloadSource({self._sources!r})"
+
+
 def count_lines_with_progress(
     path: str,
     encoding: str = "utf-8",

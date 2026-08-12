@@ -522,12 +522,22 @@ class ProjectManager:
             except Exception as exc:
                 logger.debug("_reload_project_screens dashboard: %s", exc)
 
+        async def _reload_intruder() -> None:
+            try:
+                from pentool.tui.screens.intruder.screen import IntruderScreen
+                intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
+                await intruder_screen.reload_from_project(path)
+                logger.info("_reload_project_screens: intruder reloaded from %s", path)
+            except Exception as exc:
+                logger.debug("_reload_project_screens intruder: %s", exc)
+
         await asyncio.gather(
             _reload_repeater(),
             _reload_proxy(),
             _reload_scanner(),
             _reload_target(),
             _reload_dashboard(),
+            _reload_intruder(),
         )
 
     async def _init_new_db(self, path: str) -> None:

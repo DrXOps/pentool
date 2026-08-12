@@ -34,13 +34,15 @@ from textual.widgets import (
 
 from pentool.api.intruder_api import (
     AttackType,
+    ChainedPayloadSource,
+    CharPayloadSource,
     FilePayloadSource,
     IntruderConfig,
     IntruderResult,
+    NumericPayloadSource,
     ProcessedPayloads,
     count_lines_with_progress,
     count_markers,
-    generate_numeric_payloads,
     process_payload,
 )
 from pentool.core.logging import get_logger
@@ -208,6 +210,13 @@ _RESULTS_COL_NAMES = ["#", "Payload(s)", "Status", "Length", "Time(ms)", "Error"
 # nothing needs random access into the middle of the set, only Add/Remove/
 # Clear/Start Attack, none of which require every item to be rendered).
 _PAYLOAD_LIST_PREVIEW_LIMIT = 500
+
+# Lazy payload-set types — all support head()/len()/__bool__/__iter__ without
+# ever materializing their full contents (a file, a numeric range, or a
+# charset brute-force product can all be far too large to hold as a
+# plain list). _refresh_payload_list() caps rendering to a preview for any
+# of these instead of iterating the whole set into ListItem widgets.
+_LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
 
 class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     """Intruder module screen."""
@@ -433,13 +442,51 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         # Применить ограничения для FREE лицензии
         self._apply_license_limits()
 
+    def _get_api(self) -> "IntruderAPI | None":
+        """Return this screen's single persistent IntruderAPI instance.
+
+        Created lazily on first use and reused for every subsequent call
+        (state load/save, result save, attacks) — mirrors ProxyService
+        holding one HttpStorage for the app's lifetime. Previously each of
+        _load_state_from_db/_auto_save_state/_auto_save_result/
+        action_start_attack constructed its own `IntruderAPI(db_path=...)`,
+        which opened+closed a fresh SQLite connection to the project DB on
+        every call — for _auto_save_result specifically, once per attack
+        result (thousands/sec during a fast attack), which is what caused
+        the connection-exhaustion crash this refactor fixes. See
+        reload_from_project() for how this instance follows project
+        switches instead of being recreated.
+        """
+        from pentool.api.intruder_api import IntruderAPI
+        if self._api is None:
+            db_path = self._get_db_path()
+            if not db_path:
+                return None
+            self._api = IntruderAPI(db_path=db_path)
+        return self._api
+
+    async def reload_from_project(self, db_path: str) -> None:
+        """Point the persistent IntruderAPI at a different project DB file.
+
+        Called from project_manager._reload_project_screens() on project
+        switch — mirrors RepeaterScreen.reload_from_project /
+        ProxyService.switch_db. Creates the API if this is the first
+        project opened this session, otherwise switches the existing
+        instance's underlying connection instead of leaking the old one.
+        """
+        from pentool.api.intruder_api import IntruderAPI
+        if self._api is None:
+            self._api = IntruderAPI(db_path=db_path)
+        else:
+            await self._api.switch_db(db_path)
+        self._state_loaded = False
+        self._load_state_from_db()
+
     def _load_state_from_db(self) -> None:
         """Load saved Intruder state (template, attack type, payloads) from DB."""
-        from pentool.api.intruder_api import IntruderAPI
-        db_path = self._get_db_path()
-        if not db_path:
+        api = self._get_api()
+        if api is None:
             return
-        api = IntruderAPI(db_path=db_path)
         self.run_worker(self._do_load_state(api), exclusive=False)
 
     def _apply_license_limits(self) -> None:
@@ -520,6 +567,18 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         for entry in raw_sets:
             if isinstance(entry, dict) and "__file__" in entry:
                 result.append(FilePayloadSource(entry["__file__"], count=entry.get("count")))
+            elif isinstance(entry, dict) and "__numeric__" in entry:
+                result.append(NumericPayloadSource(
+                    entry.get("start", 0), entry.get("end", 0), entry.get("step", 1)
+                ))
+            elif isinstance(entry, dict) and "__charset__" in entry:
+                result.append(CharPayloadSource(
+                    entry.get("__charset__", ""), entry.get("min_len", 1), entry.get("max_len", 1)
+                ))
+            elif isinstance(entry, dict) and "__chained__" in entry:
+                result.append(ChainedPayloadSource(
+                    *IntruderScreen._deserialize_payloads(entry["__chained__"])
+                ))
             elif isinstance(entry, list):
                 result.append(entry)
             else:
@@ -539,25 +598,49 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         the file already lives on disk at `path` and is re-streamed from
         there on demand (attack start, or re-opening this tab — see
         _deserialize_payloads).
+
+        NumericPayloadSource/CharPayloadSource serialize the same way — as
+        their small constructor params (a range or a charset+lengths),
+        never their (potentially huge) enumerated contents — and are
+        reconstructed fresh (still lazy) on load, same rationale.
+
+        A ChainedPayloadSource (result of appending Generate…/Smart onto an
+        existing set — see _append_to_active_set) serializes as a
+        {"__chained__": [...]} envelope wrapping each inner source's own
+        serialized form recursively, so it never materializes either —
+        only a plain `list[str]` (the base case) is ever actually iterated
+        into a JSON array here.
         """
         result = []
         for entry in sets:
             if isinstance(entry, FilePayloadSource):
                 result.append({"__file__": entry.path, "count": entry.cached_count})
+            elif isinstance(entry, NumericPayloadSource):
+                result.append({
+                    "__numeric__": True,
+                    "start": entry.start, "end": entry.end, "step": entry.step,
+                })
+            elif isinstance(entry, CharPayloadSource):
+                result.append({
+                    "__charset__": entry.charset,
+                    "min_len": entry.min_len, "max_len": entry.max_len,
+                })
+            elif isinstance(entry, ChainedPayloadSource):
+                result.append({
+                    "__chained__": IntruderScreen._serialize_payloads(list(entry._sources)),
+                })
             else:
                 result.append(list(entry))
         return result
 
     def _auto_save_state(self) -> None:
         """Auto-save current state (template, attack type, payloads) to DB."""
-        from pentool.api.intruder_api import IntruderAPI
-        db_path = self._get_db_path()
-        if not db_path:
+        api = self._get_api()
+        if api is None:
             return
         try:
             editor = self.query_one("#template-editor", TextArea)
             template = editor.text
-            api = IntruderAPI(db_path=db_path)
             self.run_worker(
                 api.save_state(
                     tab_name=self._tab_name,
@@ -572,12 +655,10 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def _auto_save_result(self, result: IntruderResult) -> None:
         """Auto-save a single intruder result to DB (fire-and-forget)."""
-        from pentool.api.intruder_api import IntruderAPI
-        db_path = self._get_db_path()
-        if not db_path:
+        api = self._get_api()
+        if api is None:
             return
         try:
-            api = IntruderAPI(db_path=db_path)
             # Get project_id from app if available
             project_id = getattr(self.app, "project_id", None)
             self.run_worker(
@@ -1036,6 +1117,20 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                     # _load_payloads_from_file's progress worker, which
                     # calls this again once it finishes.
                     lv.append(ListItem(Label("(counting lines…)")))
+            elif isinstance(active, (NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)):
+                # Same preview-only rendering as FilePayloadSource — a
+                # generated range/brute-force set (or a chain of appended
+                # sets) can be just as large (millions+ of values), and
+                # head()/len() are both O(1) or cheap here, never
+                # enumerating the full set.
+                total = len(active)
+                preview = active.head(_PAYLOAD_LIST_PREVIEW_LIMIT)
+                for p in preview:
+                    lv.append(ListItem(Label(p)))
+                if total > len(preview):
+                    lv.append(ListItem(Label(
+                        f"… {total - len(preview):,} more value(s) not shown"
+                    )))
             else:
                 for p in active:
                     lv.append(ListItem(Label(p)))
@@ -1053,6 +1148,11 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         30GB). The count is instead computed by a background worker (see
         _load_payloads_from_file) which calls back into this method as it
         progresses and once finished.
+
+        NumericPayloadSource/CharPayloadSource are safe to call `len()` on
+        directly here — both compute their count via closed-form arithmetic
+        (range length / sum-of-powers), never by enumerating values, so it's
+        always O(1) regardless of how many values the set represents.
         """
         try:
             label = self.query_one("#payload-count-label", Static)
@@ -1068,6 +1168,9 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                 label.update(f"[dim]{active.cached_count:,} line(s) — {Path(active.path).name}[/dim]")
             else:
                 label.update(f"[dim]counting… — {Path(active.path).name}[/dim]")
+        elif isinstance(active, (NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)):
+            n = len(active)
+            label.update(f"[dim]{n:,} value(s)[/dim]" if n else "")
         else:
             n = len(active)
             label.update(f"[dim]{n:,} line(s)[/dim]" if n else "")
@@ -1114,11 +1217,11 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def _add_payload_manual(self) -> None:
         if self._active_set_idx < len(self._payloads) and isinstance(
-            self._payloads[self._active_set_idx], FilePayloadSource
+            self._payloads[self._active_set_idx], _LAZY_SOURCE_TYPES
         ):
             self.app.notify(
-                "This set is loaded from a file — click Clear first to switch "
-                "it to a manually-edited list.",
+                "This set is generated/loaded from a file — click Clear first "
+                "to switch it to a manually-edited list.",
                 severity="warning", timeout=4,
             )
             return
@@ -1135,11 +1238,11 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def _remove_selected_payload(self) -> None:
         if self._active_set_idx < len(self._payloads) and isinstance(
-            self._payloads[self._active_set_idx], FilePayloadSource
+            self._payloads[self._active_set_idx], _LAZY_SOURCE_TYPES
         ):
             self.app.notify(
-                "This set is loaded from a file — individual lines can't be "
-                "removed. Click Clear to remove the whole set.",
+                "This set is generated/loaded from a file — individual lines "
+                "can't be removed. Click Clear to remove the whole set.",
                 severity="warning", timeout=4,
             )
             return
@@ -1239,8 +1342,9 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             return
 
         existing = self._payloads[target_idx]
-        if isinstance(existing, FilePayloadSource):
-            # Switching a file-backed slot back to a plain list — start fresh.
+        if isinstance(existing, _LAZY_SOURCE_TYPES):
+            # Switching a lazy-backed slot (file/numeric/charset) back to a
+            # plain list — start fresh (extend() isn't supported on these).
             self._payloads[target_idx] = payloads
         else:
             existing.extend(payloads)
@@ -1313,16 +1417,48 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         """Synchronous file read (runs in executor)."""
         return Path(path).read_text(encoding="utf-8", errors="replace")
 
+    def _append_to_active_set(self, new_source) -> int:
+        """Append `new_source` (a plain list or a lazy source) to the active
+        payload set, without forcing either side to materialize.
+
+        - list + list -> plain list.extend() (unchanged fast path).
+        - existing set is empty (nothing manually entered yet — the common
+          case for a first Generate…/Smart Payloads call on a fresh set)
+          -> `new_source` replaces it directly, no wrapper. Keeps a single
+          NumericPayloadSource/CharPayloadSource as itself instead of an
+          unnecessary ChainedPayloadSource([], source).
+        - otherwise (existing set has content, and either side is lazy)
+          -> wrap both in ChainedPayloadSource instead of eagerly reading/
+          enumerating the existing set just to concatenate. This is what
+          makes a second Generate… onto an existing Numeric/Char set (or a
+          manual add after generating) lazy too.
+
+        Returns the count of newly added items (O(1) for lazy sources,
+        cheap for lists) for the caller's notify() message.
+        """
+        while self._active_set_idx >= len(self._payloads):
+            self._payloads.append([])
+        existing = self._payloads[self._active_set_idx]
+        added = len(new_source)
+        if isinstance(existing, list) and isinstance(new_source, list):
+            existing.extend(new_source)
+        elif isinstance(existing, list) and not existing:
+            self._payloads[self._active_set_idx] = new_source
+        else:
+            self._payloads[self._active_set_idx] = ChainedPayloadSource(existing, new_source)
+        return added
+
     def _open_generate_dialog(self) -> None:
         self.app.push_screen(_GenerateDialog(), self._on_payloads_generated)
 
-    def _on_payloads_generated(self, payloads: list[str] | None) -> None:
-        if payloads:
-            while self._active_set_idx >= len(self._payloads):
-                self._payloads.append([])
-            self._payloads[self._active_set_idx].extend(payloads)
+    def _on_payloads_generated(self, source) -> None:
+        """Callback from _GenerateDialog — `source` is a lazy
+        NumericPayloadSource/CharPayloadSource (or None if cancelled/invalid),
+        never a materialized list. See _append_to_active_set."""
+        if source:
+            added = self._append_to_active_set(source)
             self._refresh_payload_list()
-            self.app.notify(f"Generated {len(payloads)} payloads", timeout=2)
+            self.app.notify(f"Generated {added:,} payload(s)", timeout=2)
 
     def _open_smart_payloads_dialog(self) -> None:
         from pentool.core.license import get_session_license
@@ -1338,11 +1474,10 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def _on_smart_payloads_generated(self, payloads: list[str] | None) -> None:
         if payloads:
-            while self._active_set_idx >= len(self._payloads):
-                self._payloads.append([])
-            self._payloads[self._active_set_idx].extend(payloads)
+            added = self._append_to_active_set(payloads)
             self._refresh_payload_list()
-            self.app.notify(f"🧠 Smart: added {len(payloads)} payloads", timeout=3)  # type: ignore[attr-defined]
+            self.app.notify(f"🧠 Smart: added {added:,} payloads", timeout=3)  # type: ignore[attr-defined]
+
 
     def action_start_attack(self) -> None:
         logger.info("INTRUDER: action_start_attack called, _attack_running=%s", self._attack_running)
@@ -1441,9 +1576,10 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             timeout=30,
         )
 
-        from pentool.api.intruder_api import IntruderAPI
-        db_path = self._get_db_path()
-        self._api = IntruderAPI(db_path=db_path)
+        api = self._get_api()
+        if api is None:
+            self.app.notify("No project open", severity="warning", timeout=3)
+            return
 
         # Turbo mode — HTTP pipelining, connection pooling (PRO only)
         turbo_mode = False
@@ -1952,32 +2088,110 @@ class _InputDialog(ModalScreen):
             self._do_add()
 
 class _GenerateDialog(ModalScreen):
+    """Generate… dialog — Numeric range or Char (alphabet brute-force) mode.
+
+    Returns a lazy NumericPayloadSource/CharPayloadSource (never a
+    materialized list) via dismiss() — see _on_payloads_generated, which
+    appends it to the active payload set without enumerating it. This
+    matters most for Char mode: a modest charset/length is already a
+    combinatorial explosion (see CharPayloadSource's docstring), and even
+    Numeric mode used to freeze the UI once _refresh_payload_list() tried
+    to render tens of thousands of ListItem widgets for an eagerly
+    generated range.
+    """
+
     DEFAULT_CSS = _CSS
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             with Horizontal(classes="row"):
-                yield Label("From:")
-                yield Input("0", id="gen-start", compact=True)
-            with Horizontal(classes="row"):
-                yield Label("To:")
-                yield Input("100", id="gen-end", compact=True)
-            with Horizontal(classes="row"):
-                yield Label("Step:")
-                yield Input("1", id="gen-step", compact=True)
+                yield Label("Mode:")
+                yield Select(
+                    [("Numeric range", "numeric"), ("Char brute-force", "char")],
+                    id="mode-select", value="numeric", allow_blank=False,
+                )
+            with Vertical(id="numeric-fields"):
+                with Horizontal(classes="row"):
+                    yield Label("From:")
+                    yield Input("0", id="gen-start", compact=True)
+                with Horizontal(classes="row"):
+                    yield Label("To:")
+                    yield Input("100", id="gen-end", compact=True)
+                with Horizontal(classes="row"):
+                    yield Label("Step:")
+                    yield Input("1", id="gen-step", compact=True)
+            with Vertical(id="char-fields"):
+                with Horizontal(classes="row"):
+                    yield Label("Charset:")
+                    yield Input("abcdefghijklmnopqrstuvwxyz0123456789", id="gen-charset", compact=True)
+                with Horizontal(classes="row"):
+                    yield Label("Min len:")
+                    yield Input("1", id="gen-minlen", compact=True)
+                with Horizontal(classes="row"):
+                    yield Label("Max len:")
+                    yield Input("3", id="gen-maxlen", compact=True)
+            yield Static("", id="preview-label")
             with Horizontal(id="buttons"):
                 yield ToolbarButton("✔ Generate", "btn-gen-ok")
                 yield ToolbarButton("✕ Cancel",   "btn-gen-cancel")
 
+    def on_mount(self) -> None:
+        self._sync_mode_visibility()
+        self._update_preview()
+
+    def _sync_mode_visibility(self) -> None:
+        mode = self.query_one("#mode-select", Select).value
+        try:
+            self.query_one("#numeric-fields").display = (mode == "numeric")
+            self.query_one("#char-fields").display = (mode == "char")
+        except Exception:
+            pass
+
+    def _build_source(self):
+        """Build the lazy source for the currently-selected mode, or None
+        if the current field values don't parse (never raises)."""
+        mode = self.query_one("#mode-select", Select).value
+        try:
+            if mode == "numeric":
+                start = int(self.query_one("#gen-start", Input).value or "0")
+                end   = int(self.query_one("#gen-end",   Input).value or "100")
+                step  = int(self.query_one("#gen-step",  Input).value or "1")
+                return NumericPayloadSource(start, end, step)
+            else:
+                charset = self.query_one("#gen-charset", Input).value or ""
+                min_len = int(self.query_one("#gen-minlen", Input).value or "1")
+                max_len = int(self.query_one("#gen-maxlen", Input).value or "1")
+                return CharPayloadSource(charset, min_len, max_len)
+        except Exception:
+            return None
+
+    def _update_preview(self) -> None:
+        """Show the resulting count — computed via len() (O(1)/closed-form
+        for both source types, see their docstrings) so previewing a huge
+        range/charset never enumerates it."""
+        try:
+            label = self.query_one("#preview-label", Static)
+        except Exception:
+            return
+        source = self._build_source()
+        if source is None:
+            label.update("[dim]invalid input[/dim]")
+            return
+        n = len(source)
+        label.update(f"[dim]→ {n:,} payload(s)[/dim]")
+
+    @on(Select.Changed, "#mode-select")
+    def _mode_changed(self, _: Select.Changed) -> None:
+        self._sync_mode_visibility()
+        self._update_preview()
+
+    @on(Input.Changed)
+    def _field_changed(self, _: Input.Changed) -> None:
+        self._update_preview()
+
     @on(ToolbarButton.Pressed, "#btn-gen-ok")
     def _gen_ok(self, _: ToolbarButton.Pressed) -> None:
-        try:
-            start = int(self.query_one("#gen-start", Input).value or "0")
-            end   = int(self.query_one("#gen-end",   Input).value or "100")
-            step  = int(self.query_one("#gen-step",  Input).value or "1")
-            self.dismiss(generate_numeric_payloads(start, end, step))
-        except Exception:
-            self.dismiss(None)
+        self.dismiss(self._build_source())
 
     @on(ToolbarButton.Pressed, "#btn-gen-cancel")
     def _gen_cancel(self, _: ToolbarButton.Pressed) -> None:

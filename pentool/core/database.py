@@ -237,6 +237,15 @@ async def init_db(db_path: str) -> None:
 async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
     """Context manager for obtaining a DB connection.
 
+    Sets WAL journal mode + a busy_timeout so a short overlap with another
+    writer to the same file (e.g. HttpStorage committing a captured Proxy
+    request while an Intruder attack result is being saved) waits and
+    retries instead of immediately raising "database is locked" — WAL lets
+    one writer + many readers proceed concurrently rather than serializing
+    on the default rollback-journal locking. HttpStorage already sets WAL
+    itself; this makes every other get_db() caller (Intruder/Scanner/
+    Repeater repositories) consistent with it against the same file.
+
     Args:
         db_path: Path to the SQLite file.
 
@@ -246,6 +255,8 @@ async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA foreign_keys = ON")
+        await db.execute("PRAGMA journal_mode = WAL")
+        await db.execute("PRAGMA busy_timeout = 5000")
         yield db
 
 

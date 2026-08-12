@@ -140,3 +140,76 @@ class TestIntruderScreen:
             # FilePayloadSource (not silently mutated into a list).
             assert isinstance(screen._payloads[0], FilePayloadSource)
 
+    async def test_generate_dialog_numeric_mode_produces_lazy_source(self) -> None:
+        """Generate… (Numeric mode) must dismiss with a lazy
+        NumericPayloadSource, not a materialized list — regression test for
+        the UI freeze that happened when generating tens of thousands of
+        numeric payloads (each rendered as its own ListItem widget)."""
+        from pentool.modules.intruder import NumericPayloadSource
+
+        app = PentoolApp()
+        app._skip_project_guard = True
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("I")
+            await pilot.pause()
+            await pilot.pause()
+
+            screen = app.query_one(IntruderScreen)
+            screen._on_payloads_generated(NumericPayloadSource(0, 10_000))
+            await pilot.pause()
+
+            assert isinstance(screen._payloads[0], NumericPayloadSource)
+            assert len(screen._payloads[0]) == 10_000
+            # The preview list is capped, not one ListItem per generated value.
+            from textual.widgets import ListView
+            lv = screen.query_one("#payload-list", ListView)
+            assert len(lv.children) <= 501  # _PAYLOAD_LIST_PREVIEW_LIMIT + 1 summary row
+
+    async def test_generate_dialog_char_mode_produces_lazy_source(self) -> None:
+        """Generate… (Char mode) must dismiss with a lazy CharPayloadSource —
+        never materialize the combinatorial explosion of a charset
+        brute-force into a list."""
+        from pentool.modules.intruder import CharPayloadSource
+
+        app = PentoolApp()
+        app._skip_project_guard = True
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("I")
+            await pilot.pause()
+            await pilot.pause()
+
+            screen = app.query_one(IntruderScreen)
+            source = CharPayloadSource("abcdefghijklmnopqrstuvwxyz", 1, 5)
+            screen._on_payloads_generated(source)
+            await pilot.pause()
+
+            assert isinstance(screen._payloads[0], CharPayloadSource)
+            assert len(screen._payloads[0]) > 10_000_000
+
+    async def test_generate_appends_lazily_to_existing_lazy_set(self) -> None:
+        """A second Generate… onto an already-lazy set (e.g. Numeric then
+        Numeric again) must chain lazily via ChainedPayloadSource, not force
+        materialization of the first set."""
+        from pentool.modules.intruder import ChainedPayloadSource, NumericPayloadSource
+
+        app = PentoolApp()
+        app._skip_project_guard = True
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("I")
+            await pilot.pause()
+            await pilot.pause()
+
+            screen = app.query_one(IntruderScreen)
+            screen._on_payloads_generated(NumericPayloadSource(0, 5))
+            await pilot.pause()
+            screen._on_payloads_generated(NumericPayloadSource(5, 10))
+            await pilot.pause()
+
+            assert isinstance(screen._payloads[0], ChainedPayloadSource)
+            assert len(screen._payloads[0]) == 10
+            assert list(screen._payloads[0]) == [str(n) for n in range(10)]
+
+

@@ -8,10 +8,13 @@ from pentool.api.base_api import ExportableAPI
 from pentool.api.intruder_repository import IntruderRepository
 from pentool.modules.intruder import (
     AttackType,
+    ChainedPayloadSource,
+    CharPayloadSource,
     FilePayloadSource,
     IntruderAttack,
     IntruderConfig,
     IntruderResult,
+    NumericPayloadSource,
     ProcessedPayloads,
     count_lines_with_progress,
     count_markers,
@@ -28,7 +31,10 @@ __all__ = [
     "IntruderAttack",
     "IntruderConfig",
     "IntruderResult",
+    "ChainedPayloadSource",
+    "CharPayloadSource",
     "FilePayloadSource",
+    "NumericPayloadSource",
     "ProcessedPayloads",
     "count_lines_with_progress",
     "count_markers",
@@ -153,11 +159,24 @@ class IntruderAPI(ExportableAPI):
         return load_payloads_from_file(path)
 
     async def generate_numeric(self, start: int, end: int, step: int = 1) -> list[str]:
+        """Eager numeric generation — kept for backward compatibility.
+
+        Prefer constructing `NumericPayloadSource(start, end, step)` directly
+        for anything the UI will hold onto (see IntruderScreen._GenerateDialog),
+        since this materializes the whole range into a list immediately.
+        """
         return generate_numeric_payloads(start, end, step)
 
     async def generate_chars(
         self, charset: str, min_len: int, max_len: int
     ) -> list[str]:
+        """Eager charset brute-force generation — kept for backward
+        compatibility. Prefer constructing
+        `CharPayloadSource(charset, min_len, max_len)` directly — this
+        materializes every combination into a list immediately, which for
+        even a modest charset/length is a combinatorial explosion (see
+        CharPayloadSource's docstring).
+        """
         return generate_char_payloads(charset, min_len, max_len)
 
     def export_csv(self, path: str) -> None:
@@ -188,6 +207,21 @@ class IntruderAPI(ExportableAPI):
     async def delete_tab(self, tab_uid: str) -> None:
         """Delete a tab's saved state and results by its stable tab_uid."""
         await self._repo.delete_tab(tab_uid)
+
+    async def switch_db(self, db_path: str) -> None:
+        """Point this API's repository at a different project DB file.
+
+        Lets IntruderScreen keep ONE persistent IntruderAPI/IntruderRepository
+        instance for the app's lifetime (mirrors ProxyService/HttpStorage)
+        instead of constructing a new one — and therefore a new SQLite
+        connection — on every single call. See BaseSqliteStorage.switch_db.
+        """
+        self._db_path = db_path
+        await self._repo.switch_db(db_path)
+
+    async def close(self) -> None:
+        """Close the underlying persistent SQLite connection, if open."""
+        await self._repo.close()
 
     async def save_result(
         self, result: IntruderResult, project_id: int | None = None, tab_uid: str = ""

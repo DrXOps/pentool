@@ -261,3 +261,150 @@ class TestRunDoesNotMaterializeCombinations:
         assert attack.total_requests == 3
         # Final progress call reports completion
         assert progress_calls[-1] == (3, 3)
+
+
+class TestNumericPayloadSource:
+    """Lazy numeric-range generator — see IntruderScreen._GenerateDialog.
+
+    Replaces the old eager generate_numeric_payloads()-backed UI path,
+    whose result (a plain list) was rendered one ListItem per value with no
+    cap, freezing the UI for tens of thousands of generated values.
+    """
+
+    def test_iterates_range(self) -> None:
+        from pentool.modules.intruder import NumericPayloadSource
+        source = NumericPayloadSource(1, 6)
+        assert list(source) == ["1", "2", "3", "4", "5"]
+
+    def test_step(self) -> None:
+        from pentool.modules.intruder import NumericPayloadSource
+        source = NumericPayloadSource(0, 10, 2)
+        assert list(source) == ["0", "2", "4", "6", "8"]
+
+    def test_empty_range(self) -> None:
+        from pentool.modules.intruder import NumericPayloadSource
+        source = NumericPayloadSource(5, 5)
+        assert list(source) == []
+        assert bool(source) is False
+
+    def test_len_is_o1_for_huge_range(self) -> None:
+        """The whole point: len() must not enumerate — a 10M-value range
+        must answer instantly."""
+        from pentool.modules.intruder import NumericPayloadSource
+        source = NumericPayloadSource(0, 10_000_000)
+        assert len(source) == 10_000_000
+
+    def test_bool_true_for_nonempty(self) -> None:
+        from pentool.modules.intruder import NumericPayloadSource
+        assert bool(NumericPayloadSource(0, 1)) is True
+
+    def test_head_returns_first_n_only(self) -> None:
+        from pentool.modules.intruder import NumericPayloadSource
+        source = NumericPayloadSource(0, 10_000_000)
+        assert source.head(5) == ["0", "1", "2", "3", "4"]
+
+    def test_repeated_iteration(self) -> None:
+        from pentool.modules.intruder import NumericPayloadSource
+        source = NumericPayloadSource(0, 3)
+        assert list(source) == ["0", "1", "2"]
+        assert list(source) == ["0", "1", "2"]
+
+    def test_zero_step_defaults_to_one(self) -> None:
+        """step=0 would raise ValueError from range() — defends against a
+        bad/empty Input field defaulting to 0 in the TUI dialog."""
+        from pentool.modules.intruder import NumericPayloadSource
+        source = NumericPayloadSource(0, 3, step=0)
+        assert list(source) == ["0", "1", "2"]
+
+
+class TestCharPayloadSource:
+    """Lazy charset brute-force generator — see IntruderScreen._GenerateDialog.
+
+    Replaces the old eager generate_char_payloads(), which was never wired
+    into the UI at all and would materialize a combinatorial explosion
+    (e.g. 26 chars, max_len=5 -> ~11.9M strings) into a list immediately.
+    """
+
+    def test_single_length(self) -> None:
+        from pentool.modules.intruder import CharPayloadSource
+        source = CharPayloadSource("ab", 1, 1)
+        assert sorted(source) == ["a", "b"]
+
+    def test_length_range(self) -> None:
+        from pentool.modules.intruder import CharPayloadSource
+        source = CharPayloadSource("ab", 1, 2)
+        assert sorted(source) == ["a", "aa", "ab", "b", "ba", "bb"]
+
+    def test_len_is_closed_form_never_enumerates(self) -> None:
+        """The whole point: len() for a combinatorially huge charset/length
+        must answer instantly via arithmetic, not iteration."""
+        from pentool.modules.intruder import CharPayloadSource
+        source = CharPayloadSource("abcdefghijklmnopqrstuvwxyz", 1, 5)
+        expected = sum(26 ** n for n in range(1, 6))
+        assert len(source) == expected
+        assert expected > 10_000_000  # confirms this really is a huge set
+
+    def test_bool_false_for_empty_charset(self) -> None:
+        from pentool.modules.intruder import CharPayloadSource
+        assert bool(CharPayloadSource("", 1, 1)) is False
+
+    def test_bool_false_for_min_gt_max(self) -> None:
+        from pentool.modules.intruder import CharPayloadSource
+        assert bool(CharPayloadSource("ab", 3, 1)) is False
+
+    def test_head_returns_first_n_only(self) -> None:
+        from pentool.modules.intruder import CharPayloadSource
+        source = CharPayloadSource("abcdefghijklmnopqrstuvwxyz", 1, 5)
+        head = source.head(3)
+        assert len(head) == 3
+        assert all(isinstance(h, str) for h in head)
+
+    def test_repeated_iteration(self) -> None:
+        from pentool.modules.intruder import CharPayloadSource
+        source = CharPayloadSource("ab", 1, 1)
+        assert sorted(source) == sorted(list(source))
+
+
+class TestChainedPayloadSource:
+    """Lazily concatenates payload sets — see
+    IntruderScreen._append_to_active_set, used when Generate…/Smart
+    Payloads appends onto an existing lazy set (e.g. a second Generate…
+    call, or a manual add after a Numeric/Char generation)."""
+
+    def test_chains_two_lists(self) -> None:
+        from pentool.modules.intruder import ChainedPayloadSource
+        chained = ChainedPayloadSource(["a", "b"], ["c", "d"])
+        assert list(chained) == ["a", "b", "c", "d"]
+        assert len(chained) == 4
+
+    def test_chains_lazy_and_list(self) -> None:
+        from pentool.modules.intruder import ChainedPayloadSource, NumericPayloadSource
+        chained = ChainedPayloadSource(NumericPayloadSource(0, 3), ["x"])
+        assert list(chained) == ["0", "1", "2", "x"]
+        assert len(chained) == 4
+
+    def test_flattens_nested_chains(self) -> None:
+        """Appending to an already-chained set must not build a deep
+        wrapper chain — nested ChainedPayloadSource instances are flattened
+        into one flat tuple of sources."""
+        from pentool.modules.intruder import ChainedPayloadSource
+        inner = ChainedPayloadSource(["a"], ["b"])
+        outer = ChainedPayloadSource(inner, ["c"])
+        assert len(outer._sources) == 3
+        assert list(outer) == ["a", "b", "c"]
+
+    def test_bool_true_if_any_source_nonempty(self) -> None:
+        from pentool.modules.intruder import ChainedPayloadSource
+        assert bool(ChainedPayloadSource([], ["a"])) is True
+        assert bool(ChainedPayloadSource([], [])) is False
+
+    def test_head_spans_multiple_sources(self) -> None:
+        from pentool.modules.intruder import ChainedPayloadSource
+        chained = ChainedPayloadSource(["a", "b"], ["c", "d", "e"])
+        assert chained.head(4) == ["a", "b", "c", "d"]
+
+    def test_len_never_enumerates_huge_source(self) -> None:
+        from pentool.modules.intruder import ChainedPayloadSource, NumericPayloadSource
+        chained = ChainedPayloadSource(NumericPayloadSource(0, 10_000_000), ["x"])
+        assert len(chained) == 10_000_001
+
