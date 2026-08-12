@@ -261,3 +261,61 @@ class TestScanPipelineDispatch:
         # baseline/probe overhead), NOT ~25x (quadratic).
         assert calls_for_five <= calls_for_one * 6
         assert calls_for_five >= calls_for_one * 4
+
+
+class TestPersistentConnection:
+    """Regression coverage for the connection-consolidation fix applied to
+    Scanner, mirroring the one already applied to Intruder (see
+    tests/unit/api/test_intruder_repository.py::TestPersistentConnection).
+
+    ScanEngine used to open a brand-new aiosqlite connection (via
+    core.database.get_db()) on every single save_findings()/get_findings()/
+    mark_false_positive()/get_stats() call. An active scan calls
+    save_findings() repeatedly as findings stream in, and Passive scanning
+    calls it once per captured Proxy request — both open/closed a fresh
+    connection to the same project DB file HttpStorage/IntruderRepository
+    already hold open, the same crash-under-load pattern fixed for
+    Intruder. ScanEngine now inherits BaseSqliteStorage: one connection,
+    opened lazily on first use via ensure_open(), reused for the engine's
+    lifetime.
+    """
+
+    @pytest.mark.asyncio
+    async def test_repeated_save_findings_reuses_same_connection(self, tmp_path):
+        from pentool.core.database import init_db
+        from pentool.modules.scanner.base import Finding
+
+        db_path = str(tmp_path / "test.db")
+        await init_db(db_path)
+        engine = ScanEngine(db_path=db_path)
+
+        def _finding(i: int) -> Finding:
+            return Finding(
+                type="sqli", name="SQLi", url=f"http://example.com/p{i}",
+                severity="high", parameter="id", payload="' OR 1=1",
+                evidence="", description="", cwe="", remediation="",
+                mitre_attack="", request_raw="", response_raw="",
+            )
+
+        await engine.save_findings([_finding(1)])
+        conn_after_first = engine._db
+        assert conn_after_first is not None
+
+        for i in range(2, 12):
+            await engine.save_findings([_finding(i)])
+            assert engine._db is conn_after_first
+
+        results = await engine.get_findings(limit=100)
+        assert len(results) == 11
+        assert engine._db is conn_after_first
+        await engine.close()
+
+    @pytest.mark.asyncio
+    async def test_ensure_open_noop_when_no_db_path(self):
+        """Safe no-op when constructed without a db_path — matches the
+        historical contract of the old get_db()-based callers."""
+        engine = ScanEngine(db_path="")
+        await engine.save_findings([])  # empty list — should not even try
+        assert await engine.get_findings() == []
+        assert engine._db is None
+        await engine.close()

@@ -28,7 +28,15 @@ from pentool.modules.scanner.base import Finding
 async def api(tmp_path):
     db_path = str(tmp_path / "test.db")
     await init_db(db_path)
-    return ScannerAPI(db_path=db_path)
+    a = ScannerAPI(db_path=db_path)
+    yield a
+    # ScannerAPI's components (ScanEngine, ScannerTabRepository) now hold a
+    # persistent aiosqlite connection each (see BaseSqliteStorage) instead
+    # of opening one per call — must be closed explicitly or its background
+    # thread leaks past the test (PytestUnhandledThreadExceptionWarning on
+    # teardown), same as IntruderRepository's fixture (see
+    # tests/unit/api/test_intruder_repository.py).
+    await a.close()
 
 
 class TestSaveTabByUid:
@@ -156,3 +164,46 @@ class TestFindingsScopedToTab:
 
         assert "xss" in types    # legacy/unscoped — visible everywhere
         assert "sqli" not in types  # scoped to a different tab — not visible
+
+
+class TestPersistentConnection:
+    """Regression coverage for the connection-consolidation fix applied to
+    ScannerTabRepository, mirroring IntruderRepository's fix (see
+    tests/unit/api/test_intruder_repository.py::TestPersistentConnection)
+    and ScanEngine's (see
+    tests/unit/modules/test_scan_engine_resume.py::TestPersistentConnection).
+
+    ScannerTabRepository used to open a brand-new aiosqlite connection (via
+    core.database.get_db()) on every single save_tab()/get_tabs()/
+    delete_tab() call — now inherits BaseSqliteStorage: one connection,
+    opened lazily on first use via ensure_open(), reused for the
+    repository's lifetime.
+    """
+
+    @pytest.mark.asyncio
+    async def test_repeated_save_tab_reuses_same_connection(self, api):
+        await api.save_tab("uid-1", "Scan 1", "http://a.com")
+        conn_after_first = api._tabs._db
+        assert conn_after_first is not None
+
+        for i in range(2, 12):
+            await api.save_tab(f"uid-{i}", f"Scan {i}", f"http://{i}.com")
+            assert api._tabs._db is conn_after_first
+
+        tabs = await api.get_tabs()
+        assert len(tabs) == 11
+        assert api._tabs._db is conn_after_first
+
+    @pytest.mark.asyncio
+    async def test_save_tab_without_uid_does_not_open_connection(self, tmp_path):
+        """ensure_open()'s no-op contract must still hold for the no-op
+        (empty tab_uid) path — mirrors the falsy-db_path no-op contract."""
+        from pentool.core.database import init_db
+        db_path = str(tmp_path / "test2.db")
+        await init_db(db_path)
+        a = ScannerAPI(db_path=db_path)
+        try:
+            await a.save_tab("", "Scan 1", "http://a.com")
+            assert a._tabs._db is None
+        finally:
+            await a.close()
