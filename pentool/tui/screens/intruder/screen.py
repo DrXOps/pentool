@@ -734,6 +734,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                     payloads=self._serialize_payloads(self._payloads),
                 ),
                 exclusive=False,
+                exit_on_error=False,
             )
         except Exception:
             pass
@@ -749,6 +750,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self.run_worker(
                 api.save_result(result, project_id=project_id),
                 exclusive=False,
+                exit_on_error=False,
             )
         except Exception:
             pass
@@ -1375,6 +1377,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                     self._load_file_async(path, captured_idx),
                     exclusive=False,
                     name="payload-load",
+                    exit_on_error=False,
                 )
 
         self.app.push_screen(
@@ -1754,13 +1757,13 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         except Exception:
             btn = None
         if self._paused:
-            self.run_worker(self._api.resume())
+            self.run_worker(self._api.resume(), exit_on_error=False)
             self._paused = False
             if btn is not None:
                 btn.label = "⏸ Pause"
             self.app.notify("Resumed", timeout=2)
         else:
-            self.run_worker(self._api.pause())
+            self.run_worker(self._api.pause(), exit_on_error=False)
             self._paused = True
             if btn is not None:
                 btn.label = "▶ Resume"
@@ -1768,7 +1771,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def action_stop_attack(self) -> None:
         if self._api is not None:
-            self.run_worker(self._api.stop())
+            self.run_worker(self._api.stop(), exit_on_error=False)
         self._attack_running = False
         self._paused = False
         self._set_running_state(False)
