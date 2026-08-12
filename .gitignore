@@ -53,3 +53,6 @@ pentool/tui/screens/scanner/
 
 # Original screenshots with Cyrillic names
 screens/Снимок*
+
+# Local scratch/debug files
+t.py
