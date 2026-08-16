@@ -284,25 +284,38 @@ class TestIntruderAPI:
         import asyncio
         import sys
         import types
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import AsyncMock, MagicMock
         from pentool.api import intruder_api as m
+        import pentool.modules as _mods
 
-        # intruder_turbo is a PRO module not present in CI — synthesize a fake
-        # so this test runs regardless of whether PRO is installed.
-        if "pentool.modules.intruder_turbo" not in sys.modules:
-            fake_mod = types.ModuleType("pentool.modules.intruder_turbo")
-            fake_mod.TurboIntruderAttack = None
-            sys.modules["pentool.modules.intruder_turbo"] = fake_mod
-
+        # intruder_turbo is a PRO module not present in CI. Synthesize a fake
+        # module so this test runs regardless of whether PRO is installed.
+        saved = sys.modules.get("pentool.modules.intruder_turbo")
+        fake_mod = types.ModuleType("pentool.modules.intruder_turbo")
+        # Reassigned to a mock below; just needs the attribute present so the
+        # `from pentool.modules.intruder_turbo import TurboIntruderAttack`
+        # inside start_attack resolves against the fake module.
+        fake_mod.TurboIntruderAttack = None
+        sys.modules["pentool.modules.intruder_turbo"] = fake_mod
+        _mods.intruder_turbo = fake_mod  # expose as a package attr for from-import
         api = m.IntruderAPI()
         turbo = MagicMock()
         turbo.run = AsyncMock()
         turbo.attack_id = "turbo-1"
-        with patch("pentool.modules.intruder_turbo.TurboIntruderAttack", return_value=turbo), \
-             patch.object(m.asyncio, "create_task",
-                          side_effect=lambda coro: asyncio.ensure_future(coro)):
-            aid = await api.start_attack(MagicMock(), on_result=None, on_progress=None, turbo_mode=True)
-        assert aid == "turbo-1"
+        fake_mod.TurboIntruderAttack = lambda *a, **k: turbo
+        try:
+            with patch.object(m.asyncio, "create_task",
+                              side_effect=lambda coro: asyncio.ensure_future(coro)):
+                aid = await api.start_attack(MagicMock(), on_result=None,
+                                             on_progress=None, turbo_mode=True)
+            assert aid == "turbo-1"
+        finally:
+            if saved is not None:
+                sys.modules["pentool.modules.intruder_turbo"] = saved
+            else:
+                sys.modules.pop("pentool.modules.intruder_turbo", None)
+            if hasattr(_mods, "intruder_turbo"):
+                delattr(_mods, "intruder_turbo")
 
     @pytest.mark.asyncio
     async def test_state_proxy_methods(self) -> None:
