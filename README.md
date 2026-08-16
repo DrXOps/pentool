@@ -65,7 +65,7 @@ Fast, transparent, and built for real-world testing.
 
 - **💥 Intruder**  
   Run automated payload attacks with four strategies: Sniper, Battering Ram, Pitchfork, Cluster Bomb.  
-  Turbo Mode delivers 10× speed via Keep-Alive and connection pooling.
+  **Turbo Mode** (PRO) delivers 10× speed via Keep-Alive and connection pooling.
 
 - **🔍 Scanner**  
   Active and passive vulnerability analysis: SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT flaws, and more.  

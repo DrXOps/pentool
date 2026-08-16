@@ -30,7 +30,7 @@
 
 - **💥 Intruder（入侵器）**  
   自动化 payload 攻击，支持四种策略：Sniper、Battering Ram、Pitchfork、Cluster Bomb。  
-  Turbo 模式通过 Keep-Alive 和连接池实现 10 倍速度提升。
+  **Turbo 模式（PRO）**通过 Keep-Alive 和连接池实现 10 倍速度提升。
 
 - **🔍 Scanner（扫描器）**  
   主动与被动漏洞分析：SQLi、XSS、SSTI、LFI、RCE、SSRF、XXE、CORS、JWT 缺陷等。  

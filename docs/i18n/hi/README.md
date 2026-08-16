@@ -30,7 +30,7 @@
 
 - **💥 Intruder**  
   चार स्ट्रेटेजी के साथ ऑटोमेटेड payload अटैक: Sniper, Battering Ram, Pitchfork, Cluster Bomb।  
-  Turbo Mode में Keep-Alive और कनेक्शन पूलिंग से 10× स्पीड।
+  **Turbo Mode (PRO)** में Keep-Alive और कनेक्शन पूलिंग से 10× स्पीड।
 
 - **🔍 Scanner (स्कैनर)**  
   एक्टिव और पैसिव वल्नेरेबिलिटी एनालिसिस: SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT फ्लॉ और बहुत कुछ।  

@@ -30,7 +30,7 @@
 
 - **💥 Intruder**  
   Автоматизированные атаки с подстановкой данных. Четыре стратегии: Sniper, Battering Ram, Pitchfork, Cluster Bomb.  
-  Turbo Mode даёт 10× прирост скорости за счёт Keep-Alive и пула соединений.
+  **Turbo Mode** (PRO) даёт 10× прирост скорости за счёт Keep-Alive и пула соединений.
 
 - **🔍 Сканер**  
   Активный и пассивный анализ: SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT-уязвимости и многое другое.  

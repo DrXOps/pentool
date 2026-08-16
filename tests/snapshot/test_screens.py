@@ -233,7 +233,7 @@ async def test_comparer_screen(assert_snapshot) -> None:
 @pytest.mark.asyncio
 @pytest.mark.xfail(strict=False, reason="Live Dashboard has time-dependent widgets (sparkline, resource monitor)")
 async def test_dashboard_live_tab(assert_snapshot) -> None:
-    """Dashboard → Live tab: TrafficSparkline, BubbleChart, EventFeed."""
+    """Dashboard screen (live widgets — chart, threat meter, resources)."""
     from pentool.tui.app import PentoolApp
     app = PentoolApp()
     app._skip_project_guard = True
