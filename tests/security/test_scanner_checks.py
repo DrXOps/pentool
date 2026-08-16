@@ -37,17 +37,28 @@ def base_request():
 class TestCorsCheck:
     """CORS check tests.
 
-    CORSCheck.scan() is an ACTIVE check that probes with attacker origins.
-    We mock http_client.get to return a response with the reflected evil origin.
+    CORSCheck now inherits BaseActiveCheck (plan 2.5 migration): it supplies
+    its own Origin-header injection point via `_build_points`, builds
+    attacker-origin probes via `_get_scan_payloads`, and sends them with the
+    get()/post() path via `_send_mutated`. The engine passes response=None
+    to scan()-pipeline checks, so the old passive branch was unreachable in
+    real scans and is gone — these tests exercise the active prober, mocking
+    http_client.get to return the reflected/flagged origin.
     """
 
     @pytest.mark.security
+    def test_is_base_active_check(self):
+        from pentool.modules.scanner.base import BaseActiveCheck
+        from pentool.modules.scanner.checks.cors import CORSCheck
+        assert issubclass(CORSCheck, BaseActiveCheck)
+
+    @pytest.mark.security
     async def test_cors_wildcard_with_credentials_detected(self, base_request):
-        """ACAO: * + credentials в passive-ветке scan()."""
+        """ACAO: * + credentials — caught via the active Origin probe."""
         from pentool.modules.scanner.checks.cors import CORSCheck
 
         check = CORSCheck()
-        # Passive branch: original response already has CORS issue
+        # Active probe: every Origin probe returns ACAO:* + credentials.
         resp = ParsedResponse(
             status=200,
             reason="OK",
@@ -58,11 +69,10 @@ class TestCorsCheck:
             body="OK",
         )
 
-        # http_client не вызовется в passive-ветке, но нужен для сигнатуры
         client = MagicMock()
         client.get = AsyncMock(return_value=resp)
 
-        findings = await check.scan(base_request, resp, client)
+        findings = await check.scan(base_request, None, client)
         assert len(findings) > 0, "Expected CORS finding for wildcard + credentials"
         assert any(
             "cors" in f.type.lower() or "CORS" in f.name
