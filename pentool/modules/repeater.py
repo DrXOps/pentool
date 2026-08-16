@@ -6,8 +6,8 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from pentool.core.database import get_db
 from pentool.core.logging import get_logger
+from pentool.storage.base_sqlite_storage import BaseSqliteStorage
 from pentool.utils.http_client import HTTPClient
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
@@ -50,8 +50,16 @@ class RepeaterEntry:
         )
 
 
-class Repeater:
+class Repeater(BaseSqliteStorage):
     """Repeater — send requests and save results to DB.
+
+    Connection lifecycle: inherits `BaseSqliteStorage` (see
+    pentool/storage/base_sqlite_storage.py). History methods open ONE
+    persistent aiosqlite connection lazily on first use (`ensure_open()`)
+    and reuse it instead of opening/closing a fresh connection via
+    `core.database.get_db()` on every call — the same consolidation already
+    applied to HttpStorage, IntruderRepository and SiteMap. `ensure_open()`
+    returns False (safe no-op) when `db_path` is falsy.
 
     Args:
         db_path: Path to the SQLite database.
@@ -67,10 +75,20 @@ class Repeater:
         timeout: float = 30.0,
         verify_ssl: bool = False,
     ) -> None:
-        self._db_path = db_path
+        super().__init__(db_path=db_path)
         self._project_id = project_id
         self._timeout = timeout
         self._verify_ssl = verify_ssl
+
+    async def init_db(self, path: str) -> None:
+        """Open/create the connection and ensure the `repeater_entries` table exists."""
+        # Applied on the SAME persistent connection (not a second get_db()),
+        # reusing the shared DDL from core.database so repeater_entries stays
+        # defined in one place. Idempotent (CREATE TABLE/INDEX IF NOT EXISTS).
+        await self._connect(path)
+        from pentool.core.database import _SCHEMA
+        await self._db.executescript(_SCHEMA)
+        await self._db.commit()
 
     async def send(
         self,
@@ -98,70 +116,74 @@ class Repeater:
         response: ParsedResponse,
         tab_name: str = "Tab",
     ) -> int:
-        async with get_db(self._db_path) as db:
-            cursor = await db.execute(
-                """
-                INSERT INTO repeater_entries
-                    (project_id, tab_name, method, url,
-                     request_headers, request_body,
-                     response_status, response_headers, response_body)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    self._project_id,
-                    tab_name,
-                    request.method,
-                    request.url,
-                    json.dumps(request.headers),
-                    request.body,
-                    response.status,
-                    json.dumps(response.headers),
-                    response.body,
-                ),
-            )
-            await db.commit()
-            return cursor.lastrowid  # type: ignore[return-value]
+        if not await self.ensure_open():
+            return 0
+        cursor = await self._db.execute(
+            """
+            INSERT INTO repeater_entries
+                (project_id, tab_name, method, url,
+                 request_headers, request_body,
+                 response_status, response_headers, response_body)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                self._project_id,
+                tab_name,
+                request.method,
+                request.url,
+                json.dumps(request.headers),
+                request.body,
+                response.status,
+                json.dumps(response.headers),
+                response.body,
+            ),
+        )
+        await self._db.commit()
+        return cursor.lastrowid  # type: ignore[return-value]
 
     async def get_history(
         self,
         limit: int = 50,
         project_id: int | None = None,
     ) -> list[RepeaterEntry]:
+        if not await self.ensure_open():
+            return []
         pid = project_id if project_id is not None else self._project_id
-        async with get_db(self._db_path) as db:
-            if pid is not None:
-                cursor = await db.execute(
-                    "SELECT * FROM repeater_entries WHERE project_id=? ORDER BY id DESC LIMIT ?",
-                    (pid, limit),
-                )
-            else:
-                cursor = await db.execute(
-                    "SELECT * FROM repeater_entries ORDER BY id DESC LIMIT ?",
-                    (limit,),
-                )
-            rows = await cursor.fetchall()
+        if pid is not None:
+            cursor = await self._db.execute(
+                "SELECT * FROM repeater_entries WHERE project_id=? ORDER BY id DESC LIMIT ?",
+                (pid, limit),
+            )
+        else:
+            cursor = await self._db.execute(
+                "SELECT * FROM repeater_entries ORDER BY id DESC LIMIT ?",
+                (limit,),
+            )
+        rows = await cursor.fetchall()
 
         return [_row_to_entry(row) for row in rows]
 
     async def get_entry(self, entry_id: int) -> RepeaterEntry | None:
-        async with get_db(self._db_path) as db:
-            cursor = await db.execute(
-                "SELECT * FROM repeater_entries WHERE id=?",
-                (entry_id,),
-            )
-            row = await cursor.fetchone()
+        if not await self.ensure_open():
+            return None
+        cursor = await self._db.execute(
+            "SELECT * FROM repeater_entries WHERE id=?",
+            (entry_id,),
+        )
+        row = await cursor.fetchone()
 
         if row is None:
             return None
         return _row_to_entry(row)
 
     async def delete_entry(self, entry_id: int) -> None:
-        async with get_db(self._db_path) as db:
-            await db.execute(
-                "DELETE FROM repeater_entries WHERE id=?",
-                (entry_id,),
-            )
-            await db.commit()
+        if not await self.ensure_open():
+            return
+        await self._db.execute(
+            "DELETE FROM repeater_entries WHERE id=?",
+            (entry_id,),
+        )
+        await self._db.commit()
 
 
 def _row_to_entry(row: object) -> RepeaterEntry:

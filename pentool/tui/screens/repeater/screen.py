@@ -82,6 +82,13 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._search_regex: bool = False
         self._tab_click_time: float = 0.0
         self._tab_click_id: str | None = None
+        # Single persistent RepeaterAPI for the screen's lifetime — created
+        # lazily via _get_api() and pointed at a different project DB on
+        # switch via reload_from_project()/switch_db(), mirroring
+        # IntruderScreen._get_api(). Previously every send/autosave/history
+        # read constructed a fresh RepeaterAPI (and thus opened+closed a new
+        # SQLite connection per call).
+        self._repeater_api = None
         # Bumped by reset_for_new_project()/reload_from_project()/_close_all_tabs().
         # on_mount()'s initial _load_tabs_from_db() reads whatever DB was
         # configured at app startup (before the user creates/opens a
@@ -133,6 +140,28 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         # Load tabs from database first, then create default tab if empty
         self._load_tabs_from_db()
 
+    def _get_api(self):
+        """Return this screen's single persistent RepeaterAPI instance.
+
+        Created lazily on first use and reused for every subsequent call
+        (send, history read, auto-save) — mirrors IntruderScreen._get_api /
+        ProxyService holding one HttpStorage for the app's lifetime.
+        Returns None when no project DB is configured yet.
+        """
+        if self._repeater_api is None:
+            from pentool.api.repeater_api import RepeaterAPI
+            from pentool.core.config import get_config
+            db_path = self._get_db_path()
+            if not db_path:
+                return None
+            cfg = get_config()
+            self._repeater_api = RepeaterAPI(
+                db_path=db_path,
+                timeout=cfg.request_timeout,
+                verify_ssl=cfg.verify_ssl,
+            )
+        return self._repeater_api
+
     def _load_tabs_from_db(self) -> None:
         """Load saved tabs from database on mount."""
         generation = self._tabs_generation
@@ -142,10 +171,10 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             self.action_new_tab()
             return
 
-        from pentool.api.repeater_api import RepeaterAPI
-        from pentool.core.config import get_config
-        cfg = get_config()
-        repeater_api = RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
+        repeater_api = self._get_api()
+        if repeater_api is None:
+            self.action_new_tab()
+            return
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=False)
 
     async def _do_load_tabs(self, repeater_api, generation: int | None = None) -> None:
@@ -324,10 +353,15 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         """Загрузить вкладки из БД. Вызывается при открытии существующего проекта."""
         await self._close_all_tabs()
         generation = self._tabs_generation
-        from pentool.api.repeater_api import RepeaterAPI
-        from pentool.core.config import get_config
-        cfg = get_config()
-        repeater_api = RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
+        # Point the persistent RepeaterAPI at the new project's DB instead of
+        # constructing a fresh one — switch_db() closes the old connection
+        # (reusing BaseSqliteStorage.switch_db), so no connection to the
+        # previous project's file lingers across switches.
+        if self._repeater_api is None:
+            self._repeater_api = self._get_api()
+        if self._repeater_api is not None:
+            await self._repeater_api.switch_db(db_path)
+        repeater_api = self._repeater_api
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=True)
 
     async def _close_all_tabs(self) -> None:
@@ -593,14 +627,10 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
             response = ParsedResponse(status=0, headers={}, body="")
 
-            db_path = self._get_db_path()
-            if not db_path:
+            repeater_api = self._get_api()
+            if repeater_api is None:
                 return
 
-            from pentool.api.repeater_api import RepeaterAPI
-            from pentool.core.config import get_config
-            cfg = get_config()
-            repeater_api = RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
             self.run_worker(
                 repeater_api.save_to_history(parsed, response, tab_name=state.name),
                 exclusive=False,
@@ -636,14 +666,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self.run_worker(self._do_send(tab_id, raw), exclusive=False, name="repeater-send")
 
     async def _do_send(self, tab_id: str, raw: str) -> None:
-        db_path = self._get_db_path()
-        from pentool.api.repeater_api import RepeaterAPI
-        from pentool.core.config import get_config
-        cfg = get_config()
-        repeater_api = (
-            RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
-            if db_path else None
-        )
+        repeater_api = self._get_api()
         service = RepeaterService(repeater_api=repeater_api)
 
         state = self._get_tab_state(tab_id)

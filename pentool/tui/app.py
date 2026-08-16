@@ -1457,6 +1457,15 @@ class PentoolApp(App):
                 logger.info("APP: Target storage closed on quit")
         except Exception as e:
             logger.warning("APP: Target storage close error on quit: %s", e)
+        # Close Repeater's persistent SQLite connection (BaseSqliteStorage).
+        try:
+            from pentool.tui.screens.repeater.screen import RepeaterScreen
+            repeater_screen = self.query_one(SCREEN_REPEATER, RepeaterScreen)
+            if repeater_screen._repeater_api is not None:
+                await repeater_screen._repeater_api.close()
+                logger.info("APP: Repeater storage closed on quit")
+        except Exception as e:
+            logger.warning("APP: Repeater storage close error on quit: %s", e)
         self.exit()
         # Force-terminate the process — kills non-daemon threads
         # (jemalloc_bg_thd from pyarrow) that would otherwise block exit.
