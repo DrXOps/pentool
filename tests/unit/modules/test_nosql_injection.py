@@ -1,15 +1,15 @@
 """Unit tests for pentool/modules/scanner/checks/nosql_injection.py.
 
-Regression coverage for a bug found while auditing checks alongside the
-BaseActiveCheck migration (see
-MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md addendum):
-NoSQLInjectionCheck declared `uses_scan_pipeline = True` while implementing
-the new analyze() API and having an unconditional `scan() -> []` stub — per
-BaseCheck.uses_analyze_api this forced the engine to always call the stub
-instead of analyze(), so the check silently never found anything in a real
-scan. A second bug in the same class: `request_raw` was built by calling
-`format_response_raw()` (a response formatter) on the *request* object
-instead of `build_http_request()`.
+Coverage for the migration of NoSQLInjectionCheck onto BaseActiveCheck
+(see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.5). The
+check is a single-phase per-payload analyze() check (MongoDB error-marker
+detection in the response body) with no multi-phase logic, so it now uses
+the inherited BaseActiveCheck cycle instead of the engine's analyze()-API
+branch on a scan() stub. It sets use_baseline_diff_skip=True to keep the
+response-diff-skip throughput. History (the pre-existing bug this inverts):
+before the migration it wrongfully declared uses_scan_pipeline=True at
+times, forcing the engine onto a `return []` scan() stub so it silently
+never found anything in a real scan.
 """
 
 from __future__ import annotations
@@ -42,14 +42,20 @@ class TestMeta:
     def test_name(self):
         assert NoSQLInjectionCheck.name == "nosql_injection"
 
-    def test_not_uses_scan_pipeline(self):
-        # The whole point of the regression: this must stay False (or unset)
-        # so BaseCheck.uses_analyze_api routes the engine to analyze(), not
-        # to the scan() stub.
-        assert getattr(NoSQLInjectionCheck, "uses_scan_pipeline", False) is False
+    def test_is_base_active_check(self):
+        # Migrated onto BaseActiveCheck (plan 2.5): the inherited scan()
+        # drives get_payloads()/analyze() through the base template cycle —
+        # the old path was the engine's analyze() branch on a scan() stub.
+        from pentool.modules.scanner.base import BaseActiveCheck
+        assert issubclass(NoSQLInjectionCheck, BaseActiveCheck)
 
-    def test_uses_analyze_api(self):
-        assert NoSQLInjectionCheck().uses_analyze_api is True
+    def test_uses_scan_pipeline(self):
+        assert NoSQLInjectionCheck.uses_scan_pipeline is True
+
+    def test_use_baseline_diff_skip(self):
+        # Keeps the response-diff-skip the engine's analyze() branch used
+        # to give this check for throughput.
+        assert NoSQLInjectionCheck.use_baseline_diff_skip is True
 
 
 class TestHasNosqlError:
