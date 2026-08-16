@@ -1434,7 +1434,7 @@ class PentoolApp(App):
         # Close SQLite storage — flush WAL to disk
         try:
             if self._proxy_service is not None:
-                await self._proxy_service._storage.close()
+                await self._proxy_service.close()
                 logger.info("APP: HttpStorage closed on quit")
         except Exception as e:
             logger.warning("APP: HttpStorage close error on quit: %s", e)

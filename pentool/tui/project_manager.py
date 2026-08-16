@@ -192,7 +192,7 @@ class ProjectManager:
             try:
                 if self._proxy_service is not None and self._proxy_service.is_storage_ready():
                     http_history = asyncio.run_coroutine_threadsafe(
-                        self._proxy_service._storage.export_all_requests(),
+                        self._proxy_service.export_all_requests(),
                         self._app._loop,
                     ).result(timeout=30)
                     proxy_export["http_history"] = http_history

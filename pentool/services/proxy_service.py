@@ -266,6 +266,34 @@ class ProxyService(BaseService):
     def is_storage_ready(self) -> bool:
         return self._storage_ready
 
+    async def close(self) -> None:
+        """Close the underlying HTTP-history storage connection.
+
+        Public wrapper — before this, app.py reached past ProxyService into
+        its private `_storage` to close it on shutdown (a layer violation,
+        see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7).
+        """
+        try:
+            await self._storage.close()
+            self._storage_ready = False
+        except Exception as exc:
+            logger.warning("ProxyService: close failed: %s", exc)
+
+    async def export_all_requests(self, limit: int = 10000) -> list[dict]:
+        """Export the full HTTP history for project save.
+
+        Public wrapper — before this, project_manager.py read the private
+        `_storage` directly to export history (a layer violation, see
+        MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7).
+        """
+        if not self._storage_ready:
+            return []
+        try:
+            return await self._storage.export_all_requests(limit=limit)
+        except Exception as exc:
+            logger.warning("ProxyService: export_all_requests failed: %s", exc)
+            return []
+
     async def reload_from_proxy(self, proxy_api: "ProxyAPI") -> None:
         """Synchronize storage from the in-memory proxy (for history clear/reset scenarios)."""
         if not self._storage_ready:
