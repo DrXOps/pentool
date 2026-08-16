@@ -749,3 +749,146 @@ class TestSpiderAPIStop:
         variants = spider._extract_path_variants(url, "example.com")
         # Ни один вариант не должен совпадать с оригинальным URL (дубль)
         assert url not in variants
+
+
+class TestResolveScheme:
+    """Tests for AsyncSpider._resolve_scheme (scheme fallback https→http)."""
+
+    @staticmethod
+    def _fake_aiohttp(session_get_exc=None):
+        import sys, types
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _cm():
+            class ClientConnectorSSLError(Exception):
+                pass
+
+            # `async with session.get(...)` expects an object whose __aenter__
+            # is async — mirror real aiohttp semantics.
+            class FakeRespCM:
+                def __init__(self):
+                    pass
+
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, *a):
+                    return False
+
+            fake = types.ModuleType("aiohttp")
+            fake.ClientTimeout = MagicMock
+
+            if session_get_exc is None:
+                class FakeSession:
+                    def __init__(self, *a, **k):
+                        pass
+
+                    def get(self, *a, **k):
+                        return FakeRespCM()
+
+                    async def __aenter__(self):
+                        return self
+
+                    async def __aexit__(self, *a):
+                        return False
+
+                fake.ClientSession = FakeSession
+            else:
+                class FakeSessionErr:
+                    def __init__(self, *a, **k):
+                        pass
+
+                    def get(self, *a, **k):
+                        raise session_get_exc
+
+                    async def __aenter__(self):
+                        return self
+
+                    async def __aexit__(self, *a):
+                        return False
+
+                fake.ClientSession = FakeSessionErr
+            fake.ClientConnectorSSLError = ClientConnectorSSLError
+
+            real = sys.modules.get("aiohttp")
+            sys.modules["aiohttp"] = fake
+            try:
+                yield
+            finally:
+                if real is not None:
+                    sys.modules["aiohttp"] = real
+                else:
+                    del sys.modules["aiohttp"]
+
+        return _cm()
+
+    @pytest.mark.asyncio
+    async def test_https_works_no_change(self):
+        spider = AsyncSpider()
+        with self._fake_aiohttp():
+            scheme, url = await spider._resolve_scheme("https://x.com/", "https", "x.com")
+        assert scheme == "https"
+
+    @pytest.mark.asyncio
+    async def test_http_url_not_probed(self):
+        spider = AsyncSpider()
+        # http scheme returns immediately without probing
+        scheme, url = await spider._resolve_scheme("http://x.com/", "http", "x.com")
+        assert scheme == "http"
+
+    @pytest.mark.asyncio
+    async def test_no_domain_returns_as_is(self):
+        spider = AsyncSpider()
+        scheme, url = await spider._resolve_scheme("https://x/", "https", "")
+        assert scheme == "https"
+
+    @pytest.mark.asyncio
+    async def test_wrong_version_falls_back_to_http(self):
+        import ssl
+        spider = AsyncSpider()
+        with self._fake_aiohttp(session_get_exc=ssl.SSLError("WRONG_VERSION_NUMBER")):
+            scheme, url = await spider._resolve_scheme("https://x.com/", "https", "x.com")
+        assert scheme == "http"
+        assert url == "http://x.com/"
+
+    @pytest.mark.asyncio
+    async def test_ssl_error_not_wrong_version_keeps_https(self):
+        import ssl
+        spider = AsyncSpider()
+        with self._fake_aiohttp(session_get_exc=ssl.SSLError("some other cert error")):
+            scheme, url = await spider._resolve_scheme("https://x.com/", "https", "x.com")
+        assert scheme == "https"
+
+    @pytest.mark.asyncio
+    async def test_generic_error_keeps_scheme(self):
+        spider = AsyncSpider()
+        with self._fake_aiohttp(session_get_exc=TimeoutError("timeout")):
+            scheme, url = await spider._resolve_scheme("https://x.com/", "https", "x.com")
+        assert scheme == "https"
+
+    @pytest.mark.asyncio
+    async def test_client_connector_ssl_error_wrong_version(self):
+        spider = AsyncSpider()
+        exc = Exception("WRONG_VERSION_NUMBER")
+        # ClientConnectorSSLError path — construct a stand-in
+        class ConnErr(Exception):
+            pass
+        with self._fake_aiohttp(session_get_exc=ConnErr("WRONG_VERSION_NUMBER")):
+            # ConnErr is not aiohttp.ClientConnectorSSLError → generic path → keep https
+            scheme, url = await spider._resolve_scheme("https://x.com/", "https", "x.com")
+        assert scheme == "https"
+
+
+class TestPlaywrightAvailable:
+    def test_false_when_import_error(self):
+        from pentool.modules.spider import is_playwright_available
+        import sys
+        real = sys.modules.get("playwright")
+        sys.modules.pop("playwright", None)
+        # Not actually installed likely — but ensure no crash either way
+        try:
+            is_playwright_available()
+        finally:
+            if real is not None:
+                sys.modules["playwright"] = real

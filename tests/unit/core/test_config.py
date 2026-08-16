@@ -201,3 +201,91 @@ class TestConfigNetworkFields:
         assert len(calls) == 1
         assert "request_timeout" in calls[0]
         assert "collaborator_url" in calls[0]
+
+
+class TestConfigObserversExtra:
+    def test_remove_observer_nonexistent_noop(self, tmp_path) -> None:
+        from pentool.core.config import Config
+        cfg = Config()
+        cfg.remove_observer(lambda f: None)  # not subscribed — no error
+
+    def test_notify_observers_catches_exception(self, tmp_path) -> None:
+        from pentool.core.config import Config
+        cfg = Config()
+        calls = []
+
+        def bad(_):
+            raise RuntimeError("observer boom")
+
+        def good(fields):
+            calls.append(fields)
+
+        cfg.add_observer(bad)
+        cfg.add_observer(good)
+        cfg.notify_observers({"x": 1})
+        # bad observer raised but was caught; good one still called
+        assert len(calls) == 1
+        assert calls[0] == {"x": 1}
+
+    def test_notify_observers_no_observers(self, tmp_path) -> None:
+        from pentool.core.config import Config
+        cfg = Config()
+        cfg.notify_observers({})  # no-op
+
+
+class TestConfigRecentProjects:
+    def test_add_recent_inserts_dedup_and_trims(self, tmp_path, monkeypatch) -> None:
+        from pentool.core.config import Config
+        cfg = Config()
+        monkeypatch.setattr(cfg, "save", lambda *a, **k: None)
+        cfg.add_recent_project("/a")
+        cfg.add_recent_project("/b")
+        cfg.add_recent_project("/a")  # dup → moves to front
+        assert cfg.recent_projects[0] == "/a"
+        assert len(cfg.recent_projects) == 2
+
+    def test_add_recent_save_failure_swallowed(self, tmp_path) -> None:
+        from pentool.core.config import Config
+        cfg = Config()
+        cfg.recent_projects = []
+        monkeypatch = __import__("pytest").MonkeyPatch() if False else None
+        # side_effect instead — save raises, add_recent should not propagate
+        import builtins
+        real_save = cfg.save if hasattr(cfg, "save") else None
+        try:
+            cfg.save = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no disk"))
+            cfg.add_recent_project("/x")
+        finally:
+            pass
+
+    def test_recent_projects_dedups(self) -> None:
+        from pentool.core.config import Config
+        cfg = Config()
+        cfg.recent_projects = ["a", "b"]
+        cfg.add_recent_project("b")
+        assert cfg.recent_projects == ["b", "a"]
+
+
+class TestConfigLoadExtra:
+    def test_load_prunes_missing_paths(self, tmp_path) -> None:
+        from pentool.core.config import Config
+        cfg_file = tmp_path / "c.yaml"
+        cfg_file.write_text("recent_projects:\n  - /definitely/missing/path\n  - /also/missing\n")
+        cfg = Config.load(str(cfg_file))
+        assert cfg.recent_projects == []
+        # and it re-saved the pruned config (no exception)
+
+    def test_load_prune_save_failure_swallowed(self, tmp_path, monkeypatch) -> None:
+        from pentool.core.config import Config
+        cfg_file = tmp_path / "c.yaml"
+        cfg_file.write_text("recent_projects:\n  - /definitely/missing\n")
+        # Force cfg.save() to raise — load must not propagate
+        monkeypatch.setattr(Config, "save", lambda self, *a, **k: (_ for _ in ()).throw(RuntimeError("nope")))
+        cfg = Config.load(str(cfg_file))
+        assert cfg.recent_projects == []
+
+    def test_get_config_initializes_on_demand(self, monkeypatch) -> None:
+        from pentool.core.config import get_config, set_config
+        set_config(None)  # reset singleton
+        cfg = get_config()
+        assert cfg is not None

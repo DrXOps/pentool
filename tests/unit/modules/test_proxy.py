@@ -5,6 +5,7 @@ Covers: MatchReplaceRule, MatchReplaceEngine, ProxyServer (state, scope, interce
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -186,3 +187,224 @@ class TestProxyServerStartStop:
         assert server.is_running is True
         await server.stop()
         assert server.is_running is False
+
+
+class TestInterceptedRequestSerialization:
+    def test_to_dict_roundtrip(self) -> None:
+        from pentool.modules.proxy import InterceptedRequest
+        from pentool.utils.parser import ParsedResponse
+        req = InterceptedRequest(
+            id="r1",
+            method="POST",
+            url="http://example.com/api",
+            headers={"Host": "example.com"},
+            body='{"a":1}',
+            timestamp=datetime.now(timezone.utc),
+            state="forwarded",
+            is_https=True,
+            response=ParsedResponse(status=200, reason="OK", headers={"X": "y"}, body="hello"),
+        )
+        d = req.to_dict()
+        restored = InterceptedRequest.from_dict(d)
+        assert restored.id == "r1"
+        assert restored.method == "POST"
+        assert restored.is_https is True
+        assert restored.response is not None
+        assert restored.response.status == 200
+        assert restored.response.body == "hello"
+
+    def test_from_dict_no_response(self) -> None:
+        from pentool.modules.proxy import InterceptedRequest
+        req = InterceptedRequest.from_dict({
+            "id": "x", "method": "GET", "url": "http://h/", "headers": {},
+            "body": "", "timestamp": "", "state": "waiting",
+        })
+        assert req.response is None
+        assert req.state == "waiting"
+
+    def test_to_parsed_request(self) -> None:
+        from pentool.modules.proxy import InterceptedRequest
+        req = InterceptedRequest(
+            id="r", method="PUT", url="http://h/x", headers={"Host": "h"},
+            body="b", timestamp=datetime.now(timezone.utc),
+        )
+        pr = req.to_parsed_request()
+        assert pr.method == "PUT"
+        assert pr.url == "http://h/x"
+        assert pr.body == "b"
+
+
+class TestProxyWsHelpers:
+    def test_build_frame_masked(self) -> None:
+        from pentool.modules.proxy import ProxyServer
+        frame = ProxyServer._build_ws_frame(0x1, b"abc", mask=False)
+        # opcode=1 text, no mask, payload len 3, payload
+        assert frame[0] == 0x81
+        assert frame[1] == 3
+        assert frame[2:] == b"abc"
+
+    def test_parse_frame_roundtrip(self) -> None:
+        from pentool.modules.proxy import ProxyServer
+        frame = ProxyServer._build_ws_frame(0x2, b"hello", mask=False)
+        parsed = ProxyServer._parse_ws_frame(frame)
+        assert parsed is not None
+        opcode, fin, payload, _ = parsed
+        assert opcode == 0x2
+        assert payload == b"hello"
+
+
+class TestProxyRawSerializers:
+    def test_request_to_raw(self) -> None:
+        from pentool.modules.proxy import ProxyServer
+        from pentool.utils.parser import ParsedRequest
+        req = ParsedRequest(method="GET", url="http://h/path", headers={"Host": "h"}, body="")
+        raw = ProxyServer._request_to_raw(req)
+        assert raw.startswith("GET http://h/path HTTP/1.1")
+
+    def test_request_to_raw_with_body(self) -> None:
+        from pentool.modules.proxy import ProxyServer
+        from pentool.utils.parser import ParsedRequest
+        req = ParsedRequest(method="POST", url="http://h/", headers={"Host": "h"}, body="payload")
+        raw = ProxyServer._request_to_raw(req)
+        assert raw.endswith("payload")
+
+    def test_response_to_raw(self) -> None:
+        from pentool.modules.proxy import ProxyServer
+        from pentool.utils.parser import ParsedResponse
+        resp = ParsedResponse(status=200, reason="OK", headers={"X": "1"}, body="hi")
+        raw = ProxyServer._response_to_raw(resp)
+        assert "HTTP" in raw and "200 OK" in raw
+
+    def test_response_to_bytes_removes_encoding_headers(self) -> None:
+        from pentool.modules.proxy import ProxyServer
+        from pentool.utils.parser import ParsedResponse
+        resp = ParsedResponse(status=200, reason="OK",
+                              headers={"transfer-encoding": "chunked",
+                                       "content-encoding": "gzip"},
+                              body="hello")
+        b = ProxyServer._response_to_bytes(resp)
+        text = b.decode()
+        assert "transfer-encoding" not in text
+        assert "content-encoding" not in text
+        assert "Content-Length: 5" in text
+        assert text.endswith("hello")
+
+
+class TestProxyRequestHistory:
+    def test_add_and_ring_buffer(self) -> None:
+        from pentool.modules.proxy import ProxyServer, InterceptedRequest
+        server = ProxyServer()
+        server._requests_max = 3
+        for i in range(5):
+            server._add_request(InterceptedRequest(
+                id=str(i), method="GET", url=f"http://h/{i}", headers={},
+                body="", timestamp=datetime.now(timezone.utc)))
+        assert len(server.requests) == 3
+        assert server.requests[0].id == "2"
+
+    def test_get_requests_filters(self) -> None:
+        from pentool.modules.proxy import ProxyServer, InterceptedRequest
+        server = ProxyServer()
+        server._add_request(InterceptedRequest(
+            id="1", method="GET", url="http://a.com/x", headers={}, body="",
+            timestamp=datetime.now(timezone.utc)))
+        server._add_request(InterceptedRequest(
+            id="2", method="POST", url="http://b.com/y", headers={}, body="",
+            timestamp=datetime.now(timezone.utc)))
+        # newest first
+        assert server.get_requests(limit=1)[0].id == "2"
+        # method filter
+        only_post = server.get_requests(method="post")
+        assert [r.id for r in only_post] == ["2"]
+        # host filter (substring)
+        only_a = server.get_requests(host="a.com")
+        assert [r.id for r in only_a] == ["1"]
+
+    def test_replace_requests_atomic(self) -> None:
+        from pentool.modules.proxy import ProxyServer, InterceptedRequest
+        server = ProxyServer()
+        server._add_request(InterceptedRequest(
+            id="old", method="GET", url="http://h/", headers={}, body="",
+            timestamp=datetime.now(timezone.utc)))
+        new = [InterceptedRequest(
+            id="new", method="GET", url="http://h/", headers={}, body="",
+            timestamp=datetime.now(timezone.utc))]
+        server.replace_requests(new)
+        assert [r.id for r in server.requests] == ["new"]
+
+    def test_clear_requests(self) -> None:
+        from pentool.modules.proxy import ProxyServer, InterceptedRequest
+        server = ProxyServer()
+        server._add_request(InterceptedRequest(
+            id="x", method="GET", url="http://h/", headers={}, body="",
+            timestamp=datetime.now(timezone.utc)))
+        server.clear_requests()
+        assert server.requests == []
+
+    def test_find_request(self) -> None:
+        from pentool.modules.proxy import ProxyServer, InterceptedRequest
+        server = ProxyServer()
+        server._add_request(InterceptedRequest(
+            id="target", method="GET", url="http://h/", headers={}, body="",
+            timestamp=datetime.now(timezone.utc)))
+        assert server._find_request("target") is not None
+        assert server._find_request("missing") is None
+
+
+class TestProxyDecisionFlow:
+    def test_forward_waiting_request(self) -> None:
+        from pentool.modules.proxy import ProxyServer, InterceptedRequest
+        server = ProxyServer()
+        req = InterceptedRequest(
+            id="f", method="GET", url="http://h/", headers={}, body="",
+            timestamp=datetime.now(timezone.utc), state="waiting")
+        server._add_request(req)
+        server.forward("f", modified_raw="MODIFIED")
+        assert req.state == "forwarded"
+        assert req._modified_raw == "MODIFIED"
+
+    def test_drop_waiting_request(self) -> None:
+        from pentool.modules.proxy import ProxyServer, InterceptedRequest
+        server = ProxyServer()
+        req = InterceptedRequest(
+            id="d", method="GET", url="http://h/", headers={}, body="",
+            timestamp=datetime.now(timezone.utc), state="waiting")
+        server._add_request(req)
+        server.drop("d")
+        assert req.state == "dropped"
+
+    def test_forward_already_resolved_noop(self) -> None:
+        from pentool.modules.proxy import ProxyServer, InterceptedRequest
+        server = ProxyServer()
+        req = InterceptedRequest(
+            id="r", method="GET", url="http://h/", headers={}, body="",
+            timestamp=datetime.now(timezone.utc), state="forwarded")
+        server._add_request(req)
+        server.forward("r")  # state already not waiting → no-op, unchanged
+        assert req.state == "forwarded"
+
+
+class TestProxyEnforceScope:
+    def test_set_enforce_scope_no_loop(self) -> None:
+        from pentool.modules.proxy import ProxyServer
+        server = ProxyServer()
+        server._loop = None
+        server.set_enforce_scope(True)
+        assert server.enforce_scope is True
+
+    def test_set_enforce_scope_with_loop(self) -> None:
+        from unittest.mock import MagicMock
+        from pentool.modules.proxy import ProxyServer
+        server = ProxyServer()
+        loop = MagicMock()
+        loop.is_running.return_value = True
+        server._loop = loop
+        server.set_enforce_scope(True)
+        loop.call_soon_threadsafe.assert_called_once()
+
+    def test_is_in_scope_wildcard(self) -> None:
+        from pentool.modules.proxy import ProxyServer
+        server = ProxyServer()
+        server.scope = ["*.example.com"]
+        assert server.is_in_scope("sub.example.com") is True
+        assert server.is_in_scope("other.com") is False

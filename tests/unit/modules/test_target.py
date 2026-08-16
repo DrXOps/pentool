@@ -221,3 +221,16 @@ class TestTargetAPI:
         path_strs = [n.path for n in paths]
         assert "/a" in path_strs
         assert "/b" in path_strs
+
+    @pytest.mark.asyncio
+    async def test_close_releases_connection(self, test_db: str) -> None:
+        """close() is a safe no-op when never opened, then allows re-save."""
+        from pentool.api.target_api import TargetAPI
+        api = TargetAPI(db_path=test_db)
+        try:
+            await api.close()  # no-op — connection was never opened
+            api.add_request(make_req("http://close.example/api"))
+            await api.save()
+            await api.close()  # close the now-open persistent connection
+        finally:
+            await api.close()

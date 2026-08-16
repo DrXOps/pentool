@@ -194,3 +194,70 @@ class TestPersistentConnection:
             assert results[0].attack_id == "atk-b"
         finally:
             await repo.close()
+
+
+class TestTabUidStatePersistence:
+    @pytest.mark.asyncio
+    async def test_save_load_with_tab_uid(self, repo):
+        await repo.save_state("Tab", "T", "sniper", [["a"]], tab_uid="uid-1")
+        state = await repo.load_state("anything", tab_uid="uid-1")
+        assert state is not None
+        assert state["template"] == "T"
+
+    @pytest.mark.asyncio
+    async def test_save_state_updates_existing_uid(self, repo):
+        await repo.save_state("Tab", "T1", "sniper", [["a"]], tab_uid="uid-2")
+        await repo.save_state("Tab2", "T2", "cluster_bomb", [["b"]], tab_uid="uid-2")
+        state = await repo.load_state("", tab_uid="uid-2")
+        assert state["template"] == "T2"
+        assert state["attack_type"] == "cluster_bomb"
+
+    @pytest.mark.asyncio
+    async def test_get_tabs_and_delete_tab(self, repo):
+        await repo.save_state("A", "TA", "sniper", [["1"]], tab_uid="uid-a")
+        await repo.save_state("B", "TB", "sniper", [["2"]], tab_uid="uid-b")
+        tabs = await repo.get_tabs()
+        uids = {t["tab_uid"] for t in tabs}
+        assert "uid-a" in uids
+        assert "uid-b" in uids
+
+        await repo.delete_tab("uid-a")
+        tabs_after = await repo.get_tabs()
+        assert all(t["tab_uid"] != "uid-a" for t in tabs_after)
+        assert await repo.load_state("", tab_uid="uid-a") is None
+
+    @pytest.mark.asyncio
+    async def test_delete_tab_empty_uid_noops(self, repo):
+        await repo.delete_tab("")  # no-op, no crash
+
+
+class TestResultTabUid:
+    @pytest.mark.asyncio
+    async def test_get_results_filters_by_tab_uid(self, repo):
+        r1 = _make_result(attack_id="a1", request_number=1)
+        r2 = _make_result(attack_id="a2", request_number=2)
+        await repo.save_result(r1, tab_uid="tab-x")
+        await repo.save_result(r2, tab_uid="tab-y")
+        only_x = await repo.get_results(tab_uid="tab-x")
+        assert len(only_x) == 1
+        assert only_x[0].attack_id == "a1"
+
+    @pytest.mark.asyncio
+    async def test_get_results_by_attack_and_uid(self, repo):
+        await repo.save_result(_make_result(attack_id="atk", request_number=1), tab_uid="t")
+        by_attack = await repo.get_results(attack_id="atk", tab_uid="t")
+        assert len(by_attack) == 1
+
+
+class TestNoDbPathGetTabsAndResults:
+    @pytest.mark.asyncio
+    async def test_get_tabs_no_db_returns_empty(self):
+        from pentool.api.intruder_storage import IntruderStorage
+        repo = IntruderStorage(db_path=None)
+        assert await repo.get_tabs() == []
+
+    @pytest.mark.asyncio
+    async def test_get_results_no_db_returns_empty(self):
+        from pentool.api.intruder_storage import IntruderStorage
+        repo = IntruderStorage(db_path=None)
+        assert await repo.get_results() == []
