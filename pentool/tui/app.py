@@ -1448,6 +1448,15 @@ class PentoolApp(App):
                 logger.info("APP: Intruder storage closed on quit")
         except Exception as e:
             logger.warning("APP: Intruder storage close error on quit: %s", e)
+        # Close Target/SiteMap's persistent SQLite connection (BaseSqliteStorage).
+        try:
+            from pentool.tui.screens.target.screen import TargetScreen
+            target_screen = self.query_one(SCREEN_TARGET, TargetScreen)
+            if target_screen._target_api is not None:
+                await target_screen._target_api.close()
+                logger.info("APP: Target storage closed on quit")
+        except Exception as e:
+            logger.warning("APP: Target storage close error on quit: %s", e)
         self.exit()
         # Force-terminate the process — kills non-daemon threads
         # (jemalloc_bg_thd from pyarrow) that would otherwise block exit.

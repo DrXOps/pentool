@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
-from pentool.core.database import get_db, init_db
 from pentool.core.logging import get_logger
+from pentool.storage.base_sqlite_storage import BaseSqliteStorage
 
 if TYPE_CHECKING:
     from pentool.utils.parser import ParsedRequest
@@ -59,11 +59,21 @@ class SiteNode:
         )
 
 
-class SiteMap:
-    """Target tree, automatically populated from proxy traffic."""
+class SiteMap(BaseSqliteStorage):
+    """Target tree, automatically populated from proxy traffic.
+
+    Connection lifecycle: inherits `BaseSqliteStorage` (see
+    pentool/storage/base_sqlite_storage.py). `save()`/`load()` open ONE
+    persistent aiosqlite connection lazily on first use (`ensure_open()`)
+    and reuse it for the object's lifetime instead of opening/closing a
+    fresh connection via `core.database.get_db()` on every call — the same
+    consolidation already applied to HttpStorage and IntruderRepository.
+    Like those, `ensure_open()` returns False (safe no-op) when `db_path`
+    is falsy.
+    """
 
     def __init__(self, db_path: str) -> None:
-        self._db_path = db_path
+        super().__init__(db_path=db_path)
     # host -> path -> SiteNode
         self._nodes: dict[str, dict[str, SiteNode]] = {}
         # Scope is tracked independently of _nodes (normalized, port-stripped
@@ -75,6 +85,20 @@ class SiteMap:
         # before any matching traffic arrived (or under a different
         # host:port key) silently never got flagged, with no error raised.
         self._scope_hosts: set[str] = set()
+
+    async def init_db(self, path: str) -> None:
+        """Open/create the connection and ensure the `site_map` table exists."""
+        # BaseSqliteStorage._connect() opens self._db and applies the shared
+        # PRAGMAs (WAL/busy_timeout) common to every storage class. Schema is
+        # applied on the SAME persistent connection (not a second get_db()),
+        # reusing the shared DDL from core.database so `site_map` and its
+        # unique index stay defined in one place. All statements are
+        # idempotent (CREATE TABLE/INDEX IF NOT EXISTS), so this is safe to
+        # run against an already-initialized project DB.
+        await self._connect(path)
+        from pentool.core.database import _SCHEMA
+        await self._db.executescript(_SCHEMA)
+        await self._db.commit()
 
     @staticmethod
     def _norm_host(host: str) -> str:
@@ -160,42 +184,42 @@ class SiteMap:
 
     async def save(self) -> None:
         try:
-            if self._db_path:
-                await init_db(self._db_path)
-            async with get_db(self._db_path) as db:
-                for host, paths in self._nodes.items():
-                    for path, node in paths.items():
-                        await db.execute(
-                            """
-                            INSERT INTO site_map (id, host, path, methods, request_count, last_seen, in_scope)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(host, path) DO UPDATE SET
-                                methods = excluded.methods,
-                                request_count = excluded.request_count,
-                                last_seen = excluded.last_seen,
-                                in_scope = excluded.in_scope
-                            """,
-                            (
-                                node.id,
-                                node.host,
-                                node.path,
-                                json.dumps(list(node.methods)),
-                                node.request_count,
-                                node.last_seen.isoformat(),
-                                1 if node.in_scope else 0,
-                            ),
-                        )
-                await db.commit()
+            if not await self.ensure_open():
+                return
+            db = self._db
+            for host, paths in self._nodes.items():
+                for path, node in paths.items():
+                    await db.execute(
+                        """
+                        INSERT INTO site_map (id, host, path, methods, request_count, last_seen, in_scope)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(host, path) DO UPDATE SET
+                            methods = excluded.methods,
+                            request_count = excluded.request_count,
+                            last_seen = excluded.last_seen,
+                            in_scope = excluded.in_scope
+                        """,
+                        (
+                            node.id,
+                            node.host,
+                            node.path,
+                            json.dumps(list(node.methods)),
+                            node.request_count,
+                            node.last_seen.isoformat(),
+                            1 if node.in_scope else 0,
+                        ),
+                    )
+            await db.commit()
         except Exception as exc:
             logger.error("SiteMap.save error: %s", exc)
 
     async def load(self) -> None:
         try:
-            if self._db_path:
-                await init_db(self._db_path)
-            async with get_db(self._db_path) as db:
-                async with db.execute("SELECT * FROM site_map") as cur:
-                    rows = await cur.fetchall()
+            if not await self.ensure_open():
+                return
+            db = self._db
+            async with db.execute("SELECT * FROM site_map") as cur:
+                rows = await cur.fetchall()
             self._nodes.clear()
             for row in rows:
                 node = SiteNode(

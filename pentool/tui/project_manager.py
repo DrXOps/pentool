@@ -517,6 +517,15 @@ class ProjectManager:
                         await target_screen._target_api.save()
                     except Exception:
                         pass
+                    # SiteMap now holds one persistent SQLite connection
+                    # (BaseSqliteStorage) — close it before dropping the
+                    # instance, otherwise a leaked connection to the old
+                    # project's DB file lingers until quit and accumulates
+                    # FDs/locks across project switches.
+                    try:
+                        await target_screen._target_api.close()
+                    except Exception:
+                        pass
                 target_screen._target_api = None
                 target_screen._get_api()
                 target_screen._load_sitemap()

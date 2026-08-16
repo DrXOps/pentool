@@ -36,6 +36,10 @@ class TargetAPI(ExportableAPI):
     async def save(self) -> None:
         await self._sitemap.save()
 
+    async def close(self) -> None:
+        """Close the persistent SiteMap SQLite connection (on quit / project switch)."""
+        await self._sitemap.close()
+
     def add_request(self, req: "ParsedRequest") -> None:
         self._sitemap.add_request(req)
 

@@ -19,9 +19,13 @@ from pentool.utils.parser import ParsedRequest
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-@pytest.fixture
-def sitemap(test_db: str) -> SiteMap:
-    return SiteMap(db_path=test_db)
+@pytest_asyncio.fixture
+async def sitemap(test_db: str):
+    sm = SiteMap(db_path=test_db)
+    try:
+        yield sm
+    finally:
+        await sm.close()
 
 
 def make_req(url: str, method: str = "GET") -> ParsedRequest:
@@ -152,12 +156,18 @@ class TestSiteMap:
         sm = SiteMap(db_path=test_db)
         sm.add_request(make_req("http://saved.com/api"))
         sm.set_in_scope("saved.com", True)
-        await sm.save()
+        try:
+            await sm.save()
 
-        sm2 = SiteMap(db_path=test_db)
-        await sm2.load()
-        assert "saved.com" in sm2.get_hosts()
-        assert sm2.is_in_scope("saved.com")
+            sm2 = SiteMap(db_path=test_db)
+            try:
+                await sm2.load()
+                assert "saved.com" in sm2.get_hosts()
+                assert sm2.is_in_scope("saved.com")
+            finally:
+                await sm2.close()
+        finally:
+            await sm.close()
 
     def test_export_json(self, sitemap: SiteMap) -> None:
         sitemap.add_request(make_req("http://example.com/api"))
