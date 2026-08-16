@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from click.testing import CliRunner
@@ -26,10 +27,25 @@ def test_import_scanner_api_unavailable_when_module_missing():
             assert e.code == 1
 
 
-def test_import_scanner_api_returned():
-    # PRO is installed in this environment — the real import succeeds.
-    cls = _import_scanner_api()
-    assert cls is not None
+def test_import_scanner_api_returns_class():
+    """When the scanner module imports cleanly, the ScannerAPI class is returned.
+
+    Scanner is a PRO module (absent in CI), so mock the import path rather
+    than depending on a real install.
+    """
+    real_import = __builtins__["__import__"] if isinstance(__builtins__, dict) else __builtins__.__import__
+    FakeScannerAPI = type("ScannerAPI", (), {})
+
+    def fake_import(name, *a, **k):
+        if name == "pentool.api.scanner_api":
+            mod = types.ModuleType("pentool.api.scanner_api")
+            mod.ScannerAPI = FakeScannerAPI
+            return mod
+        return real_import(name, *a, **k)
+
+    with patch("builtins.__import__", side_effect=fake_import):
+        cls = _import_scanner_api()
+    assert cls is FakeScannerAPI
 
 
 # ── passive ─────────────────────────────────────────────────────────────────

@@ -282,8 +282,18 @@ class TestIntruderAPI:
     @pytest.mark.asyncio
     async def test_start_attack_turbo_mode(self) -> None:
         import asyncio
+        import sys
+        import types
         from unittest.mock import AsyncMock, MagicMock, patch
         from pentool.api import intruder_api as m
+
+        # intruder_turbo is a PRO module not present in CI — synthesize a fake
+        # so this test runs regardless of whether PRO is installed.
+        if "pentool.modules.intruder_turbo" not in sys.modules:
+            fake_mod = types.ModuleType("pentool.modules.intruder_turbo")
+            fake_mod.TurboIntruderAttack = None
+            sys.modules["pentool.modules.intruder_turbo"] = fake_mod
+
         api = m.IntruderAPI()
         turbo = MagicMock()
         turbo.run = AsyncMock()
