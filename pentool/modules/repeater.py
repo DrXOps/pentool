@@ -57,8 +57,8 @@ class Repeater(BaseSqliteStorage):
     pentool/storage/base_sqlite_storage.py). History methods open ONE
     persistent aiosqlite connection lazily on first use (`ensure_open()`)
     and reuse it instead of opening/closing a fresh connection via
-    `core.database.get_db()` on every call — the same consolidation already
-    applied to HttpStorage, IntruderRepository and SiteMap. `ensure_open()`
+    `core.db_schema.get_db()` on every call — the same consolidation already
+    applied to HttpStorage, IntruderStorage and SiteMap. `ensure_open()`
     returns False (safe no-op) when `db_path` is falsy.
 
     Args:
@@ -83,10 +83,10 @@ class Repeater(BaseSqliteStorage):
     async def init_db(self, path: str) -> None:
         """Open/create the connection and ensure the `repeater_entries` table exists."""
         # Applied on the SAME persistent connection (not a second get_db()),
-        # reusing the shared DDL from core.database so repeater_entries stays
+        # reusing the shared DDL from core.db_schema so repeater_entries stays
         # defined in one place. Idempotent (CREATE TABLE/INDEX IF NOT EXISTS).
         await self._connect(path)
-        from pentool.core.database import _SCHEMA
+        from pentool.core.db_schema import _SCHEMA
         await self._db.executescript(_SCHEMA)
         await self._db.commit()
 

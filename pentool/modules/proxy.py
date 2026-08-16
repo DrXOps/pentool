@@ -133,7 +133,7 @@ class ProxyServer:
     - Interactive mode (intercept): pauses request until user decision
     - Scope: host filtering
     - Match/Replace: automatic replacement in requests/responses (via MatchReplaceEngine)
-    - Logging to SQLite via core/database
+    - Logging to SQLite via core/db_schema
     - Notifications via EventBus: ProxyRequestCaptured, ProxyRequestCompleted
     """
 

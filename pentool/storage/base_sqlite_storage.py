@@ -2,11 +2,11 @@
 
 Extracted from HttpStorage as part of the connection-consolidation effort
 (see chat: "проблема с соединениями к БД" — вариант C, общий пул соединений).
-Both `HttpStorage` (Proxy/History) and `IntruderRepository` (Intruder tab
+Both `HttpStorage` (Proxy/History) and `IntruderStorage` (Intruder tab
 state/results) inherit from this — each keeps ONE persistent aiosqlite
 connection open for as long as the project is active, instead of opening
 and closing a fresh connection on every single call (the old `get_db()`
-pattern in core/database.py). That old pattern was the direct cause of an
+pattern in core/db_schema.py). That old pattern was the direct cause of an
 Intruder crash: a fast attack calls `save_result()` per HTTP response —
 thousands of times a second — and each call used to open+close its own
 SQLite connection to the *same file* HttpStorage already holds open, which
@@ -17,7 +17,7 @@ already present in the codebase:
 
 - Explicit (HttpStorage-style): caller awaits `init_db(path)` once, then
   uses `self._db` directly. `ensure_open()` is a no-op once connected.
-- Lazy (IntruderRepository-style): the object is constructed synchronously
+- Lazy (IntruderStorage-style): the object is constructed synchronously
   with `db_path` and methods are called directly with no explicit connect
   step — each public method calls `await self.ensure_open()` first, which
   opens the connection on first use and reuses it afterwards.
@@ -67,7 +67,7 @@ class BaseSqliteStorage:
         """Lazily open the connection using `self._db_path` if not already
         open. Returns False (no-op) if there is no db_path to connect to —
         matches the historical "safe no-op when db_path is falsy" contract
-        of callers like IntruderRepository.
+        of callers like IntruderStorage.
         """
         if self._db is not None:
             return True

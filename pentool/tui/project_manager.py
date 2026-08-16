@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pentool.core.database import init_db
+from pentool.core.db_schema import init_db
 from pentool.core.logging import get_logger
 from pentool.tui.constants import (
     SCREEN_DASHBOARD,

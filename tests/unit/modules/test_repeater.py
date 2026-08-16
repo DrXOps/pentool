@@ -17,7 +17,7 @@ from pentool.utils.parser import ParsedRequest, ParsedResponse
 class TestRepeaterHistory:
     @pytest_asyncio.fixture
     async def repeater(self, tmp_path: Path):
-        from pentool.core.database import init_db
+        from pentool.core.db_schema import init_db
         from pentool.modules.repeater import Repeater
         db_path = str(tmp_path / "test.db")
         await init_db(db_path)
@@ -131,7 +131,7 @@ class TestRepeaterHistory:
 class TestRepeaterSend:
     @pytest_asyncio.fixture
     async def repeater(self, tmp_path: Path):
-        from pentool.core.database import init_db
+        from pentool.core.db_schema import init_db
         from pentool.modules.repeater import Repeater
         db_path = str(tmp_path / "test.db")
         await init_db(db_path)

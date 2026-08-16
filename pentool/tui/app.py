@@ -26,7 +26,7 @@ Checkbox.BUTTON_RIGHT = "]"
 from pentool.api.proxy_api import InterceptedRequest as _IR
 from pentool.api.proxy_api import ProxyAPI, ProxyServer
 from pentool.core.config import get_config
-from pentool.core.database import init_db
+from pentool.core.db_schema import init_db
 from pentool.core.event_bus import get_event_bus
 from pentool.core.events import (
     FindingDiscovered,

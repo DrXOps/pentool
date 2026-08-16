@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from pentool.core.database import get_db  # noqa: E402 — needed for patch target
+from pentool.core.db_schema import get_db  # noqa: E402 — needed for patch target
 
 
 class StorageInterface(ABC):
@@ -219,7 +219,7 @@ class SQLiteStorage(StorageInterface):
     async def search_requests(self, query: str, limit: int = 100) -> list[dict[str, Any]]:
         return await self._storage.search(query, limit=limit)
 
-    # Scanner findings (delegating to core/database.py via get_db)
+    # Scanner findings (delegating to core/db_schema.py via get_db)
     async def add_finding(
         self,
         severity: str,

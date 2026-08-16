@@ -1,8 +1,8 @@
-"""Unit tests for pentool/api/intruder_repository.py.
+"""Unit tests for pentool/api/intruder_storage.py.
 
 Regression coverage for the extraction done in
 MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.6 —
-IntruderRepository now owns the SQL that used to live directly on
+IntruderStorage now owns the SQL that used to live directly on
 IntruderAPI (save_state/load_state/save_result/get_results_from_db).
 IntruderAPI keeps identical public method names delegating to this class.
 """
@@ -20,7 +20,7 @@ from pentool.modules.intruder import IntruderResult
 
 @pytest_asyncio.fixture
 async def db_path(tmp_path: Path) -> str:
-    from pentool.core.database import init_db
+    from pentool.core.db_schema import init_db
     path = str(tmp_path / "test.db")
     await init_db(path)
     return path
@@ -28,10 +28,10 @@ async def db_path(tmp_path: Path) -> str:
 
 @pytest_asyncio.fixture
 async def repo(db_path):
-    from pentool.api.intruder_repository import IntruderRepository
-    r = IntruderRepository(db_path=db_path)
+    from pentool.api.intruder_storage import IntruderStorage
+    r = IntruderStorage(db_path=db_path)
     yield r
-    # IntruderRepository now holds a persistent aiosqlite connection (see
+    # IntruderStorage now holds a persistent aiosqlite connection (see
     # BaseSqliteStorage) instead of the old open/close-per-call get_db()
     # pattern — must be closed explicitly or its background thread leaks
     # past the test (PytestUnhandledThreadExceptionWarning on teardown).
@@ -61,26 +61,26 @@ class TestNoDbPath:
 
     @pytest.mark.asyncio
     async def test_save_state_noop(self):
-        from pentool.api.intruder_repository import IntruderRepository
-        repo = IntruderRepository(db_path=None)
+        from pentool.api.intruder_storage import IntruderStorage
+        repo = IntruderStorage(db_path=None)
         await repo.save_state("tab", "template", "sniper", [["a"]])  # should not raise
 
     @pytest.mark.asyncio
     async def test_load_state_returns_none(self):
-        from pentool.api.intruder_repository import IntruderRepository
-        repo = IntruderRepository(db_path=None)
+        from pentool.api.intruder_storage import IntruderStorage
+        repo = IntruderStorage(db_path=None)
         assert await repo.load_state("tab") is None
 
     @pytest.mark.asyncio
     async def test_save_result_noop(self):
-        from pentool.api.intruder_repository import IntruderRepository
-        repo = IntruderRepository(db_path=None)
+        from pentool.api.intruder_storage import IntruderStorage
+        repo = IntruderStorage(db_path=None)
         await repo.save_result(_make_result())  # should not raise
 
     @pytest.mark.asyncio
     async def test_get_results_returns_empty(self):
-        from pentool.api.intruder_repository import IntruderRepository
-        repo = IntruderRepository(db_path=None)
+        from pentool.api.intruder_storage import IntruderStorage
+        repo = IntruderStorage(db_path=None)
         assert await repo.get_results() == []
 
 
@@ -145,11 +145,11 @@ class TestResultPersistence:
 class TestPersistentConnection:
     """Regression coverage for the connection-consolidation fix.
 
-    IntruderRepository used to open a brand-new aiosqlite connection (via
-    core.database.get_db()) on every single call — save_result() is called
+    IntruderStorage used to open a brand-new aiosqlite connection (via
+    core.db_schema.get_db()) on every single call — save_result() is called
     once per HTTP response during an attack, so a fast attack opened/closed
     thousands of connections a second to the same file HttpStorage already
-    holds open, which crashed under load. IntruderRepository now inherits
+    holds open, which crashed under load. IntruderStorage now inherits
     BaseSqliteStorage: one connection, opened lazily on first use via
     ensure_open(), reused for the object's lifetime.
     """
@@ -170,15 +170,15 @@ class TestPersistentConnection:
 
     @pytest.mark.asyncio
     async def test_switch_db_moves_to_new_file(self, tmp_path: Path):
-        from pentool.api.intruder_repository import IntruderRepository
-        from pentool.core.database import init_db
+        from pentool.api.intruder_storage import IntruderStorage
+        from pentool.core.db_schema import init_db
 
         db1 = str(tmp_path / "a.db")
         db2 = str(tmp_path / "b.db")
         await init_db(db1)
         await init_db(db2)
 
-        repo = IntruderRepository(db_path=db1)
+        repo = IntruderStorage(db_path=db1)
         try:
             await repo.save_result(_make_result(attack_id="atk-a"))
             assert len(await repo.get_results()) == 1

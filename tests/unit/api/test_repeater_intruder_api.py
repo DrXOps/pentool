@@ -14,7 +14,7 @@ from pentool.utils.parser import ParsedRequest, ParsedResponse
 class TestRepeaterAPI:
     @pytest_asyncio.fixture
     async def api(self, tmp_path: Path):
-        from pentool.core.database import init_db
+        from pentool.core.db_schema import init_db
         from pentool.api.repeater_api import RepeaterAPI
         db_path = str(tmp_path / "test.db")
         await init_db(db_path)

@@ -34,7 +34,7 @@ def patch_slow_io():
     - check_update_async      : HTTP + sleep(3) → мгновенный результат
     - _setup_signal_handlers  : регистрирует SIGTERM → вызывает sys.exit при teardown pytest
     - ProxyService.init_storage: создаёт aiosqlite non-daemon поток → блокирует exit
-    - BaseSqliteStorage.ensure_open: то же самое для IntruderRepository (и любого
+    - BaseSqliteStorage.ensure_open: то же самое для IntruderStorage (и любого
       другого BaseSqliteStorage-потомка с ленивым connect) — IntruderScreen
       теперь держит один persistent aiosqlite-коннекшн на весь app lifecycle
       (см. IntruderScreen._get_api()/reload_from_project(), фикс краша от

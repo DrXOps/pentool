@@ -66,8 +66,8 @@ class SiteMap(BaseSqliteStorage):
     pentool/storage/base_sqlite_storage.py). `save()`/`load()` open ONE
     persistent aiosqlite connection lazily on first use (`ensure_open()`)
     and reuse it for the object's lifetime instead of opening/closing a
-    fresh connection via `core.database.get_db()` on every call — the same
-    consolidation already applied to HttpStorage and IntruderRepository.
+    fresh connection via `core.db_schema.get_db()` on every call — the same
+    consolidation already applied to HttpStorage and IntruderStorage.
     Like those, `ensure_open()` returns False (safe no-op) when `db_path`
     is falsy.
     """
@@ -91,12 +91,12 @@ class SiteMap(BaseSqliteStorage):
         # BaseSqliteStorage._connect() opens self._db and applies the shared
         # PRAGMAs (WAL/busy_timeout) common to every storage class. Schema is
         # applied on the SAME persistent connection (not a second get_db()),
-        # reusing the shared DDL from core.database so `site_map` and its
+        # reusing the shared DDL from core.db_schema so `site_map` and its
         # unique index stay defined in one place. All statements are
         # idempotent (CREATE TABLE/INDEX IF NOT EXISTS), so this is safe to
         # run against an already-initialized project DB.
         await self._connect(path)
-        from pentool.core.database import _SCHEMA
+        from pentool.core.db_schema import _SCHEMA
         await self._db.executescript(_SCHEMA)
         await self._db.commit()
 

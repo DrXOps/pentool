@@ -1679,7 +1679,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
 
     async def _save_enforce_scope_setting(self, enabled: bool) -> None:
         try:
-            from pentool.core.database import set_project_setting
+            from pentool.core.db_schema import set_project_setting
             db_path = self._get_db_path()
             if db_path:
                 await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
@@ -1698,7 +1698,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         if proxy is None:
             return
         try:
-            from pentool.core.database import get_project_setting
+            from pentool.core.db_schema import get_project_setting
             db_path = self._get_db_path()
             value = await get_project_setting(db_path, "proxy.enforce_scope", "0") if db_path else "0"
             enabled = value == "1"
@@ -1728,7 +1728,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         """
         try:
             import json
-            from pentool.core.database import set_project_setting
+            from pentool.core.db_schema import set_project_setting
             db_path = self._get_db_path()
             if db_path:
                 await set_project_setting(db_path, "proxy.scope", json.dumps(hosts))
@@ -1751,7 +1751,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         hosts: list[str] | None = None
         try:
             import json
-            from pentool.core.database import get_project_setting
+            from pentool.core.db_schema import get_project_setting
             db_path = self._get_db_path()
             raw = await get_project_setting(db_path, "proxy.scope", None) if db_path else None
             if raw is not None:
