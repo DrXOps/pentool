@@ -49,7 +49,12 @@ __all__ = [
 
 class IntruderAPI(ExportableAPI):
 
-    def __init__(self, db_path: str | None = None, http_client=None) -> None:
+    def __init__(
+        self,
+        db_path: str | None = None,
+        http_client=None,
+        storage: IntruderStorage | None = None,
+    ) -> None:
         self._db_path = db_path
         # Optional injected HTTPClient (DIP — see
         # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.2).
@@ -72,7 +77,14 @@ class IntruderAPI(ExportableAPI):
         # — mirrors ScannerTabRepository, the same extraction already done
         # for Scanner. IntruderAPI keeps its existing public method names
         # as a thin facade so no caller needs to change.
-        self._repo = IntruderStorage(db_path=db_path)
+        #
+        # `storage` is dependency-injected (DIP) so tests and alternate
+        # backends can supply an IntruderStorage (or a double) instead of
+        # forcing a real SQLite connection here — mirrors the `storage=None`
+        # pattern already used by ProxyService and the `http_client=None`
+        # pattern above. Default constructs IntruderStorage(db_path) the
+        # same way it always did.
+        self._repo = storage or IntruderStorage(db_path=db_path)
 
     async def start_attack(
         self,
