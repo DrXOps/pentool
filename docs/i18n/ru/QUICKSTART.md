@@ -7,13 +7,16 @@
 ## Установка
 
 ```bash
-# Установка из PyPI
-pip install pentool
+# Установка из PyPI (рекомендуется)
+uv tool install pentool
+
+# Альтернатива: pip
+# pip install pentool
 
 # Или из исходников
 git clone https://github.com/DrXOps/pentool.git
 cd pentool
-pip install -e .
+uv sync
 ```
 
 ---

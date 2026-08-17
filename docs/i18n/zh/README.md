@@ -30,7 +30,7 @@
 
 - **💥 Intruder（入侵器）**  
   自动化 payload 攻击，支持四种策略：Sniper、Battering Ram、Pitchfork、Cluster Bomb。  
-  Turbo 模式通过 Keep-Alive 和连接池实现 10 倍速度提升。
+  **Turbo 模式（PRO）**通过 Keep-Alive 和连接池实现 10 倍速度提升。
 
 - **🔍 Scanner（扫描器）**  
   主动与被动漏洞分析：SQLi、XSS、SSTI、LFI、RCE、SSRF、XXE、CORS、JWT 缺陷等。  
@@ -55,7 +55,7 @@
   全异步引擎，支持数千并发连接和每秒数百个请求。
 
 - **📦 一行安装**  
-  `pip install pentool` — 无需复杂配置，支持 Linux、macOS 和 Windows（WSL）。
+  `uv tool install pentool` — 无需复杂配置，支持 Linux、macOS 和 Windows（WSL）。
 
 - **🆓 开源 + PRO 扩展**  
   基础版完全免费开源。PRO 许可证解锁独家功能并支持项目发展。
@@ -65,8 +65,11 @@
 ## 🚀 快速开始
 
 ```bash
-# 安装
-pip install pentool
+# 安装（推荐）
+uv tool install pentool
+
+# 或使用 pip
+# pip install pentool
 
 # 开始 14 天 PRO 试用（解锁 Scanner 及其他 PRO 功能）
 # 请在首次启动 TUI 之前运行此命令 — 如果 TUI 已经打开，

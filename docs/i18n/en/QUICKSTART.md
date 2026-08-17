@@ -7,13 +7,16 @@ Get started with Pentool in 5 minutes!
 ## Installation
 
 ```bash
-# Install from PyPI
-pip install pentool
+# Install from PyPI (recommended)
+uv tool install pentool
+
+# Alternative: pip
+# pip install pentool
 
 # Or from source
 git clone https://github.com/DrXOps/pentool.git
 cd pentool
-pip install -e .
+uv sync
 ```
 
 ---

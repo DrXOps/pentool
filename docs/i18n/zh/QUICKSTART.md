@@ -7,13 +7,16 @@
 ## 安装
 
 ```bash
-# 从 PyPI 安装
-pip install pentool
+# 从 PyPI 安装（推荐）
+uv tool install pentool
+
+# 备选：pip
+# pip install pentool
 
 # 或从源代码
 git clone https://github.com/DrXOps/pentool.git
 cd pentool
-pip install -e .
+uv sync
 ```
 
 ---

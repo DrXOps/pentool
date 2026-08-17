@@ -1,6 +1,6 @@
 # 🚀 First Run — Certificate & First Intercept
 
-A minimal walkthrough to get from `pip install pentool` to seeing your first
+A minimal walkthrough to get from `uv tool install pentool` to seeing your first
 intercepted HTTPS request. For the full picture see the
 [Quick Start Guide](QUICKSTART.md) and [User Guide](USER_GUIDE.md).
 
@@ -16,7 +16,8 @@ intercepted HTTPS request. For the full picture see the
 ## 1. Install and launch
 
 ```bash
-pip install pentool
+uv tool install pentool   # recommended
+# or: pip install pentool
 pentool
 ```
 

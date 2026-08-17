@@ -7,13 +7,16 @@
 ## इंस्टॉलेशन
 
 ```bash
-# PyPI से इंस्टॉल करें
-pip install pentool
+# PyPI से इंस्टॉल करें (अनुशंसित)
+uv tool install pentool
+
+# वैकल्पिक: pip
+# pip install pentool
 
 # या स्रोत से
 git clone https://github.com/DrXOps/pentool.git
 cd pentool
-pip install -e .
+uv sync
 ```
 
 ---

@@ -20,7 +20,7 @@
 | | | |
 |---|---|---|
 | ⭐ **Sponsor (individual)** | **$5** one-time or /month | [Sponsor on GitHub](https://github.com/sponsors/DrXOps) |
-| 🏢 **Sponsor (company)** | **$50** one-time or /month | Logo in README + website · [pentool.pro/sponsor](https://pentool.pro/sponsor) |
+| 🏢 **Sponsor (company)** | **$50** one-time or /month | Logo in README + website · [pentool.pro](https://pentool.pro) |
 | 🔑 **PRO License — Early Access** | **$29** *(beta price, until Dec 31 2026)* | After release: $99/year |
 
 > **🎁 Beta loyalty discount:** Everyone who buys PRO for $29 gets a **lifetime 50% discount on annual renewal** (i.e. $49.50/year instead of $99).  
@@ -90,7 +90,7 @@ Fast, transparent, and built for real-world testing.
   Fully async engine handles thousands of concurrent connections and hundreds of requests per second.
 
 - **📦 One-line Install**  
-  `pip install pentool` — no complex setup, works on Linux, macOS, and Windows (WSL).
+  `uv tool install pentool` — fast, isolated, single command. Works on Linux, macOS, and Windows (WSL). `pip install pentool` still works as an alternative.
 
 - **🆓 Open Source + PRO Extensions**  
   The base version is free and open. PRO extensions unlock exclusive features and support the project.
@@ -100,8 +100,11 @@ Fast, transparent, and built for real-world testing.
 ## 🚀 Quick Start
 
 ```bash
-# Install
-pip install pentool
+# Install (recommended — fast, isolated, single command)
+uv tool install pentool
+
+# Alternative: pip still works
+# pip install pentool
 
 # Start a 14-day PRO trial (unlocks Scanner + other PRO features)
 # Run this BEFORE first launching the TUI — if the TUI is already open,
@@ -159,7 +162,7 @@ Pentool is built and maintained by a solo developer in spare time.
 If it saves you hours on a pentest — consider giving back. Every contribution directly funds new features, fixes, and faster releases.
 
 - ⭐ **[Star on GitHub](https://github.com/DrXOps/pentool)** — free, takes 2 seconds, helps visibility enormously
-- 💸 **[Sponsor the project](https://pentool.pro/sponsor)** — $5 (individual) or $50 (company, includes logo placement)
+- 💸 **[Sponsor the project](https://pentool.pro)** — $5 (individual) or $50 (company, includes logo placement)
 - 🔑 **[PRO license — $29 beta price](https://pentool.pro)** — early access + lifetime loyalty discount
 - 💬 **Share** — tell a colleague, post a review, or mention Pentool in your writeups
 

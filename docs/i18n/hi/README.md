@@ -30,7 +30,7 @@
 
 - **💥 Intruder**  
   चार स्ट्रेटेजी के साथ ऑटोमेटेड payload अटैक: Sniper, Battering Ram, Pitchfork, Cluster Bomb।  
-  Turbo Mode में Keep-Alive और कनेक्शन पूलिंग से 10× स्पीड।
+  **Turbo Mode (PRO)** में Keep-Alive और कनेक्शन पूलिंग से 10× स्पीड।
 
 - **🔍 Scanner (स्कैनर)**  
   एक्टिव और पैसिव वल्नेरेबिलिटी एनालिसिस: SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT फ्लॉ और बहुत कुछ।  
@@ -55,7 +55,7 @@
   पूरी तरह async इंजन — हज़ारों कंकरंट कनेक्शन और प्रति सेकंड सैकड़ों रिक्वेस्ट।
 
 - **📦 एक लाइन इंस्टॉलेशन**  
-  `pip install pentool` — कोई जटिल सेटअप नहीं। Linux, macOS और Windows (WSL) पर काम करता है।
+  `uv tool install pentool` — कोई जटिल सेटअप नहीं। Linux, macOS और Windows (WSL) पर काम करता है।
 
 - **🆓 Open Source + PRO Extensions**  
   बेस वर्शन पूरी तरह फ्री और ओपन। PRO लाइसेंस एक्सक्लूसिव फीचर्स अनलॉक करता है और प्रोजेक्ट को सपोर्ट करता है।
@@ -65,8 +65,11 @@
 ## 🚀 Quick Start (त्वरित शुरुआत)
 
 ```bash
-# इंस्टॉल करें
-pip install pentool
+# इंस्टॉल करें (अनुशंसित)
+uv tool install pentool
+
+# या pip से
+# pip install pentool
 
 # 14-दिन का PRO ट्रायल शुरू करें (Scanner + अन्य PRO फीचर्स अनलॉक करता है)
 # TUI पहली बार लॉन्च करने से पहले इसे चलाएं — अगर TUI पहले से खुला है,

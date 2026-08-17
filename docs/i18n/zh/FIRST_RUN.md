@@ -1,6 +1,6 @@
 # 🚀 首次运行 — 证书与首次拦截
 
-从 `pip install pentool` 到看到第一个被拦截的 HTTPS 请求的最简指南。完整内容请参阅
+从 `uv tool install pentool` 到看到第一个被拦截的 HTTPS 请求的最简指南。完整内容请参阅
 [快速开始指南](QUICKSTART.md) 和 [用户手册](USER_GUIDE.md)。
 
 > ⚠️ **请使用现代终端模拟器。** Pentool 的 TUI 依赖鼠标支持、真彩色和现代渲染
@@ -14,7 +14,8 @@
 ## 1. 安装并启动
 
 ```bash
-pip install pentool
+uv tool install pentool   # 推荐
+# 或: pip install pentool
 pentool
 ```
 
