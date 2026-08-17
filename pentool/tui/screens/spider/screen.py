@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlparse
 
+from pentool.modules.spider import DEFAULT_MAX_DEPTH, DEFAULT_MAX_PAGES
+
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -53,7 +55,7 @@ class SpiderScreen(Widget):
         self._crawl_running = False
         self._result = None
         self._pages_count = 0
-        self._max_pages = 100
+        self._max_pages = DEFAULT_MAX_PAGES
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="spider-toolbar"):
@@ -74,10 +76,10 @@ class SpiderScreen(Widget):
                 yield Label("Settings:")
                 with Horizontal(classes="config-row"):
                     yield Label("Max depth:")
-                    yield Input(value="3", id="cfg-depth", type="integer", compact=True)
+                    yield Input(value=str(DEFAULT_MAX_DEPTH), id="cfg-depth", type="integer", compact=True)
                 with Horizontal(classes="config-row"):
                     yield Label("Max pages:")
-                    yield Input(value="100", id="cfg-pages", type="integer", compact=True)
+                    yield Input(value=str(DEFAULT_MAX_PAGES), id="cfg-pages", type="integer", compact=True)
                 with Horizontal(classes="config-row"):
                     yield Label("Concurrency:")
                     yield Input(value="5", id="cfg-concurrency", type="integer", compact=True)
@@ -146,13 +148,13 @@ class SpiderScreen(Widget):
             url_input.value = url
 
         try:
-            max_depth = int(self.query_one("#cfg-depth", Input).value or "3")
+            max_depth = int(self.query_one("#cfg-depth", Input).value or str(DEFAULT_MAX_DEPTH))
         except ValueError:
-            max_depth = 3
+            max_depth = DEFAULT_MAX_DEPTH
         try:
-            max_pages = int(self.query_one("#cfg-pages", Input).value or "100")
+            max_pages = int(self.query_one("#cfg-pages", Input).value or str(DEFAULT_MAX_PAGES))
         except ValueError:
-            max_pages = 100
+            max_pages = DEFAULT_MAX_PAGES
         try:
             concurrency = int(self.query_one("#cfg-concurrency", Input).value or "5")
         except ValueError:

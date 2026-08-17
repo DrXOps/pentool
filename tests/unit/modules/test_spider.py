@@ -97,8 +97,8 @@ class TestSpiderEndpoint:
 class TestAsyncSpiderInit:
     def test_default_init(self):
         spider = AsyncSpider()
-        assert spider.max_depth == 3
-        assert spider.max_pages == 100
+        assert spider.max_depth == 5
+        assert spider.max_pages == 200
         assert spider.concurrency == 5
         assert spider.respect_scope is True
 

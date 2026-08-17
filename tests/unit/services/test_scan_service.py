@@ -121,8 +121,8 @@ class TestScanConfigDataclass:
         assert config.targets == ["https://example.com"]
         assert config.check_names is None  # Default (all checks)
         assert config.threads == 10  # Default
-        assert config.max_depth == 3  # Default
-        assert config.max_pages == 100  # Default
+        assert config.max_depth == 5  # Default
+        assert config.max_pages == 200  # Default
 
     def test_scan_config_custom_values(self):
         """Test ScanConfig with custom values."""

@@ -27,6 +27,15 @@ logger = get_logger(__name__)
 #
 # Порог: если страница даёт меньше _PROC_THRESHOLD кандидатов-ссылок,
 # обрабатываем синхронно (дешёвле), иначе — пачкой через пул.
+# ── Single source of truth for the crawler's default limits ──────────────
+# Consumed by AsyncSpider, SpiderConfig/SpiderAPI, ScanConfig/ScanService,
+# the Spider screen, and the Scanner screen's crawl options — so the default
+# crawl depth/pages/concurrency are defined in ONE place instead of being
+# copy-pasted as magic numbers across modules.
+DEFAULT_MAX_DEPTH: int = 5
+DEFAULT_MAX_PAGES: int = 200
+DEFAULT_CONCURRENCY: int = 5
+
 _PROC_POOL_ENABLED: bool = True
 _PROC_POOL_WORKERS: int = min(8, max(2, (os.cpu_count() or 4)))
 _PROC_THRESHOLD: int = 64
@@ -338,9 +347,9 @@ class AsyncSpider:
 
     def __init__(
         self,
-        max_depth: int = 3,
-        max_pages: int = 100,
-        concurrency: int = 5,
+        max_depth: int = DEFAULT_MAX_DEPTH,
+        max_pages: int = DEFAULT_MAX_PAGES,
+        concurrency: int = DEFAULT_CONCURRENCY,
         timeout: float = 10.0,
         user_agent: str = "Mozilla/5.0 (compatible; pentool/1.0; security scanner)",
         respect_scope: bool = True,
@@ -1042,4 +1051,7 @@ class AsyncSpider:
             return False
 
 
-__all__ = ["AsyncSpider", "SpiderResult", "SpiderForm", "FormField", "SpiderEndpoint"]
+__all__ = [
+    "AsyncSpider", "SpiderResult", "SpiderForm", "FormField", "SpiderEndpoint",
+    "DEFAULT_MAX_DEPTH", "DEFAULT_MAX_PAGES", "DEFAULT_CONCURRENCY",
+]

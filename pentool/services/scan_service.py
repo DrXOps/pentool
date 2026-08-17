@@ -19,6 +19,7 @@ from pentool.core.events import (
     UrlCrawled,
 )
 from pentool.core.logging import get_logger
+from pentool.modules.spider import DEFAULT_MAX_DEPTH, DEFAULT_MAX_PAGES
 from pentool.services.base_service import BaseService
 from pentool.utils.auth_headers import extract_auth_headers
 
@@ -33,8 +34,8 @@ class ScanConfig:
     check_names: list[str] | None = None
     threads: int = 10
     delay_sec: float = 0.0
-    max_depth: int = 3
-    max_pages: int = 100
+    max_depth: int = DEFAULT_MAX_DEPTH
+    max_pages: int = DEFAULT_MAX_PAGES
     db_path: str = ""
     resume: bool = False  # True — skip crawling, use seed_requests directly
     resume_targets: list[str] = field(default_factory=list)  # URLs to scan on resume
