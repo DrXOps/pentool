@@ -56,3 +56,11 @@ screens/Снимок*
 
 # Local scratch/debug files
 t.py
+
+# Load-testing payload files (multi-hundred-MB) — generated on demand by
+# tests/perf/gen_payload_file.py, never committed
+tests/perf/_data/
+
+# Load-test report artifacts (tests/perf/load_*.md) — regenerated on each run
+# by load_scanner.py / load_intruder.py / load_spider.py, never committed
+tests/perf/load_*.md

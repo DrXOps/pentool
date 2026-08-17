@@ -34,6 +34,7 @@ dependencies = [
     "aiohttp>=3.9.0",
     "aiosqlite>=0.19.0",
     "beautifulsoup4>=4.12.0",
+    "lxml>=4.9.0",
     "click>=8.1.0",
     "cryptography>=41.0.0",
     "pyyaml>=6.0",
@@ -84,6 +85,9 @@ addopts = "-ra -q --strict-markers"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
+    "perf: performance benchmarks (small N, CI-friendly; skip in normal unit runs)",
+    "network: tests that hit a live target (skip by default)",
+    "huge: tests that touch multi-hundred-MB payload files / DVWA (only on demand)",
 ]
 asyncio_mode = "auto"
 
