@@ -264,6 +264,11 @@ async def run_level_c(args) -> dict:
     _data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_data")
     os.makedirs(_data_dir, exist_ok=True)
     db_path = os.path.join(_data_dir, f"scan_c_{int(time.time())}.db")
+    # ScanEngine НЕ создаёт схему vulnerabilities сам — это делает
+    # core.db_schema.init_db. Без init_db save_findings падает с
+    # «no such table». Инициализируем схему до скана.
+    from pentool.core.db_schema import init_db
+    await init_db(db_path)
 
     sampler = MemSampler(cpu=True)
     # Набор DVWA-страниц: главная + учебные уязвимые точки. Используем ТОЛЬКО
