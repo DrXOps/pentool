@@ -496,11 +496,15 @@ class ProjectManager:
                 scanner_screen._scanner_api = scanner_screen._get_or_create_api(path)
                 scanner_screen._populate_from_db([])
                 scanner_screen._load_findings_worker()
+                # Clear the tab scan logs so the new project doesn't inherit the
+                # previous project's log lines (the scanner screen was reloaded,
+                # but each tab's RichLog kept its old content).
+                scanner_screen._clear_scan_logs()
                 logger.info("_reload_project_screens: scanner reloaded")
             except Exception as exc:
                 logger.debug("_reload_project_screens scanner: %s", exc)
 
-        async def _reload_target() -> None:
+        async def _reload_target(is_new: bool = False) -> None:
             try:
                 from pentool.tui.screens.target.screen import TargetScreen
                 target_screen = self._app.query_one(SCREEN_TARGET, TargetScreen)
@@ -520,6 +524,16 @@ class ProjectManager:
                         pass
                 target_screen._target_api = None
                 target_screen._get_api()
+                # For a brand-new project the DB is empty, but guard anyway:
+                # clear the new SiteMap explicitly so no node from a previous
+                # project can appear in the tree (defence in depth — the new
+                # TargetAPI already points at the new db_path).
+                if is_new:
+                    try:
+                        target_screen._target_api.clear()
+                        target_screen._target_api.sitemap._scope_hosts.clear()
+                    except Exception:
+                        pass
                 target_screen._load_sitemap()
                 logger.info("_reload_project_screens: target reloaded from %s", path)
             except Exception as exc:
@@ -546,7 +560,7 @@ class ProjectManager:
             _reload_repeater(),
             _reload_proxy(),
             _reload_scanner(),
-            _reload_target(),
+            _reload_target(is_new=is_new),
             _reload_dashboard(),
             _reload_intruder(),
         )
