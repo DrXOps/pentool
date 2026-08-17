@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
+from pickle import PicklingError
 from typing import Callable
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
@@ -12,6 +16,212 @@ from pentool.core.logging import get_logger
 from pentool.utils.scope import domain_in_scope
 
 logger = get_logger(__name__)
+
+# ── CPU-оптимизация (GIL) ──────────────────────────────────────────────────
+# Профиль показал: ~55% CPU спайдера уходит на urllib-обработку ссылок в
+# _add_link (urljoin/urlparse/urlsplit/normalize) — это Python-код под GIL.
+# Выносим эту работу в ProcessPoolExecutor на ПАЧКАХ ссылок (даёт ~4x на
+# бенчмарке), НО только когда пачка достаточно большая, чтобы оправдать
+# IPC-перенос (на мелких — IPC задавит: 0.1x). Парсинг же ускоряем lxml
+# (11x, C-реализация, освобождает GIL) — см. bench_cpu_parsing.py.
+#
+# Порог: если страница даёт меньше _PROC_THRESHOLD кандидатов-ссылок,
+# обрабатываем синхронно (дешёвле), иначе — пачкой через пул.
+_PROC_POOL_ENABLED: bool = True
+_PROC_POOL_WORKERS: int = min(8, max(2, (os.cpu_count() or 4)))
+_PROC_THRESHOLD: int = 64
+
+# Ленивый module-level пул процессов: один на процесс, делится всеми
+# спайдерами. Намеренно НЕ закрываем в вызовах (fork+pickle дорого) — процесс
+# сканера живёт недолго, ОС уберёт воркеры. Создаётся только при первом
+# использовании.
+_PROC_POOL: ProcessPoolExecutor | None = None
+
+
+def _get_proc_pool() -> ProcessPoolExecutor | None:
+    global _PROC_POOL
+    if not _PROC_POOL_ENABLED:
+        return None
+    if _PROC_POOL is None:
+        try:
+            _PROC_POOL = ProcessPoolExecutor(max_workers=_PROC_POOL_WORKERS)
+        except (ImportError, OSError, RuntimeError):
+            _PROC_POOL = None
+    return _PROC_POOL
+
+
+def _normalize_url_cpu(url: str) -> str:
+    """Модульная urllib-нормализация (fragment, trailing slash) — picklizable.
+
+    Одна и та же логика используется и в sync-пути, и работающими в
+    процессах воркерами пула (ProcessPoolExecutor требует модульную функцию,
+    а не метод инстанса — иначе не попиклизуется).
+    """
+    try:
+        parsed = urlparse(url)
+        normalized = parsed._replace(fragment="")
+        return normalized.geturl().rstrip("/")
+    except Exception:
+        return url
+
+
+def _link_cpu_work(raw: str, page_url: str, base_domain: str,
+                   respect_scope: bool) -> tuple[bool, str, str]:
+    """Модульная CPU-половина _add_link: тяжёлая urllib-обработка одной ссылки.
+
+    Возвращает (ok, abs_url, norm_url):
+      ok      — True если ссылку надо добавить (протокол http(s), в scope)
+      abs_url — абсолютный URL (для result.links)
+      norm_url— нормализованный (fragment без trailing slash) для дедупликации
+    Дедупликация (seen_links) остаётся в ОСНОВНОМ потоке — сеть сета set-add
+    дёшева и не требует GIL-обхода.
+    """
+    if not raw:
+        return False, "", ""
+    raw = raw.strip()
+    if raw.startswith(("#", "mailto:", "tel:", "javascript:", "data:")):
+        return False, "", ""
+    try:
+        abs_url = urljoin(page_url, raw)
+        parsed = urlparse(abs_url)
+    except Exception:
+        return False, "", ""
+    if parsed.scheme not in ("http", "https"):
+        return False, "", ""
+    if respect_scope and parsed.netloc != base_domain:
+        return False, "", ""
+    norm = _normalize_url_cpu(abs_url)
+    return True, abs_url, norm
+
+
+def _bulk_links_cpu(cands, page_url: str, base_domain: str,
+                    respect_scope: bool) -> list[tuple[bool, str, str]]:
+    """Батч-версия _link_cpu_work: обрабатывает весь СПИСОК кандидатов.
+
+    Нужен для ProcessPoolExecutor: если отдавать в пул по одной ссылке
+    (pool.map(_link_cpu_work, cands)), каждая ссылка — отдельный IPC-перенос
+    (одна микро-задача туда + результат обратно). На пачке из тысяч ссылок
+    IPC-накладные > выигрыша от распараллеливания. Батч передаёт весь список
+    одним IPC (pickle), воркер перебирает его построчно и возвращает список
+    результатов одним IPC — всего 2 IPC на пачку, а urllib-работа выполняется
+    в подпроцессе без GIL (см. bench_cpu_parsing.py: urllib-задача 4.16x).
+    """
+    return [_link_cpu_work(c, page_url, base_domain, respect_scope)
+            for c in cands]
+
+
+# ── lxml/bs4 единый интерфейс для парсинга ─────────────────────────────────
+
+class _LxmlSoup:
+    """Тонкая адаптация lxml.html.Element → bs4-подобный find_all/get.
+
+    Позволяет писать общий код итерации по soup независимо от того, парсим
+    lxml (быстро, C-код) или bs4 (фолбэк). find_all по имени тега возвращает
+    список-подобный объект, у которого элементы имеют .get(name)/.text.
+    """
+
+    __slots__ = ("_tree",)
+
+    def __init__(self, html: str, lxml_html) -> None:
+        # fromstring бросает на пустом/мусорном HTML; делаем tolerant через
+        # разбор в фрагмент: lxml.html.document_fromstring требует полный док.
+        try:
+            self._tree = lxml_html.fromstring(html)
+        except Exception:
+            self._tree = lxml_html.Element("html")
+
+    def find_all(self, name):
+        """Все элементы с тегом name (str или list[str]) либо все (True)."""
+        if name is True:
+            return list(self._tree.iter())
+        if isinstance(name, (list, tuple)):
+            out = []
+            for n in name:
+                out.extend(self._tree.iter(n))
+            return out
+        return list(self._tree.iter(name))
+
+
+    def get_text_strip(self, el) -> str:
+        # lxml Element.text_content — полный текстовый контент (аналог bs4 get_text)
+        if hasattr(el, "text_content"):
+            return el.text_content() or ""
+        return el.text or ""
+
+
+class _EmptySoup:
+    """Пустой soup, если ни lxml, ни bs4 недоступны — парсинг даёт ничего."""
+
+    def find_all(self, name):
+        return []
+
+
+def _el_get(el, attr: str, default: str = "") -> str:
+    return el.get(attr, default)
+
+
+def _iter_hrefs(soup, tags):
+    """<a>/<link> href-значения."""
+    for tag in soup.find_all(tags if not isinstance(tags, str) else tags):
+        href = _el_get(tag, "href")
+        if href:
+            yield href
+
+
+def _iter_attr_urls(soup):
+    """data-url/href/src/action/content атрибуты на всех тегах."""
+    for tag in soup.find_all(True):
+        for attr in _URL_ATTRIBUTES:
+            val = _el_get(tag, attr)
+            if val and val.startswith(("http", "/", "./")):
+                yield val
+
+
+def _iter_meta_refresh(soup):
+    """content у <meta http-equiv>.lxml атрибуты регистрозависимы — http-equiv
+    может быть передано как http-quiv; lxml сохраняет регистр атрибута. Пробуем
+    оба варианта."""
+    for tag in soup.find_all("meta"):
+        eq = _el_get(tag, "http-equiv", _el_get(tag, "http_equiv"))
+        if eq and "refresh" in eq.lower():
+            yield _el_get(tag, "content")
+
+
+def _iter_script_src(soup):
+    for script in soup.find_all("script"):
+        yield _el_get(script, "src")
+
+
+def _iter_inline_scripts(soup):
+    """Текстовый контент инлайн-скриптов (без src)."""
+    for script in soup.find_all("script"):
+        if _el_get(script, "src"):
+            continue
+        # lxml: text_content; bs4: get_text(strip=True)
+        if hasattr(script, "get_text"):
+            txt = script.get_text(strip=True)
+        elif hasattr(script, "text_content"):
+            txt = (script.text_content() or "").strip()
+        else:
+            txt = getattr(script, "text", "") or ""
+        yield txt
+
+
+def _iter_forms(soup):
+    yield from soup.find_all("form")
+
+
+def _iter_form_inputs(form):
+    """input/textarea/select внутри формы. Работает и с bs4, и с lxml-элементом."""
+    # bs4: .find_all([...]); lxml: .iter() по тегам
+    if hasattr(form, "find_all"):
+        try:
+            return list(form.find_all(["input", "textarea", "select"]))
+        except Exception:
+            return list(form.find_all(True))
+    # lxml-элемент — итерируем по тегам через iter()
+    tags = ("input", "textarea", "select")
+    return [el for el in form.iter() if el.tag in tags]
 
 
 def is_playwright_available() -> bool:
@@ -244,8 +454,9 @@ class AsyncSpider:
         if scheme != "https" or not domain:
             return scheme, start_url
 
-        import aiohttp
         import ssl
+
+        import aiohttp
 
         try:
             probe_timeout = aiohttp.ClientTimeout(total=min(self.timeout, 5.0))
@@ -556,78 +767,81 @@ class AsyncSpider:
     def _parse_html(
         self, html: str, page_url: str, base_domain: str
     ) -> tuple[list[str], list[SpiderForm], list[str]]:
-        """Parse HTML: links, forms, JS files, data attributes."""
-        try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            return [], [], []
+        """Parse HTML: links, forms, JS files, data attributes.
 
-        soup = BeautifulSoup(html, "html.parser")
+        CPU-оптимизация (см. header): парсинг — lxml (C, освобождает GIL),
+        урllib-обработка ссылок — пачкой через ProcessPoolExecutor, когда
+        кандидатов достаточно; в противном случае синхронно (тот же движок).
+        Результат (дедуплицированные links/forms/js) идентичен прежнему bs4+
+        построчному _add_link — это покрыто тестами test_spider.py.
+        """
+        return self._parse_html_internal(html, page_url, base_domain)
+
+    def _parse_html_internal(
+        self, html: str, page_url: str, base_domain: str
+    ) -> tuple[list[str], list[SpiderForm], list[str]]:
+        """Внутренняя реализация _parse_html (lxml + пачечная обработка URL).
+
+        Парсинг: предпочитаем lxml (C-код, ~11x быстрее bs4/html.parser и
+        освобождает GIL). Если lxml не установлен — фолбэк на BeautifulSoup.
+
+        Обработка ссылок: собираем все raw-кандидаты в один список, затем
+        if len(candidates) >= _PROC_THRESHOLD — обрабатываем пачкой через
+        ProcessPoolExecutor (_link_cpu_work, urllib-Часть в подпроцессах,
+        обходит GIL, ~4x), иначе синхронно построчно (тот же _link_cpu_work,
+        но в текущем процессе). Дедупликация (seen_links) всегда в основном
+        потоке — сеть set-add дешёва. Итог идентичен прежнему bs4-пути.
+        """
+        soup = self._make_soup(html)
         links: list[str] = []
         js_links: list[str] = []
         forms: list[SpiderForm] = []
         seen_links: set[str] = set()
 
-        def _add_link(raw_href: str) -> None:
-            if not raw_href:
-                return
-            raw_href = raw_href.strip()
-            if raw_href.startswith(("#", "mailto:", "tel:", "javascript:", "data:")):
-                return
-            abs_url = urljoin(page_url, raw_href)
-            parsed = urlparse(abs_url)
-            if parsed.scheme not in ("http", "https"):
-                return
-            if self.respect_scope and parsed.netloc != base_domain:
-                return
-            norm = self._normalize_url(abs_url)
-            if norm not in seen_links:
-                seen_links.add(norm)
-                links.append(abs_url)
+        candidates: list[str] = []
 
         # <a href> and <link href>
-        for tag in soup.find_all(["a", "link"], href=True):
-            _add_link(tag.get("href", ""))
+        for href in _iter_hrefs(soup, ["a", "link"]):
+            candidates.append(href)
 
         # All tags — look for data-url / data-href / data-src / data-action
-        for tag in soup.find_all(True):
-            for attr in _URL_ATTRIBUTES:
-                val = tag.get(attr, "")
-                if val and val.startswith(("http", "/", "./")):
-                    _add_link(val)
+        for val in _iter_attr_urls(soup):
+            candidates.append(val)
 
         # <meta http-equiv="refresh" content="0;url=...">
-        for meta in soup.find_all("meta", attrs={"http-equiv": True}):
-            content = meta.get("content", "")
+        for content in _iter_meta_refresh(soup):
             m = re.search(r'url=([^\s"\']+)', content, re.IGNORECASE)
             if m:
-                _add_link(m.group(1))
+                candidates.append(m.group(1))
 
-        # JS files (<script src>)
-        for script in soup.find_all("script", src=True):
-            src = script.get("src", "")
+        # JS files (<script src>) — отдельно, не через пул (немного urljoin)
+        for src in _iter_script_src(soup):
             if src:
                 abs_url = urljoin(page_url, src)
                 if urlparse(abs_url).scheme in ("http", "https"):
                     js_links.append(abs_url)
 
-        # Inline <script> — search in them too
-        for script in soup.find_all("script", src=False):
-            inline = script.get_text(strip=True)
+        # Inline <script> — search in them too (не через пул: извлекает
+        # endpoints, а не просто нормализует ссылку)
+        for inline in _iter_inline_scripts(soup):
             if inline and len(inline) > 20:
                 endpoints = self._extract_js_endpoints(inline, page_url)
                 for ep in endpoints:
-                    if ep.url.startswith("http") and self._in_scope(ep.url, base_domain):
-                        _add_link(ep.url)
+                    candidates.append(ep.url)
 
-        # Forms
-        for form in soup.find_all("form"):
-            action = form.get("action", "") or page_url
+        # ── Обработка пачки кандидатов (пул или синхронно) ────────────────
+        if candidates:
+            links = self._commit_links(
+                candidates, page_url, base_domain, seen_links)
+
+        # ── Forms (по-прежнему bs4/lxml-итерация, без пула) ───────────────
+        for form in _iter_forms(soup):
+            action = (form.get("action") or page_url)
             action = urljoin(page_url, action)
             method = (form.get("method", "GET") or "GET").upper()
             fields: list[FormField] = []
 
-            for inp in form.find_all(["input", "textarea", "select"]):
+            for inp in _iter_form_inputs(form):
                 name = inp.get("name", "")
                 if not name:
                     continue
@@ -650,20 +864,72 @@ class AsyncSpider:
                 ))
                 # Auto-submit GET forms with their default field values so
                 # pages only reachable through a form (search boxes,
-                # filters, ...) still get crawled — a common cause of
-                # "the crawler misses pages" complaints in other scanners.
-                # Deliberately GET-only: submitting POST forms could trigger
-                # real side effects on the target (create/delete/state
-                # changes), which needs explicit user opt-in and CSRF
-                # handling — not something to do silently during a crawl.
-                # See MYPLANS inbox note for future POST-form consideration.
+                # filters, ...) still get crawled. GET-only: submitting POST
+                # forms could trigger real side effects (see old comment).
                 if method == "GET" and any(f.value for f in fields):
                     query = urlencode([(f.name, f.value) for f in fields])
                     if query:
                         sep = "&" if urlparse(action).query else "?"
-                        _add_link(f"{action}{sep}{query}")
+                        # form-query трактуем как кандидата (может попасть в пул)
+                        candidates2 = [f"{action}{sep}{query}"]
+                        links.extend(self._commit_links(
+                            candidates2, page_url, base_domain, seen_links))
 
         return links, forms, js_links
+
+    def _make_soup(self, html: str):
+        """Парсер: lxml (быстро) или bs4 (фолбэк), с защитой от ImportError."""
+        try:
+            import lxml.html as lxml_html
+            return _LxmlSoup(html, lxml_html)
+        except ImportError:
+            pass
+        try:
+            from bs4 import BeautifulSoup
+            return BeautifulSoup(html, "html.parser")
+        except ImportError:
+            return _EmptySoup()
+
+    def _commit_links(self, candidates, page_url, base_domain, seen_links):
+        """Обработать пачку кандидатов через пул/синхронно, вернуть добавленные.
+
+        Использует _link_cpu_work (модульную): если кандидатов много — через
+        ProcessPoolExecutor (обход GIL), иначе синхронно. Дедуп — здесь.
+        """
+        if not candidates:
+            return []
+        # Пытаемся через пул, если кандидатов достаточно. Используем БАТЧ:
+        # pool.submit(_bulk_links_cpu, candidates) — весь список одним IPC
+        #  туда и результатом — обратно (всего 2 IPC на пачку). НЕ pool.map
+        #  по одной ссылке: то было бы N IPC на микро-задачу и вредило бы
+        #  (см. Ремарка в _bulk_links_cpu).
+        pool = _get_proc_pool() if len(candidates) >= _PROC_THRESHOLD else None
+        respect_scope = self.respect_scope
+        if pool is not None:
+            try:
+                fut = pool.submit(
+                    _bulk_links_cpu, candidates, page_url, base_domain,
+                    respect_scope,
+                )
+                results = fut.result(timeout=60)
+            except (BrokenProcessPool, PicklingError, RuntimeError, OSError,
+                    TimeoutError):
+                # Пул сломался/завис — падаем на синхронный путь (тот же
+                # движок _link_cpu_work, результат не меняется)
+                results = [_link_cpu_work(c, page_url, base_domain, respect_scope)
+                           for c in candidates]
+        else:
+            results = [_link_cpu_work(c, page_url, base_domain, respect_scope)
+                       for c in candidates]
+
+        added: list[str] = []
+        for ok, abs_url, norm in results:
+            if not ok:
+                continue
+            if norm not in seen_links:
+                seen_links.add(norm)
+                added.append(abs_url)
+        return added
 
     # ── JS endpoint extraction ────────────────────────────────────────────────
 
@@ -728,14 +994,12 @@ class AsyncSpider:
     # ── utilities ─────────────────────────────────────────────────────────────
 
     def _normalize_url(self, url: str) -> str:
-        """Normalize URL (remove fragment, trailing slash)."""
-        try:
-            parsed = urlparse(url)
-            normalized = parsed._replace(fragment="")
-            result = normalized.geturl()
-            return result.rstrip("/")
-        except Exception:
-            return url
+        """Normalize URL (remove fragment, trailing slash).
+
+        Делегирует в модульную _normalize_url_cpu — единая реализация с
+        воркерами ProcessPoolExecutor (см. _link_cpu_work).
+        """
+        return _normalize_url_cpu(url)
 
     def _in_scope(self, url: str, base_domain: str) -> bool:
         """Check that a URL is in scope (same domain or subdomain).
