@@ -187,8 +187,12 @@ class ScanService(BaseService):
             self._emit(ScanProgressEvent(done=done, total=total, scanning=True, source="scanner"))
 
         def on_request(url: str, check_name: str, point_name: str = "") -> None:
-            pt = f" [{point_name}]" if point_name and point_name != "—" else ""
-            self._log(f"[dim]→ {check_name}{pt}[/dim]  {url[:80]}")
+            # Intentionally a no-op for the scan log: printing a line for every
+            # HTTP request flooded the log with hundreds/thousands of lines
+            # ("→ check [param] url"). The live request counter on the status
+            # bar is driven separately via on_request_sent. The scan log only
+            # shows stage summaries (crawl/scan/findings/stage-done).
+            pass
 
         _on_request_sent = getattr(config, "on_request_sent", None)
         _on_total_estimate = getattr(config, "on_total_estimate", None)
