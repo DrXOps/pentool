@@ -1424,13 +1424,13 @@ class PentoolApp(App):
             pass
         # Stop terminal (shell process) via Message Bus
         self.post_message(TerminalStop())
-        # Stop proxy
-        if self._proxy and self._proxy.is_running and self._proxy_loop:
-            asyncio.run_coroutine_threadsafe(
-                self._proxy.stop(), self._proxy_loop
-            )
-        if self._proxy_thread and self._proxy_thread.is_alive():
-            self._proxy_thread.join(timeout=2)
+        # Stop proxy — reuse the same robust path as manual stop (_stop_proxy):
+        # it awaits proxy.stop() up to 6s, force-cancels stuck tasks on timeout,
+        # and joins the proxy thread (cf. the old weak inline stop that used only
+        # join(timeout=2) here, which could leave the proxy thread wound around
+        # the 8080 listener after Ctrl+Q — see oszatel procesy workaround).
+        if self._proxy and self._proxy.is_running:
+            self._stop_proxy()
         # Close SQLite storage — flush WAL to disk
         try:
             if self._proxy_service is not None:
