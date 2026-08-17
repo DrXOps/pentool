@@ -34,7 +34,7 @@ class SpiderConfig:
     concurrency: int = 5
     timeout: float = 10.0
     user_agent: str = "pentool/1.0"
-    respect_scope: bool = False
+    respect_scope: bool = True   # stay on the target host/subdomains — don't crawl external links
     js_render: bool = False  # Playwright JS rendering (if installed)
 
 
