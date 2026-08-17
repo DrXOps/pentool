@@ -838,7 +838,10 @@ class PentoolApp(App):
         if self._proxy is None:
             return
         if self._proxy.is_running:
-            self._stop_proxy()
+            # Stop asynchronously so the TUI thread isn't frozen for up to
+            # ~10s while proxy.stop() + thread join complete (the Stop button
+            # currently felt slow/unresponsive on a busy proxy).
+            self.run_worker(self._stop_proxy_async())
         else:
             if not self._project_loaded:
                 # Project DB switch/open (auto-open at startup, New/Open
@@ -995,6 +998,39 @@ class PentoolApp(App):
                 logger.warning("APP: proxy thread did not stop in 5s — port 8080 may still be in use")
         self.call_after_refresh(self._update_status)
         self.call_after_refresh(self._update_proxy_screen_labels)
+
+    async def _stop_proxy_async(self) -> None:
+        """Async stop of the proxy that does NOT block the TUI thread.
+
+        Same robust path as `_stop_proxy()` (await proxy.stop() up to 6s,
+        force-cancel tasks on timeout, join the proxy thread) but expressed
+        as a coroutine. Intended to be awaited from an async worker context
+        (e.g. ProjectManager._do_switch) so that switching to a new project
+        does NOT freeze the UI for up to ~10s while the old proxy is being
+        wound down. _stop_proxy() remains the synchronous variant used by
+        the Stop button / Ctrl+Q.
+        """
+        logger.info("APP: _stop_proxy_async called")
+        if self._proxy and self._proxy.is_running and self._proxy_loop:
+            future = asyncio.run_coroutine_threadsafe(
+                self._proxy.stop(), self._proxy_loop
+            )
+            try:
+                await asyncio.wait_for(asyncio.wrap_future(future), timeout=6)
+            except asyncio.TimeoutError:
+                logger.warning("APP: proxy.stop() (async) timed out")
+        # Wait (in this async context) for the proxy thread to die so the
+        # 8080 port is released before the caller switches the project DB.
+        loop = asyncio.get_running_loop()
+        proxy_thread = self._proxy_thread
+        if proxy_thread is not None:
+            for _ in range(70):  # up to ~7s in 100ms steps
+                alive = await loop.run_in_executor(None, proxy_thread.is_alive)
+                if not alive:
+                    break
+                await asyncio.sleep(0.1)
+            self.call_after_refresh(self._update_status)
+            self.call_after_refresh(self._update_proxy_screen_labels)
 
     # Sprint 3: _on_proxy_request and _proxy_request_done_cb removed — proxy emits via EventBus,
     # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted → _on_bus_proxy_captured/completed

@@ -317,13 +317,17 @@ class ProjectManager:
 
         # Stop proxy before switching DB — avoids writing to the wrong file
         # and simplifies the concurrency story (one connection at a time).
+        # NOTE: do NOT call the synchronous _stop_proxy() here — it holds the
+        # TUI thread for up to ~10s (future.result(6)+join(5)) while the old
+        # proxy is wound down, freezing the UI on "New/Open Project". The actual
+        # stop now happens asynchronously at the top of _do_switch (see "0."
+        # there), which awaits _stop_proxy_async() without blocking the UI.
         if self._proxy and self._proxy.is_running:
             self._app.notify(
                 "Proxy остановлен для переключения проекта",
                 severity="warning",
                 timeout=4,
             )
-            self._app._stop_proxy()
 
         # Gate Start Proxy (action_toggle_proxy) until _do_switch flips this
         # back to True once HttpStorage.switch_db() has actually completed —
@@ -396,27 +400,15 @@ class ProjectManager:
           5. reload the remaining screens — run concurrently (they read
              independent tables/state), not sequentially.
         """
-        # 0. Wait for the proxy thread to die before touching the DB.
-        # _stop_proxy() already called join(timeout=5), but if the thread
-        # is still alive (e.g. a 30-second _READ_TIMEOUT blocked task didn't
-        # get cancelled in time) we must not open a new SQLite connection
-        # while the old proxy event loop might still be writing to it.
-        proxy_thread = self._app._proxy_thread
-        if proxy_thread is not None and proxy_thread.is_alive():
-            logger.info("_do_switch: waiting for proxy thread to exit before DB switch…")
-            loop = asyncio.get_running_loop()
-            # Poll in the async event loop so we don't block the TUI thread
-            for _ in range(50):  # up to 5 seconds in 100ms steps
-                alive = await loop.run_in_executor(
-                    None, lambda: proxy_thread.is_alive()
-                )
-                if not alive:
-                    break
-                await asyncio.sleep(0.1)
-            if proxy_thread.is_alive():
-                logger.warning("_do_switch: proxy thread still alive after extra 5s — proceeding anyway")
-            else:
-                logger.info("_do_switch: proxy thread exited, proceeding with DB switch")
+        # 0. Stop the proxy (async) and wait for its thread to die before
+        # touching the DB. Runs in this async worker, so the TUI thread is
+        # NOT blocked — this is what previously froze the UI for ~10s on
+        # "New/Open Project" (switch_project_db called the synchronous
+        # _stop_proxy() = future.result(6)+join(5)). _stop_proxy_async both
+        # initiates proxy.stop() (so the 8080 listener is released) and waits
+        # for the thread to exit so we don't open a new SQLite connection
+        # while the old proxy loop might still be writing to it.
+        await self._app._stop_proxy_async()
 
         # 1. Ensure schema exists (safe for both new and existing DBs)
         await self._init_new_db(path)
