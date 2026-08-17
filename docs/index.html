@@ -55,6 +55,21 @@
       transition: opacity .2s;
     }
     .nav-cta:hover { opacity: .85; }
+    .lang-switch {
+      display: flex; gap: .25rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .18rem;
+      background: var(--bg2);
+    }
+    .lang-switch button {
+      border: none; background: transparent;
+      color: var(--muted); font-size: .75rem; font-weight: 600;
+      padding: .25rem .5rem; border-radius: 4px;
+      cursor: pointer; transition: color .2s, background .2s;
+    }
+    .lang-switch button:hover { color: var(--text); }
+    .lang-switch button.active { background: var(--accent); color: #0d1117; }
 
     /* HERO */
     .hero {
@@ -197,34 +212,93 @@
     .footer-links a:hover { color: var(--text); }
     .footer-bottom { text-align: center; padding: 1.5rem 2rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--border); }
 
-    /* SCREENSHOTS */
-    .screenshots-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-      gap: 1.5rem;
+    /* SCREENSHOTS — slider */
+    .slider {
+      position: relative;
+      max-width: 720px;
+      margin: 0 auto;
     }
-    .screenshot-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
+    .slider-viewport {
       overflow: hidden;
-      transition: border-color .2s, transform .15s;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg2);
     }
-    .screenshot-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-    .screenshot-label {
-      padding: .5rem 1rem;
-      font-size: .8rem;
-      font-weight: 600;
-      color: var(--muted);
+    .slider-track {
+      display: flex;
+      transition: transform .45s cubic-bezier(.4,0,.2,1);
+    }
+    .slide {
+      flex: 0 0 100%;
+      min-width: 100%;
+      position: relative;
+    }
+    .slide-label {
+      position: absolute;
+      top: .75rem;
+      left: .75rem;
+      z-index: 5;
+      padding: .25rem .6rem;
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--text);
       text-transform: uppercase;
       letter-spacing: .06em;
-      border-bottom: 1px solid var(--border);
+      background: rgba(13,17,23,.72);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      backdrop-filter: blur(4px);
     }
-    .screenshot-card img {
+    .slide img {
       width: 100%;
       height: auto;
       display: block;
     }
+    .slider-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 6;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text);
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .2s, border-color .2s;
+    }
+    .slider-btn:hover { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+    .slider-prev { left: -12px; }
+    .slider-next { right: -12px; }
+    .slider-dots {
+      display: flex;
+      justify-content: center;
+      gap: .5rem;
+      margin-top: 1.25rem;
+    }
+    .slider-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      border: none;
+      background: var(--border);
+      cursor: pointer;
+      transition: background .2s, transform .2s;
+      padding: 0;
+    }
+    .slider-dot.active { background: var(--accent); transform: scale(1.3); }
+    .slider-credit {
+      text-align: center;
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 1rem;
+    }
+    .slider-credit a { color: var(--accent); text-decoration: none; }
+    .slider-credit a:hover { text-decoration: underline; }
 
     /* DONATE */
     .donate-section { padding: 5rem 2rem; max-width: 1000px; margin: 0 auto; }
@@ -294,7 +368,8 @@
     @media (max-width: 600px) {
       .nav-links { display: none; }
       footer { flex-direction: column; }
-      .screenshots-grid { grid-template-columns: 1fr; }
+      .slider-prev { left: 6px; }
+      .slider-next { right: 6px; }
       .donate-grid { grid-template-columns: 1fr; }
     }
   </style>
@@ -305,25 +380,31 @@
 <nav>
   <a class="nav-logo" href="#"><span>⬛</span> Pentool</a>
   <ul class="nav-links">
-    <li><a href="#features">Features</a></li>
-    <li><a href="#screenshots">Screenshots</a></li>
-    <li><a href="#install">Install</a></li>
-    <li><a href="#docs">Docs</a></li>
-    <li><a href="#donate">Donate</a></li>
-    <li><a href="#beta">Trial</a></li>
+    <li><a href="#features" data-i18n="nav.features">Features</a></li>
+    <li><a href="#screenshots" data-i18n="nav.screenshots">Screenshots</a></li>
+    <li><a href="#install" data-i18n="nav.install">Install</a></li>
+    <li><a href="#docs" data-i18n="nav.docs">Docs</a></li>
+    <li><a href="#donate" data-i18n="nav.donate">Donate</a></li>
+    <li><a href="#beta" data-i18n="nav.beta">Trial</a></li>
   </ul>
+  <div class="lang-switch" role="group" aria-label="Language">
+    <button data-lang="en" class="active" onclick="setLang('en')">EN</button>
+    <button data-lang="ru" onclick="setLang('ru')">РУ</button>
+    <button data-lang="zh" onclick="setLang('zh')">中文</button>
+    <button data-lang="hi" onclick="setLang('hi')">हिन्दी</button>
+  </div>
   <a class="nav-cta" href="https://github.com/DrXOps/pentool">GitHub</a>
 </nav>
 
 <!-- HERO -->
 <section class="hero">
-  <div class="beta-badge">🚀 Demo · 14-day Free Trial · All PRO Features Included</div>
-  <h1>Pentesting toolkit<br/><em>that runs at async speed</em></h1>
-  <p>Pentool is a fully async, keyboard-driven TUI for web security testing — hundreds of concurrent requests, zero Java, zero Electron.</p>
+  <div class="beta-badge" data-i18n="hero.badge">🚀 Demo · 14-day Free Trial · All PRO Features Included</div>
+  <h1><span data-i18n="hero.h1.1">Pentesting toolkit</span><br/><em data-i18n="hero.h1.2">that runs at async speed</em></h1>
+  <p data-i18n="hero.p">Pentool is a fully async, keyboard-driven TUI for web security testing — hundreds of concurrent requests, zero Java, zero Electron.</p>
   <div class="hero-buttons">
-    <a class="btn btn-primary" href="#install">📦 uv tool install pentool</a>
-    <a class="btn btn-secondary" href="https://github.com/DrXOps/pentool">⭐ GitHub</a>
-    <a class="btn btn-donate" href="https://t.me/sudores">💬 Get PRO Trial</a>
+    <a class="btn btn-primary" href="#install" data-i18n="hero.btnInstall">📦 uv tool install pentool</a>
+    <a class="btn btn-secondary" href="https://github.com/DrXOps/pentool" data-i18n="hero.btnGithub">⭐ GitHub</a>
+    <a class="btn btn-donate" href="https://t.me/sudores" data-i18n="hero.btnTrial">💬 Get PRO Trial</a>
   </div>
 </section>
 
@@ -343,18 +424,18 @@
       <div class="dot dot-r"></div>
       <div class="dot dot-y"></div>
       <div class="dot dot-g"></div>
-      <span class="terminal-title">bash — pentool</span>
+      <span class="terminal-title" data-i18n="term.title">bash — pentool</span>
     </div>
     <div class="terminal-body">
-      <div><span class="t-comment"># Install (recommended — isolated, fast)</span></div>
+      <div><span class="t-comment" data-i18n="term.install"># Install (recommended — isolated, fast)</span></div>
       <div><span class="t-cmd">$</span> uv tool install pentool</div>
       <div style="color:var(--muted);margin:.25rem 0">Resolved 12 packages in 0.3s — Installed pentool-0.2.11</div>
       <br/>
-      <div><span class="t-comment"># Launch TUI</span></div>
+      <div><span class="t-comment" data-i18n="term.launch"># Launch TUI</span></div>
       <div><span class="t-cmd">$</span> pentool</div>
       <div class="t-accent">  ▶ Dashboard  |  Proxy  |  Scanner  |  Intruder  |  Repeater  |  Tools</div>
       <br/>
-      <div><span class="t-comment"># Or use CLI mode</span></div>
+      <div><span class="t-comment" data-i18n="term.cli"># Or use CLI mode</span></div>
       <div><span class="t-cmd">$</span> pentool scan active --url https://example.com</div>
       <div class="t-warn">  [~] Scanning https://example.com ...</div>
       <div class="t-out">  [✓] SQLi found: /search?q=</div>
@@ -367,49 +448,49 @@
 
 <!-- FEATURES -->
 <section class="section" id="features">
-  <div class="section-label">Why Pentool</div>
-  <h2 class="section-title">What competitors don't offer</h2>
-  <p class="section-sub">No Java. No Electron. No browser tab eating your RAM. Just a fast async TUI that stays out of your way.</p>
+  <div class="section-label" data-i18n="feat.label">Why Pentool</div>
+  <h2 class="section-title" data-i18n="feat.title">What competitors don't offer</h2>
+  <p class="section-sub" data-i18n="feat.sub">No Java. No Electron. No browser tab eating your RAM. Just a fast async TUI that stays out of your way.</p>
   <div class="features-grid">
-    <div class="feature-card">
+    <div class="feature-card" data-i18n-block>
       <div class="feature-icon">⚡</div>
-      <h3>Fully Async Engine</h3>
-      <p>Built on asyncio from the ground up — thousands of concurrent connections, hundreds of req/s. Burp queues. Pentool flies.</p>
+      <h3 data-i18n="feat.async.t">Fully Async Engine</h3>
+      <p data-i18n="feat.async.d">Built on asyncio from the ground up — thousands of concurrent connections, hundreds of req/s. Burp queues. Pentool flies.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">⌨️</div>
-      <h3>Keyboard-First TUI</h3>
-      <p>Every action reachable without a mouse. Works over SSH, in tmux, on headless servers — anywhere a terminal runs.</p>
+      <h3 data-i18n="feat.keyboard.t">Keyboard-First TUI</h3>
+      <p data-i18n="feat.keyboard.d">Every action reachable without a mouse. Works over SSH, in tmux, on headless servers — anywhere a terminal runs.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">💥</div>
-      <h3>Intruder Turbo Mode</h3>
-      <p>Keep-Alive + connection pooling = 10× attack speed vs. standard HTTP. Four modes: Sniper, Battering Ram, Pitchfork, Cluster Bomb.</p>
+      <h3 data-i18n="feat.turbo.t">Intruder Turbo Mode</h3>
+      <p data-i18n="feat.turbo.d">Keep-Alive + connection pooling = 10× attack speed vs. standard HTTP. Four modes: Sniper, Battering Ram, Pitchfork, Cluster Bomb.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🔍</div>
-      <h3>Smart Scanner<span class="pro-badge">PRO</span></h3>
-      <p>Context-aware payloads for SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. WAF bypass and blind techniques built in.</p>
+      <h3><span data-i18n="feat.scanner.t">Smart Scanner</span><span class="pro-badge">PRO</span></h3>
+      <p data-i18n="feat.scanner.d">Context-aware payloads for SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. WAF bypass and blind techniques built in.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🌐</div>
-      <h3>Proxy + WebSockets</h3>
-      <p>Intercept HTTP/HTTPS and WebSocket frames in real time. Match &amp; Replace rules, scope filters, history search.</p>
+      <h3 data-i18n="feat.proxy.t">Proxy + WebSockets</h3>
+      <p data-i18n="feat.proxy.d">Intercept HTTP/HTTPS and WebSocket frames in real time. Match &amp; Replace rules, scope filters, history search.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🔐</div>
-      <h3>Decoder · Comparer · Sequencer</h3>
-      <p>19 chained encode/decode/hash ops. Side-by-side diff. Entropy + FIPS analysis for sessions, CSRF tokens, JWTs.</p>
+      <h3 data-i18n="feat.tools.t">Decoder · Comparer · Sequencer</h3>
+      <p data-i18n="feat.tools.d">19 chained encode/decode/hash ops. Side-by-side diff. Entropy + FIPS analysis for sessions, CSRF tokens, JWTs.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📦</div>
-      <h3>uv tool install — done</h3>
-      <p>One command, no Docker, no JDK, no license server. Linux, macOS, Windows WSL. Python 3.10+.</p>
+      <h3 data-i18n="feat.install.t">uv tool install — done</h3>
+      <p data-i18n="feat.install.d">One command, no Docker, no JDK, no license server. Linux, macOS, Windows WSL. Python 3.10+.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🧩</div>
-      <h3>Plugin API</h3>
-      <p>Extend without touching core. PRO plugins add advanced scanners, smart payloads, and report generators.</p>
+      <h3 data-i18n="feat.plugin.t">Plugin API</h3>
+      <p data-i18n="feat.plugin.d">Extend without touching core. PRO plugins add advanced scanners, smart payloads, and report generators.</p>
     </div>
   </div>
 </section>
@@ -419,9 +500,9 @@
 <!-- INSTALL -->
 <section class="install-section" id="install">
   <div class="install-inner">
-    <div class="section-label">One-line setup</div>
-    <h2 class="section-title">Get started in seconds</h2>
-    <p class="section-sub" style="margin:0 auto 2rem;">Works on Linux, macOS, and Windows (WSL). Python 3.10+.</p>
+    <div class="section-label" data-i18n="install.label">One-line setup</div>
+    <h2 class="section-title" data-i18n="install.title">Get started in seconds</h2>
+    <p class="section-sub" style="margin:0 auto 2rem;" data-i18n="install.sub">Works on Linux, macOS, and Windows (WSL). Python 3.10+.</p>
     <div class="code-block">
       <span>$ uv tool install pentool</span>
       <span class="copy-hint" onclick="navigator.clipboard.writeText('uv tool install pentool')">copy</span>
@@ -431,9 +512,9 @@
       <span class="copy-hint" onclick="navigator.clipboard.writeText('pentool')">copy</span>
     </div>
     <p style="font-size:.85rem;color:var(--muted);margin-top:1rem;">
-      Don't have uv? <code style="background:var(--bg3);padding:.1rem .3rem;border-radius:3px;">curl -LsSf https://astral.sh/uv/install.sh | sh</code> ·
-      pip still works too: <code style="background:var(--bg3);padding:.1rem .3rem;border-radius:3px;">pip install pentool</code> ·
-      <a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/INSTALLATION.md" style="color:var(--accent);text-decoration:none;">Full installation guide →</a>
+      <span data-i18n="install.noUv">Don't have uv?</span> <code style="background:var(--bg3);padding:.1rem .3rem;border-radius:3px;">curl -LsSf https://astral.sh/uv/install.sh | sh</code> ·
+      <span data-i18n="install.pipAlso">pip still works too:</span> <code style="background:var(--bg3);padding:.1rem .3rem;border-radius:3px;">pip install pentool</code> ·
+      <a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/INSTALLATION.md" style="color:var(--accent);text-decoration:none;" data-i18n="install.guide">Full installation guide →</a>
     </p>
   </div>
 </section>
@@ -442,66 +523,74 @@
 
 <!-- SCREENSHOTS -->
 <section class="section" id="screenshots">
-  <div class="section-label">In action</div>
-  <h2 class="section-title">Screenshots</h2>
-  <p class="section-sub">Pentool running in a real terminal — no mocks, no marketing renders.</p>
-  <div class="screenshots-grid">
-    <div class="screenshot-card">
-      <div class="screenshot-label">Dashboard</div>
-      <a href="screens/screen-dashboard.png" target="_blank">
-        <img src="screens/screen-dashboard.png" alt="Dashboard" loading="lazy" />
-      </a>
+  <div class="section-label" data-i18n="screens.label">In action</div>
+  <h2 class="section-title" data-i18n="screens.title">Screenshots</h2>
+  <p class="section-sub" data-i18n="screens.sub">Pentool running in a real terminal — no mocks, no marketing renders.</p>
+  <div class="slider" id="screenshot-slider">
+    <div class="slider-viewport">
+      <div class="slider-track" id="slider-track">
+        <div class="slide">
+          <div class="slide-label" data-i18n="screens.dashboard">Dashboard</div>
+          <a href="screens/screen-dashboard.png" target="_blank">
+            <img src="screens/screen-dashboard.png" alt="Dashboard" loading="lazy" />
+          </a>
+        </div>
+        <div class="slide">
+          <div class="slide-label" data-i18n="screens.scanner">Scanner</div>
+          <a href="screens/screen-scanner.png" target="_blank">
+            <img src="screens/screen-scanner.png" alt="Scanner" loading="lazy" />
+          </a>
+        </div>
+        <div class="slide">
+          <div class="slide-label" data-i18n="screens.proxy">Proxy</div>
+          <a href="screens/screen-proxy.png" target="_blank">
+            <img src="screens/screen-proxy.png" alt="Proxy" loading="lazy" />
+          </a>
+        </div>
+        <div class="slide">
+          <div class="slide-label" data-i18n="screens.repeater">Repeater</div>
+          <a href="screens/screen-repeater.png" target="_blank">
+            <img src="screens/screen-repeater.png" alt="Repeater" loading="lazy" />
+          </a>
+        </div>
+        <div class="slide">
+          <div class="slide-label" data-i18n="screens.intruder">Intruder</div>
+          <a href="screens/screen-intruder.png" target="_blank">
+            <img src="screens/screen-intruder.png" alt="Intruder" loading="lazy" />
+          </a>
+        </div>
+        <div class="slide">
+          <div class="slide-label" data-i18n="screens.intruderDetail">Intruder — Attack Detail</div>
+          <a href="screens/screen-intruder-detail.png" target="_blank">
+            <img src="screens/screen-intruder-detail.png" alt="Intruder Attack Detail" loading="lazy" />
+          </a>
+        </div>
+        <div class="slide">
+          <div class="slide-label" data-i18n="screens.decoder">Decoder</div>
+          <a href="screens/screen-decoder.png" target="_blank">
+            <img src="screens/screen-decoder.png" alt="Decoder" loading="lazy" />
+          </a>
+        </div>
+      </div>
     </div>
-    <div class="screenshot-card">
-      <div class="screenshot-label">Scanner</div>
-      <a href="screens/screen-scanner.png" target="_blank">
-        <img src="screens/screen-scanner.png" alt="Scanner" loading="lazy" />
-      </a>
-    </div>
-    <div class="screenshot-card">
-      <div class="screenshot-label">Proxy</div>
-      <a href="screens/screen-proxy.png" target="_blank">
-        <img src="screens/screen-proxy.png" alt="Proxy" loading="lazy" />
-      </a>
-    </div>
-    <div class="screenshot-card">
-      <div class="screenshot-label">Repeater</div>
-      <a href="screens/screen-repeater.png" target="_blank">
-        <img src="screens/screen-repeater.png" alt="Repeater" loading="lazy" />
-      </a>
-    </div>
-    <div class="screenshot-card">
-      <div class="screenshot-label">Intruder</div>
-      <a href="screens/screen-intruder.png" target="_blank">
-        <img src="screens/screen-intruder.png" alt="Intruder" loading="lazy" />
-      </a>
-    </div>
-    <div class="screenshot-card">
-      <div class="screenshot-label">Intruder — Attack Detail</div>
-      <a href="screens/screen-intruder-detail.png" target="_blank">
-        <img src="screens/screen-intruder-detail.png" alt="Intruder Attack Detail" loading="lazy" />
-      </a>
-    </div>
-    <div class="screenshot-card">
-      <div class="screenshot-label">Decoder</div>
-      <a href="screens/screen-decoder.png" target="_blank">
-        <img src="screens/screen-decoder.png" alt="Decoder" loading="lazy" />
-      </a>
-    </div>
+    <button class="slider-btn slider-prev" aria-label="Previous" onclick="sliderMove(-1)">‹</button>
+    <button class="slider-btn slider-next" aria-label="Next" onclick="sliderMove(1)">›</button>
+    <div class="slider-dots" id="slider-dots"></div>
+    <p class="slider-credit" data-i18n="screens.credit">Click any screenshot to open it at full size.</p>
   </div>
 </section>
 
 <hr class="divider" />
 <section class="beta-section" id="beta">
   <div class="beta-box">
-    <h2>🚀 Demo Version — 14-Day Free Trial</h2>
+    <h2 data-i18n="beta.title">🚀 Demo Version — 14-Day Free Trial</h2>
     <ul>
-      <li>⏱ <div><strong>Trial period: 14 days.</strong> Full PRO functionality is available from day one — no feature gates, no paywalls during the trial.</div></li>
-      <li>🔧 <div><strong>PRO features are under active development.</strong> Some advanced modules are still being built. You're getting early access, not a finished product.</div></li>
-      <li>🔑 <div><strong>Ready to go PRO?</strong> Licenses are not sold publicly yet. Reach out personally — <a href="https://t.me/sudores">@sudores</a> on Telegram.</div></li>
-      <li>📰 <div><strong>Want news on new releases and features?</strong> Subscribe to the <a href="https://t.me/pentool_pro">Pentool Telegram channel</a>.</div></li>
-      <li>🎙 <div><strong>Run a security blog, YouTube channel, or Telegram channel?</strong> Write a review and recommend Pentool to your audience — we'll give you a <strong>permanent PRO license, free of charge.</strong> → <a href="https://t.me/sudores">@sudores</a></div></li>
-      <li>☕ <div><strong>Want to support development?</strong> → <a href="https://t.me/sudores">@sudores</a></div></li>
+      <li>⏱ <div><strong data-i18n="beta.trial.s">Trial period: 14 days.</strong> <span data-i18n="beta.trial.d">Full PRO functionality is available from day one — no feature gates, no paywalls during the trial.</span></div></li>
+      <li>🔧 <div><strong data-i18n="beta.dev.s">PRO features are under active development.</strong> <span data-i18n="beta.dev.d">Some advanced modules are still being built. You're getting early access, not a finished product.</span></div></li>
+      <li>🔑 <div><strong data-i18n="beta.pro.s">Ready to go PRO?</strong> <span data-i18n="beta.pro.d">Licenses are not sold publicly yet. Reach out personally —</span> <a href="https://t.me/sudores">@sudores</a></div></li>
+      <li>📰 <div><strong data-i18n="beta.news.s">Want news on new releases and features?</strong> <span data-i18n="beta.news.d">Subscribe to the</span> <a href="https://t.me/pentool_pro">Pentool</a></div></li>
+      <li>🎙 <div><strong data-i18n="beta.review.s">Run a security blog, YouTube channel, or Telegram channel?</strong> <span data-i18n="beta.review.d">Write a review and recommend Pentool to your audience — we'll give you a</span> <strong data-i18n="beta.review.b">permanent PRO license, free of charge.</strong> → <a href="https://t.me/sudores">@sudores</a></div></li>
+      <li>☕ <div><strong data-i18n="beta.support.s">Want to support development?</strong> → <a href="https://t.me/sudores">@sudores</a></div></li>
     </ul>
   </div>
 </section>
@@ -510,9 +599,9 @@
 
 <!-- DONATE -->
 <section class="donate-section" id="donate">
-  <div class="section-label">Support the project</div>
-  <h2 class="section-title">💝 Donate</h2>
-  <p class="section-sub">Help keep Pentool free and open-source. Any amount is appreciated.</p>
+  <div class="section-label" data-i18n="donate.label">Support the project</div>
+  <h2 class="section-title" data-i18n="donate.title">💝 Donate</h2>
+  <p class="section-sub" data-i18n="donate.sub">Help keep Pentool free and open-source. Any amount is appreciated.</p>
   <div class="donate-grid">
 
     <div class="donate-card">
@@ -523,7 +612,7 @@
       <div class="donate-network">BTC · Native SegWit</div>
       <div class="donate-address-row">
         <span class="donate-address" id="addr-btc">bc1q3dpyhrllqfj3lh7sppszfp7tqwwczvnnnmqc6u</span>
-        <button class="donate-copy" onclick="copyAddr('addr-btc',this)">Copy</button>
+        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-btc',this)">Copy</button>
       </div>
     </div>
 
@@ -535,12 +624,12 @@
       <div class="donate-network">ERC-20 · Ethereum</div>
       <div class="donate-address-row">
         <span class="donate-address" id="addr-eth-erc20">0x080EF7003e9A2f74a427571882D84053787E57FA</span>
-        <button class="donate-copy" onclick="copyAddr('addr-eth-erc20',this)">Copy</button>
+        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-eth-erc20',this)">Copy</button>
       </div>
       <div class="donate-network">BSC · BEP-20</div>
       <div class="donate-address-row">
         <span class="donate-address" id="addr-eth-bsc">0x080EF7003e9A2f74a427571882D84053787E57FA</span>
-        <button class="donate-copy" onclick="copyAddr('addr-eth-bsc',this)">Copy</button>
+        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-eth-bsc',this)">Copy</button>
       </div>
     </div>
 
@@ -552,12 +641,12 @@
       <div class="donate-network">TRC-20 · TRON</div>
       <div class="donate-address-row">
         <span class="donate-address" id="addr-usdt-trc20">THuwFSKVkUjmWVDa8sRwVPdPtWVr4kxTtq</span>
-        <button class="donate-copy" onclick="copyAddr('addr-usdt-trc20',this)">Copy</button>
+        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-usdt-trc20',this)">Copy</button>
       </div>
       <div class="donate-network">ERC-20 · Ethereum</div>
       <div class="donate-address-row">
         <span class="donate-address" id="addr-usdt-erc20">0x080EF7003e9A2f74a427571882D84053787E57FA</span>
-        <button class="donate-copy" onclick="copyAddr('addr-usdt-erc20',this)">Copy</button>
+        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-usdt-erc20',this)">Copy</button>
       </div>
     </div>
 
@@ -568,16 +657,16 @@
       </div>
       <div class="donate-network">TON Network</div>
       <div class="donate-address-row">
-        <span class="donate-address" id="addr-ton">Coming soon</span>
-        <button class="donate-copy" onclick="copyAddr('addr-ton',this)">Copy</button>
+        <span class="donate-address" id="addr-ton" data-i18n="donate.soon">Coming soon</span>
+        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-ton',this)">Copy</button>
       </div>
     </div>
 
   </div>
   <div class="donate-note">
-    <strong>⚠️ Important:</strong> Always select the correct network before sending.
-    Sending to the wrong network may result in permanent loss of funds.
-    After donating, feel free to reach out on <a href="https://t.me/sudores" style="color:var(--accent);">Telegram</a> — it means a lot!
+    <strong data-i18n="donate.note.s">⚠️ Important:</strong> <span data-i18n="donate.note.d1">Always select the correct network before sending.</span>
+    <span data-i18n="donate.note.d2">Sending to the wrong network may result in permanent loss of funds.</span>
+    <span data-i18n="donate.note.d3">After donating, feel free to reach out on</span> <a href="https://t.me/sudores" style="color:var(--accent);">Telegram</a> — it means a lot!
   </div>
 </section>
 
@@ -585,51 +674,34 @@
 
 <!-- DOCS -->
 <section class="section" id="docs">
-  <div class="section-label">Documentation</div>
-  <h2 class="section-title">Learn Pentool</h2>
-  <p class="section-sub">Guides, references and plugin API.</p>
+  <div class="section-label" data-i18n="docs.label">Documentation</div>
+  <h2 class="section-title" data-i18n="docs.title">Learn Pentool</h2>
+  <p class="section-sub" data-i18n="docs.sub">Guides, references and plugin API.</p>
   <div class="docs-grid">
     <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md">
       <div class="doc-icon">🚀</div>
-      <h4>Quick Start</h4>
-      <p>Up and running in 5 minutes</p>
+      <h4 data-i18n="docs.quickStart">Quick Start</h4>
+      <p data-i18n="docs.quickStart.d">Up and running in 5 minutes</p>
     </a>
     <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/INSTALLATION.md">
       <div class="doc-icon">📦</div>
-      <h4>Installation</h4>
-      <p>Detailed setup for all platforms</p>
+      <h4 data-i18n="docs.installation">Installation</h4>
+      <p data-i18n="docs.installation.d">Detailed setup for all platforms</p>
     </a>
     <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/USER_GUIDE.md">
       <div class="doc-icon">📖</div>
-      <h4>User Guide</h4>
-      <p>All modules, all features</p>
+      <h4 data-i18n="docs.userGuide">User Guide</h4>
+      <p data-i18n="docs.userGuide.d">All modules, all features</p>
     </a>
     <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/API_CONTRACTS.md">
       <div class="doc-icon">🧩</div>
-      <h4>Plugin API</h4>
-      <p>Build your own extensions</p>
-    </a>
-    <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/README.md">
-      <div class="doc-icon">🇬🇧</div>
-      <h4>English</h4>
-      <p>README in English</p>
-    </a>
-    <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/ru/README.md">
-      <div class="doc-icon">🇷🇺</div>
-      <h4>Русский</h4>
-      <p>README на русском</p>
-    </a>
-    <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/zh/README.md">
-      <div class="doc-icon">🇨🇳</div>
-      <h4>中文</h4>
-      <p>中文 README</p>
-    </a>
-    <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/hi/README.md">
-      <div class="doc-icon">🇮🇳</div>
-      <h4>हिन्दी</h4>
-      <p>हिन्दी में README</p>
+      <h4 data-i18n="docs.pluginApi">Plugin API</h4>
+      <p data-i18n="docs.pluginApi.d">Build your own extensions</p>
     </a>
   </div>
+  <p class="section-sub" data-i18n="docs.langHint" style="margin-top:1.5rem;">
+    Read this page in your language — use the language switch in the top menu.
+  </p>
 </section>
 
 <hr class="divider" />
@@ -638,32 +710,32 @@
 <footer>
   <div class="footer-brand">
     <div class="logo">⬛ <span>Pento</span>ol</div>
-    <p>Professional TUI web pentesting toolkit. Open source, async, extensible.</p>
+    <p data-i18n="footer.brand">Professional TUI web pentesting toolkit. Open source, async, extensible.</p>
   </div>
   <div class="footer-links">
-    <h4>Project</h4>
+    <h4 data-i18n="footer.project">Project</h4>
     <ul>
       <li><a href="https://github.com/DrXOps/pentool">GitHub</a></li>
       <li><a href="https://pypi.org/project/pentool/">PyPI</a></li>
-      <li><a href="https://github.com/DrXOps/pentool/blob/main/CONTRIBUTING.md">Contributing</a></li>
-      <li><a href="https://github.com/DrXOps/pentool/blob/main/LICENSE">License (AGPL-3.0)</a></li>
+      <li><a href="https://github.com/DrXOps/pentool/blob/main/CONTRIBUTING.md" data-i18n="footer.contributing">Contributing</a></li>
+      <li><a href="https://github.com/DrXOps/pentool/blob/main/LICENSE" data-i18n="footer.license">License (AGPL-3.0)</a></li>
     </ul>
   </div>
   <div class="footer-links">
-    <h4>Community</h4>
+    <h4 data-i18n="footer.community">Community</h4>
     <ul>
-      <li><a href="https://t.me/pentool_pro">Telegram Channel (news)</a></li>
-      <li><a href="https://t.me/sudores">Telegram @sudores (personal)</a></li>
-      <li><a href="mailto:support@pentool.pro">Email</a></li>
-      <li><a href="#donate">Donate ☕</a></li>
+      <li><a href="https://t.me/pentool_pro" data-i18n="footer.telegramNews">Telegram Channel (news)</a></li>
+      <li><a href="https://t.me/sudores" data-i18n="footer.telegramPersonal">Telegram @sudores (personal)</a></li>
+      <li><a href="mailto:support@pentool.pro" data-i18n="footer.email">Email</a></li>
+      <li><a href="#donate" data-i18n="footer.donate">Donate ☕</a></li>
     </ul>
   </div>
   <div class="footer-links">
-    <h4>Docs</h4>
+    <h4 data-i18n="footer.docs">Docs</h4>
     <ul>
-      <li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md">Quick Start</a></li>
-      <li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/USER_GUIDE.md">User Guide</a></li>
-      <li><a href="https://github.com/DrXOps/pentool/blob/main/docs/API_CONTRACTS.md">Plugin API</a></li>
+      <li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md" data-i18n="docs.quickStart">Quick Start</a></li>
+      <li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/USER_GUIDE.md" data-i18n="docs.userGuide">User Guide</a></li>
+      <li><a href="https://github.com/DrXOps/pentool/blob/main/docs/API_CONTRACTS.md" data-i18n="docs.pluginApi">Plugin API</a></li>
     </ul>
   </div>
 </footer>
@@ -673,13 +745,472 @@
 
 </body>
 <script>
-function copyAddr(id, btn) {
-  const text = document.getElementById(id).textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = '✓ Copied';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+/* ---- i18n dictionaries: en / ru / zh / hi ---- */
+const I18N = {
+  en: {
+    "nav.features": "Features",
+    "nav.screenshots": "Screenshots",
+    "nav.install": "Install",
+    "nav.docs": "Docs",
+    "nav.donate": "Donate",
+    "nav.beta": "Trial",
+    "hero.badge": "🚀 Demo · 14-day Free Trial · All PRO Features Included",
+    "hero.h1.1": "Pentesting toolkit",
+    "hero.h1.2": "that runs at async speed",
+    "hero.p": "Pentool is a fully async, keyboard-driven TUI for web security testing — hundreds of concurrent requests, zero Java, zero Electron.",
+    "hero.btnInstall": "📦 uv tool install pentool",
+    "hero.btnGithub": "⭐ GitHub",
+    "hero.btnTrial": "💬 Get PRO Trial",
+    "term.install": "# Install (recommended — isolated, fast)",
+    "term.launch": "# Launch TUI",
+    "term.cli": "# Or use CLI mode",
+    "term.title": "bash — pentool",
+    "feat.label": "Why Pentool",
+    "feat.title": "What competitors don't offer",
+    "feat.sub": "No Java. No Electron. No browser tab eating your RAM. Just a fast async TUI that stays out of your way.",
+    "feat.async.t": "Fully Async Engine",
+    "feat.async.d": "Built on asyncio from the ground up — thousands of concurrent connections, hundreds of req/s. Burp queues. Pentool flies.",
+    "feat.keyboard.t": "Keyboard-First TUI",
+    "feat.keyboard.d": "Every action reachable without a mouse. Works over SSH, in tmux, on headless servers — anywhere a terminal runs.",
+    "feat.turbo.t": "Intruder Turbo Mode",
+    "feat.turbo.d": "Keep-Alive + connection pooling = 10× attack speed vs. standard HTTP. Four modes: Sniper, Battering Ram, Pitchfork, Cluster Bomb.",
+    "feat.scanner.t": "Smart Scanner",
+    "feat.scanner.d": "Context-aware payloads for SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. WAF bypass and blind techniques built in.",
+    "feat.proxy.t": "Proxy + WebSockets",
+    "feat.proxy.d": "Intercept HTTP/HTTPS and WebSocket frames in real time. Match &amp; Replace rules, scope filters, history search.",
+    "feat.tools.t": "Decoder · Comparer · Sequencer",
+    "feat.tools.d": "19 chained encode/decode/hash ops. Side-by-side diff. Entropy + FIPS analysis for sessions, CSRF tokens, JWTs.",
+    "feat.install.t": "uv tool install — done",
+    "feat.install.d": "One command, no Docker, no JDK, no license server. Linux, macOS, Windows WSL. Python 3.10+.",
+    "feat.plugin.t": "Plugin API",
+    "feat.plugin.d": "Extend without touching core. PRO plugins add advanced scanners, smart payloads, and report generators.",
+    "install.label": "One-line setup",
+    "install.title": "Get started in seconds",
+    "install.sub": "Works on Linux, macOS, and Windows (WSL). Python 3.10+.",
+    "install.noUv": "Don't have uv?",
+    "install.pipAlso": "pip still works too:",
+    "install.guide": "Full installation guide →",
+    "screens.label": "In action",
+    "screens.title": "Screenshots",
+    "screens.sub": "Pentool running in a real terminal — no mocks, no marketing renders.",
+    "screens.credit": "Click any screenshot to open it at full size.",
+    "screens.dashboard": "Dashboard",
+    "screens.scanner": "Scanner",
+    "screens.proxy": "Proxy",
+    "screens.repeater": "Repeater",
+    "screens.intruder": "Intruder",
+    "screens.intruderDetail": "Intruder — Attack Detail",
+    "screens.decoder": "Decoder",
+    "beta.title": "🚀 Demo Version — 14-Day Free Trial",
+    "beta.trial.s": "Trial period: 14 days.",
+    "beta.trial.d": "Full PRO functionality is available from day one — no feature gates, no paywalls during the trial.",
+    "beta.dev.s": "PRO features are under active development.",
+    "beta.dev.d": "Some advanced modules are still being built. You're getting early access, not a finished product.",
+    "beta.pro.s": "Ready to go PRO?",
+    "beta.pro.d": "Licenses are not sold publicly yet. Reach out personally —",
+    "beta.news.s": "Want news on new releases and features?",
+    "beta.news.d": "Subscribe to the",
+    "beta.review.s": "Run a security blog, YouTube channel, or Telegram channel?",
+    "beta.review.d": "Write a review and recommend Pentool to your audience — we'll give you a",
+    "beta.review.b": "permanent PRO license, free of charge.",
+    "beta.support.s": "Want to support development?",
+    "donate.label": "Support the project",
+    "donate.title": "💝 Donate",
+    "donate.sub": "Help keep Pentool free and open-source. Any amount is appreciated.",
+    "donate.copy": "Copy",
+    "donate.copied": "✓ Copied",
+    "donate.soon": "Coming soon",
+    "donate.note.s": "⚠️ Important:",
+    "donate.note.d1": "Always select the correct network before sending.",
+    "donate.note.d2": "Sending to the wrong network may result in permanent loss of funds.",
+    "donate.note.d3": "After donating, feel free to reach out on",
+    "docs.label": "Documentation",
+    "docs.title": "Learn Pentool",
+    "docs.sub": "Guides, references and plugin API.",
+    "docs.quickStart": "Quick Start",
+    "docs.quickStart.d": "Up and running in 5 minutes",
+    "docs.installation": "Installation",
+    "docs.installation.d": "Detailed setup for all platforms",
+    "docs.userGuide": "User Guide",
+    "docs.userGuide.d": "All modules, all features",
+    "docs.pluginApi": "Plugin API",
+    "docs.pluginApi.d": "Build your own extensions",
+    "docs.langHint": "Read this page in your language — use the language switch in the top menu.",
+    "footer.brand": "Professional TUI web pentesting toolkit. Open source, async, extensible.",
+    "footer.project": "Project",
+    "footer.contributing": "Contributing",
+    "footer.license": "License (AGPL-3.0)",
+    "footer.community": "Community",
+    "footer.telegramNews": "Telegram Channel (news)",
+    "footer.telegramPersonal": "Telegram @sudores (personal)",
+    "footer.email": "Email",
+    "footer.donate": "Donate ☕",
+    "footer.docs": "Docs"
+  },
+
+  ru: {
+    "nav.features": "Возможности",
+    "nav.screenshots": "Скриншоты",
+    "nav.install": "Установка",
+    "nav.docs": "Документация",
+    "nav.donate": "Поддержка",
+    "nav.beta": "Триал",
+    "hero.badge": "🚀 Демо · 14-дневный бесплатный триал · Все функции PRO",
+    "hero.h1.1": "Пентест-набор",
+    "hero.h1.2": "на асинхронной скорости",
+    "hero.p": "Pentool — полностью асинхронный TUI с управлением с клавиатуры для тестирования веб-безопасности — сотни параллельных запросов, без Java, без Electron.",
+    "hero.btnInstall": "📦 uv tool install pentool",
+    "hero.btnGithub": "⭐ GitHub",
+    "hero.btnTrial": "💬 Получить PRO-триал",
+    "term.install": "# Установка (рекомендуется — изолированно, быстро)",
+    "term.launch": "# Запуск TUI",
+    "term.cli": "# Или используйте режим CLI",
+    "term.title": "bash — pentool",
+    "feat.label": "Почему Pentool",
+    "feat.title": "Чего нет у конкурентов",
+    "feat.sub": "Без Java. Без Electron. Без вкладки браузера, съедающей RAM. Просто быстрый асинхронный TUI, который не мешает.",
+    "feat.async.t": "Полностью асинхронный движок",
+    "feat.async.d": "Построен на asyncio с нуля — тысячи параллельных соединений, сотни запросов/с. Burp стоит в очереди. Pentool летит.",
+    "feat.keyboard.t": "TUI с управлением с клавиатуры",
+    "feat.keyboard.d": "Каждое действие доступно без мыши. Работает по SSH, в tmux, на серверах без графики — где угодно, где есть терминал.",
+    "feat.turbo.t": "Турбо-режим Intruder",
+    "feat.turbo.d": "Keep-Alive + пул соединений = скорость в 10 раз выше обычного HTTP. Четыре режима: Sniper, Battering Ram, Pitchfork, Cluster Bomb.",
+    "feat.scanner.t": "Умный сканер",
+    "feat.scanner.d": "Контекстные payload'ы для SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. Обход WAF и слепые техники встроены.",
+    "feat.proxy.t": "Прокси + WebSocket",
+    "feat.proxy.d": "Перехват HTTP/HTTPS и WebSocket-фреймов в реальном времени. Правила Match &amp; Replace, фильтры области видимости, поиск по истории.",
+    "feat.tools.t": "Decoder · Comparer · Sequencer",
+    "feat.tools.d": "19 цепочек encode/decode/hash. Дифф бок о бок. Анализ энтропии + FIPS для сессий, CSRF-токенов, JWT.",
+    "feat.install.t": "uv tool install — готово",
+    "feat.install.d": "Одна команда, без Docker, без JDK, без лицензионного сервера. Linux, macOS, Windows WSL. Python 3.10+.",
+    "feat.plugin.t": "Плагины (Plugin API)",
+    "feat.plugin.d": "Расширяйте, не трогая ядро. PRO-плагины добавляют продвинутые сканеры, умные payload'ы и генераторы отчётов.",
+    "install.label": "Установка одной строкой",
+    "install.title": "Начните за секунды",
+    "install.sub": "Работает на Linux, macOS и Windows (WSL). Python 3.10+.",
+    "install.noUv": "Нет uv?",
+    "install.pipAlso": "pip тоже работает:",
+    "install.guide": "Полное руководство по установке →",
+    "screens.label": "В действии",
+    "screens.title": "Скриншоты",
+    "screens.sub": "Pentool работает в реальном терминале — без моков и маркетинговых рендеров.",
+    "screens.credit": "Нажмите на скриншот, чтобы открыть его в полном размере.",
+    "screens.dashboard": "Дашборд",
+    "screens.scanner": "Сканер",
+    "screens.proxy": "Прокси",
+    "screens.repeater": "Repeater",
+    "screens.intruder": "Intruder",
+    "screens.intruderDetail": "Intruder — детали атаки",
+    "screens.decoder": "Decoder",
+    "beta.title": "🚀 Демо-версия — 14-дневный бесплатный триал",
+    "beta.trial.s": "Пробный период: 14 дней.",
+    "beta.trial.d": "Полный функционал PRO доступен с первого дня — без ограничений функций и платёжных стен во время триала.",
+    "beta.dev.s": "Функции PRO находятся в активной разработке.",
+    "beta.dev.d": "Некоторые продвинутые модули ещё создаются. Вы получаете ранний доступ, а не готовый продукт.",
+    "beta.pro.s": "Готовы перейти на PRO?",
+    "beta.pro.d": "Лицензии пока не продаются публично. Свяжитесь лично —",
+    "beta.news.s": "Хотите новости о релизах и функциях?",
+    "beta.news.d": "Подпишитесь на",
+    "beta.review.s": "Ведёте блог по безопасности, YouTube или Telegram-канал?",
+    "beta.review.d": "Напишите честный обзор и порекомендуйте Pentool аудитории — мы выдадим вам",
+    "beta.review.b": "постоянную PRO-лицензию бесплатно.",
+    "beta.support.s": "Хотите поддержать разработку?",
+    "donate.label": "Поддержать проект",
+    "donate.title": "💝 Донат",
+    "donate.sub": "Помогите сохранить Pentool бесплатным и открытым. Любая сумма важна.",
+    "donate.copy": "Копировать",
+    "donate.copied": "✓ Скопировано",
+    "donate.soon": "Скоро",
+    "donate.note.s": "⚠️ Важно:",
+    "donate.note.d1": "Всегда выбирайте правильную сеть перед отправкой.",
+    "donate.note.d2": "Отправка в неверную сеть может привести к безвозвратной потере средств.",
+    "donate.note.d3": "После доната свяжитесь в",
+    "docs.label": "Документация",
+    "docs.title": "Изучите Pentool",
+    "docs.sub": "Руководства, справочники и Plugin API.",
+    "docs.quickStart": "Быстрый старт",
+    "docs.quickStart.d": "Запуск за 5 минут",
+    "docs.installation": "Установка",
+    "docs.installation.d": "Подробная установка для всех платформ",
+    "docs.userGuide": "Руководство пользователя",
+    "docs.userGuide.d": "Все модули, все функции",
+    "docs.pluginApi": "Plugin API",
+    "docs.pluginApi.d": "Создавайте свои расширения",
+    "docs.langHint": "Читайте эту страницу на своём языке — используйте переключатель языка в верхнем меню.",
+    "footer.brand": "Профессиональный TUI-набор для веб-пентеста. Открытый, асинхронный, расширяемый.",
+    "footer.project": "Проект",
+    "footer.contributing": "Участие",
+    "footer.license": "Лицензия (AGPL-3.0)",
+    "footer.community": "Сообщество",
+    "footer.telegramNews": "Telegram-канал (новости)",
+    "footer.telegramPersonal": "Telegram @sudores (личный)",
+    "footer.email": "Email",
+    "footer.donate": "Донат ☕",
+    "footer.docs": "Документация"
+  },
+
+  zh: {
+    "nav.features": "功能",
+    "nav.screenshots": "截图",
+    "nav.install": "安装",
+    "nav.docs": "文档",
+    "nav.donate": "捐赠",
+    "nav.beta": "试用",
+    "hero.badge": "🚀 演示 · 14 天免费试用 · 包含全部 PRO 功能",
+    "hero.h1.1": "渗透测试工具包",
+    "hero.h1.2": "以异步速度运行",
+    "hero.p": "Pentool 是用于 Web 安全测试的全异步、键盘驱动的 TUI——数百个并发请求，零 Java，零 Electron。",
+    "hero.btnInstall": "📦 uv tool install pentool",
+    "hero.btnGithub": "⭐ GitHub",
+    "hero.btnTrial": "💬 获取 PRO 试用",
+    "term.install": "# 安装（推荐——隔离、快速）",
+    "term.launch": "# 启动 TUI",
+    "term.cli": "# 或使用 CLI 模式",
+    "term.title": "bash — pentool",
+    "feat.label": "为什么选择 Pentool",
+    "feat.title": "竞争对手没有的",
+    "feat.sub": "没有 Java。没有 Electron。没有占用内存的浏览器标签页。只是一个快速异步 TUI，不碍事。",
+    "feat.async.t": "全异步引擎",
+    "feat.async.d": "从零开始基于 asyncio 构建——数千并发连接，每秒数百请求。Burp 排队时，Pentool 已起飞。",
+    "feat.keyboard.t": "键盘优先 TUI",
+    "feat.keyboard.d": "无需鼠标即可完成所有操作。支持 SSH、tmux、无头服务器——任何终端可运行之处。",
+    "feat.turbo.t": "Intruder 涡轮模式",
+    "feat.turbo.d": "Keep-Alive + 连接池 = 比标准 HTTP 快 10 倍。四种模式：Sniper、Battering Ram、Pitchfork、Cluster Bomb。",
+    "feat.scanner.t": "智能扫描器",
+    "feat.scanner.d": "针对 SQLi、XSS、SSTI、LFI、RCE、SSRF、XXE、CORS、JWT 的上下文感知载荷。内置 WAF 绕过和盲测技术。",
+    "feat.proxy.t": "代理 + WebSocket",
+    "feat.proxy.d": "实时拦截 HTTP/HTTPS 和 WebSocket 帧。Match &amp; Replace 规则、范围过滤器、历史搜索。",
+    "feat.tools.t": "Decoder · Comparer · Sequencer",
+    "feat.tools.d": "19 种链式编解码/哈希操作。并排对比。对会话、CSRF 令牌、JWT 进行熵 + FIPS 分析。",
+    "feat.install.t": "uv tool install — 完成",
+    "feat.install.d": "一条命令，无需 Docker、JDK 或许可证服务器。Linux、macOS、Windows WSL。Python 3.10+。",
+    "feat.plugin.t": "插件 API",
+    "feat.plugin.d": "无需修改核心即可扩展。PRO 插件添加高级扫描器、智能载荷和报告生成器。",
+    "install.label": "单行安装",
+    "install.title": "数秒内开始",
+    "install.sub": "适用于 Linux、macOS 和 Windows（WSL）。Python 3.10+。",
+    "install.noUv": "没有 uv？",
+    "install.pipAlso": "pip 仍可用：",
+    "install.guide": "完整安装指南 →",
+    "screens.label": "实战",
+    "screens.title": "截图",
+    "screens.sub": "Pentool 在真实终端中运行——没有 Mock，没有营销渲染。",
+    "screens.credit": "点击任意截图以全尺寸查看。",
+    "screens.dashboard": "仪表盘",
+    "screens.scanner": "扫描器",
+    "screens.proxy": "代理",
+    "screens.repeater": "Repeater",
+    "screens.intruder": "Intruder",
+    "screens.intruderDetail": "Intruder — 攻击详情",
+    "screens.decoder": "Decoder",
+    "beta.title": "🚀 演示版 — 14 天免费试用",
+    "beta.trial.s": "试用期：14 天。",
+    "beta.trial.d": "第一天即可使用全部 PRO 功能——试用期间无功能限制、无付费墙。",
+    "beta.dev.s": "PRO 功能正在积极开发中。",
+    "beta.dev.d": "一些高级模块仍在构建中。您获得的是早期访问，而非最终成品。",
+    "beta.pro.s": "准备升级 PRO？",
+    "beta.pro.d": "许可证尚未公开销售。请直接联系",
+    "beta.news.s": "想了解新版本和功能动态？",
+    "beta.news.d": "订阅",
+    "beta.review.s": "运营安全博客、YouTube 或 Telegram 频道？",
+    "beta.review.d": "撰写评测并向受众推荐 Pentool——我们将为您提供",
+    "beta.review.b": "永久免费 PRO 许可证。",
+    "beta.support.s": "想支持开发？",
+    "donate.label": "支持本项目",
+    "donate.title": "💝 捐赠",
+    "donate.sub": "帮助保持 Pentool 免费开源。任何金额都受欢迎。",
+    "donate.copy": "复制",
+    "donate.copied": "✓ 已复制",
+    "donate.soon": "即将推出",
+    "donate.note.s": "⚠️ 重要：",
+    "donate.note.d1": "发送前请务必选择正确的网络。",
+    "donate.note.d2": "发送至错误网络可能导致资金永久丢失。",
+    "donate.note.d3": "捐赠后，欢迎联系",
+    "docs.label": "文档",
+    "docs.title": "学习 Pentool",
+    "docs.sub": "指南、参考和插件 API。",
+    "docs.quickStart": "快速入门",
+    "docs.quickStart.d": "5 分钟内上手",
+    "docs.installation": "安装",
+    "docs.installation.d": "各平台的详细安装",
+    "docs.userGuide": "用户指南",
+    "docs.userGuide.d": "所有模块，所有功能",
+    "docs.pluginApi": "插件 API",
+    "docs.pluginApi.d": "构建您自己的扩展",
+    "docs.langHint": "用您的语言阅读本页——使用顶部菜单的语言切换。",
+    "footer.brand": "专业的 TUI Web 渗透测试工具包。开源、异步、可扩展。",
+    "footer.project": "项目",
+    "footer.contributing": "参与贡献",
+    "footer.license": "许可证（AGPL-3.0）",
+    "footer.community": "社区",
+    "footer.telegramNews": "Telegram 频道（新闻）",
+    "footer.telegramPersonal": "Telegram @sudores（个人）",
+    "footer.email": "邮箱",
+    "footer.donate": "捐赠 ☕",
+    "footer.docs": "文档"
+  },
+
+  hi: {
+    "nav.features": "विशेषताएँ",
+    "nav.screenshots": "स्क्रीनशॉट",
+    "nav.install": "इंस्टॉल",
+    "nav.docs": "दस्तावेज़",
+    "nav.donate": "दान",
+    "nav.beta": "ट्रायल",
+    "hero.badge": "🚀 डेमो · 14-दिन मुफ़्त ट्रायल · सभी PRO सुविधाएँ शामिल",
+    "hero.h1.1": "पेंटेस्टिंग टूलकिट",
+    "hero.h1.2": "जो async गति पर चलता है",
+    "hero.p": "Pentool वेब सुरक्षा परीक्षण के लिए पूरी तरह async, कीबोर्ड-चालित TUI है — सैकड़ों समवर्ती अनुरोध, शून्य Java, शून्य Electron।",
+    "hero.btnInstall": "📦 uv tool install pentool",
+    "hero.btnGithub": "⭐ GitHub",
+    "hero.btnTrial": "💬 PRO ट्रायल पाएँ",
+    "term.install": "# इंस्टॉल (अनुशंसित — पृथक, तेज़)",
+    "term.launch": "# TUI लॉन्च करें",
+    "term.cli": "# या CLI मोड उपयोग करें",
+    "term.title": "bash — pentool",
+    "feat.label": "Pentool क्यों",
+    "feat.title": "प्रतिस्पर्धियों की बात जो नहीं है",
+    "feat.sub": "न Java। न Electron। न ब्राउज़र टैब जो आपकी RAM खाए। सिर्फ़ एक तेज़ async TUI जो आपके रास्ते से हटकर रहता है।",
+    "feat.async.t": "पूर्ण async इंजन",
+    "feat.async.d": "शुरू से asyncio पर बना — हज़ारों समवर्ती कनेक्शन, सैकड़ों अनुरोध/सेकंड। Burp कतार में है, Pentool उड़ता है।",
+    "feat.keyboard.t": "कीबोर्ड-प्रथम TUI",
+    "feat.keyboard.d": "बिना माउस सभी कार्य सुलभ। SSH, tmux, हेडलेस सर्वर पर काम करता है — जहाँ भी टर्मिनल चलता है।",
+    "feat.turbo.t": "Intruder टर्बो मोड",
+    "feat.turbo.d": "Keep-Alive + कनेक्शन पूलिंग = मानक HTTP से 10× तेज़। चार मोड: Sniper, Battering Ram, Pitchfork, Cluster Bomb।",
+    "feat.scanner.t": "स्मार्ट स्कैनर",
+    "feat.scanner.d": "SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT के लिए संदर्भ-जागरूक पेलोड। WAF बायपास और ब्लाइंड तकनीकें अंतर्निहित।",
+    "feat.proxy.t": "प्रॉक्सी + WebSocket",
+    "feat.proxy.d": "वास्तविक समय में HTTP/HTTPS और WebSocket फ्रेम इंटरसेप्ट करें। Match &amp; Replace नियम, स्कोप फ़िल्टर, इतिहास खोज।",
+    "feat.tools.t": "Decoder · Comparer · Sequencer",
+    "feat.tools.d": "19 श्रृंखलाबद्ध encode/decode/hash ऑप। साथ-साथ डिफ़। सत्रों, CSRF टोकन, JWT के लिए एन्ट्रॉपी + FIPS विश्लेषण।",
+    "feat.install.t": "uv tool install — हो गया",
+    "feat.install.d": "एक कमांड, न Docker, न JDK, न लाइसेंस सर्वर। Linux, macOS, Windows WSL। Python 3.10+।",
+    "feat.plugin.t": "प्लगइन API",
+    "feat.plugin.d": "कोर को छुए बिना विस्तार करें। PRO प्लगइन अग्रिम स्कैनर, स्मार्ट पेलोड और रिपोर्ट जनरेटर जोड़ते हैं।",
+    "install.label": "एक-लाइन सेटअप",
+    "install.title": "सेकंडों में शुरू करें",
+    "install.sub": "Linux, macOS और Windows (WSL) पर काम करता है। Python 3.10+।",
+    "install.noUv": "uv नहीं है?",
+    "install.pipAlso": "pip भी काम करता है:",
+    "install.guide": "पूर्ण इंस्टॉल गाइड →",
+    "screens.label": "कार्रवाई में",
+    "screens.title": "स्क्रीनशॉट",
+    "screens.sub": "Pentool असली टर्मिनल में चल रहा है — कोई मॉक नहीं, कोई मार्केटिंग रेंडर नहीं।",
+    "screens.credit": "पूर्ण आकार में खोलने के लिए किसी स्क्रीनशॉट पर क्लिक करें।",
+    "screens.dashboard": "डैशबोर्ड",
+    "screens.scanner": "स्कैनर",
+    "screens.proxy": "प्रॉक्सी",
+    "screens.repeater": "Repeater",
+    "screens.intruder": "Intruder",
+    "screens.intruderDetail": "Intruder — अटैक विवरण",
+    "screens.decoder": "Decoder",
+    "beta.title": "🚀 डेमो संस्करण — 14-दिन मुफ़्त ट्रायल",
+    "beta.trial.s": "ट्रायल अवधि: 14 दिन।",
+    "beta.trial.d": "पहले दिन से पूर्ण PRO कार्यक्षमता उपलब्ध है — ट्रायल के दौरान कोई फ़ीचर-गेट या पे-वॉल नहीं।",
+    "beta.dev.s": "PRO सुविधाएँ सक्रिय विकास में हैं।",
+    "beta.dev.d": "कुछ अग्रिम मॉड्यूल अभी बन रहे हैं। आपको प्रारंभिक पहुँच मिल रही है, पूर्ण उत्पाद नहीं।",
+    "beta.pro.s": "PRO में जाने के लिए तैयार?",
+    "beta.pro.d": "लाइसेंस अभी सार्वजनिक रूप से नहीं बिकते। व्यक्तिगत रूप से संपर्क करें —",
+    "beta.news.s": "नए रिलीज़ और सुविधाओं की खबर चाहिए?",
+    "beta.news.d": "सदस्यता लें",
+    "beta.review.s": "सुरक्षा ब्लॉग, YouTube या Telegram चैनल चलाते हैं?",
+    "beta.review.d": "समीक्षा लिखें और अपने दर्शकों को Pentool की अनुशंसा करें — हम आपको देंगे",
+    "beta.review.b": "स्थायी FREE PRO लाइसेंस।",
+    "beta.support.s": "विकास का समर्थन करना चाहते हैं?",
+    "donate.label": "परियोजना का समर्थन",
+    "donate.title": "💝 दान",
+    "donate.sub": "Pentool को निःशुल्क और ओपन-सोर्स रखने में मदद करें। कोई भी राशि स्वागत योग्य है।",
+    "donate.copy": "कॉपी",
+    "donate.copied": "✓ कॉपी हो गया",
+    "donate.soon": "जल्द आ रहा है",
+    "donate.note.s": "⚠️ महत्वपूर्ण:",
+    "donate.note.d1": "भेजने से पहले हमेशा सही नेटवर्क चुनें।",
+    "donate.note.d2": "गलत नेटवर्क पर भेजने से धन स्थायी रूप से खो सकता है।",
+    "donate.note.d3": "दान के बाद, बेझिझक संपर्क करें",
+    "docs.label": "दस्तावेज़",
+    "docs.title": "Pentool सीखें",
+    "docs.sub": "गाइड, संदर्भ और प्लगइन API।",
+    "docs.quickStart": "त्वरित प्रारंभ",
+    "docs.quickStart.d": "5 मिनट में चालू",
+    "docs.installation": "इंस्टॉलेशन",
+    "docs.installation.d": "सभी प्लेटफ़ॉर्म के लिए विस्तृत सेटअप",
+    "docs.userGuide": "उपयोगकर्ता गाइड",
+    "docs.userGuide.d": "सभी मॉड्यूल, सभी सुविधाएँ",
+    "docs.pluginApi": "प्लगइन API",
+    "docs.pluginApi.d": "अपने स्वयं के एक्सटेंशन बनाएँ",
+    "docs.langHint": "इस पृष्ठ को अपनी भाषा में पढ़ें — शीर्ष मेनू में भाषा स्विच का उपयोग करें।",
+    "footer.brand": "पेशेवर TUI वेब पेंटेस्टिंग टूलकिट। ओपन सोर्स, async, विस्तार योग्य।",
+    "footer.project": "परियोजना",
+    "footer.contributing": "योगदान",
+    "footer.license": "लाइसेंस (AGPL-3.0)",
+    "footer.community": "समुदाय",
+    "footer.telegramNews": "Telegram चैनल (समाचार)",
+    "footer.telegramPersonal": "Telegram @sudores (व्यक्तिगत)",
+    "footer.email": "ईमेल",
+    "footer.donate": "दान ☕",
+    "footer.docs": "दस्तावेज़"
+  }
+};
+
+/* ---- slider ---- */
+let slideIndex = 0;
+const SLIDES = document.querySelectorAll('#slider-track .slide');
+function buildDots() {
+  const dotsBox = document.getElementById('slider-dots');
+  dotsBox.innerHTML = '';
+  SLIDES.forEach((_, i) => {
+    const d = document.createElement('button');
+    d.className = 'slider-dot' + (i === 0 ? ' active' : '');
+    d.setAttribute('aria-label', 'Slide ' + (i + 1));
+    d.onclick = () => goToSlide(i);
+    dotsBox.appendChild(d);
   });
 }
+function goToSlide(i) {
+  slideIndex = (i + SLIDES.length) % SLIDES.length;
+  document.getElementById('slider-track').style.transform = 'translateX(-' + slideIndex * 100 + '%)';
+  document.querySelectorAll('#slider-dots .slider-dot').forEach((d, idx) => {
+    d.classList.toggle('active', idx === slideIndex);
+  });
+}
+function sliderMove(dir) { goToSlide(slideIndex + dir); }
+
+/* ---- i18n ---- */
+function applyLang(lang) {
+  const dict = I18N[lang] || I18N.en;
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key] !== undefined) el.innerHTML = dict[key];
+  });
+  document.title = dict['hero.h1.1'] + ' — Pentool';
+  document.querySelectorAll('.lang-switch button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-lang') === lang);
+  });
+  try { localStorage.setItem('pentool_lang', lang); } catch (e) {}
+}
+function setLang(lang) { applyLang(lang); }
+
+/* ---- init ---- */
+function init() {
+  buildDots();
+  let saved = 'en';
+  try { saved = localStorage.getItem('pentool_lang') || 'en'; } catch (e) {}
+  if (!I18N[saved]) saved = 'en';
+  applyLang(saved);
+}
+
+function copyAddr(id, btn) {
+  const text = document.getElementById(id).textContent;
+  const lang = document.documentElement.lang || 'en';
+  const dict = I18N[lang] || I18N.en;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = dict['donate.copied'] || '✓ Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = dict['donate.copy'] || 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+init();
 </script>
 </html>
