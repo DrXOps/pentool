@@ -32,9 +32,13 @@ _PROC_POOL_WORKERS: int = min(8, max(2, (os.cpu_count() or 4)))
 _PROC_THRESHOLD: int = 64
 
 # Ленивый module-level пул процессов: один на процесс, делится всеми
-# спайдерами. Намеренно НЕ закрываем в вызовах (fork+pickle дорого) — процесс
-# сканера живёт недолго, ОС уберёт воркеры. Создаётся только при первом
-# использовании.
+# спайдерами. Создаётся только при первом использовании.
+#
+# Пул намеренно закрывают явно через shutdown_proc_pool() при выходе
+# приложения (action_quit): fork воркеры наследуют все открытые fd родителя,
+# включая слушающий сокет прокси на 8080. Если оставить их висеть, после
+# штатного выхода TUI они осиротеют (PPID=1) и будут держать 8080 — следующий
+# запуск падал с "address already in use".
 _PROC_POOL: ProcessPoolExecutor | None = None
 
 
@@ -44,10 +48,33 @@ def _get_proc_pool() -> ProcessPoolExecutor | None:
         return None
     if _PROC_POOL is None:
         try:
+            # fork (spawn небезопасен: при установке через uv console-script
+            # __main__ не является .py модулем, и spawn-воркеры не могут его
+            # переимпортировать — пул падал/зависал на *start up*). При fork
+            # воркеры наследуют fd 8080, поэтому пул закрывают явно через
+            # shutdown_proc_pool() при выходе приложения (action_quit).
             _PROC_POOL = ProcessPoolExecutor(max_workers=_PROC_POOL_WORKERS)
         except (ImportError, OSError, RuntimeError):
             _PROC_POOL = None
     return _PROC_POOL
+
+
+def shutdown_proc_pool() -> None:
+    """Stop the shared CPU pool, releasing its workers' inherited fds.
+
+    Only needed for long-lived processes (the TUI). Without this, a pool
+    created via fork leaves workers that remain after the main process
+    exits (orphans with PPID=1) and keep the proxy's 8080 listener fd open.
+    Terminating them cleanly on quit releases the port for the next launch.
+    """
+    global _PROC_POOL
+    pool = _PROC_POOL
+    _PROC_POOL = None
+    if pool is not None:
+        try:
+            pool.shutdown(wait=False, cancel_futures=True)
+        except Exception as exc:
+            logger.debug("shutdown_proc_pool: %s", exc)
 
 
 def _normalize_url_cpu(url: str) -> str:

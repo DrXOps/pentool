@@ -1502,6 +1502,17 @@ class PentoolApp(App):
                 logger.info("APP: Repeater storage closed on quit")
         except Exception as e:
             logger.warning("APP: Repeater storage close error on quit: %s", e)
+        # Stop the spider CPU pool BEFORE the hard os._exit() below. exit() is
+        # followed synchronously by os._exit(), which by-passes atexit/finally —
+        # so a process-pool created via fork leaves orphaned workers (PPID=1)
+        # holding the inherited 8080 listener fd, and the next launch fails
+        # with "address already in use". shutdown_proc_pool() terminates them
+        # cleanly so the port is released on a normal quit.
+        try:
+            from pentool.modules.spider import shutdown_proc_pool
+            shutdown_proc_pool()
+        except Exception:
+            pass
         self.exit()
         # Force-terminate the process — kills non-daemon threads
         # (jemalloc_bg_thd from pyarrow) that would otherwise block exit.
