@@ -62,7 +62,10 @@ class TestInitAndConnect:
         assert row[0].lower() == "wal"
         cur = await storage._db.execute("PRAGMA busy_timeout")
         row = await cur.fetchone()
-        assert row[0] == 5000
+        # Raised from 5000 → 15000 so concurrent writers (scanner + proxy
+        # history, one SQLite writer at a time in WAL) wait for their turn
+        # instead of dropping rows with "database is locked".
+        assert row[0] == 15000
         await storage.close()
 
 

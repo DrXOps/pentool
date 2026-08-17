@@ -55,7 +55,12 @@ class BaseSqliteStorage:
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA foreign_keys = ON")
         await self._db.execute("PRAGMA journal_mode = WAL")
-        await self._db.execute("PRAGMA busy_timeout = 5000")
+        # 15s (was 5s): with the scanner writing large chunks and the proxy
+        # writing history to the SAME project DB concurrently (WAL — one
+        # writer at a time), 5s could expire before the proxy got its write
+        # window, silently dropping history rows ("request LOST"). Raised so a
+        # writer waits longer for its turn instead of failing without saving.
+        await self._db.execute("PRAGMA busy_timeout = 15000")
         await self._db.commit()
 
     async def init_db(self, path: str) -> None:

@@ -1,5 +1,6 @@
 """Entry point: no arguments — TUI, with arguments — CLI."""
 
+import os
 import sys
 import threading
 
@@ -20,6 +21,58 @@ import threading
 # all in that situation — with it, the TUI still starts, just with PRO
 # features unavailable (same as if no PRO package were installed).
 _UNSAFE_SKIP_PRO_CHECK_FLAG = "--unsafe-skip-pro-compat-check"
+
+
+def _kill_orphaned_pentool() -> None:
+    """Kill orphaned pentool processes left behind by a previous run.
+
+    When `pentool` is killed forcefully (kill -9 / crash / terminal closed
+    mid-scan), its ProcessPoolExecutor workers (fork'd) survive as orphans
+    (PPID=1) and keep the proxy's 8080 listener fd open — the next launch
+    then fails with "address already in use" until they are killed manually.
+    This scans /proc for live processes whose command is our own pentool
+    entrypoint, whose PPID is 1 (orphaned), and that are not the current
+    process, and SIGKILLs them so the port is free before this instance
+    starts. Cheap, safe (only touches our own binary), and idempotent.
+
+    Kept deliberate: it runs only on script entry, before any proxy bind, so
+    it can't kill a legitimately-running proxy of a *concurrent* session we
+    don't want to disturb? No — it kills orphans only (PPID==1), never a
+    running foreground session (PPID != 1). A real second session has a live
+    parent and won't match.
+    """
+    try:
+        self_pid = os.getpid()
+        exe_basename = os.path.basename(sys.argv[0])
+        killed = 0
+        for pid_dir in os.listdir("/proc"):
+            if not pid_dir.isdigit():
+                continue
+            pid = int(pid_dir)
+            if pid == self_pid:
+                continue
+            try:
+                stat = open(f"/proc/{pid}/stat", "r").read().split(") ", 1)
+                ppid = int((stat[1].split(" "))[1]) if len(stat) > 1 else -1
+                if ppid != 1:
+                    continue  # has a live parent — not an orphan
+                cmdline = open(f"/proc/{pid}/cmdline", "rb").read().decode(errors="replace")
+                # Match our own binary name in the command line (e.g. .../pentool)
+                if exe_basename and exe_basename not in cmdline and "pentool" not in cmdline:
+                    continue
+                # Ignore the current process tree's own helpers we never spawn as
+                # orphans — only kill pentool entrypoints.
+                if "pentool" not in cmdline:
+                    continue
+                import signal
+                os.kill(pid, signal.SIGKILL)
+                killed += 1
+            except (OSError, ValueError, IndexError, FileNotFoundError):
+                continue
+        if killed:
+            sys.stderr.write(f"[pentool] cleaned up {killed} orphaned pentool process(es)\n")
+    except Exception:
+        pass  # never block startup on cleanup
 
 
 def main() -> None:
@@ -106,6 +159,12 @@ def main() -> None:
             threading.Thread(target=send_first_run_ping, daemon=True).start()
         except Exception:
             pass
+
+        # Free the proxy port from any orphaned pentool processes left by a
+        # previous hard-killed run (their ProcessPoolExecutor workers survive
+        # with PPID=1 and hold fd 8080). Do this right before the TUI starts
+        # so a fresh launch doesn't fail with "address already in use".
+        _kill_orphaned_pentool()
 
         try:
             from pentool.tui.app import PentoolApp
