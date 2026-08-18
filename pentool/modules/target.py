@@ -105,6 +105,21 @@ class SiteMap(BaseSqliteStorage):
         """Normalize a host for scope comparisons: lowercase, no port."""
         return host.split(":")[0].strip().lower()
 
+    @staticmethod
+    def _strip_default_port(host: str) -> str:
+        """Return ``host`` with a DEFAULT http/https port stripped (host:443 → host).
+
+        Non-standard ports (e.g. :8443) are kept — they are distinct endpoints.
+        """
+        try:
+            if ":" in host:
+                bare, _, port = host.rpartition(":")
+                if port in ("80", "443"):
+                    return bare
+        except Exception:
+            pass
+        return host
+
     def add_request(self, req: "ParsedRequest") -> None:
         try:
             parsed = urlparse(req.url)
@@ -116,8 +131,13 @@ class SiteMap(BaseSqliteStorage):
             return
 
         now = datetime.now(timezone.utc)
-        host_map = self._nodes.setdefault(host, {})
-        in_scope = self._norm_host(host) in self._scope_hosts
+        # Merge the browser-CONNECT host ("host:443") and a seed host ("host")
+        # into ONE tree node, but only strip the DEFAULT ports (80/443) — a
+        # non-standard port (e.g. :8443) is a genuinely separate endpoint and
+        # must stay its own host.
+        host_key = self._strip_default_port(host)
+        host_map = self._nodes.setdefault(host_key, {})
+        in_scope = self._norm_host(host_key) in self._scope_hosts
 
         if path in host_map:
             node = host_map[path]
@@ -126,7 +146,7 @@ class SiteMap(BaseSqliteStorage):
             node.last_seen = now
         else:
             host_map[path] = SiteNode(
-                host=host,
+                host=host_key,
                 path=path,
                 methods={req.method},
                 request_count=1,
