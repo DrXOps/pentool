@@ -76,6 +76,11 @@ from pentool.cli.scan import scan  # noqa: E402
 cli.add_command(scan)
 
 
+from pentool.cli.ai_cmd import ai  # noqa: E402
+
+cli.add_command(ai)
+
+
 @cli.command("decode")
 @click.argument("operation", type=click.Choice([
     "url_encode", "url_decode",

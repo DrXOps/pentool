@@ -51,6 +51,11 @@ pentool/plugins/builtin/scanner_pro.py
 pentool/api/scanner_api.py
 pentool/tui/screens/scanner/
 
+# pentool-mcp-server — separate Git repository (DrXOps/pentool-mcp-server),
+# installed via the PyPI extra `pentool[ai]`. Kept out of this repo to avoid
+# embedding a nested git repo.
+ai_server/
+
 # Original screenshots with Cyrillic names
 screens/Снимок*
 

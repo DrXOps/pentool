@@ -160,6 +160,45 @@ def main() -> None:
         except Exception:
             pass
 
+        # AI first-run dialog: ask user to install LLM if not set up yet
+        try:
+            from pentool.services.ai.factory import ai_setup_required, get_model_size_mb
+            if ai_setup_required():
+                print()
+                print("╔══════════════════════════════════════════════════════════╗")
+                print("║ 🔮 AI-помощник                                        ║")
+                print("║                                                         ║")
+                print("║ AI может помогать со сканированием:                    ║")
+                print("║   • подбирать релевантные чеки под цель               ║")
+                print("║   • обходить WAF сгенерированными payload'ами         ║")
+                print("║   • находить скрытые эндпоинты                        ║")
+                print("║                                                         ║")
+                print(f"║ ⚠ LLM (~{get_model_size_mb()} MB) будет загружена при     ║")
+                print("║   установке. Это займёт время в зависимости от        ║")
+                print("║   скорости интернета.                                 ║")
+                print("║                                                         ║")
+                print("║ Хотите установить AI-помощника?                       ║")
+                print("║                                                         ║")
+                print("║  [Y] Да, установить  [N] Нет, спасибо  [S] Пропустить ║")
+                print("╚══════════════════════════════════════════════════════════╝")
+                choice = input("> ").strip().lower()
+                if choice == "y":
+                    print("\nУстановка AI-помощника...")
+                    import asyncio
+                    from pentool.core.config import get_config
+                    from pentool.services.ai.factory import install_ai_components
+                    asyncio.run(install_ai_components(get_config()))
+                    print("\n✅ AI-помощник установлен. MCP-сервер запускается из Dashboard.")
+                    print("  Или командой: pentool ai start\n")
+                elif choice == "n":
+                    print("\nOK. AI-помощник можно будет установить позже:\n")
+                    print("  pentool ai setup\n")
+                else:
+                    print("\nПропущено. Установи позже:\n")
+                    print("  pentool ai setup\n")
+        except Exception:
+            pass
+
         # Free the proxy port from any orphaned pentool processes left by a
         # previous hard-killed run (their ProcessPoolExecutor workers survive
         # with PPID=1 and hold fd 8080). Do this right before the TUI starts

@@ -398,7 +398,6 @@ status = 404 OR status = 500
 | `Shift+D` | Decoder |
 | `Shift+C` | Comparer |
 | `Shift+Q` | Sequencer |
-| `Shift+W` | Spider |
 | `Shift+E` | Extensions |
 | `Shift+X` | Terminal |
 

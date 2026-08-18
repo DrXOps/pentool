@@ -27,13 +27,10 @@ Reading those attributes off a timer cannot get out of sync with reality
 the way a missed event could.
 
 Spider is the one exception: it's tracked via PentoolApp.is_spider_active()
-(a shared counter on the app), not a single screen's attribute — a crawl
-can be started either from SpiderScreen's own Start button OR from
-TargetScreen's "Crawl scope"/"Crawl selected host" convenience triggers,
-which build their own SpiderAPI instance rather than going through
-SpiderScreen (see TargetScreen._crawl_hosts_worker). This glyph used to
-read only SpiderScreen._crawl_running, so a crawl started from Target never
-lit it up even though a real crawl was in progress.
+(a shared counter on the app), not a single screen's attribute. There is no
+dedicated SpiderScreen/module-tab — crawling runs only from TargetScreen's
+"Crawl scope"/"Crawl selected host" convenience triggers, which build their
+own SpiderAPI instance (see TargetScreen._crawl_hosts_worker).
 
 Note on the non-Spider attribute names: none of them is `_running` — that
 name collides with textual.message_pump.MessagePump._running, an internal
@@ -122,15 +119,12 @@ class ActivityIndicator(Widget):
                 return None
 
         def _spider_active() -> bool | None:
-            # Spider can be started from two places — SpiderScreen's own
-            # Start button, and TargetScreen's "Crawl scope"/"Crawl selected
-            # host" convenience triggers (which build their own SpiderAPI
-            # instance rather than going through SpiderScreen — see
-            # TargetScreen._crawl_hosts_worker). Reading only
-            # SpiderScreen._crawl_running missed the Target-initiated case
-            # entirely. PentoolApp.is_spider_active() is a single shared
-            # counter both call sites increment/decrement, so this glyph
-            # stays correct regardless of which screen started the crawl.
+            # No dedicated SpiderScreen/module-tab anymore — crawling runs
+            # only from TargetScreen's "Crawl scope"/"Crawl selected host"
+            # triggers (which build their own SpiderAPI instance — see
+            # TargetScreen._crawl_hosts_worker). PentoolApp.is_spider_active()
+            # is the single shared counter that path increments/decrements,
+            # so this glyph tracks the real crawl regardless of host.
             try:
                 return bool(app_ref.is_spider_active())
             except Exception:

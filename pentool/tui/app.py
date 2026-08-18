@@ -77,7 +77,6 @@ from pentool.tui.screens import (
     ScannerScreen,
     SequencerScreen,
     SettingsScreen,
-    SpiderScreen,
     TargetScreen,
     TerminalScreen,
 )
@@ -98,7 +97,6 @@ _SCREEN_MAP: dict[str, type] = {
     "decoder":    DecoderScreen,
     "comparer":   ComparerScreen,
     "sequencer":  SequencerScreen,
-    "spider":     SpiderScreen,
     "extensions": ExtensionsScreen,
     "terminal":   TerminalScreen,
     "settings":   SettingsScreen,
@@ -220,7 +218,6 @@ class PentoolApp(App):
         Binding("D", "switch_module('decoder')",    "Decoder",    show=False, priority=True),
         Binding("C", "switch_module('comparer')",   "Comparer",   show=False, priority=True),
         Binding("Q", "switch_module('sequencer')",  "Sequencer",  show=False, priority=True),
-        Binding("W", "switch_module('spider')",     "Spider",     show=False, priority=True),
         Binding("E", "switch_module('extensions')", "Extensions", show=False, priority=True),
         Binding("X", "switch_module('terminal')",   "Terminal",   show=False, priority=True),
         # Shift+digit aliases for compatibility
@@ -231,7 +228,6 @@ class PentoolApp(App):
         Binding("percent_sign",       "switch_module('decoder')",    show=False, priority=True),
         Binding("circumflex_accent",  "switch_module('comparer')",   show=False, priority=True),
         Binding("ampersand",          "switch_module('sequencer')",  show=False, priority=True),
-        Binding("asterisk",           "switch_module('spider')",     show=False, priority=True),
         Binding("left_parenthesis",   "switch_module('extensions')", show=False, priority=True),
         # Proxy sub-tabs: use Ctrl+H/I/W for Proxy HTTP/Intercept/WS
         Binding("ctrl+h", "proxy_tab('http')",      "HTTP History", show=False, priority=True),
@@ -268,21 +264,19 @@ class PentoolApp(App):
         # Project management — extracted to keep app.py focused on Textual wiring
         from pentool.tui.project_manager import ProjectManager
         self._pm = ProjectManager(self)
-        # Shared "is a crawl in progress" state — Spider's functionality is
-        # driven from two places (SpiderScreen's own Start button, and
-        # TargetScreen's "Crawl scope"/"Crawl selected host" convenience
-        # triggers, which build their own SpiderAPI instance rather than
-        # going through SpiderScreen — see TargetScreen._crawl_hosts_worker).
-        # ActivityIndicator used to read only SpiderScreen._crawl_running,
-        # so a crawl started from Target never lit up the Spider glyph. A
-        # counter (not a bool) because _crawl_hosts_worker can in principle
-        # be re-triggered while a previous one is still finishing up.
+        # Shared "is a crawl in progress" state. There is no dedicated
+        # SpiderScreen/module-tab anymore — crawling runs only from
+        # TargetScreen's "Crawl scope"/"Crawl selected host" triggers
+        # (which build their own SpiderAPI instance — see
+        # TargetScreen._crawl_hosts_worker). A counter (not a bool) because
+        # _crawl_hosts_worker can in principle be re-triggered while a
+        # previous one is still finishing up; ActivityIndicator's Spider
+        # glyph reads this via is_spider_active().
         self._spider_active_count: int = 0
 
     def spider_crawl_started(self) -> None:
-        """Call when any crawl (Spider tab or Target's convenience triggers)
-        begins — keeps ActivityIndicator's Spider glyph in sync regardless
-        of which screen initiated the crawl."""
+        """Call when any crawl begins — keeps ActivityIndicator's Spider
+        glyph in sync regardless of which screen initiated the crawl."""
         self._spider_active_count += 1
 
     def spider_crawl_finished(self) -> None:
@@ -316,7 +310,6 @@ class PentoolApp(App):
             yield DecoderScreen(id="screen-decoder")
             yield ComparerScreen(id="screen-comparer")
             yield SequencerScreen(id="screen-sequencer")
-            yield SpiderScreen(id="screen-spider")
             yield ExtensionsScreen(id="screen-extensions")
             yield TerminalScreen(id="screen-terminal")
             yield SettingsScreen(id="screen-settings")

@@ -12,6 +12,7 @@ from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
 from pentool.tui.messages import SendHostToScanner, SyncScopeToProxy
+from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -48,6 +49,11 @@ class TargetScreen(Widget):
             yield ToolbarButton(
                 "🕷 Crawl Host", "btn-crawl-host",
                 tooltip="Crawl the selected host in the tree with the Spider"
+            )
+            yield Static(" │ ", classes="toolbar-sep")
+            yield Checkbox(
+                "🤖 Use AI", id="cfg-ai-use", value=False,
+                tooltip="When set, Spider adds AI-suggested endpoints after crawling"
             )
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("🗑 Clear",             "btn-clear")
@@ -329,13 +335,14 @@ class TargetScreen(Widget):
         except Exception as exc:
             logger.warning("_clear_worker: %s", exc)
 
-    # ── Crawler (uses the same SpiderAPI/AsyncSpider as SpiderScreen) ──────────
+    # ── Crawler (uses SpiderAPI / AsyncSpider) ───────────────────────────────
     #
-    # There is no dedicated Crawler module/tab — Spider's functionality lives
-    # inside SpiderScreen only. Rather than duplicating a full crawler UI here,
-    # Target gets two convenience triggers that call SpiderAPI directly and
-    # feed discovered pages back into the SiteMap, matching what Send to
-    # Scanner/context menu users would expect from "crawl this scope".
+    # The Spider has no dedicated module/tab in the TUI (see docs) — crawling
+    # runs from here, in Target. These two toolbar triggers call SpiderAPI
+    # directly and feed discovered pages back into the SiteMap, matching what
+    # Send to Scanner/context menu users would expect from "crawl this scope".
+    # The "🤖 Use AI" toolbar checkbox adds AI-suggested endpoints (see
+    # _ai_suggest_endpoints) after each host's crawl.
 
     def action_crawl_scope(self) -> None:
         """Crawl every in-scope host (falls back to all known hosts if scope
@@ -366,12 +373,17 @@ class TargetScreen(Widget):
             timeout=3,
         )
         # Keeps ActivityIndicator's Spider glyph lit for the duration of this
-        # crawl too — this path builds its own SpiderAPI instead of going
-        # through SpiderScreen, so without this the indicator would stay
-        # idle even while a real crawl is running (see
-        # PentoolApp.spider_crawl_started/_finished).
+        # crawl (no dedicated SpiderScreen anymore; this Target path builds its
+        # own SpiderAPI and drives the counter directly).
         try:
             self.app.spider_crawl_started()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        # "🤖 Use AI" toolbar checkbox — when set, add AI-suggested endpoints
+        # after each host's crawl.
+        use_ai = False
+        try:
+            use_ai = self.query_one("#cfg-ai-use", Checkbox).value
         except Exception:
             pass
         total_pages = 0
@@ -396,6 +408,10 @@ class TargetScreen(Widget):
                         api.add_request(ParsedRequest(method="GET", url=page_url))
                     except Exception as exc:
                         logger.debug("action_crawl_scope: failed to add %s: %s", page_url, exc)
+                if use_ai:
+                    ai_added = await self._ai_suggest_endpoints(api, url)
+                    if ai_added:
+                        self.app.notify(f"AI endpoints added: {ai_added}", timeout=3)
         finally:
             try:
                 self.app.spider_crawl_finished()  # type: ignore[attr-defined]
@@ -412,6 +428,59 @@ class TargetScreen(Widget):
         if total_errors:
             msg += f", {total_errors} error(s)"
         self.app.notify(msg, severity="information")
+
+    async def _ai_suggest_endpoints(self, api, url: str) -> int:
+        """Ask the AI for non-obvious endpoints and register them in the SiteMap.
+
+        Returns how many endpoints were added (0 if AI is off or returned nothing).
+        Called from _crawl_hosts_worker when the "🤖 Use AI" checkbox is set.
+        """
+        try:
+            from pentool.services.ai import get_ai
+            from pentool.core.config import get_config
+            from pentool.utils.parser import ParsedRequest
+
+            cfg = get_config()
+            backend = get_ai(cfg)
+            if backend is None:
+                return 0
+
+            # Already-discovered context: all hosts + their paths from the SiteMap.
+            known: list[str] = []
+            for h in api.get_hosts():
+                try:
+                    for node in api.get_paths(h):
+                        if node.path and node.path != "/":
+                            known.append(f"https://{h}{node.path}")
+                except Exception:
+                    continue
+
+            result = await backend.generate("crawl_endpoints", {
+                "url": url,
+                "links": known,
+            })
+            if not result:
+                return 0
+            items = result if isinstance(result, list) else result.get("items", [])
+            if not items:
+                return 0
+
+            added = 0
+            for item in items:
+                method = str(item.get("method", "GET")).upper()
+                path = str(item.get("path", "")).strip()
+                if not path.startswith("/"):
+                    path = "/" + path
+                # Skip certainty-empty or already-known. Simple dedupe vs known.
+                try:
+                    api.add_request(ParsedRequest(method=method, url=f"{url}{path}"))
+                    added += 1
+                except Exception:
+                    continue
+            return added
+        except Exception as exc:
+            logger.debug("_ai_suggest_endpoints failed: %s", exc)
+            return 0
 
     def action_export_json(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode

@@ -74,6 +74,36 @@ uv run pentool --version
 
 ---
 
+## Optional: AI Assistant (`pentool[ai]`)
+
+Pentool can use a local LLM to help with scanning (picking checks, bypassing WAF,
+finding non-obvious endpoints). The AI *MCP server* ships as a **separate PyPI
+package** (`pentool-mcp-server`), maintained in its own repository.
+
+To install the AI extra together with pentool:
+
+```bash
+uv tool install pentool --with pentool-mcp-server
+# or:
+pip install "pentool[ai]"
+```
+
+Then set things up and start the server:
+
+```bash
+pentool ai setup    # downloads the model + installs the MCP server package
+pentool ai start    # runs the MCP server (stdio/port)
+```
+
+When AI is enabled (Settings → AI), the Dashboard shows an MCP status LED
+(`RUNNING` / `READY` / `OFF`), and the Target module's `🤖 Use AI` crawl checkbox
+adds AI-suggested endpoints after an ordinary crawl.
+
+> Note: if network/pip is unavailable, `pentool ai setup` falls back to an
+> inline stub server so the rest of the AI pipeline still works.
+
+---
+
 ## Platform-Specific Instructions
 
 ### Linux (Ubuntu/Debian)
