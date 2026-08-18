@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import sys
 import threading
 from pathlib import Path
 
@@ -510,14 +511,13 @@ class PentoolApp(App):
     async def _do_real_fetch(self, urls: list[str]) -> None:
         """Fetch each URL with a real headless browser THROUGH the running proxy.
 
-        This is a genuine interception: a headless Firefox (Playwright) is told
-        to use our proxy (browser.new_context(proxy=...)) and to not fail on the
-        proxy's dynamic CA cert (ignore_https_errors). The request therefore
-        really passes through ProxyServer's MITM, which captures it into HTTP
-        History and Target Site Map automatically — not a synthetic re-injection.
+        Runs Playwright/Firefox in a SEPARATE subprocess — not inside the Textual
+        event loop, which can conflict with Playwright's own driver/loop and hang
+        (which is why the earlier in-loop version captured nothing). The child
+        process points Firefox at our proxy; ProxyServer's MITM captures the real
+        request into HTTP History + Target automatically.
 
-        Requires Playwright + a browser. The proxy starts asynchronously, so we
-        wait for it to be ready before launching the browser.
+        Requires Playwright + a browser install in the child's Python env.
         """
         # The proxy starts async via _start_proxy — wait up to ~5s for it.
         for _ in range(50):
@@ -528,41 +528,50 @@ class PentoolApp(App):
             logger.info("--real: proxy not ready, cannot do a real browser fetch")
             return
 
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            self.notify(
-                "--real needs Playwright: pip/uv tool with playwright + chromium "
-                "['pentool ai'? no — playwright install chromium]",
-                severity="warning",
-                timeout=8,
-            )
-            logger.warning("--real: playwright not installed; real browser capture unavailable")
-            return
-
         proxy_host = self._proxy.host or "127.0.0.1"
         proxy_port = self._proxy.port or 8080
         proxy_url = f"http://{proxy_host}:{proxy_port}"
 
+        # Commit-ready script executed in a child process (sys.executable — the
+        # same venv), so the browser runs independently of the TUI's loop.
+        _script = (
+            "import asyncio,sys\n"
+            "async def _run():\n"
+            "    from playwright.async_api import async_playwright\n"
+            "    async with async_playwright() as pw:\n"
+            "        b=await pw.firefox.launch(headless=True)\n"
+            "        c=await b.new_context(proxy={'server':%r},ignore_https_errors=True)\n"
+            "        p=await c.new_page()\n"
+            "        for u in %r:\n"
+            "            try:\n"
+            "                await p.goto(u,timeout=30000,wait_until='domcontentloaded')\n"
+            "                print('--real child visited',u,flush=True)\n"
+            "            except Exception as e:\n"
+            "                print('--real child visit failed',u,repr(e),flush=True)\n"
+            "        await c.close(); await b.close()\n"
+            "asyncio.run(_run())\n"
+        ) % (proxy_url, urls)
+
         try:
-            async with async_playwright() as pw:
-                # Firefox by default (user picked Firefox — lighter than Chromium).
-                browser = await pw.firefox.launch(headless=True)
-                context = await browser.new_context(
-                    # Route the browser through our proxy → real MITM capture.
-                    proxy={"server": proxy_url},
-                    ignore_https_errors=True,
-                )
-                page = await context.new_page()
-                for url in urls:
-                    try:
-                        await page.goto(url, timeout=30000, wait_until="domcontentloaded")
-                        logger.info("--real: browser visited %s (captured by proxy)", url)
-                    except Exception as exc:
-                        logger.info("--real: browser visit %s failed: %s", url, exc)
-                await context.close()
-                await browser.close()
-            self.call_after_refresh(self._refresh_target_tree)
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-c", _script,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
+            out = (stdout or b"").decode(errors="replace").strip()
+            err = (stderr or b"").decode(errors="replace").strip()
+            for line in out.splitlines():
+                logger.info("--real: %s", line)
+            if proc.returncode != 0:
+                logger.warning("--real: child exited %s: %s", proc.returncode, err.splitlines()[-1] if err else "")
+                self.notify(f"--real: couldn't open real browser ({err.splitlines()[-1] if err else proc.returncode})",
+                            severity="warning", timeout=8)
+            else:
+                self.call_after_refresh(self._refresh_target_tree)
+        except asyncio.TimeoutError:
+            logger.warning("--real: child timed out")
+            self.notify("--real: browser fetch timed out", severity="warning", timeout=6)
         except Exception as exc:
             logger.warning("--real: browser capture error: %s", exc)
             self.notify(f"--real browser error: {exc}", severity="warning", timeout=6)
