@@ -493,10 +493,13 @@ class PentoolApp(App):
         except Exception as exc:
             logger.warning("seed: proxy start failed: %s", exc)
 
+        logger.info("seed: --real=%s proxy_started=%s proxy_running=%s", real, proxy_started,
+                    bool(self._proxy and self._proxy.is_running))
         if real:
             # Actually fetch the target(s) through the proxy so real requests
             # show up in the project (not just a dry seed entry).
             try:
+                logger.info("--real: calling _do_real_fetch for %s", urls)
                 await self._do_real_fetch(urls)
             except Exception as exc:
                 logger.warning("seed: real fetch failed: %s", exc)

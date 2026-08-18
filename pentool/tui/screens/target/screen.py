@@ -443,6 +443,8 @@ class TargetScreen(Widget):
         except Exception:
             pass
         total_pages = 0
+        total_endpoints = 0
+        total_js = 0
         total_errors = 0
         api = self._get_api()
         db_path = getattr(self.app, "db_path", "") or getattr(self.app, "_db_path", "")
@@ -474,6 +476,8 @@ class TargetScreen(Widget):
                     total_errors += 1
                     continue
                 total_pages += len(result.pages)
+                total_endpoints += len(result.endpoints)
+                total_js += len(result.js_files)
                 total_errors += len(result.errors)
                 if use_ai:
                     ai_added = await self._ai_suggest_endpoints(api, url)
@@ -491,7 +495,10 @@ class TargetScreen(Widget):
         except Exception as exc:
             logger.debug("action_crawl_scope: save failed: %s", exc)
 
-        msg = f"Crawl done: {total_pages} page(s) found across {len(hosts)} host(s)"
+        msg = (
+            f"Crawl done: {total_pages} page(s), {total_endpoints} endpoint(s), "
+            f"{total_js} file(s) across {len(hosts)} host(s)"
+        )
         if total_errors:
             msg += f", {total_errors} error(s)"
         self.app.notify(msg, severity="information")
