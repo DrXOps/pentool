@@ -555,6 +555,7 @@ class PentoolApp(App):
         ) % (_proxy_arg, "--ignore-certificate-errors")
 
         import subprocess
+        logger.info("--real: running browser child via subprocess in executor (py=%s)", sys.executable)
         try:
             # Run the browser child SYNCHRONOUSLY in an executor thread — avoids
             # the Textual event loop entirely (Playwright/Chromium + Textual's
@@ -570,6 +571,7 @@ class PentoolApp(App):
                 ),
                 timeout=130,
             )
+            logger.info("--real: child returned rc=%s", result.returncode)
             out = (result.stdout or "").strip()
             err = (result.stderr or "").strip()
             for line in out.splitlines():
