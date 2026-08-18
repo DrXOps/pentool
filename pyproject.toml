@@ -45,6 +45,10 @@ dependencies = [
 [project.optional-dependencies]
 ai = [
     "pentool-mcp-server>=0.1.0",
+    # Playwright: headless browser for --real capture, crawler js_render and
+    # future scanner JS support. Browser binary is installed separately:
+    #   uv tool run --with playwright python -m playwright install chromium
+    "playwright>=1.40.0",
 ]
 dev = [
     "pytest>=7.4.0",
