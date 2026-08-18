@@ -488,15 +488,21 @@ class PentoolApp(App):
         self.notify(f"New project for {len(urls)} URL(s) — proxy starting. Ready to audit.", timeout=6)
 
     def _project_path_for_target(self, url: str) -> str:
-        """Build a clean .db path for a target URL, e.g. ~/.config/pentool/projects/example.com.db."""
+        """Build a clean .db path for a target URL with a date+time stamp so each
+        `pentool --url ...` run creates a fresh, uniquely-named project.
+
+        e.g. ~/.config/pentool/projects/xss-game.appspot.com_20260818_185030.db
+        """
+        from datetime import datetime
         from urllib.parse import urlparse
         host = urlparse(url if "://" in url else f"//{url}").netloc or url
         host_clean = "".join(c if (c.isalnum() or c in "._-") else "_" for c in host).strip(".")
         if not host_clean:
             host_clean = "target"
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         projects_dir = Path(self._cfg.db_path).parent / "projects"
         projects_dir.mkdir(parents=True, exist_ok=True)
-        return str(projects_dir / f"{host_clean}.db")
+        return str(projects_dir / f"{host_clean}_{stamp}.db")
 
     async def _check_for_updates(self) -> None:
         """Check for a new version in the background. Show notify if an update is available."""
