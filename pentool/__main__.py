@@ -22,6 +22,57 @@ import threading
 # features unavailable (same as if no PRO package were installed).
 _UNSAFE_SKIP_PRO_CHECK_FLAG = "--unsafe-skip-pro-compat-check"
 
+# Top-level one-shot mode flags handled by _run_target_mode (a click.group
+# can't take bare options without a subcommand, so we intercept these here).
+_URL_FLAGS = ("--url",)
+
+
+def _run_target_mode(argv: list[str]) -> None:
+    """Handle `pentool --url <url> [--headless] [--output file]`.
+
+    Headless  → run an active scan and emit a report (CI/CD).
+    Otherwise → launch the TUI pre-seeded with the URL(s).
+    """
+    urls: list[str] = []
+    headless = False
+    output: str | None = None
+
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in _URL_FLAGS:
+            if i + 1 < len(argv):
+                urls.append(argv[i + 1])
+                i += 2
+            else:
+                urls.append("")
+                i += 1
+        elif arg == "--headless":
+            headless = True
+            i += 1
+        elif arg == "--output":
+            if i + 1 < len(argv):
+                output = argv[i + 1]
+                i += 2
+            else:
+                i += 1
+        else:
+            i += 1
+
+    urls = [u for u in urls if u]
+    if not urls:
+        print("Error: --url requires at least one URL.", file=sys.stderr)
+        raise SystemExit(2)
+
+    if headless:
+        from pentool.cli.headless import run_headless_scan
+        sys.exit(run_headless_scan(urls, output))
+    else:
+        from pentool.tui.app import PentoolApp
+        app = PentoolApp()
+        app._pending_start_urls = urls
+        app.run()
+
 
 def _kill_orphaned_pentool() -> None:
     """Kill orphaned pentool processes left behind by a previous run.
@@ -79,6 +130,13 @@ def main() -> None:
     unsafe_skip_pro_check = _UNSAFE_SKIP_PRO_CHECK_FLAG in sys.argv
     if unsafe_skip_pro_check:
         sys.argv.remove(_UNSAFE_SKIP_PRO_CHECK_FLAG)
+
+    if len(sys.argv) > 1 and "--url" in sys.argv:
+        # One-shot target mode: `pentool --url <url> [--headless] [--output f]`.
+        # A click.group requires a subcommand, so top-level flags alone would
+        # die with "Missing command" — intercept them here and handle directly.
+        _run_target_mode(sys.argv[1:])
+        return
 
     if len(sys.argv) > 1:
         from pentool.cli.main import cli
