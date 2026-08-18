@@ -735,8 +735,8 @@ class AsyncSpider:
             return
 
         async with async_playwright() as pw:
-            # Firefox — lighter than Chromium, shared with --real.
-            browser = await pw.firefox.launch(headless=True)
+            # Chromium — same browser as --real, reliable proxy/JS rendering.
+            browser = await pw.chromium.launch(headless=True)
             context = await browser.new_context(
                 user_agent=self.user_agent,
                 ignore_https_errors=True,
