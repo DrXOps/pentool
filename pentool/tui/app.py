@@ -534,38 +534,46 @@ class PentoolApp(App):
 
         # Commit-ready script executed in a child process (sys.executable — the
         # same venv), so the browser runs independently of the TUI's loop.
+        # Chromium + --proxy-server (reliable for proxy interception) with
+        # --ignore-certificate-errors so it accepts our dynamic CA on HTTPS.
+        _proxy_arg = f"--proxy-server={proxy_url}"
         _script = (
             "import asyncio,sys\n"
             "async def _run():\n"
             "    from playwright.async_api import async_playwright\n"
             "    async with async_playwright() as pw:\n"
-            "        b=await pw.firefox.launch(headless=True)\n"
-            "        c=await b.new_context(proxy={'server':%r},ignore_https_errors=True)\n"
-            "        p=await c.new_page()\n"
-            "        for u in %r:\n"
+            "        b=await pw.chromium.launch(headless=True,args=[%r,%r])\n"
+            "        p=await b.new_page()\n"
+            "        for u in sys.argv[1:]:\n"
             "            try:\n"
             "                await p.goto(u,timeout=30000,wait_until='domcontentloaded')\n"
             "                print('--real child visited',u,flush=True)\n"
             "            except Exception as e:\n"
             "                print('--real child visit failed',u,repr(e),flush=True)\n"
-            "        await c.close(); await b.close()\n"
+            "        await b.close()\n"
             "asyncio.run(_run())\n"
-        ) % (proxy_url, urls)
+        ) % (_proxy_arg, "--ignore-certificate-errors")
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-c", _script,
+                sys.executable, "-c", _script, *urls,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
-            out = (stdout or b"").decode(errors="replace").strip()
-            err = (stderr or b"").decode(errors="replace").strip()
-            for line in out.splitlines():
-                logger.info("--real: %s", line)
+            # Stream child output in real time so progress is visible even if
+            # the browser is slow to start / the user closes early.
+            import io as _io
+            done, _ = await asyncio.wait_for(
+                self._pump_subprocess(proc), timeout=120
+            )
+            err = ""
             if proc.returncode != 0:
-                logger.warning("--real: child exited %s: %s", proc.returncode, err.splitlines()[-1] if err else "")
-                self.notify(f"--real: couldn't open real browser ({err.splitlines()[-1] if err else proc.returncode})",
+                try:
+                    err = (await proc.stderr.read()).decode(errors="replace") if proc.stderr else ""
+                except Exception:
+                    err = ""
+                logger.warning("--real: child exited %s: %s", proc.returncode, (err or "?").splitlines()[-1] if err else "")
+                self.notify(f"--real: couldn't open real browser (exit {proc.returncode})",
                             severity="warning", timeout=8)
             else:
                 self.call_after_refresh(self._refresh_target_tree)
@@ -575,6 +583,15 @@ class PentoolApp(App):
         except Exception as exc:
             logger.warning("--real: browser capture error: %s", exc)
             self.notify(f"--real browser error: {exc}", severity="warning", timeout=6)
+
+    async def _pump_subprocess(self, proc) -> None:
+        """Read a subprocess' stdout/stderr lines incrementally and log them."""
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            logger.info("--real: %s", line.decode(errors="replace").rstrip())
+        await asyncio.wait_for(proc.wait(), timeout=10)
 
     def _refresh_target_tree(self) -> None:
         try:
