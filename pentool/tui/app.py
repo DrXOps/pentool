@@ -480,12 +480,107 @@ class PentoolApp(App):
                 self.post_message(SendUrlToTarget(ParsedRequest(method="GET", url=url)))
             except Exception as exc:
                 logger.debug("seed url %s: %s", url, exc)
+
+        real = bool(getattr(self, "_pending_start_real", False))
+
+        # Start the proxy so --real traffic (and subsequent manual use) can be
+        # intercepted and land in the project.
+        proxy_started = False
         try:
             if not (self._proxy and self._proxy.is_running):
                 self._start_proxy()
+                proxy_started = True
         except Exception as exc:
             logger.warning("seed: proxy start failed: %s", exc)
-        self.notify(f"New project for {len(urls)} URL(s) — proxy starting. Ready to audit.", timeout=6)
+
+        if real:
+            # Actually fetch the target(s) through the proxy so real requests
+            # show up in the project (not just a dry seed entry).
+            try:
+                await self._do_real_fetch(urls)
+            except Exception as exc:
+                logger.warning("seed: real fetch failed: %s", exc)
+                self.notify(f"--real fetch failed: {exc}", severity="warning", timeout=6)
+
+        self.notify(f"New project for {len(urls)} URL(s) — {'proxy on, ready to audit' if (proxy_started or (self._proxy and self._proxy.is_running)) else 'ready to audit'}.", timeout=6)
+
+    async def _do_real_fetch(self, urls: list[str]) -> None:
+        """Fetch each URL through the running proxy so real traffic is captured.
+
+        Uses aiohttp with the proxy's CA cert trusted (verify), so HTTPS targets
+        are intercepted and their request/response land in the current project
+        via the normal proxy capture path. If aiohttp isn't available we fall
+        back to a plain Python http.client CONNECT (still through the proxy).
+        """
+        proxy_host = self._proxy.host if self._proxy else "127.0.0.1"
+        proxy_port = self._proxy.port if self._proxy else 8080
+        proxy_url = f"http://{proxy_host}:{proxy_port}"
+
+        # Wait for the proxy port to be listening (started async).
+        for _ in range(50):
+            if self._proxy and self._proxy.is_running:
+                break
+            await asyncio.sleep(0.1)
+        if not (self._proxy and self._proxy.is_running):
+            logger.info("--real: proxy not ready, skipping real fetch")
+            return
+
+        import ssl
+        from pathlib import Path as _P
+        ca_path = _P(self._cfg.cert_dir) / "ca.crt"
+        ssl_ctx = ssl.create_default_context()
+        if ca_path.exists():
+            try:
+                ssl_ctx.load_verify_locations(ca_path)
+            except Exception as exc:
+                logger.debug("--real: could not load CA %s: %s", ca_path, exc)
+
+        try:
+            import aiohttp
+        except ImportError:
+            aiohttp = None
+
+        for url in urls:
+            try:
+                if aiohttp is not None:
+                    async with aiohttp.ClientSession(ssl=ssl_ctx) as sess:
+                        async with sess.get(url, proxy=proxy_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                            await resp.text()
+                            logger.info("--real: fetched %s -> %s (via proxy)", url, resp.status)
+                else:
+                    await self._real_fetch_httpclient(url, proxy_host, proxy_port, ssl_ctx)
+            except Exception as exc:
+                logger.info("--real fetch %s failed: %s", url, exc)
+
+    async def _real_fetch_httpclient(self, url: str, host: str, port: int, ssl_ctx=None) -> None:
+        """Fallback CONNECT through the proxy without aiohttp."""
+        import asyncio  # noqa: F401
+        try:
+            loop = asyncio.get_event_loop()
+            reader, writer = await asyncio.open_connection(host, port)
+            from urllib.parse import urlparse
+            p = urlparse(url)
+            target_host = p.hostname or ""
+            target_port = p.port or (443 if p.scheme == "https" else 80)
+            writer.write(f"CONNECT {target_host}:{target_port} HTTP/1.1\r\nHost: {target_host}:{target_port}\r\n\r\n".encode())
+            await writer.drain()
+            line = (await reader.readline()).decode(errors="replace")
+            if "200" not in line:
+                writer.close()
+                return
+            # Read until 2xCRLF, then a real request over the tunnel.
+            while True:
+                l = await reader.readline()
+                if l in (b"\r\n", b"\n", b""):
+                    break
+            req = f"GET {p.path or '/'}{('?'+p.query) if p.query else ''} HTTP/1.1\r\nHost: {target_host}\r\nUser-Agent: pentool\r\n\r\n"
+            writer.write(req.encode())
+            await writer.drain()
+            await reader.read(8192)
+            writer.close()
+            logger.info("--real: CONNECT+GET through proxy to %s", url)
+        except Exception as exc:
+            logger.debug("_real_fetch_httpclient: %s", exc)
 
     def _project_path_for_target(self, url: str) -> str:
         """Build a clean .db path for a target URL with a date+time stamp so each

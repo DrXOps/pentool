@@ -28,13 +28,16 @@ _URL_FLAGS = ("--url",)
 
 
 def _run_target_mode(argv: list[str]) -> None:
-    """Handle `pentool --url <url> [--headless] [--output file]`.
+    """Handle `pentool --url <url> [--headless] [--output file] [--real]`.
 
-    Headless  → run an active scan and emit a report (CI/CD).
-    Otherwise → launch the TUI pre-seeded with the URL(s).
+    Headless       → run an active scan and emit a report (CI/CD).
+    --real         → launch the TUI, proxy on, and actually fetch the target
+                     through the proxy so real traffic lands in the project.
+    Otherwise      → launch the TUI pre-seeded with the URL(s).
     """
     urls: list[str] = []
     headless = False
+    real = False
     output: str | None = None
 
     i = 0
@@ -49,6 +52,9 @@ def _run_target_mode(argv: list[str]) -> None:
                 i += 1
         elif arg == "--headless":
             headless = True
+            i += 1
+        elif arg == "--real":
+            real = True
             i += 1
         elif arg == "--output":
             if i + 1 < len(argv):
@@ -71,6 +77,7 @@ def _run_target_mode(argv: list[str]) -> None:
         from pentool.tui.app import PentoolApp
         app = PentoolApp()
         app._pending_start_urls = urls
+        app._pending_start_real = real
         app.run()
 
 
