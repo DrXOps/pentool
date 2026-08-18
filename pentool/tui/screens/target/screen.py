@@ -390,24 +390,35 @@ class TargetScreen(Widget):
         total_errors = 0
         api = self._get_api()
         db_path = getattr(self.app, "db_path", "") or getattr(self.app, "_db_path", "")
+
+        def _on_page_async(url: str) -> None:
+            """Lazy feed: each discovered URL lands in the Site Map tree
+            immediately (not once the whole crawl finishes). Runs in the async
+            worker's loop alongside the crawl."""
+            try:
+                from pentool.utils.parser import ParsedRequest
+                api.add_request(ParsedRequest(method="GET", url=url))
+            except Exception as exc:
+                logger.debug("lazy add %s: %s", url, exc)
+            try:
+                self.call_after_refresh(self._refresh_tree)
+            except Exception:
+                pass
+
         try:
             for host in hosts:
                 url = host if "://" in host else f"https://{host}"
-                spider = SpiderAPI(config=SpiderConfig(respect_scope=False))
+                # respect_scope defaults True — stay on the target host/subdomains,
+                # never crawl external links.
+                spider = SpiderAPI(config=SpiderConfig())
                 try:
-                    result = await spider.crawl(url, db_path=db_path)
+                    result = await spider.crawl(url, db_path=db_path, on_page=_on_page_async)
                 except Exception as exc:
                     logger.warning("action_crawl_scope: crawl failed for %s: %s", host, exc)
                     total_errors += 1
                     continue
                 total_pages += len(result.pages)
                 total_errors += len(result.errors)
-                for page_url in result.pages:
-                    try:
-                        from pentool.utils.parser import ParsedRequest
-                        api.add_request(ParsedRequest(method="GET", url=page_url))
-                    except Exception as exc:
-                        logger.debug("action_crawl_scope: failed to add %s: %s", page_url, exc)
                 if use_ai:
                     ai_added = await self._ai_suggest_endpoints(api, url)
                     if ai_added:
