@@ -15,10 +15,17 @@ from pentool.modules.spider import (
     SpiderForm,
     SpiderResult,
     is_playwright_available,
+    shutdown_proc_pool,
 )
 from pentool.utils.auth_headers import extract_auth_headers
 
 logger = get_logger(__name__)
+
+
+def shutdown_spider_pool() -> None:
+    """API-level wrapper so the TUI can shut the Spider CPU pool down without
+    importing ``pentool.modules`` directly (architecture layer rule)."""
+    shutdown_proc_pool()
 
 # Re-export types — TUI uses them from here
 __all__ = [

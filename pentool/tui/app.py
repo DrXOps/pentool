@@ -1670,8 +1670,8 @@ class PentoolApp(App):
         # with "address already in use". shutdown_proc_pool() terminates them
         # cleanly so the port is released on a normal quit.
         try:
-            from pentool.modules.spider import shutdown_proc_pool
-            shutdown_proc_pool()
+            from pentool.api.spider_api import shutdown_spider_pool
+            shutdown_spider_pool()
         except Exception:
             pass
         self.exit()
