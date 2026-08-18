@@ -538,18 +538,16 @@ class PentoolApp(App):
 
         proxy_host = self._proxy.host or "127.0.0.1"
         proxy_port = self._proxy.port or 8080
-        proxy_arg = f"--proxy-server=http://{proxy_host}:{proxy_port}"
+        proxy_url = f"http://{proxy_host}:{proxy_port}"
 
         try:
             async with async_playwright() as pw:
-                browser = await pw.chromium.launch(
-                    headless=True,
-                    args=[proxy_arg],
-                )
+                # Firefox by default (user picked Firefox — lighter than Chromium).
+                browser = await pw.firefox.launch(headless=True)
                 context = await browser.new_context(
+                    # Route the browser through our proxy → real MITM capture.
+                    proxy={"server": proxy_url},
                     ignore_https_errors=True,
-                    user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                                "(KHTML, like Gecko) Chrome/126.0 Safari/537.36 pentool/--real",
                 )
                 page = await context.new_page()
                 for url in urls:
