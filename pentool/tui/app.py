@@ -501,41 +501,51 @@ class PentoolApp(App):
             # show up in the project (not just a dry seed entry).
             try:
                 logger.info("--real: calling _do_real_fetch for %s", urls)
-                await self._do_real_fetch(urls)
+                # Run the WHOLE browser fetch in an executor thread (time.sleep,
+                # subprocess.run) — Textual's loop doesn't pump `await
+                # asyncio.sleep()` inside this worker, which hung the old async
+                # wait-loop and produced zero logs/children.
+                loop = asyncio.get_running_loop()
+                ok = await asyncio.wait_for(
+                    loop.run_in_executor(None, self._do_real_fetch_sync, urls), timeout=140
+                )
+                logger.info("--real: fetch done ok=%s", ok)
+                if ok:
+                    self.call_after_refresh(self._refresh_target_tree)
+                else:
+                    self.notify("--real: browser fetch didn't capture traffic", severity="warning", timeout=6)
             except Exception as exc:
                 logger.warning("seed: real fetch failed: %s", exc)
                 self.notify(f"--real fetch failed: {exc}", severity="warning", timeout=6)
 
         self.notify(f"New project for {len(urls)} URL(s) — {'proxy on, ready to audit' if (proxy_started or (self._proxy and self._proxy.is_running)) else 'ready to audit'}.", timeout=6)
 
-    async def _do_real_fetch(self, urls: list[str]) -> None:
-        """Fetch each URL with a real headless browser THROUGH the running proxy.
+    def _do_real_fetch_sync(self, urls: list[str]) -> bool:
+        """Fetch each URL with a real headless Chrome THROUGH the proxy.
 
-        Runs Playwright/Firefox in a SEPARATE subprocess — not inside the Textual
-        event loop, which can conflict with Playwright's own driver/loop and hang
-        (which is why the earlier in-loop version captured nothing). The child
-        process points Firefox at our proxy; ProxyServer's MITM captures the real
-        request into HTTP History + Target automatically.
-
-        Requires Playwright + a browser install in the child's Python env.
+        Runs entirely in an executor thread (no asyncio/Textual-loop primitives —
+        `time.sleep` only), so Textual's worker can never hang on `await
+        asyncio.sleep()`. Launches a child process that points Chromium at our
+        proxy; ProxyServer's MITM captures the real request into HTTP History +
+        Target automatically. Returns whether the browser reached the target.
         """
-        # The proxy starts async via _start_proxy — wait up to ~5s for it.
-        for _ in range(50):
-            if self._proxy and self._proxy.is_running:
+        import subprocess
+        import time
+
+        # The proxy starts async via _start_proxy — wait up to ~10s (time.sleep).
+        waited = 0
+        while not (self._proxy and self._proxy.is_running):
+            time.sleep(0.2)
+            waited += 0.2
+            if waited >= 10:
                 break
-            await asyncio.sleep(0.1)
         if not (self._proxy and self._proxy.is_running):
-            logger.info("--real: proxy not ready, cannot do a real browser fetch")
-            return
+            logger.info("--real: proxy not ready after %.1fs, cannot fetch", waited)
+            return False
 
         proxy_host = self._proxy.host or "127.0.0.1"
         proxy_port = self._proxy.port or 8080
         proxy_url = f"http://{proxy_host}:{proxy_port}"
-
-        # Commit-ready script executed in a child process (sys.executable — the
-        # same venv), so the browser runs independently of the TUI's loop.
-        # Chromium + --proxy-server (reliable for proxy interception) with
-        # --ignore-certificate-errors so it accepts our dynamic CA on HTTPS.
         _proxy_arg = f"--proxy-server={proxy_url}"
         _script = (
             "import asyncio,sys\n"
@@ -554,22 +564,11 @@ class PentoolApp(App):
             "asyncio.run(_run())\n"
         ) % (_proxy_arg, "--ignore-certificate-errors")
 
-        import subprocess
         logger.info("--real: running browser child via subprocess in executor (py=%s)", sys.executable)
         try:
-            # Run the browser child SYNCHRONOUSLY in an executor thread — avoids
-            # the Textual event loop entirely (Playwright/Chromium + Textual's
-            # loop were fighting, leaving --real frozen with no child output).
-            loop = asyncio.get_running_loop()
-            result = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: subprocess.run(
-                        [sys.executable, "-c", _script, *urls],
-                        capture_output=True, text=True, timeout=120,
-                    ),
-                ),
-                timeout=130,
+            result = subprocess.run(
+                [sys.executable, "-c", _script, *urls],
+                capture_output=True, text=True, timeout=120,
             )
             logger.info("--real: child returned rc=%s", result.returncode)
             out = (result.stdout or "").strip()
@@ -579,16 +578,14 @@ class PentoolApp(App):
             if result.returncode != 0:
                 logger.warning("--real: child exited %s: %s",
                                result.returncode, (err.splitlines()[-1] if err else ""))
-                self.notify(f"--real: couldn't open real browser (exit {result.returncode})",
-                            severity="warning", timeout=8)
-            else:
-                self.call_after_refresh(self._refresh_target_tree)
-        except asyncio.TimeoutError:
+                return False
+            return "--real child visited" in out
+        except subprocess.TimeoutExpired:
             logger.warning("--real: child timed out")
-            self.notify("--real: browser fetch timed out", severity="warning", timeout=6)
+            return False
         except Exception as exc:
             logger.warning("--real: browser capture error: %s", exc)
-            self.notify(f"--real browser error: {exc}", severity="warning", timeout=6)
+            return False
 
     def _refresh_target_tree(self) -> None:
         try:
