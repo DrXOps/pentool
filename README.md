@@ -81,9 +81,13 @@ can start auditing immediately. No lag, no heavy setup.
 # Install (recommended — isolated, single command)
 uv tool install pentool
 
-# Launch TUI and auto-setup a target: proxy on, CA cert generated + imported
-# into a headless browser, project ready with one request logged
+# Launch the TUI with a new project for the target (host pre-seeded)
 pentool --url https://example.com
+
+# Same, but actually load the target in a headless browser THROUGH the proxy,
+# so real traffic lands in HTTP History + Target (needs Playwright/Chromium)
+# install:  uv tool run --with playwright python -m playwright install chromium
+pentool --url https://example.com --real
 
 # Headless scan — perfect for CI/CD (GitLab CI, GitHub Actions, Jenkins)
 pentool --url https://example.com --headless --output result.json
