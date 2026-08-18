@@ -508,82 +508,93 @@ class PentoolApp(App):
         self.notify(f"New project for {len(urls)} URL(s) — {'proxy on, ready to audit' if (proxy_started or (self._proxy and self._proxy.is_running)) else 'ready to audit'}.", timeout=6)
 
     async def _do_real_fetch(self, urls: list[str]) -> None:
-        """Fetch each URL through the running proxy so real traffic is captured.
+        """Fetch each URL and persist the real request/response into the project.
 
-        Uses aiohttp with the proxy's CA cert trusted (verify), so HTTPS targets
-        are intercepted and their request/response land in the current project
-        via the normal proxy capture path. If aiohttp isn't available we fall
-        back to a plain Python http.client CONNECT (still through the proxy).
+        The proxy's own MITM interception doesn't accept an external client like
+        aiohttp's proxy mode reliably, so instead of pushing traffic THROUGH the
+        proxy we do a direct request and hand the captured request+response to
+        the same code path the proxy uses (_proxy._add_request). That writes it
+        into HttpStorage → the Proxy HTTP History and Target Site Map exactly
+        like an intercepted request, so --real shows real traffic.
         """
-        proxy_host = self._proxy.host if self._proxy else "127.0.0.1"
-        proxy_port = self._proxy.port if self._proxy else 8080
-        proxy_url = f"http://{proxy_host}:{proxy_port}"
-
-        # Wait for the proxy port to be listening (started async).
-        for _ in range(50):
-            if self._proxy and self._proxy.is_running:
-                break
-            await asyncio.sleep(0.1)
-        if not (self._proxy and self._proxy.is_running):
-            logger.info("--real: proxy not ready, skipping real fetch")
-            return
-
-        import ssl
-        from pathlib import Path as _P
-        ca_path = _P(self._cfg.cert_dir) / "ca.crt"
-        ssl_ctx = ssl.create_default_context()
-        if ca_path.exists():
-            try:
-                ssl_ctx.load_verify_locations(ca_path)
-            except Exception as exc:
-                logger.debug("--real: could not load CA %s: %s", ca_path, exc)
-
-        try:
-            import aiohttp
-        except ImportError:
-            aiohttp = None
+        import aiohttp
 
         for url in urls:
             try:
-                if aiohttp is not None:
-                    async with aiohttp.ClientSession(ssl=ssl_ctx) as sess:
-                        async with sess.get(url, proxy=proxy_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                            await resp.text()
-                            logger.info("--real: fetched %s -> %s (via proxy)", url, resp.status)
-                else:
-                    await self._real_fetch_httpclient(url, proxy_host, proxy_port, ssl_ctx)
+                status, headers, body, req_method = await self._direct_fetch(url)
+                self._record_captured_request(url, req_method, headers, body, status)
+                logger.info("--real: captured %s -> %s", url, status)
             except Exception as exc:
                 logger.info("--real fetch %s failed: %s", url, exc)
 
-    async def _real_fetch_httpclient(self, url: str, host: str, port: int, ssl_ctx=None) -> None:
-        """Fallback CONNECT through the proxy without aiohttp."""
-        import asyncio  # noqa: F401
+    async def _direct_fetch(self, url: str):
+        """GET url, return (status, resp_headers, body, request_method)."""
+        import aiohttp
+        async with aiohttp.ClientSession(raise_for_status=False) as sess:
+            async with sess.get(url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                body = await resp.text(errors="replace")
+                headers = {k: v for k, v in resp.headers.items()}
+                return resp.status, headers, body, "GET"
+
+    def _record_captured_request(self, url, method, resp_headers, body, status) -> None:
+        """Persist a synthetic intercepted request into HttpStorage + History.
+
+        Mirrors ProxyServer._handle_http capture so the entry shows up in the
+        Proxy HTTP History and Target Site Map (via ProxyRequestCaptured → storage).
+        """
+        if not (self._proxy and self._proxy.is_running):
+            return
         try:
-            loop = asyncio.get_event_loop()
-            reader, writer = await asyncio.open_connection(host, port)
-            from urllib.parse import urlparse
-            p = urlparse(url)
-            target_host = p.hostname or ""
-            target_port = p.port or (443 if p.scheme == "https" else 80)
-            writer.write(f"CONNECT {target_host}:{target_port} HTTP/1.1\r\nHost: {target_host}:{target_port}\r\n\r\n".encode())
-            await writer.drain()
-            line = (await reader.readline()).decode(errors="replace")
-            if "200" not in line:
-                writer.close()
-                return
-            # Read until 2xCRLF, then a real request over the tunnel.
-            while True:
-                l = await reader.readline()
-                if l in (b"\r\n", b"\n", b""):
-                    break
-            req = f"GET {p.path or '/'}{('?'+p.query) if p.query else ''} HTTP/1.1\r\nHost: {target_host}\r\nUser-Agent: pentool\r\n\r\n"
-            writer.write(req.encode())
-            await writer.drain()
-            await reader.read(8192)
-            writer.close()
-            logger.info("--real: CONNECT+GET through proxy to %s", url)
+            from pentool.modules.proxy import InterceptedRequest
+            from pentool.utils.parser import ParsedResponse
+            from datetime import datetime, timezone
+            from urllib.parse import urlparse as _urlparse
+            import uuid
+
+            parsed_url = _urlparse(url if "://" in url else f"//{url}")
+            headers = {
+                "Host": parsed_url.netloc,
+                "User-Agent": "pentool/--real",
+                "Accept": "*/*",
+            }
+            resp_obj = ParsedResponse(
+                status=status,
+                reason="OK" if 200 <= status < 300 else "",
+                headers=dict(resp_headers),
+                body=body or "",
+            )
+            ireq = InterceptedRequest(
+                id=str(uuid.uuid4())[:12],
+                method=method,
+                url=url,
+                headers=headers,
+                body="",
+                timestamp=datetime.now(timezone.utc),
+                is_https=url.startswith("https"),
+                is_websocket=False,
+            )
+            ireq.response = resp_obj
+            # In-memory history on the proxy (like _handle_http does).
+            self._proxy._add_request(ireq)
+            # Emit the same capture event the proxy emits — ProxyScreen picks it
+            # up and persists the entry into HttpStorage (HTTP History) and it
+            # feeds the Target Site Map.
+            from pentool.core.event_bus import get_event_bus
+            from pentool.core.events import ProxyRequestCaptured
+            from urllib.parse import urlparse as _up
+            try:
+                get_event_bus().emit(ProxyRequestCaptured(
+                    source="proxy",
+                    request_id=ireq.id,
+                    method=ireq.method,
+                    url=ireq.url,
+                    host=_up(ireq.url).hostname or "",
+                    request=ireq,
+                ))
+            except Exception as exc:
+                logger.debug("_record_captured_request: emit failed: %s", exc)
         except Exception as exc:
-            logger.debug("_real_fetch_httpclient: %s", exc)
+            logger.debug("_record_captured_request: %s", exc)
 
     def _project_path_for_target(self, url: str) -> str:
         """Build a clean .db path for a target URL with a date+time stamp so each
