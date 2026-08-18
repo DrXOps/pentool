@@ -1,6 +1,7 @@
-# 🔒 Pentool — Professional TUI Web Pentesting Toolkit
+# ⚡ Pentool — AI-Powered Web Pentesting, Right in Your Terminal
 
-> **🚧 Active Development — Public Demo/Beta.** Core modules are stable and fully usable. PRO features are under active development. Feedback and bug reports are welcome.
+> **Fast, easy, lightweight.** An AI assistant drives your pentest in the terminal —
+> picks the right checks, bypasses WAF, finds hidden endpoints. No heavy IDE, no lag.
 
 [![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
@@ -12,48 +13,25 @@
 
 ---
 
-## 💸 Support & Pricing
-
-> Pentool is open-source and free to use. If it saves you time on a pentest — consider supporting development.  
-> Full pricing details and sponsorship options: **[pentool.pro](https://pentool.pro)**
-
-| | | |
-|---|---|---|
-| ⭐ **Sponsor (individual)** | **$5** one-time or /month | [Sponsor on GitHub](https://github.com/sponsors/DrXOps) |
-| 🏢 **Sponsor (company)** | **$50** one-time or /month | Logo in README + website · [pentool.pro](https://pentool.pro) |
-| 🔑 **PRO License — Early Access** | **$29** *(beta price, until Dec 31 2026)* | After release: $99/year |
-
-> **🎁 Beta loyalty discount:** Everyone who buys PRO for $29 gets a **lifetime 50% discount on annual renewal** (i.e. $49.50/year instead of $99).  
-> This discount applies **only to first buyers during the beta — until December 31, 2026**.
-
-**PRO license is issued manually during beta.**  
-To purchase, contact: **[@sudores](https://t.me/sudores)** (Telegram) · **dev@pentool.pro**
-
----
-
-**Pentool** is a terminal-based (TUI) security toolkit for penetration testers and security researchers.  
-It combines HTTP interception, vulnerability scanning, automated attacks, and data analysis — all inside your terminal.  
+Pentool is a **terminal-based (TUI) security toolkit** for penetration testers and security researchers.  
+It combines HTTP interception, vulnerability scanning, automated attacks, AI assistance, and data analysis — all inside your terminal.  
 Fast, transparent, and built for real-world testing.
+
+**Your AI in the loop:** point it at a URL once and Pentool spins up the proxy, generates + imports
+a trusted CA cert into a headless browser, sends the first request, and fills the project — so you
+can start auditing immediately. No lag, no heavy setup.
 
 > ⚠️ **Use a modern terminal emulator.** Pentool's TUI relies on mouse support, true color, and modern rendering (built on the [Textual](https://github.com/Textualize/textual) framework). Legacy terminals (e.g. Windows `cmd.exe`) will render incorrectly. Recommended: **Windows Terminal**, **iTerm2** (macOS), **GNOME Terminal / Kitty / Alacritty / WezTerm** (Linux). On Windows, running inside **WSL** gives the best experience.
 
 ---
 
-## 📸 Screenshots
+## 🎬 Overview
 
-| Dashboard | Scanner |
-|:---------:|:-------:|
-| ![Dashboard](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/dashboard.png) | ![Scanner](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/scaner.png) |
-
-| Proxy | Repeater |
-|:-----:|:--------:|
-| ![Proxy](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/proxy.png) | ![Repeater](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/repeater.png) |
-
-| Intruder | Settings |
-|:--------:|:--------:|
-| ![Intruder](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/intruder.png) | ![Settings](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/settings.png) |
+![Pentool demo](https://raw.githubusercontent.com/DrXOps/pentool/main/screens/pentool_demo.gif)
 
 ---
+
+
 
 ## ✨ Features
 
@@ -103,21 +81,17 @@ Fast, transparent, and built for real-world testing.
 # Install (recommended — isolated, single command)
 uv tool install pentool
 
-# Alternative: pip still works
-# pip install pentool
+# Launch TUI and auto-setup a target: proxy on, CA cert generated + imported
+# into a headless browser, project ready with one request logged
+pentool --url https://example.com
 
-# Start a 14-day PRO trial (unlocks Scanner + other PRO features)
-# Run this BEFORE first launching the TUI — if the TUI is already open,
-# restart it afterwards so it picks up the new license.
-pentool license trial
-
-# Launch TUI
-pentool
+# Headless scan — perfect for CI/CD (GitLab CI, GitHub Actions, Jenkins)
+pentool --url https://example.com --headless --output result.json
 
 # Start proxy on custom port
 pentool proxy start --port 8080
 
-# Active scan
+# Active scan (CLI)
 pentool scan active --url https://example.com
 
 # Check for updates
@@ -126,6 +100,21 @@ pentool update --check
 
 ---
 
+## 🤖 CI/CD — headless security checks
+
+For automation, run Pentool **without the TUI** and get a JSON audit report:
+
+```bash
+pentool --url https://example.com --headless --output result.json
+```
+
+- Emits findings as machine-readable JSON for later audit / dashboards.
+- Works in **GitLab CI, GitHub Actions, Jenkins**, cron jobs, or any script.
+- No display, no terminal, no interaction required.
+
+Full examples and a ready-to-copy GitHub Actions / GitLab CI template —
+see the **[CI/CD Guide](docs/i18n/en/CI_CD.md)**.
+
 ---
 
 ## 📚 Documentation
@@ -133,6 +122,7 @@ pentool update --check
 - [🚀 First Run: Certificate & First Intercept](docs/i18n/en/FIRST_RUN.md) — start here
 - [Quick Start Guide](docs/i18n/en/QUICKSTART.md)
 - [User Guide](docs/i18n/en/USER_GUIDE.md)
+- [CI/CD Guide (headless)](docs/i18n/en/CI_CD.md)
 - [Installation](docs/i18n/en/INSTALLATION.md)
 - [Plugin Development](docs/i18n/en/PLUGIN_DEVELOPMENT.md)
 - [Plugin API Reference](docs/API_CONTRACTS.md)

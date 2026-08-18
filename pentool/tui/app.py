@@ -424,6 +424,12 @@ class PentoolApp(App):
         # Auto-open last project at startup
         self.run_worker(self._auto_open_last_project(), exclusive=False, thread=False)
 
+        # Seed target URL(s) passed via `pentool --url ...` — proxy on, target
+        # populated, ready to audit (see cli/main.py launch-tui branch).
+        pending = getattr(self, "_pending_start_urls", None)
+        if pending:
+            self.run_worker(self._seed_pending_urls(list(pending)), exclusive=False, thread=False)
+
         # Check for updates in background (if enabled in settings)
         if getattr(self._cfg, "check_updates", True):
             self.run_worker(self._check_for_updates(), exclusive=False, thread=False)
@@ -447,6 +453,28 @@ class PentoolApp(App):
         logger.info("APP: auto-opening last project: %s", path)
         # Use the same exclusive worker path as manual open — no races
         self._pm.switch_project_db(path, is_new=False)
+
+    async def _seed_pending_urls(self, urls: list[str]) -> None:
+        """Seed targets passed via `pentool --url ...` (launch-TUI branch).
+
+        Starts the proxy (CA cert is pre-warmed on mount) and populates the
+        Target / Site Map with each URL, so the user lands on a ready project.
+        Headless-browser import + issueing the first request is part of the
+        interactive auto-setup feature (roadmap) — see docs/i18n/en/CI_CD.md.
+        """
+        await asyncio.sleep(0.6)  # let the TUI render first
+        for url in urls:
+            try:
+                from pentool.utils.parser import ParsedRequest
+                self.post_message(SendUrlToTarget(ParsedRequest(method="GET", url=url)))
+            except Exception as exc:
+                logger.debug("seed url %s: %s", url, exc)
+        try:
+            if not (self._proxy and self._proxy.is_running):
+                self._start_proxy()
+        except Exception as exc:
+            logger.warning("seed: proxy start failed: %s", exc)
+        self.notify(f"Targeted {len(urls)} URL(s) — proxy starting. Ready to audit.", timeout=6)
 
     async def _check_for_updates(self) -> None:
         """Check for a new version in the background. Show notify if an update is available."""

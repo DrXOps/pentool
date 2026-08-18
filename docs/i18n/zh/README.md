@@ -1,6 +1,7 @@
-# 🔒 Pentool — 专业的 Web 渗透测试 TUI 工具包
+# ⚡ Pentool — AI 驱动的终端渗透测试
 
-> **🚧 积极开发中 — 公开演示/测试版。** 核心模块稳定且完全可用。PRO 功能正在积极开发中。欢迎反馈和错误报告。
+> **快速、简单、不卡顿。** AI 助手在终端中驱动你的渗透测试 — 挑选合适的检测、
+> 绕过 WAF、发现隐藏端点。无需重型 IDE，不卡不拖。
 
 [![PyPI version](https://img.shields.io/pypi/v/pentool)](https://pypi.org/project/pentool/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pentool)](https://pypi.org/project/pentool/)
@@ -13,8 +14,14 @@
 ---
 
 **Pentool** 是一款基于终端界面（TUI）的 Web 安全测试工具，专为渗透测试人员和安全研究人员设计。  
-它将 HTTP 拦截、漏洞扫描、自动化攻击和数据分析集成于一个终端中。  
+它将 HTTP 拦截、漏洞扫描、AI 助手、自动化攻击和数据分析集成于一个终端中。  
 高效、透明、专为实战设计。
+
+**你的 AI 随时待命：** 只需指定一个 URL — Pentool 自动启动代理、生成并导入可信
+CA 证书到无头浏览器、发送首个请求并填充项目，即可立即开始审计。快速、轻松。
+
+**CI/CD（无 TUI）：** `pentool --url https://example.com --headless --output result.json` —
+可嵌入任何流水线。参见 [CI/CD 指南](../en/CI_CD.md)。
 
 > ⚠️ **请使用现代终端模拟器。** Pentool 的 TUI 基于 [Textual](https://github.com/Textualize/textual) 框架构建，依赖鼠标支持、真彩色和现代渲染。传统终端（如 Windows 的 `cmd.exe`）会显示异常。推荐使用：**Windows Terminal**、**iTerm2**（macOS）、**GNOME Terminal / Kitty / Alacritty / WezTerm**（Linux）。在 Windows 上，在 **WSL** 中运行可获得最佳体验。
 

@@ -12,8 +12,12 @@ from pentool.core.logging import setup_logging
 @click.version_option(package_name="pentool")
 @click.option("--config", "config_path", default=None, help="Path to the configuration file.")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Verbose output (DEBUG).")
+@click.option("--url", "cli_urls", multiple=True, default=None, help="Target URL(s). With --headless runs a headless scan; without, launches the TUI pre-seeded with this URL.")
+@click.option("--headless", is_flag=True, default=False, help="Run without the TUI (headless), for CI/CD automation.")
+@click.option("--output", "cli_output", default=None, help="Save headless findings to file (.json / .html / .csv). Requires --headless.")
 @click.pass_context
-def cli(ctx: click.Context, config_path: str | None, verbose: bool) -> None:
+def cli(ctx: click.Context, config_path: str | None, verbose: bool,
+        cli_urls: tuple[str, ...] | None, headless: bool, cli_output: str | None) -> None:
     """Pentool — a command-line tool for web application penetration testing.
 
     Run without arguments to open the TUI:
@@ -21,6 +25,10 @@ def cli(ctx: click.Context, config_path: str | None, verbose: bool) -> None:
         pentool
 
     Or use the commands below for command-line usage.
+
+    One-shot / CI/CD:
+
+        pentool --url https://example.com --headless --output result.json
     """
     ctx.ensure_object(dict)
 
@@ -33,6 +41,22 @@ def cli(ctx: click.Context, config_path: str | None, verbose: bool) -> None:
     setup_logging(cfg.log_file, log_level)
 
     ctx.obj["config"] = cfg
+
+    if cli_urls:
+        urls = list(cli_urls)
+        if headless:
+            from pentool.cli.headless import run_headless_scan
+            run_headless_scan(urls, cli_output)
+        else:
+            # Launch the TUI pre-seeded with the given URL(s). The proxy starts,
+            # a CA cert is generated/imported into a headless browser, and the
+            # first request is sent so the user lands on a ready project.
+            # (Full auto-setup is part of the interactive-mode feature; for now
+            # the URL is handed to the running app as a pending target.)
+            from pentool.tui.app import PentoolApp
+            app = PentoolApp()
+            app._pending_start_urls = urls
+            app.run()
 
 
 # Import and register command groups
