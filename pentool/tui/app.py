@@ -6,6 +6,7 @@ import asyncio
 import os
 import signal
 import threading
+from pathlib import Path
 
 from textual import on
 from textual.app import App, ComposeResult
@@ -421,14 +422,15 @@ class PentoolApp(App):
         # Lock Scanner tab if no valid license with scanner_pro feature
         self._refresh_scanner_tab_lock()
 
-        # Auto-open last project at startup
-        self.run_worker(self._auto_open_last_project(), exclusive=False, thread=False)
-
-        # Seed target URL(s) passed via `pentool --url ...` — proxy on, target
-        # populated, ready to audit (see cli/main.py launch-tui branch).
+        # Seed target URL(s) passed via `pentool --url ...` — a NEW project for
+        # the target is created, proxy on, target populated, ready to audit.
+        # When --url is given we do NOT auto-open the last project.
         pending = getattr(self, "_pending_start_urls", None)
         if pending:
             self.run_worker(self._seed_pending_urls(list(pending)), exclusive=False, thread=False)
+        else:
+            # Auto-open last project at startup (no arguments)
+            self.run_worker(self._auto_open_last_project(), exclusive=False, thread=False)
 
         # Check for updates in background (if enabled in settings)
         if getattr(self._cfg, "check_updates", True):
@@ -458,11 +460,20 @@ class PentoolApp(App):
         """Seed targets passed via `pentool --url ...` (launch-TUI branch).
 
         Starts the proxy (CA cert is pre-warmed on mount) and populates the
-        Target / Site Map with each URL, so the user lands on a ready project.
-        Headless-browser import + issueing the first request is part of the
-        interactive auto-setup feature (roadmap) — see docs/i18n/en/CI_CD.md.
+        Target / Site Map with each URL, so the user lands on a NEW project for
+        the target (rather than the last-used project). Headless-browser import
+        + issuing the first request is part of the interactive auto-setup
+        feature (roadmap) — see docs/i18n/en/CI_CD.md.
         """
         await asyncio.sleep(0.6)  # let the TUI render first
+
+        # Create a NEW project for this target (do not reuse the last project).
+        try:
+            new_path = self._project_path_for_target(urls[0])
+            self._pm.switch_project_db(new_path, is_new=True)
+        except Exception as exc:
+            logger.warning("seed: new project create failed: %s", exc)
+
         for url in urls:
             try:
                 from pentool.utils.parser import ParsedRequest
@@ -474,7 +485,18 @@ class PentoolApp(App):
                 self._start_proxy()
         except Exception as exc:
             logger.warning("seed: proxy start failed: %s", exc)
-        self.notify(f"Targeted {len(urls)} URL(s) — proxy starting. Ready to audit.", timeout=6)
+        self.notify(f"New project for {len(urls)} URL(s) — proxy starting. Ready to audit.", timeout=6)
+
+    def _project_path_for_target(self, url: str) -> str:
+        """Build a clean .db path for a target URL, e.g. ~/.config/pentool/projects/example.com.db."""
+        from urllib.parse import urlparse
+        host = urlparse(url if "://" in url else f"//{url}").netloc or url
+        host_clean = "".join(c if (c.isalnum() or c in "._-") else "_" for c in host).strip(".")
+        if not host_clean:
+            host_clean = "target"
+        projects_dir = Path(self._cfg.db_path).parent / "projects"
+        projects_dir.mkdir(parents=True, exist_ok=True)
+        return str(projects_dir / f"{host_clean}.db")
 
     async def _check_for_updates(self) -> None:
         """Check for a new version in the background. Show notify if an update is available."""
