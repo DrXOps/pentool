@@ -510,18 +510,22 @@ class PentoolApp(App):
     async def _do_real_fetch(self, urls: list[str]) -> None:
         """Fetch each URL with a real headless browser THROUGH the running proxy.
 
-        This is a genuine interception: a headless Chromium (Playwright) is told
-        to use our proxy (--proxy-server) and to not fail on the proxy's dynamic
-        CA cert (ignore_https_errors). The request therefore really passes
-        through ProxyServer's MITM, which captures it into HTTP History and
-        Target Site Map automatically — not a synthetic re-injection.
+        This is a genuine interception: a headless Firefox (Playwright) is told
+        to use our proxy (browser.new_context(proxy=...)) and to not fail on the
+        proxy's dynamic CA cert (ignore_https_errors). The request therefore
+        really passes through ProxyServer's MITM, which captures it into HTTP
+        History and Target Site Map automatically — not a synthetic re-injection.
 
-        Requires Playwright + a Chromium browser. If they aren't installed we
-        fail loudly (no fake capture): installing a browser is a deliberate,
-        large step the user should opt into.
+        Requires Playwright + a browser. The proxy starts asynchronously, so we
+        wait for it to be ready before launching the browser.
         """
+        # The proxy starts async via _start_proxy — wait up to ~5s for it.
+        for _ in range(50):
+            if self._proxy and self._proxy.is_running:
+                break
+            await asyncio.sleep(0.1)
         if not (self._proxy and self._proxy.is_running):
-            logger.info("--real: proxy not running, cannot do a real browser fetch")
+            logger.info("--real: proxy not ready, cannot do a real browser fetch")
             return
 
         try:
