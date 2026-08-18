@@ -554,26 +554,30 @@ class PentoolApp(App):
             "asyncio.run(_run())\n"
         ) % (_proxy_arg, "--ignore-certificate-errors")
 
+        import subprocess
         try:
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-c", _script, *urls,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            # Run the browser child SYNCHRONOUSLY in an executor thread — avoids
+            # the Textual event loop entirely (Playwright/Chromium + Textual's
+            # loop were fighting, leaving --real frozen with no child output).
+            loop = asyncio.get_running_loop()
+            result = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: subprocess.run(
+                        [sys.executable, "-c", _script, *urls],
+                        capture_output=True, text=True, timeout=120,
+                    ),
+                ),
+                timeout=130,
             )
-            # Stream child output in real time so progress is visible even if
-            # the browser is slow to start / the user closes early.
-            import io as _io
-            done, _ = await asyncio.wait_for(
-                self._pump_subprocess(proc), timeout=120
-            )
-            err = ""
-            if proc.returncode != 0:
-                try:
-                    err = (await proc.stderr.read()).decode(errors="replace") if proc.stderr else ""
-                except Exception:
-                    err = ""
-                logger.warning("--real: child exited %s: %s", proc.returncode, (err or "?").splitlines()[-1] if err else "")
-                self.notify(f"--real: couldn't open real browser (exit {proc.returncode})",
+            out = (result.stdout or "").strip()
+            err = (result.stderr or "").strip()
+            for line in out.splitlines():
+                logger.info("--real: %s", line)
+            if result.returncode != 0:
+                logger.warning("--real: child exited %s: %s",
+                               result.returncode, (err.splitlines()[-1] if err else ""))
+                self.notify(f"--real: couldn't open real browser (exit {result.returncode})",
                             severity="warning", timeout=8)
             else:
                 self.call_after_refresh(self._refresh_target_tree)
@@ -583,15 +587,6 @@ class PentoolApp(App):
         except Exception as exc:
             logger.warning("--real: browser capture error: %s", exc)
             self.notify(f"--real browser error: {exc}", severity="warning", timeout=6)
-
-    async def _pump_subprocess(self, proc) -> None:
-        """Read a subprocess' stdout/stderr lines incrementally and log them."""
-        while True:
-            line = await proc.stdout.readline()
-            if not line:
-                break
-            logger.info("--real: %s", line.decode(errors="replace").rstrip())
-        await asyncio.wait_for(proc.wait(), timeout=10)
 
     def _refresh_target_tree(self) -> None:
         try:
