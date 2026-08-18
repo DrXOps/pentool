@@ -508,93 +508,70 @@ class PentoolApp(App):
         self.notify(f"New project for {len(urls)} URL(s) — {'proxy on, ready to audit' if (proxy_started or (self._proxy and self._proxy.is_running)) else 'ready to audit'}.", timeout=6)
 
     async def _do_real_fetch(self, urls: list[str]) -> None:
-        """Fetch each URL and persist the real request/response into the project.
+        """Fetch each URL with a real headless browser THROUGH the running proxy.
 
-        The proxy's own MITM interception doesn't accept an external client like
-        aiohttp's proxy mode reliably, so instead of pushing traffic THROUGH the
-        proxy we do a direct request and hand the captured request+response to
-        the same code path the proxy uses (_proxy._add_request). That writes it
-        into HttpStorage → the Proxy HTTP History and Target Site Map exactly
-        like an intercepted request, so --real shows real traffic.
-        """
-        import aiohttp
+        This is a genuine interception: a headless Chromium (Playwright) is told
+        to use our proxy (--proxy-server) and to not fail on the proxy's dynamic
+        CA cert (ignore_https_errors). The request therefore really passes
+        through ProxyServer's MITM, which captures it into HTTP History and
+        Target Site Map automatically — not a synthetic re-injection.
 
-        for url in urls:
-            try:
-                status, headers, body, req_method = await self._direct_fetch(url)
-                self._record_captured_request(url, req_method, headers, body, status)
-                logger.info("--real: captured %s -> %s", url, status)
-            except Exception as exc:
-                logger.info("--real fetch %s failed: %s", url, exc)
-
-    async def _direct_fetch(self, url: str):
-        """GET url, return (status, resp_headers, body, request_method)."""
-        import aiohttp
-        async with aiohttp.ClientSession(raise_for_status=False) as sess:
-            async with sess.get(url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
-                body = await resp.text(errors="replace")
-                headers = {k: v for k, v in resp.headers.items()}
-                return resp.status, headers, body, "GET"
-
-    def _record_captured_request(self, url, method, resp_headers, body, status) -> None:
-        """Persist a synthetic intercepted request into HttpStorage + History.
-
-        Mirrors ProxyServer._handle_http capture so the entry shows up in the
-        Proxy HTTP History and Target Site Map (via ProxyRequestCaptured → storage).
+        Requires Playwright + a Chromium browser. If they aren't installed we
+        fail loudly (no fake capture): installing a browser is a deliberate,
+        large step the user should opt into.
         """
         if not (self._proxy and self._proxy.is_running):
+            logger.info("--real: proxy not running, cannot do a real browser fetch")
             return
-        try:
-            from pentool.modules.proxy import InterceptedRequest
-            from pentool.utils.parser import ParsedResponse
-            from datetime import datetime, timezone
-            from urllib.parse import urlparse as _urlparse
-            import uuid
 
-            parsed_url = _urlparse(url if "://" in url else f"//{url}")
-            headers = {
-                "Host": parsed_url.netloc,
-                "User-Agent": "pentool/--real",
-                "Accept": "*/*",
-            }
-            resp_obj = ParsedResponse(
-                status=status,
-                reason="OK" if 200 <= status < 300 else "",
-                headers=dict(resp_headers),
-                body=body or "",
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            self.notify(
+                "--real needs Playwright: pip/uv tool with playwright + chromium "
+                "['pentool ai'? no — playwright install chromium]",
+                severity="warning",
+                timeout=8,
             )
-            ireq = InterceptedRequest(
-                id=str(uuid.uuid4())[:12],
-                method=method,
-                url=url,
-                headers=headers,
-                body="",
-                timestamp=datetime.now(timezone.utc),
-                is_https=url.startswith("https"),
-                is_websocket=False,
-            )
-            ireq.response = resp_obj
-            # In-memory history on the proxy (like _handle_http does).
-            self._proxy._add_request(ireq)
-            # Emit the same capture event the proxy emits — ProxyScreen picks it
-            # up and persists the entry into HttpStorage (HTTP History) and it
-            # feeds the Target Site Map.
-            from pentool.core.event_bus import get_event_bus
-            from pentool.core.events import ProxyRequestCaptured
-            from urllib.parse import urlparse as _up
-            try:
-                get_event_bus().emit(ProxyRequestCaptured(
-                    source="proxy",
-                    request_id=ireq.id,
-                    method=ireq.method,
-                    url=ireq.url,
-                    host=_up(ireq.url).hostname or "",
-                    request=ireq,
-                ))
-            except Exception as exc:
-                logger.debug("_record_captured_request: emit failed: %s", exc)
+            logger.warning("--real: playwright not installed; real browser capture unavailable")
+            return
+
+        proxy_host = self._proxy.host or "127.0.0.1"
+        proxy_port = self._proxy.port or 8080
+        proxy_arg = f"--proxy-server=http://{proxy_host}:{proxy_port}"
+
+        try:
+            async with async_playwright() as pw:
+                browser = await pw.chromium.launch(
+                    headless=True,
+                    args=[proxy_arg],
+                )
+                context = await browser.new_context(
+                    ignore_https_errors=True,
+                    user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                                "(KHTML, like Gecko) Chrome/126.0 Safari/537.36 pentool/--real",
+                )
+                page = await context.new_page()
+                for url in urls:
+                    try:
+                        await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+                        logger.info("--real: browser visited %s (captured by proxy)", url)
+                    except Exception as exc:
+                        logger.info("--real: browser visit %s failed: %s", url, exc)
+                await context.close()
+                await browser.close()
+            self.call_after_refresh(self._refresh_target_tree)
         except Exception as exc:
-            logger.debug("_record_captured_request: %s", exc)
+            logger.warning("--real: browser capture error: %s", exc)
+            self.notify(f"--real browser error: {exc}", severity="warning", timeout=6)
+
+    def _refresh_target_tree(self) -> None:
+        try:
+            from pentool.tui.screens.target.screen import TargetScreen
+            target = self.query_one(SCREEN_TARGET, TargetScreen)
+            target._refresh_tree()
+        except Exception:
+            pass
 
     def _project_path_for_target(self, url: str) -> str:
         """Build a clean .db path for a target URL with a date+time stamp so each
