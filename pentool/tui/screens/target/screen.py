@@ -11,7 +11,7 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
-from pentool.tui.messages import SendHostToScanner, SyncScopeToProxy
+from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
@@ -148,15 +148,44 @@ class TargetScreen(Widget):
                 host_label = f"{host} ({total_reqs})"
             host_node = root.add(host_label, data={"type": "host", "host": host, "in_scope": in_scope})
 
+            # Multi-level tree: split each path into segments so endpoints like
+            # /api/users/123 become api → users → 123 rather than a flat list.
             for node in nodes:
-                methods_str = " ".join(sorted(node.methods))
-                path_label = f"{node.path}  [{methods_str}] ({node.request_count})"
-                host_node.add_leaf(
-                    path_label,
-                    data={"type": "path", "host": host, "node": node},
-                )
+                self._add_path_node_tree(host_node, host, node)
 
         root.expand()
+
+    def _add_path_node_tree(self, host_node, host: str, node) -> None:
+        """Insert a SiteNode into host_node, nesting by path segments (multi-level).
+
+        /api/users/123  →  api / users / 123  (dirs auto-created, leaves are paths)
+        """
+        raw = node.path or "/"
+        segments = [seg for seg in raw.split("/") if seg != ""] or ["/"]
+
+        # Walk the segment tree, creating/reusing dir nodes, then add the leaf.
+        parent = host_node
+        for i, seg in enumerate(segments):
+            if not seg:  # skip empty segments between slashes
+                continue
+            is_last = (i == len(segments) - 1)
+            if is_last:
+                methods_str = " ".join(sorted(node.methods)) if node.methods else "GET"
+                parent.add_leaf(
+                    f"{seg}  [{methods_str}] ({node.request_count})",
+                    data={"type": "path", "host": host, "node": node},
+                )
+            else:
+                parent = self._ensure_dir_child(parent, host, seg)
+
+    @staticmethod
+    def _ensure_dir_child(node, host: str, seg: str):
+        """Return an existing dir child named ``seg`` under ``node`` or create one."""
+        for child in node.children:
+            d = child.data or {}
+            if d.get("type") == "dir" and d.get("dir") == seg:
+                return child
+        return node.add(seg, data={"type": "dir", "host": host, "dir": seg})
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         data = event.node.data
@@ -210,6 +239,12 @@ class TargetScreen(Widget):
             return
         items = [
             ("add_to_scanner", f"🔍 Send to Scanner: {self._selected_host}"),
+        ]
+        # "Send to Repeater" is only meaningful for a specific path endpoint.
+        if self._selected_node_data is not None:
+            node = self._selected_node_data
+            items.append(("send_repeater", f"↗️ Send to Repeater: {node.path}"))
+        items += [
             ("add_scope",      "★ Add to Scope"),
             ("remove_scope",   "✖ Remove from Scope"),
         ]
@@ -227,10 +262,31 @@ class TargetScreen(Widget):
     def _on_context_action(self, action: str) -> None:
         if action == "add_to_scanner":
             self._add_host_to_scanner(self._selected_host)
+        elif action == "send_repeater":
+            self._send_selected_to_repeater()
         elif action == "add_scope":
             self.action_add_to_scope()
         elif action == "remove_scope":
             self.action_remove_from_scope()
+
+    def _send_selected_to_repeater(self) -> None:
+        """Send the selected path endpoint to the Repeater as a request template.
+
+        Site nodes only store aggregated method/path, not body/headers, so this
+        builds a clean GET (or the node's first method) to edit in Repeater.
+        """
+        node = self._selected_node_data
+        if not node:
+            return
+        try:
+            from pentool.utils.parser import ParsedRequest, build_http_request
+            method = sorted(node.methods)[0] if node.methods else "GET"
+            url = f"https://{node.host}{node.path}"
+            raw = build_http_request(ParsedRequest(method=method, url=url, headers={}, body=""))
+            self.app.post_message(SendToRepeater(raw))  # type: ignore[attr-defined]
+            self.app.notify(f"Sent {method} {node.path} to Repeater", timeout=3)
+        except Exception as exc:
+            logger.debug("send_selected_to_repeater: %s", exc)
 
     def _add_host_to_scanner(self, host: str | None) -> None:
         if not host:
