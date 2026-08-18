@@ -588,7 +588,11 @@ class PentoolApp(App):
         if not host_clean:
             host_clean = "target"
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        projects_dir = Path(self._cfg.db_path).parent / "projects"
+        # Fixed projects dir (~/.config/pentool/projects/) — NOT derived from
+        # the current db_path, which would nest projects/projects/... deeper
+        # on every --real run.
+        from pentool.core.config import DEFAULT_CONFIG_DIR
+        projects_dir = DEFAULT_CONFIG_DIR / "projects"
         projects_dir.mkdir(parents=True, exist_ok=True)
         return str(projects_dir / f"{host_clean}_{stamp}.db")
 
