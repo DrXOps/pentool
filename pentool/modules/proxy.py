@@ -33,6 +33,19 @@ _READ_TIMEOUT = 30.0
 # Timeout waiting for user decision during interception (seconds)
 _INTERCEPT_TIMEOUT = 300.0
 
+# Grace window (seconds) for the listening server to fully close during
+# stop(). The listener closes synchronously; this only covers lingering
+# sockets, so it stays short — a long value here stalls app shutdown for
+# no benefit.
+_STOP_SERVER_GRACE = 0.4
+
+# Grace window (seconds) to await cancellation of in-flight per-connection
+# tasks (TLS tunnels, keep-alive, intercept waits) during stop(). The
+# listener's close() releases the 8080 port synchronously, so we only need
+# one short cancel wave here — waiting longer just slows a normal quit.
+# Residual connections get torn down by the process exiting.
+_STOP_TASK_GRACE = 0.6
+
 
 InterceptState = Literal["waiting", "forwarded", "dropped"]
 
@@ -215,7 +228,9 @@ class ProxyServer:
         if self._server:
             self._server.close()
             try:
-                await asyncio.wait_for(self._server.wait_closed(), timeout=2.0)
+                await asyncio.wait_for(
+                    self._server.wait_closed(), timeout=_STOP_SERVER_GRACE
+                )
             except asyncio.TimeoutError:
                 logger.debug("ProxyServer.stop: wait_closed timeout, continuing")
             self._server = None
@@ -239,9 +254,13 @@ class ProxyServer:
             for task in pending:
                 task.cancel()
             try:
+                # Call gather() inside wait_for() so we do not block the whole
+                # shutdown on a slow task. The grace is deliberately short: on
+                # a normal quit one cancel wave is enough, and anything still
+                # alive when we return is torn down by the process exiting.
                 await asyncio.wait_for(
                     asyncio.gather(*pending, return_exceptions=True),
-                    timeout=2.0,
+                    timeout=_STOP_TASK_GRACE,
                 )
             except asyncio.TimeoutError:
                 logger.debug("ProxyServer.stop: task cancellation timed out")

@@ -1172,9 +1172,11 @@ class PentoolApp(App):
                 self._proxy.stop(), self._proxy_loop
             )
             try:
-                # stop() now cancels all active tasks and waits up to ~4s
-                # internally, so 6s here is generous headroom
-                future.result(timeout=6)
+                # stop() itself now cancels tasks within a short grace
+                # (see _STOP_TASK_GRACE), so a short timeout here is enough —
+                # and on a normal quit the leftover connections are released
+                # by the process exit, so we never need the old 6s headroom.
+                future.result(timeout=1.5)
             except Exception as e:
                 logger.warning("APP: proxy.stop() error or timeout: %s", e)
                 # Force-cancel anything still running in the proxy loop so
@@ -1188,9 +1190,9 @@ class PentoolApp(App):
                     except Exception:
                         pass
         if self._proxy_thread and self._proxy_thread.is_alive():
-            self._proxy_thread.join(timeout=5)
+            self._proxy_thread.join(timeout=1.5)
             if self._proxy_thread.is_alive():
-                logger.warning("APP: proxy thread did not stop in 5s — port 8080 may still be in use")
+                logger.warning("APP: proxy thread did not stop in 1.5s — port 8080 may still be in use")
         self.call_after_refresh(self._update_status)
         self.call_after_refresh(self._update_proxy_screen_labels)
         self.call_after_refresh(self.customnotify, "○ Proxy stopped", "warning")
@@ -1212,15 +1214,17 @@ class PentoolApp(App):
                 self._proxy.stop(), self._proxy_loop
             )
             try:
-                await asyncio.wait_for(asyncio.wrap_future(future), timeout=6)
+                await asyncio.wait_for(asyncio.wrap_future(future), timeout=1.5)
             except asyncio.TimeoutError:
                 logger.warning("APP: proxy.stop() (async) timed out")
         # Wait (in this async context) for the proxy thread to die so the
         # 8080 port is released before the caller switches the project DB.
+        # Short bounded window — beyond it the port is released by the
+        # (soon-exiting) process, so we never block the caller for ~7s.
         loop = asyncio.get_running_loop()
         proxy_thread = self._proxy_thread
         if proxy_thread is not None:
-            for _ in range(70):  # up to ~7s in 100ms steps
+            for _ in range(20):  # up to ~2s in 100ms steps
                 alive = await loop.run_in_executor(None, proxy_thread.is_alive)
                 if not alive:
                     break
@@ -1659,13 +1663,13 @@ class PentoolApp(App):
             pass
         # Stop terminal (shell process) via Message Bus
         self.post_message(TerminalStop())
-        # Stop proxy — reuse the same robust path as manual stop (_stop_proxy):
-        # it awaits proxy.stop() up to 6s, force-cancels stuck tasks on timeout,
-        # and joins the proxy thread (cf. the old weak inline stop that used only
-        # join(timeout=2) here, which could leave the proxy thread wound around
-        # the 8080 listener after Ctrl+Q — see oszatel procesy workaround).
+        # Stop proxy — reuse the same robust path as manual stop, but the
+        # async variant so Ctrl+Q does NOT freeze the TUI renderer, and with
+        # short grace windows (proxy.stop cancels tasks fast; the 8080 port is
+        # released by the process exit anyway). Shutdown now takes ~1-2s even
+        # with a busy proxy instead of the old ~11s (6s stop + 5s join).
         if self._proxy and self._proxy.is_running:
-            self._stop_proxy()
+            await self._stop_proxy_async()
         # Close SQLite storage — flush WAL to disk
         try:
             if self._proxy_service is not None:
