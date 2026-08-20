@@ -1688,9 +1688,10 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         total_payloads = sum(len(ps) for ps in payload_sets)
         mode_label = " [⚡ Turbo]" if turbo_mode else ""
         limit_label = "" if is_pro else " [FREE: limited]"
-        self.app.notify(
+        self.app.customnotify(
             f"Attack started: {total_payloads} payload(s){mode_label}{limit_label}",
-            timeout=3
+            severity="success",
+            title="Intruder",
         )
         self.run_worker(self._run_attack(config, turbo_mode=turbo_mode), exclusive=False, name="intruder-attack")
 
@@ -1775,7 +1776,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self._attack_running = False
         self._paused = False
         self._set_running_state(False)
-        self.app.notify("Attack stopped", severity="warning", timeout=3)
+        self.app.customnotify("Attack stopped", severity="warning")
 
     def on_worker_state_changed(self, event) -> None:
         """Safety net: reset _attack_running on any attack-worker outcome."""

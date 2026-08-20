@@ -52,7 +52,7 @@ class Config:
     check_updates: bool = True        # check for updates on startup
     # ── UI ────────────────────────────────────────────────────────────────────────
     theme: str = "textual-dark"       # Textual theme name
-    notifications_sound_enabled: bool = True  # play a short sound with notify2() toasts
+    notifications_sound_enabled: bool = True  # play a short sound with customnotify() toasts
 
     # ── AI ────────────────────────────────────────────────────────────────────────
     ai_enabled: bool = False           # мастер-выключатель AI-помощника

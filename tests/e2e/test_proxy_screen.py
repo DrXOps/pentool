@@ -93,3 +93,57 @@ class TestProxyScreen:
             assert proxy.enforce_scope is False
             assert btn.label == "☐ Skip out-of-scope"
 
+
+    async def test_selection_race_ignores_stale_slow_load(self) -> None:
+        """Regression: clicking A then quickly B must NOT paint A's details
+        when A's async load finishes last (slow disk / weak hardware).
+
+        Before the fix _load_row_details had no gate, so a slow
+        get_full_entry(A) that returned after the user had moved to B would
+        draw A over the B the user actually selected. The gate drops any
+        load whose id no longer matches the current selection.
+        """
+        import asyncio
+
+        from unittest.mock import AsyncMock
+
+        from pentool.tui.screens.proxy.screen import ProxyScreen
+
+        app = PentoolApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            screen = app.query_one(ProxyScreen)
+
+            # Seed the display cache so _select_row has rows to pick from.
+            screen._rows_cache = [{"id": 1, "host": "a"}, {"id": 2, "host": "b"}]
+
+            # get_full_entry: id=1 is SLOW, id=2 returns immediately.
+            async def fake_get_full_entry(row_id: int) -> dict | None:
+                if row_id == 1:
+                    await asyncio.sleep(0.2)  # slow disk
+                return {"id": row_id, "method": "GET", "url": f"http://x/{row_id}"}
+
+            screen._proxy_service.get_full_entry = AsyncMock(side_effect=fake_get_full_entry)
+            screen._proxy_service.is_storage_ready = lambda: True
+
+            # Spy on the paint so we can assert which entry was actually drawn.
+            painted: list[int] = []
+            real_paint = screen._load_entry_details
+
+            def spy_paint(entry: dict) -> None:
+                painted.append(entry.get("id"))
+                real_paint(entry)
+
+            screen._load_entry_details = spy_paint
+
+            # Click A, then immediately click B.
+            screen._select_row(0)  # id=1 (slow)
+            screen._select_row(1)  # id=2 (fast)
+            for _ in range(30):
+                await pilot.pause()
+                if painted:
+                    break
+
+            assert screen._selected_req_id == 2
+            # Only B may have been painted; the stale A must have been dropped.
+            assert painted == [2], f"stale row A leaked into details: {painted}"

@@ -83,7 +83,6 @@ from pentool.tui.screens import (
     TerminalScreen,
 )
 from pentool.tui.widgets.module_tabs import ModuleTabs
-from pentool.tui.widgets.notification_center import NotificationCenter
 from pentool.tui.widgets.statusbar import StatusBar
 
 logger = get_logger(__name__)
@@ -199,6 +198,22 @@ class PentoolApp(App):
         background: $primary-darken-3;
         text-style: none;
     }
+
+    /* Override Textual's built-in toast: replace the default vertical
+       severity stripe on the left edge with a full border all the way round,
+       and force every toast onto a single line — long text is truncated with
+       an ellipsis rather than wrapping. */
+    Toast {
+        border: none;
+        text-wrap: wrap;
+        /* Compact padding, but the card grows vertically to fit the text. */
+        padding: 0 1;
+    }
+    Toast.-information { border: round $accent; }
+    Toast.-success     { border: round $success; }
+    Toast.-warning     { border: round $warning; }
+    Toast.-error       { border: round $error; }
+    Toast.-critical    { border: heavy $error; }
     """
 
     BINDINGS = [
@@ -326,7 +341,6 @@ class PentoolApp(App):
         with Vertical(id="bottom-dock"):
             yield Footer()
             yield StatusBar(id="statusbar")
-        yield NotificationCenter(id="notification-center")
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
@@ -888,8 +902,7 @@ class PentoolApp(App):
                 lic = get_session_license()
                 if not (lic.valid and lic.has_feature("scanner_pro")):
                     self.notify(
-                        "🔒 Scanner — paid feature.\n"
-                        "Activate: pentool license trial",
+                        "🔒 Scanner — paid feature. Activate: pentool license trial",
                         severity="warning",
                         timeout=5,
                     )
@@ -898,6 +911,10 @@ class PentoolApp(App):
                 pass
         self.query_one(ContentSwitcher).current = f"screen-{module_id}"
         self._active_module = module_id
+        # Re-paint any visible toasts on top after the content swap, so they
+        # don't end up hidden underneath the freshly-shown tab (Textual's
+        # toast rack can sit below a tab's own layers after a switch).
+        self.call_after_refresh(self._refresh_notifications)
         # _update_proxy_screen_labels() only refreshes the ProxyScreen label
         # when it IS the active module — so if the proxy was stopped/started
         # while the user was on a different tab (e.g. right after creating a
@@ -920,7 +937,7 @@ class PentoolApp(App):
         except Exception:
             pass
 
-    def notify2(
+    def customnotify(
         self,
         message: str,
         severity: str = "information",
@@ -928,35 +945,53 @@ class PentoolApp(App):
         timeout: float | None = None,
         sound: bool = True,
     ) -> None:
-        """ICQ-style stacked toast notification (top-right corner).
+        """Deprecated alias for `notify()`.
 
-        Separate from `flash()` (single-line tooltip2 in the module bar,
-        kept as-is for existing lightweight status messages) and from the
-        standard Textual `app.notify()` toast. Use this for events that
-        deserve a more visible, dismissible, optionally-audible alert —
-        e.g. a finished attack, a high-severity Scanner finding, a dropped
-        connection.
-
-        severity: "information" | "success" | "warning" | "error" | "critical"
-        sound: play a short notification sound (see
-            pentool.core.notification_sound) — respects the user's
-            `notifications_sound_enabled` config toggle regardless of this
-            argument's default.
+        Kept so existing call sites work unchanged; routes through the
+        built-in Textual toast rack (no reserved zone → no dark band).
         """
-        try:
-            self.query_one("#notification-center", NotificationCenter).push(
-                message, severity=severity, title=title, timeout=timeout
-            )
-        except Exception as exc:
-            logger.debug("notify2: could not show toast: %s", exc)
+        self.notify(message, title=title or "", severity=severity, timeout=timeout, sound=sound)
 
+    def notify(
+        self,
+        message: str,
+        *,
+        title: str = "",
+        severity: str = "information",
+        timeout: float | None = None,
+        markup: bool = True,
+        sound: bool = True,
+    ) -> None:
+        """Standard notification using Textual's built-in toast rack.
+
+        Ties every `app.notify(...)` (~170 call sites) into Textual's own
+        ToastRack, which renders severity-styled cards bottom-right WITHOUT
+        reserving a zone — so no dark band appears (the custom dock rack used
+        to leave one). Sound is layered on top, respecting the user's
+        `notifications_sound_enabled` config toggle.
+        """
+        super().notify(
+            message,
+            title=title,
+            severity=severity,
+            timeout=timeout,
+            markup=markup,
+        )
+        # Belt-and-braces dismissal: Textual's toast rack only prunes expired
+        # toasts when the rack is refreshed (next notify, or an idle tick). If
+        # the app is busy it can leave an expired toast sitting until a new
+        # notification arrives. Unless explicitly kept forever (critical), we
+        # schedule a refresh shortly after the timeout so the toast always
+        # dismisses on its own.
+        if timeout is not None:
+            self.set_timer(timeout + 0.5, self._refresh_notifications)
         if sound:
             try:
                 if self._cfg.notifications_sound_enabled:
                     from pentool.core.notification_sound import play_notification_sound
                     play_notification_sound(severity)
             except Exception as exc:
-                logger.debug("notify2: sound failed: %s", exc)
+                logger.debug("notify: sound failed: %s", exc)
 
     def _on_storage_error(self, message: str) -> None:
         """ProxyService.init_storage()/switch_db() failed to open the DB.
@@ -970,7 +1005,7 @@ class PentoolApp(App):
         notify() here is safe without call_from_thread.
         """
         self.notify(
-            f"{message}\n\nRequests will not be saved until this is fixed — "
+            f"{message}. Requests will not be saved until this is fixed — "
             f"check that no other Pentool instance has this project open.",
             severity="error",
             timeout=8,
@@ -1108,7 +1143,7 @@ class PentoolApp(App):
             self.call_from_thread(self._update_status)
             self.call_from_thread(self._update_proxy_screen_labels)
             self.call_from_thread(self._update_dashboard_proxy_status, True)
-            self.call_from_thread(self.flash, f"● Proxy :{self._proxy.port}", "success")
+            self.call_from_thread(self.customnotify, f"● Proxy :{self._proxy.port}", "success")
             logger.info("Proxy started on port %s", self._proxy.port)
             async with self._proxy._server:
                 await self._proxy._server.serve_forever()
@@ -1129,7 +1164,6 @@ class PentoolApp(App):
             self.call_from_thread(self._update_status)
             self.call_from_thread(self._update_proxy_screen_labels)
             self.call_from_thread(self._update_dashboard_proxy_status, False)
-            self.call_from_thread(self.flash, "○ Proxy stopped", "warning")
 
     def _stop_proxy(self) -> None:
         logger.info("APP: _stop_proxy called")
@@ -1159,6 +1193,7 @@ class PentoolApp(App):
                 logger.warning("APP: proxy thread did not stop in 5s — port 8080 may still be in use")
         self.call_after_refresh(self._update_status)
         self.call_after_refresh(self._update_proxy_screen_labels)
+        self.call_after_refresh(self.customnotify, "○ Proxy stopped", "warning")
 
     async def _stop_proxy_async(self) -> None:
         """Async stop of the proxy that does NOT block the TUI thread.
@@ -1192,6 +1227,9 @@ class PentoolApp(App):
                 await asyncio.sleep(0.1)
             self.call_after_refresh(self._update_status)
             self.call_after_refresh(self._update_proxy_screen_labels)
+            self.call_after_refresh(self.customnotify, "○ Proxy stopped", "warning")
+        else:
+            self.call_after_refresh(self._update_status)
 
     # Sprint 3: _on_proxy_request and _proxy_request_done_cb removed — proxy emits via EventBus,
     # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted → _on_bus_proxy_captured/completed
@@ -1256,7 +1294,7 @@ class PentoolApp(App):
             repeater.load_request_in_new_tab(msg.raw)
             self.action_switch_module("repeater")
             self.call_after_refresh(self._focus_repeater_editor, repeater)
-            self.flash("→ Repeater", "information", 2.0)
+            self.customnotify("→ Repeater", "information")
             self._add_raw_to_target(msg.raw)
         except Exception as exc:
             self.notify(f"Send to Repeater failed: {exc}", severity="error", timeout=4)

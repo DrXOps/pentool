@@ -324,7 +324,7 @@ class ProjectManager:
         # there), which awaits _stop_proxy_async() without blocking the UI.
         if self._proxy and self._proxy.is_running:
             self._app.notify(
-                "Proxy остановлен для переключения проекта",
+                "Proxy stopped to switch project",
                 severity="warning",
                 timeout=4,
             )
@@ -361,16 +361,17 @@ class ProjectManager:
         )
 
         self.update_project_name(path)
-        action = "Создан" if is_new else "Открыт"
-        name = os.path.splitext(os.path.basename(path))[0]
-        self._app.notify(f"{action}: {os.path.basename(path)}", timeout=3)
-        self._app.flash(f"{action}: {name}", "success" if is_new else "information")
+        action = "Created" if is_new else "Opened"
+        # Single-line toast: no separate title (Textual's toast would render
+        # the title on its own row above the message, duplicating "Opened/"
+        # "Created" and making the card two rows tall).
+        self._app.customnotify(f"{action}: {os.path.basename(path)}", "success" if is_new else "information")
 
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen
             dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dash._populate_projects()
-            verb = "создан" if is_new else "открыт"
+            verb = "created" if is_new else "opened"
             dash.log_activity(
                 f'Project "{os.path.splitext(os.path.basename(path))[0]}" {verb} from {path}',
                 "ok"

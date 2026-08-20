@@ -67,15 +67,30 @@ def test_play_blocking_macos_without_afplay():
     bell.assert_called_once()
 
 
-def test_play_blocking_linux_uses_bell():
+def test_play_blocking_linux_uses_bell_when_no_player():
     with patch.object(sys, "platform", "linux"), \
+         patch("pentool.core.notification_sound.shutil.which", return_value=None), \
          patch("pentool.core.notification_sound._terminal_bell") as bell:
         ns._play_blocking("error")
     bell.assert_called_once_with("error")
 
 
+def test_play_blocking_linux_uses_real_tone_when_player_exists():
+    with patch.object(sys, "platform", "linux"), \
+         patch("pentool.core.notification_sound.shutil.which", return_value="/usr/bin/aplay"), \
+         patch("pentool.core.notification_sound.subprocess.run") as run:
+        ns._play_blocking("success")
+    run.assert_called_once()
+    # aplay reads the WAV stream from stdin
+    assert run.call_args.args[0] == ["/usr/bin/aplay", "-"]
+    # the piped input is a valid RIFF/WAVE blob
+    wav = run.call_args.kwargs.get("input") or run.call_args.args[0][-1]
+    assert wav[:4] == b"RIFF"
+
+
 def test_play_blocking_unknown_platform_uses_bell():
     with patch.object(sys, "platform", "os2"), \
+         patch("pentool.core.notification_sound.shutil.which", return_value=None), \
          patch("pentool.core.notification_sound._terminal_bell"):
         ns._play_blocking("info")  # falls into else → _play_linux → bell
 

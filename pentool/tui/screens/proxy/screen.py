@@ -832,8 +832,16 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         try:
             table = self.query_one("#request-list", DataTable)
             records = [_row_to_record(r) for r in new_rows]
+            # add_rows() appends at the BOTTOM and never shifts existing row
+            # indexes, so a highlighted row keeps pointing at the same request
+            # even while live traffic streams in. Auto-scroll to the bottom
+            # ONLY when the user is already at the tail (or not looking at the
+            # table at all) — if someone has selected an older row further up,
+            # don't yank their cursor/selection down to the newest entry. That
+            # is the second barrier behind the _selected_req_id race guard.
             table.add_rows(records)
-            table.scroll_end(animate=False)
+            if not (table.has_focus and table.cursor_row < len(self._rows_cache) - 1):
+                table.scroll_end(animate=False)
         except Exception as exc:
             logger.debug("PROXY SCREEN: _flush_pending_rows: %s", exc)
         # Cap unbounded growth of the in-memory cache during very long
@@ -911,6 +919,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         entry = await self._proxy_service.get_full_entry(row_id)
         if entry is None:
             return
+        # Selection race guard: by the time get_full_entry() returns, the
+        # user may have clicked a different row — drawing the stale entry
+        # would make the request/response panels show a request that no
+        # longer matches the highlighted row. Drop it if the target id moved.
+        if self._selected_req_id is not None and row_id != self._selected_req_id:
+            return
         self.call_after_refresh(self._load_entry_details, entry)
 
     async def _load_ws_row_details(self, row_id: int) -> None:
@@ -919,9 +933,17 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         entry = await self._proxy_service.get_full_entry(row_id)
         if entry is None:
             return
+        # Same selection race guard as _load_row_details — ignore stale loads.
+        if self._selected_req_id is not None and row_id != self._selected_req_id:
+            return
         self.call_after_refresh(self._load_ws_entry_details, entry)
 
     def _load_ws_entry_details(self, entry: dict) -> None:
+        # Selection race guard (second layer) — skip drawing a stale entry
+        # if the highlighted row changed after the async load finished.
+        entry_id = entry.get("id")
+        if self._selected_req_id is not None and entry_id is not None and entry_id != self._selected_req_id:
+            return
         from pentool.utils.parser import ParsedRequest
 
         req_headers = entry.get("request_headers") or {}
@@ -1199,6 +1221,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             logger.error("Delete failed: %s", exc)
 
     def _load_entry_details(self, entry: dict) -> None:
+        # Second layer of the selection race guard: the deferred paint may
+        # run after the user has already moved to another row, so re-check
+        # that this entry still matches the current selection before drawing.
+        entry_id = entry.get("id")
+        if self._selected_req_id is not None and entry_id is not None and entry_id != self._selected_req_id:
+            return
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req_headers = entry.get("request_headers") or {}
@@ -1514,10 +1542,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 btn.add_class("active")
             except Exception:
                 pass
-            port = proxy.port if proxy else self.app._cfg.proxy_port  # type: ignore[attr-defined]
-            self.app.notify(  # type: ignore[attr-defined]
-                f"Starting proxy on :{port}...", timeout=3
-            )
         elif proxy and proxy.is_running:
             try:
                 btn = self.query_one("#btn-proxy", ToolbarButton)
@@ -1526,7 +1550,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 btn.add_class("inactive")
             except Exception:
                 pass
-            self.app.notify("Stopping proxy...", timeout=2)  # type: ignore[attr-defined]
         self.app.action_toggle_proxy()  # type: ignore[attr-defined]
         self.call_after_refresh(self._sync_proxy_button)
 
