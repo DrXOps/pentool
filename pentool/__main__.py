@@ -338,6 +338,25 @@ def main() -> None:
                 for _tid, _frame in _sys._current_frames().items():
                     _buf.write(f"\n--- Thread 0x{_tid:x} ---\n")
                     _tb.print_stack(_frame, file=_buf)
+                # If there's still a running event loop, dump its pending tasks.
+                try:
+                    import asyncio as _aio
+                    try:
+                        _aloop = _aio.get_running_loop()
+                    except RuntimeError:
+                        _aloop = None
+                    if _aloop is not None:
+                        _tasks = _aio.all_tasks(_aloop)
+                        if _tasks:
+                            _buf.write(f"\n--- Pending asyncio tasks ({len(_tasks)}) ---\n")
+                            for _t in sorted(_tasks, key=lambda t: str(getattr(t, "_coro", ""))):
+                                _coro = getattr(_t, "_coro", _t)
+                                _buf.write(f"  Task {_t.get_name()} (done={_t.done()}, "
+                                           f"cancelled={_t.cancelled()}): {_coro!r:.200}\n")
+                                _tb.print_stack(_coro, file=_buf, limit=5)
+                                _buf.write("\n")
+                except Exception:
+                    pass
                 # Extra: also try faulthandler (may be a no-op if signals conflict)
                 try:
                     import faulthandler
