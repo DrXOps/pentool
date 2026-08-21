@@ -1173,7 +1173,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             if self._highlight_debounce_handle is not None:
                 self._highlight_debounce_handle.cancel()
             self._highlight_debounce_handle = self.set_timer(
-                0.25, lambda: self.run_worker(self._load_row_details(new_id))
+                0.25, lambda: self._debounced_load(new_id)
             )
 
     def _select_ws_row(self, row_idx: int) -> None:
@@ -1230,6 +1230,24 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             event.data_table.focus()
         except Exception:
             pass
+
+    def _debounced_load(self, row_id: int | None) -> None:
+        """Safely run _load_row_details from a debounce timer callback.
+
+        Textual's set_timer may fire its callback after the widget has been
+        removed from the DOM (e.g. during project switch or shutdown). In that
+        case the widget is unmounted and run_worker raises an exception that
+        Textual may silently swallow by tearing down the screen stack — causing
+        a clean run() return with no traceback ("TUI just vanished"). Check
+        is_running before scheduling the async worker.
+        """
+        try:
+            app = self.app
+            if not app.is_running:
+                return
+        except Exception:
+            return
+        self.run_worker(self._load_row_details(row_id))
 
     async def _load_row_details(self, row_id: int | None) -> None:
         if row_id is None or self._proxy_service is None or not self._proxy_service.is_storage_ready():
