@@ -476,12 +476,32 @@ class PentoolApp(App):
         _setup_faulthandler(self._cfg.log_file)
         self._guard_forward_event()
 
-        # Diagnostic: patch app.exit() to capture the call-site stack so the
-        # "run() returned cleanly" dump in __main__.py can identify the caller.
-        # Textual's exit() sets an internal flag; the event loop winds down
-        # silently and produces no traceback in the clean-return path.
-        _orig_exit = self.exit
+        # Diagnostic: Textual swallows ANY unhandled exception in a message
+        # handler — _process_messages_loop catches it, calls
+        # self.app._handle_exception(error) and then `break`s out of the loop.
+        # That makes run() return cleanly (no traceback on stderr) and our
+        # __main__ else-branch os._exit(0)s silently — the exact "TUI just
+        # vanished" the user has been seeing. But the exception IS available
+        # to _handle_exception, so we patch it to log the real stack before
+        # Textual tears down. Also patch exit() to capture the call-site.
         _self = self
+        _orig_handle = self._handle_exception
+
+        def _probed_handle_exception(error: Exception) -> None:
+            import traceback as _tb, io as _io
+            _sbuf = _io.StringIO()
+            _sbuf.write(f"TEXTUAL UNHANDLED EXCEPTION: {type(error).__name__}: {error}\n")
+            _tb.print_exc(file=_sbuf)
+            _self._exit_caller_stack = _sbuf.getvalue()
+            try:
+                logger.error("TEXTUAL UNHANDLED EXCEPTION: %s", _sbuf.getvalue())
+            except Exception:
+                pass
+            return _orig_handle(error)
+
+        self._handle_exception = _probed_handle_exception  # type: ignore[method-assign]
+
+        _orig_exit = self.exit
 
         def _probed_exit(*a, **kw):
             import traceback as _tb, io as _io, time as _time

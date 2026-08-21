@@ -324,12 +324,15 @@ def main() -> None:
                 _buf = io.StringIO()
                 _buf.write(f"--- run() returned cleanly, {_time.strftime('%Y-%m-%d %H:%M:%S')} "
                            f"pid={os.getpid()} ---\n")
-                # If the app captured an exit() call-site stack, log it here
+                # If the app captured an exception or exit() call-site, log it here.
                 try:
                     from pentool.tui.app import PentoolApp
                     _exit_stack = getattr(PentoolApp, '_exit_caller_stack', '')
                     if _exit_stack:
-                        _buf.write(f"\n--- app.exit() caller ---\n{_exit_stack}\n")
+                        label = ("TEXTUAL UNHANDLED EXCEPTION"
+                                 if "TEXTUAL UNHANDLED EXCEPTION" in _exit_stack
+                                 else "app.exit() caller")
+                        _buf.write(f"\n--- {label} ---\n{_exit_stack}\n")
                 except Exception:
                     pass
                 for _tid, _frame in _sys._current_frames().items():
