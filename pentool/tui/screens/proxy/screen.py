@@ -343,7 +343,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         # firing on every pixel of mouse travel + programmatic scroll_end from live
         # traffic) doesn't flood the main loop with SQLite workers. Only the LAST
         # highlight within the window triggers a load.
-        self._highlight_debounce_handle: asyncio.TimerHandle | None = None
+        self._highlight_debounce_handle = None
 
     def compose(self) -> ComposeResult:
         # Toolbar (outside SubTabs — all btn-* IDs are always in the DOM)
@@ -1171,7 +1171,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             # Rapid cursor movement (RowHighlighted on every pixel) only triggers
             # one load for the final row, not N loads for every intermediate row.
             if self._highlight_debounce_handle is not None:
-                self._highlight_debounce_handle.cancel()
+                try:
+                    self._highlight_debounce_handle.stop()
+                except Exception:
+                    pass
             self._highlight_debounce_handle = self.set_timer(
                 0.25, lambda: self._debounced_load(new_id)
             )
