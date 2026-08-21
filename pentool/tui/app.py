@@ -915,6 +915,13 @@ class PentoolApp(App):
                 pass
         self.query_one(ContentSwitcher).current = f"screen-{module_id}"
         self._active_module = module_id
+        # Refresh AI-dependent UI whenever we switch to Target: the "🤖 Use AI"
+        # checkbox visibility tracks the global ai_enabled, and this must be
+        # re-applied when the Target screen is (re)shown — otherwise a checkbox
+        # that was hidden while the screen wasn't mounted stays hidden even
+        # after the user enables AI globally.
+        if module_id == "target":
+            self._update_ai_ui()
         # Re-paint any visible toasts on top after the content swap, so they
         # don't end up hidden underneath the freshly-shown tab (Textual's
         # toast rack can sit below a tab's own layers after a switch).

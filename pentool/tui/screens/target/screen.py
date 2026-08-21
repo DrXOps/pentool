@@ -442,6 +442,7 @@ class TargetScreen(Widget):
             use_ai = self.query_one("#cfg-ai-use", Checkbox).value
         except Exception:
             pass
+        logger.info("action_crawl_scope: use_ai=%s (AI-enabled checkbox)", use_ai)
         total_pages = 0
         total_endpoints = 0
         total_js = 0
@@ -549,6 +550,10 @@ class TargetScreen(Widget):
                 "url": url,
                 "links": known,
             })
+            if isinstance(result, dict):
+                _nitems = len(result.get("items") or [])
+                logger.info("_ai_suggest_endpoints: %s gen result items=%d %s",
+                            url, _nitems, "RAW:" + str(result.get("raw", ""))[:120] if _nitems == 0 else "")
             if not result:
                 return 0
             items = result if isinstance(result, list) else result.get("items", [])
@@ -571,7 +576,7 @@ class TargetScreen(Widget):
                     continue
             return added
         except Exception as exc:
-            logger.debug("_ai_suggest_endpoints failed: %s", exc)
+            logger.warning("_ai_suggest_endpoints failed: %s", exc, exc_info=True)
             return 0
 
     def action_export_json(self) -> None:
