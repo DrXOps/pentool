@@ -396,6 +396,47 @@ class PentoolApp(App):
             pass
         super()._handle_exception(error)
 
+    @staticmethod
+    def _guard_forward_event() -> None:
+        """Neutralize a Textual mouse-path crash at its source.
+
+        Textual's `Screen._forward_event` (screen.py) dereferences
+        `content_widget.parent.region`; when a mouse event lands while a widget
+        under the cursor has no laid-out parent (e.g. the History table rebuilt
+        under live traffic), `parent` is None and it raises
+        `AttributeError: 'NoneType' object has no attribute 'region'`. That is
+        raised inside the message-pump dispatch, which Textual treats as fatal
+        and tears the whole app down ("TUI just vanished").
+
+        We patch the source method once so that exact race degrades to a quiet
+        no-op instead of killing the app. A per-table guard in the DataTable is
+        not enough — App.on_event → screen._forward_event runs for mouse events
+        the table never sees. Doing it here (once, globally) is the only safe
+        seam; it never touches on_event/MessagePump, so normal event flow is
+        unaffected.
+        """
+        try:
+            import textual.screen as _tss
+            if getattr(_tss.Screen, "_pentool_guard_done", False):
+                return
+            _orig = _tss.Screen._forward_event
+
+            def _guarded(self, event) -> None:
+                try:
+                    _orig(self, event)
+                except AttributeError as _ae:
+                    if "has no attribute 'region'" in str(_ae):
+                        return
+                    raise
+
+            _guarded.__name__ = "_forward_event"
+            _guarded.__qualname__ = "Screen._forward_event"
+            _tss.Screen._forward_event = _guarded
+            _tss.Screen._pentool_guard_done = True
+            logger.debug("APP: Screen._forward_event guarded against layout race")
+        except Exception:
+            pass
+
     def compose(self) -> ComposeResult:
         yield ModuleTabs(id="module-tabs")
         with ContentSwitcher(initial="screen-dashboard"):
@@ -426,6 +467,7 @@ class PentoolApp(App):
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
         _setup_faulthandler(self._cfg.log_file)
+        self._guard_forward_event()
         try:
             await init_db(self._cfg.db_path)
         except Exception as exc:
