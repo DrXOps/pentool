@@ -305,8 +305,26 @@ def main() -> None:
             # _connection_worker threads plus the still-alive proxy thread.
             # Those only get closed inside action_quit; if it never ran, a
             # plain return would leave a zombie "TUI vanished, terminal hangs".
-            # Force-terminate here — the TUI is already gone and any terminal
-            # pty has already been reset by Textual.
+            #
+            # Diagnostic: dump EVERY thread's Python stack to the log right
+            # now, i.e. the exact moment app.run() returned cleanly under load.
+            # This is the "TUI just vanished with no traceback" case — the
+            # all-thread dump shows what the main loop / proxy / sqlite were
+            # doing as the run() collapsed, instead of the usual post-mortem
+            # proxy-only stacks.
+            try:
+                import faulthandler
+                import io
+                import time as _time
+                from pentool.core.config import DEFAULT_CONFIG_DIR
+                _buf = io.StringIO()
+                faulthandler.dump_traceback(file=_buf, all_threads=True)
+                with open(str(DEFAULT_CONFIG_DIR / "pentool_exit_dump.log"), "a") as _f:
+                    _f.write(f"--- run() returned cleanly, {_time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+                    _f.write(_buf.getvalue())
+                    _f.write("\n")
+            except Exception:
+                pass
             import os as _os
             _os._exit(0)
 
