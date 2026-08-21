@@ -1411,14 +1411,14 @@ class PentoolApp(App):
         """Cached #screen-proxy; re-resolves every interval. Returns None when
         the screen isn't mounted — callers treat None as a quiet no-op."""
         from pentool.tui.screens.proxy.screen import ProxyScreen
-        return self._get_screen(SCREEN_PROXY, ProxyScreen, "_proxy_screen")
+        return self._get_cached_screen(SCREEN_PROXY, ProxyScreen, "_proxy_screen")
 
     def _get_target_screen(self):
         """Cached #screen-target; re-resolves every interval. None = not mounted."""
         from pentool.tui.screens.target.screen import TargetScreen
-        return self._get_screen(SCREEN_TARGET, TargetScreen, "_target_screen")
+        return self._get_cached_screen(SCREEN_TARGET, TargetScreen, "_target_screen")
 
-    def _get_screen(self, selector: str, cls, cache_attr: str):
+    def _get_cached_screen(self, selector: str, cls, cache_attr: str):
         now = time.monotonic()
         # Cache hit within the interval → reuse without re-querying.
         if now - self._screen_resolve_at < self._SCREEN_RESOLVE_INTERVAL:
