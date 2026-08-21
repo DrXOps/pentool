@@ -120,7 +120,18 @@ class SiteMap(BaseSqliteStorage):
             pass
         return host
 
-    def add_request(self, req: "ParsedRequest") -> None:
+    def add_request(self, req: "ParsedRequest", count: bool = True) -> None:
+        """Add a discovered URL to the tree.
+
+        Args:
+            req: parsed request to register (host + path).
+            count: when True (default), a re-addition of an existing path bumps
+                its request_count by one. Pass count=False for "discovery" sources
+                (spider crawl, AI-suggested endpoints) so re-crawling the same
+                target does NOT inflate the node counter — that counter should
+                track real HTTP requests, not how many times the crawler re-found
+                an already-known page. Real proxy traffic always uses count=True.
+        """
         try:
             parsed = urlparse(req.url)
             host = parsed.netloc or parsed.hostname or req.url
@@ -142,7 +153,8 @@ class SiteMap(BaseSqliteStorage):
         if path in host_map:
             node = host_map[path]
             node.methods.add(req.method)
-            node.request_count += 1
+            if count:
+                node.request_count += 1
             node.last_seen = now
         else:
             host_map[path] = SiteNode(

@@ -455,7 +455,9 @@ class TargetScreen(Widget):
             worker's loop alongside the crawl."""
             try:
                 from pentool.utils.parser import ParsedRequest
-                api.add_request(ParsedRequest(method="GET", url=url))
+                # count=False: this is a discovery event, not a real HTTP request.
+                # Re-crawling the same page must not inflate the node counter.
+                api.add_request(ParsedRequest(method="GET", url=url), count=False)
             except Exception as exc:
                 logger.debug("lazy add %s: %s", url, exc)
             try:
@@ -512,12 +514,24 @@ class TargetScreen(Widget):
         Called from _crawl_hosts_worker when the "🤖 Use AI" checkbox is set.
         """
         try:
-            from pentool.services.ai import get_ai
             from pentool.core.config import get_config
+            from pentool.services.ai import get_active_backend, get_ai, start_ai
             from pentool.utils.parser import ParsedRequest
 
             cfg = get_config()
-            backend = get_ai(cfg)
+            # Reuse the already-started MCP server (started on ai_enabled or at
+            # app mount) instead of creating a fresh, never-started backend —
+            # a fresh get_ai() has no live subprocess, so its generate() fails
+            # with "сервер не запущен".
+            backend = get_active_backend()
+            if backend is None:
+                backend = get_ai(cfg)
+                if backend is None:
+                    return 0
+                ok = await start_ai(cfg)
+                if not ok:
+                    return 0
+                backend = get_active_backend()
             if backend is None:
                 return 0
 
@@ -548,8 +562,10 @@ class TargetScreen(Widget):
                 if not path.startswith("/"):
                     path = "/" + path
                 # Skip certainty-empty or already-known. Simple dedupe vs known.
+                # count=False: AI-suggested paths are discoveries, not real HTTP —
+                # a repeated suggestion must not inflate the node counter.
                 try:
-                    api.add_request(ParsedRequest(method=method, url=f"{url}{path}"))
+                    api.add_request(ParsedRequest(method=method, url=f"{url}{path}"), count=False)
                     added += 1
                 except Exception:
                     continue

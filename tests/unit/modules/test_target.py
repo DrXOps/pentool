@@ -80,6 +80,17 @@ class TestSiteMap:
         node = next(n for n in nodes if n.path == "/login")
         assert node.request_count == 3
 
+    def test_add_request_count_false_not_increment_on_dup(self, sitemap: SiteMap) -> None:
+        """Discovery sources (crawl/AI) pass count=False — re-adding an
+        existing path must update meta but not inflate request_count."""
+        url = "http://example.com/login"
+        sitemap.add_request(make_req(url, "GET"))            # count=True → 1
+        sitemap.add_request(make_req(url, "GET"), count=False)  # discovery → stays 1
+        sitemap.add_request(make_req(url, "GET"), count=False)  # discovery → stays 1
+        nodes = sitemap.get_paths("example.com")
+        node = next(n for n in nodes if n.path == "/login")
+        assert node.request_count == 1
+
     def test_add_request_collects_methods(self, sitemap: SiteMap) -> None:
         url = "http://example.com/form"
         sitemap.add_request(make_req(url, "GET"))
