@@ -297,8 +297,15 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._intercept_pending: list[InterceptedRequest] = []
         self._intercept_show_special_chars: bool = False
         self._intercept_raw_full: str = ""
-        # Debounce: batch rapid row appends into one incremental add_rows() call
-        self._pending_append_rows: list[tuple] = []  # (req, row_id) pairs
+        # Adaptive debounce for _append_row_to_table: under light traffic (≤5
+        # rows/burst) use 0.2s; under heavy traffic (bursts from many tabs)
+        # use 0.8s so the main loop isn't flooded with add_rows()/scroll_end().
+        # Reset to fast debounce whenever the queue drains completely.
+        self._append_debounce_fast = 0.2
+        self._append_debounce_slow = 0.8
+        self._append_debounce_heavy = 0.8
+        self._append_burst_count = 0
+        self._last_append_burst_ts = 0.0
         self._debounce_timer = None
         # Same incremental-append batching for the WS History table, so a live
         # WS row is added to the tail without a full `_reload_ws_table` rebuild
@@ -980,7 +987,19 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         }
         self._pending_append_rows.append(row)
         if self._debounce_timer is None:
-            self._debounce_timer = self.set_timer(0.15, self._flush_pending_rows)
+            # Adaptive debounce: if a burst just drained, start fast; if
+            # the burst count keeps growing, use slow debounce so the
+            # main loop doesn't drown in table rebuilds.
+            now = time.time()
+            if now - self._last_append_burst_ts < 0.5:
+                self._append_burst_count += 1
+            else:
+                self._append_burst_count = 0
+            self._last_append_burst_ts = now
+            delay = (self._append_debounce_slow
+                     if self._append_burst_count > 10
+                     else self._append_debounce_fast)
+            self._debounce_timer = self.set_timer(delay, self._flush_pending_rows)
 
     def _flush_pending_rows(self) -> None:
         """Flush all pending rows into the table via incremental add_rows().
