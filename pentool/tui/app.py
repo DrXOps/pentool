@@ -7,6 +7,7 @@ import os
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
 
 from textual import on
@@ -86,6 +87,53 @@ from pentool.tui.widgets.module_tabs import ModuleTabs
 from pentool.tui.widgets.statusbar import StatusBar
 
 logger = get_logger(__name__)
+
+
+def _setup_faulthandler(log_file: str) -> None:
+    """Install faulthandler to dump Python thread stacks into the log file.
+
+    Purpose: catch the "TUI just vanished silently" failure mode. When the
+    Textual main loop exits on its own (not through `action_quit`) under a wall
+    of traffic, the root cause never reached the logger — only a sudden
+    `app.run()` return, after which the process previously hung on non-daemon
+    threads. With faulthandler enabled:
+
+      * SIGSEGV/SIGABRT (C-level or interpreter abort) print every thread's
+        Python stack into the log file immediately;
+      * `kill -USR1 <pid>` dumps all threads on demand, so a live hang can be
+        caught without sudo/py-spy.
+
+    Writes to the same file the logger uses (append), so it survives a
+    pty/terminal teardown. Best-effort — never throws into the app.
+    """
+    try:
+        import faulthandler
+        import signal as _signal
+
+        path = str(log_file)
+        try:
+            _fh = open(path, "a", buffering=1)
+        except Exception:
+            # Fall back to stderr if the configured log path isn't writable.
+            _fh = None
+        faulthandler.enable(file=_fh, all_threads=True) if _fh is not None else faulthandler.enable(all_threads=True)
+        for _sig in (_signal.SIGUSR1, _signal.SIGUSR2):
+            try:
+                # chain=False deliberately: faulthandler prints the stacks and
+                # swallows the signal, so `kill -USR1 <pid>` is a pure on-demand
+                # dump that does NOT terminate the process (chain=True would
+                # re-raise to the default SIG_DFL and kill it).
+                faulthandler.register(
+                    _sig,
+                    file=_fh,
+                    chain=False,
+                    all_threads=True,
+                ) if _fh is not None else faulthandler.register(_sig, chain=False, all_threads=True)
+            except (ValueError, OSError):
+                pass
+    except Exception:
+        pass
+
 
 # Mapping module_id → widget class
 _SCREEN_MAP: dict[str, type] = {
@@ -270,6 +318,23 @@ class PentoolApp(App):
         self._skip_project_guard: bool = False  # True in tests to bypass the guard
         # Protection against message storm: set of pending req_ids for deduplication
         self._pending_done_ids: set[str] = set()
+        # Set when a deliberate quit (action_quit / Ctrl+Q) is underway, so the
+        # on_screen_unmounted diagnostic doesn't fire on the normal shutdown
+        # that action_quit performs. Cleared... reset per run() naturally since
+        # a fresh app instance is created for each launch.
+        self._is_quitting = False
+        # Cached module screens + last time we re-resolved them. Live proxy
+        # traffic calls on_proxy_request_* / on_send_to_target *per request*;
+        # each call used to do a fresh `query_one(SCREEN_*)`. When a module
+        # screen wasn't mounted (other tab, being torn down), that became a
+        # query_one → NoMatches → try/except → log-log-log on EVERY request —
+        # under a wall of traffic this alone pegged the CPU (~25%) with the UI
+        # already gone. Cache the resolved screen and only re-resolve on a slow
+        # interval, so a missing screen degrades to a quiet no-op instead of a
+        # per-request hunt.
+        self._proxy_screen = None
+        self._target_screen = None
+        self._screen_resolve_at = 0.0
         # Vim-style key sequences: "g" prefix for Proxy sub-tabs
         # Shift+p then h/i/w → proxy HTTP/Intercept/WS
         self._key_seq_state: str = ""
@@ -313,6 +378,22 @@ class PentoolApp(App):
             error,
             "".join(traceback.format_exception(type(error), error, error.__traceback__)),
         )
+        # Additionally dump EVERY thread's Python stack — a module screen can
+        # be torn down by Textual after a fatal error, and the plain traceback
+        # above loses what the other threads (proxy loop, aiosqlite) were doing
+        # at the moment the app collapsed. All-threads dump is what shows the
+        # actual trigger ("TUI just vanished" hunting).
+        try:
+            import faulthandler
+            import io
+            _buf = io.StringIO()
+            faulthandler.dump_traceback(file=_buf, all_threads=True)
+            logger.error(
+                "APP: --- fatal all-thread dump begin ---\n%s\n--- fatal all-thread dump end ---",
+                _buf.getvalue(),
+            )
+        except Exception:
+            pass
         super()._handle_exception(error)
 
     def compose(self) -> ComposeResult:
@@ -344,6 +425,7 @@ class PentoolApp(App):
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
+        _setup_faulthandler(self._cfg.log_file)
         try:
             await init_db(self._cfg.db_path)
         except Exception as exc:
@@ -460,6 +542,38 @@ class PentoolApp(App):
         # Global AI: if the master switch was left ON (persisted), bring up the
         # MCP server and make AI controls visible right away. If OFF, hide them.
         self._start_ai_if_enabled()
+
+    def on_screen_unmounted(self, event) -> None:
+        """Diagnostic: catch the "TUI just vanished" exit path.
+
+        When the main loop dies on its own (not via action_quit), Textual strips
+        every module screen and falls back to the bare `_default` Screen — the
+        point at which `app.run()` is about to return. That moment never reached
+        the logger before (Textual's own exit diagnostics go to the lost stderr).
+        If we see the last screen unmount while the app still considers itself
+        running (i.e. NOT an in-progress, deliberate quit), dump every thread's
+        Python stack into the log — that shows what the main thread was doing
+        right as the loop collapsed, i.e. the actual trigger we've been hunting.
+        """
+        try:
+            if self._is_quitting:
+                return
+            # Only fire on the abnormal "last screen goes away" case: app is
+            # still running and the active screen has collapsed to the default.
+            if not getattr(self, "is_running", False):
+                return
+            current = getattr(self, "screen", None)
+            cid = getattr(current, "id", None) if current is not None else None
+            if cid == "_default":
+                import faulthandler
+                import io
+                logger.warning("APP: diagnosing abnormal exit — app lost all module screens "
+                               "(active_screen=%r) while still running. Full thread stack dump:", cid)
+                _buf = io.StringIO()
+                faulthandler.dump_traceback(file=_buf, all_threads=True)
+                logger.warning("APP: --- exit-dump begin ---\n%s\n--- exit-dump end ---", _buf.getvalue())
+        except Exception:
+            pass
 
     async def _auto_open_last_project(self) -> None:
         """Open the last project from recent_projects at startup."""
@@ -1249,13 +1363,45 @@ class PentoolApp(App):
     # Sprint 3: _on_proxy_request and _proxy_request_done_cb removed — proxy emits via EventBus,
     # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted → _on_bus_proxy_captured/completed
 
+    _SCREEN_RESOLVE_INTERVAL = 2.0
+
+    def _get_proxy_screen(self):
+        """Cached #screen-proxy; re-resolves every interval. Returns None when
+        the screen isn't mounted — callers treat None as a quiet no-op."""
+        from pentool.tui.screens.proxy.screen import ProxyScreen
+        return self._get_screen(SCREEN_PROXY, ProxyScreen, "_proxy_screen")
+
+    def _get_target_screen(self):
+        """Cached #screen-target; re-resolves every interval. None = not mounted."""
+        from pentool.tui.screens.target.screen import TargetScreen
+        return self._get_screen(SCREEN_TARGET, TargetScreen, "_target_screen")
+
+    def _get_screen(self, selector: str, cls, cache_attr: str):
+        now = time.monotonic()
+        # Cache hit within the interval → reuse without re-querying.
+        if now - self._screen_resolve_at < self._SCREEN_RESOLVE_INTERVAL:
+            return getattr(self, cache_attr)
+        self._screen_resolve_at = now
+        try:
+            screen = self.query_one(selector, cls)
+        except Exception:
+            # Screen not mounted (other tab / being torn down). Cache None so we
+            # DON'T re-hunt on every request — this is the anti-spam that stops
+            # the per-request query_one→NoMatches→log loop under load.
+            setattr(self, cache_attr, None)
+            return None
+        setattr(self, cache_attr, screen)
+        return screen
+
     @on(ProxyRequestAdded)
     def on_proxy_request_added(self, msg: ProxyRequestAdded) -> None:
         """Proxy captured a new request → update ProxyScreen."""
         if not (self._proxy and self._proxy.is_running):
             return
         try:
-            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+            screen = self._get_proxy_screen()
+            if screen is None:
+                return  # quiet no-op — screen not mounted; do NOT log each call
             screen.add_request_row(msg.req)
             if self._proxy and self._proxy.intercept_enabled:
                 screen.show_intercepted_request(msg.req)  # type: ignore[arg-type]
@@ -1273,7 +1419,9 @@ class PentoolApp(App):
             logger.warning("on_proxy_request_done: msg.req is %s, skipping", type(msg.req))
             return
         try:
-            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+            screen = self._get_proxy_screen()
+            if screen is None:
+                return  # quiet no-op — screen not mounted; do NOT log each call
             screen.update_request_row(msg.req)
             if self._proxy and self._proxy.intercept_enabled:
                 screen.show_intercept_response(msg.req)  # type: ignore[arg-type]
@@ -1285,18 +1433,20 @@ class PentoolApp(App):
     @on(SendToTarget)
     def on_send_to_target(self, msg: SendToTarget) -> None:
         try:
-            from pentool.tui.screens.target.screen import TargetScreen
-            target = self.query_one(SCREEN_TARGET, TargetScreen)
+            target = self._get_target_screen()
+            if target is None:
+                return  # quiet no-op — Target screen not mounted; do NOT log each call
             target.add_request_from_proxy(msg.req)
         except Exception as e:
-            logger.warning("on_send_to_target: failed to forward request to Target: %s", e)
+            logger.debug("on_send_to_target: %s", e)
 
     def _add_raw_to_target(self, raw: str) -> None:
         try:
-            from pentool.tui.screens.target.screen import TargetScreen
             from pentool.utils.parser import parse_http_request
             req = parse_http_request(raw)
-            target = self.query_one(SCREEN_TARGET, TargetScreen)
+            target = self._get_target_screen()
+            if target is None:
+                return
             target.add_request_from_proxy(req)
         except Exception as e:
             logger.debug("_add_raw_to_target: %s", e)
@@ -1704,6 +1854,10 @@ class PentoolApp(App):
             pass
 
     async def action_quit(self) -> None:
+        # Deliberate quit underway — suppress the abnormal-exit diagnostic in
+        # on_screen_unmounted (which would otherwise fire during this normal
+        # shutdown as the module screens are torn down one by one).
+        self._is_quitting = True
         # Unsubscribe from EventBus before exiting
         try:
             bus = get_event_bus()

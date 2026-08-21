@@ -55,6 +55,13 @@ _STOP_TASK_GRACE = 0.6
 # This is deliberately a bit longer than the cancel wave.
 _STOP_TASK_DRAIN = 2.0
 
+# How long _handle_client may wait for its writer to actually close before
+# giving up. Bounded so a wedged socket (open upstream tunnel that never got
+# its far side closed) cannot leave the task pending on wait_closed() forever —
+# see _handle_client's bound on wait_closed(), which is the fix for the mass
+# _PyGen_Finalize heap-corruption crash (mass-pending-tasks at loop teardown).
+_WRITER_CLOSE_GRACE = 0.5
+
 
 InterceptState = Literal["waiting", "forwarded", "dropped"]
 
@@ -398,7 +405,21 @@ class ProxyServer:
         finally:
             try:
                 writer.close()
-                await writer.wait_closed()
+                # Bounded close, not an unbounded await. If this connection
+                # still holds a live upstream tunnel (an open _tunnel_raw /
+                # WS relay that never got its other side closed), wait_closed()
+                # would block forever — and under mass cancellation (proxy.stop
+                # with many in-flight WS/keep-alive tunnels) that left hundreds
+                # of _handle_client tasks pending on account of THIS line, which
+                # the loop then finalized in a burst (_PyGen_Finalize over a
+                # fragmented heap → "free(): corrupted unsorted chunks" SIGABRT).
+                # Give it a short grace so even a wedged socket cannot hold a
+                # task hostage; the fd is closed regardless at loop teardown.
+                await asyncio.wait_for(
+                    writer.wait_closed(), timeout=_WRITER_CLOSE_GRACE
+                )
+            except asyncio.TimeoutError:
+                logger.debug("_handle_client: writer.wait_closed() timed out after %.1fs", _WRITER_CLOSE_GRACE)
             except Exception as e:
                 logger.debug("_handle_client: writer.close() error (connection already reset?): %s", e)
 
@@ -539,6 +560,14 @@ class ProxyServer:
                     await dst.drain()
             except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
                 pass  # normal TCP tunnel termination
+            except asyncio.CancelledError:
+                # CancelledError is a BaseException (not Exception) — it would
+                # otherwise slip past the generic handler below AND, if the
+                # peer pipe fell over mid-drain, leave the far-side writer
+                # open so the enclosing _handle_client's wait_closed() would
+                # never return. Nothing to log; the shared finally (outside
+                # this gather) closes both writers.
+                raise
             except Exception as e:
                 logger.debug("_tunnel_raw pipe error: %s", e)
             finally:
@@ -547,11 +576,26 @@ class ProxyServer:
                 except Exception as e:
                     logger.debug("_tunnel_raw dst.close() error: %s", e)
 
-        await asyncio.gather(
-            pipe(reader, rem_writer),
-            pipe(rem_reader, writer),
-            return_exceptions=True,
-        )
+        try:
+            await asyncio.gather(
+                pipe(reader, rem_writer),
+                pipe(rem_reader, writer),
+                return_exceptions=True,
+            )
+        finally:
+            # Ensure BOTH ends are closed even when this whole tunnel is
+            # cancelled mid-flight (one pipe broke the other). Under mass
+            # cancellation this is what was leaking open writers → unbounded
+            # pending _handle_client tasks on wait_closed() → the _PyGen_Finalize
+            # heap-corruption crash. close() alone is sufficient (asyncio
+            # schedules the actual fd close); wait_closed is bounded here as a
+            # belt-and-braces so we never block a cancel.
+            for w in (writer, rem_writer):
+                try:
+                    w.close()
+                    await asyncio.wait_for(w.wait_closed(), timeout=_WRITER_CLOSE_GRACE)
+                except Exception:
+                    pass
 
     async def _handle_http(
         self,

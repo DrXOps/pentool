@@ -280,10 +280,13 @@ def main() -> None:
         # so a fresh launch doesn't fail with "address already in use".
         _kill_orphaned_pentool()
 
+        from pentool.tui.app import PentoolApp
         try:
-            from pentool.tui.app import PentoolApp
             PentoolApp().run()
         except (KeyboardInterrupt, SystemExit):
+            # Let the interpreter shut down normally on signals/explicit exits
+            # (PEP 8: never swallow these). The non-daemon-thread hang fix
+            # below only targets the clean-return path (the `else` branch).
             raise
         except Exception as exc:
             # Send anonymous crash report (if not disabled in settings)
@@ -293,6 +296,19 @@ def main() -> None:
             except Exception:
                 pass
             raise
+        else:
+            # `run()` returned cleanly — but NOT through `action_quit` (which
+            # does its own os._exit deep inside the app). Observed: under a
+            # wall-of-traffic refresh the app finished, app.run() returned,
+            # and the interpreter then hung forever in threading._shutdown
+            # waiting on never-closed non-daemon threads — several aiosqlite
+            # _connection_worker threads plus the still-alive proxy thread.
+            # Those only get closed inside action_quit; if it never ran, a
+            # plain return would leave a zombie "TUI vanished, terminal hangs".
+            # Force-terminate here — the TUI is already gone and any terminal
+            # pty has already been reset by Textual.
+            import os as _os
+            _os._exit(0)
 
 
 if __name__ == "__main__":

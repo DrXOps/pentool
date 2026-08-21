@@ -10,6 +10,11 @@ from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# How long a writer may take to actually close (fd teardown) before we give up
+# and let the fd be reclaimed at loop shutdown. Bounded so a wedged socket can't
+# hold a cancellation hostage — same rationale as Proxy._WRITER_CLOSE_GRACE.
+_WRITER_CLOSE_GRACE = 0.5
+
 
 class WebSocketHandler:
     """WebSocket connection handler for the proxy.
@@ -153,6 +158,12 @@ class WebSocketHandler:
                     await dst.drain()
             except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
                 pass
+            except asyncio.CancelledError:
+                # CancelledError is BaseException — it would bypass the generic
+                # handler below. We let it propagate; the shared finally after
+                # the gather closes both writers (see below), so a cancelled
+                # relay can't leave the far side open.
+                raise
             except Exception as exc:
                 logger.debug("_ws_tunnel relay error (%s): %s", direction, exc)
             finally:
@@ -161,11 +172,25 @@ class WebSocketHandler:
                 except Exception:
                     pass
 
-        await asyncio.gather(
-            _relay(client_reader, srv_writer, "client->server"),
-            _relay(srv_reader, client_writer, "server->client"),
-            return_exceptions=True,
-        )
+        try:
+            await asyncio.gather(
+                _relay(client_reader, srv_writer, "client->server"),
+                _relay(srv_reader, client_writer, "server->client"),
+                return_exceptions=True,
+            )
+        finally:
+            # Close BOTH writers even when the tunnel is cancelled mid-flight
+            # (one relay broke the other). Leaving srv_writer (upstream) open
+            # left _handle_client's wait_closed() pending forever; massed up,
+            # those pending tasks were finalized in a burst at loop teardown
+            # → _PyGen_Finalize heap corruption ("free(): corrupted unsorted
+            # chunks") SIGABRT. Bounded wait so we never block a cancel.
+            for w in (client_writer, srv_writer):
+                try:
+                    w.close()
+                    await asyncio.wait_for(w.wait_closed(), timeout=_WRITER_CLOSE_GRACE)
+                except Exception:
+                    pass
 
     async def connect_and_handle(
         self,

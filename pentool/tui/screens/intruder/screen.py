@@ -2315,7 +2315,7 @@ class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
     }
     _SmartPayloadsDialog #dialog {
         width: 60;
-        height: 22;
+        height: auto;
         background: $surface;
         border: solid $primary;
         padding: 1 2;
@@ -2357,10 +2357,10 @@ class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
         height: auto;
         layout: horizontal;
         margin-top: 1;
-        align: left middle;
+        align: center middle;
     }
-    _SmartPayloadsDialog #buttons Button {
-        margin-right: 1;
+    _SmartPayloadsDialog #buttons ToolbarButton {
+        margin: 0 1;
     }
     """
 
