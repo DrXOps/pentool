@@ -432,9 +432,11 @@ class PentoolApp(App):
                 try:
                     _orig(self, event)
                 except AttributeError as _ae:
-                    if "has no attribute 'region'" in str(_ae):
+                    _emsg = str(_ae)
+                    if "has no attribute 'region'" in _emsg:
                         return
-                    raise
+                    logger.warning("APP: _forward_event guard caught %s: %s",
+                                   type(_ae).__name__, _emsg)
 
             _guarded.__name__ = "_forward_event"
             _guarded.__qualname__ = "Screen._forward_event"
