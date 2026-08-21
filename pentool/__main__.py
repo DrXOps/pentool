@@ -227,39 +227,49 @@ def main() -> None:
 
         # AI first-run dialog: ask user to install LLM if not set up yet
         try:
-            from pentool.services.ai.factory import ai_setup_required, get_model_size_mb
+            from pentool.services.ai.factory import (
+                ai_setup_required,
+                get_ai_system_requirements,
+                get_model_size_mb,
+            )
             if ai_setup_required():
+                ts = get_ai_system_requirements()
                 print()
                 print("╔══════════════════════════════════════════════════════════╗")
-                print("║ 🔮 AI-помощник                                        ║")
+                print("║ 🔮 AI assistant                                         ║")
                 print("║                                                         ║")
-                print("║ AI может помогать со сканированием:                    ║")
-                print("║   • подбирать релевантные чеки под цель               ║")
-                print("║   • обходить WAF сгенерированными payload'ами         ║")
-                print("║   • находить скрытые эндпоинты                        ║")
+                print("║ AI can assist during scanning:                         ║")
+                print("║   • pick relevant checks for a target                  ║")
+                print("║   • bypass WAF with generated payloads                 ║")
+                print("║   • discover hidden endpoints                          ║")
                 print("║                                                         ║")
-                print(f"║ ⚠ LLM (~{get_model_size_mb()} MB) будет загружена при     ║")
-                print("║   установке. Это займёт время в зависимости от        ║")
-                print("║   скорости интернета.                                 ║")
+                print("║  Model: LFM2.5-350M-heretic                            ║")
+                print(f"║  Size:  ~{get_model_size_mb()} MB  |  Context: {ts['context_len']} tokens             ║")
+                print(f"║  RAM:   {ts['ram']}  |  CPU-only, no GPU required           ║")
                 print("║                                                         ║")
-                print("║ Хотите установить AI-помощника?                       ║")
+                print("║ The model will be downloaded and converted to GGUF at  ║")
+                print("║ install time. This may take a while depending on your  ║")
+                print("║ connection speed.                                      ║")
                 print("║                                                         ║")
-                print("║  [Y] Да, установить  [N] Нет, спасибо  [S] Пропустить ║")
+                print("║ Install the AI assistant?                              ║")
+                print("║                                                         ║")
+                print("║  [Y] Yes  [N] No, thanks  [S] Skip                    ║")
                 print("╚══════════════════════════════════════════════════════════╝")
                 choice = input("> ").strip().lower()
                 if choice == "y":
-                    print("\nУстановка AI-помощника...")
+                    print("\nInstalling AI assistant...")
                     import asyncio
+
                     from pentool.core.config import get_config
                     from pentool.services.ai.factory import install_ai_components
                     asyncio.run(install_ai_components(get_config()))
-                    print("\n✅ AI-помощник установлен. MCP-сервер запускается из Dashboard.")
-                    print("  Или командой: pentool ai start\n")
+                    print("\n✅ AI assistant installed. MCP server is started from the Dashboard.")
+                    print("  Or via the command: pentool ai start\n")
                 elif choice == "n":
-                    print("\nOK. AI-помощник можно будет установить позже:\n")
+                    print("\nOK. You can install the AI assistant later:\n")
                     print("  pentool ai setup\n")
                 else:
-                    print("\nПропущено. Установи позже:\n")
+                    print("\nSkipped. Install later:\n")
                     print("  pentool ai setup\n")
         except Exception:
             pass

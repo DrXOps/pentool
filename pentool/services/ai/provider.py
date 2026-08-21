@@ -13,7 +13,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any
 
-from pentool.services.ai.prompts import AITask, REGISTRY
+from pentool.services.ai.prompts import REGISTRY, AITask
 
 log = logging.getLogger(__name__)
 
@@ -63,8 +63,8 @@ class MCPBackend(AIBackend):
     def __init__(self, mcp_cmd: list[str] | None = None) -> None:
         self._process: asyncio.subprocess.Process | None = None
         self._mcp_cmd = mcp_cmd
-        self._reader: asyncio.StreamReader | None = None
-        self._writer: asyncio.StreamWriter | None = None
+        self._stdin: Any = None  # asyncio StreamWriter (process stdin)
+        self._stdout: Any = None  # asyncio StreamReader (process stdout)
 
     async def start(self) -> bool:
         """Запустить MCP-сервер как подпроцесс."""
@@ -78,11 +78,13 @@ class MCPBackend(AIBackend):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            # Обёртка для удобства чтения/записи
-            if self._process.stdin and self._process.stdout:
-                self._reader = asyncio.StreamReader()
-                protocol = asyncio.StreamReaderProtocol(self._reader)
-                self._writer = asyncio.StreamWriter(self._process.stdin, protocol, None, None)
+            # Используем буферизованный binary I/O subprocess напрямую, а НЕ
+            # asyncio.StreamWriter/StreamReader поверх pipe: последние требуют
+            # корректного event loop при создании и падали с
+            # «'NoneType' object has no attribute 'create_future'» когда loop
+            # не был привязан. Чтение/запись ведём блокирующе в to_thread.
+            self._stdin = self._process.stdin
+            self._stdout = self._process.stdout
             global _MCP_PROCESS_PID
             _MCP_PROCESS_PID = self._process.pid
             log.info("MCP-сервер запущен (PID=%s)", self._process.pid)
@@ -93,7 +95,7 @@ class MCPBackend(AIBackend):
 
     async def _call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
         """Вызвать tool MCP-сервера через JSON-RPC."""
-        if not self._writer:
+        if not self._stdin or not self._stdout:
             log.warning("MCPBackend: сервер не запущен")
             return None
         req = {
@@ -104,16 +106,19 @@ class MCPBackend(AIBackend):
         }
         try:
             payload = json.dumps(req, ensure_ascii=False)
-            self._writer.write((payload + "\n").encode("utf-8"))
-            await self._writer.drain()
+            # process.stdin/stdout от create_subprocess_exec — это asyncio
+            # StreamWriter/StreamReader, правильно привязанные к event loop.
+            self._stdin.write((payload + "\n").encode("utf-8"))
+            await self._stdin.drain()
 
-            if self._reader:
-                line = await asyncio.wait_for(self._reader.readline(), timeout=60.0)
-                resp = json.loads(line.decode("utf-8").strip())
-                if "error" in resp:
-                    log.error("MCP-сервер вернул ошибку: %s", resp["error"])
-                    return None
-                return resp.get("result")
+            line = await asyncio.wait_for(self._stdout.readline(), timeout=60.0)
+            if not line:
+                return None
+            resp = json.loads(line.decode("utf-8").strip())
+            if "error" in resp:
+                log.error("MCP-сервер вернул ошибку: %s", resp["error"])
+                return None
+            return resp.get("result")
         except asyncio.TimeoutError:
             log.warning("MCPBackend: таймаут при вызове tool %s", tool_name)
         except Exception as exc:
@@ -121,7 +126,11 @@ class MCPBackend(AIBackend):
         return None
 
     async def generate(self, task_name: str, context: dict[str, Any] | None = None) -> dict[str, Any] | None:
-        """Вызвать MCP-сервер для задачи task_name."""
+        """Вызвать MCP-сервер для задачи task_name.
+
+        MCP tools/call возвращает {"content": [{"type":"text","text":"<json>"}]}
+        — вытаскиваем и парсим text, чтобы клиент получил "чистый" dict/items.
+        """
         task = REGISTRY.get(task_name)
         if not task:
             log.warning("MCPBackend: неизвестная задача %s", task_name)
@@ -136,13 +145,39 @@ class MCPBackend(AIBackend):
         if context:
             prompt_data["context"] = context
 
-        return await self._call_tool("generate_payload", prompt_data)
+        resp = await self._call_tool("generate_payload", prompt_data)
+        if not resp:
+            return None
+        # tools/call → {"content": [{"type":"text","text":"<json>"}], ...}
+        try:
+            content = resp.get("content") or []
+            text = ""
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    text += str(item.get("text", ""))
+            parsed = json.loads(text) if text.strip() else None
+            return parsed if isinstance(parsed, dict) else {"items": parsed} if isinstance(parsed, list) else None
+        except Exception as exc:  # noqa: BLE001
+            log.error("MCPBackend: не удалось распарсить ответ: %s", exc)
+            return None
 
     async def health(self) -> bool:
-        """Проверить здоровье MCP-сервера."""
+        """Проверить здоровье MCP-сервера.
+
+        Инструмент `health` существует на сервере (возвращает {ok, ...});
+        обращаться через него, а не через JSON-RPC-метод `ping`.
+        """
         try:
-            result = await self._call_tool("ping", {})
-            return result is not None
+            result = await self._call_tool("health", {})
+            if not result:
+                return False
+            content = result.get("content") or []
+            text = "".join(str(c.get("text", "")) for c in content if isinstance(c, dict))
+            try:
+                data = json.loads(text) if text.strip() else {}
+                return bool(data.get("ok", False))
+            except Exception:  # noqa: BLE001
+                return False
         except Exception:
             return False
 
@@ -159,5 +194,5 @@ class MCPBackend(AIBackend):
             if _MCP_PROCESS_PID == self._process.pid:
                 _MCP_PROCESS_PID = None
             self._process = None
-            self._writer = None
-            self._reader = None
+            self._stdin = None
+            self._stdout = None

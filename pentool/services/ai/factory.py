@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -52,6 +50,64 @@ def _find_default_model() -> str | None:
     return None
 
 
+# Активный AI-бэкенд на процесс. Храним здесь (а не где-то в TUI), чтобы и
+# TUI, и CLI имели общую ссылку для start/stop/health — раньше вместо этого
+# был «TODO: хранить ссылку на активный бэкенд».
+_ACTIVE_BACKEND: "MCPBackend | None" = None
+
+
+def is_ai_running() -> bool:
+    """True, если MCP-бэкенд создан и его subprocess жив."""
+    global _ACTIVE_BACKEND
+    b = _ACTIVE_BACKEND
+    if b is None:
+        return False
+    try:
+        from pentool.services.ai.provider import is_mcp_running
+        return is_mcp_running()
+    except Exception:  # noqa: BLE001
+        return False
+
+
+async def start_ai(config: Config) -> bool:
+    """Поднять MCP-сервер (если модель есть и AI включён). Лениво-идемпотентно."""
+    global _ACTIVE_BACKEND
+    if _ACTIVE_BACKEND is not None:
+        return True
+    if not config.ai_enabled:
+        return False
+    backend = get_ai(config)
+    if backend is None:
+        log.warning("AI: start_ai — модель не найдена, AI недоступен")
+        return False
+    try:
+        ok = await backend.start()
+    except Exception as exc:  # noqa: BLE001
+        log.error("AI: start_ai failed: %s", exc)
+        return False
+    if ok:
+        _ACTIVE_BACKEND = backend
+        log.info("AI: MCP-сервер запущен")
+    return ok
+
+
+async def stop_ai() -> None:
+    """Остановить MCP-сервер, если он запущен."""
+    global _ACTIVE_BACKEND
+    b = _ACTIVE_BACKEND
+    _ACTIVE_BACKEND = None
+    if b is not None:
+        try:
+            await b.close()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("AI: stop_ai close error: %s", exc)
+
+
+def get_active_backend() -> "MCPBackend | None":
+    """Вернуть активный (запущенный) AI-бэкенд, если он поднят."""
+    return _ACTIVE_BACKEND
+
+
 def _build_mcp_cmd(model_path: str) -> list[str]:
     """Собрать команду запуска MCP-сервера.
 
@@ -62,7 +118,6 @@ def _build_mcp_cmd(model_path: str) -> list[str]:
          старый inline-механизм).
       3. Заглушка `echo`, если сервер не установлен.
     """
-    import shutil
     exe = shutil.which("pentool-mcp-server")
     if exe:
         return [exe, "--model", model_path]
@@ -83,8 +138,29 @@ def ai_setup_required() -> bool:
 
 
 def get_model_size_mb() -> int:
-    """Вернуть примерный размер модели в MB для показа пользователю."""
-    return 750  # LFM2.5-350M-heretic ~750 MB
+    """Вернуть примерный размер GGUF-файла модели в MB для показа пользователю.
+
+    LFM2.5-350M-heretic конвертируется в llama.cpp GGUF-Q8_0 — размер близок
+    к официальному LiquidAI/LFM2.5-350M-Q8_0 (361.7 MB), округляем до 363.
+    """
+    return 363
+
+
+def get_ai_system_requirements() -> dict[str, str]:
+    """Вернуть системные требования AI-модели для показа в вводном сообщении.
+
+    Значения взяты из карточек LFM2.5-350M-heretic (Liquid AI + GGUF-репо
+    FadedRedStar): 350M параметров, контекст 131 072 токенов, работает на CPU
+    под 1 GB RAM — edge/on-device deployment, день-1 поддержка llama.cpp.
+    """
+    return {
+        "parameters": "350M",
+        "context_len": "131072",
+        "ram": "< 1 GB",
+        "accelerator": "CPU only (no GPU required)",
+        "quant": "GGUF-Q8_0",
+        "prompt_format": "ChatML",
+    }
 
 
 async def install_ai_components(config: Config, progress_cb: Any = None) -> bool:
@@ -101,16 +177,14 @@ async def install_ai_components(config: Config, progress_cb: Any = None) -> bool
     AI_MODELS_DIR.mkdir(parents=True, exist_ok=True)
     AI_MCP_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 2. Скачать модель (заглушка — реальная загрузка будет позже)
-    model_url = _get_model_download_url()
+    # 2. Скачать готовый GGUF-файл модели (пользователь ничего не
+    #    конвертирует — квантизация уже готова и хостится на HuggingFace).
+    #    Никаких мнимых "успехов": при сетевой ошибке/404/неверном размере
+    #    возвращаем False, и вызывающий показывает ошибку пользователю.
     model_path = AI_MODELS_DIR / "lfm-2.5-350m-heretic.gguf"
-
     if not model_path.exists():
-        if progress_cb:
-            progress_cb(f"Скачивание модели LFM2.5-350M (~{get_model_size_mb()} MB)...")
-        # TODO: реальная загрузка через aiohttp / curl
-        # Сейчас — заглушка, чтобы не блокировать разработку
-        log.info("AI: модель будет скачана из %s в %s", model_url, model_path)
+        if not await _download_gguf(model_path, progress_cb=progress_cb):
+            return False
 
     # 3. MCP-сервер: предпочитаем отдельный PyPI-пакет `pentool-mcp-server`,
     #    если он не установлен и доступен pip — доустанавливаем. Если pip
@@ -132,7 +206,6 @@ async def install_ai_components(config: Config, progress_cb: Any = None) -> bool
 
 def _is_mcp_server_installed() -> bool:
     """True, если доступен entry point `pentool-mcp-server`."""
-    import shutil
     return shutil.which("pentool-mcp-server") is not None
 
 
@@ -160,9 +233,59 @@ def _try_pip_install_mcp_server() -> bool:
 
 
 def _get_model_download_url() -> str:
-    """Вернуть URL для скачивания GGUF-модели."""
-    # TODO: заменить на реальный URL после форка репозитория
-    return "https://github.com/DrXOps/LFM-2.5-350M-heretic/releases/latest/download/lfm-2.5-350m-heretic.gguf"
+    """Вернуть URL для скачивания готового GGUF-файла модели.
+
+    Квантизация LFM2.5-350M-heretic уже готова (пользователь ничего не
+    конвертирует) и хостится на HuggingFace: FadedRedStar/LFM2.5-350M-heretic-GGUF.
+    Берём near-lossless Q8_0 (~362 MB) — лучшая точность для задач
+    instruction-following / структурной генерации payload.
+    """
+    return (
+        "https://huggingface.co/FadedRedStar/LFM2.5-350M-heretic-GGUF/"
+        "resolve/main/LFM2.5-350M-heretic-Q8_0.gguf"
+    )
+
+
+async def _download_gguf(dest: Path, progress_cb: Any = None) -> bool:
+    """Скачать готовый GGUF-файл модели в dest с проверкой результата.
+
+    Возвращает True только после успешной загрузки непустого файла с
+    ожидаемым (минимальным) размером. При любом сбое частичный файл
+    удаляется, возвращается False — чтобы не подсунуть повреждённую модель.
+    """
+    import urllib.request
+
+    url = _get_model_download_url()
+    if progress_cb:
+        progress_cb(f"Downloading LFM2.5-350M-heretic GGUF (~{get_model_size_mb()} MB)...")
+
+    tmp = dest.with_suffix(".gguf.part")
+    try:
+        # Follow redirects (HuggingFace -> CDN), with a timeout.
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=120) as resp, open(tmp, "wb") as f:
+            total = int(resp.headers.get("Content-Length") or 0)
+            downloaded = 0
+            while True:
+                chunk = resp.read(1 << 20)  # 1 MB
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if progress_cb and total:
+                    pct = downloaded * 100 // total
+                    progress_cb(f"Downloading model... {pct}%")
+        # Minimum sanity check (Q8_0 is ~362 MB; anything far smaller is bad).
+        if not tmp.exists() or tmp.stat().st_size < 100_000_000:
+            log.error("AI: скачанный GGUF слишком мал или равен 0: %s", tmp.stat().st_size if tmp.exists() else -1)
+            tmp.unlink(missing_ok=True)
+            return False
+        tmp.replace(dest)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log.error("AI: не удалось скачать модель %s: %s", url, exc)
+        tmp.unlink(missing_ok=True)
+        return False
 
 
 def _ensure_mcp_server_stub() -> None:

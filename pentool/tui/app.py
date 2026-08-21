@@ -457,6 +457,10 @@ class PentoolApp(App):
         # since the PRO package otherwise only downloads once, at activation.
         self.run_worker(self._check_for_pro_update(), exclusive=False, thread=False)
 
+        # Global AI: if the master switch was left ON (persisted), bring up the
+        # MCP server and make AI controls visible right away. If OFF, hide them.
+        self._start_ai_if_enabled()
+
     async def _auto_open_last_project(self) -> None:
         """Open the last project from recent_projects at startup."""
         await asyncio.sleep(0.2)  # give Textual time to render the UI
@@ -1508,6 +1512,18 @@ class PentoolApp(App):
         # timer that is still mid-fire).
         if "auto_save_enabled" in fields or "auto_save_interval" in fields:
             self.call_after_refresh(self._setup_auto_save)
+        # Global AI master-switch (Settings → AI): when toggled, start the MCP
+        # server (or stop it) and show/hide AI-dependent UI across modules.
+        # start_ai/stop_ai are async and run as workers so the TUI stays live.
+        if "ai_enabled" in fields:
+            from pentool.services.ai.factory import start_ai, stop_ai
+            if fields.get("ai_enabled"):
+                self.run_worker(start_ai(self._cfg))
+                self.notify("AI enabled — starting MCP server", severity="information", timeout=3)
+            else:
+                self.run_worker(stop_ai())
+                self.notify("AI disabled", severity="information", timeout=3)
+            self._update_ai_ui()
 
     def _update_status(self) -> None:
         try:
@@ -1524,6 +1540,38 @@ class PentoolApp(App):
             dashboard.update_proxy_status(running)
         except Exception:
             pass
+
+    def _update_ai_ui(self) -> None:
+        """Show/hide AI-dependent UI across modules based on the global ai_enabled.
+
+        ai_enabled in Settings is the master switch for ALL AI features. When off,
+        AI-specific controls are hidden; when on, they become visible. Target's
+        "Use AI" checkbox additionally decides AI-crawl per target.
+        """
+        ai_on = bool(getattr(self._cfg, "ai_enabled", False))
+        # Target toolbar "🤖 Use AI" checkbox — visible only when AI is enabled.
+        try:
+            box = self.query_one("#cfg-ai-use")
+            box.display = ai_on
+        except Exception:
+            pass
+        # Dashboard MCP status LED gets refreshed from is_ai_running/ai_enabled.
+        try:
+            from pentool.tui.screens.dashboard.screen import DashboardScreen, SCREEN_DASHBOARD
+            dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
+            dashboard._update_ai_status()
+        except Exception:
+            pass
+
+    def _start_ai_if_enabled(self) -> None:
+        """On app startup: start the MCP server if the global AI switch is on."""
+        try:
+            from pentool.services.ai.factory import start_ai
+            if getattr(self._cfg, "ai_enabled", False):
+                self.run_worker(start_ai(self._cfg))
+        except Exception as e:
+            logger.debug("_start_ai_if_enabled: %s", e)
+        self._update_ai_ui()
 
     def _update_proxy_screen_labels(self) -> None:
         try:
@@ -1714,6 +1762,12 @@ class PentoolApp(App):
         try:
             from pentool.api.spider_api import shutdown_spider_pool
             shutdown_spider_pool()
+        except Exception:
+            pass
+        # Stop the AI MCP server (subprocess) so no orphan LLM process lingers.
+        try:
+            from pentool.services.ai.factory import stop_ai
+            await stop_ai()
         except Exception:
             pass
         self.exit()
