@@ -1172,8 +1172,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             # one load for the final row, not N loads for every intermediate row.
             if self._highlight_debounce_handle is not None:
                 self._highlight_debounce_handle.cancel()
-            loop = asyncio.get_event_loop()
-            self._highlight_debounce_handle = loop.call_later(
+            self._highlight_debounce_handle = self.set_timer(
                 0.25, lambda: self.run_worker(self._load_row_details(new_id))
             )
 
