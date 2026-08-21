@@ -297,6 +297,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._intercept_pending: list[InterceptedRequest] = []
         self._intercept_show_special_chars: bool = False
         self._intercept_raw_full: str = ""
+        # Debounce: batch rapid row appends into one incremental add_rows() call
+        self._pending_append_rows: list[tuple] = []  # (req, row_id) pairs
         # Adaptive debounce for _append_row_to_table: under light traffic (≤5
         # rows/burst) use 0.2s; under heavy traffic (bursts from many tabs)
         # use 0.8s so the main loop isn't flooded with add_rows()/scroll_end().
