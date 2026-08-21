@@ -312,19 +312,42 @@ def main() -> None:
             # all-thread dump shows what the main loop / proxy / sqlite were
             # doing as the run() collapsed, instead of the usual post-mortem
             # proxy-only stacks.
+            #
+            # NOTE: Uses sys._current_frames() (always works) as primary + old
+            # faulthandler as a secondary. The file is APPENDED (not overwritten)
+            # so casual 'script -qc ...' capturing stdout to the same path
+            # doesn't erase it.
+            import io, sys as _sys, time as _time, traceback as _tb
+            from pentool.core.config import DEFAULT_CONFIG_DIR
+            _log_path = str(DEFAULT_CONFIG_DIR / "pentool_exit_dump.log")
             try:
-                import faulthandler
-                import io
-                import time as _time
-                from pentool.core.config import DEFAULT_CONFIG_DIR
                 _buf = io.StringIO()
-                faulthandler.dump_traceback(file=_buf, all_threads=True)
-                with open(str(DEFAULT_CONFIG_DIR / "pentool_exit_dump.log"), "a") as _f:
-                    _f.write(f"--- run() returned cleanly, {_time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+                _buf.write(f"--- run() returned cleanly, {_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                           f"pid={os.getpid()} ---\n")
+                for _tid, _frame in _sys._current_frames().items():
+                    _buf.write(f"\n--- Thread 0x{_tid:x} ---\n")
+                    _tb.print_stack(_frame, file=_buf)
+                # Extra: also try faulthandler (may be a no-op if signals conflict)
+                try:
+                    import faulthandler
+                    _fbuf = io.StringIO()
+                    faulthandler.dump_traceback(file=_fbuf, all_threads=True)
+                    _faul = _fbuf.getvalue().strip()
+                    if _faul:
+                        _buf.write(f"\n--- faulthandler supplement ---\n{_faul}\n")
+                except Exception:
+                    _buf.write("(faulthandler unavailable)\n")
+                with open(_log_path, "a") as _f:
                     _f.write(_buf.getvalue())
-                    _f.write("\n")
-            except Exception:
-                pass
+                    _f.flush()
+            except Exception as _exc:
+                # Don't swallow — write whatever we can to stderr so the user
+                # sees if the dump itself failed.
+                try:
+                    msg = f"[pentool] EXIT-DUMP-FAILED: {_exc}"
+                    print(msg, file=_sys.stderr)
+                except Exception:
+                    pass  # bare print has no business failing — but if it does, die silently
             import os as _os
             _os._exit(0)
 
