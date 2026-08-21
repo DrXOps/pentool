@@ -323,6 +323,13 @@ class PentoolApp(App):
         # that action_quit performs. Cleared... reset per run() naturally since
         # a fresh app instance is created for each launch.
         self._is_quitting = False
+        # Diagnostic: patched below to capture the call-site of app.exit() so the
+        # "run() returned cleanly" dump in __main__.py can cross-reference who
+        # requested the exit. Textual's App.exit() does NOT raise anything that
+        # escapes run() — it sets an internal flag and the event loop winds down
+        # naturally.  Without a probe, the "clean return" case (no exception =>
+        # no traceback) has no way to name the caller.
+        self._exit_caller_stack: str = ""
         # Cached module screens + last time we re-resolved them. Live proxy
         # traffic calls on_proxy_request_* / on_send_to_target *per request*;
         # each call used to do a fresh `query_one(SCREEN_*)`. When a module
@@ -468,6 +475,26 @@ class PentoolApp(App):
         setup_logging(self._cfg.log_file, self._cfg.log_level)
         _setup_faulthandler(self._cfg.log_file)
         self._guard_forward_event()
+
+        # Diagnostic: patch app.exit() to capture the call-site stack so the
+        # "run() returned cleanly" dump in __main__.py can identify the caller.
+        # Textual's exit() sets an internal flag; the event loop winds down
+        # silently and produces no traceback in the clean-return path.
+        _orig_exit = self.exit
+        _self = self
+
+        def _probed_exit(*a, **kw):
+            import traceback as _tb, io as _io, time as _time
+            _sbuf = _io.StringIO()
+            _tb.print_stack(file=_sbuf)
+            _self._exit_caller_stack = (
+                f"[exit() called at {_time.strftime('%H:%M:%S')}]\n"
+                f"{_sbuf.getvalue()}"
+            )
+            return _orig_exit(*a, **kw)
+
+        self.exit = _probed_exit  # type: ignore[method-assign]
+
         try:
             await init_db(self._cfg.db_path)
         except Exception as exc:
