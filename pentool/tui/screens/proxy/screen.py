@@ -916,9 +916,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         return self._pending_req_ids.get(req.id)
 
     async def _update_and_reload(self, req: InterceptedRequest) -> None:
+        _t0 = time.monotonic()
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         await self._wait_for_row_id(req)
+        _t1 = time.monotonic()
         actual_row_id = self._pending_req_ids.pop(req.id, None)
         self._pending_req_ids_ts.pop(req.id, None)
         if actual_row_id and actual_row_id != -1 and req.response is not None:
@@ -938,6 +940,14 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             else:
                 # Never stored / id unknown — fall back to a full WS reload.
                 await self._reload_ws_table()
+        _t2 = time.monotonic()
+        if (_t2 - _t0) > 0.2:
+            logger.warning(
+                "PROXY SCREEN: _update_and_reload slow: wait_row_id=%.1fms "
+                "update_resp=%.1fms total=%.1fms req=%s %s",
+                (_t1 - _t0) * 1000, (_t2 - _t1) * 1000, (_t2 - _t0) * 1000,
+                req.method, req.url[:60],
+            )
         elif self._current_filters:
             self._schedule_filter_reload()
         elif actual_row_id and actual_row_id != -1:
@@ -1020,9 +1030,28 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._pending_append_rows = []
         self._rows_cache.extend(new_rows)
         self._history_total += len(new_rows)
+        _t0 = time.monotonic()
         try:
             table = self.query_one("#request-list", DataTable)
+            _t1 = time.monotonic()
             records = [_row_to_record(r) for r in new_rows]
+            _t2 = time.monotonic()
+            old_tail = len(self._rows_cache) - len(new_rows) - 1
+            was_at_tail = table.cursor_row >= old_tail
+            table.add_rows(records)
+            _t3 = time.monotonic()
+            if was_at_tail or table.cursor_row >= len(self._rows_cache) - 1:
+                table.scroll_end(animate=False)
+            _t4 = time.monotonic()
+            if len(new_rows) > 50 or (_t4 - _t0) > 0.05:
+                logger.warning(
+                    "PROXY SCREEN: _flush_pending_rows: %d rows, "
+                    "query_one=%.1fms _row_to_record=%.1fms add_rows=%.1fms scroll_end=%.1fms total=%.1fms",
+                    len(new_rows),
+                    (_t1 - _t0) * 1000, (_t2 - _t1) * 1000,
+                    (_t3 - _t2) * 1000, (_t4 - _t3) * 1000,
+                    (_t4 - _t0) * 1000,
+                )
             # add_rows() appends at the BOTTOM and never shifts existing row
             # indexes, so a highlighted row keeps pointing at the same request
             # even while live traffic streams in. Auto-scroll to the bottom
