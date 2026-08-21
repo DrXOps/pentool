@@ -330,6 +330,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._filter_reload_pending: bool = False
         self._filter_reload_timer = None  # textual Timer handle (set_timer), see _schedule_filter_reload
         self._current_comment: str = ""  # comment of the currently-selected row (for the Comment dialog)
+        # Debounce: delay _load_row_details so rapid cursor movement (RowHighlighted
+        # firing on every pixel of mouse travel + programmatic scroll_end from live
+        # traffic) doesn't flood the main loop with SQLite workers. Only the LAST
+        # highlight within the window triggers a load.
+        self._highlight_debounce_handle: asyncio.TimerHandle | None = None
 
     def compose(self) -> ComposeResult:
         # Toolbar (outside SubTabs — all btn-* IDs are always in the DOM)
@@ -1109,25 +1114,18 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         if 0 <= row_idx < len(self._rows_cache):
             row = self._rows_cache[row_idx]
             new_id = row.get("id")
-            # Avoid redundant DB load: if the same row is already selected,
-            # don't fire another _load_row_details (which would re-query
-            # storage and re-paint the panels for the same data).
             if new_id == self._selected_req_id:
                 return
             self._selected_req_id = new_id
-            self.run_worker(self._load_row_details(self._selected_req_id))
-
-    def _select_row_id_only(self, row_idx: int) -> None:
-        """Cache the row id from highlight — NO db query (avoids freeze under load)."""
-        if 0 <= row_idx < len(self._rows_cache):
-            row = self._rows_cache[row_idx]
-            self._selected_req_id = row.get("id")
-
-    def _select_ws_row_id_only(self, row_idx: int) -> None:
-        """Cache the WS row id from highlight — NO db query."""
-        if 0 <= row_idx < len(self._ws_rows_cache):
-            row = self._ws_rows_cache[row_idx]
-            self._selected_req_id = row.get("id")
+            # Debounce: cancel pending timer, schedule _load_row_details in 0.25s.
+            # Rapid cursor movement (RowHighlighted on every pixel) only triggers
+            # one load for the final row, not N loads for every intermediate row.
+            if self._highlight_debounce_handle is not None:
+                self._highlight_debounce_handle.cancel()
+            loop = asyncio.get_event_loop()
+            self._highlight_debounce_handle = loop.call_later(
+                0.25, lambda: self.run_worker(self._load_row_details(new_id))
+            )
 
     def _select_ws_row(self, row_idx: int) -> None:
         """Select a row in WS History — loads details into the WS panels."""
@@ -1160,22 +1158,22 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._comment_dialog(initial_comment=comment)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        """Row highlighted → just cache the row id, do NOT load full details.
+        """Row highlighted → load details with debounce.
 
         RowHighlighted fires on every cursor movement — including when live
-        traffic append_rows() shifts the cursor (programmatic scroll_end).
-        Loading full request/response bodies from SQLite on every highlight
-        flooded the main event loop with workers under load, causing the UI
-        to freeze and eventually exit cleanly ("TUI vanished").
+        traffic append_rows() shifts the cursor. Without debounce, every
+        highlight queued a _load_row_details worker, flooding the main event
+        loop with SQLite queries and freezing the UI under load.
 
-        Full details are loaded only on explicit RowSelected (Enter / explicit
-        click that lands on a new row). The cached id is used by other
-        synchronous actions (context menu, copy, etc.) without a DB round-trip.
+        Debounce: delay 0.25s; if another highlight arrives before it fires,
+        the old timer is cancelled. Only the final highlight within the window
+        triggers a load. Also skips the load if the row id hasn't changed
+        (avoids re-painting the same data).
         """
         if event.data_table.id == "ws-request-list":
-            self._select_ws_row_id_only(event.cursor_row)
+            self._select_ws_row(event.cursor_row)
         else:
-            self._select_row_id_only(event.cursor_row)
+            self._select_row(event.cursor_row)
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
         """Give focus to DataTable on any cursor movement — required for mouse scroll."""
