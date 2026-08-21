@@ -46,6 +46,15 @@ _STOP_SERVER_GRACE = 0.4
 # Residual connections get torn down by the process exiting.
 _STOP_TASK_GRACE = 0.6
 
+# DRAIN grace (seconds): after sending CancelledError we must actually let each
+# cancelled _handle_client task run to completion (its `finally` does
+# writer.close()/wait_closed()). If we don't wait it out, tens-to-hundreds of
+# pending _handle_client coroutines are destroyed by Python when the loop
+# finishes — a burst of _PyGen_Finalize over a live heap that was implicated in
+# "free(): corrupted unsorted chunks" crashes under heavy WebSocket traffic.
+# This is deliberately a bit longer than the cancel wave.
+_STOP_TASK_DRAIN = 2.0
+
 
 InterceptState = Literal["waiting", "forwarded", "dropped"]
 
@@ -253,17 +262,32 @@ class ProxyServer:
             logger.debug("ProxyServer.stop: cancelling %d active task(s)", len(pending))
             for task in pending:
                 task.cancel()
+            # Two phases so we don't leave a pile of half-cancelled _handle_client
+            # coroutines to be destroyed by Python when the loop tears down (that
+            # burst of _PyGen_Finalize over a fragmented heap was implicated in
+            # the "free(): corrupted unsorted chunks" crashes). Phase 1: a short
+            # bounded await so a normal quit stays fast. Phase 2: actually wait
+            # out the drain so every cancelled task runs its finally (writer
+            # close) — bounded so a genuinely stuck task can't hang shutdown.
             try:
-                # Call gather() inside wait_for() so we do not block the whole
-                # shutdown on a slow task. The grace is deliberately short: on
-                # a normal quit one cancel wave is enough, and anything still
-                # alive when we return is torn down by the process exiting.
                 await asyncio.wait_for(
                     asyncio.gather(*pending, return_exceptions=True),
                     timeout=_STOP_TASK_GRACE,
                 )
             except asyncio.TimeoutError:
-                logger.debug("ProxyServer.stop: task cancellation timed out")
+                # Second pass: give the cancelled tasks time to finish their
+                # finally blocks instead of leaving them pending for loop teardown.
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*pending, return_exceptions=True),
+                        timeout=_STOP_TASK_DRAIN,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "ProxyServer.stop: %d task(s) still pending after drain — "
+                        "residual coroutines will be torn down at loop exit",
+                        sum(1 for t in pending if not t.done()),
+                    )
         logger.info("Proxy stopped")
 
     async def serve_forever(self) -> None:
