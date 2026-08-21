@@ -1108,8 +1108,26 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     def _select_row(self, row_idx: int) -> None:
         if 0 <= row_idx < len(self._rows_cache):
             row = self._rows_cache[row_idx]
-            self._selected_req_id = row.get("id")
+            new_id = row.get("id")
+            # Avoid redundant DB load: if the same row is already selected,
+            # don't fire another _load_row_details (which would re-query
+            # storage and re-paint the panels for the same data).
+            if new_id == self._selected_req_id:
+                return
+            self._selected_req_id = new_id
             self.run_worker(self._load_row_details(self._selected_req_id))
+
+    def _select_row_id_only(self, row_idx: int) -> None:
+        """Cache the row id from highlight — NO db query (avoids freeze under load)."""
+        if 0 <= row_idx < len(self._rows_cache):
+            row = self._rows_cache[row_idx]
+            self._selected_req_id = row.get("id")
+
+    def _select_ws_row_id_only(self, row_idx: int) -> None:
+        """Cache the WS row id from highlight — NO db query."""
+        if 0 <= row_idx < len(self._ws_rows_cache):
+            row = self._ws_rows_cache[row_idx]
+            self._selected_req_id = row.get("id")
 
     def _select_ws_row(self, row_idx: int) -> None:
         """Select a row in WS History — loads details into the WS panels."""
@@ -1142,10 +1160,22 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._comment_dialog(initial_comment=comment)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Row highlighted → just cache the row id, do NOT load full details.
+
+        RowHighlighted fires on every cursor movement — including when live
+        traffic append_rows() shifts the cursor (programmatic scroll_end).
+        Loading full request/response bodies from SQLite on every highlight
+        flooded the main event loop with workers under load, causing the UI
+        to freeze and eventually exit cleanly ("TUI vanished").
+
+        Full details are loaded only on explicit RowSelected (Enter / explicit
+        click that lands on a new row). The cached id is used by other
+        synchronous actions (context menu, copy, etc.) without a DB round-trip.
+        """
         if event.data_table.id == "ws-request-list":
-            self._select_ws_row(event.cursor_row)
+            self._select_ws_row_id_only(event.cursor_row)
         else:
-            self._select_row(event.cursor_row)
+            self._select_row_id_only(event.cursor_row)
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
         """Give focus to DataTable on any cursor movement — required for mouse scroll."""
