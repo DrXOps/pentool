@@ -1161,31 +1161,35 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._update_ws_history_count_label()
 
     def _select_row(self, row_idx: int) -> None:
-        if 0 <= row_idx < len(self._rows_cache):
-            row = self._rows_cache[row_idx]
-            new_id = row.get("id")
-            if new_id == self._selected_req_id:
-                return
-            self._selected_req_id = new_id
-            # Debounce: cancel pending timer, schedule _load_row_details in 0.25s.
-            # Rapid cursor movement (RowHighlighted on every pixel) only triggers
-            # one load for the final row, not N loads for every intermediate row.
-            if self._highlight_debounce_handle is not None:
-                try:
-                    self._highlight_debounce_handle.stop()
-                except Exception:
-                    pass
-            self._highlight_debounce_handle = self.set_timer(
-                0.25, lambda: self._debounced_load(new_id)
-            )
+        try:
+            if 0 <= row_idx < len(self._rows_cache):
+                row = self._rows_cache[row_idx]
+                new_id = row.get("id")
+                if new_id == self._selected_req_id:
+                    return
+                self._selected_req_id = new_id
+                # Debounce: cancel pending timer, schedule _load_row_details in 0.25s.
+                if self._highlight_debounce_handle is not None:
+                    try:
+                        self._highlight_debounce_handle.stop()
+                    except Exception:
+                        pass
+                self._highlight_debounce_handle = self.set_timer(
+                    0.25, lambda: self._debounced_load(new_id)
+                )
+        except Exception as exc:
+            logger.error("PROXY SCREEN: _select_row crashed: %s", exc, exc_info=True)
 
     def _select_ws_row(self, row_idx: int) -> None:
         """Select a row in WS History — loads details into the WS panels."""
-        if 0 <= row_idx < len(self._ws_rows_cache):
-            row = self._ws_rows_cache[row_idx]
-            row_id = row.get("id")
-            if row_id is not None:
-                self.run_worker(self._load_ws_row_details(row_id))
+        try:
+            if 0 <= row_idx < len(self._ws_rows_cache):
+                row = self._ws_rows_cache[row_idx]
+                row_id = row.get("id")
+                if row_id is not None:
+                    self.run_worker(self._load_ws_row_details(row_id))
+        except Exception as exc:
+            logger.error("PROXY SCREEN: _select_ws_row crashed: %s", exc, exc_info=True)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.data_table.id == "ws-request-list":
@@ -1210,22 +1214,14 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._comment_dialog(initial_comment=comment)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        """Row highlighted → load details with debounce.
-
-        RowHighlighted fires on every cursor movement — including when live
-        traffic append_rows() shifts the cursor. Without debounce, every
-        highlight queued a _load_row_details worker, flooding the main event
-        loop with SQLite queries and freezing the UI under load.
-
-        Debounce: delay 0.25s; if another highlight arrives before it fires,
-        the old timer is cancelled. Only the final highlight within the window
-        triggers a load. Also skips the load if the row id hasn't changed
-        (avoids re-painting the same data).
-        """
-        if event.data_table.id == "ws-request-list":
-            self._select_ws_row(event.cursor_row)
-        else:
-            self._select_row(event.cursor_row)
+        """Row highlighted → load details with debounce."""
+        try:
+            if event.data_table.id == "ws-request-list":
+                self._select_ws_row(event.cursor_row)
+            else:
+                self._select_row(event.cursor_row)
+        except Exception as exc:
+            logger.error("PROXY SCREEN: on_data_table_row_highlighted crashed: %s", exc, exc_info=True)
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
         """Give focus to DataTable on any cursor movement — required for mouse scroll."""
