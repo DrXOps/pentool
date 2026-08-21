@@ -100,13 +100,16 @@ _register(AITask(
         "Попробуй найти неочевидные эндпоинты, скрытые параметры, "
         "недокументированные API, path-traversal кандидаты, возможные точки "
         "GraphQL-интроспекции.\n\n"
-        "Верни JSON-массив объектов:\n"
-        "- method: \"GET\" | \"POST\" | \"PUT\" | \"DELETE\"\n"
-        "- path: предполагаемый путь\n"
-        "- params: строка параметров (если есть)\n"
-        "- confidence: \"high\" | \"medium\" | \"low\"\n"
-        "- reason: почему этот эндпоинт может существовать\n\n"
-        "Не выдумывай очевидно несуществующие пути. Только обоснованные догадки."
+        "Верни ТОЛЬКО компактный JSON-массив. БЕЗ пояснений, БЕЗ markdown, "
+        "БЕЗ текста вокруг JSON. Формат каждого объекта:\n"
+        '{"method":"GET","path":"/admin","params":"","confidence":"high",'
+        '"reason":"админ-панель"}\n'
+        "Допустимые method: GET | POST | PUT | DELETE. "
+        "confidence: high | medium | low. path обязателен, начинается с \"/\".\n\n"
+        "Пример полного ответа:\n"
+        '[{"method":"GET","path":"/api/user","params":"id=1","confidence":"high","reason":"api"},{"method":"POST","path":"/graphql","params":"","confidence":"medium","reason":"graphql"}]\n\n'
+        "Не выдумывай очевидно несуществующие пути. Только обоснованные догадки. "
+        "Если подходящих эндпоинтов нет — верни пустой массив []."
     ),
     expected_json_schema={
         "type": "array",
@@ -123,7 +126,7 @@ _register(AITask(
         },
     },
     max_tokens=2048,
-    temperature=0.4,
+    temperature=0.1,
 ))
 
 # === 4. Анализ находок (перенос из ai_analyzer) ===
