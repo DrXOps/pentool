@@ -383,7 +383,7 @@ def main() -> None:
                     import subprocess as _sp
                     _ps_r = _sp.run(
                         ["py-spy", "dump", "--pid", str(os.getpid()),
-                         "--non-interactive"],
+                         "--nonblocking"],
                         capture_output=True, timeout=10,
                     )
                     _ps_out = _ps_r.stdout.decode("utf-8", errors="replace")
