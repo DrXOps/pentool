@@ -367,6 +367,20 @@ def main() -> None:
                         _buf.write(f"\n--- faulthandler supplement ---\n{_faul}\n")
                 except Exception:
                     _buf.write("(faulthandler unavailable)\n")
+                # ── py-spy snapshot (external sampler, captures every thread) ──
+                try:
+                    import subprocess as _sp
+                    _ps_r = _sp.run(
+                        ["py-spy", "dump", "--pid", str(os.getpid()),
+                         "--non-interactive"],
+                        capture_output=True, timeout=10,
+                    )
+                    _ps_out = _ps_r.stdout.decode("utf-8", errors="replace")
+                    if _ps_out.strip():
+                        _buf.write(f"\n--- py-spy all-thread dump ---\n{_ps_out}\n")
+                except Exception:
+                    pass
+
                 with open(_log_path, "a") as _f:
                     _f.write(_buf.getvalue())
                     _f.flush()
