@@ -338,6 +338,8 @@ def main() -> None:
                         _buf.write(f"\n--- watchdog snapshots (last {len(_wd_buf)} of 5) ---\n")
                         for _snap in _wd_buf:
                             _buf.write(_snap)
+                    else:
+                        _buf.write("(watchdog buffer empty — no tick fired yet)\n")
                 except Exception:
                     pass
                 try:
@@ -355,14 +357,15 @@ def main() -> None:
                         _aloop = None
                     if _aloop is not None:
                         _tasks = _aio.all_tasks(_aloop)
-                        if _tasks:
-                            _buf.write(f"\n--- Pending asyncio tasks ({len(_tasks)}) ---\n")
-                            for _t in sorted(_tasks, key=lambda t: str(getattr(t, "_coro", ""))):
-                                _coro = getattr(_t, "_coro", _t)
-                                _buf.write(f"  Task {_t.get_name()} (done={_t.done()}, "
-                                           f"cancelled={_t.cancelled()}): {_coro!r:.200}\n")
-                                _tb.print_stack(_coro, file=_buf, limit=5)
-                                _buf.write("\n")
+                        _buf.write(f"\n--- asyncio tasks: {len(_tasks)} total ---\n")
+                        for _t in sorted(_tasks, key=lambda t: str(getattr(t, "_coro", ""))):
+                            _coro = getattr(_t, "_coro", _t)
+                            _buf.write(f"  Task {_t.get_name()} (done={_t.done()}, "
+                                       f"cancelled={_t.cancelled()}): {_coro!r:.200}\n")
+                            _tb.print_stack(_coro, file=_buf, limit=5)
+                            _buf.write("\n")
+                    else:
+                        _buf.write("(no running event loop)\n")
                 except Exception:
                     _buf.write("(asyncio tasks unavailable)\n")
                 # Extra: also try faulthandler (may be a no-op if signals conflict)
@@ -386,8 +389,10 @@ def main() -> None:
                     _ps_out = _ps_r.stdout.decode("utf-8", errors="replace")
                     if _ps_out.strip():
                         _buf.write(f"\n--- py-spy all-thread dump ---\n{_ps_out}\n")
+                    else:
+                        _buf.write(f"(py-spy: stdout empty, stderr={_ps_r.stderr.decode('utf-8','replace')[:200]})\n")
                 except Exception as _ps_exc:
-                    _buf.write(f"(py-spy unavailable: {_ps_exc})\n")
+                    _buf.write(f"(py-spy error: {_ps_exc})\n")
 
                 with open(_log_path, "a") as _f:
                     _f.write(_buf.getvalue())
