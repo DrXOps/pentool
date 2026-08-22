@@ -297,26 +297,10 @@ def main() -> None:
                 pass
             raise
         else:
-            # `run()` returned cleanly — but NOT through `action_quit` (which
-            # does its own os._exit deep inside the app). Observed: under a
-            # wall-of-traffic refresh the app finished, app.run() returned,
-            # and the interpreter then hung forever in threading._shutdown
-            # waiting on never-closed non-daemon threads — several aiosqlite
-            # _connection_worker threads plus the still-alive proxy thread.
-            # Those only get closed inside action_quit; if it never ran, a
-            # plain return would leave a zombie "TUI vanished, terminal hangs".
-            #
-            # Diagnostic: dump EVERY thread's Python stack to the log right
-            # now, i.e. the exact moment app.run() returned cleanly under load.
-            # This is the "TUI just vanished with no traceback" case — the
-            # all-thread dump shows what the main loop / proxy / sqlite were
-            # doing as the run() collapsed, instead of the usual post-mortem
-            # proxy-only stacks.
-            #
-            # NOTE: Uses sys._current_frames() (always works) as primary + old
-            # faulthandler as a secondary. The file is APPENDED (not overwritten)
-            # so casual 'script -qc ...' capturing stdout to the same path
-            # doesn't erase it.
+            # `run()` returned cleanly — not through `action_quit` (which
+            # does its own os._exit deep inside the app). Dump all thread
+            # stacks to the log for post-mortem diagnosis, then hard-exit so
+            # the interpreter doesn't hang on orphan non-daemon threads.
             import io, sys as _sys, time as _time, traceback as _tb
             from pentool.core.config import DEFAULT_CONFIG_DIR
             _log_path = str(DEFAULT_CONFIG_DIR / "pentool_exit_dump.log")
@@ -324,87 +308,30 @@ def main() -> None:
                 _buf = io.StringIO()
                 _buf.write(f"--- run() returned cleanly, {_time.strftime('%Y-%m-%d %H:%M:%S')} "
                            f"pid={os.getpid()} ---\n")
-                # If the app captured an exception or exit() call-site, log it here.
+                # If the app captured a Textual-swallowed exception, log it.
                 try:
                     from pentool.tui.app import PentoolApp
                     _exit_stack = getattr(PentoolApp, '_exit_caller_stack', '')
                     if _exit_stack:
-                        label = ("TEXTUAL UNHANDLED EXCEPTION"
-                                 if "TEXTUAL UNHANDLED EXCEPTION" in _exit_stack
-                                 else "app.exit() caller")
-                        _buf.write(f"\n--- {label} ---\n{_exit_stack}\n")
-                    _wd_buf = getattr(PentoolApp, '_watchdog_buffer', None)
-                    if _wd_buf:
-                        _buf.write(f"\n--- watchdog snapshots (last {len(_wd_buf)} of 5) ---\n")
-                        for _snap in _wd_buf:
-                            _buf.write(_snap)
-                    else:
-                        _buf.write("(watchdog buffer empty — no tick fired yet)\n")
+                        _buf.write(f"\n--- app.exit()/exception ---\n{_exit_stack}\n")
                 except Exception:
                     pass
-                try:
-                    for _tid, _frame in _sys._current_frames().items():
-                        _buf.write(f"\n--- Thread 0x{_tid:x} ---\n")
-                        _tb.print_stack(_frame, file=_buf)
-                except Exception:
-                    _buf.write("(thread frames unavailable)\n")
-                # If there's still a running event loop, dump its pending tasks.
-                try:
-                    import asyncio as _aio
-                    try:
-                        _aloop = _aio.get_running_loop()
-                    except RuntimeError:
-                        _aloop = None
-                    if _aloop is not None:
-                        _tasks = _aio.all_tasks(_aloop)
-                        _buf.write(f"\n--- asyncio tasks: {len(_tasks)} total ---\n")
-                        for _t in sorted(_tasks, key=lambda t: str(getattr(t, "_coro", ""))):
-                            _coro = getattr(_t, "_coro", _t)
-                            _buf.write(f"  Task {_t.get_name()} (done={_t.done()}, "
-                                       f"cancelled={_t.cancelled()}): {_coro!r:.200}\n")
-                            _tb.print_stack(_coro, file=_buf, limit=5)
-                            _buf.write("\n")
-                    else:
-                        _buf.write("(no running event loop)\n")
-                except Exception:
-                    _buf.write("(asyncio tasks unavailable)\n")
-                # Extra: also try faulthandler (may be a no-op if signals conflict)
+                for _tid, _frame in _sys._current_frames().items():
+                    _buf.write(f"\n--- Thread 0x{_tid:x} ---\n")
+                    _tb.print_stack(_frame, file=_buf)
                 try:
                     import faulthandler
                     _fbuf = io.StringIO()
                     faulthandler.dump_traceback(file=_fbuf, all_threads=True)
                     _faul = _fbuf.getvalue().strip()
                     if _faul:
-                        _buf.write(f"\n--- faulthandler supplement ---\n{_faul}\n")
+                        _buf.write(f"\n--- faulthandler ---\n{_faul}\n")
                 except Exception:
-                    _buf.write("(faulthandler unavailable)\n")
-                # ── py-spy snapshot (external sampler, captures every thread) ──
-                try:
-                    import subprocess as _sp
-                    _ps_r = _sp.run(
-                        ["py-spy", "dump", "--pid", str(os.getpid()),
-                         "--nonblocking"],
-                        capture_output=True, timeout=10,
-                    )
-                    _ps_out = _ps_r.stdout.decode("utf-8", errors="replace")
-                    if _ps_out.strip():
-                        _buf.write(f"\n--- py-spy all-thread dump ---\n{_ps_out}\n")
-                    else:
-                        _buf.write(f"(py-spy: stdout empty, stderr={_ps_r.stderr.decode('utf-8','replace')[:200]})\n")
-                except Exception as _ps_exc:
-                    _buf.write(f"(py-spy error: {_ps_exc})\n")
-
+                    pass
                 with open(_log_path, "a") as _f:
                     _f.write(_buf.getvalue())
-                    _f.flush()
-            except Exception as _exc:
-                # Don't swallow — write whatever we can to stderr so the user
-                # sees if the dump itself failed.
-                try:
-                    msg = f"[pentool] EXIT-DUMP-FAILED: {_exc}"
-                    print(msg, file=_sys.stderr)
-                except Exception:
-                    pass  # bare print has no business failing — but if it does, die silently
+            except Exception:
+                pass
             import os as _os
             _os._exit(0)
 

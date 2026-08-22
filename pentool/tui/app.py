@@ -330,14 +330,6 @@ class PentoolApp(App):
         # naturally.  Without a probe, the "clean return" case (no exception =>
         # no traceback) has no way to name the caller.
         self._exit_caller_stack: str = ""
-        # Watchdog ring buffer: periodic snapshots of thread stacks + asyncio
-        # tasks, kept as a rolling window of the last 5 samples (1s apart).
-        # When run() returns cleanly, __main__.py flushes the buffer into the
-        # exit dump — showing NOT just the final stack at os._exit(0) time but
-        # also the ~5 seconds leading up to it, so we can see what was
-        # accumulating before the loop collapsed.
-        self._watchdog_buffer: list[str] = []
-        self._watchdog_handle = None
         # Cached module screens + last time we re-resolved them. Live proxy
         # traffic calls on_proxy_request_* / on_send_to_target *per request*;
         # each call used to do a fresh `query_one(SCREEN_*)`. When a module
@@ -440,11 +432,9 @@ class PentoolApp(App):
                 try:
                     _orig(self, event)
                 except AttributeError as _ae:
-                    _emsg = str(_ae)
-                    if "has no attribute 'region'" in _emsg:
+                    if "has no attribute 'region'" in str(_ae):
                         return
-                    logger.warning("APP: _forward_event guard caught %s: %s",
-                                   type(_ae).__name__, _emsg)
+                    raise
 
             _guarded.__name__ = "_forward_event"
             _guarded.__qualname__ = "Screen._forward_event"
@@ -486,44 +476,11 @@ class PentoolApp(App):
         _setup_faulthandler(self._cfg.log_file)
         self._guard_forward_event()
 
-        # Diagnostic: Textual swallows ANY unhandled exception in a message
-        # handler — _process_messages_loop catches it, calls
-        # self.app._handle_exception(error) and then `break`s out of the loop.
-        # That makes run() return cleanly (no traceback on stderr) and our
-        # __main__ else-branch os._exit(0)s silently — the exact "TUI just
-        # vanished" the user has been seeing. But the exception IS available
-        # to _handle_exception, so we patch it to log the real stack before
-        # Textual tears down. Also patch exit() to capture the call-site.
-        _self = self
-        _orig_handle = self._handle_exception
-
-        def _probed_handle_exception(error: Exception) -> None:
-            import traceback as _tb, io as _io
-            _sbuf = _io.StringIO()
-            _sbuf.write(f"TEXTUAL UNHANDLED EXCEPTION: {type(error).__name__}: {error}\n")
-            _tb.print_exc(file=_sbuf)
-            _self._exit_caller_stack = _sbuf.getvalue()
-            try:
-                logger.error("TEXTUAL UNHANDLED EXCEPTION: %s", _sbuf.getvalue())
-            except Exception:
-                pass
-            return _orig_handle(error)
-
-        self._handle_exception = _probed_handle_exception  # type: ignore[method-assign]
-
-        _orig_exit = self.exit
-
-        def _probed_exit(*a, **kw):
-            import traceback as _tb, io as _io, time as _time
-            _sbuf = _io.StringIO()
-            _tb.print_stack(file=_sbuf)
-            _self._exit_caller_stack = (
-                f"[exit() called at {_time.strftime('%H:%M:%S')}]\n"
-                f"{_sbuf.getvalue()}"
-            )
-            return _orig_exit(*a, **kw)
-
-        self.exit = _probed_exit  # type: ignore[method-assign]
+        # Keep a _exit_caller_stack slot — __main__.py reads it on clean exit.
+        # Currently unused (was filled by the _handle_exception / exit() probes
+        # removed after the "TUI just vanished" bug was diagnosed), but reserved
+        # for future diagnostic use.
+        self._exit_caller_stack = ""
 
         try:
             await init_db(self._cfg.db_path)
@@ -641,14 +598,6 @@ class PentoolApp(App):
         # Global AI: if the master switch was left ON (persisted), bring up the
         # MCP server and make AI controls visible right away. If OFF, hide them.
         self._start_ai_if_enabled()
-
-        # ── Watchdog timer: snapshot stacks every 1s, keep last 5 ──────────
-        try:
-            self._watchdog_handle = self.set_interval(
-                1.0, self._watchdog_tick
-            )
-        except Exception:
-            pass
 
     def on_screen_unmounted(self, event) -> None:
         """Diagnostic: catch the "TUI just vanished" exit path.
@@ -1957,38 +1906,6 @@ class PentoolApp(App):
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.update_passive_status(event.enabled)
-        except Exception:
-            pass
-
-    def _watchdog_tick(self) -> None:
-        """Snapshot current thread stacks + asyncio tasks, keep rolling window.
-
-        Called every 1s via set_interval. The last 5 snapshots are dumped
-        into the exit dump so we can see what was happening in the ~5 seconds
-        before the main loop collapsed.
-        """
-        try:
-            import io, traceback as _tb, sys as _sys, time as _time
-            import asyncio as _aio
-            _snap = io.StringIO()
-            _snap.write(f"\n--- watchdog @ {_time.strftime('%H:%M:%S')} "
-                        f"(pid={os.getpid()}) ---\n")
-            for _tid, _frame in _sys._current_frames().items():
-                _snap.write(f"  Thread 0x{_tid:x}\n")
-            try:
-                _aloop = _aio.get_running_loop()
-            except RuntimeError:
-                _aloop = None
-            if _aloop is not None:
-                _tasks = _aio.all_tasks(_aloop)
-                _snap.write(f"  asyncio tasks: {len(_tasks)} active\n")
-                for _t in sorted(_tasks, key=lambda t: str(getattr(t, "_coro", ""))):
-                    _snap.write(f"    {_t.get_name()} done={_t.done()} "
-                                f"cancelled={_t.cancelled()}\n")
-            self._watchdog_buffer.append(_snap.getvalue())
-            # Keep last 5
-            if len(self._watchdog_buffer) > 5:
-                self._watchdog_buffer.pop(0)
         except Exception:
             pass
 
