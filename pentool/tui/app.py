@@ -341,7 +341,6 @@ class PentoolApp(App):
         # per-request hunt.
         self._proxy_screen = None
         self._target_screen = None
-        self._screen_resolve_at = 0.0
         # Vim-style key sequences: "g" prefix for Proxy sub-tabs
         # Shift+p then h/i/w → proxy HTTP/Intercept/WS
         self._key_seq_state: str = ""
@@ -1433,11 +1432,13 @@ class PentoolApp(App):
         return self._get_cached_screen(SCREEN_TARGET, TargetScreen, "_target_screen")
 
     def _get_cached_screen(self, selector: str, cls, cache_attr: str):
+        _ts_attr = f"_screen_resolve_{cache_attr}"
+        _last = getattr(self, _ts_attr, 0.0)
         now = time.monotonic()
         # Cache hit within the interval → reuse without re-querying.
-        if now - self._screen_resolve_at < self._SCREEN_RESOLVE_INTERVAL:
+        if now - _last < self._SCREEN_RESOLVE_INTERVAL:
             return getattr(self, cache_attr)
-        self._screen_resolve_at = now
+        setattr(self, _ts_attr, now)
         try:
             screen = self.query_one(selector, cls)
         except Exception:
