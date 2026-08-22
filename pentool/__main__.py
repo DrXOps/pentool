@@ -335,9 +335,12 @@ def main() -> None:
                         _buf.write(f"\n--- {label} ---\n{_exit_stack}\n")
                 except Exception:
                     pass
-                for _tid, _frame in _sys._current_frames().items():
-                    _buf.write(f"\n--- Thread 0x{_tid:x} ---\n")
-                    _tb.print_stack(_frame, file=_buf)
+                try:
+                    for _tid, _frame in _sys._current_frames().items():
+                        _buf.write(f"\n--- Thread 0x{_tid:x} ---\n")
+                        _tb.print_stack(_frame, file=_buf)
+                except Exception:
+                    _buf.write("(thread frames unavailable)\n")
                 # If there's still a running event loop, dump its pending tasks.
                 try:
                     import asyncio as _aio
@@ -356,7 +359,7 @@ def main() -> None:
                                 _tb.print_stack(_coro, file=_buf, limit=5)
                                 _buf.write("\n")
                 except Exception:
-                    pass
+                    _buf.write("(asyncio tasks unavailable)\n")
                 # Extra: also try faulthandler (may be a no-op if signals conflict)
                 try:
                     import faulthandler
@@ -378,8 +381,8 @@ def main() -> None:
                     _ps_out = _ps_r.stdout.decode("utf-8", errors="replace")
                     if _ps_out.strip():
                         _buf.write(f"\n--- py-spy all-thread dump ---\n{_ps_out}\n")
-                except Exception:
-                    pass
+                except Exception as _ps_exc:
+                    _buf.write(f"(py-spy unavailable: {_ps_exc})\n")
 
                 with open(_log_path, "a") as _f:
                     _f.write(_buf.getvalue())
