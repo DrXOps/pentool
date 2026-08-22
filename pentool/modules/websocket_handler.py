@@ -10,6 +10,12 @@ from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Cached SSL context for outgoing WebSocket connections (reused across all
+# WS upgrades so we don't load system CA certs from disk on every upgrade).
+# ssl.create_default_context() → load_default_certs() is I/O-heavy and was
+# blocking the proxy event loop under burst traffic.
+_SSL_CTX: ssl.SSLContext | None = None
+
 # How long a writer may take to actually close (fd teardown) before we give up
 # and let the fd be reclaimed at loop shutdown. Bounded so a wedged socket can't
 # hold a cancellation hostage — same rationale as Proxy._WRITER_CLOSE_GRACE.
@@ -211,10 +217,18 @@ class WebSocketHandler:
 
         try:
             if use_ssl:
-                ssl_ctx = ssl.create_default_context()
-                ssl_ctx.check_hostname = False
-                ssl_ctx.verify_mode = ssl.CERT_NONE
-                srv_reader, srv_writer = await asyncio.open_connection(host, port, ssl=ssl_ctx)
+                # Cached SSL context — ssl.create_default_context() calls
+                # load_default_certs() which reads all system CA files. Under
+                # burst traffic (many tabs refreshing) every WebSocket upgrade
+                # triggered a fresh cert load, blocking the proxy event loop
+                # and causing the main loop to time out → clean run() exit.
+                if _SSL_CTX is None:
+                    _SSL_CTX = ssl.create_default_context()
+                    _SSL_CTX.check_hostname = False
+                    _SSL_CTX.verify_mode = ssl.CERT_NONE
+                srv_reader, srv_writer = await asyncio.open_connection(
+                    host, port, ssl=_SSL_CTX,
+                )
             else:
                 srv_reader, srv_writer = await asyncio.open_connection(host, port)
         except Exception as exc:
