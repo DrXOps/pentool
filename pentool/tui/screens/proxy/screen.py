@@ -1353,6 +1353,31 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             tabs.active = tab_id
             # Focus the DataTable in the target tab
             self.call_after_refresh(self._focus_tab_table, tab_id)
+            # Reload the table if switching to HTTP History — rows may have
+            # accumulated in _rows_cache while the table was off-screen and
+            # query_one("#request-list") was failing (TabPane hidden = widget
+            # not in DOM). Without this, cached rows never appear.
+            if tab_id == "tab-http-history":
+                self.call_after_refresh(self._reload_http_history_on_switch)
+        except Exception:
+            pass
+
+    def _reload_http_history_on_switch(self) -> None:
+        """Rebuild the backend from _rows_cache when switching to HTTP History."""
+        try:
+            table = self.query_one("#request-list", DataTable)
+            if not self._rows_cache:
+                return
+            from textual_fastdatatable import ArrowBackend
+            import pentool.tui.screens.proxy.screen as _ps
+            arrow = _ps._rows_to_arrow(self._rows_cache)
+            table.backend = ArrowBackend(arrow)
+            table._ordered_columns = None
+            table._clear_caches()
+            table._require_update_dimensions = True
+            table.refresh()
+            if self._rows_cache:
+                table.scroll_end(animate=False)
         except Exception:
             pass
 
