@@ -333,6 +333,11 @@ def main() -> None:
                                  if "TEXTUAL UNHANDLED EXCEPTION" in _exit_stack
                                  else "app.exit() caller")
                         _buf.write(f"\n--- {label} ---\n{_exit_stack}\n")
+                    _wd_buf = getattr(PentoolApp, '_watchdog_buffer', None)
+                    if _wd_buf:
+                        _buf.write(f"\n--- watchdog snapshots (last {len(_wd_buf)} of 5) ---\n")
+                        for _snap in _wd_buf:
+                            _buf.write(_snap)
                 except Exception:
                     pass
                 try:
