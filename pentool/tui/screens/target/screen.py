@@ -557,7 +557,6 @@ class TargetScreen(Widget):
                 except Exception:
                     continue
 
-            import json as _json
             from pentool.services.tech_detector import detect_tech
             tech_profile = await detect_tech(url)
             prompt_data = {
@@ -565,20 +564,7 @@ class TargetScreen(Widget):
                 "tech_stack": tech_profile,
                 "links": known,
             }
-            self.app.notify(
-                f"🤖 Краулер AI: запрос к MCP\n"
-                f"URL: {url}\n"
-                f"Стек: {tech_profile.get('language') or '?'} / {tech_profile.get('framework') or '?'} / {tech_profile.get('cms') or '?'}\n"
-                f"Известно: {len(known)} путей",
-                timeout=5,
-            )
             result = await backend.generate("crawl_endpoints", prompt_data)
-            if result:
-                self.app.notify(
-                    f"✅ Краулер AI: ответ MCP\n"
-                    f"{_json.dumps(result, indent=2, ensure_ascii=False)[:500]}",
-                    timeout=6,
-                )
             if isinstance(result, dict):
                 _nitems = len(result.get("items") or [])
                 logger.info("_ai_suggest_endpoints: %s gen result items=%d %s",
