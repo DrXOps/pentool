@@ -339,6 +339,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._filter_reload_pending: bool = False
         self._filter_reload_timer = None  # textual Timer handle (set_timer), see _schedule_filter_reload
         self._current_comment: str = ""  # comment of the currently-selected row (for the Comment dialog)
+        self._filter_show_comments: bool = False  # "💬 Comments" toggle — show only rows with comments
         # Debounce: delay _load_row_details so rapid cursor movement (RowHighlighted
         # firing on every pixel of mouse travel + programmatic scroll_end from live
         # traffic) doesn't flood the main loop with SQLite workers. Only the LAST
@@ -366,6 +367,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             )
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("M/R",         "btn-mr")
+            yield Static(" │ ", classes="toolbar-sep")
+            yield ToolbarButton("📝 Show comments", "btn-show-comments",
+                                tooltip="Show only rows that have comments (toggle)")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Clear",       "btn-clear")
 
@@ -584,6 +588,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         try:
+            # Add has_comment filter if toggle is active
+            if self._filter_show_comments:
+                f = dict(filters) if filters else {}
+                f["has_comment"] = True
+                filters = f
             logger.info("PROXY SCREEN: _reload_table called, filters=%s", filters)
             newest_first_rows = await self._proxy_service.get_history(
                 limit=_HISTORY_PAGE_SIZE, filters=filters,
@@ -1672,6 +1681,30 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     @on(ToolbarButton.Pressed, "#btn-clear")
     def on_btn_clear(self, _: ToolbarButton.Pressed) -> None:
         self.action_clear_list()
+
+    @on(ToolbarButton.Pressed, "#btn-show-comments")
+    def on_btn_show_comments(self, event: ToolbarButton.Pressed) -> None:
+        """Toggle: show only rows that have a comment.
+        Повторное нажатие сбрасывает фильтр и возвращает полную историю."""
+        btn = event.button
+        if "active" in btn.classes:
+            btn.remove_class("active")
+            btn.label = "📝 Show comments"
+            self._filter_show_comments = False
+            # Сбрасываем и все фильтры FilterBar, чтобы вернуть полную историю
+            try:
+                fb = self.query_one("#filter-bar")
+                from pentool.tui.widgets.filter_bar import FilterBar
+                if hasattr(fb, "_reset"):
+                    fb._reset()
+            except Exception:
+                pass
+            self._current_filters = None
+        else:
+            btn.add_class("active")
+            btn.label = "📝 Comments: ON"
+            self._filter_show_comments = True
+        self.run_worker(self._reload_table(self._current_filters), exclusive=False, exit_on_error=False)
 
     def action_load_history(self) -> None:
         self.run_worker(self._reload_table(self._current_filters))

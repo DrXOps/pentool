@@ -313,8 +313,6 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         with Horizontal(id="toolbar"):
             yield ToolbarButton("▶ Start", "btn-start")
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("⏸ Pause", "btn-pause", classes="disabled")
-            yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("■ Stop",  "btn-stop",  classes="disabled")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Clear results", "btn-clear-results")
@@ -773,13 +771,13 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     @on(ToolbarButton.Pressed, "#btn-start")
     def on_btn_start(self, _: ToolbarButton.Pressed) -> None:
-        logger.info("INTRUDER: btn-start pressed")
-        self.app.notify("▶ Starting attack…", timeout=2)
-        self.action_start_attack()
-
-    @on(ToolbarButton.Pressed, "#btn-pause")
-    def on_btn_pause(self, _: ToolbarButton.Pressed) -> None:
-        self.action_toggle_pause()
+        logger.info("INTRUDER: btn-start pressed, running=%s paused=%s",
+                     self._attack_running, self._paused)
+        if self._attack_running:
+            self.action_toggle_pause()
+        else:
+            self.app.notify("▶ Starting attack…", timeout=2)
+            self.action_start_attack()
 
     @on(ToolbarButton.Pressed, "#btn-stop")
     def on_btn_stop(self, _: ToolbarButton.Pressed) -> None:
@@ -1753,21 +1751,15 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             return
         if self._api is None:
             return
-        try:
-            btn = self.query_one("#btn-pause", ToolbarButton)
-        except Exception:
-            btn = None
         if self._paused:
             self.run_worker(self._api.resume(), exit_on_error=False)
             self._paused = False
-            if btn is not None:
-                btn.label = "⏸ Pause"
+            self.query_one("#btn-start", ToolbarButton).label = "⏸ Pause"
             self.app.notify("Resumed", timeout=2)
         else:
             self.run_worker(self._api.pause(), exit_on_error=False)
             self._paused = True
-            if btn is not None:
-                btn.label = "▶ Resume"
+            self.query_one("#btn-start", ToolbarButton).label = "▶ Resume"
             self.app.notify("Paused", timeout=2)
 
     def action_stop_attack(self) -> None:
@@ -1791,16 +1783,14 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def _set_running_state(self, running: bool) -> None:
         try:
-            self.query_one("#btn-start", ToolbarButton).disabled = running
-            pause_btn = self.query_one("#btn-pause", ToolbarButton)
-            pause_btn.disabled = not running
-            if not running:
-                # Attack stopped/finished (possibly while paused) — reset
-                # the Pause/Resume label back to its "fresh attack" state,
-                # otherwise the NEXT Start Attack would show "▶ Resume"
-                # left over from the previous run instead of "⏸ Pause".
+            btn_start = self.query_one("#btn-start", ToolbarButton)
+            if running:
+                btn_start.label = "⏸ Pause"
+                btn_start.disabled = False
+            else:
+                btn_start.label = "▶ Start"
+                btn_start.disabled = False
                 self._paused = False
-                pause_btn.label = "⏸ Pause"
             self.query_one("#btn-stop",  ToolbarButton).disabled = not running
         except Exception:
             pass

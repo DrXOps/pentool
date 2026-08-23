@@ -121,7 +121,7 @@ class ProxyService(BaseService):
                 return None
 
     def _effective_filters(self, filters: dict | None) -> dict:
-        """Resolve scope_only/is_websocket defaults shared by get_history/count."""
+        """Resolve scope_only/is_websocket/has_comment defaults shared by get_history/count."""
         effective_filters = dict(filters) if filters else {}
         if effective_filters.pop("scope_only", False):
             proxy = self._proxy_api.get_proxy()

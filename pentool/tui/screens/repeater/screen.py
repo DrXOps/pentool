@@ -575,6 +575,13 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     def _get_active_text(self) -> str:
         if self._active_tab_id is None:
             return ""
+        if self._search_target == "response":
+            try:
+                viewer = self.query_one(f"#resp-viewer-{self._active_tab_id}", ResponseViewer)
+                area = viewer.query_one("#viewer-area", TextArea)
+                return area.text
+            except Exception:
+                return ""
         try:
             editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
             return editor.get_text()
@@ -813,6 +820,9 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     def on_key(self, event) -> None:
         if event.key == "ctrl+j":
             self.action_send()
+            event.prevent_default()
+        elif event.key in ("ctrl+f", "ctrl+shift+f"):
+            self.action_toggle_search()
             event.prevent_default()
 
     def load_request(self, raw: str) -> None:

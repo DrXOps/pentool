@@ -569,6 +569,10 @@ class HttpStorage(BaseSqliteStorage):
             clauses.append("color = ?")
             params.append(color)
 
+        has_comment = filters.get("has_comment")
+        if has_comment:
+            clauses.append("comment IS NOT NULL AND comment != ''")
+
         if not clauses:
             return "", []
         return "WHERE " + " AND ".join(clauses), params

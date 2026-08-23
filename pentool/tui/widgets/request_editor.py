@@ -557,7 +557,12 @@ class ResponseViewer(_BaseHttpWidget):
 
         try:
             area = self.query_one("#viewer-area", TextArea)
-            _load_into_textarea(area, raw)
+            if lang in ("html", "json", "xml"):
+                # Ставим встроенную подсветку TextArea (html/json/xml)
+                area.language = lang
+                area.load_text(raw)
+            else:
+                _load_into_textarea(area, raw)
         except Exception:
             pass
 
