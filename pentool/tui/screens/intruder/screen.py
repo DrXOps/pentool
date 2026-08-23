@@ -276,6 +276,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         # blocks starting a new load and disables edits on that set until
         # the streaming count finishes (see _load_payloads_from_file).
         self._payload_load_in_progress: bool = False
+        # Tracked auto-save workers — cancelled before closing API on exit
+        self._running_save_tasks: list[str] = []
 
     async def on_event(self, event: _tevents.Event) -> None:
         """Double-click in template-editor — select the word under the cursor."""
@@ -474,6 +476,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         instance's underlying connection instead of leaking the old one.
         """
         from pentool.api.intruder_api import IntruderAPI
+        # Cancel any in-flight auto-save workers before touching the DB connection
+        self._cancel_save_workers()
         # Cancel any in-flight _do_load_state / _do_load_results workers
         # from a previous on_mount or project-switch BEFORE calling
         # switch_db(). switch_db() closes the old connection (close() →
@@ -724,12 +728,17 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         try:
             editor = self.query_one("#template-editor", TextArea)
             template = editor.text
+            worker_name = f"intruder-save-state-{time.monotonic_ns()}"
+            self._running_save_tasks.append(worker_name)
             self.run_worker(
-                api.save_state(
-                    tab_name=self._tab_name,
-                    template=template,
-                    attack_type=self._attack_type.value,
-                    payloads=self._serialize_payloads(self._payloads),
+                self._do_auto_save(
+                    api.save_state(
+                        tab_name=self._tab_name,
+                        template=template,
+                        attack_type=self._attack_type.value,
+                        payloads=self._serialize_payloads(self._payloads),
+                    ),
+                    worker_name,
                 ),
                 exclusive=False,
                 exit_on_error=False,
@@ -745,13 +754,36 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         try:
             # Get project_id from app if available
             project_id = getattr(self.app, "project_id", None)
+            worker_name = f"intruder-save-result-{time.monotonic_ns()}"
+            self._running_save_tasks.append(worker_name)
             self.run_worker(
-                api.save_result(result, project_id=project_id),
+                self._do_auto_save(
+                    api.save_result(result, project_id=project_id),
+                    worker_name,
+                ),
                 exclusive=False,
                 exit_on_error=False,
             )
         except Exception:
             pass
+
+    async def _do_auto_save(self, coro, worker_name: str) -> None:
+        """Auto-save wrapper — cleanup _running_save_tasks on completion."""
+        try:
+            await coro
+        except Exception:
+            pass
+        finally:
+            self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
+
+    def _cancel_save_workers(self) -> None:
+        """Cancel all tracked auto-save workers."""
+        for wname in list(self._running_save_tasks):
+            try:
+                self.workers.cancel(wname)
+            except Exception:
+                pass
+        self._running_save_tasks.clear()
 
     def _setup_tooltips(self) -> None:
         tips = {

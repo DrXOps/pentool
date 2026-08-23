@@ -8,6 +8,7 @@ from pathlib import Path
 
 from textual import events as _tevents
 from textual.app import ComposeResult
+from textual.containers import Vertical
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static, TextArea
@@ -330,6 +331,62 @@ def decode_special_chars(text: str) -> str:
     return "".join(result)
 
 
+def _build_body_highlights(body_lines: list[str], lang: str, start_row: int) -> dict[int, list]:
+    """Build _highlights entries for body lines with HTML/JSON/XML token colors.
+
+    Returns a dict (row → [(col_start, col_end, token)]) that can be merged
+    into an existing highlights dict.
+    """
+    hl: dict = defaultdict(list)
+    if lang == "html":
+        import re as _re
+        for bi, bline in enumerate(body_lines):
+            row = start_row + bi
+            # Подсвечиваем теги: <tagname ...>
+            for m in _re.finditer(r'(</?)([\w-]+)([^>]*)(/?>)', bline):
+                hl[row].append((m.start(1), m.end(1), "operator"))          # <
+                hl[row].append((m.start(2), m.end(2), "tag"))               # tagname
+                # атрибуты внутри тега
+                attr_re = _re.finditer(r'([\w-]+)(=)(["\'])(.*?)(\3)', m.group(3))
+                attr_offset = m.start(3)
+                for am in attr_re:
+                    hl[row].append((attr_offset + am.start(1), attr_offset + am.end(1), "function"))  # attr name
+                    hl[row].append((attr_offset + am.start(2), attr_offset + am.end(2), "operator"))  # =
+                    hl[row].append((attr_offset + am.start(3), attr_offset + am.end(3), "string"))    # quote
+                    hl[row].append((attr_offset + am.start(4), attr_offset + am.end(4), "string"))    # value
+                    hl[row].append((attr_offset + am.start(5), attr_offset + am.end(5), "string"))    # quote
+                hl[row].append((m.start(4), m.end(4), "operator"))          # >
+    elif lang == "json":
+        import json as _json
+        try:
+            _parsed = _json.loads("\n".join(body_lines))
+        except Exception:
+            _parsed = None
+        # JSON ключи подсвечиваем через regex
+        import re as _re
+        for bi, bline in enumerate(body_lines):
+            row = start_row + bi
+            for m in _re.finditer(r'("(?:[^"\\]|\\.)*")\s*:', bline):
+                hl[row].append((m.start(1), m.end(1), "function"))          # ключ
+    elif lang == "xml":
+        import re as _re
+        for bi, bline in enumerate(body_lines):
+            row = start_row + bi
+            for m in _re.finditer(r'(</?)([\w:-]+)([^>]*)(/?>)', bline):
+                hl[row].append((m.start(1), m.end(1), "operator"))
+                hl[row].append((m.start(2), m.end(2), "tag"))
+                attr_re = _re.finditer(r'([\w:-]+)(=)(["\'])(.*?)(\3)', m.group(3))
+                attr_offset = m.start(3)
+                for am in attr_re:
+                    hl[row].append((attr_offset + am.start(1), attr_offset + am.end(1), "function"))
+                    hl[row].append((attr_offset + am.start(2), attr_offset + am.end(2), "operator"))
+                    hl[row].append((attr_offset + am.start(3), attr_offset + am.end(3), "string"))
+                    hl[row].append((attr_offset + am.start(4), attr_offset + am.end(4), "string"))
+                    hl[row].append((attr_offset + am.start(5), attr_offset + am.end(5), "string"))
+                hl[row].append((m.start(4), m.end(4), "operator"))
+    return hl
+
+
 def _load_into_textarea(area: TextArea, text: str,
                         highlight_terms: list[str] | None = None) -> None:
     normalized = text.replace("\r\n", "\n")
@@ -522,7 +579,12 @@ def _beautify_text(body: str) -> str | None:
 
 
 class ResponseViewer(_BaseHttpWidget):
-    """HTTP response viewer panel with header and body highlighting."""
+    """HTTP response viewer panel with header and body highlighting.
+
+    One TextArea: HTTP-заголовки подсвечиваются через _build_http_highlights,
+    тело — через встроенный area.language (html/json/xml) когда Content-Type
+    позволяет. В отличие от RequestEditor, заголовки read-only.
+    """
 
     _textarea_id = "viewer-area"
 
@@ -535,10 +597,9 @@ class ResponseViewer(_BaseHttpWidget):
         yield TextArea("", read_only=True, id="viewer-area", soft_wrap=False)
 
     def load_response(self, resp: ParsedResponse) -> None:
-        """Display ParsedResponse: full raw HTTP in a single TextArea with _highlights."""
+        """Display ParsedResponse: raw HTTP с подсветкой headers+body."""
         body = resp.body or ""
 
-        # Build raw HTTP string
         status_line = f"HTTP/1.1 {resp.status} {resp.reason}"
         headers_str = "\r\n".join(f"{k}: {v}" for k, v in resp.headers.items())
         raw = f"{status_line}\r\n{headers_str}\r\n\r\n{body}"
@@ -557,12 +618,27 @@ class ResponseViewer(_BaseHttpWidget):
 
         try:
             area = self.query_one("#viewer-area", TextArea)
-            if lang in ("html", "json", "xml"):
-                # Ставим встроенную подсветку TextArea (html/json/xml)
-                area.language = lang
-                area.load_text(raw)
-            else:
-                _load_into_textarea(area, raw)
+            normalized = raw.replace("\r\n", "\n")
+
+            # Всегда грузим с language=None — подсветка только через _highlights
+            area.language = None
+            area.load_text(normalized)
+
+            hl: dict = defaultdict(list, _build_http_highlights(normalized))
+
+            # Если тело — html/json/xml, добавляем подсветку body-строк
+            if lang in ("html", "json", "xml") and "\n\n" in normalized:
+                head_part, body_part = normalized.split("\n\n", 1)
+                if body_part.strip():
+                    body_lines_start = normalized.count("\n", 0, normalized.index("\n\n")) + 2
+                    body_lines = body_part.split("\n")
+                    body_hl = _build_body_highlights(body_lines, lang, body_lines_start)
+                    for row, entries in body_hl.items():
+                        hl[row].extend(entries)
+
+            area._highlights = hl
+            area._line_cache.clear()
+            area.refresh()
         except Exception:
             pass
 

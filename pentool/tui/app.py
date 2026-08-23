@@ -1948,6 +1948,7 @@ class PentoolApp(App):
         try:
             from pentool.tui.screens.intruder.screen import IntruderScreen
             intruder_screen = self.query_one(SCREEN_INTRUDER, IntruderScreen)
+            intruder_screen._cancel_save_workers()
             if intruder_screen._api is not None:
                 await intruder_screen._api.close()
                 logger.info("APP: Intruder storage closed on quit")
@@ -1957,6 +1958,7 @@ class PentoolApp(App):
         try:
             from pentool.tui.screens.target.screen import TargetScreen
             target_screen = self.query_one(SCREEN_TARGET, TargetScreen)
+            target_screen._cancel_save_workers()
             if target_screen._target_api is not None:
                 await target_screen._target_api.close()
                 logger.info("APP: Target storage closed on quit")

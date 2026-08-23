@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 
 from textual import on
@@ -80,6 +81,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._search_current: int = 0
         self._search_query: str = ""
         self._search_regex: bool = False
+        self._search_target: str = "request"  # "request" | "response" — синхронизируется с SearchBar
         self._tab_click_time: float = 0.0
         self._tab_click_id: str | None = None
         # Single persistent RepeaterAPI for the screen's lifetime — created
@@ -99,6 +101,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         # project's tab. Each loader captures the generation at call time
         # and no-ops if it no longer matches when its callback runs.
         self._tabs_generation: int = 0
+        self._running_save_tasks: list[str] = []  # worker names for auto-save, cancelled on exit
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="top-bar"):
@@ -376,7 +379,20 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         check and produced a stray, blank/unlabeled tab to the left of the
         first real tab — reproducible specifically right after creating a
         new project (reset_for_new_project), not after a full app restart.
+
+        Also cancels any in-flight auto-save workers to prevent
+        ProgrammingError('Cannot operate on a closed database.') when the
+        database is closed during exit or project switch while a
+        save_to_history commit is still pending.
         """
+        # Cancel all in-flight save workers
+        for worker_name in list(self._running_save_tasks):
+            try:
+                self.remove_worker(worker_name, interrupt=True)
+            except Exception:
+                pass
+        self._running_save_tasks.clear()
+
         self._tabs_generation += 1  # invalidate any in-flight _do_load_tabs from on_mount
         try:
             tabs = self.query_one("#repeater-tabs", TabbedContent)
@@ -525,6 +541,14 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._search_regex = event.regex
         self._run_search(event.direction)
 
+    def on_search_bar_target_toggle(self, event: SearchBar.TargetToggle) -> None:
+        """User toggled search target (Req/Resp) in SearchBar — sync state."""
+        try:
+            bar = self.query_one("#repeater-search-bar", SearchBar)
+            self._search_target = bar._search_target
+        except Exception:
+            pass
+
     def on_search_bar_closed(self, event: SearchBar.Closed) -> None:
         self._search_matches = []
         self._search_current = 0
@@ -594,8 +618,12 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             return
         try:
             from textual.widgets import TextArea
-            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
-            area = editor.query_one("#editor-area", TextArea)
+            if self._search_target == "response":
+                viewer = self.query_one(f"#resp-viewer-{self._active_tab_id}", ResponseViewer)
+                area = viewer.query_one("#viewer-area", TextArea)
+            else:
+                editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+                area = editor.query_one("#editor-area", TextArea)
             lines = text[:offset].split("\n")
             row = len(lines) - 1
             col = len(lines[-1])
@@ -624,7 +652,13 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             pass
 
     def _auto_save_tab_to_db(self, state: _TabState) -> None:
-        """Save tab state to database (non-blocking, fire-and-forget)."""
+        """Save tab state to database (non-blocking, fire-and-forget).
+
+        Worker is tracked in _running_save_tasks and cancelled on
+        _close_all_tabs() / reset_for_new_project() / reload_from_project()
+        so that an in-flight save_to_history commit doesn't hit a closed
+        database when the user exits or switches projects.
+        """
         try:
             from pentool.utils.parser import ParsedResponse, parse_http_request
             parsed = parse_http_request(state.request_text)
@@ -638,12 +672,23 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             if repeater_api is None:
                 return
 
+            worker_name = f"save-{state.tab_id}-{time.monotonic_ns()}"
+            self._running_save_tasks.append(worker_name)
             self.run_worker(
-                repeater_api.save_to_history(parsed, response, tab_name=state.name),
-                exclusive=False,
+                self._do_auto_save(repeater_api, parsed, response, state.name, worker_name),
+                exclusive=False, name=worker_name,
             )
         except Exception as exc:
             logger.debug("_auto_save_tab_to_db: %s", exc)
+
+    async def _do_auto_save(self, api, parsed, response, tab_name: str, worker_name: str) -> None:
+        """Auto-save wrapper — cleanup _running_save_tasks on completion."""
+        try:
+            await api.save_to_history(parsed, response, tab_name=tab_name)
+        except Exception:
+            pass
+        finally:
+            self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
     def _get_tab_state(self, tab_id: str) -> _TabState | None:
         for t in self._tabs:

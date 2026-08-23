@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from textual import on, work
@@ -32,6 +33,16 @@ class TargetScreen(Widget):
         self._selected_host: str | None = None
         self._selected_node_data = None
         self._scope_config = None  # ScopeConfig for regex include/exclude rules
+        self._running_save_tasks: list[str] = []  # tracked auto-save workers
+
+    def _cancel_save_workers(self) -> None:
+        """Cancel all tracked auto-save workers before closing the DB."""
+        for wname in list(self._running_save_tasks):
+            try:
+                self.workers.cancel(wname)
+            except Exception:
+                pass
+        self._running_save_tasks.clear()
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="toolbar"):
@@ -624,16 +635,21 @@ class TargetScreen(Widget):
             # Persist to DB (batches of ~20 requests)
             self._save_counter = getattr(self, "_save_counter", 0) + 1
             if self._save_counter % 20 == 0:
-                self.run_worker(self._do_save_sitemap())
+                wname = f"target-save-{time.monotonic_ns()}"
+                self._running_save_tasks.append(wname)
+                self.run_worker(self._do_save_sitemap(wname))
         except Exception as exc:
             logger.warning("add_request_from_proxy: %s", exc)
 
-    async def _do_save_sitemap(self) -> None:
+    async def _do_save_sitemap(self, worker_name: str = "") -> None:
         try:
             api = self._get_api()
             await api.save()
         except Exception as exc:
             logger.debug("_do_save_sitemap: %s", exc)
+        finally:
+            if worker_name:
+                self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
     def _refresh_tree(self) -> None:
         try:
