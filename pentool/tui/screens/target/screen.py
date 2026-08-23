@@ -380,8 +380,24 @@ class TargetScreen(Widget):
             self.app.notify(msg, severity="information")
             # Mirror the change into ProxyServer.scope — keep both modules in sync
             self.app.post_message(SyncScopeToProxy(host, in_scope))  # type: ignore[attr-defined]
+            # Auto-detect tech stack for new in-scope hosts (fire-and-forget)
+            if in_scope:
+                self.run_worker(self._auto_detect_tech(host), exclusive=False)
         except Exception as exc:
             logger.warning("_set_scope_worker: %s", exc)
+
+    async def _auto_detect_tech(self, host: str) -> None:
+        """Fire-and-forget tech detection when a host is added to scope."""
+        try:
+            from pentool.services.tech_detector import detect_tech
+            url = host if "://" in host else f"https://{host}"
+            profile = await detect_tech(url)
+            tech_str = f"{profile.get('language') or '?'} / {profile.get('framework') or '?'}"
+            if profile.get('cms'):
+                tech_str += f" / {profile['cms']}"
+            self.app.notify(f"🔍 {host}: {tech_str}", timeout=4)
+        except Exception:
+            pass
 
     def action_clear(self) -> None:
         self._clear_worker()
@@ -558,7 +574,11 @@ class TargetScreen(Widget):
                     continue
 
             from pentool.services.tech_detector import detect_tech
-            tech_profile = await detect_tech(url)
+            # Use js_render for SPA to get full rendered HTML
+            from pentool.services.tech_detector import get_cached_tech
+            cached = get_cached_tech(url)
+            use_js = bool(cached and cached.get("spa"))
+            tech_profile = await detect_tech(url, js_render=use_js)
             prompt_data = {
                 "url": url,
                 "tech_stack": tech_profile,
