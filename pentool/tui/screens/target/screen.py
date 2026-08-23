@@ -586,19 +586,39 @@ class TargetScreen(Widget):
                 return 0
 
             added = 0
-            for item in items:
-                method = str(item.get("method", "GET")).upper()
-                path = str(item.get("path", "")).strip()
-                if not path.startswith("/"):
-                    path = "/" + path
-                # Skip certainty-empty or already-known. Simple dedupe vs known.
-                # count=False: AI-suggested paths are discoveries, not real HTTP —
-                # a repeated suggestion must not inflate the node counter.
-                try:
-                    api.add_request(ParsedRequest(method=method, url=f"{url}{path}"), count=False)
-                    added += 1
-                except Exception:
-                    continue
+            import aiohttp as _aiohttp
+            _timeout = _aiohttp.ClientTimeout(total=5)
+            async with _aiohttp.ClientSession(timeout=_timeout) as session:
+                for item in items:
+                    method = str(item.get("method", "GET")).upper()
+                    path = str(item.get("path", "")).strip()
+                    if not path.startswith("/"):
+                        path = "/" + path
+                    full_url = f"{url}{path}"
+                    # Validate endpoint with a quick HEAD (fallback to GET)
+                    valid = False
+                    try:
+                        async with session.head(full_url, ssl=False) as resp:
+                            if resp.status < 500:
+                                valid = True
+                    except Exception:
+                        pass
+                    if not valid:
+                        try:
+                            async with session.get(full_url, ssl=False) as resp:
+                                if resp.status < 500:
+                                    valid = True
+                        except Exception:
+                            pass
+                    if not valid:
+                        continue
+                    # count=False: AI-suggested paths are discoveries, not real HTTP —
+                    # a repeated suggestion must not inflate the node counter.
+                    try:
+                        api.add_request(ParsedRequest(method=method, url=full_url), count=False)
+                        added += 1
+                    except Exception:
+                        continue
             return added
         except Exception as exc:
             logger.warning("_ai_suggest_endpoints failed: %s", exc, exc_info=True)
