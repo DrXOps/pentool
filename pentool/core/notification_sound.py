@@ -8,9 +8,11 @@ pentool-pro). Instead this uses each OS's own built-in sound facility:
 - Windows: winsound.Beep() — stdlib, always available.
 - macOS: `afplay` on one of the built-in system sound files (always present
   on a stock install).
-- Linux: whichever of `paplay`/`aplay`/`play` is on PATH, falling back to
-  the terminal BEL character if none are found (e.g. minimal/headless
-  containers, SSH sessions without ALSA/PulseAudio).
+- Linux: generates a short sine-tone WAV *in memory* (stdlib `wave`/`struct`,
+  no assets to ship) and plays it through whichever of
+  `paplay`/`aplay`/`ffplay` is on PATH. Falls back to the terminal BEL
+  character only when no player is found (e.g. minimal/headless containers,
+  SSH sessions without ALSA/PulseAudio).
 
 All playback happens in a short-lived subprocess/thread so it never blocks
 the Textual event loop. Any error here is swallowed — a missing sound
@@ -19,19 +21,24 @@ system must never crash the app or break notifications themselves.
 
 from __future__ import annotations
 
+import io
+import math
 import shutil
+import struct
 import subprocess
 import sys
 import threading
+import wave
 
 from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# One "tone" per severity — Windows Beep(frequency_hz, duration_ms) pairs.
+# One "tone" per severity — (frequency_hz, duration_ms) pairs.
 # Loosely modeled after the ICQ-style ascending/descending cues: info is a
 # single short blip, success a quick double-up chirp, warning a two-tone
-# alert, error/critical a longer, lower, more insistent tone.
+# alert, error/critical a longer, lower, more insistent tone. Shared by the
+# Windows Beep() path and the Linux sine-tone generator.
 _WIN_TONES: dict[str, list[tuple[int, int]]] = {
     "information": [(880, 80)],
     "success":     [(880, 60), (1175, 90)],
@@ -48,6 +55,9 @@ _MAC_SOUNDS: dict[str, str] = {
     "error":       "/System/Library/Sounds/Basso.aiff",
     "critical":    "/System/Library/Sounds/Sosumi.aiff",
 }
+
+_SAMPLE_RATE = 44100
+_AMPLITUDE = 12000  # headroom so summed tones don't clip
 
 
 def play_notification_sound(severity: str = "information") -> None:
@@ -104,12 +114,60 @@ def _play_macos(severity: str) -> None:
     )
 
 
+def _render_sine_wav(tones: list[tuple[int, int]]) -> bytes:
+    """Render the tone sequence to in-memory PCM WAV bytes (no temp file)."""
+    # Concatenate each tone's samples with a tiny gap so they read as
+    # distinct blips rather than one smear (ICQ-style).
+    pcm = bytearray()
+    gap = int(0.02 * _SAMPLE_RATE)
+    for freq, dur_ms in tones:
+        n = int(_SAMPLE_RATE * dur_ms / 1000)
+        for i in range(n):
+            sample = _AMPLITUDE * math.sin(2 * math.pi * freq * i / _SAMPLE_RATE)
+            pcm += struct.pack("<h", int(sample))
+        pcm += b"\x00\x00" * gap
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(_SAMPLE_RATE)
+        wf.writeframes(bytes(pcm))
+    return buf.getvalue()
+
+
 def _play_linux(severity: str) -> None:
-    # No universal built-in system sound file across distros — use the
-    # terminal bell (\a), which every terminal emulator supports and which
-    # works over SSH with no audio subsystem required. This keeps the
-    # feature dependency-free rather than shipping our own WAV assets.
-    _terminal_bell(severity)
+    """Play a real sine-tone notification instead of the terminal BEL.
+
+    Preferred players in order; each reads a WAV stream from stdin so no
+    temp file is needed and nothing is shiped on disk. Falls back to the
+    BEL character only when no player exists.
+    """
+    player = shutil.which("paplay") or shutil.which("aplay") or shutil.which("ffplay")
+    if not player:
+        _terminal_bell(severity)
+        return
+
+    tones = _WIN_TONES.get(severity, _WIN_TONES["information"])
+    wav = _render_sine_wav(tones)
+    args = [player]
+    if player.endswith("ffplay"):
+        # ffplay wants its input flagged explicitly and nudged to quit alone.
+        args += ["-nodisp", "-autoexit", "-i", "-"]
+    else:
+        args += ["-"]
+    try:
+        subprocess.run(
+            args,
+            input=wav,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    except Exception as exc:
+        logger.debug("_play_linux(%s): player failed: %s", severity, exc)
+        _terminal_bell(severity)
 
 
 def _terminal_bell(severity: str = "information") -> None:

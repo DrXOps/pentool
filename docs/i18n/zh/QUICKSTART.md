@@ -129,10 +129,11 @@ pentool
 - 粘贴两个文本
 - 获取带高亮的差异
 
-### Spider
-- `Shift+W` → 打开 Spider
-- 输入基础 URL
-- 自动爬取网站
+### Spider（爬取）
+- 无独立标签页 — 爬取在 **Target** 模块中运行
+- 「🕷 Crawl Scope」按钮 — 爬取 scope 内所有主机
+- 「🕷 Crawl Host」按钮 — 爬取树中选择的主机
+- 「🤖 Use AI」复选框 — 爬取后 AI 补充不易发现的端点
 
 ---
 
@@ -154,7 +155,6 @@ pentool
 - `Shift+D` — Decoder
 - `Shift+C` — Comparer
 - `Shift+Q` — Sequencer
-- `Shift+W` — Spider
 - `Shift+E` — Extensions
 - `Shift+X` — Terminal
 

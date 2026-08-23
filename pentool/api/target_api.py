@@ -36,8 +36,12 @@ class TargetAPI(ExportableAPI):
     async def save(self) -> None:
         await self._sitemap.save()
 
-    def add_request(self, req: "ParsedRequest") -> None:
-        self._sitemap.add_request(req)
+    async def close(self) -> None:
+        """Close the persistent SiteMap SQLite connection (on quit / project switch)."""
+        await self._sitemap.close()
+
+    def add_request(self, req: "ParsedRequest", count: bool = True) -> None:
+        self._sitemap.add_request(req, count=count)
 
     def get_tree(self) -> dict[str, list[SiteNode]]:
         return self._sitemap.get_tree()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 
 from textual import on
@@ -80,8 +81,16 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._search_current: int = 0
         self._search_query: str = ""
         self._search_regex: bool = False
+        self._search_target: str = "request"  # "request" | "response" — синхронизируется с SearchBar
         self._tab_click_time: float = 0.0
         self._tab_click_id: str | None = None
+        # Single persistent RepeaterAPI for the screen's lifetime — created
+        # lazily via _get_api() and pointed at a different project DB on
+        # switch via reload_from_project()/switch_db(), mirroring
+        # IntruderScreen._get_api(). Previously every send/autosave/history
+        # read constructed a fresh RepeaterAPI (and thus opened+closed a new
+        # SQLite connection per call).
+        self._repeater_api = None
         # Bumped by reset_for_new_project()/reload_from_project()/_close_all_tabs().
         # on_mount()'s initial _load_tabs_from_db() reads whatever DB was
         # configured at app startup (before the user creates/opens a
@@ -92,6 +101,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         # project's tab. Each loader captures the generation at call time
         # and no-ops if it no longer matches when its callback runs.
         self._tabs_generation: int = 0
+        self._running_save_tasks: list[str] = []  # worker names for auto-save, cancelled on exit
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="top-bar"):
@@ -133,6 +143,28 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         # Load tabs from database first, then create default tab if empty
         self._load_tabs_from_db()
 
+    def _get_api(self):
+        """Return this screen's single persistent RepeaterAPI instance.
+
+        Created lazily on first use and reused for every subsequent call
+        (send, history read, auto-save) — mirrors IntruderScreen._get_api /
+        ProxyService holding one HttpStorage for the app's lifetime.
+        Returns None when no project DB is configured yet.
+        """
+        if self._repeater_api is None:
+            from pentool.api.repeater_api import RepeaterAPI
+            from pentool.core.config import get_config
+            db_path = self._get_db_path()
+            if not db_path:
+                return None
+            cfg = get_config()
+            self._repeater_api = RepeaterAPI(
+                db_path=db_path,
+                timeout=cfg.request_timeout,
+                verify_ssl=cfg.verify_ssl,
+            )
+        return self._repeater_api
+
     def _load_tabs_from_db(self) -> None:
         """Load saved tabs from database on mount."""
         generation = self._tabs_generation
@@ -142,10 +174,10 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             self.action_new_tab()
             return
 
-        from pentool.api.repeater_api import RepeaterAPI
-        from pentool.core.config import get_config
-        cfg = get_config()
-        repeater_api = RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
+        repeater_api = self._get_api()
+        if repeater_api is None:
+            self.action_new_tab()
+            return
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=False)
 
     async def _do_load_tabs(self, repeater_api, generation: int | None = None) -> None:
@@ -324,10 +356,15 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         """Загрузить вкладки из БД. Вызывается при открытии существующего проекта."""
         await self._close_all_tabs()
         generation = self._tabs_generation
-        from pentool.api.repeater_api import RepeaterAPI
-        from pentool.core.config import get_config
-        cfg = get_config()
-        repeater_api = RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
+        # Point the persistent RepeaterAPI at the new project's DB instead of
+        # constructing a fresh one — switch_db() closes the old connection
+        # (reusing BaseSqliteStorage.switch_db), so no connection to the
+        # previous project's file lingers across switches.
+        if self._repeater_api is None:
+            self._repeater_api = self._get_api()
+        if self._repeater_api is not None:
+            await self._repeater_api.switch_db(db_path)
+        repeater_api = self._repeater_api
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=True)
 
     async def _close_all_tabs(self) -> None:
@@ -342,7 +379,20 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         check and produced a stray, blank/unlabeled tab to the left of the
         first real tab — reproducible specifically right after creating a
         new project (reset_for_new_project), not after a full app restart.
+
+        Also cancels any in-flight auto-save workers to prevent
+        ProgrammingError('Cannot operate on a closed database.') when the
+        database is closed during exit or project switch while a
+        save_to_history commit is still pending.
         """
+        # Cancel all in-flight save workers
+        for worker_name in list(self._running_save_tasks):
+            try:
+                self.remove_worker(worker_name, interrupt=True)
+            except Exception:
+                pass
+        self._running_save_tasks.clear()
+
         self._tabs_generation += 1  # invalidate any in-flight _do_load_tabs from on_mount
         try:
             tabs = self.query_one("#repeater-tabs", TabbedContent)
@@ -491,6 +541,14 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._search_regex = event.regex
         self._run_search(event.direction)
 
+    def on_search_bar_target_toggle(self, event: SearchBar.TargetToggle) -> None:
+        """User toggled search target (Req/Resp) in SearchBar — sync state."""
+        try:
+            bar = self.query_one("#repeater-search-bar", SearchBar)
+            self._search_target = bar._search_target
+        except Exception:
+            pass
+
     def on_search_bar_closed(self, event: SearchBar.Closed) -> None:
         self._search_matches = []
         self._search_current = 0
@@ -541,6 +599,13 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     def _get_active_text(self) -> str:
         if self._active_tab_id is None:
             return ""
+        if self._search_target == "response":
+            try:
+                viewer = self.query_one(f"#resp-viewer-{self._active_tab_id}", ResponseViewer)
+                area = viewer.query_one("#viewer-area", TextArea)
+                return area.text
+            except Exception:
+                return ""
         try:
             editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
             return editor.get_text()
@@ -553,8 +618,12 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             return
         try:
             from textual.widgets import TextArea
-            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
-            area = editor.query_one("#editor-area", TextArea)
+            if self._search_target == "response":
+                viewer = self.query_one(f"#resp-viewer-{self._active_tab_id}", ResponseViewer)
+                area = viewer.query_one("#viewer-area", TextArea)
+            else:
+                editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+                area = editor.query_one("#editor-area", TextArea)
             lines = text[:offset].split("\n")
             row = len(lines) - 1
             col = len(lines[-1])
@@ -583,7 +652,13 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             pass
 
     def _auto_save_tab_to_db(self, state: _TabState) -> None:
-        """Save tab state to database (non-blocking, fire-and-forget)."""
+        """Save tab state to database (non-blocking, fire-and-forget).
+
+        Worker is tracked in _running_save_tasks and cancelled on
+        _close_all_tabs() / reset_for_new_project() / reload_from_project()
+        so that an in-flight save_to_history commit doesn't hit a closed
+        database when the user exits or switches projects.
+        """
         try:
             from pentool.utils.parser import ParsedResponse, parse_http_request
             parsed = parse_http_request(state.request_text)
@@ -593,20 +668,27 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
             response = ParsedResponse(status=0, headers={}, body="")
 
-            db_path = self._get_db_path()
-            if not db_path:
+            repeater_api = self._get_api()
+            if repeater_api is None:
                 return
 
-            from pentool.api.repeater_api import RepeaterAPI
-            from pentool.core.config import get_config
-            cfg = get_config()
-            repeater_api = RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
+            worker_name = f"save-{state.tab_id}-{time.monotonic_ns()}"
+            self._running_save_tasks.append(worker_name)
             self.run_worker(
-                repeater_api.save_to_history(parsed, response, tab_name=state.name),
-                exclusive=False,
+                self._do_auto_save(repeater_api, parsed, response, state.name, worker_name),
+                exclusive=False, name=worker_name,
             )
         except Exception as exc:
             logger.debug("_auto_save_tab_to_db: %s", exc)
+
+    async def _do_auto_save(self, api, parsed, response, tab_name: str, worker_name: str) -> None:
+        """Auto-save wrapper — cleanup _running_save_tasks on completion."""
+        try:
+            await api.save_to_history(parsed, response, tab_name=tab_name)
+        except Exception:
+            pass
+        finally:
+            self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
     def _get_tab_state(self, tab_id: str) -> _TabState | None:
         for t in self._tabs:
@@ -636,14 +718,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self.run_worker(self._do_send(tab_id, raw), exclusive=False, name="repeater-send")
 
     async def _do_send(self, tab_id: str, raw: str) -> None:
-        db_path = self._get_db_path()
-        from pentool.api.repeater_api import RepeaterAPI
-        from pentool.core.config import get_config
-        cfg = get_config()
-        repeater_api = (
-            RepeaterAPI(db_path=db_path, timeout=cfg.request_timeout, verify_ssl=cfg.verify_ssl)
-            if db_path else None
-        )
+        repeater_api = self._get_api()
         service = RepeaterService(repeater_api=repeater_api)
 
         state = self._get_tab_state(tab_id)
@@ -790,6 +865,9 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     def on_key(self, event) -> None:
         if event.key == "ctrl+j":
             self.action_send()
+            event.prevent_default()
+        elif event.key in ("ctrl+f", "ctrl+shift+f"):
+            self.action_toggle_search()
             event.prevent_default()
 
     def load_request(self, raw: str) -> None:

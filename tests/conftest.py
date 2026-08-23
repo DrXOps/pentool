@@ -19,7 +19,7 @@ import pytest
 import pytest_asyncio
 
 from pentool.core.config import Config, set_config
-from pentool.core.database import init_db
+from pentool.core.db_schema import init_db
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 

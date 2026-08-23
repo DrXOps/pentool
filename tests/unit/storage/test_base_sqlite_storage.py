@@ -1,11 +1,11 @@
 """Unit tests: pentool/storage/base_sqlite_storage.py
 
 Covers BaseSqliteStorage — the shared persistent-connection lifecycle
-extracted out of HttpStorage so IntruderRepository (and future storages)
+extracted out of HttpStorage so IntruderStorage (and future storages)
 can reuse ONE aiosqlite connection for their whole lifetime instead of
-opening/closing a fresh one on every call (the old core.database.get_db()
+opening/closing a fresh one on every call (the old core.db_schema.get_db()
 pattern, which caused a real crash under a fast Intruder attack — see
-IntruderRepository's module docstring).
+IntruderStorage's module docstring).
 """
 
 from __future__ import annotations
@@ -62,7 +62,10 @@ class TestInitAndConnect:
         assert row[0].lower() == "wal"
         cur = await storage._db.execute("PRAGMA busy_timeout")
         row = await cur.fetchone()
-        assert row[0] == 5000
+        # Raised from 5000 → 15000 so concurrent writers (scanner + proxy
+        # history, one SQLite writer at a time in WAL) wait for their turn
+        # instead of dropping rows with "database is locked".
+        assert row[0] == 15000
         await storage.close()
 
 

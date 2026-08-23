@@ -35,16 +35,23 @@ class SearchBar(Widget):
             self.regex = regex
             self.direction = direction  # 1 = forward, -1 = backward
 
+    class TargetToggle(Message):
+        """User toggled search target (Req/Resp)."""
+        def __init__(self) -> None:
+            super().__init__()
+
     class Closed(Message):
         """Search bar closed."""
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._regex_enabled = False
+        self._search_target: str = "request"  # "request" | "response"
 
     def compose(self) -> ComposeResult:
         yield Label("Find:")
         yield Input(placeholder="search...", id="search-input", compact=True)
+        yield Static("Req", id="search-target-toggle", classes="search-target-req")
         yield Button("◀", id="btn-prev", variant="default")
         yield Button("▶", id="btn-next", variant="default")
         yield Static("Regex", id="search-regex-toggle")
@@ -85,12 +92,16 @@ class SearchBar(Widget):
     def on_static_click(self, event) -> None:
         try:
             widget = event.widget
-            if getattr(widget, "id", None) == "search-regex-toggle":
+            wid = getattr(widget, "id", None)
+            if wid == "search-regex-toggle":
                 self._regex_enabled = not self._regex_enabled
                 if self._regex_enabled:
                     widget.add_class("-active")
                 else:
                     widget.remove_class("-active")
+            elif wid == "search-target-toggle":
+                self.toggle_target()
+                self.post_message(self.TargetToggle())
         except Exception:
             pass
 
@@ -101,6 +112,10 @@ class SearchBar(Widget):
         elif event.key == "enter":
             self._fire_search(1)
             event.prevent_default()
+        elif event.key == "tab":
+            self.toggle_target()
+            self.post_message(self.TargetToggle())
+            event.prevent_default()
 
     def set_count(self, current: int, total: int) -> None:
         try:
@@ -109,5 +124,16 @@ class SearchBar(Widget):
                 count_label.update("No matches")
             else:
                 count_label.update(f"{current}/{total}")
+        except Exception:
+            pass
+
+    def toggle_target(self) -> None:
+        self._search_target = "response" if self._search_target == "request" else "request"
+        label = "Req" if self._search_target == "request" else "Resp"
+        try:
+            tgt = self.query_one("#search-target-toggle", Static)
+            tgt.update(label)
+            tgt.remove_class("search-target-req", "search-target-resp")
+            tgt.add_class(f"search-target-{'req' if self._search_target == 'request' else 'resp'}")
         except Exception:
             pass

@@ -33,6 +33,35 @@ _READ_TIMEOUT = 30.0
 # Timeout waiting for user decision during interception (seconds)
 _INTERCEPT_TIMEOUT = 300.0
 
+# Grace window (seconds) for the listening server to fully close during
+# stop(). The listener closes synchronously; this only covers lingering
+# sockets, so it stays short — a long value here stalls app shutdown for
+# no benefit.
+_STOP_SERVER_GRACE = 0.4
+
+# Grace window (seconds) to await cancellation of in-flight per-connection
+# tasks (TLS tunnels, keep-alive, intercept waits) during stop(). The
+# listener's close() releases the 8080 port synchronously, so we only need
+# one short cancel wave here — waiting longer just slows a normal quit.
+# Residual connections get torn down by the process exiting.
+_STOP_TASK_GRACE = 0.6
+
+# DRAIN grace (seconds): after sending CancelledError we must actually let each
+# cancelled _handle_client task run to completion (its `finally` does
+# writer.close()/wait_closed()). If we don't wait it out, tens-to-hundreds of
+# pending _handle_client coroutines are destroyed by Python when the loop
+# finishes — a burst of _PyGen_Finalize over a live heap that was implicated in
+# "free(): corrupted unsorted chunks" crashes under heavy WebSocket traffic.
+# This is deliberately a bit longer than the cancel wave.
+_STOP_TASK_DRAIN = 2.0
+
+# How long _handle_client may wait for its writer to actually close before
+# giving up. Bounded so a wedged socket (open upstream tunnel that never got
+# its far side closed) cannot leave the task pending on wait_closed() forever —
+# see _handle_client's bound on wait_closed(), which is the fix for the mass
+# _PyGen_Finalize heap-corruption crash (mass-pending-tasks at loop teardown).
+_WRITER_CLOSE_GRACE = 0.5
+
 
 InterceptState = Literal["waiting", "forwarded", "dropped"]
 
@@ -133,7 +162,7 @@ class ProxyServer:
     - Interactive mode (intercept): pauses request until user decision
     - Scope: host filtering
     - Match/Replace: automatic replacement in requests/responses (via MatchReplaceEngine)
-    - Logging to SQLite via core/database
+    - Logging to SQLite via core/db_schema
     - Notifications via EventBus: ProxyRequestCaptured, ProxyRequestCompleted
     """
 
@@ -215,7 +244,9 @@ class ProxyServer:
         if self._server:
             self._server.close()
             try:
-                await asyncio.wait_for(self._server.wait_closed(), timeout=2.0)
+                await asyncio.wait_for(
+                    self._server.wait_closed(), timeout=_STOP_SERVER_GRACE
+                )
             except asyncio.TimeoutError:
                 logger.debug("ProxyServer.stop: wait_closed timeout, continuing")
             self._server = None
@@ -238,13 +269,32 @@ class ProxyServer:
             logger.debug("ProxyServer.stop: cancelling %d active task(s)", len(pending))
             for task in pending:
                 task.cancel()
+            # Two phases so we don't leave a pile of half-cancelled _handle_client
+            # coroutines to be destroyed by Python when the loop tears down (that
+            # burst of _PyGen_Finalize over a fragmented heap was implicated in
+            # the "free(): corrupted unsorted chunks" crashes). Phase 1: a short
+            # bounded await so a normal quit stays fast. Phase 2: actually wait
+            # out the drain so every cancelled task runs its finally (writer
+            # close) — bounded so a genuinely stuck task can't hang shutdown.
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*pending, return_exceptions=True),
-                    timeout=2.0,
+                    timeout=_STOP_TASK_GRACE,
                 )
             except asyncio.TimeoutError:
-                logger.debug("ProxyServer.stop: task cancellation timed out")
+                # Second pass: give the cancelled tasks time to finish their
+                # finally blocks instead of leaving them pending for loop teardown.
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*pending, return_exceptions=True),
+                        timeout=_STOP_TASK_DRAIN,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "ProxyServer.stop: %d task(s) still pending after drain — "
+                        "residual coroutines will be torn down at loop exit",
+                        sum(1 for t in pending if not t.done()),
+                    )
         logger.info("Proxy stopped")
 
     async def serve_forever(self) -> None:
@@ -355,7 +405,21 @@ class ProxyServer:
         finally:
             try:
                 writer.close()
-                await writer.wait_closed()
+                # Bounded close, not an unbounded await. If this connection
+                # still holds a live upstream tunnel (an open _tunnel_raw /
+                # WS relay that never got its other side closed), wait_closed()
+                # would block forever — and under mass cancellation (proxy.stop
+                # with many in-flight WS/keep-alive tunnels) that left hundreds
+                # of _handle_client tasks pending on account of THIS line, which
+                # the loop then finalized in a burst (_PyGen_Finalize over a
+                # fragmented heap → "free(): corrupted unsorted chunks" SIGABRT).
+                # Give it a short grace so even a wedged socket cannot hold a
+                # task hostage; the fd is closed regardless at loop teardown.
+                await asyncio.wait_for(
+                    writer.wait_closed(), timeout=_WRITER_CLOSE_GRACE
+                )
+            except asyncio.TimeoutError:
+                logger.debug("_handle_client: writer.wait_closed() timed out after %.1fs", _WRITER_CLOSE_GRACE)
             except Exception as e:
                 logger.debug("_handle_client: writer.close() error (connection already reset?): %s", e)
 
@@ -496,6 +560,14 @@ class ProxyServer:
                     await dst.drain()
             except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
                 pass  # normal TCP tunnel termination
+            except asyncio.CancelledError:
+                # CancelledError is a BaseException (not Exception) — it would
+                # otherwise slip past the generic handler below AND, if the
+                # peer pipe fell over mid-drain, leave the far-side writer
+                # open so the enclosing _handle_client's wait_closed() would
+                # never return. Nothing to log; the shared finally (outside
+                # this gather) closes both writers.
+                raise
             except Exception as e:
                 logger.debug("_tunnel_raw pipe error: %s", e)
             finally:
@@ -504,11 +576,26 @@ class ProxyServer:
                 except Exception as e:
                     logger.debug("_tunnel_raw dst.close() error: %s", e)
 
-        await asyncio.gather(
-            pipe(reader, rem_writer),
-            pipe(rem_reader, writer),
-            return_exceptions=True,
-        )
+        try:
+            await asyncio.gather(
+                pipe(reader, rem_writer),
+                pipe(rem_reader, writer),
+                return_exceptions=True,
+            )
+        finally:
+            # Ensure BOTH ends are closed even when this whole tunnel is
+            # cancelled mid-flight (one pipe broke the other). Under mass
+            # cancellation this is what was leaking open writers → unbounded
+            # pending _handle_client tasks on wait_closed() → the _PyGen_Finalize
+            # heap-corruption crash. close() alone is sufficient (asyncio
+            # schedules the actual fd close); wait_closed is bounded here as a
+            # belt-and-braces so we never block a cancel.
+            for w in (writer, rem_writer):
+                try:
+                    w.close()
+                    await asyncio.wait_for(w.wait_closed(), timeout=_WRITER_CLOSE_GRACE)
+                except Exception:
+                    pass
 
     async def _handle_http(
         self,

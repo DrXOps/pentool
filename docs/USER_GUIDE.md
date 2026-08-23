@@ -430,20 +430,20 @@ Compare two requests/responses to find differences.
 
 ## Spider Module
 
-Automatically crawl website to discover content.
+Crawl websites to discover content. The Spider has **no dedicated TUI tab** —
+crawling runs from the **Target** module's toolbar (`🕷 Crawl Scope` / `🕷 Crawl Host`).
 
-### Starting a Crawl
+### Starting a Crawl (from Target)
 
-1. Enter starting URL
-2. Configure:
-   - **Max Depth:** Levels to follow (3-10)
-   - **Max Pages:** Total pages limit (50-1000)
-   - **Scope:** Stay in same domain / allow subdomains
-3. Click "Start Crawl"
+1. In the Target module's Site Map tree, select a host for a single-target crawl,
+   or rely on scope rules for a whole-scope crawl.
+2. (Optional) Tick **`🤖 Use AI`** in the toolbar — after the normal crawl, the AI
+   suggests likely-but-not-found endpoints and adds them to the Site Map.
+3. Click `🕷 Crawl Scope` (every in-scope host) or `🕷 Crawl Host` (the selected host).
 
 ### Discovered URLs
 
-All found URLs listed with:
+Found pages surface in the Target Site Map tree, with:
 - HTTP method
 - Status code
 - Content type

@@ -34,6 +34,7 @@ dependencies = [
     "aiohttp>=3.9.0",
     "aiosqlite>=0.19.0",
     "beautifulsoup4>=4.12.0",
+    "lxml>=4.9.0",
     "click>=8.1.0",
     "cryptography>=41.0.0",
     "pyyaml>=6.0",
@@ -42,6 +43,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ai = [
+    "pentool-mcp-server>=0.1.0",
+    # Playwright: headless browser for --real capture, crawler js_render and
+    # future scanner JS support. Browser binary is installed separately:
+    #   uv tool run --with playwright python -m playwright install chromium
+    "playwright>=1.40.0",
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
@@ -84,6 +92,9 @@ addopts = "-ra -q --strict-markers"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
+    "perf: performance benchmarks (small N, CI-friendly; skip in normal unit runs)",
+    "network: tests that hit a live target (skip by default)",
+    "huge: tests that touch multi-hundred-MB payload files / DVWA (only on demand)",
 ]
 asyncio_mode = "auto"
 
@@ -117,3 +128,20 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-textual-snapshot>=0.4.0",
+    "aioresponses>=0.7.6",
+    "coverage>=7.3.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "flake8>=6.1.0",
+    "pre-commit>=3.4.0",
+    "textual>=8.0.0",
+]

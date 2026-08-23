@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from pentool.core.config import Config, get_config
-from pentool.core.database import init_db
+from pentool.core.db_schema import init_db
 from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)

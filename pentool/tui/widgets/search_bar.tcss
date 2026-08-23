@@ -34,6 +34,19 @@ SearchBar #search-regex-toggle {
 SearchBar #search-regex-toggle.-active {
     color: $primary;
 }
+SearchBar #search-target-toggle {
+    width: auto;
+    height: 1;
+    padding: 0 1 0 1;
+    color: $text-muted;
+    text-style: bold;
+}
+SearchBar #search-target-toggle.search-target-req {
+    color: $primary;
+}
+SearchBar #search-target-toggle.search-target-resp {
+    color: $warning;
+}
 SearchBar #search-count {
     width: auto;
     color: $text-muted;

@@ -276,6 +276,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         # blocks starting a new load and disables edits on that set until
         # the streaming count finishes (see _load_payloads_from_file).
         self._payload_load_in_progress: bool = False
+        # Tracked auto-save workers — cancelled before closing API on exit
+        self._running_save_tasks: list[str] = []
 
     async def on_event(self, event: _tevents.Event) -> None:
         """Double-click in template-editor — select the word under the cursor."""
@@ -312,8 +314,6 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     def compose(self) -> ComposeResult:
         with Horizontal(id="toolbar"):
             yield ToolbarButton("▶ Start", "btn-start")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("⏸ Pause", "btn-pause", classes="disabled")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("■ Stop",  "btn-stop",  classes="disabled")
             yield Static(" │ ", classes="toolbar-sep")
@@ -476,6 +476,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         instance's underlying connection instead of leaking the old one.
         """
         from pentool.api.intruder_api import IntruderAPI
+        # Cancel any in-flight auto-save workers before touching the DB connection
+        self._cancel_save_workers()
         # Cancel any in-flight _do_load_state / _do_load_results workers
         # from a previous on_mount or project-switch BEFORE calling
         # switch_db(). switch_db() closes the old connection (close() →
@@ -726,12 +728,17 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         try:
             editor = self.query_one("#template-editor", TextArea)
             template = editor.text
+            worker_name = f"intruder-save-state-{time.monotonic_ns()}"
+            self._running_save_tasks.append(worker_name)
             self.run_worker(
-                api.save_state(
-                    tab_name=self._tab_name,
-                    template=template,
-                    attack_type=self._attack_type.value,
-                    payloads=self._serialize_payloads(self._payloads),
+                self._do_auto_save(
+                    api.save_state(
+                        tab_name=self._tab_name,
+                        template=template,
+                        attack_type=self._attack_type.value,
+                        payloads=self._serialize_payloads(self._payloads),
+                    ),
+                    worker_name,
                 ),
                 exclusive=False,
                 exit_on_error=False,
@@ -747,13 +754,36 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         try:
             # Get project_id from app if available
             project_id = getattr(self.app, "project_id", None)
+            worker_name = f"intruder-save-result-{time.monotonic_ns()}"
+            self._running_save_tasks.append(worker_name)
             self.run_worker(
-                api.save_result(result, project_id=project_id),
+                self._do_auto_save(
+                    api.save_result(result, project_id=project_id),
+                    worker_name,
+                ),
                 exclusive=False,
                 exit_on_error=False,
             )
         except Exception:
             pass
+
+    async def _do_auto_save(self, coro, worker_name: str) -> None:
+        """Auto-save wrapper — cleanup _running_save_tasks on completion."""
+        try:
+            await coro
+        except Exception:
+            pass
+        finally:
+            self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
+
+    def _cancel_save_workers(self) -> None:
+        """Cancel all tracked auto-save workers."""
+        for wname in list(self._running_save_tasks):
+            try:
+                self.workers.cancel(wname)
+            except Exception:
+                pass
+        self._running_save_tasks.clear()
 
     def _setup_tooltips(self) -> None:
         tips = {
@@ -773,13 +803,13 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     @on(ToolbarButton.Pressed, "#btn-start")
     def on_btn_start(self, _: ToolbarButton.Pressed) -> None:
-        logger.info("INTRUDER: btn-start pressed")
-        self.app.notify("▶ Starting attack…", timeout=2)
-        self.action_start_attack()
-
-    @on(ToolbarButton.Pressed, "#btn-pause")
-    def on_btn_pause(self, _: ToolbarButton.Pressed) -> None:
-        self.action_toggle_pause()
+        logger.info("INTRUDER: btn-start pressed, running=%s paused=%s",
+                     self._attack_running, self._paused)
+        if self._attack_running:
+            self.action_toggle_pause()
+        else:
+            self.app.notify("▶ Starting attack…", timeout=2)
+            self.action_start_attack()
 
     @on(ToolbarButton.Pressed, "#btn-stop")
     def on_btn_stop(self, _: ToolbarButton.Pressed) -> None:
@@ -1688,9 +1718,10 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         total_payloads = sum(len(ps) for ps in payload_sets)
         mode_label = " [⚡ Turbo]" if turbo_mode else ""
         limit_label = "" if is_pro else " [FREE: limited]"
-        self.app.notify(
+        self.app.customnotify(
             f"Attack started: {total_payloads} payload(s){mode_label}{limit_label}",
-            timeout=3
+            severity="success",
+            title="Intruder",
         )
         self.run_worker(self._run_attack(config, turbo_mode=turbo_mode), exclusive=False, name="intruder-attack")
 
@@ -1752,21 +1783,15 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             return
         if self._api is None:
             return
-        try:
-            btn = self.query_one("#btn-pause", ToolbarButton)
-        except Exception:
-            btn = None
         if self._paused:
             self.run_worker(self._api.resume(), exit_on_error=False)
             self._paused = False
-            if btn is not None:
-                btn.label = "⏸ Pause"
+            self.query_one("#btn-start", ToolbarButton).label = "⏸ Pause"
             self.app.notify("Resumed", timeout=2)
         else:
             self.run_worker(self._api.pause(), exit_on_error=False)
             self._paused = True
-            if btn is not None:
-                btn.label = "▶ Resume"
+            self.query_one("#btn-start", ToolbarButton).label = "▶ Resume"
             self.app.notify("Paused", timeout=2)
 
     def action_stop_attack(self) -> None:
@@ -1775,7 +1800,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self._attack_running = False
         self._paused = False
         self._set_running_state(False)
-        self.app.notify("Attack stopped", severity="warning", timeout=3)
+        self.app.customnotify("Attack stopped", severity="warning")
 
     def on_worker_state_changed(self, event) -> None:
         """Safety net: reset _attack_running on any attack-worker outcome."""
@@ -1790,16 +1815,14 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def _set_running_state(self, running: bool) -> None:
         try:
-            self.query_one("#btn-start", ToolbarButton).disabled = running
-            pause_btn = self.query_one("#btn-pause", ToolbarButton)
-            pause_btn.disabled = not running
-            if not running:
-                # Attack stopped/finished (possibly while paused) — reset
-                # the Pause/Resume label back to its "fresh attack" state,
-                # otherwise the NEXT Start Attack would show "▶ Resume"
-                # left over from the previous run instead of "⏸ Pause".
+            btn_start = self.query_one("#btn-start", ToolbarButton)
+            if running:
+                btn_start.label = "⏸ Pause"
+                btn_start.disabled = False
+            else:
+                btn_start.label = "▶ Start"
+                btn_start.disabled = False
                 self._paused = False
-                pause_btn.label = "⏸ Pause"
             self.query_one("#btn-stop",  ToolbarButton).disabled = not running
         except Exception:
             pass
@@ -2314,7 +2337,7 @@ class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
     }
     _SmartPayloadsDialog #dialog {
         width: 60;
-        height: 22;
+        height: auto;
         background: $surface;
         border: solid $primary;
         padding: 1 2;
@@ -2356,10 +2379,10 @@ class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
         height: auto;
         layout: horizontal;
         margin-top: 1;
-        align: left middle;
+        align: center middle;
     }
-    _SmartPayloadsDialog #buttons Button {
-        margin-right: 1;
+    _SmartPayloadsDialog #buttons ToolbarButton {
+        margin: 0 1;
     }
     """
 

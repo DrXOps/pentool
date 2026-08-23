@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import sys
 import threading
+import time
+from pathlib import Path
 
 from textual import on
 from textual.app import App, ComposeResult
@@ -26,7 +29,7 @@ Checkbox.BUTTON_RIGHT = "]"
 from pentool.api.proxy_api import InterceptedRequest as _IR
 from pentool.api.proxy_api import ProxyAPI, ProxyServer
 from pentool.core.config import get_config
-from pentool.core.database import init_db
+from pentool.core.db_schema import init_db
 from pentool.core.event_bus import get_event_bus
 from pentool.core.events import (
     FindingDiscovered,
@@ -77,15 +80,60 @@ from pentool.tui.screens import (
     ScannerScreen,
     SequencerScreen,
     SettingsScreen,
-    SpiderScreen,
     TargetScreen,
     TerminalScreen,
 )
 from pentool.tui.widgets.module_tabs import ModuleTabs
-from pentool.tui.widgets.notification_center import NotificationCenter
 from pentool.tui.widgets.statusbar import StatusBar
 
 logger = get_logger(__name__)
+
+
+def _setup_faulthandler(log_file: str) -> None:
+    """Install faulthandler to dump Python thread stacks into the log file.
+
+    Purpose: catch the "TUI just vanished silently" failure mode. When the
+    Textual main loop exits on its own (not through `action_quit`) under a wall
+    of traffic, the root cause never reached the logger — only a sudden
+    `app.run()` return, after which the process previously hung on non-daemon
+    threads. With faulthandler enabled:
+
+      * SIGSEGV/SIGABRT (C-level or interpreter abort) print every thread's
+        Python stack into the log file immediately;
+      * `kill -USR1 <pid>` dumps all threads on demand, so a live hang can be
+        caught without sudo/py-spy.
+
+    Writes to the same file the logger uses (append), so it survives a
+    pty/terminal teardown. Best-effort — never throws into the app.
+    """
+    try:
+        import faulthandler
+        import signal as _signal
+
+        path = str(log_file)
+        try:
+            _fh = open(path, "a", buffering=1)
+        except Exception:
+            # Fall back to stderr if the configured log path isn't writable.
+            _fh = None
+        faulthandler.enable(file=_fh, all_threads=True) if _fh is not None else faulthandler.enable(all_threads=True)
+        for _sig in (_signal.SIGUSR1, _signal.SIGUSR2):
+            try:
+                # chain=False deliberately: faulthandler prints the stacks and
+                # swallows the signal, so `kill -USR1 <pid>` is a pure on-demand
+                # dump that does NOT terminate the process (chain=True would
+                # re-raise to the default SIG_DFL and kill it).
+                faulthandler.register(
+                    _sig,
+                    file=_fh,
+                    chain=False,
+                    all_threads=True,
+                ) if _fh is not None else faulthandler.register(_sig, chain=False, all_threads=True)
+            except (ValueError, OSError):
+                pass
+    except Exception:
+        pass
+
 
 # Mapping module_id → widget class
 _SCREEN_MAP: dict[str, type] = {
@@ -98,7 +146,6 @@ _SCREEN_MAP: dict[str, type] = {
     "decoder":    DecoderScreen,
     "comparer":   ComparerScreen,
     "sequencer":  SequencerScreen,
-    "spider":     SpiderScreen,
     "extensions": ExtensionsScreen,
     "terminal":   TerminalScreen,
     "settings":   SettingsScreen,
@@ -199,6 +246,22 @@ class PentoolApp(App):
         background: $primary-darken-3;
         text-style: none;
     }
+
+    /* Override Textual's built-in toast: replace the default vertical
+       severity stripe on the left edge with a full border all the way round,
+       and force every toast onto a single line — long text is truncated with
+       an ellipsis rather than wrapping. */
+    Toast {
+        border: none;
+        text-wrap: wrap;
+        /* Compact padding, but the card grows vertically to fit the text. */
+        padding: 0 1;
+    }
+    Toast.-information { border: round $accent; }
+    Toast.-success     { border: round $success; }
+    Toast.-warning     { border: round $warning; }
+    Toast.-error       { border: round $error; }
+    Toast.-critical    { border: heavy $error; }
     """
 
     BINDINGS = [
@@ -220,7 +283,6 @@ class PentoolApp(App):
         Binding("D", "switch_module('decoder')",    "Decoder",    show=False, priority=True),
         Binding("C", "switch_module('comparer')",   "Comparer",   show=False, priority=True),
         Binding("Q", "switch_module('sequencer')",  "Sequencer",  show=False, priority=True),
-        Binding("W", "switch_module('spider')",     "Spider",     show=False, priority=True),
         Binding("E", "switch_module('extensions')", "Extensions", show=False, priority=True),
         Binding("X", "switch_module('terminal')",   "Terminal",   show=False, priority=True),
         # Shift+digit aliases for compatibility
@@ -231,7 +293,6 @@ class PentoolApp(App):
         Binding("percent_sign",       "switch_module('decoder')",    show=False, priority=True),
         Binding("circumflex_accent",  "switch_module('comparer')",   show=False, priority=True),
         Binding("ampersand",          "switch_module('sequencer')",  show=False, priority=True),
-        Binding("asterisk",           "switch_module('spider')",     show=False, priority=True),
         Binding("left_parenthesis",   "switch_module('extensions')", show=False, priority=True),
         # Proxy sub-tabs: use Ctrl+H/I/W for Proxy HTTP/Intercept/WS
         Binding("ctrl+h", "proxy_tab('http')",      "HTTP History", show=False, priority=True),
@@ -257,6 +318,29 @@ class PentoolApp(App):
         self._skip_project_guard: bool = False  # True in tests to bypass the guard
         # Protection against message storm: set of pending req_ids for deduplication
         self._pending_done_ids: set[str] = set()
+        # Set when a deliberate quit (action_quit / Ctrl+Q) is underway, so the
+        # on_screen_unmounted diagnostic doesn't fire on the normal shutdown
+        # that action_quit performs. Cleared... reset per run() naturally since
+        # a fresh app instance is created for each launch.
+        self._is_quitting = False
+        # Diagnostic: patched below to capture the call-site of app.exit() so the
+        # "run() returned cleanly" dump in __main__.py can cross-reference who
+        # requested the exit. Textual's App.exit() does NOT raise anything that
+        # escapes run() — it sets an internal flag and the event loop winds down
+        # naturally.  Without a probe, the "clean return" case (no exception =>
+        # no traceback) has no way to name the caller.
+        self._exit_caller_stack: str = ""
+        # Cached module screens + last time we re-resolved them. Live proxy
+        # traffic calls on_proxy_request_* / on_send_to_target *per request*;
+        # each call used to do a fresh `query_one(SCREEN_*)`. When a module
+        # screen wasn't mounted (other tab, being torn down), that became a
+        # query_one → NoMatches → try/except → log-log-log on EVERY request —
+        # under a wall of traffic this alone pegged the CPU (~25%) with the UI
+        # already gone. Cache the resolved screen and only re-resolve on a slow
+        # interval, so a missing screen degrades to a quiet no-op instead of a
+        # per-request hunt.
+        self._proxy_screen = None
+        self._target_screen = None
         # Vim-style key sequences: "g" prefix for Proxy sub-tabs
         # Shift+p then h/i/w → proxy HTTP/Intercept/WS
         self._key_seq_state: str = ""
@@ -268,21 +352,19 @@ class PentoolApp(App):
         # Project management — extracted to keep app.py focused on Textual wiring
         from pentool.tui.project_manager import ProjectManager
         self._pm = ProjectManager(self)
-        # Shared "is a crawl in progress" state — Spider's functionality is
-        # driven from two places (SpiderScreen's own Start button, and
-        # TargetScreen's "Crawl scope"/"Crawl selected host" convenience
-        # triggers, which build their own SpiderAPI instance rather than
-        # going through SpiderScreen — see TargetScreen._crawl_hosts_worker).
-        # ActivityIndicator used to read only SpiderScreen._crawl_running,
-        # so a crawl started from Target never lit up the Spider glyph. A
-        # counter (not a bool) because _crawl_hosts_worker can in principle
-        # be re-triggered while a previous one is still finishing up.
+        # Shared "is a crawl in progress" state. There is no dedicated
+        # SpiderScreen/module-tab anymore — crawling runs only from
+        # TargetScreen's "Crawl scope"/"Crawl selected host" triggers
+        # (which build their own SpiderAPI instance — see
+        # TargetScreen._crawl_hosts_worker). A counter (not a bool) because
+        # _crawl_hosts_worker can in principle be re-triggered while a
+        # previous one is still finishing up; ActivityIndicator's Spider
+        # glyph reads this via is_spider_active().
         self._spider_active_count: int = 0
 
     def spider_crawl_started(self) -> None:
-        """Call when any crawl (Spider tab or Target's convenience triggers)
-        begins — keeps ActivityIndicator's Spider glyph in sync regardless
-        of which screen initiated the crawl."""
+        """Call when any crawl begins — keeps ActivityIndicator's Spider
+        glyph in sync regardless of which screen initiated the crawl."""
         self._spider_active_count += 1
 
     def spider_crawl_finished(self) -> None:
@@ -302,7 +384,64 @@ class PentoolApp(App):
             error,
             "".join(traceback.format_exception(type(error), error, error.__traceback__)),
         )
+        # Additionally dump EVERY thread's Python stack — a module screen can
+        # be torn down by Textual after a fatal error, and the plain traceback
+        # above loses what the other threads (proxy loop, aiosqlite) were doing
+        # at the moment the app collapsed. All-threads dump is what shows the
+        # actual trigger ("TUI just vanished" hunting).
+        try:
+            import faulthandler
+            import io
+            _buf = io.StringIO()
+            faulthandler.dump_traceback(file=_buf, all_threads=True)
+            logger.error(
+                "APP: --- fatal all-thread dump begin ---\n%s\n--- fatal all-thread dump end ---",
+                _buf.getvalue(),
+            )
+        except Exception:
+            pass
         super()._handle_exception(error)
+
+    @staticmethod
+    def _guard_forward_event() -> None:
+        """Neutralize a Textual mouse-path crash at its source.
+
+        Textual's `Screen._forward_event` (screen.py) dereferences
+        `content_widget.parent.region`; when a mouse event lands while a widget
+        under the cursor has no laid-out parent (e.g. the History table rebuilt
+        under live traffic), `parent` is None and it raises
+        `AttributeError: 'NoneType' object has no attribute 'region'`. That is
+        raised inside the message-pump dispatch, which Textual treats as fatal
+        and tears the whole app down ("TUI just vanished").
+
+        We patch the source method once so that exact race degrades to a quiet
+        no-op instead of killing the app. A per-table guard in the DataTable is
+        not enough — App.on_event → screen._forward_event runs for mouse events
+        the table never sees. Doing it here (once, globally) is the only safe
+        seam; it never touches on_event/MessagePump, so normal event flow is
+        unaffected.
+        """
+        try:
+            import textual.screen as _tss
+            if getattr(_tss.Screen, "_pentool_guard_done", False):
+                return
+            _orig = _tss.Screen._forward_event
+
+            def _guarded(self, event) -> None:
+                try:
+                    _orig(self, event)
+                except AttributeError as _ae:
+                    if "has no attribute 'region'" in str(_ae):
+                        return
+                    raise
+
+            _guarded.__name__ = "_forward_event"
+            _guarded.__qualname__ = "Screen._forward_event"
+            _tss.Screen._forward_event = _guarded
+            _tss.Screen._pentool_guard_done = True
+            logger.debug("APP: Screen._forward_event guarded against layout race")
+        except Exception:
+            pass
 
     def compose(self) -> ComposeResult:
         yield ModuleTabs(id="module-tabs")
@@ -316,7 +455,6 @@ class PentoolApp(App):
             yield DecoderScreen(id="screen-decoder")
             yield ComparerScreen(id="screen-comparer")
             yield SequencerScreen(id="screen-sequencer")
-            yield SpiderScreen(id="screen-spider")
             yield ExtensionsScreen(id="screen-extensions")
             yield TerminalScreen(id="screen-terminal")
             yield SettingsScreen(id="screen-settings")
@@ -331,10 +469,18 @@ class PentoolApp(App):
         with Vertical(id="bottom-dock"):
             yield Footer()
             yield StatusBar(id="statusbar")
-        yield NotificationCenter(id="notification-center")
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
+        _setup_faulthandler(self._cfg.log_file)
+        self._guard_forward_event()
+
+        # Keep a _exit_caller_stack slot — __main__.py reads it on clean exit.
+        # Currently unused (was filled by the _handle_exception / exit() probes
+        # removed after the "TUI just vanished" bug was diagnosed), but reserved
+        # for future diagnostic use.
+        self._exit_caller_stack = ""
+
         try:
             await init_db(self._cfg.db_path)
         except Exception as exc:
@@ -428,8 +574,15 @@ class PentoolApp(App):
         # Lock Scanner tab if no valid license with scanner_pro feature
         self._refresh_scanner_tab_lock()
 
-        # Auto-open last project at startup
-        self.run_worker(self._auto_open_last_project(), exclusive=False, thread=False)
+        # Seed target URL(s) passed via `pentool --url ...` — a NEW project for
+        # the target is created, proxy on, target populated, ready to audit.
+        # When --url is given we do NOT auto-open the last project.
+        pending = getattr(self, "_pending_start_urls", None)
+        if pending:
+            self.run_worker(self._seed_pending_urls(list(pending)), exclusive=False, thread=False)
+        else:
+            # Auto-open last project at startup (no arguments)
+            self.run_worker(self._auto_open_last_project(), exclusive=False, thread=False)
 
         # Check for updates in background (if enabled in settings)
         if getattr(self._cfg, "check_updates", True):
@@ -440,6 +593,42 @@ class PentoolApp(App):
         # already-activated machine keeps running the stale code forever,
         # since the PRO package otherwise only downloads once, at activation.
         self.run_worker(self._check_for_pro_update(), exclusive=False, thread=False)
+
+        # Global AI: if the master switch was left ON (persisted), bring up the
+        # MCP server and make AI controls visible right away. If OFF, hide them.
+        self._start_ai_if_enabled()
+
+    def on_screen_unmounted(self, event) -> None:
+        """Diagnostic: catch the "TUI just vanished" exit path.
+
+        When the main loop dies on its own (not via action_quit), Textual strips
+        every module screen and falls back to the bare `_default` Screen — the
+        point at which `app.run()` is about to return. That moment never reached
+        the logger before (Textual's own exit diagnostics go to the lost stderr).
+        If we see the last screen unmount while the app still considers itself
+        running (i.e. NOT an in-progress, deliberate quit), dump every thread's
+        Python stack into the log — that shows what the main thread was doing
+        right as the loop collapsed, i.e. the actual trigger we've been hunting.
+        """
+        try:
+            if self._is_quitting:
+                return
+            # Only fire on the abnormal "last screen goes away" case: app is
+            # still running and the active screen has collapsed to the default.
+            if not getattr(self, "is_running", False):
+                return
+            current = getattr(self, "screen", None)
+            cid = getattr(current, "id", None) if current is not None else None
+            if cid == "_default":
+                import faulthandler
+                import io
+                logger.warning("APP: diagnosing abnormal exit — app lost all module screens "
+                               "(active_screen=%r) while still running. Full thread stack dump:", cid)
+                _buf = io.StringIO()
+                faulthandler.dump_traceback(file=_buf, all_threads=True)
+                logger.warning("APP: --- exit-dump begin ---\n%s\n--- exit-dump end ---", _buf.getvalue())
+        except Exception:
+            pass
 
     async def _auto_open_last_project(self) -> None:
         """Open the last project from recent_projects at startup."""
@@ -454,6 +643,165 @@ class PentoolApp(App):
         logger.info("APP: auto-opening last project: %s", path)
         # Use the same exclusive worker path as manual open — no races
         self._pm.switch_project_db(path, is_new=False)
+
+    async def _seed_pending_urls(self, urls: list[str]) -> None:
+        """Seed targets passed via `pentool --url ...` (launch-TUI branch).
+
+        Starts the proxy (CA cert is pre-warmed on mount) and populates the
+        Target / Site Map with each URL, so the user lands on a NEW project for
+        the target (rather than the last-used project). Headless-browser import
+        + issuing the first request is part of the interactive auto-setup
+        feature (roadmap) — see docs/i18n/en/CI_CD.md.
+        """
+        await asyncio.sleep(0.6)  # let the TUI render first
+
+        # Create a NEW project for this target (do not reuse the last project).
+        try:
+            new_path = self._project_path_for_target(urls[0])
+            self._pm.switch_project_db(new_path, is_new=True)
+        except Exception as exc:
+            logger.warning("seed: new project create failed: %s", exc)
+
+        for url in urls:
+            try:
+                from pentool.utils.parser import ParsedRequest
+                self.post_message(SendUrlToTarget(ParsedRequest(method="GET", url=url)))
+            except Exception as exc:
+                logger.debug("seed url %s: %s", url, exc)
+
+        real = bool(getattr(self, "_pending_start_real", False))
+
+        # Start the proxy so --real traffic (and subsequent manual use) can be
+        # intercepted and land in the project.
+        proxy_started = False
+        try:
+            if not (self._proxy and self._proxy.is_running):
+                self._start_proxy()
+                proxy_started = True
+        except Exception as exc:
+            logger.warning("seed: proxy start failed: %s", exc)
+
+        logger.info("seed: --real=%s proxy_started=%s proxy_running=%s", real, proxy_started,
+                    bool(self._proxy and self._proxy.is_running))
+        if real:
+            # Actually fetch the target(s) through the proxy so real requests
+            # show up in the project (not just a dry seed entry).
+            try:
+                logger.info("--real: calling _do_real_fetch for %s", urls)
+                # Run the WHOLE browser fetch in an executor thread (time.sleep,
+                # subprocess.run) — Textual's loop doesn't pump `await
+                # asyncio.sleep()` inside this worker, which hung the old async
+                # wait-loop and produced zero logs/children.
+                loop = asyncio.get_running_loop()
+                ok = await asyncio.wait_for(
+                    loop.run_in_executor(None, self._do_real_fetch_sync, urls), timeout=140
+                )
+                logger.info("--real: fetch done ok=%s", ok)
+                if ok:
+                    self.call_after_refresh(self._refresh_target_tree)
+                else:
+                    self.notify("--real: browser fetch didn't capture traffic", severity="warning", timeout=6)
+            except Exception as exc:
+                logger.warning("seed: real fetch failed: %s", exc)
+                self.notify(f"--real fetch failed: {exc}", severity="warning", timeout=6)
+
+        self.notify(f"New project for {len(urls)} URL(s) — {'proxy on, ready to audit' if (proxy_started or (self._proxy and self._proxy.is_running)) else 'ready to audit'}.", timeout=6)
+
+    def _do_real_fetch_sync(self, urls: list[str]) -> bool:
+        """Fetch each URL with a real headless Chrome THROUGH the proxy.
+
+        Runs entirely in an executor thread (no asyncio/Textual-loop primitives —
+        `time.sleep` only), so Textual's worker can never hang on `await
+        asyncio.sleep()`. Launches a child process that points Chromium at our
+        proxy; ProxyServer's MITM captures the real request into HTTP History +
+        Target automatically. Returns whether the browser reached the target.
+        """
+        import subprocess
+        import time
+
+        # The proxy starts async via _start_proxy — wait up to ~10s (time.sleep).
+        waited = 0
+        while not (self._proxy and self._proxy.is_running):
+            time.sleep(0.2)
+            waited += 0.2
+            if waited >= 10:
+                break
+        if not (self._proxy and self._proxy.is_running):
+            logger.info("--real: proxy not ready after %.1fs, cannot fetch", waited)
+            return False
+
+        proxy_host = self._proxy.host or "127.0.0.1"
+        proxy_port = self._proxy.port or 8080
+        proxy_url = f"http://{proxy_host}:{proxy_port}"
+        _proxy_arg = f"--proxy-server={proxy_url}"
+        _script = (
+            "import asyncio,sys\n"
+            "async def _run():\n"
+            "    from playwright.async_api import async_playwright\n"
+            "    async with async_playwright() as pw:\n"
+            "        b=await pw.chromium.launch(headless=True,args=[%r,%r])\n"
+            "        p=await b.new_page()\n"
+            "        for u in sys.argv[1:]:\n"
+            "            try:\n"
+            "                await p.goto(u,timeout=30000,wait_until='domcontentloaded')\n"
+            "                print('--real child visited',u,flush=True)\n"
+            "            except Exception as e:\n"
+            "                print('--real child visit failed',u,repr(e),flush=True)\n"
+            "        await b.close()\n"
+            "asyncio.run(_run())\n"
+        ) % (_proxy_arg, "--ignore-certificate-errors")
+
+        logger.info("--real: running browser child via subprocess in executor (py=%s)", sys.executable)
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c", _script, *urls],
+                capture_output=True, text=True, timeout=120,
+            )
+            logger.info("--real: child returned rc=%s", result.returncode)
+            out = (result.stdout or "").strip()
+            err = (result.stderr or "").strip()
+            for line in out.splitlines():
+                logger.info("--real: %s", line)
+            if result.returncode != 0:
+                logger.warning("--real: child exited %s: %s",
+                               result.returncode, (err.splitlines()[-1] if err else ""))
+                return False
+            return "--real child visited" in out
+        except subprocess.TimeoutExpired:
+            logger.warning("--real: child timed out")
+            return False
+        except Exception as exc:
+            logger.warning("--real: browser capture error: %s", exc)
+            return False
+
+    def _refresh_target_tree(self) -> None:
+        try:
+            from pentool.tui.screens.target.screen import TargetScreen
+            target = self.query_one(SCREEN_TARGET, TargetScreen)
+            target._refresh_tree()
+        except Exception:
+            pass
+
+    def _project_path_for_target(self, url: str) -> str:
+        """Build a clean .db path for a target URL with a date+time stamp so each
+        `pentool --url ...` run creates a fresh, uniquely-named project.
+
+        e.g. ~/.config/pentool/projects/xss-game.appspot.com_20260818_185030.db
+        """
+        from datetime import datetime
+        from urllib.parse import urlparse
+        host = urlparse(url if "://" in url else f"//{url}").netloc or url
+        host_clean = "".join(c if (c.isalnum() or c in "._-") else "_" for c in host).strip(".")
+        if not host_clean:
+            host_clean = "target"
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Fixed projects dir (~/.config/pentool/projects/) — NOT derived from
+        # the current db_path, which would nest projects/projects/... deeper
+        # on every --real run.
+        from pentool.core.config import DEFAULT_CONFIG_DIR
+        projects_dir = DEFAULT_CONFIG_DIR / "projects"
+        projects_dir.mkdir(parents=True, exist_ok=True)
+        return str(projects_dir / f"{host_clean}_{stamp}.db")
 
     async def _check_for_updates(self) -> None:
         """Check for a new version in the background. Show notify if an update is available."""
@@ -727,8 +1075,7 @@ class PentoolApp(App):
                 lic = get_session_license()
                 if not (lic.valid and lic.has_feature("scanner_pro")):
                     self.notify(
-                        "🔒 Scanner — paid feature.\n"
-                        "Activate: pentool license trial",
+                        "🔒 Scanner — paid feature. Activate: pentool license trial",
                         severity="warning",
                         timeout=5,
                     )
@@ -737,6 +1084,17 @@ class PentoolApp(App):
                 pass
         self.query_one(ContentSwitcher).current = f"screen-{module_id}"
         self._active_module = module_id
+        # Refresh AI-dependent UI whenever we switch to Target: the "🤖 Use AI"
+        # checkbox visibility tracks the global ai_enabled, and this must be
+        # re-applied when the Target screen is (re)shown — otherwise a checkbox
+        # that was hidden while the screen wasn't mounted stays hidden even
+        # after the user enables AI globally.
+        if module_id == "target":
+            self._update_ai_ui()
+        # Re-paint any visible toasts on top after the content swap, so they
+        # don't end up hidden underneath the freshly-shown tab (Textual's
+        # toast rack can sit below a tab's own layers after a switch).
+        self.call_after_refresh(self._refresh_notifications)
         # _update_proxy_screen_labels() only refreshes the ProxyScreen label
         # when it IS the active module — so if the proxy was stopped/started
         # while the user was on a different tab (e.g. right after creating a
@@ -759,7 +1117,7 @@ class PentoolApp(App):
         except Exception:
             pass
 
-    def notify2(
+    def customnotify(
         self,
         message: str,
         severity: str = "information",
@@ -767,35 +1125,53 @@ class PentoolApp(App):
         timeout: float | None = None,
         sound: bool = True,
     ) -> None:
-        """ICQ-style stacked toast notification (top-right corner).
+        """Deprecated alias for `notify()`.
 
-        Separate from `flash()` (single-line tooltip2 in the module bar,
-        kept as-is for existing lightweight status messages) and from the
-        standard Textual `app.notify()` toast. Use this for events that
-        deserve a more visible, dismissible, optionally-audible alert —
-        e.g. a finished attack, a high-severity Scanner finding, a dropped
-        connection.
-
-        severity: "information" | "success" | "warning" | "error" | "critical"
-        sound: play a short notification sound (see
-            pentool.core.notification_sound) — respects the user's
-            `notifications_sound_enabled` config toggle regardless of this
-            argument's default.
+        Kept so existing call sites work unchanged; routes through the
+        built-in Textual toast rack (no reserved zone → no dark band).
         """
-        try:
-            self.query_one("#notification-center", NotificationCenter).push(
-                message, severity=severity, title=title, timeout=timeout
-            )
-        except Exception as exc:
-            logger.debug("notify2: could not show toast: %s", exc)
+        self.notify(message, title=title or "", severity=severity, timeout=timeout, sound=sound)
 
+    def notify(
+        self,
+        message: str,
+        *,
+        title: str = "",
+        severity: str = "information",
+        timeout: float | None = None,
+        markup: bool = True,
+        sound: bool = True,
+    ) -> None:
+        """Standard notification using Textual's built-in toast rack.
+
+        Ties every `app.notify(...)` (~170 call sites) into Textual's own
+        ToastRack, which renders severity-styled cards bottom-right WITHOUT
+        reserving a zone — so no dark band appears (the custom dock rack used
+        to leave one). Sound is layered on top, respecting the user's
+        `notifications_sound_enabled` config toggle.
+        """
+        super().notify(
+            message,
+            title=title,
+            severity=severity,
+            timeout=timeout,
+            markup=markup,
+        )
+        # Belt-and-braces dismissal: Textual's toast rack only prunes expired
+        # toasts when the rack is refreshed (next notify, or an idle tick). If
+        # the app is busy it can leave an expired toast sitting until a new
+        # notification arrives. Unless explicitly kept forever (critical), we
+        # schedule a refresh shortly after the timeout so the toast always
+        # dismisses on its own.
+        if timeout is not None:
+            self.set_timer(timeout + 0.5, self._refresh_notifications)
         if sound:
             try:
                 if self._cfg.notifications_sound_enabled:
                     from pentool.core.notification_sound import play_notification_sound
                     play_notification_sound(severity)
             except Exception as exc:
-                logger.debug("notify2: sound failed: %s", exc)
+                logger.debug("notify: sound failed: %s", exc)
 
     def _on_storage_error(self, message: str) -> None:
         """ProxyService.init_storage()/switch_db() failed to open the DB.
@@ -809,7 +1185,7 @@ class PentoolApp(App):
         notify() here is safe without call_from_thread.
         """
         self.notify(
-            f"{message}\n\nRequests will not be saved until this is fixed — "
+            f"{message}. Requests will not be saved until this is fixed — "
             f"check that no other Pentool instance has this project open.",
             severity="error",
             timeout=8,
@@ -838,7 +1214,10 @@ class PentoolApp(App):
         if self._proxy is None:
             return
         if self._proxy.is_running:
-            self._stop_proxy()
+            # Stop asynchronously so the TUI thread isn't frozen for up to
+            # ~10s while proxy.stop() + thread join complete (the Stop button
+            # currently felt slow/unresponsive on a busy proxy).
+            self.run_worker(self._stop_proxy_async())
         else:
             if not self._project_loaded:
                 # Project DB switch/open (auto-open at startup, New/Open
@@ -944,7 +1323,7 @@ class PentoolApp(App):
             self.call_from_thread(self._update_status)
             self.call_from_thread(self._update_proxy_screen_labels)
             self.call_from_thread(self._update_dashboard_proxy_status, True)
-            self.call_from_thread(self.flash, f"● Proxy :{self._proxy.port}", "success")
+            self.call_from_thread(self.customnotify, f"● Proxy :{self._proxy.port}", "success")
             logger.info("Proxy started on port %s", self._proxy.port)
             async with self._proxy._server:
                 await self._proxy._server.serve_forever()
@@ -965,7 +1344,6 @@ class PentoolApp(App):
             self.call_from_thread(self._update_status)
             self.call_from_thread(self._update_proxy_screen_labels)
             self.call_from_thread(self._update_dashboard_proxy_status, False)
-            self.call_from_thread(self.flash, "○ Proxy stopped", "warning")
 
     def _stop_proxy(self) -> None:
         logger.info("APP: _stop_proxy called")
@@ -974,9 +1352,11 @@ class PentoolApp(App):
                 self._proxy.stop(), self._proxy_loop
             )
             try:
-                # stop() now cancels all active tasks and waits up to ~4s
-                # internally, so 6s here is generous headroom
-                future.result(timeout=6)
+                # stop() itself now cancels tasks within a short grace
+                # (see _STOP_TASK_GRACE), so a short timeout here is enough —
+                # and on a normal quit the leftover connections are released
+                # by the process exit, so we never need the old 6s headroom.
+                future.result(timeout=1.5)
             except Exception as e:
                 logger.warning("APP: proxy.stop() error or timeout: %s", e)
                 # Force-cancel anything still running in the proxy loop so
@@ -990,14 +1370,85 @@ class PentoolApp(App):
                     except Exception:
                         pass
         if self._proxy_thread and self._proxy_thread.is_alive():
-            self._proxy_thread.join(timeout=5)
+            self._proxy_thread.join(timeout=1.5)
             if self._proxy_thread.is_alive():
-                logger.warning("APP: proxy thread did not stop in 5s — port 8080 may still be in use")
+                logger.warning("APP: proxy thread did not stop in 1.5s — port 8080 may still be in use")
         self.call_after_refresh(self._update_status)
         self.call_after_refresh(self._update_proxy_screen_labels)
+        self.call_after_refresh(self.customnotify, "○ Proxy stopped", "warning")
+
+    async def _stop_proxy_async(self) -> None:
+        """Async stop of the proxy that does NOT block the TUI thread.
+
+        Same robust path as `_stop_proxy()` (await proxy.stop() up to 6s,
+        force-cancel tasks on timeout, join the proxy thread) but expressed
+        as a coroutine. Intended to be awaited from an async worker context
+        (e.g. ProjectManager._do_switch) so that switching to a new project
+        does NOT freeze the UI for up to ~10s while the old proxy is being
+        wound down. _stop_proxy() remains the synchronous variant used by
+        the Stop button / Ctrl+Q.
+        """
+        logger.info("APP: _stop_proxy_async called")
+        if self._proxy and self._proxy.is_running and self._proxy_loop:
+            future = asyncio.run_coroutine_threadsafe(
+                self._proxy.stop(), self._proxy_loop
+            )
+            try:
+                await asyncio.wait_for(asyncio.wrap_future(future), timeout=1.5)
+            except asyncio.TimeoutError:
+                logger.warning("APP: proxy.stop() (async) timed out")
+        # Wait (in this async context) for the proxy thread to die so the
+        # 8080 port is released before the caller switches the project DB.
+        # Short bounded window — beyond it the port is released by the
+        # (soon-exiting) process, so we never block the caller for ~7s.
+        loop = asyncio.get_running_loop()
+        proxy_thread = self._proxy_thread
+        if proxy_thread is not None:
+            for _ in range(20):  # up to ~2s in 100ms steps
+                alive = await loop.run_in_executor(None, proxy_thread.is_alive)
+                if not alive:
+                    break
+                await asyncio.sleep(0.1)
+            self.call_after_refresh(self._update_status)
+            self.call_after_refresh(self._update_proxy_screen_labels)
+            self.call_after_refresh(self.customnotify, "○ Proxy stopped", "warning")
+        else:
+            self.call_after_refresh(self._update_status)
 
     # Sprint 3: _on_proxy_request and _proxy_request_done_cb removed — proxy emits via EventBus,
     # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted → _on_bus_proxy_captured/completed
+
+    _SCREEN_RESOLVE_INTERVAL = 2.0
+
+    def _get_proxy_screen(self):
+        """Cached #screen-proxy; re-resolves every interval. Returns None when
+        the screen isn't mounted — callers treat None as a quiet no-op."""
+        from pentool.tui.screens.proxy.screen import ProxyScreen
+        return self._get_cached_screen(SCREEN_PROXY, ProxyScreen, "_proxy_screen")
+
+    def _get_target_screen(self):
+        """Cached #screen-target; re-resolves every interval. None = not mounted."""
+        from pentool.tui.screens.target.screen import TargetScreen
+        return self._get_cached_screen(SCREEN_TARGET, TargetScreen, "_target_screen")
+
+    def _get_cached_screen(self, selector: str, cls, cache_attr: str):
+        _ts_attr = f"_screen_resolve_{cache_attr}"
+        _last = getattr(self, _ts_attr, 0.0)
+        now = time.monotonic()
+        # Cache hit within the interval → reuse without re-querying.
+        if now - _last < self._SCREEN_RESOLVE_INTERVAL:
+            return getattr(self, cache_attr)
+        setattr(self, _ts_attr, now)
+        try:
+            screen = self.query_one(selector, cls)
+        except Exception:
+            # Screen not mounted (other tab / being torn down). Cache None so we
+            # DON'T re-hunt on every request — this is the anti-spam that stops
+            # the per-request query_one→NoMatches→log loop under load.
+            setattr(self, cache_attr, None)
+            return None
+        setattr(self, cache_attr, screen)
+        return screen
 
     @on(ProxyRequestAdded)
     def on_proxy_request_added(self, msg: ProxyRequestAdded) -> None:
@@ -1005,7 +1456,9 @@ class PentoolApp(App):
         if not (self._proxy and self._proxy.is_running):
             return
         try:
-            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+            screen = self._get_proxy_screen()
+            if screen is None:
+                return  # quiet no-op — screen not mounted; do NOT log each call
             screen.add_request_row(msg.req)
             if self._proxy and self._proxy.intercept_enabled:
                 screen.show_intercepted_request(msg.req)  # type: ignore[arg-type]
@@ -1023,7 +1476,9 @@ class PentoolApp(App):
             logger.warning("on_proxy_request_done: msg.req is %s, skipping", type(msg.req))
             return
         try:
-            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+            screen = self._get_proxy_screen()
+            if screen is None:
+                return  # quiet no-op — screen not mounted; do NOT log each call
             screen.update_request_row(msg.req)
             if self._proxy and self._proxy.intercept_enabled:
                 screen.show_intercept_response(msg.req)  # type: ignore[arg-type]
@@ -1035,18 +1490,20 @@ class PentoolApp(App):
     @on(SendToTarget)
     def on_send_to_target(self, msg: SendToTarget) -> None:
         try:
-            from pentool.tui.screens.target.screen import TargetScreen
-            target = self.query_one(SCREEN_TARGET, TargetScreen)
+            target = self._get_target_screen()
+            if target is None:
+                return  # quiet no-op — Target screen not mounted; do NOT log each call
             target.add_request_from_proxy(msg.req)
         except Exception as e:
-            logger.warning("on_send_to_target: failed to forward request to Target: %s", e)
+            logger.debug("on_send_to_target: %s", e)
 
     def _add_raw_to_target(self, raw: str) -> None:
         try:
-            from pentool.tui.screens.target.screen import TargetScreen
             from pentool.utils.parser import parse_http_request
             req = parse_http_request(raw)
-            target = self.query_one(SCREEN_TARGET, TargetScreen)
+            target = self._get_target_screen()
+            if target is None:
+                return
             target.add_request_from_proxy(req)
         except Exception as e:
             logger.debug("_add_raw_to_target: %s", e)
@@ -1059,7 +1516,7 @@ class PentoolApp(App):
             repeater.load_request_in_new_tab(msg.raw)
             self.action_switch_module("repeater")
             self.call_after_refresh(self._focus_repeater_editor, repeater)
-            self.flash("→ Repeater", "information", 2.0)
+            self.customnotify("→ Repeater", "information")
             self._add_raw_to_target(msg.raw)
         except Exception as exc:
             self.notify(f"Send to Repeater failed: {exc}", severity="error", timeout=4)
@@ -1269,6 +1726,18 @@ class PentoolApp(App):
         # timer that is still mid-fire).
         if "auto_save_enabled" in fields or "auto_save_interval" in fields:
             self.call_after_refresh(self._setup_auto_save)
+        # Global AI master-switch (Settings → AI): when toggled, start the MCP
+        # server (or stop it) and show/hide AI-dependent UI across modules.
+        # start_ai/stop_ai are async and run as workers so the TUI stays live.
+        if "ai_enabled" in fields:
+            from pentool.services.ai.factory import start_ai, stop_ai
+            if fields.get("ai_enabled"):
+                self.run_worker(start_ai(self._cfg))
+                self.notify("AI enabled — starting MCP server", severity="information", timeout=3)
+            else:
+                self.run_worker(stop_ai())
+                self.notify("AI disabled", severity="information", timeout=3)
+            self._update_ai_ui()
 
     def _update_status(self) -> None:
         try:
@@ -1285,6 +1754,38 @@ class PentoolApp(App):
             dashboard.update_proxy_status(running)
         except Exception:
             pass
+
+    def _update_ai_ui(self) -> None:
+        """Show/hide AI-dependent UI across modules based on the global ai_enabled.
+
+        ai_enabled in Settings is the master switch for ALL AI features. When off,
+        AI-specific controls are hidden; when on, they become visible. Target's
+        "Use AI" checkbox additionally decides AI-crawl per target.
+        """
+        ai_on = bool(getattr(self._cfg, "ai_enabled", False))
+        # Target toolbar "🤖 Use AI" checkbox — visible only when AI is enabled.
+        try:
+            box = self.query_one("#cfg-ai-use")
+            box.display = ai_on
+        except Exception:
+            pass
+        # Dashboard MCP status LED gets refreshed from is_ai_running/ai_enabled.
+        try:
+            from pentool.tui.screens.dashboard.screen import DashboardScreen, SCREEN_DASHBOARD
+            dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
+            dashboard._update_ai_status()
+        except Exception:
+            pass
+
+    def _start_ai_if_enabled(self) -> None:
+        """On app startup: start the MCP server if the global AI switch is on."""
+        try:
+            from pentool.services.ai.factory import start_ai
+            if getattr(self._cfg, "ai_enabled", False):
+                self.run_worker(start_ai(self._cfg))
+        except Exception as e:
+            logger.debug("_start_ai_if_enabled: %s", e)
+        self._update_ai_ui()
 
     def _update_proxy_screen_labels(self) -> None:
         try:
@@ -1410,6 +1911,10 @@ class PentoolApp(App):
             pass
 
     async def action_quit(self) -> None:
+        # Deliberate quit underway — suppress the abnormal-exit diagnostic in
+        # on_screen_unmounted (which would otherwise fire during this normal
+        # shutdown as the module screens are torn down one by one).
+        self._is_quitting = True
         # Unsubscribe from EventBus before exiting
         try:
             bus = get_event_bus()
@@ -1424,17 +1929,17 @@ class PentoolApp(App):
             pass
         # Stop terminal (shell process) via Message Bus
         self.post_message(TerminalStop())
-        # Stop proxy
-        if self._proxy and self._proxy.is_running and self._proxy_loop:
-            asyncio.run_coroutine_threadsafe(
-                self._proxy.stop(), self._proxy_loop
-            )
-        if self._proxy_thread and self._proxy_thread.is_alive():
-            self._proxy_thread.join(timeout=2)
+        # Stop proxy — reuse the same robust path as manual stop, but the
+        # async variant so Ctrl+Q does NOT freeze the TUI renderer, and with
+        # short grace windows (proxy.stop cancels tasks fast; the 8080 port is
+        # released by the process exit anyway). Shutdown now takes ~1-2s even
+        # with a busy proxy instead of the old ~11s (6s stop + 5s join).
+        if self._proxy and self._proxy.is_running:
+            await self._stop_proxy_async()
         # Close SQLite storage — flush WAL to disk
         try:
             if self._proxy_service is not None:
-                await self._proxy_service._storage.close()
+                await self._proxy_service.close()
                 logger.info("APP: HttpStorage closed on quit")
         except Exception as e:
             logger.warning("APP: HttpStorage close error on quit: %s", e)
@@ -1443,11 +1948,48 @@ class PentoolApp(App):
         try:
             from pentool.tui.screens.intruder.screen import IntruderScreen
             intruder_screen = self.query_one(SCREEN_INTRUDER, IntruderScreen)
+            intruder_screen._cancel_save_workers()
             if intruder_screen._api is not None:
                 await intruder_screen._api.close()
                 logger.info("APP: Intruder storage closed on quit")
         except Exception as e:
             logger.warning("APP: Intruder storage close error on quit: %s", e)
+        # Close Target/SiteMap's persistent SQLite connection (BaseSqliteStorage).
+        try:
+            from pentool.tui.screens.target.screen import TargetScreen
+            target_screen = self.query_one(SCREEN_TARGET, TargetScreen)
+            target_screen._cancel_save_workers()
+            if target_screen._target_api is not None:
+                await target_screen._target_api.close()
+                logger.info("APP: Target storage closed on quit")
+        except Exception as e:
+            logger.warning("APP: Target storage close error on quit: %s", e)
+        # Close Repeater's persistent SQLite connection (BaseSqliteStorage).
+        try:
+            from pentool.tui.screens.repeater.screen import RepeaterScreen
+            repeater_screen = self.query_one(SCREEN_REPEATER, RepeaterScreen)
+            if repeater_screen._repeater_api is not None:
+                await repeater_screen._repeater_api.close()
+                logger.info("APP: Repeater storage closed on quit")
+        except Exception as e:
+            logger.warning("APP: Repeater storage close error on quit: %s", e)
+        # Stop the spider CPU pool BEFORE the hard os._exit() below. exit() is
+        # followed synchronously by os._exit(), which by-passes atexit/finally —
+        # so a process-pool created via fork leaves orphaned workers (PPID=1)
+        # holding the inherited 8080 listener fd, and the next launch fails
+        # with "address already in use". shutdown_proc_pool() terminates them
+        # cleanly so the port is released on a normal quit.
+        try:
+            from pentool.api.spider_api import shutdown_spider_pool
+            shutdown_spider_pool()
+        except Exception:
+            pass
+        # Stop the AI MCP server (subprocess) so no orphan LLM process lingers.
+        try:
+            from pentool.services.ai.factory import stop_ai
+            await stop_ai()
+        except Exception:
+            pass
         self.exit()
         # Force-terminate the process — kills non-daemon threads
         # (jemalloc_bg_thd from pyarrow) that would otherwise block exit.

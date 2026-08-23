@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from pentool.api.base_api import ExportableAPI
-from pentool.api.intruder_repository import IntruderRepository
+from pentool.api.intruder_storage import IntruderStorage
 from pentool.modules.intruder import (
     AttackType,
     ChainedPayloadSource,
@@ -49,7 +49,12 @@ __all__ = [
 
 class IntruderAPI(ExportableAPI):
 
-    def __init__(self, db_path: str | None = None, http_client=None) -> None:
+    def __init__(
+        self,
+        db_path: str | None = None,
+        http_client=None,
+        storage: IntruderStorage | None = None,
+    ) -> None:
         self._db_path = db_path
         # Optional injected HTTPClient (DIP — see
         # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.2).
@@ -67,12 +72,19 @@ class IntruderAPI(ExportableAPI):
         self._attack: IntruderAttack | None = None
         self._task: asyncio.Task | None = None
         self._restored_results: list = []
-        # SQL for tab state / attack results lives in IntruderRepository
+        # SQL for tab state / attack results lives in IntruderStorage
         # (see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.6)
         # — mirrors ScannerTabRepository, the same extraction already done
         # for Scanner. IntruderAPI keeps its existing public method names
         # as a thin facade so no caller needs to change.
-        self._repo = IntruderRepository(db_path=db_path)
+        #
+        # `storage` is dependency-injected (DIP) so tests and alternate
+        # backends can supply an IntruderStorage (or a double) instead of
+        # forcing a real SQLite connection here — mirrors the `storage=None`
+        # pattern already used by ProxyService and the `http_client=None`
+        # pattern above. Default constructs IntruderStorage(db_path) the
+        # same way it always did.
+        self._repo = storage or IntruderStorage(db_path=db_path)
 
     async def start_attack(
         self,
@@ -211,7 +223,7 @@ class IntruderAPI(ExportableAPI):
     async def switch_db(self, db_path: str) -> None:
         """Point this API's repository at a different project DB file.
 
-        Lets IntruderScreen keep ONE persistent IntruderAPI/IntruderRepository
+        Lets IntruderScreen keep ONE persistent IntruderAPI/IntruderStorage
         instance for the app's lifetime (mirrors ProxyService/HttpStorage)
         instead of constructing a new one — and therefore a new SQLite
         connection — on every single call. See BaseSqliteStorage.switch_db.

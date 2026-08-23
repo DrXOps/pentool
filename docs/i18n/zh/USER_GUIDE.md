@@ -352,15 +352,14 @@ Comparer 比较两个文本并显示差异。
 
 Spider 自动爬取 Web 应用程序并构建地图。
 
-### 启动 Spider
+> ⚠️ **Spider 在 TUI 中没有独立标签页。** 爬取从 **Target** 模块的工具栏启动，
+> 该工具栏直接调用 Spider 引擎。
 
-1. 进入 Spider（`Shift+W`）
-2. 输入 **Base URL**
-3. 配置参数：
-   - **Max Depth** — 最大爬取深度
-   - **Max Pages** — 爬取的最大页面数
-   - **Threads** — 线程数
-4. 点击 **Start**（`F5`）
+### 启动爬取（在 Target 模块中）
+
+1. 在 Site Map 树中选定主机（单个）或设定 scope（全部）
+2. （可选）勾选工具栏中的 **`🤖 Use AI`** — 爬取后 AI 补充不易发现的端点并加入 Site Map
+3. 点击 **`🕷 Crawl Scope`**（scope 内所有主机）或 **`🕷 Crawl Host`**（选定的主机）
 
 ### 结果
 
@@ -472,7 +471,6 @@ status = 404 OR status = 500
 | `Shift+D` | Decoder |
 | `Shift+C` | Comparer |
 | `Shift+Q` | Sequencer |
-| `Shift+W` | Spider |
 | `Shift+E` | Extensions |
 | `Shift+X` | Terminal |
 

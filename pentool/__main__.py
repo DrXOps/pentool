@@ -1,5 +1,6 @@
 """Entry point: no arguments — TUI, with arguments — CLI."""
 
+import os
 import sys
 import threading
 
@@ -21,11 +22,128 @@ import threading
 # features unavailable (same as if no PRO package were installed).
 _UNSAFE_SKIP_PRO_CHECK_FLAG = "--unsafe-skip-pro-compat-check"
 
+# Top-level one-shot mode flags handled by _run_target_mode (a click.group
+# can't take bare options without a subcommand, so we intercept these here).
+_URL_FLAGS = ("--url",)
+
+
+def _run_target_mode(argv: list[str]) -> None:
+    """Handle `pentool --url <url> [--headless] [--output file] [--real]`.
+
+    Headless       → run an active scan and emit a report (CI/CD).
+    --real         → launch the TUI, proxy on, and actually fetch the target
+                     through the proxy so real traffic lands in the project.
+    Otherwise      → launch the TUI pre-seeded with the URL(s).
+    """
+    urls: list[str] = []
+    headless = False
+    real = False
+    output: str | None = None
+
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in _URL_FLAGS:
+            if i + 1 < len(argv):
+                urls.append(argv[i + 1])
+                i += 2
+            else:
+                urls.append("")
+                i += 1
+        elif arg == "--headless":
+            headless = True
+            i += 1
+        elif arg == "--real":
+            real = True
+            i += 1
+        elif arg == "--output":
+            if i + 1 < len(argv):
+                output = argv[i + 1]
+                i += 2
+            else:
+                i += 1
+        else:
+            i += 1
+
+    urls = [u for u in urls if u]
+    if not urls:
+        print("Error: --url requires at least one URL.", file=sys.stderr)
+        raise SystemExit(2)
+
+    if headless:
+        from pentool.cli.headless import run_headless_scan
+        sys.exit(run_headless_scan(urls, output))
+    else:
+        from pentool.tui.app import PentoolApp
+        app = PentoolApp()
+        app._pending_start_urls = urls
+        app._pending_start_real = real
+        app.run()
+
+
+def _kill_orphaned_pentool() -> None:
+    """Kill orphaned pentool processes left behind by a previous run.
+
+    When `pentool` is killed forcefully (kill -9 / crash / terminal closed
+    mid-scan), its ProcessPoolExecutor workers (fork'd) survive as orphans
+    (PPID=1) and keep the proxy's 8080 listener fd open — the next launch
+    then fails with "address already in use" until they are killed manually.
+    This scans /proc for live processes whose command is our own pentool
+    entrypoint, whose PPID is 1 (orphaned), and that are not the current
+    process, and SIGKILLs them so the port is free before this instance
+    starts. Cheap, safe (only touches our own binary), and idempotent.
+
+    Kept deliberate: it runs only on script entry, before any proxy bind, so
+    it can't kill a legitimately-running proxy of a *concurrent* session we
+    don't want to disturb? No — it kills orphans only (PPID==1), never a
+    running foreground session (PPID != 1). A real second session has a live
+    parent and won't match.
+    """
+    try:
+        self_pid = os.getpid()
+        exe_basename = os.path.basename(sys.argv[0])
+        killed = 0
+        for pid_dir in os.listdir("/proc"):
+            if not pid_dir.isdigit():
+                continue
+            pid = int(pid_dir)
+            if pid == self_pid:
+                continue
+            try:
+                stat = open(f"/proc/{pid}/stat", "r").read().split(") ", 1)
+                ppid = int((stat[1].split(" "))[1]) if len(stat) > 1 else -1
+                if ppid != 1:
+                    continue  # has a live parent — not an orphan
+                cmdline = open(f"/proc/{pid}/cmdline", "rb").read().decode(errors="replace")
+                # Match our own binary name in the command line (e.g. .../pentool)
+                if exe_basename and exe_basename not in cmdline and "pentool" not in cmdline:
+                    continue
+                # Ignore the current process tree's own helpers we never spawn as
+                # orphans — only kill pentool entrypoints.
+                if "pentool" not in cmdline:
+                    continue
+                import signal
+                os.kill(pid, signal.SIGKILL)
+                killed += 1
+            except (OSError, ValueError, IndexError, FileNotFoundError):
+                continue
+        if killed:
+            sys.stderr.write(f"[pentool] cleaned up {killed} orphaned pentool process(es)\n")
+    except Exception:
+        pass  # never block startup on cleanup
+
 
 def main() -> None:
     unsafe_skip_pro_check = _UNSAFE_SKIP_PRO_CHECK_FLAG in sys.argv
     if unsafe_skip_pro_check:
         sys.argv.remove(_UNSAFE_SKIP_PRO_CHECK_FLAG)
+
+    if len(sys.argv) > 1 and "--url" in sys.argv:
+        # One-shot target mode: `pentool --url <url> [--headless] [--output f]`.
+        # A click.group requires a subcommand, so top-level flags alone would
+        # die with "Missing command" — intercept them here and handle directly.
+        _run_target_mode(sys.argv[1:])
+        return
 
     if len(sys.argv) > 1:
         from pentool.cli.main import cli
@@ -107,10 +225,68 @@ def main() -> None:
         except Exception:
             pass
 
+        # AI first-run dialog: ask user to install LLM if not set up yet
         try:
-            from pentool.tui.app import PentoolApp
+            from pentool.services.ai.factory import (
+                ai_setup_required,
+                get_ai_system_requirements,
+                get_model_size_mb,
+            )
+            if ai_setup_required():
+                ts = get_ai_system_requirements()
+                print()
+                print("╔══════════════════════════════════════════════════════════╗")
+                print("║ 🔮 AI assistant                                         ║")
+                print("║                                                         ║")
+                print("║ AI can assist during scanning:                         ║")
+                print("║   • pick relevant checks for a target                  ║")
+                print("║   • bypass WAF with generated payloads                 ║")
+                print("║   • discover hidden endpoints                          ║")
+                print("║                                                         ║")
+                print("║  Model: LFM2.5-350M-heretic                            ║")
+                print(f"║  Size:  ~{get_model_size_mb()} MB  |  Context: {ts['context_len']} tokens             ║")
+                print(f"║  RAM:   {ts['ram']}  |  CPU-only, no GPU required           ║")
+                print("║                                                         ║")
+                print("║ The model will be downloaded and converted to GGUF at  ║")
+                print("║ install time. This may take a while depending on your  ║")
+                print("║ connection speed.                                      ║")
+                print("║                                                         ║")
+                print("║ Install the AI assistant?                              ║")
+                print("║                                                         ║")
+                print("║  [Y] Yes  [N] No, thanks  [S] Skip                    ║")
+                print("╚══════════════════════════════════════════════════════════╝")
+                choice = input("> ").strip().lower()
+                if choice == "y":
+                    print("\nInstalling AI assistant...")
+                    import asyncio
+
+                    from pentool.core.config import get_config
+                    from pentool.services.ai.factory import install_ai_components
+                    asyncio.run(install_ai_components(get_config()))
+                    print("\n✅ AI assistant installed. MCP server is started from the Dashboard.")
+                    print("  Or via the command: pentool ai start\n")
+                elif choice == "n":
+                    print("\nOK. You can install the AI assistant later:\n")
+                    print("  pentool ai setup\n")
+                else:
+                    print("\nSkipped. Install later:\n")
+                    print("  pentool ai setup\n")
+        except Exception:
+            pass
+
+        # Free the proxy port from any orphaned pentool processes left by a
+        # previous hard-killed run (their ProcessPoolExecutor workers survive
+        # with PPID=1 and hold fd 8080). Do this right before the TUI starts
+        # so a fresh launch doesn't fail with "address already in use".
+        _kill_orphaned_pentool()
+
+        from pentool.tui.app import PentoolApp
+        try:
             PentoolApp().run()
         except (KeyboardInterrupt, SystemExit):
+            # Let the interpreter shut down normally on signals/explicit exits
+            # (PEP 8: never swallow these). The non-daemon-thread hang fix
+            # below only targets the clean-return path (the `else` branch).
             raise
         except Exception as exc:
             # Send anonymous crash report (if not disabled in settings)
@@ -120,6 +296,44 @@ def main() -> None:
             except Exception:
                 pass
             raise
+        else:
+            # `run()` returned cleanly — not through `action_quit` (which
+            # does its own os._exit deep inside the app). Dump all thread
+            # stacks to the log for post-mortem diagnosis, then hard-exit so
+            # the interpreter doesn't hang on orphan non-daemon threads.
+            import io, sys as _sys, time as _time, traceback as _tb
+            from pentool.core.config import DEFAULT_CONFIG_DIR
+            _log_path = str(DEFAULT_CONFIG_DIR / "pentool_exit_dump.log")
+            try:
+                _buf = io.StringIO()
+                _buf.write(f"--- run() returned cleanly, {_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                           f"pid={os.getpid()} ---\n")
+                # If the app captured a Textual-swallowed exception, log it.
+                try:
+                    from pentool.tui.app import PentoolApp
+                    _exit_stack = getattr(PentoolApp, '_exit_caller_stack', '')
+                    if _exit_stack:
+                        _buf.write(f"\n--- app.exit()/exception ---\n{_exit_stack}\n")
+                except Exception:
+                    pass
+                for _tid, _frame in _sys._current_frames().items():
+                    _buf.write(f"\n--- Thread 0x{_tid:x} ---\n")
+                    _tb.print_stack(_frame, file=_buf)
+                try:
+                    import faulthandler
+                    _fbuf = io.StringIO()
+                    faulthandler.dump_traceback(file=_fbuf, all_threads=True)
+                    _faul = _fbuf.getvalue().strip()
+                    if _faul:
+                        _buf.write(f"\n--- faulthandler ---\n{_faul}\n")
+                except Exception:
+                    pass
+                with open(_log_path, "a") as _f:
+                    _f.write(_buf.getvalue())
+            except Exception:
+                pass
+            import os as _os
+            _os._exit(0)
 
 
 if __name__ == "__main__":

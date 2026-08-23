@@ -110,6 +110,23 @@ class TestPayloads:
     def test_url_encoded_payloads_present(self):
         assert any("%2e" in p.lower() for p in _TRAVERSAL_PAYLOADS)
 
+    def test_load_payloads_path_traversal_not_empty(self):
+        # Regression: load_payloads("path_traversal") returned [] because the
+        # generator registry lacked "path_traversal" (plan 2026-08-09 fixed in
+        # payloads.py by aliasing it to the LFI generator). PathTraversalCheck
+        # shares the traversal family with LFI, so the built-ins must be present.
+        from pentool.modules.scanner.payloads import load_payloads
+        assert len(load_payloads("path_traversal")) > 0
+
+    def test_get_payloads_includes_builtins(self):
+        # get_payloads() = _TRAVERSAL_PAYLOADS + load_payloads("path_traversal");
+        # before the fix the second term was always empty.
+        check = PathTraversalCheck()
+        from pentool.modules.scanner.payloads import load_payloads
+        builtins = load_payloads("path_traversal")
+        for p in builtins:
+            assert p in check.get_payloads()
+
     def test_null_byte_payload_present(self):
         assert any("\x00" in p or "%00" in p for p in _TRAVERSAL_PAYLOADS)
 

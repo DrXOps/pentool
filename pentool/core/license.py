@@ -340,6 +340,7 @@ async def activate_license(key: str) -> LicenseInfo:
                 f"{_LICENSE_API_BASE}/api/validate",
                 json={"key": key, "machine_id": machine_id},
                 ssl=False,
+                headers={"Accept-Encoding": "gzip, deflate"},
             ) as resp:
                 if resp.status != 200:
                     return LicenseInfo(
@@ -424,6 +425,7 @@ async def start_trial() -> LicenseInfo:
                 f"{_LICENSE_API_BASE}/api/trial/start",
                 json={"machine_id": machine_id},
                 ssl=False,
+                headers={"Accept-Encoding": "gzip, deflate"},
             ) as resp:
                 data = await resp.json()
 
@@ -695,6 +697,7 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
                 f"{_LICENSE_API_BASE}/api/download",
                 json={"key": key, "machine_id": machine_id, "platform": plat, "sig": "1"},
                 ssl=False,
+                headers={"Accept-Encoding": "gzip, deflate"},
             ) as resp:
                 if resp.status != 200:
                     return False
@@ -759,6 +762,13 @@ async def _fetch_pro_build_id(plat: str) -> str | None:
                 f"{_LICENSE_API_BASE}/api/pro/version",
                 params={"platform": plat},
                 ssl=False,
+                # The Cloudflare Worker serves responses brotli-compressed by
+                # default. aiohttp (without brotli installed) can't decode
+                # `br`, so resp.json() raised ClientPayloadError and this whole
+                # function returned None — the client never saw a new PRO
+                # build_id and never re-downloaded an updated PRO package.
+                # Ask for gzip/deflate only, which aiohttp can decode.
+                headers={"Accept-Encoding": "gzip, deflate"},
             ) as resp:
                 if resp.status != 200:
                     return None

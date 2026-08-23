@@ -158,3 +158,98 @@ class TestProxyAPIWithMockProxy:
         rules = [MatchReplaceRule(match="x", replace="y")]
         api.set_match_replace_rules(rules)
         assert mock_proxy_server.match_replace_rules == rules
+
+
+class TestProxyAPIExtra:
+    def test_create_proxy_sets_internal(self) -> None:
+        from unittest.mock import patch
+        api = ProxyAPI()
+        with patch("pentool.api.proxy_api.ProxyServer") as PS:
+            api.create_proxy(host="h", port=9999, cert_dir="/c", db_path="/d")
+        PS.assert_called_once_with(host="h", port=9999, cert_dir="/c", db_path="/d")
+        assert api.get_proxy() is PS.return_value
+        assert api.proxy is PS.return_value
+        assert api.is_running() is bool(PS.return_value.is_running)
+
+    def test_export_project_data_without_proxy(self) -> None:
+        api = ProxyAPI()
+        data = api.export_project_data()
+        assert data["http_history"] == []
+        assert data["proxy"]["scope"] == []
+
+    def test_import_project_data_without_proxy(self) -> None:
+        api = ProxyAPI()
+        loaded, msg = api.import_project_data({})
+        assert loaded == 0
+        assert msg == "Proxy not initialized"
+
+
+class TestProxyAPIExportImport:
+    def test_export_with_requests(self, mock_proxy_server) -> None:
+        from pentool.api.proxy_api import InterceptedRequest
+        api = ProxyAPI()
+        api.set_proxy(mock_proxy_server)
+        req = MagicMock()
+        req.to_dict.return_value = {"id": "r1"}
+        req2 = MagicMock()
+        req2.to_dict.return_value = {"id": "r2"}
+        api._proxy.get_requests.return_value = [req, req2]
+        data = api.export_project_data()
+        assert len(data["http_history"]) == 2
+        assert data["http_history"][0]["id"] == "r1"
+
+    def test_export_empty_requests(self, mock_proxy_server) -> None:
+        api = ProxyAPI()
+        api.set_proxy(mock_proxy_server)
+        api._proxy.get_requests.return_value = []
+        data = api.export_project_data()
+        assert data["http_history"] == []
+
+    def test_import_project_data(self, mock_proxy_server) -> None:
+        api = ProxyAPI()
+        api.set_proxy(mock_proxy_server)
+        data = {
+            "proxy": {"scope": ["a.com"], "match_replace": []},
+            "http_history": [{"id": "x", "method": "GET", "url": "http://h/",
+                              "headers": {}, "body": "", "timestamp": "",
+                              "state": "forwarded", "is_https": False,
+                              "is_websocket": False, "response": None}],
+        }
+        loaded, msg = api.import_project_data(data)
+        assert loaded == 1
+        assert msg == ""
+        mock_proxy_server.match_replace_rules == []
+
+    def test_import_project_data_bad_request(self, mock_proxy_server) -> None:
+        api = ProxyAPI()
+        api.set_proxy(mock_proxy_server)
+        data = {"http_history": [{"bad": "missing required keys"}]}
+        loaded, msg = api.import_project_data(data)
+        assert loaded == 0
+
+
+class TestProxyAPIEmptyBranches:
+    """Cover empty-proxy branches across every accessor."""
+
+    def test_get_requests_when_no_proxy(self) -> None:
+        api = ProxyAPI()
+        assert api.get_requests(limit=5) == []
+
+    def test_find_request_when_no_proxy(self) -> None:
+        api = ProxyAPI()
+        assert api.find_request("x") is None
+
+    def test_get_status_when_no_proxy(self) -> None:
+        api = ProxyAPI()
+        st = api.get_status()
+        assert st["running"] is False
+        assert st["requests_count"] == 0
+
+    def test_set_match_replace_rules_when_no_proxy(self) -> None:
+        api = ProxyAPI()
+        api.set_match_replace_rules([])  # no-op, no crash
+
+    def test_get_port_and_host_defaults(self) -> None:
+        api = ProxyAPI()
+        assert api.get_port() == 8080
+        assert api.get_host() == "127.0.0.1"

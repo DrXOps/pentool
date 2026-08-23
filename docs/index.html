@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pentool — Async TUI Web Pentesting Toolkit</title>
-  <meta name="description" content="Fully async terminal-based security toolkit. HTTP proxy, scanner, intruder, repeater — keyboard-driven, no browser, no Electron, no Java." />
-  <meta name="keywords" content="pentool, pentesting, TUI, security, burp alternative, async, proxy, scanner, intruder, CLI" />
-  <meta property="og:title" content="Pentool — Async TUI Web Pentesting Toolkit" />
-  <meta property="og:description" content="Fully async pentesting toolkit in your terminal. No browser, no Electron, no Java. uv tool install pentool." />
+  <title>Pentool — Async TUI Web Security Tool</title>
+  <meta name="description" content="Modern async TUI for web pentesting. One command install, unlimited Intruder, AI-powered scanner, proxy+WebSocket. Runs in terminal and CI/CD." />
+  <meta name="keywords" content="pentool, pentesting, TUI, security, burp alternative, async, proxy, scanner, intruder, CLI, AI security" />
+  <meta property="og:title" content="Pentool — Async TUI Web Security Tool" />
+  <meta property="og:description" content="Modern async TUI for web pentesting. One command install, unlimited Intruder, AI scanner, proxy+WebSocket. uv tool install pentool." />
   <meta property="og:url" content="https://pentool.pro" />
   <meta property="og:type" content="website" />
   <link rel="canonical" href="https://pentool.pro" />
@@ -399,8 +399,8 @@
 <!-- HERO -->
 <section class="hero">
   <div class="beta-badge" data-i18n="hero.badge">🚀 Demo · 14-day Free Trial · All PRO Features Included</div>
-  <h1><span data-i18n="hero.h1.1">Pentesting toolkit</span><br/><em data-i18n="hero.h1.2">that runs at async speed</em></h1>
-  <p data-i18n="hero.p">Pentool is a fully async, keyboard-driven TUI for web security testing — hundreds of concurrent requests, zero Java, zero Electron.</p>
+  <h1><span data-i18n="hero.h1.1">Web Security TUI</span><br/><em data-i18n="hero.h1.2">one command, async, no limits</em></h1>
+  <p data-i18n="hero.p">Pentool is a modern async TUI for web pentesting — one command to install, zero config, unlimited Intruder, AI-powered scanner. Runs in your terminal, works in CI/CD.</p>
   <div class="hero-buttons">
     <a class="btn btn-primary" href="#install" data-i18n="hero.btnInstall">📦 uv tool install pentool</a>
     <a class="btn btn-secondary" href="https://github.com/DrXOps/pentool" data-i18n="hero.btnGithub">⭐ GitHub</a>
@@ -449,48 +449,48 @@
 <!-- FEATURES -->
 <section class="section" id="features">
   <div class="section-label" data-i18n="feat.label">Why Pentool</div>
-  <h2 class="section-title" data-i18n="feat.title">What competitors don't offer</h2>
-  <p class="section-sub" data-i18n="feat.sub">No Java. No Electron. No browser tab eating your RAM. Just a fast async TUI that stays out of your way.</p>
+  <h2 class="section-title" data-i18n="feat.title">Fast, simple, modern</h2>
+  <p class="section-sub" data-i18n="feat.sub">One command, zero config, async by design. AI helps you find vulnerabilities faster. No Java, no Electron, no bloat.</p>
   <div class="features-grid">
     <div class="feature-card" data-i18n-block>
       <div class="feature-icon">⚡</div>
-      <h3 data-i18n="feat.async.t">Fully Async Engine</h3>
-      <p data-i18n="feat.async.d">Built on asyncio from the ground up — thousands of concurrent connections, hundreds of req/s. Burp queues. Pentool flies.</p>
+      <h3 data-i18n="feat.async.t">Async by Design</h3>
+      <p data-i18n="feat.async.d">Built on asyncio — thousands of concurrent connections, hundreds of req/s. No waiting, no queues. Speed that matters.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">⌨️</div>
-      <h3 data-i18n="feat.keyboard.t">Keyboard-First TUI</h3>
-      <p data-i18n="feat.keyboard.d">Every action reachable without a mouse. Works over SSH, in tmux, on headless servers — anywhere a terminal runs.</p>
+      <h3 data-i18n="feat.keyboard.t">Terminal-Native TUI</h3>
+      <p data-i18n="feat.keyboard.d">Full keyboard + mouse support. Works over SSH, in tmux, in CI/CD pipelines, on headless servers. No display needed.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">💥</div>
-      <h3 data-i18n="feat.turbo.t">Intruder Turbo Mode</h3>
-      <p data-i18n="feat.turbo.d">Keep-Alive + connection pooling = 10× attack speed vs. standard HTTP. Four modes: Sniper, Battering Ram, Pitchfork, Cluster Bomb.</p>
+      <h3 data-i18n="feat.turbo.t">Unlimited Intruder</h3>
+      <p data-i18n="feat.turbo.d">No request limits, no throttling. Keep-Alive + connection pooling = 10× attack speed. Sniper, Battering Ram, Pitchfork, Cluster Bomb.</p>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🔍</div>
-      <h3><span data-i18n="feat.scanner.t">Smart Scanner</span><span class="pro-badge">PRO</span></h3>
-      <p data-i18n="feat.scanner.d">Context-aware payloads for SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. WAF bypass and blind techniques built in.</p>
+      <div class="feature-icon">🤖</div>
+      <h3><span data-i18n="feat.scanner.t">AI-Powered Scanner</span><span class="pro-badge">PRO</span></h3>
+      <p data-i18n="feat.scanner.d">Smart scan with context-aware payloads for SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. AI-assisted WAF bypass and blind injection. Learns from responses.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🌐</div>
-      <h3 data-i18n="feat.proxy.t">Proxy + WebSockets</h3>
-      <p data-i18n="feat.proxy.d">Intercept HTTP/HTTPS and WebSocket frames in real time. Match &amp; Replace rules, scope filters, history search.</p>
+      <h3 data-i18n="feat.proxy.t">Proxy + WebSockets + AI</h3>
+      <p data-i18n="feat.proxy.d">Intercept HTTP/HTTPS and WebSocket frames in real time. AI suggests matching rules, detects hidden parameters, auto-highlights interesting requests.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🔐</div>
       <h3 data-i18n="feat.tools.t">Decoder · Comparer · Sequencer</h3>
-      <p data-i18n="feat.tools.d">19 chained encode/decode/hash ops. Side-by-side diff. Entropy + FIPS analysis for sessions, CSRF tokens, JWTs.</p>
+      <p data-i18n="feat.tools.d">19 chained encode/decode/hash ops. Side-by-side diff. Entropy + FIPS analysis. AI helps decode unknown formats and spot anomalies.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📦</div>
-      <h3 data-i18n="feat.install.t">uv tool install — done</h3>
-      <p data-i18n="feat.install.d">One command, no Docker, no JDK, no license server. Linux, macOS, Windows WSL. Python 3.10+.</p>
+      <h3 data-i18n="feat.install.t">Zero Config Setup</h3>
+      <p data-i18n="feat.install.d">One command, no Docker, no JDK, no certs to install, no proxy to configure. Linux, macOS, Windows WSL. Works immediately.</p>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🧩</div>
-      <h3 data-i18n="feat.plugin.t">Plugin API</h3>
-      <p data-i18n="feat.plugin.d">Extend without touching core. PRO plugins add advanced scanners, smart payloads, and report generators.</p>
+      <div class="feature-icon">🔄</div>
+      <h3 data-i18n="feat.plugin.t">CI/CD Ready + Plugin API</h3>
+      <p data-i18n="feat.plugin.d">Run scans in your pipeline — <code>pentool scan active --url ...</code> — exit codes, JSON reports. Extend with Python plugins. PRO adds advanced scanners.</p>
     </div>
   </div>
 </section>
@@ -755,9 +755,9 @@ const I18N = {
     "nav.donate": "Donate",
     "nav.beta": "Trial",
     "hero.badge": "🚀 Demo · 14-day Free Trial · All PRO Features Included",
-    "hero.h1.1": "Pentesting toolkit",
-    "hero.h1.2": "that runs at async speed",
-    "hero.p": "Pentool is a fully async, keyboard-driven TUI for web security testing — hundreds of concurrent requests, zero Java, zero Electron.",
+    "hero.h1.1": "Web Security TUI",
+    "hero.h1.2": "one command, async, no limits",
+    "hero.p": "Pentool is a modern async TUI for web pentesting — one command to install, zero config, unlimited Intruder, AI-powered scanner. Runs in your terminal, works in CI/CD.",
     "hero.btnInstall": "📦 uv tool install pentool",
     "hero.btnGithub": "⭐ GitHub",
     "hero.btnTrial": "💬 Get PRO Trial",
@@ -766,24 +766,24 @@ const I18N = {
     "term.cli": "# Or use CLI mode",
     "term.title": "bash — pentool",
     "feat.label": "Why Pentool",
-    "feat.title": "What competitors don't offer",
-    "feat.sub": "No Java. No Electron. No browser tab eating your RAM. Just a fast async TUI that stays out of your way.",
-    "feat.async.t": "Fully Async Engine",
-    "feat.async.d": "Built on asyncio from the ground up — thousands of concurrent connections, hundreds of req/s. Burp queues. Pentool flies.",
-    "feat.keyboard.t": "Keyboard-First TUI",
-    "feat.keyboard.d": "Every action reachable without a mouse. Works over SSH, in tmux, on headless servers — anywhere a terminal runs.",
-    "feat.turbo.t": "Intruder Turbo Mode",
-    "feat.turbo.d": "Keep-Alive + connection pooling = 10× attack speed vs. standard HTTP. Four modes: Sniper, Battering Ram, Pitchfork, Cluster Bomb.",
-    "feat.scanner.t": "Smart Scanner",
-    "feat.scanner.d": "Context-aware payloads for SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. WAF bypass and blind techniques built in.",
-    "feat.proxy.t": "Proxy + WebSockets",
-    "feat.proxy.d": "Intercept HTTP/HTTPS and WebSocket frames in real time. Match &amp; Replace rules, scope filters, history search.",
+    "feat.title": "Fast, simple, modern",
+    "feat.sub": "One command, zero config, async by design. AI helps you find vulnerabilities faster. No Java, no Electron, no bloat.",
+    "feat.async.t": "Async by Design",
+    "feat.async.d": "Built on asyncio — thousands of concurrent connections, hundreds of req/s. No waiting, no queues. Speed that matters.",
+    "feat.keyboard.t": "Terminal-Native TUI",
+    "feat.keyboard.d": "Full keyboard + mouse support. Works over SSH, in tmux, in CI/CD pipelines, on headless servers. No display needed.",
+    "feat.turbo.t": "Unlimited Intruder",
+    "feat.turbo.d": "No request limits, no throttling. Keep-Alive + connection pooling = 10× attack speed. Sniper, Battering Ram, Pitchfork, Cluster Bomb.",
+    "feat.scanner.t": "AI-Powered Scanner",
+    "feat.scanner.d": "Smart scan with context-aware payloads for SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. AI-assisted WAF bypass and blind injection. Learns from responses.",
+    "feat.proxy.t": "Proxy + WebSockets + AI",
+    "feat.proxy.d": "Intercept HTTP/HTTPS and WebSocket frames in real time. AI suggests matching rules, detects hidden parameters, auto-highlights interesting requests.",
     "feat.tools.t": "Decoder · Comparer · Sequencer",
-    "feat.tools.d": "19 chained encode/decode/hash ops. Side-by-side diff. Entropy + FIPS analysis for sessions, CSRF tokens, JWTs.",
-    "feat.install.t": "uv tool install — done",
-    "feat.install.d": "One command, no Docker, no JDK, no license server. Linux, macOS, Windows WSL. Python 3.10+.",
-    "feat.plugin.t": "Plugin API",
-    "feat.plugin.d": "Extend without touching core. PRO plugins add advanced scanners, smart payloads, and report generators.",
+    "feat.tools.d": "19 chained encode/decode/hash ops. Side-by-side diff. Entropy + FIPS analysis. AI helps decode unknown formats and spot anomalies.",
+    "feat.install.t": "Zero Config Setup",
+    "feat.install.d": "One command, no Docker, no JDK, no certs to install, no proxy to configure. Linux, macOS, Windows WSL. Works immediately.",
+    "feat.plugin.t": "CI/CD Ready + Plugin API",
+    "feat.plugin.d": "Run scans in your pipeline — pentool scan active --url ... — exit codes, JSON reports. Extend with Python plugins. PRO adds advanced scanners.",
     "install.label": "One-line setup",
     "install.title": "Get started in seconds",
     "install.sub": "Works on Linux, macOS, and Windows (WSL). Python 3.10+.",
@@ -836,7 +836,7 @@ const I18N = {
     "docs.pluginApi": "Plugin API",
     "docs.pluginApi.d": "Build your own extensions",
     "docs.langHint": "Read this page in your language — use the language switch in the top menu.",
-    "footer.brand": "Professional TUI web pentesting toolkit. Open source, async, extensible.",
+    "footer.brand": "Modern async TUI for web security testing. Open source, AI-powered, CI/CD ready.",
     "footer.project": "Project",
     "footer.contributing": "Contributing",
     "footer.license": "License (AGPL-3.0)",
@@ -856,9 +856,9 @@ const I18N = {
     "nav.donate": "Поддержка",
     "nav.beta": "Триал",
     "hero.badge": "🚀 Демо · 14-дневный бесплатный триал · Все функции PRO",
-    "hero.h1.1": "Пентест-набор",
-    "hero.h1.2": "на асинхронной скорости",
-    "hero.p": "Pentool — полностью асинхронный TUI с управлением с клавиатуры для тестирования веб-безопасности — сотни параллельных запросов, без Java, без Electron.",
+    "hero.h1.1": "Web Security TUI",
+    "hero.h1.2": "одна команда, async, без лимитов",
+    "hero.p": "Pentool — современный асинхронный TUI для веб-пентеста: одна команда для установки, ноль настроек, безлимитный Intruder, сканер с ИИ. Работает в терминале и в CI/CD.",
     "hero.btnInstall": "📦 uv tool install pentool",
     "hero.btnGithub": "⭐ GitHub",
     "hero.btnTrial": "💬 Получить PRO-триал",
@@ -867,24 +867,24 @@ const I18N = {
     "term.cli": "# Или используйте режим CLI",
     "term.title": "bash — pentool",
     "feat.label": "Почему Pentool",
-    "feat.title": "Чего нет у конкурентов",
-    "feat.sub": "Без Java. Без Electron. Без вкладки браузера, съедающей RAM. Просто быстрый асинхронный TUI, который не мешает.",
-    "feat.async.t": "Полностью асинхронный движок",
-    "feat.async.d": "Построен на asyncio с нуля — тысячи параллельных соединений, сотни запросов/с. Burp стоит в очереди. Pentool летит.",
-    "feat.keyboard.t": "TUI с управлением с клавиатуры",
-    "feat.keyboard.d": "Каждое действие доступно без мыши. Работает по SSH, в tmux, на серверах без графики — где угодно, где есть терминал.",
-    "feat.turbo.t": "Турбо-режим Intruder",
-    "feat.turbo.d": "Keep-Alive + пул соединений = скорость в 10 раз выше обычного HTTP. Четыре режима: Sniper, Battering Ram, Pitchfork, Cluster Bomb.",
-    "feat.scanner.t": "Умный сканер",
-    "feat.scanner.d": "Контекстные payload'ы для SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. Обход WAF и слепые техники встроены.",
-    "feat.proxy.t": "Прокси + WebSocket",
-    "feat.proxy.d": "Перехват HTTP/HTTPS и WebSocket-фреймов в реальном времени. Правила Match &amp; Replace, фильтры области видимости, поиск по истории.",
+    "feat.title": "Быстро, просто, современно",
+    "feat.sub": "Одна команда, ноль настроек, async из коробки. ИИ помогает находить уязвимости быстрее. Без Java, без Electron, без тормозов.",
+    "feat.async.t": "Асинхронный движок",
+    "feat.async.d": "Построен на asyncio — тысячи параллельных соединений, сотни запросов/с. Никаких очередей. Скорость, которая имеет значение.",
+    "feat.keyboard.t": "TUI без компромиссов",
+    "feat.keyboard.d": "Полное управление клавиатурой + мышь. Работает по SSH, в tmux, в CI/CD, на серверах без графики. Не требует дисплея.",
+    "feat.turbo.t": "Безлимитный Intruder",
+    "feat.turbo.d": "Никаких ограничений запросов и троттлинга. Keep-Alive + пул соединений = скорость в 10× выше. Sniper, Battering Ram, Pitchfork, Cluster Bomb.",
+    "feat.scanner.t": "Сканер с ИИ",
+    "feat.scanner.d": "Контекстные payload'ы для SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT. Обход WAF и слепые техники с помощью ИИ. Адаптируется под ответы сервера.",
+    "feat.proxy.t": "Прокси + WebSocket + ИИ",
+    "feat.proxy.d": "Перехват HTTP/HTTPS и WebSocket в реальном времени. ИИ предлагает правила Match &amp; Replace, находит скрытые параметры, подсвечивает подозрительные запросы.",
     "feat.tools.t": "Decoder · Comparer · Sequencer",
-    "feat.tools.d": "19 цепочек encode/decode/hash. Дифф бок о бок. Анализ энтропии + FIPS для сессий, CSRF-токенов, JWT.",
-    "feat.install.t": "uv tool install — готово",
-    "feat.install.d": "Одна команда, без Docker, без JDK, без лицензионного сервера. Linux, macOS, Windows WSL. Python 3.10+.",
-    "feat.plugin.t": "Плагины (Plugin API)",
-    "feat.plugin.d": "Расширяйте, не трогая ядро. PRO-плагины добавляют продвинутые сканеры, умные payload'ы и генераторы отчётов.",
+    "feat.tools.d": "19 цепочек encode/decode/hash. Дифф бок о бок. Энтропия + FIPS. ИИ помогает расшифровать неизвестные форматы и найти аномалии.",
+    "feat.install.t": "Zero Config — и вперёд",
+    "feat.install.d": "Одна команда, без Docker, без JDK, без настройки сертификатов и прокси. Linux, macOS, Windows WSL. Работает сразу.",
+    "feat.plugin.t": "CI/CD + Plugin API",
+    "feat.plugin.d": "Запускайте сканирование в пайплайне — pentool scan active --url ... — коды возврата, JSON-отчёты. Расширяйте плагинами на Python. PRO добавляет продвинутые сканеры.",
     "install.label": "Установка одной строкой",
     "install.title": "Начните за секунды",
     "install.sub": "Работает на Linux, macOS и Windows (WSL). Python 3.10+.",
@@ -937,7 +937,7 @@ const I18N = {
     "docs.pluginApi": "Plugin API",
     "docs.pluginApi.d": "Создавайте свои расширения",
     "docs.langHint": "Читайте эту страницу на своём языке — используйте переключатель языка в верхнем меню.",
-    "footer.brand": "Профессиональный TUI-набор для веб-пентеста. Открытый, асинхронный, расширяемый.",
+    "footer.brand": "Современный асинхронный TUI для веб-пентеста. Open source, с ИИ, готов для CI/CD.",
     "footer.project": "Проект",
     "footer.contributing": "Участие",
     "footer.license": "Лицензия (AGPL-3.0)",
@@ -957,9 +957,9 @@ const I18N = {
     "nav.donate": "捐赠",
     "nav.beta": "试用",
     "hero.badge": "🚀 演示 · 14 天免费试用 · 包含全部 PRO 功能",
-    "hero.h1.1": "渗透测试工具包",
-    "hero.h1.2": "以异步速度运行",
-    "hero.p": "Pentool 是用于 Web 安全测试的全异步、键盘驱动的 TUI——数百个并发请求，零 Java，零 Electron。",
+    "hero.h1.1": "Web 安全 TUI",
+    "hero.h1.2": "一条命令，异步，无限制",
+    "hero.p": "Pentool 是用于 Web 渗透测试的现代异步 TUI — 一条命令安装，零配置，无限 Intruder，AI 驱动扫描器。在终端中运行，支持 CI/CD。",
     "hero.btnInstall": "📦 uv tool install pentool",
     "hero.btnGithub": "⭐ GitHub",
     "hero.btnTrial": "💬 获取 PRO 试用",
@@ -968,24 +968,24 @@ const I18N = {
     "term.cli": "# 或使用 CLI 模式",
     "term.title": "bash — pentool",
     "feat.label": "为什么选择 Pentool",
-    "feat.title": "竞争对手没有的",
-    "feat.sub": "没有 Java。没有 Electron。没有占用内存的浏览器标签页。只是一个快速异步 TUI，不碍事。",
-    "feat.async.t": "全异步引擎",
-    "feat.async.d": "从零开始基于 asyncio 构建——数千并发连接，每秒数百请求。Burp 排队时，Pentool 已起飞。",
-    "feat.keyboard.t": "键盘优先 TUI",
-    "feat.keyboard.d": "无需鼠标即可完成所有操作。支持 SSH、tmux、无头服务器——任何终端可运行之处。",
-    "feat.turbo.t": "Intruder 涡轮模式",
-    "feat.turbo.d": "Keep-Alive + 连接池 = 比标准 HTTP 快 10 倍。四种模式：Sniper、Battering Ram、Pitchfork、Cluster Bomb。",
-    "feat.scanner.t": "智能扫描器",
-    "feat.scanner.d": "针对 SQLi、XSS、SSTI、LFI、RCE、SSRF、XXE、CORS、JWT 的上下文感知载荷。内置 WAF 绕过和盲测技术。",
-    "feat.proxy.t": "代理 + WebSocket",
-    "feat.proxy.d": "实时拦截 HTTP/HTTPS 和 WebSocket 帧。Match &amp; Replace 规则、范围过滤器、历史搜索。",
+    "feat.title": "快速、简单、现代",
+    "feat.sub": "一条命令，零配置，天生异步。AI 帮你更快发现漏洞。没有 Java，没有 Electron，没有臃肿。",
+    "feat.async.t": "天生异步引擎",
+    "feat.async.d": "基于 asyncio 构建——数千并发连接，每秒数百请求。无需等待，没有队列。有意义的性能。",
+    "feat.keyboard.t": "终端原生 TUI",
+    "feat.keyboard.d": "完整键盘 + 鼠标支持。可在 SSH、tmux、CI/CD 流水线、无头服务器上运行。无需显示器。",
+    "feat.turbo.t": "无限 Intruder",
+    "feat.turbo.d": "无请求限制，无节流。Keep-Alive + 连接池 = 10 倍攻击速度。Sniper、Battering Ram、Pitchfork、Cluster Bomb。",
+    "feat.scanner.t": "AI 驱动扫描器",
+    "feat.scanner.d": "针对 SQLi、XSS、SSTI、LFI、RCE、SSRF、XXE、CORS、JWT 的智能上下文载荷。AI 辅助 WAF 绕过和盲注。从响应中学习。",
+    "feat.proxy.t": "代理 + WebSocket + AI",
+    "feat.proxy.d": "实时拦截 HTTP/HTTPS 和 WebSocket 帧。AI 建议匹配规则，检测隐藏参数，自动高亮可疑请求。",
     "feat.tools.t": "Decoder · Comparer · Sequencer",
-    "feat.tools.d": "19 种链式编解码/哈希操作。并排对比。对会话、CSRF 令牌、JWT 进行熵 + FIPS 分析。",
-    "feat.install.t": "uv tool install — 完成",
-    "feat.install.d": "一条命令，无需 Docker、JDK 或许可证服务器。Linux、macOS、Windows WSL。Python 3.10+。",
-    "feat.plugin.t": "插件 API",
-    "feat.plugin.d": "无需修改核心即可扩展。PRO 插件添加高级扫描器、智能载荷和报告生成器。",
+    "feat.tools.d": "19 种链式编解码/哈希操作。并排对比。熵 + FIPS 分析。AI 帮助解码未知格式和发现异常。",
+    "feat.install.t": "零配置启动",
+    "feat.install.d": "一条命令，无需 Docker、JDK、证书配置或代理设置。Linux、macOS、Windows WSL。立即可用。",
+    "feat.plugin.t": "CI/CD 就绪 + 插件 API",
+    "feat.plugin.d": "在流水线中运行扫描——pentool scan active --url ...——退出码、JSON 报告。用 Python 插件扩展。PRO 添加高级扫描器。",
     "install.label": "单行安装",
     "install.title": "数秒内开始",
     "install.sub": "适用于 Linux、macOS 和 Windows（WSL）。Python 3.10+。",
@@ -1038,7 +1038,7 @@ const I18N = {
     "docs.pluginApi": "插件 API",
     "docs.pluginApi.d": "构建您自己的扩展",
     "docs.langHint": "用您的语言阅读本页——使用顶部菜单的语言切换。",
-    "footer.brand": "专业的 TUI Web 渗透测试工具包。开源、异步、可扩展。",
+    "footer.brand": "用于 Web 安全测试的现代异步 TUI。开源、AI 驱动、CI/CD 就绪。",
     "footer.project": "项目",
     "footer.contributing": "参与贡献",
     "footer.license": "许可证（AGPL-3.0）",
@@ -1058,9 +1058,9 @@ const I18N = {
     "nav.donate": "दान",
     "nav.beta": "ट्रायल",
     "hero.badge": "🚀 डेमो · 14-दिन मुफ़्त ट्रायल · सभी PRO सुविधाएँ शामिल",
-    "hero.h1.1": "पेंटेस्टिंग टूलकिट",
-    "hero.h1.2": "जो async गति पर चलता है",
-    "hero.p": "Pentool वेब सुरक्षा परीक्षण के लिए पूरी तरह async, कीबोर्ड-चालित TUI है — सैकड़ों समवर्ती अनुरोध, शून्य Java, शून्य Electron।",
+    "hero.h1.1": "Web Security TUI",
+    "hero.h1.2": "एक कमांड, async, कोई सीमा नहीं",
+    "hero.p": "Pentool वेब पेंटेस्टिंग के लिए एक आधुनिक async TUI है — एक कमांड में इंस्टॉल, जीरो कॉन्फ़िग, असीमित Intruder, AI-संचालित स्कैनर। टर्मिनल में चलता है, CI/CD में काम करता है।",
     "hero.btnInstall": "📦 uv tool install pentool",
     "hero.btnGithub": "⭐ GitHub",
     "hero.btnTrial": "💬 PRO ट्रायल पाएँ",
@@ -1069,24 +1069,24 @@ const I18N = {
     "term.cli": "# या CLI मोड उपयोग करें",
     "term.title": "bash — pentool",
     "feat.label": "Pentool क्यों",
-    "feat.title": "प्रतिस्पर्धियों की बात जो नहीं है",
-    "feat.sub": "न Java। न Electron। न ब्राउज़र टैब जो आपकी RAM खाए। सिर्फ़ एक तेज़ async TUI जो आपके रास्ते से हटकर रहता है।",
-    "feat.async.t": "पूर्ण async इंजन",
-    "feat.async.d": "शुरू से asyncio पर बना — हज़ारों समवर्ती कनेक्शन, सैकड़ों अनुरोध/सेकंड। Burp कतार में है, Pentool उड़ता है।",
-    "feat.keyboard.t": "कीबोर्ड-प्रथम TUI",
-    "feat.keyboard.d": "बिना माउस सभी कार्य सुलभ। SSH, tmux, हेडलेस सर्वर पर काम करता है — जहाँ भी टर्मिनल चलता है।",
-    "feat.turbo.t": "Intruder टर्बो मोड",
-    "feat.turbo.d": "Keep-Alive + कनेक्शन पूलिंग = मानक HTTP से 10× तेज़। चार मोड: Sniper, Battering Ram, Pitchfork, Cluster Bomb।",
-    "feat.scanner.t": "स्मार्ट स्कैनर",
-    "feat.scanner.d": "SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT के लिए संदर्भ-जागरूक पेलोड। WAF बायपास और ब्लाइंड तकनीकें अंतर्निहित।",
-    "feat.proxy.t": "प्रॉक्सी + WebSocket",
-    "feat.proxy.d": "वास्तविक समय में HTTP/HTTPS और WebSocket फ्रेम इंटरसेप्ट करें। Match &amp; Replace नियम, स्कोप फ़िल्टर, इतिहास खोज।",
+    "feat.title": "तेज़, सरल, आधुनिक",
+    "feat.sub": "एक कमांड, जीरो कॉन्फ़िग, async डिज़ाइन। AI कमज़ोरियाँ तेज़ी से खोजने में मदद करता है। न Java, न Electron, न ब्लोट।",
+    "feat.async.t": "Async डिज़ाइन",
+    "feat.async.d": "asyncio पर बना — हज़ारों समवर्ती कनेक्शन, सैकड़ों अनुरोध/सेकंड। कोई प्रतीक्षा नहीं, कोई कतार नहीं। गति जो मायने रखती है।",
+    "feat.keyboard.t": "टर्मिनल-नेटिव TUI",
+    "feat.keyboard.d": "पूर्ण कीबोर्ड + माउस सपोर्ट। SSH, tmux, CI/CD पाइपलाइन, हेडलेस सर्वर पर काम करता है। डिस्प्ले की ज़रूरत नहीं।",
+    "feat.turbo.t": "असीमित Intruder",
+    "feat.turbo.d": "कोई अनुरोध सीमा नहीं, कोई थ्रॉटलिंग नहीं। Keep-Alive + कनेक्शन पूलिंग = 10× आक्रमण गति। Sniper, Battering Ram, Pitchfork, Cluster Bomb।",
+    "feat.scanner.t": "AI-संचालित स्कैनर",
+    "feat.scanner.d": "SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT के लिए स्मार्ट पेलोड। AI-सहायक WAF बायपास और ब्लाइंड इंजेक्शन। रिस्पॉन्स से सीखता है।",
+    "feat.proxy.t": "प्रॉक्सी + WebSocket + AI",
+    "feat.proxy.d": "रीयल-टाइम में HTTP/HTTPS और WebSocket फ्रेम इंटरसेप्ट करें। AI मैचिंग नियम सुझाता है, छिपे पैरामीटर खोजता है, संदिग्ध अनुरोध हाइलाइट करता है।",
     "feat.tools.t": "Decoder · Comparer · Sequencer",
-    "feat.tools.d": "19 श्रृंखलाबद्ध encode/decode/hash ऑप। साथ-साथ डिफ़। सत्रों, CSRF टोकन, JWT के लिए एन्ट्रॉपी + FIPS विश्लेषण।",
-    "feat.install.t": "uv tool install — हो गया",
-    "feat.install.d": "एक कमांड, न Docker, न JDK, न लाइसेंस सर्वर। Linux, macOS, Windows WSL। Python 3.10+।",
-    "feat.plugin.t": "प्लगइन API",
-    "feat.plugin.d": "कोर को छुए बिना विस्तार करें। PRO प्लगइन अग्रिम स्कैनर, स्मार्ट पेलोड और रिपोर्ट जनरेटर जोड़ते हैं।",
+    "feat.tools.d": "19 श्रृंखलाबद्ध encode/decode/hash ऑप। साथ-साथ डिफ़। एन्ट्रॉपी + FIPS विश्लेषण। AI अज्ञात फ़ॉर्मेट डिकोड करने और विसंगतियाँ खोजने में मदद करता है।",
+    "feat.install.t": "ज़ीरो कॉन्फ़िग सेटअप",
+    "feat.install.d": "एक कमांड, न Docker, न JDK, न सर्टिफिकेट कॉन्फ़िग, न प्रॉक्सी सेटअप। Linux, macOS, Windows WSL। तुरंत काम करता है।",
+    "feat.plugin.t": "CI/CD रेडी + प्लगइन API",
+    "feat.plugin.d": "पाइपलाइन में स्कैन चलाएँ — pentool scan active --url ... — एग्ज़िट कोड, JSON रिपोर्ट। Python प्लगइन से विस्तार करें। PRO उन्नत स्कैनर जोड़ता है।",
     "install.label": "एक-लाइन सेटअप",
     "install.title": "सेकंडों में शुरू करें",
     "install.sub": "Linux, macOS और Windows (WSL) पर काम करता है। Python 3.10+।",
@@ -1139,7 +1139,7 @@ const I18N = {
     "docs.pluginApi": "प्लगइन API",
     "docs.pluginApi.d": "अपने स्वयं के एक्सटेंशन बनाएँ",
     "docs.langHint": "इस पृष्ठ को अपनी भाषा में पढ़ें — शीर्ष मेनू में भाषा स्विच का उपयोग करें।",
-    "footer.brand": "पेशेवर TUI वेब पेंटेस्टिंग टूलकिट। ओपन सोर्स, async, विस्तार योग्य।",
+    "footer.brand": "वेब सुरक्षा परीक्षण के लिए आधुनिक async TUI। ओपन सोर्स, AI-संचालित, CI/CD रेडी।",
     "footer.project": "परियोजना",
     "footer.contributing": "योगदान",
     "footer.license": "लाइसेंस (AGPL-3.0)",

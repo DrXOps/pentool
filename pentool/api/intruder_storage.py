@@ -1,4 +1,4 @@
-"""IntruderRepository — SQL for Intruder tab state and attack result persistence.
+"""IntruderStorage — SQL for Intruder tab state and attack result persistence.
 
 Extracted from `IntruderAPI` (see
 MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md, section 2.6). Pure
@@ -22,7 +22,7 @@ behavior when omitted, so existing single-tab callers/tests are unaffected.
 
 Connection lifecycle: inherits `BaseSqliteStorage` (see
 pentool/storage/base_sqlite_storage.py) instead of opening/closing a fresh
-`aiosqlite` connection via `core.database.get_db()` on every call. That old
+`aiosqlite` connection via `core.db_schema.get_db()` on every call. That old
 per-call open/close pattern was the direct cause of a real crash — a fast
 Intruder attack calls `save_result()` per HTTP response (thousands/sec),
 each one opening+closing its own connection to the same file HttpStorage
@@ -30,7 +30,7 @@ already holds open. Every public method here now calls
 `await self.ensure_open()` first, which connects once (lazily, on first
 use) and reuses that connection for the object's lifetime — the "safe
 no-op when db_path is falsy" contract (see TestNoDbPath in
-tests/unit/api/test_intruder_repository.py) is preserved because
+tests/unit/api/test_intruder_storage.py) is preserved because
 `ensure_open()` returns False when `self._db_path` is empty.
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ from pentool.modules.intruder import IntruderResult
 from pentool.storage.base_sqlite_storage import BaseSqliteStorage
 
 
-class IntruderRepository(BaseSqliteStorage):
+class IntruderStorage(BaseSqliteStorage):
     """CRUD for `intruder_state` and `intruder_results`, scoped to one project DB."""
 
     def __init__(self, db_path: str | None = None) -> None:

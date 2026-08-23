@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from pentool.api.proxy_api import InterceptedRequest, ProxyAPI
-from pentool.core.database import init_db
+from pentool.core.db_schema import init_db
 from pentool.modules.proxy import ProxyServer
 from pentool.services.proxy_service import ProxyService
 from pentool.storage.http_storage import HttpStorage

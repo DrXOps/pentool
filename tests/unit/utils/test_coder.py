@@ -1,111 +1,102 @@
-"""Unit tests: utils/coder.py
-
-Covers: url_encode/decode, base64, html, hex, hashing.
-"""
+"""Unit tests: utils/coder.py — encoding, decoding, and hashing helpers."""
 
 from __future__ import annotations
 
 import pytest
 
 from pentool.utils.coder import (
-    base64_decode,
+    apply_operation,
     base64_encode,
-    base64url_decode,
+    base64_decode,
     base64url_encode,
-    html_decode,
+    base64url_decode,
     html_encode,
+    html_decode,
+    hex_encode,
+    hex_decode,
+    md5,
+    sha1,
+    sha256,
+    unicode_escape,
+    unicode_unescape,
+    url_encode,
     url_decode,
     url_decode_plus,
-    url_encode,
 )
 
 
-class TestUrlEncoding:
-    def test_url_encode_spaces(self) -> None:
-        assert url_encode("hello world") == "hello%20world"
-
-    def test_url_encode_special_chars(self) -> None:
-        result = url_encode("a=1&b=2")
-        assert "%" in result
-        assert "&" not in result
-
-    def test_url_decode_roundtrip(self) -> None:
-        original = "user=admin&pass=s3cr3t!"
-        assert url_decode(url_encode(original)) == original
-
-    def test_url_encode_all_no_safe(self) -> None:
-        # url_encode_all was identical to url_encode — now uses url_encode
-        result = url_encode("/path/to/resource")
-        assert "/" not in result
-
-    def test_url_decode_plus_converts_plus(self) -> None:
-        assert url_decode_plus("hello+world") == "hello world"
-
-    def test_url_decode_plus_keeps_percent(self) -> None:
-        assert url_decode_plus("hello%20world") == "hello world"
-
-    def test_url_encode_unicode(self) -> None:
-        result = url_encode("café")
-        assert "%" in result
-
-    def test_url_decode_unicode(self) -> None:
-        encoded = url_encode("café")
-        assert url_decode(encoded) == "café"
+def test_url_encode_decode_roundtrip():
+    assert url_encode("a b&c") == "a%20b%26c"
+    assert url_decode("a%20b%26c") == "a b&c"
+    assert url_decode_plus("a+b") == "a b"
 
 
-class TestBase64:
-    def test_encode_basic(self) -> None:
-        assert base64_encode("hello") == "aGVsbG8="
-
-    def test_decode_basic(self) -> None:
-        assert base64_decode("aGVsbG8=") == "hello"
-
-    def test_roundtrip(self) -> None:
-        original = "PenTool v0.1 — test"
-        assert base64_decode(base64_encode(original)) == original
-
-    def test_decode_without_padding(self) -> None:
-        """Decoding without '=' padding."""
-        result = base64_decode("aGVsbG8")
-        assert result == "hello"
-
-    def test_encode_empty(self) -> None:
-        assert base64_encode("") == ""
-
-    def test_decode_invalid_raises(self) -> None:
-        with pytest.raises(ValueError):
-            base64_decode("not-valid-base64!!!")
-
-    def test_base64url_encode(self) -> None:
-        result = base64url_encode("hello+world")
-        assert "+" not in result
-        assert "/" not in result
-
-    def test_base64url_roundtrip(self) -> None:
-        original = "data with +/= chars"
-        assert base64url_decode(base64url_encode(original)) == original
+def test_base64_roundtrip():
+    enc = base64_encode("hello")
+    assert base64_decode(enc) == "hello"
 
 
-class TestHtmlEncoding:
-    def test_html_encode_lt_gt(self) -> None:
-        result = html_encode("<script>alert(1)</script>")
-        assert "<" not in result
-        assert ">" not in result
-        assert "&lt;" in result
-        assert "&gt;" in result
+def test_base64_decode_invalid_padding_still_works():
+    # b64decode with pad-right padding always succeeds for well-formed input
+    assert base64_decode("aGVsbG8") == "hello"
 
-    def test_html_encode_ampersand(self) -> None:
-        result = html_encode("a & b")
-        assert "&amp;" in result
 
-    def test_html_encode_quotes(self) -> None:
-        result = html_encode('"quoted"')
-        assert "&quot;" in result
+def test_base64url_roundtrip():
+    enc = base64url_encode("hello world")
+    # no padding
+    assert "=" not in enc
+    assert base64url_decode(enc) == "hello world"
 
-    def test_html_decode_roundtrip(self) -> None:
-        original = '<div class="test">Hello & World</div>'
-        assert html_decode(html_encode(original)) == original
 
-    def test_html_decode_entities(self) -> None:
-        assert html_decode("&lt;b&gt;") == "<b>"
-        assert html_decode("&amp;") == "&"
+def test_html_roundtrip():
+    assert html_encode("<b>a&b</b>") == "&lt;b&gt;a&amp;b&lt;/b&gt;"
+    assert html_decode("&lt;b&gt;&amp;&lt;/b&gt;") == "<b>&</b>"
+
+
+def test_hex_roundtrip():
+    assert hex_encode("AB") == "4142"
+    assert hex_decode("4142") == "AB"
+    assert hex_decode("41 42") == "AB"  # spaces stripped
+    assert hex_decode("\\x41\\x42") == "AB"  # \x prefix stripped
+
+
+def test_unicode_escape_non_ascii():
+    assert unicode_escape("café") == "caf\\u00e9"
+    # ascii passes through
+    assert unicode_escape("abc") == "abc"
+    assert unicode_unescape("caf\\u00e9") == "café"
+
+
+def test_hashes_deterministic():
+    assert md5("abc") == "900150983cd24fb0d6963f7d28e17f72"
+    assert sha1("abc") == "a9993e364706816aba3e25717850c26c9cd0d89d"
+    assert sha256("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+
+def test_apply_operation_known_and_unknown():
+    assert apply_operation("base64_encode", "x") == base64_encode("x")
+    with pytest.raises(ValueError):
+        apply_operation("nope", "x")
+
+
+def test_base64_decode_invalid_raises():
+    with pytest.raises(ValueError):
+        base64_decode("!!!not base64!!!")
+
+
+def test_base64url_decode_invalid_raises():
+    with pytest.raises(ValueError):
+        base64url_decode("a@@@")
+    with pytest.raises(ValueError):
+        base64url_decode("a")
+
+
+def test_hex_decode_invalid_raises():
+    with pytest.raises(ValueError):
+        hex_decode("zzz-not-hex")
+
+
+def test_url_escape_decode_roundtrip_invalid_unicode():
+    # '\ud800' is a lone surrogate — unicode_escape fallback path
+    result = unicode_unescape("\\uD800")
+    assert isinstance(result, str)

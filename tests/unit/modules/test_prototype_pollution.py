@@ -1,13 +1,15 @@
 """Unit tests for pentool/modules/scanner/checks/prototype_pollution.py.
 
-Regression coverage for the same bug class documented in
-test_nosql_injection.py (see
-MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md addendum):
-PrototypePollutionCheck declared `uses_scan_pipeline = True` while
-implementing the new analyze() API and having an unconditional
-`scan() -> []` stub, so the check silently never found anything in a real
-scan. Also fixed: `request_raw` used `format_response_raw()` (a response
-formatter) on the request object instead of `build_http_request()`.
+Coverage for the migration of PrototypePollutionCheck onto BaseActiveCheck
+(see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.5). The
+check is a single-phase per-payload analyze() check (SSPP marker / TypeError
+detection in the response body) with no multi-phase logic, so it now uses
+the inherited BaseActiveCheck cycle instead of the engine's analyze()-API
+branch on a scan() stub. It sets use_baseline_diff_skip=True to keep the
+response-diff-skip throughput. History (the pre-existing bug this inverts):
+before the migration it wrongly declared uses_scan_pipeline=True, forcing
+the engine onto a `return []` scan() stub, so it silently never found
+anything in a real scan.
 """
 
 from __future__ import annotations
@@ -38,11 +40,20 @@ class TestMeta:
     def test_name(self):
         assert PrototypePollutionCheck.name == "prototype_pollution"
 
-    def test_not_uses_scan_pipeline(self):
-        assert getattr(PrototypePollutionCheck, "uses_scan_pipeline", False) is False
+    def test_is_base_active_check(self):
+        # Migrated onto BaseActiveCheck (plan 2.5): the inherited scan()
+        # drives get_payloads()/analyze() through the base template cycle —
+        # the old path was the engine's analyze() branch on a scan() stub.
+        from pentool.modules.scanner.base import BaseActiveCheck
+        assert issubclass(PrototypePollutionCheck, BaseActiveCheck)
 
-    def test_uses_analyze_api(self):
-        assert PrototypePollutionCheck().uses_analyze_api is True
+    def test_uses_scan_pipeline(self):
+        assert PrototypePollutionCheck.uses_scan_pipeline is True
+
+    def test_use_baseline_diff_skip(self):
+        # Keeps the response-diff-skip the engine's analyze() branch used
+        # to give this check for throughput.
+        assert PrototypePollutionCheck.use_baseline_diff_skip is True
 
 
 class TestAnalyze:

@@ -266,14 +266,14 @@ class TestScanPipelineDispatch:
 class TestPersistentConnection:
     """Regression coverage for the connection-consolidation fix applied to
     Scanner, mirroring the one already applied to Intruder (see
-    tests/unit/api/test_intruder_repository.py::TestPersistentConnection).
+    tests/unit/api/test_intruder_storage.py::TestPersistentConnection).
 
     ScanEngine used to open a brand-new aiosqlite connection (via
-    core.database.get_db()) on every single save_findings()/get_findings()/
+    core.db_schema.get_db()) on every single save_findings()/get_findings()/
     mark_false_positive()/get_stats() call. An active scan calls
     save_findings() repeatedly as findings stream in, and Passive scanning
     calls it once per captured Proxy request — both open/closed a fresh
-    connection to the same project DB file HttpStorage/IntruderRepository
+    connection to the same project DB file HttpStorage/IntruderStorage
     already hold open, the same crash-under-load pattern fixed for
     Intruder. ScanEngine now inherits BaseSqliteStorage: one connection,
     opened lazily on first use via ensure_open(), reused for the engine's
@@ -282,7 +282,7 @@ class TestPersistentConnection:
 
     @pytest.mark.asyncio
     async def test_repeated_save_findings_reuses_same_connection(self, tmp_path):
-        from pentool.core.database import init_db
+        from pentool.core.db_schema import init_db
         from pentool.modules.scanner.base import Finding
 
         db_path = str(tmp_path / "test.db")

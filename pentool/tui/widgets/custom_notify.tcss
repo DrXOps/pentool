@@ -1,0 +1,70 @@
+/* CustomNotify hosts the toast cards bottom-right, just above the Footer.
+   This mirrors Textual's own built-in ToastRack (textual/widgets/_toast.py),
+   which is the proven way to float toasts WITHOUT a background fill:
+   - layer:_toastrack  — a dedicated low-priority UI layer that does NOT paint
+     a theme background (unlike layer:overlay, which fills its area with the
+     theme background and produced the dark full-window block in earlier
+     attempts).
+   - display:none when empty — the rack occupies and paints nothing while it
+     has no cards, so no residual dark band ever lingers.
+   - dock:bottom + align:right bottom — pins the stack to the lower-right.
+   - overflow-y:scroll — keeps the rack from growing unboundedly tall.
+   Only the cards themselves carry color (the single opaque column). */
+CustomNotify {
+    layer: _toastrack;
+    width: 1fr;
+    height: auto;
+    max-height: 4;
+    dock: bottom;
+    align: right bottom;
+    layout: vertical;
+    margin-bottom: 1;
+    background: transparent;
+}
+CustomNotify > CustomNotifyCard {
+    width: 60;
+    height: auto;
+    max-height: 8;
+    margin-bottom: 1;
+    padding: 0 1;
+    border: round $accent;
+    background: $accent 18%;
+}
+CustomNotifyCard.-information {
+    border: round $accent;
+    background: $accent 20%;
+}
+CustomNotifyCard.-success {
+    border: round $success;
+    background: $success 15%;
+}
+CustomNotifyCard.-warning {
+    border: round $warning;
+    background: $warning 18%;
+}
+CustomNotifyCard.-error {
+    border: round $error;
+    background: $error 20%;
+}
+CustomNotifyCard.-critical {
+    border: heavy $error;
+    background: $error 25%;
+}
+CustomNotifyCard #toast-title {
+    text-style: bold;
+    height: 1;
+}
+CustomNotifyCard #toast-body {
+    color: $text-muted;
+    height: auto;
+}
+CustomNotifyCard #toast-close {
+    dock: right;
+    width: 3;
+    height: 1;
+    color: $text-muted;
+}
+CustomNotifyCard #toast-close:hover {
+    color: $text;
+    text-style: bold;
+}

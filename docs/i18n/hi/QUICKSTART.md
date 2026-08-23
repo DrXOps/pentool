@@ -129,10 +129,11 @@ pentool
 - दो टेक्स्ट पेस्ट करें
 - हाइलाइटिंग के साथ diff प्राप्त करें
 
-### Spider
-- `Shift+W` → Spider खोलें
-- बेस URL दर्ज करें
-- स्वचालित साइट क्रॉल
+### Spider (क्रॉलिंग)
+- कोई समर्पित टैब नहीं — क्रॉलिंग **Target** मॉड्यूल में चलती है
+- «🕷 Crawl Scope» बटन — scope के सभी होस्ट क्रॉल करें
+- «🕷 Crawl Host» बटन — ट्री में चुने गए होस्ट को क्रॉल करें
+- «🤖 Use AI» चेकबॉक्स — क्रॉल के बाद AI छिपे एंडपॉइंट जोड़ता है
 
 ---
 
@@ -154,7 +155,6 @@ pentool
 - `Shift+D` — Decoder
 - `Shift+C` — Comparer
 - `Shift+Q` — Sequencer
-- `Shift+W` — Spider
 - `Shift+E` — Extensions
 - `Shift+X` — Terminal
 

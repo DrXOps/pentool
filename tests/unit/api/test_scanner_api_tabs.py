@@ -20,7 +20,7 @@ import pytest
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.api.scanner_api import ScannerAPI
-from pentool.core.database import init_db
+from pentool.core.db_schema import init_db
 from pentool.modules.scanner.base import Finding
 
 
@@ -34,8 +34,8 @@ async def api(tmp_path):
     # persistent aiosqlite connection each (see BaseSqliteStorage) instead
     # of opening one per call — must be closed explicitly or its background
     # thread leaks past the test (PytestUnhandledThreadExceptionWarning on
-    # teardown), same as IntruderRepository's fixture (see
-    # tests/unit/api/test_intruder_repository.py).
+    # teardown), same as IntruderStorage's fixture (see
+    # tests/unit/api/test_intruder_storage.py).
     await a.close()
 
 
@@ -168,13 +168,13 @@ class TestFindingsScopedToTab:
 
 class TestPersistentConnection:
     """Regression coverage for the connection-consolidation fix applied to
-    ScannerTabRepository, mirroring IntruderRepository's fix (see
-    tests/unit/api/test_intruder_repository.py::TestPersistentConnection)
+    ScannerTabRepository, mirroring IntruderStorage's fix (see
+    tests/unit/api/test_intruder_storage.py::TestPersistentConnection)
     and ScanEngine's (see
     tests/unit/modules/test_scan_engine_resume.py::TestPersistentConnection).
 
     ScannerTabRepository used to open a brand-new aiosqlite connection (via
-    core.database.get_db()) on every single save_tab()/get_tabs()/
+    core.db_schema.get_db()) on every single save_tab()/get_tabs()/
     delete_tab() call — now inherits BaseSqliteStorage: one connection,
     opened lazily on first use via ensure_open(), reused for the
     repository's lifetime.
@@ -198,7 +198,7 @@ class TestPersistentConnection:
     async def test_save_tab_without_uid_does_not_open_connection(self, tmp_path):
         """ensure_open()'s no-op contract must still hold for the no-op
         (empty tab_uid) path — mirrors the falsy-db_path no-op contract."""
-        from pentool.core.database import init_db
+        from pentool.core.db_schema import init_db
         db_path = str(tmp_path / "test2.db")
         await init_db(db_path)
         a = ScannerAPI(db_path=db_path)

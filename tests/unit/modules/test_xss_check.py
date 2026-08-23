@@ -264,3 +264,84 @@ class TestXSSCheckClass:
         resp = ParsedResponse(status=200, headers={}, body="")
         findings = await self.check.passive_scan(req, resp, MagicMock())
         assert findings == []
+
+
+class TestXSSCheckScan:
+    """Active scan()/_scan_point coverage (the multi-phase probe -> sweep path
+    that the existing helper tests don't exercise).
+
+    The fake client echoes the URL-decoded request — i.e. reflects the
+    injected payload — so a reflected-XSS finding is produced by the payload
+    sweep (phase 3).
+    """
+
+    def _echo_client(self):
+        from urllib.parse import unquote
+        import asyncio
+        from pentool.utils.parser import ParsedResponse
+
+        class Echo:
+            async def send(self, request):
+                body = unquote(request.url or "") + (request.body or "")
+                return ParsedResponse(status=200, headers={}, body=body)
+
+        return Echo()
+
+    @pytest.mark.asyncio
+    async def test_scan_per_point_detects_reflected_xss(self):
+        from pentool.modules.scanner.checks.xss import XSSCheck
+        from pentool.modules.scanner.mutator import InjectionPoint, RequestMutator
+        from pentool.utils.parser import ParsedRequest
+
+        check = XSSCheck()
+        req = ParsedRequest(method="GET", url="http://x.com/search?q=1", headers={}, body="")
+        point = InjectionPoint(kind="get", name="q", original_value="1")
+        findings = await check.scan(
+            req, None, self._echo_client(), point=point, mutator=RequestMutator()
+        )
+        assert any(f.type == "xss" for f in findings)
+        assert any("Reflected XSS" in f.name for f in findings)
+
+    @pytest.mark.asyncio
+    async def test_scan_global_mode(self):
+        from pentool.modules.scanner.checks.xss import XSSCheck
+        from pentool.utils.parser import ParsedRequest
+
+        check = XSSCheck()
+        req = ParsedRequest(method="GET", url="http://x.com/search?q=1", headers={}, body="")
+        findings = await check.scan(req, None, self._echo_client())
+        assert any(f.type == "xss" for f in findings)
+
+
+class TestXSSEngineIntegration:
+    """End-to-end through ScanEngine — reflected XSS surfaced via the
+    per-point scan()-pipeline."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_session_license(self):
+        import pentool.core.license as lic_mod
+        saved = lic_mod._session_license
+        lic_mod._session_license = None
+        yield
+        lic_mod._session_license = saved
+
+    @pytest.mark.asyncio
+    async def test_engine_detects_reflected_xss(self):
+        from urllib.parse import unquote
+        from pentool.modules.scanner.checks.xss import XSSCheck
+        from pentool.modules.scanner.engine import ScanEngine
+        from pentool.utils.parser import ParsedRequest, ParsedResponse
+
+        class FakeClient:
+            async def send(self, request):
+                body = unquote(request.url or "") + (request.body or "")
+                return ParsedResponse(status=200, headers={}, body=body)
+
+            async def get(self, url, headers=None):
+                return ParsedResponse(status=200, headers={}, body=(url or ""))
+
+        engine = ScanEngine(db_path=":memory:", http_client=FakeClient())
+        engine.register_check(XSSCheck())
+        req = ParsedRequest(method="GET", url="http://x.com/search?q=1", headers={}, body="")
+        findings = await engine.run_active_on_requests([req])
+        assert any(f.type == "xss" for f in findings)

@@ -52,7 +52,15 @@ class Config:
     check_updates: bool = True        # check for updates on startup
     # ── UI ────────────────────────────────────────────────────────────────────────
     theme: str = "textual-dark"       # Textual theme name
-    notifications_sound_enabled: bool = True  # play a short sound with notify2() toasts
+    notifications_sound_enabled: bool = True  # play a short sound with customnotify() toasts
+
+    # ── AI ────────────────────────────────────────────────────────────────────────
+    ai_enabled: bool = False           # мастер-выключатель AI-помощника
+    ai_model: str = ""                 # имя/путь к LLM-модели (GGUF)
+    ai_mcp_host: str = "127.0.0.1"    # MCP-сервер хост
+    ai_mcp_port: int = 0              # 0 = stdio, >0 = TCP
+    ai_mcp_model_path: str = ""       # путь к GGUF-файлу
+    ai_mcp_auto_start: bool = False   # автостарт MCP-сервера при запуске pentool
 
     # Observer list — not serialized
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)

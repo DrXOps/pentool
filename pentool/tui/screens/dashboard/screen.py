@@ -404,9 +404,11 @@ class DashboardScreen(Widget):
                         yield Static("[dim]●[/dim] Passive: [dim]OFF[/dim]",    id="led-passive-bar", classes="led-item")
                         yield Static("[dim]●[/dim] Active: [dim]IDLE[/dim]",    id="led-scan-bar",    classes="led-item")
                         yield Static("[dim]●[/dim] Spider: [dim]IDLE[/dim]",    id="led-spider-bar",  classes="led-item")
+                        yield Static("[dim]●[/dim] MCP: [dim]OFF[/dim]",        id="led-mcp-bar",     classes="led-item")
                         yield Static("[dim]●[/dim] Threads: [dim]—[/dim]",      id="led-threads-bar", classes="led-item")
                 with Vertical(id="matrix-col"):
                     yield SeverityMatrix(id="vuln-matrix")
+                    yield Static(id="ai-status-panel", markup=True)
 
     def on_mount(self) -> None:
         self._ticker = self.set_interval(1.0, self._tick)
@@ -417,6 +419,7 @@ class DashboardScreen(Widget):
             pass
         self._load_stats_bg()
         self._populate_projects()
+        self._update_ai_status()
         self._boot_animate()
 
     @on(ToolbarButton.Pressed, "#btn-new-project")
@@ -485,6 +488,48 @@ class DashboardScreen(Widget):
         else:
             self.app.notify(f"Opened: {os.path.basename(path)}", timeout=3)
 
+    def _update_ai_status(self) -> None:
+        """Обновить виджет статуса AI-помощника."""
+        try:
+            from pentool.services.ai.factory import ai_setup_required
+            cfg = getattr(self.app, "_cfg", None)
+            ai_enabled = getattr(cfg, "ai_enabled", False) if cfg else False
+            needs_setup = ai_setup_required()
+            model_ready = not needs_setup  # AI enabled & model present
+
+            mcp_running = False
+            try:
+                from pentool.services.ai.provider import is_mcp_running
+                mcp_running = is_mcp_running()
+            except Exception:
+                pass
+            try:
+                self.update_mcp_status(running=mcp_running, ready=ai_enabled and model_ready)
+            except Exception:
+                pass
+
+            panel = self.query_one("#ai-status-panel", Static)
+            if ai_enabled:
+                if needs_setup:
+                    panel.update("[dim]┌─ AI STATUS ──────────────────────[/dim]\n"
+                                 "[dim]● AI: [yellow]ENABLED[/yellow] (no model)[/dim]\n"
+                                 "[dim]  Run: pentool ai setup[/dim]\n"
+                                 "[dim]──────────────────────────────────[/dim]")
+                else:
+                    mcp_txt = "RUNNING" if mcp_running else "OFF"
+                    mcp_color = "green" if mcp_running else "yellow"
+                    panel.update("[dim]┌─ AI STATUS ──────────────────────[/dim]\n"
+                                 f"[dim]● AI: [green]ENABLED[/green]   MCP: [{mcp_color}]{mcp_txt}[/{mcp_color}][/dim]\n"
+                                 "[dim]  [yellow]▶ Start MCP: pentool ai start[/yellow][/dim]\n"
+                                 "[dim]──────────────────────────────────[/dim]")
+            else:
+                panel.update("[dim]┌─ AI STATUS ──────────────────────[/dim]\n"
+                             "[dim]● AI: [dim]DISABLED[/dim][/dim]\n"
+                             "[dim]  Enable in Settings → AI[/dim]\n"
+                             "[dim]──────────────────────────────────[/dim]")
+        except Exception:
+            pass
+
     @work(thread=True)
     def _boot_animate(self) -> None:
         time.sleep(0.2)
@@ -516,6 +561,7 @@ class DashboardScreen(Widget):
             self.query_one("#chart-requests", LiveChart).push(rps)
         except Exception:
             pass
+        self._update_ai_status()
 
     @work
     async def _load_stats_bg(self) -> None:
@@ -681,6 +727,16 @@ class DashboardScreen(Widget):
             self._set_led_bar("led-spider-bar", "bold magenta", f"Spider: [bold magenta]CRAWLING {pages}p[/bold magenta]")
         else:
             self._set_led_bar("led-spider-bar", "dim", "Spider: [dim]IDLE[/dim]")
+
+    def update_mcp_status(self, running: bool, ready: bool = False) -> None:
+        """Update the MCP LED. running=True → MCP subprocess alive; otherwise
+        ready=True (AI enabled + model present) → READY (needs start), else OFF."""
+        if running:
+            self._set_led_bar("led-mcp-bar", "bold green", "MCP: [bold green]RUNNING[/bold green]")
+        elif ready:
+            self._set_led_bar("led-mcp-bar", "cyan", "MCP: [cyan]READY[/cyan]")
+        else:
+            self._set_led_bar("led-mcp-bar", "dim", "MCP: [dim]OFF[/dim]")
 
     def refresh_stats(self) -> None:
         self._load_stats_bg()

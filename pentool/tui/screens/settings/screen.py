@@ -171,6 +171,33 @@ class SettingsScreen(Widget):
                     )
                     yield ToolbarButton("Save", "settings-save-privacy")
 
+            with TabPane("AI", id="tab-ai"):
+                with Vertical(classes="settings-pane"):
+                    yield Static("AI Assistant", classes="section-title")
+                    with Horizontal(classes="row"):
+                        yield Static("AI Assistant:", classes="row-label")
+                        yield Checkbox("Enable AI Assistant", id="set-ai-enabled", value=False)
+                    yield Static(
+                        "AI can help with scanning: picking checks, bypassing WAF, "
+                        "searching for non-obvious endpoints.\n"
+                        "Requires an installed LLM model. The MCP server is started "
+                        "separately from the Dashboard or `pentool ai start`.",
+                        classes="settings-hint",
+                    )
+                    yield Static("─" * 40, classes="license-sep")
+                    with Horizontal(classes="row"):
+                        yield Static("MCP port:", classes="row-label")
+                        yield Input(placeholder="0 = stdio", id="set-ai-mcp-port", compact=True)
+                    with Horizontal(classes="row"):
+                        yield Static("Model:", classes="row-label")
+                        yield Input(id="set-ai-model-path", compact=True)
+                    yield Static(
+                        "Path to the model's GGUF file. If empty, "
+                        "~/.pentool/ai/models/ is used.",
+                        classes="settings-hint",
+                    )
+                    yield ToolbarButton("Save", "settings-save-ai")
+
             with TabPane("License", id="tab-license"):
                 with Vertical(classes="settings-pane"):
                     yield Static("License", classes="section-title")
@@ -332,6 +359,10 @@ class SettingsScreen(Widget):
     @on(ToolbarButton.Pressed, "#settings-save-privacy")
     def on_btn_settings_save_privacy(self, _: ToolbarButton.Pressed) -> None:
         self._save_privacy_settings()
+
+    @on(ToolbarButton.Pressed, "#settings-save-ai")
+    def on_btn_settings_save_ai(self, _: ToolbarButton.Pressed) -> None:
+        self._save_ai_settings()
 
     @on(ToolbarButton.Pressed, "#btn-license-activate")
     def on_btn_license_activate(self, _: ToolbarButton.Pressed) -> None:
@@ -621,6 +652,44 @@ class SettingsScreen(Widget):
             )
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
+
+    def _save_ai_settings(self) -> None:
+        """Сохранить AI-настройки."""
+        try:
+            from pentool.services.ai.factory import AI_MODELS_DIR
+            cfg = getattr(self.app, "_cfg", None)
+            if cfg is None:
+                self.app.notify("Config not loaded", severity="error", timeout=4)
+                return
+
+            changes: dict[str, object] = {}
+            try:
+                enabled = self.query_one("#set-ai-enabled", Checkbox).value
+                changes["ai_enabled"] = enabled
+            except Exception:
+                pass
+            try:
+                port_v = self.query_one("#set-ai-mcp-port", Input).value.strip()
+                changes["ai_mcp_port"] = int(port_v) if port_v else 0
+            except Exception:
+                pass
+            try:
+                model_v = self.query_one("#set-ai-model-path", Input).value.strip()
+                if model_v:
+                    changes["ai_mcp_model_path"] = model_v
+                elif AI_MODELS_DIR.exists():
+                    models = list(AI_MODELS_DIR.iterdir())
+                    if models:
+                        changes["ai_mcp_model_path"] = str(models[0])
+            except Exception:
+                pass
+
+            self.run_worker(
+                self._async_save_config(changes, "AI settings saved"),
+                exclusive=False, thread=False,
+            )
+        except Exception as e:
+            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
     # ── License actions ────────────────────────────────────────────────────────
 

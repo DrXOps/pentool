@@ -51,7 +51,15 @@ _COL_NAMES = ["ID", "Host", "Method", "URL", "Status", "Size", "Time"]
 # Matches ProxyService.get_history()'s default limit — the full history lives
 # in SQLite (HttpStorage), this only bounds how much is materialized in the
 # TUI table/rows_cache at once.
-_HISTORY_PAGE_SIZE = 1000
+_HISTORY_PAGE_SIZE = 300
+
+# Minimum interval between full filtered reloads of the HTTP History table.
+# While a filter is active, every live request used to trigger a full reload
+# (COUNT + SELECT + Arrow rebuild + refresh) in the main loop — under dense
+# background traffic this starved the Textual renderer ("UI froze for tens of
+# seconds"). Coalescing to one reload per window keeps the list fresh without
+# drowning the renderer.
+_FILTER_RELOAD_DEBOUNCE_S = 0.6
 
 def _make_empty_table() -> pa.Table:
     """Empty Arrow table with the required columns."""
@@ -166,10 +174,13 @@ class _ProxyDataTable(_BaseDataTable):
     class ScrolledToTop(Message):
         """Posted when the user scrolls to the very top of the table.
 
-        Used by ProxyScreen (HTTP History only, id="request-list") as the
+        Used by ProxyScreen (request-list HTTP, ws-request-list WS) as the
         trigger to load an older page of history from SQLite — see
-        ProxyScreen._load_more_history().
+        ProxyScreen._load_more_history() / _load_more_ws_history().
         """
+        def __init__(self, table_id: str) -> None:
+            super().__init__()
+            self.table_id = table_id
 
     class CommentIconClicked(Message):
         """Posted on a single left-click landing in the Host column — used
@@ -181,6 +192,19 @@ class _ProxyDataTable(_BaseDataTable):
             self.column_index = column_index
 
     async def on_event(self, event: _events.Event) -> None:
+        # Crash guard: while the table is being rebuilt (we swap `backend` in
+        # _load_more_history / _flush_pending_rows on every live request) or a
+        # sheet is mid (re)mount, the widget may momentarily have `parent is
+        # None` / a zeroed region. If a MouseDown lands in that instant, Textual's
+        # Screen._forward_event assumes `container = content_widget.parent` is a
+        # live node and dereferences it → AttributeError: 'NoneType' has no
+        # attribute 'region' → the whole App dies ("TUI just vanished"). Swallow
+        # the event instead of letting that crash tear down the app; the click is
+        # irrelevant on a table that isn't laid out yet anyway. We still handle
+        # movement/scroll (non-mouse events) normally below.
+        if isinstance(event, _events.MouseEvent) and not self._mouse_ready():
+            event.stop()
+            return
         if isinstance(event, _events.MouseDown) and (
             event.button == 3 or (event.button == 1 and event.ctrl)
         ):
@@ -200,12 +224,31 @@ class _ProxyDataTable(_BaseDataTable):
         else:
             await super().on_event(event)
 
+    def _mouse_ready(self) -> bool:
+        """True when the table has a live parent and a laid-out region, i.e. a
+        click can be resolved to a row safely. Textual's Screen._forward_event
+        requires a non-None `container` (widget parent) to build a SelectStart;
+        if we swallow the event while not ready, we avoid the
+        `AttributeError: 'NoneType' object has no attribute 'region'` crash
+        (see the guard in on_event)."""
+        try:
+            parent = self.parent
+            if parent is None:
+                return False
+            region = self.region
+            return region.width > 0 and region.height > 0
+        except Exception:
+            return False
+
     def watch_scroll_y(self, old_value: float, new_value: float) -> None:
         super().watch_scroll_y(old_value, new_value)
-        # Only the HTTP History table (id="request-list") supports
-        # scroll-up-to-load-more; WS History has no such feature.
-        if self.id == "request-list" and new_value <= 0 and old_value > 0:
-            self.post_message(self.ScrolledToTop())
+        # Both the HTTP History (id="request-list") and the WS History
+        # (id="ws-request-list") tables support scroll-up-to-load-more; the WS
+        # one used to load the whole history (now page-capped at 300) and had
+        # no pagination — older WS rows were unreachable. Both now share the
+        # same scroll-up pagination path.
+        if new_value <= 0 and old_value > 0 and self.id in ("request-list", "ws-request-list"):
+            self.post_message(self.ScrolledToTop(self.id or ""))
 
 DataTable = _ProxyDataTable
 
@@ -256,17 +299,52 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._intercept_raw_full: str = ""
         # Debounce: batch rapid row appends into one incremental add_rows() call
         self._pending_append_rows: list[tuple] = []  # (req, row_id) pairs
+        # Adaptive debounce for _append_row_to_table: under light traffic (≤5
+        # rows/burst) use 0.2s; under heavy traffic (bursts from many tabs)
+        # use 0.8s so the main loop isn't flooded with add_rows()/scroll_end().
+        # Reset to fast debounce whenever the queue drains completely.
+        self._append_debounce_fast = 0.2
+        self._append_debounce_slow = 0.8
+        self._append_debounce_heavy = 0.8
+        self._append_burst_count = 0
+        self._last_append_burst_ts = 0.0
         self._debounce_timer = None
+        # Same incremental-append batching for the WS History table, so a live
+        # WS row is added to the tail without a full `_reload_ws_table` rebuild
+        # (which would otherwise reset any scroll-up pagination the user was
+        # navigating). See _append_ws_row_to_table / _flush_pending_ws_rows.
+        self._pending_ws_append_rows: list[dict] = []
+        self._ws_debounce_timer = None
         # Cap on in-memory _rows_cache size — beyond this, oldest loaded rows
         # are dropped and _history_oldest_offset is bumped so "scroll up to
         # load more" can re-fetch them from storage on demand instead of
         # keeping the whole session's history resident in memory forever.
-        self._ROWS_CACHE_MAX = 5000
+        self._ROWS_CACHE_MAX = 1200
         # "Showing N of M" + scroll-up-to-load-more state (HTTP History only)
         self._history_total: int = 0       # total rows matching current filters (from COUNT(*))
         self._history_oldest_offset: int = 0  # how many older rows are NOT yet loaded (above what's in _rows_cache)
         self._history_loading_more: bool = False
+        self._ws_history_total: int = 0   # total WS rows (from COUNT(*)), for the WS "Showing N of M" label
+        # WS History pagination (scroll-up-to-load-more), mirroring HTTP's
+        # _history_* state. Same rationale: bounded 300-row page so the renderer
+        # isn't starved, older rows re-fetched from storage on demand.
+        self._ws_history_oldest_offset: int = 0
+        self._ws_history_loading_more: bool = False
+        # Debounce full reloads while a filter is active: each live request
+        # used to trigger a full `_reload_table(filters)` (COUNT + SELECT +
+        # Arrow rebuild + refresh) in the main loop. Under dense background
+        # traffic with 1000s of rows this starved the Textual renderer and
+        # froze the UI for many seconds. Now a filter reload is coalesced to at
+        # most one per _FILTER_RELOAD_DEBOUNCE_S window.
+        self._filter_reload_pending: bool = False
+        self._filter_reload_timer = None  # textual Timer handle (set_timer), see _schedule_filter_reload
         self._current_comment: str = ""  # comment of the currently-selected row (for the Comment dialog)
+        self._filter_show_comments: bool = False  # "💬 Comments" toggle — show only rows with comments
+        # Debounce: delay _load_row_details so rapid cursor movement (RowHighlighted
+        # firing on every pixel of mouse travel + programmatic scroll_end from live
+        # traffic) doesn't flood the main loop with SQLite workers. Only the LAST
+        # highlight within the window triggers a load.
+        self._highlight_debounce_handle = None
 
     def compose(self) -> ComposeResult:
         # Toolbar (outside SubTabs — all btn-* IDs are always in the DOM)
@@ -289,6 +367,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             )
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("M/R",         "btn-mr")
+            yield Static(" │ ", classes="toolbar-sep")
+            yield ToolbarButton("📝 Show comments", "btn-show-comments",
+                                tooltip="Show only rows that have comments (toggle)")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Clear",       "btn-clear")
 
@@ -372,6 +453,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                                 zebra_stripes=True,
                                 column_widths=[5, 20, 8, 60, 6, 8, 8],
                             )
+                            yield Static("", id="ws-history-count", classes="history-count")
                         yield ResizeHandle(
                             "ws-table-area", "ws-detail-area",
                             vertical=True,
@@ -506,6 +588,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         try:
+            # Add has_comment filter if toggle is active
+            if self._filter_show_comments:
+                f = dict(filters) if filters else {}
+                f["has_comment"] = True
+                filters = f
             logger.info("PROXY SCREEN: _reload_table called, filters=%s", filters)
             newest_first_rows = await self._proxy_service.get_history(
                 limit=_HISTORY_PAGE_SIZE, filters=filters,
@@ -551,6 +638,24 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             return
         shown = len(self._rows_cache)
         total = self._history_total
+        if total <= shown:
+            label.update("")
+        else:
+            label.update(f"Showing {shown:,} of {total:,} — scroll up to load more")
+
+    def _update_ws_history_count_label(self) -> None:
+        """Same "Showing N of M" treatment for the WS History table.
+
+        WS History now has the same scroll-up pagination as HTTP (page-capped
+        at 300), so the counter is identical in shape to HTTP's. When the cap
+        hides rows it shows "Showing N of M — scroll up to load more";
+        otherwise it's blank (everything loaded)."""
+        try:
+            label = self.query_one("#ws-history-count", Static)
+        except Exception:
+            return
+        shown = len(self._ws_rows_cache)
+        total = self._ws_history_total
         if total <= shown:
             label.update("")
         else:
@@ -607,7 +712,56 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._history_loading_more = False
 
     def on__proxy_data_table_scrolled_to_top(self, event: _ProxyDataTable.ScrolledToTop) -> None:
-        self.run_worker(self._load_more_history())
+        if event.table_id == "ws-request-list":
+            self.run_worker(self._load_more_ws_history())
+        else:
+            self.run_worker(self._load_more_history())
+
+    async def _load_more_ws_history(self) -> None:
+        """Load one older page of WS history when the user scrolls to the top.
+
+        Mirrors _load_more_history but for the WS History table, which is now
+        page-capped (300 rows). Without this, older WS rows were unreachable
+        once the cap hid them. Prepends older rows to _ws_rows_cache/table and
+        re-anchors the scroll so the user stays put (same as HTTP)."""
+        if self._ws_history_loading_more or self._ws_history_oldest_offset <= 0:
+            return
+        if self._proxy_service is None or not self._proxy_service.is_storage_ready():
+            return
+        self._ws_history_loading_more = True
+        try:
+            page_offset = max(self._ws_history_oldest_offset - _HISTORY_PAGE_SIZE, 0)
+            page_limit = self._ws_history_oldest_offset - page_offset
+            if page_limit <= 0:
+                return
+            older_newest_first = await self._proxy_service.get_history(
+                offset=page_offset, limit=page_limit, filters={"is_websocket": True},
+            )
+            older_rows = list(reversed(older_newest_first))
+            if not older_rows:
+                return
+            self._ws_rows_cache = older_rows + self._ws_rows_cache
+            self._ws_history_oldest_offset = page_offset
+            try:
+                table = self.query_one("#ws-request-list", DataTable)
+                arrow = _rows_to_arrow(self._ws_rows_cache)
+                table.backend = ArrowBackend(arrow)
+                table._ordered_columns = None
+                table._clear_caches()
+                table._require_update_dimensions = True
+                table.refresh()
+                table.scroll_to(y=table.scroll_y + len(older_rows), animate=False)
+            except Exception as exc:
+                logger.debug("PROXY SCREEN: _load_more_ws_history: table update failed: %s", exc)
+            self._update_ws_history_count_label()
+            logger.info(
+                "PROXY SCREEN: _load_more_ws_history loaded %d older rows, oldest_offset now %d",
+                len(older_rows), self._ws_history_oldest_offset,
+            )
+        except Exception as exc:
+            logger.error("_load_more_ws_history failed: %s", exc)
+        finally:
+            self._ws_history_loading_more = False
 
     async def _reload_ws_table(self) -> None:
         """Load/reload WebSocket requests into the WS History table."""
@@ -615,9 +769,16 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             return
         try:
             logger.info("PROXY SCREEN: _reload_ws_table called")
-            rows = await self._proxy_service.get_history(filters={"is_websocket": True})
-            logger.info("PROXY SCREEN: _reload_ws_table loaded %d WS rows", len(rows))
+            total = await self._proxy_service.count_history(filters={"is_websocket": True})
+            rows = await self._proxy_service.get_history(
+                limit=_HISTORY_PAGE_SIZE, filters={"is_websocket": True},
+            )
+            logger.info("PROXY SCREEN: _reload_ws_table loaded %d/%d WS rows",
+                        len(rows), total)
             self._ws_rows_cache = rows
+            self._ws_history_total = total
+            self._ws_history_oldest_offset = max(total - len(rows), 0)
+            self._update_ws_history_count_label()
             arrow = _rows_to_arrow(rows)
             try:
                 table = self.query_one("#ws-request-list", DataTable)
@@ -764,9 +925,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         return self._pending_req_ids.get(req.id)
 
     async def _update_and_reload(self, req: InterceptedRequest) -> None:
+        _t0 = time.monotonic()
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         await self._wait_for_row_id(req)
+        _t1 = time.monotonic()
         actual_row_id = self._pending_req_ids.pop(req.id, None)
         self._pending_req_ids_ts.pop(req.id, None)
         if actual_row_id and actual_row_id != -1 and req.response is not None:
@@ -781,13 +944,48 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             if new_row_id is not None:
                 actual_row_id = new_row_id
         if req.is_websocket:
-            await self._reload_ws_table()
+            if actual_row_id and actual_row_id != -1:
+                self._append_ws_row_to_table(req, actual_row_id)
+            else:
+                # Never stored / id unknown — fall back to a full WS reload.
+                await self._reload_ws_table()
+        _t2 = time.monotonic()
+        if (_t2 - _t0) > 0.2:
+            logger.warning(
+                "PROXY SCREEN: _update_and_reload slow: wait_row_id=%.1fms "
+                "update_resp=%.1fms total=%.1fms req=%s %s",
+                (_t1 - _t0) * 1000, (_t2 - _t1) * 1000, (_t2 - _t0) * 1000,
+                req.method, req.url[:60],
+            )
         elif self._current_filters:
-            await self._reload_table(self._current_filters)
+            self._schedule_filter_reload()
         elif actual_row_id and actual_row_id != -1:
             self._append_row_to_table(req, actual_row_id)
         else:
             await self._reload_table(None)
+
+    def _schedule_filter_reload(self) -> None:
+        """Coalesce full filtered reloads while live traffic is streaming in.
+
+        See _FILTER_RELOAD_DEBOUNCE_S. The first pending request reloads
+        immediately-ish; any further requests within the window only mark it
+        pending, and one final reload fires after the window closes. This stops
+        the per-request full-table rebuild that froze the UI."""
+        self._filter_reload_pending = True
+        if self._filter_reload_timer is not None:
+            return  # already scheduled — later reload coalesces into it
+        self._filter_reload_timer = self.set_timer(
+            _FILTER_RELOAD_DEBOUNCE_S,
+            lambda: self.run_worker(self._flush_filter_reload()),
+        )
+
+    async def _flush_filter_reload(self) -> None:
+        """Fire one coalesced filtered reload (debounce window has closed)."""
+        self._filter_reload_timer = None
+        if not self._filter_reload_pending:
+            return
+        self._filter_reload_pending = False
+        await self._reload_table(self._current_filters)
 
     def _append_row_to_table(self, req: InterceptedRequest, row_id: int) -> None:
         """Incrementally add a single row — debounced at 150 ms.
@@ -810,7 +1008,19 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         }
         self._pending_append_rows.append(row)
         if self._debounce_timer is None:
-            self._debounce_timer = self.set_timer(0.15, self._flush_pending_rows)
+            # Adaptive debounce: if a burst just drained, start fast; if
+            # the burst count keeps growing, use slow debounce so the
+            # main loop doesn't drown in table rebuilds.
+            now = time.time()
+            if now - self._last_append_burst_ts < 0.5:
+                self._append_burst_count += 1
+            else:
+                self._append_burst_count = 0
+            self._last_append_burst_ts = now
+            delay = (self._append_debounce_slow
+                     if self._append_burst_count > 10
+                     else self._append_debounce_fast)
+            self._debounce_timer = self.set_timer(delay, self._flush_pending_rows)
 
     def _flush_pending_rows(self) -> None:
         """Flush all pending rows into the table via incremental add_rows().
@@ -829,11 +1039,51 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._pending_append_rows = []
         self._rows_cache.extend(new_rows)
         self._history_total += len(new_rows)
+        _t0 = time.monotonic()
         try:
             table = self.query_one("#request-list", DataTable)
+            _t1 = time.monotonic()
             records = [_row_to_record(r) for r in new_rows]
+            _t2 = time.monotonic()
+            old_tail = len(self._rows_cache) - len(new_rows) - 1
+            was_at_tail = table.cursor_row >= old_tail
             table.add_rows(records)
-            table.scroll_end(animate=False)
+            _t3 = time.monotonic()
+            if was_at_tail or table.cursor_row >= len(self._rows_cache) - 1:
+                table.scroll_end(animate=False)
+            _t4 = time.monotonic()
+            if len(new_rows) > 50 or (_t4 - _t0) > 0.05:
+                logger.warning(
+                    "PROXY SCREEN: _flush_pending_rows: %d rows, "
+                    "query_one=%.1fms _row_to_record=%.1fms add_rows=%.1fms scroll_end=%.1fms total=%.1fms",
+                    len(new_rows),
+                    (_t1 - _t0) * 1000, (_t2 - _t1) * 1000,
+                    (_t3 - _t2) * 1000, (_t4 - _t3) * 1000,
+                    (_t4 - _t0) * 1000,
+                )
+            # add_rows() appends at the BOTTOM and never shifts existing row
+            # indexes, so a highlighted row keeps pointing at the same request
+            # even while live traffic streams in. Auto-scroll to the bottom
+            # ONLY when the user was already sitting at the tail (following
+            # the stream, tail -f style) — if they have selected an older row
+            # further up, don't yank their cursor/selection down to the newest
+            # entry. That is the second barrier behind the _selected_req_id
+            # race guard.
+            #
+            # Previous logic keyed the "follow the stream" decision on
+            # `table.has_focus`, which goes False the instant a context menu
+            # (or any other widget) takes focus — so opening the right-click
+            # menu over a selected row made the next incoming request fire
+            # scroll_end() and yank the table to the newest entry, moving the
+            # requested row out from under the user's cursor. We now judge by
+            # the cursor's position relative to the OLD tail *before* the
+            # append, independent of focus: only follow the stream when the
+            # cursor was at (or past) the last row already there.
+            old_tail = len(self._rows_cache) - len(new_rows) - 1
+            was_at_tail = table.cursor_row >= old_tail
+            table.add_rows(records)
+            if was_at_tail or table.cursor_row >= len(self._rows_cache) - 1:
+                table.scroll_end(animate=False)
         except Exception as exc:
             logger.debug("PROXY SCREEN: _flush_pending_rows: %s", exc)
         # Cap unbounded growth of the in-memory cache during very long
@@ -856,19 +1106,99 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 logger.debug("PROXY SCREEN: _rows_cache trim rebuild failed: %s", exc)
         self._update_history_count_label()
 
+    def _append_ws_row_to_table(self, req: InterceptedRequest, row_id: int) -> None:
+        """Incrementally add a single WS row — debounced like HTTP.
+
+        Same tail-append as _append_row_to_table, but for the WS History table.
+        Using incremental add_rows() (instead of _reload_ws_table) keeps any
+        scroll-up pagination the user was navigating intact: a new live WS row
+        only touches the tail, it never resets the loaded-older-rows offset.
+        """
+        parsed = req.to_parsed_request()
+        url = parsed.url or ""
+        ts = time.time()
+        row: dict = {
+            "id": row_id,
+            "host": parsed.headers.get("Host", "").split(":")[0] or url.split("/")[2] if "://" in url else url,
+            "method": req.method or "",
+            "url": url,
+            "status_code": req.response.status if req.response else None,
+            "length": len((req.response.body or "").encode("utf-8")) if req.response else None,
+            "timestamp": ts,
+            "is_websocket": True,
+        }
+        self._pending_ws_append_rows.append(row)
+        if self._ws_debounce_timer is None:
+            self._ws_debounce_timer = self.set_timer(0.15, self._flush_pending_ws_rows)
+
+    def _flush_pending_ws_rows(self) -> None:
+        """Flush pending WS rows via incremental add_rows(), tail-append."""
+        self._ws_debounce_timer = None
+        if not self._pending_ws_append_rows:
+            return
+        new_rows = self._pending_ws_append_rows
+        self._pending_ws_append_rows = []
+        self._ws_rows_cache.extend(new_rows)
+        self._ws_history_total += len(new_rows)
+        try:
+            table = self.query_one("#ws-request-list", DataTable)
+            records = [_row_to_record(r) for r in new_rows]
+            old_tail = len(self._ws_rows_cache) - len(new_rows) - 1
+            was_at_tail = table.cursor_row >= old_tail
+            table.add_rows(records)
+            if was_at_tail or table.cursor_row >= len(self._ws_rows_cache) - 1:
+                table.scroll_end(animate=False)
+        except Exception as exc:
+            logger.debug("PROXY SCREEN: _flush_pending_ws_rows: %s", exc)
+        # Cap unbounded growth of _ws_rows_cache during long sessions — oldest
+        # rows become re-fetchable via scroll-up (_ws_history_oldest_offset),
+        # same strategy as HTTP's _flush_pending_rows.
+        if len(self._ws_rows_cache) > self._ROWS_CACHE_MAX:
+            overflow = len(self._ws_rows_cache) - self._ROWS_CACHE_MAX
+            self._ws_rows_cache = self._ws_rows_cache[overflow:]
+            self._ws_history_oldest_offset += overflow
+            try:
+                table = self.query_one("#ws-request-list", DataTable)
+                arrow = _rows_to_arrow(self._ws_rows_cache)
+                table.backend = ArrowBackend(arrow)
+                table._ordered_columns = None
+                table._clear_caches()
+                table._require_update_dimensions = True
+                table.scroll_end(animate=False)
+            except Exception as exc:
+                logger.debug("PROXY SCREEN: _ws_rows_cache trim rebuild failed: %s", exc)
+        self._update_ws_history_count_label()
+
     def _select_row(self, row_idx: int) -> None:
-        if 0 <= row_idx < len(self._rows_cache):
-            row = self._rows_cache[row_idx]
-            self._selected_req_id = row.get("id")
-            self.run_worker(self._load_row_details(self._selected_req_id))
+        try:
+            if 0 <= row_idx < len(self._rows_cache):
+                row = self._rows_cache[row_idx]
+                new_id = row.get("id")
+                if new_id == self._selected_req_id:
+                    return
+                self._selected_req_id = new_id
+                # Debounce: cancel pending timer, schedule _load_row_details in 0.25s.
+                if self._highlight_debounce_handle is not None:
+                    try:
+                        self._highlight_debounce_handle.stop()
+                    except Exception:
+                        pass
+                self._highlight_debounce_handle = self.set_timer(
+                    0.25, lambda: self._debounced_load(new_id)
+                )
+        except Exception as exc:
+            logger.error("PROXY SCREEN: _select_row crashed: %s", exc, exc_info=True)
 
     def _select_ws_row(self, row_idx: int) -> None:
         """Select a row in WS History — loads details into the WS panels."""
-        if 0 <= row_idx < len(self._ws_rows_cache):
-            row = self._ws_rows_cache[row_idx]
-            row_id = row.get("id")
-            if row_id is not None:
-                self.run_worker(self._load_ws_row_details(row_id))
+        try:
+            if 0 <= row_idx < len(self._ws_rows_cache):
+                row = self._ws_rows_cache[row_idx]
+                row_id = row.get("id")
+                if row_id is not None:
+                    self.run_worker(self._load_ws_row_details(row_id))
+        except Exception as exc:
+            logger.error("PROXY SCREEN: _select_ws_row crashed: %s", exc, exc_info=True)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.data_table.id == "ws-request-list":
@@ -893,10 +1223,14 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._comment_dialog(initial_comment=comment)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        if event.data_table.id == "ws-request-list":
-            self._select_ws_row(event.cursor_row)
-        else:
-            self._select_row(event.cursor_row)
+        """Row highlighted → load details with debounce."""
+        try:
+            if event.data_table.id == "ws-request-list":
+                self._select_ws_row(event.cursor_row)
+            else:
+                self._select_row(event.cursor_row)
+        except Exception as exc:
+            logger.error("PROXY SCREEN: on_data_table_row_highlighted crashed: %s", exc, exc_info=True)
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
         """Give focus to DataTable on any cursor movement — required for mouse scroll."""
@@ -905,11 +1239,35 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         except Exception:
             pass
 
+    def _debounced_load(self, row_id: int | None) -> None:
+        """Safely run _load_row_details from a debounce timer callback.
+
+        Textual's set_timer may fire its callback after the widget has been
+        removed from the DOM (e.g. during project switch or shutdown). In that
+        case the widget is unmounted and run_worker raises an exception that
+        Textual may silently swallow by tearing down the screen stack — causing
+        a clean run() return with no traceback ("TUI just vanished"). Check
+        is_running before scheduling the async worker.
+        """
+        try:
+            app = self.app
+            if not app.is_running:
+                return
+        except Exception:
+            return
+        self.run_worker(self._load_row_details(row_id))
+
     async def _load_row_details(self, row_id: int | None) -> None:
         if row_id is None or self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         entry = await self._proxy_service.get_full_entry(row_id)
         if entry is None:
+            return
+        # Selection race guard: by the time get_full_entry() returns, the
+        # user may have clicked a different row — drawing the stale entry
+        # would make the request/response panels show a request that no
+        # longer matches the highlighted row. Drop it if the target id moved.
+        if self._selected_req_id is not None and row_id != self._selected_req_id:
             return
         self.call_after_refresh(self._load_entry_details, entry)
 
@@ -919,9 +1277,17 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         entry = await self._proxy_service.get_full_entry(row_id)
         if entry is None:
             return
+        # Same selection race guard as _load_row_details — ignore stale loads.
+        if self._selected_req_id is not None and row_id != self._selected_req_id:
+            return
         self.call_after_refresh(self._load_ws_entry_details, entry)
 
     def _load_ws_entry_details(self, entry: dict) -> None:
+        # Selection race guard (second layer) — skip drawing a stale entry
+        # if the highlighted row changed after the async load finished.
+        entry_id = entry.get("id")
+        if self._selected_req_id is not None and entry_id is not None and entry_id != self._selected_req_id:
+            return
         from pentool.utils.parser import ParsedRequest
 
         req_headers = entry.get("request_headers") or {}
@@ -996,6 +1362,31 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             tabs.active = tab_id
             # Focus the DataTable in the target tab
             self.call_after_refresh(self._focus_tab_table, tab_id)
+            # Reload the table if switching to HTTP History — rows may have
+            # accumulated in _rows_cache while the table was off-screen and
+            # query_one("#request-list") was failing (TabPane hidden = widget
+            # not in DOM). Without this, cached rows never appear.
+            if tab_id == "tab-http-history":
+                self.call_after_refresh(self._reload_http_history_on_switch)
+        except Exception:
+            pass
+
+    def _reload_http_history_on_switch(self) -> None:
+        """Rebuild the backend from _rows_cache when switching to HTTP History."""
+        try:
+            table = self.query_one("#request-list", DataTable)
+            if not self._rows_cache:
+                return
+            from textual_fastdatatable import ArrowBackend
+            import pentool.tui.screens.proxy.screen as _ps
+            arrow = _ps._rows_to_arrow(self._rows_cache)
+            table.backend = ArrowBackend(arrow)
+            table._ordered_columns = None
+            table._clear_caches()
+            table._require_update_dimensions = True
+            table.refresh()
+            if self._rows_cache:
+                table.scroll_end(animate=False)
         except Exception:
             pass
 
@@ -1199,6 +1590,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             logger.error("Delete failed: %s", exc)
 
     def _load_entry_details(self, entry: dict) -> None:
+        # Second layer of the selection race guard: the deferred paint may
+        # run after the user has already moved to another row, so re-check
+        # that this entry still matches the current selection before drawing.
+        entry_id = entry.get("id")
+        if self._selected_req_id is not None and entry_id is not None and entry_id != self._selected_req_id:
+            return
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req_headers = entry.get("request_headers") or {}
@@ -1284,6 +1681,30 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     @on(ToolbarButton.Pressed, "#btn-clear")
     def on_btn_clear(self, _: ToolbarButton.Pressed) -> None:
         self.action_clear_list()
+
+    @on(ToolbarButton.Pressed, "#btn-show-comments")
+    def on_btn_show_comments(self, event: ToolbarButton.Pressed) -> None:
+        """Toggle: show only rows that have a comment.
+        Повторное нажатие сбрасывает фильтр и возвращает полную историю."""
+        btn = event.button
+        if "active" in btn.classes:
+            btn.remove_class("active")
+            btn.label = "📝 Show comments"
+            self._filter_show_comments = False
+            # Сбрасываем и все фильтры FilterBar, чтобы вернуть полную историю
+            try:
+                fb = self.query_one("#filter-bar")
+                from pentool.tui.widgets.filter_bar import FilterBar
+                if hasattr(fb, "_reset"):
+                    fb._reset()
+            except Exception:
+                pass
+            self._current_filters = None
+        else:
+            btn.add_class("active")
+            btn.label = "📝 Comments: ON"
+            self._filter_show_comments = True
+        self.run_worker(self._reload_table(self._current_filters), exclusive=False, exit_on_error=False)
 
     def action_load_history(self) -> None:
         self.run_worker(self._reload_table(self._current_filters))
@@ -1514,10 +1935,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 btn.add_class("active")
             except Exception:
                 pass
-            port = proxy.port if proxy else self.app._cfg.proxy_port  # type: ignore[attr-defined]
-            self.app.notify(  # type: ignore[attr-defined]
-                f"Starting proxy on :{port}...", timeout=3
-            )
         elif proxy and proxy.is_running:
             try:
                 btn = self.query_one("#btn-proxy", ToolbarButton)
@@ -1526,7 +1943,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 btn.add_class("inactive")
             except Exception:
                 pass
-            self.app.notify("Stopping proxy...", timeout=2)  # type: ignore[attr-defined]
         self.app.action_toggle_proxy()  # type: ignore[attr-defined]
         self.call_after_refresh(self._sync_proxy_button)
 
@@ -1679,7 +2095,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
 
     async def _save_enforce_scope_setting(self, enabled: bool) -> None:
         try:
-            from pentool.core.database import set_project_setting
+            from pentool.core.db_schema import set_project_setting
             db_path = self._get_db_path()
             if db_path:
                 await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
@@ -1698,7 +2114,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         if proxy is None:
             return
         try:
-            from pentool.core.database import get_project_setting
+            from pentool.core.db_schema import get_project_setting
             db_path = self._get_db_path()
             value = await get_project_setting(db_path, "proxy.enforce_scope", "0") if db_path else "0"
             enabled = value == "1"
@@ -1728,7 +2144,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         """
         try:
             import json
-            from pentool.core.database import set_project_setting
+            from pentool.core.db_schema import set_project_setting
             db_path = self._get_db_path()
             if db_path:
                 await set_project_setting(db_path, "proxy.scope", json.dumps(hosts))
@@ -1751,7 +2167,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         hosts: list[str] | None = None
         try:
             import json
-            from pentool.core.database import get_project_setting
+            from pentool.core.db_schema import get_project_setting
             db_path = self._get_db_path()
             raw = await get_project_setting(db_path, "proxy.scope", None) if db_path else None
             if raw is not None:

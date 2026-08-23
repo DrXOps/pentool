@@ -6,6 +6,9 @@
 # line of defense against publishing a build that is broken at import time
 # (e.g. missing package-data like *.tcss, broken dependency pin, etc.) — see
 # memory/pentool-release-checklist.md.
+#
+# Uses uv for speed: venv creation + install is ~5× faster than pip.
+# Falls back to python -m venv + pip if uv is not on PATH.
 set -euo pipefail
 
 WHEEL="$(ls dist/*.whl | head -1)"
@@ -15,9 +18,17 @@ if [ -z "$WHEEL" ]; then
 fi
 
 VENV_DIR="$(mktemp -d)/pentool-smoke-venv"
-python -m venv "$VENV_DIR"
-"$VENV_DIR/bin/pip" install --quiet --upgrade pip
-"$VENV_DIR/bin/pip" install --quiet "$WHEEL"
+
+if command -v uv &>/dev/null; then
+    echo "--- using uv for smoke venv ---"
+    uv venv "$VENV_DIR" --quiet
+    uv pip install --quiet --python "$VENV_DIR/bin/python" "$WHEEL"
+else
+    echo "--- uv not found, falling back to pip ---"
+    python -m venv "$VENV_DIR"
+    "$VENV_DIR/bin/pip" install --quiet --upgrade pip
+    "$VENV_DIR/bin/pip" install --quiet "$WHEEL"
+fi
 
 echo "--- import check ---"
 "$VENV_DIR/bin/python" -c "import pentool; print('pentool version:', pentool.__version__)"

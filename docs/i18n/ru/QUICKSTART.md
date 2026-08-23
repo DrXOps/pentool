@@ -129,10 +129,11 @@ pentool
 - Вставьте два текста
 - Получите diff с подсветкой
 
-### Spider
-- `Shift+W` → откроет Spider
-- Введите base URL
-- Автоматический обход сайта
+### Spider (краулинг)
+- Нет отдельной вкладки — краулинг запускается в модуле **Target**
+- Кнопка «🕷 Crawl Scope» — обойти все хосты в scope
+- Кнопка «🕷 Crawl Host» — обойти выбранный в дереве хост
+- Чекбокс «🤖 Use AI» — после обхода AI добавит неочевидные эндпоинты
 
 ---
 
@@ -154,7 +155,6 @@ pentool
 - `Shift+D` — Decoder
 - `Shift+C` — Comparer
 - `Shift+Q` — Sequencer
-- `Shift+W` — Spider
 - `Shift+E` — Extensions
 - `Shift+X` — Terminal
 

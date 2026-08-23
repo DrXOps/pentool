@@ -14,31 +14,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
+          version: "latest"
           python-version: '3.12'
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install -r requirements-dev.txt
-          pip install aioresponses
+        run: uv sync --frozen
 
       - name: Check layer violations
-        run: python tools/check_layers.py
+        run: uv run python tools/check_layers.py
 
       - name: Run unit tests
-        run: |
-          pytest tests/unit/ -v --tb=short -q
+        run: uv run pytest tests/unit/ -v --tb=short -q
         env:
           PYTHONDONTWRITEBYTECODE: "1"
 
@@ -49,28 +39,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
+          version: "latest"
           python-version: '3.12'
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install -r requirements-dev.txt
-          pip install aioresponses
+        run: uv sync --frozen
 
       - name: Run integration tests (storage + services + events)
         run: |
-          pytest tests/integration/test_http_storage.py \
+          uv run pytest tests/integration/test_http_storage.py \
                  tests/integration/test_proxy_service.py \
                  tests/integration/test_event_bus.py \
                  tests/integration/test_repeater_service.py \
@@ -81,7 +62,7 @@ jobs:
 
       - name: Run TUI integration tests
         run: |
-          pytest tests/integration/test_navigation.py \
+          uv run pytest tests/integration/test_navigation.py \
                  tests/integration/test_tui_events.py \
                  tests/integration/test_new_features.py \
                  -v --tb=short
@@ -96,28 +77,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
+          version: "latest"
           python-version: '3.12'
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install -r requirements-dev.txt
-          pip install aioresponses
+        run: uv sync --frozen
 
       - name: Run E2E tests
-        run: |
-          pytest tests/e2e/ -v --tb=short
+        run: uv run pytest tests/e2e/ -v --tb=short
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         continue-on-error: true  # E2E tests may be flaky in headless CI
@@ -129,28 +100,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
+          version: "latest"
           python-version: '3.12'
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install -r requirements-dev.txt
-          pip install aioresponses
+        run: uv sync --frozen
 
       - name: Run security tests
-        run: |
-          pytest tests/security/ -v --tb=short
+        run: uv run pytest tests/security/ -v --tb=short
         continue-on-error: true  # may be skipped if scanner module unavailable
         env:
           PYTHONDONTWRITEBYTECODE: "1"
@@ -162,28 +123,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
+          version: "latest"
           python-version: '3.12'
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install -r requirements-dev.txt
-          pip install aioresponses
+        run: uv sync --frozen
 
       - name: Run performance tests
-        run: |
-          pytest tests/performance/ -v --tb=short -m "performance or slow"
+        run: uv run pytest tests/performance/ -v --tb=short -m "performance or slow"
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         continue-on-error: true  # performance bounds may vary on CI
@@ -196,28 +147,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
+          version: "latest"
           python-version: '3.12'
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install -r requirements-dev.txt
-          pip install aioresponses
+        run: uv sync --frozen
 
       - name: Run coverage
         run: |
-          coverage run -m pytest \
+          uv run coverage run -m pytest \
             tests/unit/ \
             tests/integration/test_http_storage.py \
             tests/integration/test_proxy_service.py \
@@ -225,8 +167,8 @@ jobs:
             tests/integration/test_repeater_service.py \
             tests/security/ \
             -q
-          coverage report
-          coverage xml
+          uv run coverage report
+          uv run coverage xml
         continue-on-error: true  # informational metric only
 
       - name: Upload coverage to Codecov
@@ -243,27 +185,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
+          version: "latest"
           python-version: '3.12'
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install -r requirements-dev.txt
+        run: uv sync --frozen
 
       - name: Run snapshot tests
-        run: |
-          pytest tests/snapshot/ -v --tb=short
+        run: uv run pytest tests/snapshot/ -v --tb=short
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         continue-on-error: true
@@ -284,18 +217,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
+          version: "latest"
           python-version: '3.12'
+          enable-cache: true
 
-      - name: Install lint tools
-        run: pip install flake8 mypy
+      - name: Install dependencies
+        run: uv sync --frozen
 
       - name: flake8
-        run: flake8 pentool/ --max-line-length=120 --extend-ignore=E203,W503,E221,E272,E402,W391
+        run: uv run flake8 pentool/ --max-line-length=120 --extend-ignore=E203,W503,E221,E272,E402,W391
         continue-on-error: true  # informational only, don't block CI
 
       - name: mypy (non-blocking)
-        run: mypy pentool/ --ignore-missing-imports --no-strict-optional
+        run: uv run mypy pentool/ --ignore-missing-imports --no-strict-optional
         continue-on-error: true

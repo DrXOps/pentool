@@ -36,7 +36,7 @@ def patch_tui_io():
     - check_update_async     : HTTP + sleep(3) → мгновенный результат
     - _setup_signal_handlers : не регистрировать SIGTERM/SIGINT
     - ProxyService.init_storage: aiosqlite non-daemon поток → блокирует exit
-    - BaseSqliteStorage.ensure_open: то же самое для IntruderRepository —
+    - BaseSqliteStorage.ensure_open: то же самое для IntruderStorage —
       IntruderScreen теперь держит один persistent aiosqlite-коннекшн на
       весь app lifecycle (см. IntruderScreen._get_api()), но интеграционные
       TUI-тесты не закрывают его явно — без мока поток зависает между

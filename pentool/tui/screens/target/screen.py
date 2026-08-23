@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from textual import on, work
@@ -11,7 +12,8 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
-from pentool.tui.messages import SendHostToScanner, SyncScopeToProxy
+from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
+from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -31,6 +33,16 @@ class TargetScreen(Widget):
         self._selected_host: str | None = None
         self._selected_node_data = None
         self._scope_config = None  # ScopeConfig for regex include/exclude rules
+        self._running_save_tasks: list[str] = []  # tracked auto-save workers
+
+    def _cancel_save_workers(self) -> None:
+        """Cancel all tracked auto-save workers before closing the DB."""
+        for wname in list(self._running_save_tasks):
+            try:
+                self.workers.cancel(wname)
+            except Exception:
+                pass
+        self._running_save_tasks.clear()
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="toolbar"):
@@ -48,6 +60,11 @@ class TargetScreen(Widget):
             yield ToolbarButton(
                 "🕷 Crawl Host", "btn-crawl-host",
                 tooltip="Crawl the selected host in the tree with the Spider"
+            )
+            yield Static(" │ ", classes="toolbar-sep")
+            yield Checkbox(
+                "🤖 Use AI", id="cfg-ai-use", value=False,
+                tooltip="When set, Spider adds AI-suggested endpoints after crawling"
             )
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("🗑 Clear",             "btn-clear")
@@ -142,15 +159,44 @@ class TargetScreen(Widget):
                 host_label = f"{host} ({total_reqs})"
             host_node = root.add(host_label, data={"type": "host", "host": host, "in_scope": in_scope})
 
+            # Multi-level tree: split each path into segments so endpoints like
+            # /api/users/123 become api → users → 123 rather than a flat list.
             for node in nodes:
-                methods_str = " ".join(sorted(node.methods))
-                path_label = f"{node.path}  [{methods_str}] ({node.request_count})"
-                host_node.add_leaf(
-                    path_label,
-                    data={"type": "path", "host": host, "node": node},
-                )
+                self._add_path_node_tree(host_node, host, node)
 
         root.expand()
+
+    def _add_path_node_tree(self, host_node, host: str, node) -> None:
+        """Insert a SiteNode into host_node, nesting by path segments (multi-level).
+
+        /api/users/123  →  api / users / 123  (dirs auto-created, leaves are paths)
+        """
+        raw = node.path or "/"
+        segments = [seg for seg in raw.split("/") if seg != ""] or ["/"]
+
+        # Walk the segment tree, creating/reusing dir nodes, then add the leaf.
+        parent = host_node
+        for i, seg in enumerate(segments):
+            if not seg:  # skip empty segments between slashes
+                continue
+            is_last = (i == len(segments) - 1)
+            if is_last:
+                methods_str = " ".join(sorted(node.methods)) if node.methods else "GET"
+                parent.add_leaf(
+                    f"{seg}  [{methods_str}] ({node.request_count})",
+                    data={"type": "path", "host": host, "node": node},
+                )
+            else:
+                parent = self._ensure_dir_child(parent, host, seg)
+
+    @staticmethod
+    def _ensure_dir_child(node, host: str, seg: str):
+        """Return an existing dir child named ``seg`` under ``node`` or create one."""
+        for child in node.children:
+            d = child.data or {}
+            if d.get("type") == "dir" and d.get("dir") == seg:
+                return child
+        return node.add(seg, data={"type": "dir", "host": host, "dir": seg})
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         data = event.node.data
@@ -204,6 +250,12 @@ class TargetScreen(Widget):
             return
         items = [
             ("add_to_scanner", f"🔍 Send to Scanner: {self._selected_host}"),
+        ]
+        # "Send to Repeater" is only meaningful for a specific path endpoint.
+        if self._selected_node_data is not None:
+            node = self._selected_node_data
+            items.append(("send_repeater", f"↗️ Send to Repeater: {node.path}"))
+        items += [
             ("add_scope",      "★ Add to Scope"),
             ("remove_scope",   "✖ Remove from Scope"),
         ]
@@ -221,10 +273,31 @@ class TargetScreen(Widget):
     def _on_context_action(self, action: str) -> None:
         if action == "add_to_scanner":
             self._add_host_to_scanner(self._selected_host)
+        elif action == "send_repeater":
+            self._send_selected_to_repeater()
         elif action == "add_scope":
             self.action_add_to_scope()
         elif action == "remove_scope":
             self.action_remove_from_scope()
+
+    def _send_selected_to_repeater(self) -> None:
+        """Send the selected path endpoint to the Repeater as a request template.
+
+        Site nodes only store aggregated method/path, not body/headers, so this
+        builds a clean GET (or the node's first method) to edit in Repeater.
+        """
+        node = self._selected_node_data
+        if not node:
+            return
+        try:
+            from pentool.utils.parser import ParsedRequest, build_http_request
+            method = sorted(node.methods)[0] if node.methods else "GET"
+            url = f"https://{node.host}{node.path}"
+            raw = build_http_request(ParsedRequest(method=method, url=url, headers={}, body=""))
+            self.app.post_message(SendToRepeater(raw))  # type: ignore[attr-defined]
+            self.app.notify(f"Sent {method} {node.path} to Repeater", timeout=3)
+        except Exception as exc:
+            logger.debug("send_selected_to_repeater: %s", exc)
 
     def _add_host_to_scanner(self, host: str | None) -> None:
         if not host:
@@ -307,8 +380,24 @@ class TargetScreen(Widget):
             self.app.notify(msg, severity="information")
             # Mirror the change into ProxyServer.scope — keep both modules in sync
             self.app.post_message(SyncScopeToProxy(host, in_scope))  # type: ignore[attr-defined]
+            # Auto-detect tech stack for new in-scope hosts (fire-and-forget)
+            if in_scope:
+                self.run_worker(self._auto_detect_tech(host), exclusive=False)
         except Exception as exc:
             logger.warning("_set_scope_worker: %s", exc)
+
+    async def _auto_detect_tech(self, host: str) -> None:
+        """Fire-and-forget tech detection when a host is added to scope."""
+        try:
+            from pentool.services.tech_detector import detect_tech
+            url = host if "://" in host else f"https://{host}"
+            profile = await detect_tech(url)
+            tech_str = f"{profile.get('language') or '?'} / {profile.get('framework') or '?'}"
+            if profile.get('cms'):
+                tech_str += f" / {profile['cms']}"
+            self.app.notify(f"🔍 {host}: {tech_str}", timeout=4)
+        except Exception:
+            pass
 
     def action_clear(self) -> None:
         self._clear_worker()
@@ -329,13 +418,14 @@ class TargetScreen(Widget):
         except Exception as exc:
             logger.warning("_clear_worker: %s", exc)
 
-    # ── Crawler (uses the same SpiderAPI/AsyncSpider as SpiderScreen) ──────────
+    # ── Crawler (uses SpiderAPI / AsyncSpider) ───────────────────────────────
     #
-    # There is no dedicated Crawler module/tab — Spider's functionality lives
-    # inside SpiderScreen only. Rather than duplicating a full crawler UI here,
-    # Target gets two convenience triggers that call SpiderAPI directly and
-    # feed discovered pages back into the SiteMap, matching what Send to
-    # Scanner/context menu users would expect from "crawl this scope".
+    # The Spider has no dedicated module/tab in the TUI (see docs) — crawling
+    # runs from here, in Target. These two toolbar triggers call SpiderAPI
+    # directly and feed discovered pages back into the SiteMap, matching what
+    # Send to Scanner/context menu users would expect from "crawl this scope".
+    # The "🤖 Use AI" toolbar checkbox adds AI-suggested endpoints (see
+    # _ai_suggest_endpoints) after each host's crawl.
 
     def action_crawl_scope(self) -> None:
         """Crawl every in-scope host (falls back to all known hosts if scope
@@ -366,36 +456,65 @@ class TargetScreen(Widget):
             timeout=3,
         )
         # Keeps ActivityIndicator's Spider glyph lit for the duration of this
-        # crawl too — this path builds its own SpiderAPI instead of going
-        # through SpiderScreen, so without this the indicator would stay
-        # idle even while a real crawl is running (see
-        # PentoolApp.spider_crawl_started/_finished).
+        # crawl (no dedicated SpiderScreen anymore; this Target path builds its
+        # own SpiderAPI and drives the counter directly).
         try:
             self.app.spider_crawl_started()  # type: ignore[attr-defined]
         except Exception:
             pass
+        # "🤖 Use AI" toolbar checkbox — when set, add AI-suggested endpoints
+        # after each host's crawl.
+        use_ai = False
+        try:
+            use_ai = self.query_one("#cfg-ai-use", Checkbox).value
+        except Exception:
+            pass
+        logger.info("action_crawl_scope: use_ai=%s (AI-enabled checkbox)", use_ai)
         total_pages = 0
+        total_endpoints = 0
+        total_js = 0
         total_errors = 0
         api = self._get_api()
         db_path = getattr(self.app, "db_path", "") or getattr(self.app, "_db_path", "")
+
+        def _on_page_async(url: str) -> None:
+            """Lazy feed: each discovered URL lands in the Site Map tree
+            immediately (not once the whole crawl finishes). Runs in the async
+            worker's loop alongside the crawl."""
+            try:
+                from pentool.utils.parser import ParsedRequest
+                # count=False: this is a discovery event, not a real HTTP request.
+                # Re-crawling the same page must not inflate the node counter.
+                api.add_request(ParsedRequest(method="GET", url=url), count=False)
+            except Exception as exc:
+                logger.debug("lazy add %s: %s", url, exc)
+            try:
+                self.call_after_refresh(self._refresh_tree)
+            except Exception:
+                pass
+
         try:
             for host in hosts:
                 url = host if "://" in host else f"https://{host}"
-                spider = SpiderAPI(config=SpiderConfig(respect_scope=False))
+                # respect_scope defaults True — stay on the target host/subdomains,
+                # never crawl external links. js_render=True renders pages in a
+                # headless Chromium so JS-generated links (e.g. XSS Game /level3,
+                # /level4) are discovered — otherwise they'd be missed.
+                spider = SpiderAPI(config=SpiderConfig(js_render=True))
                 try:
-                    result = await spider.crawl(url, db_path=db_path)
+                    result = await spider.crawl(url, db_path=db_path, on_page=_on_page_async)
                 except Exception as exc:
                     logger.warning("action_crawl_scope: crawl failed for %s: %s", host, exc)
                     total_errors += 1
                     continue
                 total_pages += len(result.pages)
+                total_endpoints += len(result.endpoints)
+                total_js += len(result.js_files)
                 total_errors += len(result.errors)
-                for page_url in result.pages:
-                    try:
-                        from pentool.utils.parser import ParsedRequest
-                        api.add_request(ParsedRequest(method="GET", url=page_url))
-                    except Exception as exc:
-                        logger.debug("action_crawl_scope: failed to add %s: %s", page_url, exc)
+                if use_ai:
+                    ai_added = await self._ai_suggest_endpoints(api, url)
+                    if ai_added:
+                        self.app.notify(f"AI endpoints added: {ai_added}", timeout=3)
         finally:
             try:
                 self.app.spider_crawl_finished()  # type: ignore[attr-defined]
@@ -408,10 +527,112 @@ class TargetScreen(Widget):
         except Exception as exc:
             logger.debug("action_crawl_scope: save failed: %s", exc)
 
-        msg = f"Crawl done: {total_pages} page(s) found across {len(hosts)} host(s)"
+        msg = (
+            f"Crawl done: {total_pages} page(s), {total_endpoints} endpoint(s), "
+            f"{total_js} file(s) across {len(hosts)} host(s)"
+        )
         if total_errors:
             msg += f", {total_errors} error(s)"
         self.app.notify(msg, severity="information")
+
+    async def _ai_suggest_endpoints(self, api, url: str) -> int:
+        """Ask the AI for non-obvious endpoints and register them in the SiteMap.
+
+        Returns how many endpoints were added (0 if AI is off or returned nothing).
+        Called from _crawl_hosts_worker when the "🤖 Use AI" checkbox is set.
+        """
+        try:
+            from pentool.core.config import get_config
+            from pentool.services.ai import get_active_backend, get_ai, start_ai
+            from pentool.utils.parser import ParsedRequest
+
+            cfg = get_config()
+            # Reuse the already-started MCP server (started on ai_enabled or at
+            # app mount) instead of creating a fresh, never-started backend —
+            # a fresh get_ai() has no live subprocess, so its generate() fails
+            # with "сервер не запущен".
+            backend = get_active_backend()
+            if backend is None:
+                backend = get_ai(cfg)
+                if backend is None:
+                    return 0
+                ok = await start_ai(cfg)
+                if not ok:
+                    return 0
+                backend = get_active_backend()
+            if backend is None:
+                return 0
+
+            # Already-discovered context: all hosts + their paths from the SiteMap.
+            known: list[str] = []
+            for h in api.get_hosts():
+                try:
+                    for node in api.get_paths(h):
+                        if node.path and node.path != "/":
+                            known.append(f"https://{h}{node.path}")
+                except Exception:
+                    continue
+
+            from pentool.services.tech_detector import detect_tech
+            # Use js_render for SPA to get full rendered HTML
+            from pentool.services.tech_detector import get_cached_tech
+            cached = get_cached_tech(url)
+            use_js = bool(cached and cached.get("spa"))
+            tech_profile = await detect_tech(url, js_render=use_js)
+            prompt_data = {
+                "url": url,
+                "tech_stack": tech_profile,
+                "links": known,
+            }
+            result = await backend.generate("crawl_endpoints", prompt_data)
+            if isinstance(result, dict):
+                _nitems = len(result.get("items") or [])
+                logger.info("_ai_suggest_endpoints: %s gen result items=%d %s",
+                            url, _nitems, "RAW:" + str(result.get("raw", ""))[:120] if _nitems == 0 else "")
+            if not result:
+                return 0
+            items = result if isinstance(result, list) else result.get("items", [])
+            if not items:
+                return 0
+
+            added = 0
+            import aiohttp as _aiohttp
+            _timeout = _aiohttp.ClientTimeout(total=5)
+            async with _aiohttp.ClientSession(timeout=_timeout) as session:
+                for item in items:
+                    method = str(item.get("method", "GET")).upper()
+                    path = str(item.get("path", "")).strip()
+                    if not path.startswith("/"):
+                        path = "/" + path
+                    full_url = f"{url}{path}"
+                    # Validate endpoint with a quick HEAD (fallback to GET)
+                    valid = False
+                    try:
+                        async with session.head(full_url, ssl=False) as resp:
+                            if resp.status < 500:
+                                valid = True
+                    except Exception:
+                        pass
+                    if not valid:
+                        try:
+                            async with session.get(full_url, ssl=False) as resp:
+                                if resp.status < 500:
+                                    valid = True
+                        except Exception:
+                            pass
+                    if not valid:
+                        continue
+                    # count=False: AI-suggested paths are discoveries, not real HTTP —
+                    # a repeated suggestion must not inflate the node counter.
+                    try:
+                        api.add_request(ParsedRequest(method=method, url=full_url), count=False)
+                        added += 1
+                    except Exception:
+                        continue
+            return added
+        except Exception as exc:
+            logger.warning("_ai_suggest_endpoints failed: %s", exc, exc_info=True)
+            return 0
 
     def action_export_json(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
@@ -458,16 +679,21 @@ class TargetScreen(Widget):
             # Persist to DB (batches of ~20 requests)
             self._save_counter = getattr(self, "_save_counter", 0) + 1
             if self._save_counter % 20 == 0:
-                self.run_worker(self._do_save_sitemap())
+                wname = f"target-save-{time.monotonic_ns()}"
+                self._running_save_tasks.append(wname)
+                self.run_worker(self._do_save_sitemap(wname))
         except Exception as exc:
             logger.warning("add_request_from_proxy: %s", exc)
 
-    async def _do_save_sitemap(self) -> None:
+    async def _do_save_sitemap(self, worker_name: str = "") -> None:
         try:
             api = self._get_api()
             await api.save()
         except Exception as exc:
             logger.debug("_do_save_sitemap: %s", exc)
+        finally:
+            if worker_name:
+                self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
     def _refresh_tree(self) -> None:
         try:

@@ -8,16 +8,24 @@ from urllib.parse import urlparse
 
 from pentool.api.base_api import ExportableAPI
 from pentool.core.logging import get_logger
+from pentool.modules.spider import DEFAULT_CONCURRENCY, DEFAULT_MAX_DEPTH, DEFAULT_MAX_PAGES
 from pentool.modules.spider import (
     AsyncSpider,
     SpiderEndpoint,
     SpiderForm,
     SpiderResult,
     is_playwright_available,
+    shutdown_proc_pool,
 )
 from pentool.utils.auth_headers import extract_auth_headers
 
 logger = get_logger(__name__)
+
+
+def shutdown_spider_pool() -> None:
+    """API-level wrapper so the TUI can shut the Spider CPU pool down without
+    importing ``pentool.modules`` directly (architecture layer rule)."""
+    shutdown_proc_pool()
 
 # Re-export types — TUI uses them from here
 __all__ = [
@@ -29,12 +37,14 @@ __all__ = [
 @dataclass
 class SpiderConfig:
     """Crawler configuration."""
-    max_depth: int = 3
-    max_pages: int = 100
-    concurrency: int = 5
+    # Defaults come from the single source (pentool.modules.spider) so the
+    # crawl depth/pages/concurrency aren't copy-pasted across modules.
+    max_depth: int = DEFAULT_MAX_DEPTH
+    max_pages: int = DEFAULT_MAX_PAGES
+    concurrency: int = DEFAULT_CONCURRENCY
     timeout: float = 10.0
     user_agent: str = "pentool/1.0"
-    respect_scope: bool = False
+    respect_scope: bool = True   # stay on the target host/subdomains — don't crawl external links
     js_render: bool = False  # Playwright JS rendering (if installed)
 
 
@@ -48,8 +58,8 @@ class SpiderAPI(ExportableAPI):
     @classmethod
     def from_params(
         cls,
-        max_depth: int = 3,
-        max_pages: int = 100,
+        max_depth: int = DEFAULT_MAX_DEPTH,
+        max_pages: int = DEFAULT_MAX_PAGES,
         concurrency: int = 5,
         timeout: float = 10.0,
     ) -> "SpiderAPI":

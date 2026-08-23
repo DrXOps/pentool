@@ -64,7 +64,7 @@ def proxy_start(
     click.echo("Press Ctrl+C to stop.\n")
 
     # Initialize database if needed
-    from pentool.core.database import init_db_sync
+    from pentool.core.db_schema import init_db_sync
     try:
         init_db_sync(_db_path)
     except Exception as exc:

@@ -16,7 +16,7 @@ class UpdateInfo:
 
 def _parse_version(v: str) -> tuple[int, ...]:
     """Parse 'v1.2.3' or '1.2.3' into (1, 2, 3)."""
-    v = v.lstrip("v").strip()
+    v = v.strip().lstrip("v").strip()
     try:
         return tuple(int(x) for x in v.split(".")[:3])
     except Exception:
