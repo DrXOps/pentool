@@ -557,10 +557,24 @@ class TargetScreen(Widget):
                 except Exception:
                     continue
 
-            result = await backend.generate("crawl_endpoints", {
+            import json as _json
+            prompt_data = {
                 "url": url,
                 "links": known,
-            })
+            }
+            self.app.notify(
+                f"🤖 Краулер AI: запрос к MCP\n"
+                f"URL: {url}\n"
+                f"Известно: {len(known)} путей",
+                timeout=4,
+            )
+            result = await backend.generate("crawl_endpoints", prompt_data)
+            if result:
+                self.app.notify(
+                    f"✅ Краулер AI: ответ MCP\n"
+                    f"{_json.dumps(result, indent=2, ensure_ascii=False)[:500]}",
+                    timeout=6,
+                )
             if isinstance(result, dict):
                 _nitems = len(result.get("items") or [])
                 logger.info("_ai_suggest_endpoints: %s gen result items=%d %s",
