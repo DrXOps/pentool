@@ -558,15 +558,19 @@ class TargetScreen(Widget):
                     continue
 
             import json as _json
+            from pentool.services.tech_detector import detect_tech
+            tech_profile = await detect_tech(url)
             prompt_data = {
                 "url": url,
+                "tech_stack": tech_profile,
                 "links": known,
             }
             self.app.notify(
                 f"🤖 Краулер AI: запрос к MCP\n"
                 f"URL: {url}\n"
+                f"Стек: {tech_profile.get('language') or '?'} / {tech_profile.get('framework') or '?'} / {tech_profile.get('cms') or '?'}\n"
                 f"Известно: {len(known)} путей",
-                timeout=4,
+                timeout=5,
             )
             result = await backend.generate("crawl_endpoints", prompt_data)
             if result:
