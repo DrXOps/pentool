@@ -355,6 +355,19 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     async def reload_from_project(self, db_path: str) -> None:
         """Загрузить вкладки из БД. Вызывается при открытии существующего проекта."""
         await self._close_all_tabs()
+        # Cancel any in-flight workers (auto-save, _do_load_tabs) from a
+        # previous on_mount or project switch BEFORE calling switch_db().
+        # switch_db() closes the old connection (close() → self._db = None),
+        # and a worker still running against the old connection would hit
+        # ProgrammingError('Cannot operate on a closed database.'), which
+        # with exit_on_error=True (the default) propagated as a FATAL
+        # exception that crashed the whole TUI. Cancelling first lets
+        # CancelledError propagate through the worker instead, which Textual
+        # handles silently. Mirrors IntruderScreen.reload_from_project.
+        try:
+            self.workers.cancel_node(self)
+        except Exception:
+            pass
         generation = self._tabs_generation
         # Point the persistent RepeaterAPI at the new project's DB instead of
         # constructing a fresh one — switch_db() closes the old connection
