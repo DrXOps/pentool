@@ -48,6 +48,7 @@ from pentool.api.intruder_api import (
 from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
@@ -219,7 +220,7 @@ _PAYLOAD_LIST_PREVIEW_LIMIT = 500
 # of these instead of iterating the whole set into ListItem widgets.
 _LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
 
-class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
+class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
     """Intruder module screen."""
 
     DEFAULT_CSS = _CSS
@@ -766,24 +767,6 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             )
         except Exception:
             pass
-
-    async def _do_auto_save(self, coro, worker_name: str) -> None:
-        """Auto-save wrapper — cleanup _running_save_tasks on completion."""
-        try:
-            await coro
-        except Exception:
-            pass
-        finally:
-            self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
-
-    def _cancel_save_workers(self) -> None:
-        """Cancel all tracked auto-save workers."""
-        for wname in list(self._running_save_tasks):
-            try:
-                self.workers.cancel(wname)
-            except Exception:
-                pass
-        self._running_save_tasks.clear()
 
     def _setup_tooltips(self) -> None:
         tips = {
