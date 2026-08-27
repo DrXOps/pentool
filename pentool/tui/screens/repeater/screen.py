@@ -23,6 +23,7 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 logger = get_logger(__name__)
 
 from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
 from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
@@ -45,7 +46,7 @@ class _TabState:
         self.last_sent_text: str | None = None
         self.is_dirty: bool = False
 
-class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
+class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     """Repeater module screen."""
 
     DEFAULT_CSS = _CSS
@@ -685,23 +686,17 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             if repeater_api is None:
                 return
 
-            worker_name = f"save-{state.tab_id}-{time.monotonic_ns()}"
-            self._running_save_tasks.append(worker_name)
+            worker_name = self._save_worker_name(f"save-{state.tab_id}")
+            self._track_save_worker(worker_name)
             self.run_worker(
-                self._do_auto_save(repeater_api, parsed, response, state.name, worker_name),
+                self._do_auto_save(
+                    repeater_api.save_to_history(parsed, response, tab_name=state.name),
+                    worker_name,
+                ),
                 exclusive=False, name=worker_name,
             )
         except Exception as exc:
             logger.debug("_auto_save_tab_to_db: %s", exc)
-
-    async def _do_auto_save(self, api, parsed, response, tab_name: str, worker_name: str) -> None:
-        """Auto-save wrapper — cleanup _running_save_tasks on completion."""
-        try:
-            await api.save_to_history(parsed, response, tab_name=tab_name)
-        except Exception:
-            pass
-        finally:
-            self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
     def _get_tab_state(self, tab_id: str) -> _TabState | None:
         for t in self._tabs:
