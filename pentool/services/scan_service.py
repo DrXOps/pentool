@@ -156,10 +156,19 @@ class ScanService(BaseService):
 
         return all_scan_targets, all_forms
 
+    # Cap how many distinct parameter-value variants we keep for one path
+    # template. `/vulnerabilities/sqli/?id=1` and `?id=2` collapse to the SAME
+    # template, but the different values may reflect differently in the
+    # active scan — keeping a small bundle (not just one representative)
+    # preserves that without an unbounded request explosion.
+    _MAX_VARIANTS_PER_TEMPLATE = 5
+
     def _filter_targets(self, all_scan_targets: list[str]) -> list[str]:
-        """Phase 2: remove static assets and deduplicate by URL template."""
+        """Phase 2: remove static assets and deduplicate by URL template,
+        keeping up to _MAX_VARIANTS_PER_TEMPLATE distinct URLs per template."""
         from pentool.modules.scanner.helpers import is_scannable_url, path_template
-        seen_templates: set[str] = set()
+        seen_templates: dict[str, int] = {}
+        seen_exact: set[str] = set()
         unique: list[str] = []
         skipped_static = 0
         skipped_dedup = 0
@@ -168,17 +177,24 @@ class ScanService(BaseService):
             if not is_scannable_url(t):
                 skipped_static += 1
                 continue
-            tmpl = path_template(t)
-            if tmpl in seen_templates:
+            # Exact duplicates are always collapsed regardless of template.
+            if t in seen_exact:
                 skipped_dedup += 1
                 continue
-            seen_templates.add(tmpl)
+            tmpl = path_template(t)
+            count = seen_templates.get(tmpl, 0)
+            if count >= self._MAX_VARIANTS_PER_TEMPLATE:
+                skipped_dedup += 1
+                continue
+            seen_exact.add(t)
+            seen_templates[tmpl] = count + 1
             unique.append(t)
 
         if skipped_static or skipped_dedup:
             self._log(
                 f"[dim]FILTER[/dim] Skipped [bold]{skipped_static}[/bold] static, "
-                f"[bold]{skipped_dedup}[/bold] duplicate templates"
+                f"[bold]{skipped_dedup}[/bold] duplicate templates (cap "
+                f"{self._MAX_VARIANTS_PER_TEMPLATE} variants/template)"
             )
         return unique
 

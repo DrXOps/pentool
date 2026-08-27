@@ -219,3 +219,49 @@ class TestScanConfigDataclass:
         assert config.max_depth == 5
         assert config.max_pages == 200
         assert config.delay_sec == 0.5
+
+
+class TestFilterTargets:
+    """2.5: don't collapse same-template URLs that carry DIFFERENT parameter
+    values — keep a bounded bundle of variants instead of one representative."""
+
+    def _service(self, scanner_api, spider_api, event_bus):
+        from pentool.services.scan_service import ScanService
+        return ScanService(scanner_api, spider_api, event_bus)
+
+    def test_different_param_values_preserved(self, scanner_api, spider_api, event_bus):
+        svc = self._service(scanner_api, spider_api, event_bus)
+        targets = [
+            "http://x.com/vulnerabilities/sqli/?id=1",
+            "http://x.com/vulnerabilities/sqli/?id=2",
+            "http://x.com/vulnerabilities/sqli/?id=3",
+        ]
+        out = svc._filter_targets(targets)
+        assert len(out) == 3, "different ?id= values must NOT collapse to one template rep"
+        assert set(out) == set(targets)
+
+    def test_same_url_duplicate_deduped(self, scanner_api, spider_api, event_bus):
+        svc = self._service(scanner_api, spider_api, event_bus)
+        targets = ["http://x.com/page?id=1", "http://x.com/page?id=1"]
+        out = svc._filter_targets(targets)
+        assert len(out) == 1
+
+    def test_variants_capped_per_template(self, scanner_api, spider_api, event_bus):
+        svc = self._service(scanner_api, spider_api, event_bus)
+        targets = [f"http://x.com/search?q={i}" for i in range(20)]
+        out = svc._filter_targets(targets)
+        assert len(out) <= svc._MAX_VARIANTS_PER_TEMPLATE, (
+            "variant bundle must be capped, not unbounded"
+        )
+
+    def test_static_assets_skipped(self, scanner_api, spider_api, event_bus):
+        svc = self._service(scanner_api, spider_api, event_bus)
+        targets = [
+            "http://x.com/app.js",
+            "http://x.com/style.css",
+            "http://x.com/index.html",
+        ]
+        out = svc._filter_targets(targets)
+        assert all("app.js" not in t and "style.css" not in t for t in out), (
+            "static assets should be removed; got " + repr(out)
+        )
