@@ -1,10 +1,10 @@
 """Unit tests: pentool.utils.scope.host_in_scope().
 
 This is the single shared scope-matching helper used by both Proxy
-(ProxyServer.is_in_scope) and Spider. Coverage was originally confined to a
-security-class in tests/security/test_scanner_checks.py (TestProxyScope);
-moved here so the utility has its own behavioral tests. Also covers the
-case-insensitivity + port-strip semantics that only this module exercises.
+(ProxyServer.is_in_scope) and Spider. Original coverage lived in a
+security-class that also had to be removed; consolidated here so the utility
+has its own behavioral tests, including the case-insensitivity + port-strip
+semantics that only this module exercises.
 """
 from __future__ import annotations
 
