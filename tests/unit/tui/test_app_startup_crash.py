@@ -5,7 +5,7 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
-async def test_app_switches_db_without_crash():
+async def test_app_switches_db_without_crash(tmp_path):
     from textual.app import App
     from pentool.tui.app import PentoolApp
 
@@ -22,9 +22,8 @@ async def test_app_switches_db_without_crash():
 
             repeater = app.query_one(RepeaterScreen)
             intruder = app.query_one(IntruderScreen)
-            # Trigger switching to a project db (whatever exists)
-            import tempfile, os
-            db_path = tempfile.mktemp(suffix=".db")
+            # Deterministic per-run project db (tmp_path fixture, not mktemp).
+            db_path = str(tmp_path / "project.db")
             # Create a db file
             from pentool.storage.http_storage import HttpStorage
             s = HttpStorage(db_path=db_path)

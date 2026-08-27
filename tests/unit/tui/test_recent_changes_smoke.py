@@ -9,23 +9,31 @@
 """
 
 import inspect
-import sys
 
-import pytest
-
-
-@pytest.fixture(autouse=True)
-def _pro_path():
-    sys.path.insert(0, "pro")
-    yield
-    if "pro" in sys.path:
-        sys.path.remove("pro")
-
+# NOTE: no manual `sys.path.insert(0, "pro")` here — pentool/__init__.py
+# (_bootstrap_pro) extends the search path for the dev `pro/` submodule itself,
+# and all imports in this file are FREE-package anyway. Explicit sys.path
+# mutation was leftover from older layout and is handled centrally in the root
+# tests/conftest.py if ever needed.
 
 def test_search_bar_target_toggle():
+    """toggle_target() actually flips _search_target request<->response
+    (behaviour, not just "method exists")."""
+    from textual.message import Message
+
     from pentool.tui.widgets.search_bar import SearchBar
-    assert hasattr(SearchBar, "TargetToggle"), "Missing TargetToggle message"
-    assert hasattr(SearchBar, "toggle_target"), "Missing toggle_target method"
+
+    # TargetToggle must be a Message so it can be posted/consumed.
+    assert issubclass(SearchBar.TargetToggle, Message), "TargetToggle not a Message"
+
+    # Unmounted widget: query_one() inside toggle_target is wrapped in
+    # try/except, so the headless instance still flips its state.
+    sb = SearchBar.__new__(SearchBar)
+    sb._search_target = "request"
+    sb.toggle_target()
+    assert sb._search_target == "response", "toggle_target did not flip to response"
+    sb.toggle_target()
+    assert sb._search_target == "request", "toggle_target did not flip back to request"
 
 
 def test_repeater_on_key_ctrl_f():

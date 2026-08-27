@@ -55,11 +55,6 @@ class TestMeta:
     def test_uses_scan_pipeline(self):
         assert BrokenAuthCheck.uses_scan_pipeline is True
 
-    def test_analyze_is_stub(self):
-        # Logic lives in scan(); analyze() returns None.
-        check = BrokenAuthCheck()
-        assert check.analyze is not None  # pragma: no cover - sanity
-
 
 class TestHelpers:
     def test_has_auth(self):
