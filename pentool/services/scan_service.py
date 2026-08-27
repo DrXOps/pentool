@@ -139,7 +139,9 @@ class ScanService(BaseService):
         if config.auto_login and config.login and not self._auth_headers:
             await self._try_auto_login(config)
 
-        all_findings = await self._run_active_scan(config, all_scan_targets, self._auth_headers)
+        all_findings = await self._run_active_scan(
+            config, all_scan_targets, self._auth_headers, post_forms=all_forms,
+        )
 
         self._emit(ScanFinished(
             total_findings=len(all_findings),
@@ -238,8 +240,22 @@ class ScanService(BaseService):
         except Exception as exc:
             self._log(f"[yellow]AUTH[/yellow] auto-login failed: {exc}")
 
+    # Action-URL substrings that signal a state-mutating/security-relevant
+    # endpoint. Auto-submitting these as POST could log the user out, delete
+    # data, or hit admin panels — so ScanService skips them (Этап 2.6 safety).
+    _RISKY_FORM_MARKERS = (
+        "/logout", "/signout", "/delete", "/remove", "/drop", "/purge",
+        "/reset", "/admin", "/truncate",
+    )
+
+    @staticmethod
+    def _is_risky_form_action(action_url: str) -> bool:
+        path = urlparse(action_url).path.lower()
+        return any(marker in path for marker in ScanService._RISKY_FORM_MARKERS)
+
     async def _run_active_scan(
-        self, config: ScanConfig, all_scan_targets: list[str], auth_headers: dict | None = None
+        self, config: ScanConfig, all_scan_targets: list[str], auth_headers: dict | None = None,
+        post_forms: list | None = None,
     ) -> list[Finding]:
         """Phase 3: run active checks on collected targets, return findings."""
         from pentool.utils.http_client import HTTPClient
@@ -300,6 +316,29 @@ class ScanService(BaseService):
                     ParsedRequest(method="GET", url=url, headers=auth_headers, body="")
                     for url in all_scan_targets
                 ]
+
+            # Auto-submit POST forms (Этап 2.6) with default field values so
+            # POST-only endpoints (e.g. sqli_blind/exec/upload) are reached.
+            # Skip dangerous actions (/logout, /delete, /admin, ...) to avoid
+            # real side-effects.
+            _form_reqs: list = []
+            for form in post_forms or []:
+                try:
+                    action = getattr(form, "action", "")
+                    fields = getattr(form, "fields", []) or []
+                    if not action.startswith("http") or not fields:
+                        continue
+                    if self._is_risky_form_action(action):
+                        self._log(f"[dim]FORM[/dim] skip POST {action} (destructive action)")
+                        continue
+                    body = urlencode([(f.name, f.value or "test") for f in fields])
+                    _form_reqs.append(ParsedRequest(
+                        method="POST", url=action, headers=auth_headers, body=body,
+                    ))
+                except Exception:
+                    continue
+            if _form_reqs:
+                all_reqs = all_reqs + _form_reqs
 
             self._log(
                 f"[bold green]SCAN[/bold green] Running active checks on "
