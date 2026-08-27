@@ -86,6 +86,84 @@ class TestScanServiceRun:
         # Should attempt to start scan (may fail in test env)
         # Just verify service doesn't crash
 
+    @pytest.mark.asyncio
+    async def test_auth_headers_flow_from_crawl_into_active_scan(
+        self, scanner_api, spider_api, event_bus,
+    ):
+        """Reuse (2.1): if the crawler establishes auth headers, they must be
+        carried into the ACTIVE scan, not dropped (DVWA would otherwise
+        redirect unauthenticated probes to /login.php)."""
+        from pentool.modules.spider import SpiderResult
+        from pentool.services.scan_service import ScanService
+
+        spider_api.crawl = AsyncMock(return_value=SpiderResult(
+            base_url="https://example.com",
+            pages=["https://example.com/page"],
+            auth_headers={"Cookie": "PHPSESSID=abc123"},
+        ))
+
+        scanner_api.run_active_on_requests = AsyncMock(return_value=[])
+        scanner_api.save_findings = AsyncMock(return_value=None)
+
+        service = ScanService(scanner_api, spider_api, event_bus)
+        config = ScanConfig(
+            targets=["https://example.com"],
+            resume=False,
+            check_names=["xss"],
+        )
+
+        await service.run(config)
+
+        # The active scan must receive requests carrying the crawl's auth.
+        assert scanner_api.run_active_on_requests.called, "active scan was never run"
+        _, kwargs = scanner_api.run_active_on_requests.call_args
+        seed = kwargs.get("seed_requests") or (
+            scanner_api.run_active_on_requests.call_args.args[0]
+        )
+        assert seed, "no seed_requests passed to active scan"
+        auth_by_url = {req.url: dict(req.headers or {}) for req in seed}
+        # The base target + crawled page should carry the session cookie.
+        assert auth_by_url.get("https://example.com", {}).get("Cookie"), (
+            f"active-scan request missing auth Cookie; got urls={auth_by_url}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_auth_headers_forwarded_to_engine_http_client(
+        self, scanner_api, spider_api, event_bus,
+    ):
+        """2.1: the HTTPClient handed to configure_engine must carry the
+        auth headers, so the TechFingerprinter baseline also stays
+        authenticated."""
+        from unittest.mock import ANY
+
+        from pentool.modules.spider import SpiderResult
+        from pentool.services.scan_service import ScanService
+
+        spider_api.crawl = AsyncMock(return_value=SpiderResult(
+            base_url="https://example.com",
+            pages=[],
+            auth_headers={"Authorization": "Bearer tok"},
+        ))
+        scanner_api.run_active_on_requests = AsyncMock(return_value=[])
+        scanner_api.save_findings = AsyncMock(return_value=None)
+        scanner_api.configure_engine = Mock(return_value=None)  # synchronous API
+
+        service = ScanService(scanner_api, spider_api, event_bus)
+        config = ScanConfig(targets=["https://example.com"], resume=False)
+
+        await service.run(config)
+
+        assert scanner_api.configure_engine.called
+        kwargs = scanner_api.configure_engine.call_args.kwargs
+        http_client = kwargs.get("http_client")
+        assert http_client is not None
+        # HTTPClient stores extra_headers privately — verify indirectly via
+        # the requests it would send being seeded with auth.
+        assert getattr(http_client, "_extra_headers", None), (
+            "engine HTTPClient did not receive extra_headers"
+        )
+        assert http_client._extra_headers.get("Authorization") == "Bearer tok"
+
 
 class TestScanServiceStop:
     """Test ScanService.stop()."""

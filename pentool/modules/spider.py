@@ -329,6 +329,10 @@ class SpiderResult:
     js_files: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     total_requests: int = 0
+    # Headers the crawler actually used after merging Proxy-discovered auth
+    # + explicit extra_headers. Filled by SpiderAPI.crawl; lets the scanner
+    # reuse the same session (Cookie/Authorization) in its own active phase.
+    auth_headers: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
