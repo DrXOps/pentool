@@ -892,3 +892,89 @@ class TestPlaywrightAvailable:
         finally:
             if real is not None:
                 sys.modules["playwright"] = real
+
+
+class TestAuthRedirectDetection:
+    """2.2: Spider flags a quiet 302 → login page instead of silently
+    indexing it as a successful page."""
+
+    def _spider(self):
+        from pentool.modules.spider import AsyncSpider
+        return AsyncSpider()  # no crawl yet; only static methods used
+
+    def test_redirect_to_login_detected(self):
+        from pentool.modules.spider import AsyncSpider
+        assert AsyncSpider._is_auth_redirect(
+            "http://x.com/login.php", "http://x.com/vulnerabilities/sqli/"
+        ) is True
+
+    def test_redirect_to_signin_detected(self):
+        from pentool.modules.spider import AsyncSpider
+        assert AsyncSpider._is_auth_redirect(
+            "https://x.com/signin", "https://x.com/dashboard"
+        ) is True
+
+    def test_benign_redirect_not_flagged(self):
+        from pentool.modules.spider import AsyncSpider
+        # "/" -> "/index.html" is not an auth page.
+        assert AsyncSpider._is_auth_redirect(
+            "http://x.com/index.html", "http://x.com/"
+        ) is False
+
+    def test_no_redirect_not_flagged(self):
+        from pentool.modules.spider import AsyncSpider
+        assert AsyncSpider._is_auth_redirect(
+            "http://x.com/page", "http://x.com/page"
+        ) is False
+
+    def test_hostname_matches_login_no_redirect_false(self):
+        from pentool.modules.spider import AsyncSpider
+        # Same URL, even containing 'auth', is NOT a redirect.
+        assert AsyncSpider._is_auth_redirect(
+            "http://x.com/auth/me", "http://x.com/auth/me"
+        ) is False
+
+
+class TestFetchPageAuthErrorRecorded:
+    """Behavioral: _fetch_page records an 'Auth required' error when the
+    server redirects an HTML page to a login URL."""
+
+    @pytest.mark.asyncio
+    async def test_login_redirect_records_error_and_returns_empty(self):
+        from unittest.mock import AsyncMock as _AsyncMock
+
+        from pentool.modules.spider import AsyncSpider, SpiderResult
+
+        spider = AsyncSpider()
+
+        # `async with session.get(...) as resp` needs get() to return an
+        # async context manager whose __aenter__ yields the response.
+        class FakeResp:
+            url = "http://x.com/login.php"
+            headers = {"Content-Type": "text/html"}
+
+            async def text(self, errors="replace"):
+                return "<html><body>Login</body></html>"
+
+        class FakeAC:
+            async def __aenter__(self):
+                return FakeResp()
+            async def __aexit__(self, *a):
+                return False
+
+        class FakeSession:
+            def get(self, url, allow_redirects=True, ssl=False):
+                return FakeAC()
+
+        result = SpiderResult(base_url="http://x.com/", pages=[], auth_headers={})
+        sem = _AsyncMock()
+
+        links = await spider._fetch_page(
+            FakeSession(), "http://x.com/vulnerabilities/sqli/", 0, result, "x.com", sem,
+        )
+
+        assert links == []
+        assert result.pages == [], "login page must not be indexed as a real page"
+        assert any("Auth required" in e for e in result.errors), (
+            f"expected an 'Auth required' diagnostic in errors, got {result.errors}"
+        )

@@ -599,6 +599,22 @@ class AsyncSpider:
 
     # ── page fetch ───────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _is_auth_redirect(final_url: str, requested_url: str) -> bool:
+        """True if a redirected final URL lands on a login/signin page.
+
+        Distinct -> login only when the final URL actually changed AND it
+        looks like an auth entry point. Benign redirects (e.g. "/" ->
+        "/index.html") are not flagged.
+        """
+        if final_url.rstrip("/") == requested_url.rstrip("/"):
+            return False
+        low = final_url.lower()
+        return any(
+            marker in low
+            for marker in ("/login", "login.php", "signin", "/auth", "logon")
+        )
+
     async def _fetch_page(
         self,
         session,
@@ -617,6 +633,21 @@ class AsyncSpider:
 
                     if self.on_page:
                         self.on_page(url)
+
+                    # Detect "the server quietly bounced us to a login page".
+                    # With allow_redirects=True a 302 → /login.php resolves to a
+                    # 200 on the login page, so this code would otherwise
+                    # silently treat the login page as a successful crawl page
+                    # (0 findings, empty errors) instead of telling the user the
+                    # target needs auth. Only flag when the FINAL URL is a
+                    # login/signin/auth page to avoid noise on benign redirects
+                    # (e.g. "/" -> "/index.html").
+                    if self._is_auth_redirect(str(resp.url), url):
+                        result.errors.append(
+                            f"Auth required: {url} redirected to {resp.url} "
+                            f"(login page) — session/Cookie needed to crawl protected pages"
+                        )
+                        return []
 
                     if "javascript" in content_type or url.split("?")[0].endswith(".js"):
                         # JS file — find API endpoints and add to list
