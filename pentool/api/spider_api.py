@@ -110,6 +110,10 @@ class SpiderAPI(ExportableAPI):
 
         try:
             result = await self._spider.crawl(url)
+            # Expose which auth headers (Cookie/Authorization) were actually
+            # used so the caller (ScanService) can reuse the same session in
+            # its active-scan phase instead of sending unauthenticated probes.
+            result.auth_headers = merged_headers
             logger.info(
                 "SpiderAPI.crawl: %s -> %d pages, %d forms, %d endpoints",
                 url, len(result.pages), len(result.forms), len(result.endpoints),

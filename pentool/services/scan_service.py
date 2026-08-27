@@ -77,6 +77,10 @@ class ScanService(BaseService):
         self._scanner = scanner_api
         self._spider = spider_api
         self._stop_requested = False
+        # Auth headers (Cookie/Authorization) shared across phases — the
+        # crawler may establish/learn a session that the active scan must
+        # reuse (DVWA would redirect to /login.php for unauthenticated probes).
+        self._auth_headers: dict = {}
 
     # ── public API ─────────────────────────────────────────────────────────────
 
@@ -97,6 +101,15 @@ class ScanService(BaseService):
             source="scanner",
         ))
 
+        # Session baseline: if seed requests carry auth headers (Cookie/
+        # Authorization), seed them so the ACTIVE phase can reuse them even
+        # before/without a crawl (e.g. resume). _crawl_target() may override
+        # this with the headers the crawler actually established.
+        from pentool.utils.auth_headers import extract_auth_headers as _extract_auth
+        self._auth_headers = {}
+        if config.seed_requests and config.seed_requests[0].headers:
+            self._auth_headers = _extract_auth(dict(config.seed_requests[0].headers))
+
         all_scan_targets, all_forms = await self._collect_targets(config)
         if self._stop_requested:
             self._log("[yellow]STOP[/yellow] Scan stopped after crawl.")
@@ -108,10 +121,12 @@ class ScanService(BaseService):
             f"[cyan]CRAWL[/cyan] Total: [bold]{len(all_scan_targets)}[/bold] URLs + "
             f"[bold]{len(all_forms)}[/bold] POST forms to test"
         )
+        if self._auth_headers:
+            self._log(f"[dim]AUTH[/dim] Reusing {len(self._auth_headers)} auth header(s) in active scan")
 
         self._emit(ScanProgressEvent(done=0, total=len(all_scan_targets), scanning=True, source="scanner"))
 
-        all_findings = await self._run_active_scan(config, all_scan_targets)
+        all_findings = await self._run_active_scan(config, all_scan_targets, self._auth_headers)
 
         self._emit(ScanFinished(
             total_findings=len(all_findings),
@@ -168,11 +183,16 @@ class ScanService(BaseService):
         return unique
 
     async def _run_active_scan(
-        self, config: ScanConfig, all_scan_targets: list[str]
+        self, config: ScanConfig, all_scan_targets: list[str], auth_headers: dict | None = None
     ) -> list[Finding]:
         """Phase 3: run active checks on collected targets, return findings."""
         from pentool.utils.http_client import HTTPClient
         from pentool.utils.parser import ParsedRequest
+
+        # Reuse any auth/session headers the crawl established, so active
+        # probes (and the TechFingerprinter baseline) target the SAME
+        # authenticated context instead of being redirected to a login page.
+        auth_headers = auth_headers or {}
 
         findings: list[Finding] = []
 
@@ -203,6 +223,7 @@ class ScanService(BaseService):
             timeout=cfg.request_timeout,
             follow_redirects=True,
             verify_ssl=cfg.verify_ssl,
+            extra_headers=auth_headers,
         )
         self._scanner.configure_engine(
             http_client=http_client,
@@ -212,16 +233,15 @@ class ScanService(BaseService):
 
         try:
             if config.seed_requests:
-                base_headers = dict(config.seed_requests[0].headers or {})
                 crawled_reqs = [
-                    ParsedRequest(method="GET", url=url, headers=base_headers, body="")
+                    ParsedRequest(method="GET", url=url, headers=auth_headers, body="")
                     for url in all_scan_targets
                     if not any(sr.url == url for sr in config.seed_requests)
                 ]
                 all_reqs = list(config.seed_requests) + crawled_reqs
             else:
                 all_reqs = [
-                    ParsedRequest(method="GET", url=url, headers={}, body="")
+                    ParsedRequest(method="GET", url=url, headers=auth_headers, body="")
                     for url in all_scan_targets
                 ]
 
@@ -281,6 +301,10 @@ class ScanService(BaseService):
             result = await self._spider.crawl(
                 base_url, extra_headers=auth_headers, db_path=config.db_path,
             )
+            # Carry the headers the crawler actually used (Proxy-discovered
+            # session + seed) into the active phase via _auth_headers.
+            if getattr(result, "auth_headers", None):
+                self._auth_headers = dict(result.auth_headers)
             base_host = urlparse(base_url).netloc
 
             self._log(
