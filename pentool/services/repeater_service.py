@@ -10,7 +10,7 @@ from pentool.api.repeater_api import RepeaterAPI
 from pentool.core.event_bus import EventBus
 from pentool.core.logging import get_logger
 from pentool.services.base_service import BaseService
-from pentool.utils.http_client import HTTPClient
+from pentool.utils.http_client import HTTPClient, get_shared_http_client
 from pentool.utils.parser import ParsedRequest, ParsedResponse, parse_http_request
 
 logger = get_logger(__name__)
@@ -57,13 +57,7 @@ class RepeaterService(BaseService):
             else:
                 # Fallback: direct request via HTTPClient (no history)
                 if self._http_client is None:
-                    from pentool.core.config import get_config
-                    cfg = get_config()
-                    self._http_client = HTTPClient(
-                        follow_redirects=follow_redirects,
-                        verify_ssl=cfg.verify_ssl,
-                        timeout=cfg.request_timeout,
-                    )
+                    self._http_client = get_shared_http_client(follow_redirects=follow_redirects)
                 resp = await self._http_client.send(req)
 
             elapsed_ms = int((time.monotonic() - t0) * 1000)

@@ -263,7 +263,6 @@ class ScanService(BaseService):
         post_forms: list | None = None,
     ) -> list[Finding]:
         """Phase 3: run active checks on collected targets, return findings."""
-        from pentool.utils.http_client import HTTPClient
         from pentool.utils.parser import ParsedRequest
 
         # Reuse any auth/session headers the crawl established, so active
@@ -294,14 +293,8 @@ class ScanService(BaseService):
         _on_request_sent = getattr(config, "on_request_sent", None)
         _on_total_estimate = getattr(config, "on_total_estimate", None)
 
-        from pentool.core.config import get_config
-        cfg = get_config()
-        http_client = HTTPClient(
-            timeout=cfg.request_timeout,
-            follow_redirects=True,
-            verify_ssl=cfg.verify_ssl,
-            extra_headers=auth_headers,
-        )
+        from pentool.utils.http_client import get_shared_http_client
+        http_client = get_shared_http_client(follow_redirects=True, extra_headers=auth_headers)
         self._scanner.configure_engine(
             http_client=http_client,
             concurrency=config.threads,
