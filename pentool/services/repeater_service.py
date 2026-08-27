@@ -10,7 +10,6 @@ from pentool.api.repeater_api import RepeaterAPI
 from pentool.core.event_bus import EventBus
 from pentool.core.logging import get_logger
 from pentool.services.base_service import BaseService
-from pentool.utils.http_client import HTTPClient, get_shared_http_client
 from pentool.utils.parser import ParsedRequest, ParsedResponse, parse_http_request
 
 logger = get_logger(__name__)
@@ -27,7 +26,6 @@ class RepeaterService(BaseService):
     ) -> None:
         super().__init__(event_bus=event_bus, tui_loop=tui_loop, on_log=on_log)
         self._repeater_api = repeater_api
-        self._http_client: HTTPClient | None = None
 
     async def send_request(
         self,
@@ -51,14 +49,21 @@ class RepeaterService(BaseService):
 
         t0 = time.monotonic()
         try:
-            # Send via RepeaterAPI (with history saving)
-            if self._repeater_api:
-                resp = await self._repeater_api.send(req, tab_name=tab_name)
+            # Single route through the API layer (Этап 4.3): if no RepeaterAPI
+            # was injected, spin up our own (no history saved — same behaviour
+            # as the old direct HTTPClient fallback). This removes the second,
+            # duplicated HTTP path in the service.
+            if self._repeater_api is None:
+                from pentool.core.config import get_config
+                cfg = get_config()
+                self._repeater_api = RepeaterAPI(
+                    db_path=cfg.db_path,
+                    timeout=cfg.request_timeout,
+                    verify_ssl=cfg.verify_ssl,
+                )
+                resp = await self._repeater_api.send(req, tab_name=tab_name, save=False)
             else:
-                # Fallback: direct request via HTTPClient (no history)
-                if self._http_client is None:
-                    self._http_client = get_shared_http_client(follow_redirects=follow_redirects)
-                resp = await self._http_client.send(req)
+                resp = await self._repeater_api.send(req, tab_name=tab_name)
 
             elapsed_ms = int((time.monotonic() - t0) * 1000)
             logger.info(
@@ -75,8 +80,7 @@ class RepeaterService(BaseService):
             return None, elapsed_ms, str(exc)
 
     async def close(self) -> None:
-        if self._http_client:
-            await self._http_client.close()
-            self._http_client = None
+        # No standalone HTTP client anymore (Этап 4.3) — the API layer owns it.
+        pass
 
     # _emit and _log inherited from BaseService
