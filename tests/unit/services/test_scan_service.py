@@ -384,3 +384,78 @@ class TestPostFormSubmission:
         assert all("delete" not in getattr(r, "url", "").lower() for r in posts), (
             "destructive POST form must NOT be auto-submitted"
         )
+
+
+class TestHybridJsCrawl:
+    """2.4: hybrid_js=True re-crawls with JS when the static crawl is dry."""
+
+    @pytest.mark.asyncio
+    async def test_hybrid_js_triggered_by_flag(self, monkeypatch):
+        """With hybrid_js=True and a tiny static result, ScanService fires a
+        second (JS) SpiderAPI crawl too."""
+        from unittest.mock import patch
+
+        from pentool.modules.spider import SpiderResult
+        from pentool.services.scan_service import ScanService
+
+        static_result = SpiderResult(
+            base_url="http://x.com/", pages=["http://x.com/"], auth_headers={},
+        )
+
+        # The JS SpiderAPI is constructed *locally* inside _crawl_target via
+        # `from pentool.api.spider_api import SpiderAPI, SpiderConfig`, so patch
+        # the source module where that import resolves.
+        js_spider_cls = Mock()
+        js_spider_cls.return_value = Mock()
+        js_spider_cls.return_value.crawl = AsyncMock(return_value=SpiderResult(
+            base_url="http://x.com/", pages=["http://x.com/app", "http://x.com/route"],
+        ))
+
+        spider_api = Mock(spec=__import__("pentool.api.spider_api", fromlist=["SpiderAPI"]).SpiderAPI)
+        spider_api.crawl = AsyncMock(return_value=static_result)
+        scanner_api = Mock(spec=__import__("pentool.api.scanner_api", fromlist=["ScannerAPI"]).ScannerAPI)
+        scanner_api.run_active_on_requests = AsyncMock(return_value=[])
+        scanner_api.save_findings = AsyncMock(return_value=None)
+        scanner_api.configure_engine = Mock(return_value=None)
+
+        service = ScanService(scanner_api, spider_api, None)
+        config = ScanConfig(targets=["http://x.com/"], resume=False, hybrid_js=True)
+
+        with patch("pentool.api.spider_api.SpiderAPI", js_spider_cls):
+            await service.run(config)
+
+        # hybrid_js fired a JS re-crawl.
+        assert js_spider_cls.called, "hybrid_js should create a JS SpiderAPI"
+        # …and the static spider ran too.
+        assert spider_api.crawl.called
+
+    @pytest.mark.asyncio
+    async def test_hybrid_js_off_by_default(self, monkeypatch):
+        """Without hybrid_js, no JS re-crawl happens (deterministic/fast)."""
+        from unittest.mock import patch
+
+        from pentool.modules.spider import SpiderResult
+        from pentool.services.scan_service import ScanService
+
+        static_result = SpiderResult(
+            base_url="http://x.com/", pages=["http://x.com/"], auth_headers={},
+        )
+        js_spider_cls = Mock()
+        js_spider_cls.return_value = Mock()
+        js_spider_cls.return_value.crawl = AsyncMock(return_value=SpiderResult(
+            base_url="http://x.com/", pages=["http://x.com/app"],
+        ))
+
+        spider_api = Mock(spec=__import__("pentool.api.spider_api", fromlist=["SpiderAPI"]).SpiderAPI)
+        spider_api.crawl = AsyncMock(return_value=static_result)
+        scanner_api = Mock(spec=__import__("pentool.api.scanner_api", fromlist=["ScannerAPI"]).ScannerAPI)
+        scanner_api.run_active_on_requests = AsyncMock(return_value=[])
+        scanner_api.save_findings = AsyncMock(return_value=None)
+        scanner_api.configure_engine = Mock(return_value=None)
+
+        service = ScanService(scanner_api, spider_api, None)
+        config = ScanConfig(targets=["http://x.com/"], resume=False, hybrid_js=False)
+
+        with patch("pentool.api.spider_api.SpiderAPI", js_spider_cls) as mocked:
+            await service.run(config)
+            assert not mocked.called, "hybrid_js=False must NOT trigger JS crawl"
