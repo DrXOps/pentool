@@ -11,25 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Detached: the whole module fails collection if PRO isn't importable at all.
 pytest.importorskip("pentool.modules.scanner")
-
-# In an environment where the obfuscated installed PRO (older build) shadows
-# dom_xss, the `DOMXSCCheck` class name may not be surfaced by the CodeEnigma
-# proxy — but the pure `_check_dom_xss()` static-analyzer (the entire real
-# logic) always is, because it's module-level plain code. So function-level
-# tests always run; class/engine-level tests are skipped with a clear reason
-# rather than hard-failing on an env that simply hasn't synced PRO yet.
-def _have_domxss_class() -> bool:
-    import pentool.modules.scanner.checks.dom_xss as _d
-
-    return getattr(_d, "DOMXSCCheck", None) is not None
-
-
-_skip_no_check = pytest.mark.skipif(
-    not _have_domxss_class(),
-    reason="DOMXSCCheck not surfaced by PRO in this env (installed PRO out of sync)",
-)
 
 
 class TestCheckDomXss:
@@ -71,11 +53,10 @@ def _mk_request() -> "ParsedRequest":
     return ParsedRequest(method="GET", url="http://x.com/page", headers={}, body="")
 
 
-@_skip_no_check
-class TestDOMXSCCheckScan:
+class TestDOMXSSCheckScan:
     @pytest.mark.asyncio
     async def test_finds_dom_xss_in_response(self) -> None:
-        from pentool.modules.scanner.checks.dom_xss import DOMXSCCheck
+        from pentool.modules.scanner.checks.dom_xss import DOMXSSCheck
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req = ParsedRequest(method="GET", url="http://x.com/page", headers={}, body="")
@@ -84,23 +65,23 @@ class TestDOMXSCCheckScan:
             headers={"content-type": "text/html"},
             body='<html><script>var q = location.search; document.write(q)</script></html>',
         )
-        findings = await DOMXSCCheck().scan(req, resp, MagicMock())
+        findings = await DOMXSSCheck().scan(req, resp, MagicMock())
         assert any(f.type == "dom_xss" for f in findings)
         assert any("Potential DOM XSS" in f.name for f in findings)
 
     @pytest.mark.asyncio
     async def test_no_script_returns_none(self) -> None:
-        from pentool.modules.scanner.checks.dom_xss import DOMXSCCheck
+        from pentool.modules.scanner.checks.dom_xss import DOMXSSCheck
         from pentool.utils.parser import ParsedResponse
 
         req = _mk_request()
         resp = ParsedResponse(status=200, headers={}, body="<html>no script here</html>")
-        findings = await DOMXSCCheck().scan(req, resp, MagicMock())
+        findings = await DOMXSSCheck().scan(req, resp, MagicMock())
         assert findings == []
 
     @pytest.mark.asyncio
     async def test_sink_without_source_returns_none(self) -> None:
-        from pentool.modules.scanner.checks.dom_xss import DOMXSCCheck
+        from pentool.modules.scanner.checks.dom_xss import DOMXSSCheck
         from pentool.utils.parser import ParsedResponse
 
         req = _mk_request()
@@ -109,18 +90,17 @@ class TestDOMXSCCheckScan:
             headers={},
             body='<script>document.getElementById("a").innerHTML = "x"</script>',
         )
-        findings = await DOMXSCCheck().scan(req, resp, MagicMock())
+        findings = await DOMXSSCheck().scan(req, resp, MagicMock())
         assert findings == []
 
     @pytest.mark.asyncio
     async def test_response_none_returns_none(self) -> None:
-        from pentool.modules.scanner.checks.dom_xss import DOMXSCCheck
+        from pentool.modules.scanner.checks.dom_xss import DOMXSSCheck
 
-        findings = await DOMXSCCheck().scan(_mk_request(), None, MagicMock())
+        findings = await DOMXSSCheck().scan(_mk_request(), None, MagicMock())
         assert findings == []
 
 
-@_skip_no_check
 class TestDOMXSSEngineIntegration:
     """DOM XSS surfaced through ScanEngine's passive run."""
 
@@ -135,27 +115,23 @@ class TestDOMXSSEngineIntegration:
 
     @pytest.mark.asyncio
     async def test_engine_surfaces_dom_xss(self) -> None:
-        from pentool.modules.scanner.checks.dom_xss import DOMXSCCheck
+        # DOM XSS is a PASSIVE check — it never runs in the active phase
+        # (run_active_on_requests filters `if not check.passive`). The passive
+        # path is run_passive(request, response), which is what a real scan
+        # uses to surface passive findings.
+        from unittest.mock import MagicMock
+
+        from pentool.modules.scanner.checks.dom_xss import DOMXSSCheck
         from pentool.modules.scanner.engine import ScanEngine
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
-        class FakeClient:
-            async def send(self, request):
-                return ParsedResponse(
-                    status=200,
-                    headers={},
-                    body='<script>eval(location.hash.substring(1))</script>',
-                )
-
-            async def get(self, url, headers=None):
-                return ParsedResponse(
-                    status=200,
-                    headers={},
-                    body='<script>eval(location.hash.substring(1))</script>',
-                )
-
-        engine = ScanEngine(db_path=":memory:", http_client=FakeClient())
-        engine.register_check(DOMXSCCheck())
+        engine = ScanEngine(db_path=":memory:", http_client=MagicMock())
+        engine.register_check(DOMXSSCheck())
         req = ParsedRequest(method="GET", url="http://x.com/page", headers={}, body="")
-        findings = await engine.run_active_on_requests([req])
+        resp = ParsedResponse(
+            status=200,
+            headers={},
+            body='<script>eval(location.hash.substring(1))</script>',
+        )
+        findings = await engine.run_passive(req, resp)
         assert any(f.type == "dom_xss" for f in findings)
