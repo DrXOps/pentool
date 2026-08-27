@@ -165,6 +165,45 @@ class TestScanServiceRun:
         assert http_client._extra_headers.get("Authorization") == "Bearer tok"
 
 
+    @pytest.mark.asyncio
+    async def test_auto_login_populates_auth_headers(
+        self, scanner_api, spider_api, event_bus,
+    ):
+        """2.3: when auto_login is enabled and the crawl learned no session,
+        ScanService calls build_session_headers and stores the cookie in
+        _auth_headers for the active phase."""
+        from unittest.mock import patch
+
+        from pentool.modules.spider import SpiderResult
+        from pentool.services.scan_service import ScanService
+
+        async def _auto_ok(**kwargs):
+            return {"Cookie": "PHPSESSID=autologin1"}
+
+        spider_api.crawl = AsyncMock(return_value=SpiderResult(
+            base_url="https://example.com", pages=[], auth_headers={},
+        ))
+        scanner_api.run_active_on_requests = AsyncMock(return_value=[])
+        scanner_api.save_findings = AsyncMock(return_value=None)
+
+        service = ScanService(scanner_api, spider_api, event_bus)
+        config = ScanConfig(
+            targets=["https://example.com"],
+            resume=False,
+            auto_login=True,
+            login=("admin", "password"),
+        )
+
+        # _try_auto_login does `from pentool.utils.auth_login import
+        # build_session_headers` lazily, so patch it at its source module.
+        with patch("pentool.utils.auth_login.build_session_headers",
+                   side_effect=_auto_ok):
+            await service.run(config)
+
+        assert "Cookie" in service._auth_headers
+        assert service._auth_headers["Cookie"] == "PHPSESSID=autologin1"
+
+
 class TestScanServiceStop:
     """Test ScanService.stop()."""
 
