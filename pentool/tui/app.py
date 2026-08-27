@@ -88,6 +88,8 @@ from pentool.tui.widgets.statusbar import StatusBar
 
 logger = get_logger(__name__)
 
+from pentool.tui.mixins.notifications import NotificationsMixin  # noqa: E402
+
 
 def _setup_faulthandler(log_file: str) -> None:
     """Install faulthandler to dump Python thread stacks into the log file.
@@ -151,7 +153,7 @@ _SCREEN_MAP: dict[str, type] = {
     "settings":   SettingsScreen,
 }
 
-class PentoolApp(App):
+class PentoolApp(NotificationsMixin, App):
     """Main Pentool TUI application."""
 
     TITLE = "Pentool"
@@ -1106,53 +1108,7 @@ class PentoolApp(App):
     def get_proxy_api(self) -> ProxyAPI:
         return self._proxy_api
 
-    def flash(self, message: str, severity: str = "information", timeout: float = 2.5) -> None:
-        """Short message on the right side of the module bar (tooltip2)."""
-        try:
-            self.query_one("#module-tabs", ModuleTabs).flash(message, severity, timeout)
-        except Exception:
-            pass
 
-    def notify(
-        self,
-        message: str,
-        *,
-        title: str = "",
-        severity: str = "information",
-        timeout: float | None = None,
-        markup: bool = True,
-        sound: bool = True,
-    ) -> None:
-        """Standard notification using Textual's built-in toast rack.
-
-        Ties every `app.notify(...)` (~170 call sites) into Textual's own
-        ToastRack, which renders severity-styled cards bottom-right WITHOUT
-        reserving a zone — so no dark band appears (the custom dock rack used
-        to leave one). Sound is layered on top, respecting the user's
-        `notifications_sound_enabled` config toggle.
-        """
-        super().notify(
-            message,
-            title=title,
-            severity=severity,
-            timeout=timeout,
-            markup=markup,
-        )
-        # Belt-and-braces dismissal: Textual's toast rack only prunes expired
-        # toasts when the rack is refreshed (next notify, or an idle tick). If
-        # the app is busy it can leave an expired toast sitting until a new
-        # notification arrives. Unless explicitly kept forever (critical), we
-        # schedule a refresh shortly after the timeout so the toast always
-        # dismisses on its own.
-        if timeout is not None:
-            self.set_timer(timeout + 0.5, self._refresh_notifications)
-        if sound:
-            try:
-                if self._cfg.notifications_sound_enabled:
-                    from pentool.core.notification_sound import play_notification_sound
-                    play_notification_sound(severity)
-            except Exception as exc:
-                logger.debug("notify: sound failed: %s", exc)
 
     def _on_storage_error(self, message: str) -> None:
         """ProxyService.init_storage()/switch_db() failed to open the DB.
