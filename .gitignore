@@ -62,6 +62,18 @@ screens/Снимок*
 # Local scratch/debug files
 t.py
 
+# Cloudflare Wrangler local runtime state (`.wrangler/` — miniflare KV/cache)
+.wrangler/
+
+# Stray curl-output / scan-report scratch files dropped into the repo root
+# during manual testing (single-letter names, JSON/HTML). Never commit these.
+/21
+/cb
+/fg
+/gf
+/gh
+/ry
+
 # Load-testing payload files (multi-hundred-MB) — generated on demand by
 # tests/perf/gen_payload_file.py, never committed
 tests/perf/_data/
