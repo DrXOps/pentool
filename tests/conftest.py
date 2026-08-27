@@ -66,6 +66,26 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_scanner)
 
 
+@pytest.fixture(autouse=True)
+def _pin_clean_session_license():
+    """Deterministic license state for every test regardless of file order.
+
+    `pentool.core.license._session_license` is a process-global module cache.
+    Some suites (scan_engine_resume, ssti, xxe, jwt_none, rce, ...) force a
+    PRO session; others (test_license) reset it to free. Without a central
+    reset, a suite that leaves the cache set could leak that value into a
+    later file and change its expectations — a cross-file race. This autouse
+    fixture pins the cache to a clean `None` (free) start before EVERY test;
+    any suite that needs PRO sets it itself via its own autouse fixture.
+    """
+    import pentool.core.license as lic_mod
+
+    saved = lic_mod._session_license
+    lic_mod._session_license = None
+    yield
+    lic_mod._session_license = saved
+
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "integration: integration tests (TUI, network)")
