@@ -1,4 +1,21 @@
-async def test_pause_resume_button_label_toggles(self) -> None:
+"""E2E: IntruderScreen — pause/resume button label regression.
+
+Tests that the '#btn-start' toolbar button toggles between "▶ Start" /
+"⏸ Pause" / "▶ Resume" as action_toggle_pause()/action_stop_attack() run.
+"""
+from __future__ import annotations
+
+import pytest
+
+from pentool.tui.app import PentoolApp
+from pentool.tui.screens.intruder.screen import IntruderScreen
+from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+
+@pytest.mark.e2e
+class TestIntruderScreen:
+
+    async def test_pause_resume_button_label_toggles(self) -> None:
         """Regression: '#btn-start' label must switch between "▶ Start" and
         "⏸ Pause" / "▶ Resume" as action_toggle_pause() is called.
         """
