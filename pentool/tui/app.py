@@ -89,6 +89,7 @@ from pentool.tui.widgets.statusbar import StatusBar
 logger = get_logger(__name__)
 
 from pentool.tui.mixins.notifications import NotificationsMixin  # noqa: E402
+from pentool.tui.screen_registry import SCREEN_MAP  # noqa: E402
 
 
 def _setup_faulthandler(log_file: str) -> None:
@@ -136,22 +137,6 @@ def _setup_faulthandler(log_file: str) -> None:
     except Exception:
         pass
 
-
-# Mapping module_id → widget class
-_SCREEN_MAP: dict[str, type] = {
-    "dashboard":  DashboardScreen,
-    "proxy":      ProxyScreen,
-    "repeater":   RepeaterScreen,
-    "intruder":   IntruderScreen,
-    "scanner":    ScannerScreen,
-    "target":     TargetScreen,
-    "decoder":    DecoderScreen,
-    "comparer":   ComparerScreen,
-    "sequencer":  SequencerScreen,
-    "extensions": ExtensionsScreen,
-    "terminal":   TerminalScreen,
-    "settings":   SettingsScreen,
-}
 
 class PentoolApp(NotificationsMixin, App):
     """Main Pentool TUI application."""
@@ -1057,7 +1042,7 @@ class PentoolApp(NotificationsMixin, App):
     def _switch_to(self, module_id: str) -> None:
         if module_id == self._active_module:
             return
-        if module_id not in _SCREEN_MAP:
+        if module_id not in SCREEN_MAP:
             return
         if not self._project_loaded and not self._skip_project_guard and module_id not in self._FREE_MODULES:
             self.notify(
