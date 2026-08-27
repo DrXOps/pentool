@@ -197,3 +197,40 @@ async def test_async_context_manager():
     client = HTTPClient()
     async with client as c:
         assert c is client
+
+
+class TestGetSharedHttpClient:
+    """4.2: factory builds HTTPClient from the current Config."""
+
+    def test_uses_config_values(self):
+        from pentool.core.config import Config, set_config, get_config
+        from pentool.utils.http_client import get_shared_http_client
+
+        saved = get_config()
+        try:
+            set_config(Config(
+                verify_ssl=True,
+                request_timeout=33,
+            ))
+            client = get_shared_http_client()
+            assert client._verify_ssl is True
+            assert client._timeout.total == 33
+            assert client._extra_headers == {}
+        finally:
+            set_config(saved)
+
+    def test_extra_headers_and_redirect_passed(self):
+        from pentool.core.config import Config, set_config, get_config
+        from pentool.utils.http_client import get_shared_http_client
+
+        saved = get_config()
+        try:
+            set_config(Config())
+            client = get_shared_http_client(
+                follow_redirects=False,
+                extra_headers={"Cookie": "sid=1"},
+            )
+            assert client._follow_redirects is False
+            assert client._extra_headers == {"Cookie": "sid=1"}
+        finally:
+            set_config(saved)

@@ -846,9 +846,8 @@ class ProxyServer:
         try:
             # Use singleton client for connection pooling
             if self._http_client is None:
-                from pentool.core.config import get_config
-                cfg = get_config()
-                self._http_client = HTTPClient(verify_ssl=cfg.verify_ssl, timeout=cfg.request_timeout)
+                from pentool.utils.http_client import get_shared_http_client
+                self._http_client = get_shared_http_client(follow_redirects=True)
             return await self._http_client.send(req)
         except Exception as exc:
             logger.warning("Request failed %s %s: %s", req.method, req.url, exc)

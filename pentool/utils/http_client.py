@@ -138,3 +138,25 @@ class HTTPClient:
     async def __aexit__(self, *_: object) -> None:
         """Context manager support: close session on exit."""
         await self.close()
+
+
+def get_shared_http_client(
+    follow_redirects: bool = True,
+    extra_headers: dict | None = None,
+) -> "HTTPClient":
+    """Build an HTTPClient configured from the current app Config.
+
+    One factory for the repeated ``get_config() -> HTTPClient(verify_ssl=...,
+    timeout=...)`` block scattered across services/modules. Returns a NEW
+    client per call (callers still own and close it as before); "shared"
+    refers to the single source of truth (the config) being used everywhere.
+    """
+    from pentool.core.config import get_config
+
+    cfg = get_config()
+    return HTTPClient(
+        verify_ssl=cfg.verify_ssl,
+        timeout=cfg.request_timeout,
+        follow_redirects=follow_redirects,
+        extra_headers=extra_headers,
+    )

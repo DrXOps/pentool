@@ -58,10 +58,11 @@ class TestRepeaterServiceSendRequest:
         from pentool.utils.parser import ParsedResponse
         resp = ParsedResponse(status=200, headers={}, body="OK")
 
-        with patch("pentool.services.repeater_service.HTTPClient") as mock_cls:
+        # RepeaterService now builds its client via get_shared_http_client().
+        with patch("pentool.services.repeater_service.get_shared_http_client") as mock_factory:
             mock_client = AsyncMock()
             mock_client.send = AsyncMock(return_value=resp)
-            mock_cls.return_value = mock_client
+            mock_factory.return_value = mock_client
 
             raw = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
             result, elapsed, error = await service_no_api.send_request(raw)
