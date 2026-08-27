@@ -509,7 +509,6 @@ class PentoolApp(App):
             on_storage_error=self._on_storage_error,
         )
         try:
-            from pentool.tui.screens.proxy.screen import ProxyScreen
             proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
             proxy_screen._proxy_service = self._proxy_service
             # Run init_storage synchronously and WAIT for it to complete
@@ -776,7 +775,6 @@ class PentoolApp(App):
 
     def _refresh_target_tree(self) -> None:
         try:
-            from pentool.tui.screens.target.screen import TargetScreen
             target = self.query_one(SCREEN_TARGET, TargetScreen)
             target._refresh_tree()
         except Exception:
@@ -911,7 +909,6 @@ class PentoolApp(App):
         # Hide Inspector by default when width < 80
         if width < 80:
             try:
-                from pentool.tui.screens.proxy.screen import ProxyScreen
                 screen = self.query_one(SCREEN_PROXY, ProxyScreen)
                 if screen._inspector_visible:
                     screen.action_toggle_inspector()
@@ -987,7 +984,6 @@ class PentoolApp(App):
         if not tab_id:
             return
         try:
-            from pentool.tui.screens.proxy.screen import ProxyScreen
             proxy_screen = self.query_one("#screen-proxy", ProxyScreen)
             from textual.widgets import TabbedContent
             tabs = proxy_screen.query_one("#proxy-subtabs", TabbedContent)
@@ -1423,12 +1419,10 @@ class PentoolApp(App):
     def _get_proxy_screen(self):
         """Cached #screen-proxy; re-resolves every interval. Returns None when
         the screen isn't mounted — callers treat None as a quiet no-op."""
-        from pentool.tui.screens.proxy.screen import ProxyScreen
         return self._get_cached_screen(SCREEN_PROXY, ProxyScreen, "_proxy_screen")
 
     def _get_target_screen(self):
         """Cached #screen-target; re-resolves every interval. None = not mounted."""
-        from pentool.tui.screens.target.screen import TargetScreen
         return self._get_cached_screen(SCREEN_TARGET, TargetScreen, "_target_screen")
 
     def _get_cached_screen(self, selector: str, cls, cache_attr: str):
@@ -1511,7 +1505,6 @@ class PentoolApp(App):
     @on(SendToRepeater)
     def on_send_to_repeater(self, msg: SendToRepeater) -> None:
         try:
-            from pentool.tui.screens.repeater.screen import RepeaterScreen
             repeater = self.query_one(SCREEN_REPEATER, RepeaterScreen)
             repeater.load_request_in_new_tab(msg.raw)
             self.action_switch_module("repeater")
@@ -1524,7 +1517,6 @@ class PentoolApp(App):
     @on(SendToIntruder)
     def on_send_to_intruder(self, msg: SendToIntruder) -> None:
         try:
-            from pentool.tui.screens.intruder.screen import IntruderScreen
             intruder = self.query_one(SCREEN_INTRUDER, IntruderScreen)
             intruder.load_request(msg.raw)
             self.action_switch_module("intruder")
@@ -1536,7 +1528,6 @@ class PentoolApp(App):
     @on(SyncScopeToTarget)
     def on_sync_scope_to_target(self, msg: SyncScopeToTarget) -> None:
         try:
-            from pentool.tui.screens.target.screen import TargetScreen
             target = self.query_one(SCREEN_TARGET, TargetScreen)
             api = target._get_api()
             api.sitemap.set_in_scope(msg.host, msg.in_scope)
@@ -1590,14 +1581,12 @@ class PentoolApp(App):
             # project's own project_settings row said on the next project
             # switch (see ProxyScreen._load_scope_setting).
             try:
-                from pentool.tui.screens.proxy.screen import ProxyScreen
                 proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
                 self.run_worker(proxy_screen._save_scope_setting(list(proxy.scope)))
             except Exception as e:
                 logger.debug("on_sync_scope_to_proxy: failed to persist scope per-project: %s", e)
             # Refresh Proxy screen's ScopeToggle state if mounted
             try:
-                from pentool.tui.screens.proxy.screen import ProxyScreen
                 from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
                 proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
                 st = proxy_screen.query_one("#filter-bar", FilterBar).query_one("#fb-scope", ScopeToggle)
@@ -1654,7 +1643,6 @@ class PentoolApp(App):
     @on(SendUrlToTarget)
     def on_send_url_to_target(self, msg: SendUrlToTarget) -> None:
         try:
-            from pentool.tui.screens.target.screen import TargetScreen
             target = self.query_one(SCREEN_TARGET, TargetScreen)
             target.add_request_from_proxy(msg.req)
         except Exception as e:
@@ -1680,7 +1668,6 @@ class PentoolApp(App):
     @on(TerminalStop)
     def on_terminal_stop(self, msg: TerminalStop) -> None:
         try:
-            from pentool.tui.screens.terminal.screen import TerminalScreen
             term = self.query_one(SCREEN_TERMINAL, TerminalScreen)
             term._stop()
         except Exception as e:
@@ -1946,7 +1933,6 @@ class PentoolApp(App):
         # Close Intruder's persistent SQLite connection (see IntruderScreen
         # _get_api()/reload_from_project() — mirrors HttpStorage above).
         try:
-            from pentool.tui.screens.intruder.screen import IntruderScreen
             intruder_screen = self.query_one(SCREEN_INTRUDER, IntruderScreen)
             intruder_screen._cancel_save_workers()
             if intruder_screen._api is not None:
@@ -1956,7 +1942,6 @@ class PentoolApp(App):
             logger.warning("APP: Intruder storage close error on quit: %s", e)
         # Close Target/SiteMap's persistent SQLite connection (BaseSqliteStorage).
         try:
-            from pentool.tui.screens.target.screen import TargetScreen
             target_screen = self.query_one(SCREEN_TARGET, TargetScreen)
             target_screen._cancel_save_workers()
             if target_screen._target_api is not None:
@@ -1966,7 +1951,6 @@ class PentoolApp(App):
             logger.warning("APP: Target storage close error on quit: %s", e)
         # Close Repeater's persistent SQLite connection (BaseSqliteStorage).
         try:
-            from pentool.tui.screens.repeater.screen import RepeaterScreen
             repeater_screen = self.query_one(SCREEN_REPEATER, RepeaterScreen)
             if repeater_screen._repeater_api is not None:
                 await repeater_screen._repeater_api.close()
