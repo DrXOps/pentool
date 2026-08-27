@@ -1113,21 +1113,6 @@ class PentoolApp(App):
         except Exception:
             pass
 
-    def customnotify(
-        self,
-        message: str,
-        severity: str = "information",
-        title: str | None = None,
-        timeout: float | None = None,
-        sound: bool = True,
-    ) -> None:
-        """Deprecated alias for `notify()`.
-
-        Kept so existing call sites work unchanged; routes through the
-        built-in Textual toast rack (no reserved zone → no dark band).
-        """
-        self.notify(message, title=title or "", severity=severity, timeout=timeout, sound=sound)
-
     def notify(
         self,
         message: str,
@@ -1319,7 +1304,7 @@ class PentoolApp(App):
             self.call_from_thread(self._update_status)
             self.call_from_thread(self._update_proxy_screen_labels)
             self.call_from_thread(self._update_dashboard_proxy_status, True)
-            self.call_from_thread(self.customnotify, f"● Proxy :{self._proxy.port}", "success")
+            self.call_from_thread(self.notify, f"● Proxy :{self._proxy.port}", "success")
             logger.info("Proxy started on port %s", self._proxy.port)
             async with self._proxy._server:
                 await self._proxy._server.serve_forever()
@@ -1371,7 +1356,7 @@ class PentoolApp(App):
                 logger.warning("APP: proxy thread did not stop in 1.5s — port 8080 may still be in use")
         self.call_after_refresh(self._update_status)
         self.call_after_refresh(self._update_proxy_screen_labels)
-        self.call_after_refresh(self.customnotify, "○ Proxy stopped", "warning")
+        self.call_after_refresh(self.notify, "○ Proxy stopped", "warning")
 
     async def _stop_proxy_async(self) -> None:
         """Async stop of the proxy that does NOT block the TUI thread.
@@ -1407,7 +1392,7 @@ class PentoolApp(App):
                 await asyncio.sleep(0.1)
             self.call_after_refresh(self._update_status)
             self.call_after_refresh(self._update_proxy_screen_labels)
-            self.call_after_refresh(self.customnotify, "○ Proxy stopped", "warning")
+            self.call_after_refresh(self.notify, "○ Proxy stopped", "warning")
         else:
             self.call_after_refresh(self._update_status)
 
@@ -1509,7 +1494,7 @@ class PentoolApp(App):
             repeater.load_request_in_new_tab(msg.raw)
             self.action_switch_module("repeater")
             self.call_after_refresh(self._focus_repeater_editor, repeater)
-            self.customnotify("→ Repeater", "information")
+            self.notify("→ Repeater", "information")
             self._add_raw_to_target(msg.raw)
         except Exception as exc:
             self.notify(f"Send to Repeater failed: {exc}", severity="error", timeout=4)
