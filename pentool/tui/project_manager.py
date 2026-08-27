@@ -365,7 +365,7 @@ class ProjectManager:
         # Single-line toast: no separate title (Textual's toast would render
         # the title on its own row above the message, duplicating "Opened/"
         # "Created" and making the card two rows tall).
-        self._app.customnotify(f"{action}: {os.path.basename(path)}", "success" if is_new else "information")
+        self._app.notify(f"{action}: {os.path.basename(path)}", severity="success" if is_new else "information")
 
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen

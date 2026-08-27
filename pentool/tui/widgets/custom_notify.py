@@ -9,8 +9,8 @@ pentool.core.notification_sound) and a manual close button, on top of
 per-severity auto-dismiss timers.
 
 Usage:
-    app.customnotify("Attack finished: 120 requests", severity="success")
-    app.customnotify("Proxy disconnected", severity="error", title="Proxy")
+    app.notify("Attack finished: 120 requests", severity="success")
+    app.notify("Proxy disconnected", severity="error", title="Proxy")
 """
 
 from __future__ import annotations
