@@ -49,6 +49,7 @@ from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
+from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
@@ -2150,7 +2151,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             return {"results": []}
 
 
-class _InputDialog(ModalScreen):
+class _InputDialog(DialogCancelMixin, ModalScreen):
     """Payload add dialog — does not close after ADD, accumulates the list."""
 
     DEFAULT_CSS = _CSS
@@ -2178,7 +2179,7 @@ class _InputDialog(ModalScreen):
 
     @on(ToolbarButton.Pressed, "#btn-cancel")
     def _cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.dismiss(None)
+        self.action_cancel()  # DialogCancelMixin -> dismiss(None)
 
     def _do_add(self) -> None:
         try:
@@ -2193,11 +2194,11 @@ class _InputDialog(ModalScreen):
 
     def on_key(self, event) -> None:
         if event.key == "escape":
-            self.dismiss(None)
+            self.action_cancel()  # DialogCancelMixin -> dismiss(None)
         elif event.key == "enter":
             self._do_add()
 
-class _GenerateDialog(ModalScreen):
+class _GenerateDialog(DialogCancelMixin, ModalScreen):
     """Generate… dialog — Numeric range or Char (alphabet brute-force) mode.
 
     Returns a lazy NumericPayloadSource/CharPayloadSource (never a
@@ -2305,13 +2306,13 @@ class _GenerateDialog(ModalScreen):
 
     @on(ToolbarButton.Pressed, "#btn-gen-cancel")
     def _gen_cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.dismiss(None)
+        self.action_cancel()  # DialogCancelMixin -> dismiss(None)
 
     def on_key(self, event) -> None:
         if event.key == "escape":
-            self.dismiss(None)
+            self.action_cancel()
 
-class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
+class _SmartPayloadsDialog(DialogCancelMixin, ModalScreen[list[str] | None]):
     """PRO Smart Payload Generator — dialog for generating context-aware payloads."""
 
     DEFAULT_CSS = """
@@ -2409,7 +2410,7 @@ class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
 
     @on(ToolbarButton.Pressed, "#btn-smart-cancel")
     def _smart_cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.dismiss(None)
+        self.action_cancel()  # DialogCancelMixin -> dismiss(None)
 
     def _generate(self) -> None:
         try:
