@@ -47,6 +47,13 @@ class ScanConfig:
     # tab showing every finding ever saved to the project DB.
     scan_tab_uid: str = ""
     scan_session_id: str = ""
+    # Optional automatic session-login (Этап 2.3). When True and `login` is
+    # set, ScanService tries to establish a cookie session against the first
+    # target (CSRF-protected form, e.g. DVWA) before the active scan, and
+    # reuses it via the shared _auth_headers. Off by default — the crawler
+    # should never silently log into third-party sites without an explicit opt-in.
+    auto_login: bool = False
+    login: tuple[str, str] | None = None  # (username, password)
     # Called once, before active-scan work starts, with a rough estimate of
     # the total number of HTTP requests the scan will make — drives a
     # progress bar off request volume instead of (req, point, check) task
@@ -126,6 +133,12 @@ class ScanService(BaseService):
 
         self._emit(ScanProgressEvent(done=0, total=len(all_scan_targets), scanning=True, source="scanner"))
 
+        # Optional auto-login (Этап 2.3): if the caller opted in with creds and
+        # the crawl never learned a session, try to establish one so the active
+        # scan runs against a logged-in context (not redirected to /login.php).
+        if config.auto_login and config.login and not self._auth_headers:
+            await self._try_auto_login(config)
+
         all_findings = await self._run_active_scan(config, all_scan_targets, self._auth_headers)
 
         self._emit(ScanFinished(
@@ -197,6 +210,33 @@ class ScanService(BaseService):
                 f"{self._MAX_VARIANTS_PER_TEMPLATE} variants/template)"
             )
         return unique
+
+    async def _try_auto_login(self, config: ScanConfig) -> None:
+        """Best-effort session login against the first target (Этап 2.3).
+
+        Uses pentool.utils.auth_login.build_session_headers() to submit a
+        CSRF-protected login form, then stores the resulting Cookie in
+        self._auth_headers so the active phase reuses it. Off by default and
+        only runs when the crawl didn't already learn a session.
+        """
+        if not config.targets or not config.login:
+            return
+        try:
+            from pentool.utils.auth_login import build_session_headers
+
+            username, password = config.login
+            base = config.targets[0]
+            headers = await build_session_headers(
+                url=base, username=username, password=password, use_cache=True,
+            )
+            if headers:
+                self._auth_headers = headers
+                self._log(
+                    f"[dim]AUTH[/dim] auto-login established session for {base} "
+                    f"({len(headers)} header(s))"
+                )
+        except Exception as exc:
+            self._log(f"[yellow]AUTH[/yellow] auto-login failed: {exc}")
 
     async def _run_active_scan(
         self, config: ScanConfig, all_scan_targets: list[str], auth_headers: dict | None = None
