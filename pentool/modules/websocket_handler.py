@@ -222,6 +222,11 @@ class WebSocketHandler:
                 # burst traffic (many tabs refreshing) every WebSocket upgrade
                 # triggered a fresh cert load, blocking the proxy event loop
                 # and causing the main loop to time out → clean run() exit.
+                # NOTE: _SSL_CTX is module-level; the assignment below made it
+                # a local without `global`, so the `if _SSL_CTX is None` read
+                # raised UnboundLocalError ("_SSL_CTX ... local variable") on
+                # every HTTPS WebSocket upgrade.
+                global _SSL_CTX
                 if _SSL_CTX is None:
                     _SSL_CTX = ssl.create_default_context()
                     _SSL_CTX.check_hostname = False
