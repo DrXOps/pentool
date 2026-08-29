@@ -45,6 +45,7 @@ from pentool.api.intruder_api import (
     count_markers,
     process_payload,
 )
+from pentool.tui.widgets.payload_serialization import deserialize_payloads, serialize_payloads
 from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
@@ -640,7 +641,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             # a multi-GB file just to restore state.
             payloads = state.get("payloads", [[]])
             if payloads and isinstance(payloads, list):
-                self._payloads = self._deserialize_payloads(payloads)
+                self._payloads = deserialize_payloads(payloads)
                 self._update_payload_select()
                 # Use call_after_refresh — ListView must be in DOM first
                 self.call_after_refresh(self._refresh_payload_list)
@@ -648,79 +649,6 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         except Exception as exc:
             from pentool.core.logging import get_logger
             get_logger(__name__).debug("_do_load_state: %s", exc)
-
-    @staticmethod
-    def _deserialize_payloads(raw_sets: list) -> list:
-        """Inverse of _serialize_payloads — see its docstring."""
-        result = []
-        for entry in raw_sets:
-            if isinstance(entry, dict) and "__file__" in entry:
-                result.append(FilePayloadSource(entry["__file__"], count=entry.get("count")))
-            elif isinstance(entry, dict) and "__numeric__" in entry:
-                result.append(NumericPayloadSource(
-                    entry.get("start", 0), entry.get("end", 0), entry.get("step", 1)
-                ))
-            elif isinstance(entry, dict) and "__charset__" in entry:
-                result.append(CharPayloadSource(
-                    entry.get("__charset__", ""), entry.get("min_len", 1), entry.get("max_len", 1)
-                ))
-            elif isinstance(entry, dict) and "__chained__" in entry:
-                result.append(ChainedPayloadSource(
-                    *IntruderScreen._deserialize_payloads(entry["__chained__"])
-                ))
-            elif isinstance(entry, list):
-                result.append(entry)
-            else:
-                result.append([])
-        return result
-
-    @staticmethod
-    def _serialize_payloads(sets: list) -> list:
-        """JSON-serializable form of self._payloads for save_state().
-
-        A plain list[str] set serializes as-is. A FilePayloadSource set
-        serializes as {"__file__": path, "count": N} — its file path and
-        (if already known) line count, NOT its contents. Writing out every
-        line of a multi-GB payload file into the intruder_state.payloads_json
-        column on every auto-save would itself be the same "load a 30GB file
-        into memory/into a DB column" problem this feature exists to avoid;
-        the file already lives on disk at `path` and is re-streamed from
-        there on demand (attack start, or re-opening this tab — see
-        _deserialize_payloads).
-
-        NumericPayloadSource/CharPayloadSource serialize the same way — as
-        their small constructor params (a range or a charset+lengths),
-        never their (potentially huge) enumerated contents — and are
-        reconstructed fresh (still lazy) on load, same rationale.
-
-        A ChainedPayloadSource (result of appending Generate…/Smart onto an
-        existing set — see _append_to_active_set) serializes as a
-        {"__chained__": [...]} envelope wrapping each inner source's own
-        serialized form recursively, so it never materializes either —
-        only a plain `list[str]` (the base case) is ever actually iterated
-        into a JSON array here.
-        """
-        result = []
-        for entry in sets:
-            if isinstance(entry, FilePayloadSource):
-                result.append({"__file__": entry.path, "count": entry.cached_count})
-            elif isinstance(entry, NumericPayloadSource):
-                result.append({
-                    "__numeric__": True,
-                    "start": entry.start, "end": entry.end, "step": entry.step,
-                })
-            elif isinstance(entry, CharPayloadSource):
-                result.append({
-                    "__charset__": entry.charset,
-                    "min_len": entry.min_len, "max_len": entry.max_len,
-                })
-            elif isinstance(entry, ChainedPayloadSource):
-                result.append({
-                    "__chained__": IntruderScreen._serialize_payloads(list(entry._sources)),
-                })
-            else:
-                result.append(list(entry))
-        return result
 
     def _auto_save_state(self) -> None:
         """Auto-save current state (template, attack type, payloads) to DB."""
@@ -738,7 +666,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                         tab_name=self._tab_name,
                         template=template,
                         attack_type=self._attack_type.value,
-                        payloads=self._serialize_payloads(self._payloads),
+                        payloads=serialize_payloads(self._payloads),
                     ),
                     worker_name,
                 ),
