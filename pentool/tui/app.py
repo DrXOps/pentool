@@ -91,6 +91,7 @@ logger = get_logger(__name__)
 from pentool.tui.mixins.notifications import NotificationsMixin  # noqa: E402
 from pentool.tui.mixins.proxy_runtime import ProxyRuntimeMixin  # noqa: E402
 from pentool.tui.mixins.events_handlers import ProxyEventHandlersMixin  # noqa: E402
+from pentool.tui.mixins.project_autosave import ProjectAutoSaveMixin  # noqa: E402
 from pentool.tui.screen_registry import SCREEN_MAP  # noqa: E402
 
 
@@ -140,7 +141,7 @@ def _setup_faulthandler(log_file: str) -> None:
         pass
 
 
-class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin, App):
+class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin, ProjectAutoSaveMixin, App):
     """Main Pentool TUI application."""
 
     TITLE = "Pentool"
@@ -839,47 +840,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 logger.warning("APP: PRO package incompatible: %s", result.warning)
         except Exception as exc:
             logger.debug("APP: PRO update check failed: %s", exc)
-
-    def _setup_auto_save(self) -> None:
-        """Configure / restart the auto-save timer from the current config.
-
-        Safe to call at any time — including from call_after_refresh and on_mount.
-        Stops the old timer cleanly before creating a new one.
-        """
-        # Pause the old timer before replacing it.
-        # Timer.pause() is safe to call from any point in the event loop;
-        # .stop() schedules a cancellation but may race if called during a tick.
-        if self._auto_save_timer is not None:
-            try:
-                self._auto_save_timer.pause()
-                self._auto_save_timer.stop()
-            except Exception:
-                pass
-            self._auto_save_timer = None
-
-        if getattr(self._cfg, "auto_save_enabled", False):
-            interval_min = max(1, getattr(self._cfg, "auto_save_interval", 5))
-            interval_sec = interval_min * 60
-            self._auto_save_timer = self.set_interval(interval_sec, self._auto_save_tick)
-            logger.info("APP: auto-save enabled, interval=%d min", interval_min)
-        else:
-            logger.info("APP: auto-save disabled")
-
-    def _auto_save_tick(self) -> None:
-        """Periodic auto-save of the project (silent, no dialogs)."""
-        if not self._project_loaded:
-            return
-        path = self._project_path or self._cfg.db_path
-        if not path:
-            return
-        try:
-            # SQLite DB is already in place — just show a notification
-            import os as _os
-            name = _os.path.basename(path)
-            self.notify(f"Auto-saved: {name}", timeout=2)
-            logger.info("APP: auto-saved project %s", path)
-        except Exception as exc:
-            logger.debug("_auto_save_tick: %s", exc)
 
     def _cfg_observer_cb(self, changed_fields: dict) -> None:
         """Config Observer callback — called from any context (R-16).
