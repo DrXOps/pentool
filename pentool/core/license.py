@@ -6,7 +6,6 @@ import base64
 import hashlib
 import json
 import platform
-import tarfile
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -43,11 +42,15 @@ _LICENSE_API_BASE = "https://pentool-license.akashtanov2020.workers.dev"
 # PRO package delivery
 PRO_PACKAGE_DIR = Path.home() / ".pentool" / "pro"
 
-# ed25519 public key (base64) matching pentool-pro's PRO_SIGNING_KEY.
-# Only the corresponding private key (held in pentool-pro's CI secret) can
-# produce a signature that verifies against this — a compromised CDN/Worker
-# cannot make the client execute tampered code.
-_PRO_PACKAGE_PUBLIC_KEY_B64 = "MMPAM1xmvGV/CaLlT0doHoUH+Uv2zvVMSmPzNBglgBA="
+# PRO-package verify/extract/platform helpers now live in
+# core/license_update.py (Этап 6) — re-exported here under the same names so
+# existing call sites don't change.
+from pentool.core.license_update import (
+    PRO_PACKAGE_PUBLIC_KEY_B64 as _PRO_PACKAGE_PUBLIC_KEY_B64,
+    current_platform as _current_platform,
+    safe_extract_tar as _safe_extract_tar,
+    verify_pro_package_signature as _verify_pro_package_signature,
+)
 
 # ed25519 public key (base64) matching pentool-backend's LICENSE_SIGNING_KEY.
 # Every /api/validate and /api/trial/start response is signed server-side —
@@ -479,53 +482,6 @@ async def start_trial() -> LicenseInfo:
             machine_id=machine_id,
             error=f"License server unreachable: {exc}",
         )
-
-
-def _verify_pro_package_signature(archive_bytes: bytes, signature_b64: str) -> bool:
-    """Verify the ed25519 detached signature over the raw archive bytes."""
-    try:
-        from cryptography.exceptions import InvalidSignature
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
-        public_key = Ed25519PublicKey.from_public_bytes(
-            base64.b64decode(_PRO_PACKAGE_PUBLIC_KEY_B64)
-        )
-        signature = base64.b64decode(signature_b64.strip())
-        public_key.verify(signature, archive_bytes)
-        return True
-    except InvalidSignature:
-        return False
-    except Exception:
-        return False
-
-
-def _safe_extract_tar(archive_path: Path, dest_dir: Path) -> None:
-    """Extract a tar.gz archive, refusing any member that would escape dest_dir.
-
-    Guards against path traversal (../../) and absolute-path members —
-    the archive is fetched over the network and, even though it is
-    signature-verified, defense in depth costs nothing here.
-    """
-    dest_dir = dest_dir.resolve()
-    with tarfile.open(archive_path, "r:gz") as tar:
-        for member in tar.getmembers():
-            member_path = (dest_dir / member.name).resolve()
-            if not str(member_path).startswith(str(dest_dir)):
-                raise ValueError(f"Unsafe path in PRO package archive: {member.name}")
-        tar.extractall(dest_dir)  # noqa: S202 — members already validated above
-
-
-def _current_platform() -> str:
-    """Map platform.system() to the pentool-pro release asset naming scheme
-    (pentool-pro-{linux,macos,windows}.tar.gz — see pentool-backend's
-    packageAssetName()). Defaults to "linux" for anything unrecognized
-    (e.g. other POSIX systems), matching the Worker's own fallback."""
-    system = platform.system().lower()
-    if system == "darwin":
-        return "macos"
-    if system == "windows":
-        return "windows"
-    return "linux"
 
 
 # File recording which PRO build is currently unpacked into PRO_PACKAGE_DIR,
