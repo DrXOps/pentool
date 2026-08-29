@@ -2055,6 +2055,14 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         return process_payload(payload, ops)
 
     def load_request(self, raw: str) -> None:
+        # A new target's raw request arriving here (Send to Intruder) means the
+        # user is starting fresh — drop any leftover rows from a previous
+        # host's attack so they don't obscure the new target. Same
+        # leftover-artifact fix as _reload_project_screens does across projects.
+        try:
+            self._clear_results()
+        except Exception:
+            pass
         try:
             editor = self.query_one("#template-editor", TextArea)
             _load_into_textarea(editor, raw, ["§"])
