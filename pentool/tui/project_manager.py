@@ -474,7 +474,9 @@ class ProjectManager:
         async def _reload_proxy() -> None:
             try:
                 screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
-                await screen._reload_from_storage()
+                # is_new lets the proxy screen start a brand-new project with
+                # an EMPTY scope (not inherited from the previous project).
+                await screen._reload_from_storage(is_new=is_new)
                 logger.info("_reload_project_screens: proxy reloaded from %s", path)
             except Exception as exc:
                 logger.debug("_reload_project_screens proxy: %s", exc)

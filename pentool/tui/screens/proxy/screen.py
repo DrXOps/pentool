@@ -843,7 +843,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         await self._proxy_service.reload_from_proxy(self._get_proxy_api())
         await self._reload_table()
 
-    async def _reload_from_storage(self) -> None:
+    async def _reload_from_storage(self, is_new: bool = False) -> None:
         """Reload the table from current storage without clearing data."""
         if self._proxy_service is None:
             return
@@ -861,8 +861,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         # for the DB we just switched to — neither must leak from whatever
         # project was open before (see _load_scope_setting docstring for the
         # "★ Scope button stops working after reopening an older project"
-        # bug this fixes).
-        await self._load_scope_setting()
+        # bug this fixes). is_new propagates so a brand-new project starts
+        # with an empty scope rather than inheriting the previous project's.
+        await self._load_scope_setting(is_new=is_new)
         await self._load_enforce_scope_setting()
         logger.info("PROXY SCREEN: _reload_from_storage: tables reloaded")
 
@@ -2157,15 +2158,21 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         except Exception as exc:
             logger.debug("_save_scope_setting: %s", exc)
 
-    async def _load_scope_setting(self) -> None:
+    async def _load_scope_setting(self, is_new: bool = False) -> None:
         """Load the persisted Scope host list for the current project's DB.
 
         Called after a project switch (and on initial mount), alongside
         _load_enforce_scope_setting — same per-project rationale. Falls
         back to the global Config.scope only if this project's DB has no
-        saved scope yet (e.g. a DB created before this fix, or a brand-new
-        project that hasn't had Scope configured), so behavior for
-        pre-existing single-project setups doesn't regress.
+        saved scope yet (e.g. a DB created before this fix, or a pre-existing
+        project that hasn't had Scope configured), so behavior for old
+        single-project setups doesn't regress.
+
+        For a brand-NEW project (is_new=True) we deliberately do NOT inherit
+        the global Config.scope (which mirrors whatever the previously-open
+        project last saved) — a new project starts with an empty scope. The
+        caller (ProjectManager._do_switch → _reload_proxy) passes is_new when
+        it created the project.
         """
         proxy = self._get_proxy()
         if proxy is None:
@@ -2181,12 +2188,17 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         except Exception as exc:
             logger.debug("_load_scope_setting: %s", exc)
             hosts = None
-        if hosts is None:
+        if hosts is None and not is_new:
+            # Existing project (or no per-project row yet): fall back to the
+            # global Config.scope so old setups don't regress. A brand-new
+            # project skips this and stays empty.
             try:
                 from pentool.core.config import get_config
                 hosts = list(get_config().scope)
             except Exception:
                 hosts = []
+        if hosts is None:
+            hosts = []
         proxy.set_scope(hosts)
         try:
             from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
