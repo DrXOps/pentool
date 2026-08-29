@@ -11,7 +11,6 @@ SCREEN_DECODER     = "#screen-decoder"
 SCREEN_COMPARER    = "#screen-comparer"
 SCREEN_SEQUENCER   = "#screen-sequencer"
 SCREEN_EXTENSIONS  = "#screen-extensions"
-SCREEN_TERMINAL    = "#screen-terminal"
 SCREEN_SETTINGS    = "#screen-settings"
 SCREEN_DASHBOARD   = "#screen-dashboard"
 

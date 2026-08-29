@@ -156,7 +156,6 @@ pentool
 - `Shift+C` — Comparer
 - `Shift+Q` — Sequencer
 - `Shift+E` — Extensions
-- `Shift+X` — Terminal
 
 ### В модулях
 - `F5` — выполнить действие (Send, Start Scan, etc.)

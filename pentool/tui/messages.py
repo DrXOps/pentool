@@ -102,10 +102,6 @@ class SendUrlToTarget(Message):
         self.req = req
 
 
-class TerminalStop(Message):
-    pass
-
-
 class ConfigChanged(Message):
     """Configuration changed — notify all subscribers (R-16).
 

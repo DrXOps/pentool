@@ -49,7 +49,6 @@ from pentool.tui.constants import (
     SCREEN_REPEATER,
     SCREEN_SCANNER,
     SCREEN_TARGET,
-    SCREEN_TERMINAL,
 )
 from pentool.tui.messages import (
     ConfigChanged,
@@ -67,7 +66,6 @@ from pentool.tui.messages import (
     SendUrlToTarget,
     SyncScopeToProxy,
     SyncScopeToTarget,
-    TerminalStop,
 )
 from pentool.tui.screens import (
     ComparerScreen,
@@ -81,7 +79,6 @@ from pentool.tui.screens import (
     SequencerScreen,
     SettingsScreen,
     TargetScreen,
-    TerminalScreen,
 )
 from pentool.tui.widgets.module_tabs import ModuleTabs
 from pentool.tui.widgets.statusbar import StatusBar
@@ -274,7 +271,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         Binding("C", "switch_module('comparer')",   "Comparer",   show=False, priority=True),
         Binding("Q", "switch_module('sequencer')",  "Sequencer",  show=False, priority=True),
         Binding("E", "switch_module('extensions')", "Extensions", show=False, priority=True),
-        Binding("X", "switch_module('terminal')",   "Terminal",   show=False, priority=True),
         # Shift+digit aliases for compatibility
         Binding("exclamation_mark",   "switch_module('proxy')",      show=False, priority=True),
         Binding("at",                 "switch_module('repeater')",   show=False, priority=True),
@@ -446,7 +442,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             yield ComparerScreen(id="screen-comparer")
             yield SequencerScreen(id="screen-sequencer")
             yield ExtensionsScreen(id="screen-extensions")
-            yield TerminalScreen(id="screen-terminal")
             yield SettingsScreen(id="screen-settings")
         # Footer and StatusBar both used to `dock: bottom` independently —
         # in Textual, multiple independently-docked widgets at the same
@@ -1416,14 +1411,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         except Exception as e:
             logger.debug("on_proxy_load_project: %s", e)
 
-    @on(TerminalStop)
-    def on_terminal_stop(self, msg: TerminalStop) -> None:
-        try:
-            term = self.query_one(SCREEN_TERMINAL, TerminalScreen)
-            term._stop()
-        except Exception as e:
-            logger.debug("on_terminal_stop: %s", e)
-
     @on(ConfigChanged)
     def on_config_changed(self, msg: ConfigChanged) -> None:
         """Apply config changes to ProxyServer and StatusBar (R-16).
@@ -1639,8 +1626,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             bus.unsubscribe_all(self._on_bus_proxy_completed)
         except Exception:
             pass
-        # Stop terminal (shell process) via Message Bus
-        self.post_message(TerminalStop())
         # Stop proxy — reuse the same robust path as manual stop, but the
         # async variant so Ctrl+Q does NOT freeze the TUI renderer, and with
         # short grace windows (proxy.stop cancels tasks fast; the 8080 port is

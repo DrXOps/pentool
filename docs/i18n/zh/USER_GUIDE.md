@@ -472,7 +472,6 @@ status = 404 OR status = 500
 | `Shift+C` | Comparer |
 | `Shift+Q` | Sequencer |
 | `Shift+E` | Extensions |
-| `Shift+X` | Terminal |
 
 ### 在模块中
 

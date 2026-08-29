@@ -17,7 +17,6 @@ from pentool.tui.screens import (
     RepeaterScreen,
     ScannerScreen,
     SequencerScreen,
-    TerminalScreen,
     SettingsScreen,
     TargetScreen,
 )
@@ -34,7 +33,6 @@ SCREEN_MAP: dict[str, type] = {
     "comparer":   ComparerScreen,
     "sequencer":  SequencerScreen,
     "extensions": ExtensionsScreen,
-    "terminal":   TerminalScreen,
     "settings":   SettingsScreen,
 }
 
