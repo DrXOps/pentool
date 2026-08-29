@@ -66,10 +66,12 @@ class NotificationsMixin:
         if timeout is not None:
             try:
                 self.set_timer(timeout + 0.5, self._refresh_notifications)  # type: ignore[attr-defined]
-            except Exception:
+            except Exception as exc:
                 # Timer unavailable — toast will just auto-expire on the next
-                # refresh; not fatal.
-                pass
+                # refresh; not fatal, but log it so a real problem (e.g. a
+                # missing _refresh_notifications after a refactor) is visible
+                # instead of silently swallowed.
+                logger.debug("notify: could not schedule toast refresh timer: %s", exc)
         if sound:
             try:
                 if self._cfg.notifications_sound_enabled:  # type: ignore[attr-defined]
