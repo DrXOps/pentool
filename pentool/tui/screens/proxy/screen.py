@@ -2199,6 +2199,10 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 hosts = []
         if hosts is None:
             hosts = []
+        logger.info(
+            "PROXY SCREEN: _load_scope_setting is_new=%s -> %d host(s): %r",
+            is_new, len(hosts), hosts,
+        )
         proxy.set_scope(hosts)
         try:
             from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
