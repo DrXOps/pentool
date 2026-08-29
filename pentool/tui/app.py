@@ -89,6 +89,7 @@ from pentool.tui.widgets.statusbar import StatusBar
 logger = get_logger(__name__)
 
 from pentool.tui.mixins.notifications import NotificationsMixin  # noqa: E402
+from pentool.tui.mixins.proxy_runtime import ProxyRuntimeMixin  # noqa: E402
 from pentool.tui.screen_registry import SCREEN_MAP  # noqa: E402
 
 
@@ -138,7 +139,7 @@ def _setup_faulthandler(log_file: str) -> None:
         pass
 
 
-class PentoolApp(NotificationsMixin, App):
+class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, App):
     """Main Pentool TUI application."""
 
     TITLE = "Pentool"
@@ -1132,32 +1133,6 @@ class PentoolApp(NotificationsMixin, App):
         """Path to the SQLite database (public access for screens)."""
         return self._cfg.db_path
 
-    def action_toggle_proxy(self) -> None:
-        if self._proxy is None:
-            return
-        if self._proxy.is_running:
-            # Stop asynchronously so the TUI thread isn't frozen for up to
-            # ~10s while proxy.stop() + thread join complete (the Stop button
-            # currently felt slow/unresponsive on a busy proxy).
-            self.run_worker(self._stop_proxy_async())
-        else:
-            if not self._project_loaded:
-                # Project DB switch/open (auto-open at startup, New/Open
-                # Project) is still finishing in the background — starting
-                # the proxy now would race HttpStorage.switch_db() (its
-                # connection may be mid-close/reopen) and silently lose or
-                # fail to persist the first captured requests. _project_loaded
-                # is set as soon as the DB switch itself completes (see
-                # ProjectManager._do_switch) — the other screens may still be
-                # reloading, but that's independent of Proxy.
-                self.notify(
-                    "Project is still opening — wait a couple of seconds before starting Proxy",
-                    severity="warning",
-                    timeout=4,
-                )
-                return
-            self._start_proxy()
-
     def action_toggle_intercept(self) -> None:
         if self._proxy is None:
             return
@@ -1169,27 +1144,7 @@ class PentoolApp(NotificationsMixin, App):
         self._update_status()
         self._update_proxy_screen_labels()
 
-    def _start_proxy(self) -> None:
-        if self._proxy is None or self._proxy.is_running:
-            return
-        logger.info("APP: _start_proxy: starting proxy on %s:%d", self._proxy.host, self._proxy.port)
-        # Sprint 3: callbacks removed — proxy emits via EventBus,
-        # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted in on_mount
-
-        def _run_proxy_loop() -> None:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            self._proxy_loop = loop
-            try:
-                loop.run_until_complete(self._proxy_main())
-            finally:
-                loop.close()
-                self._proxy_loop = None
-
-        self._proxy_thread = threading.Thread(
-            target=_run_proxy_loop, daemon=True, name="proxy"
-        )
-        self._proxy_thread.start()
+    # -- Proxy start/stop/toggle lives in ProxyRuntimeMixin (tui/mixins/proxy_runtime.py)
 
     def _setup_signal_handlers(self) -> None:
         """Register SIGTERM/SIGINT for graceful shutdown (10.2).
@@ -1238,104 +1193,8 @@ class PentoolApp(NotificationsMixin, App):
         except Exception as exc:
             logger.warning("APP: CA pre-warm failed: %s", exc)
 
-    async def _proxy_main(self) -> None:
-        """Proxy entry point — runs in a separate event loop."""
-        try:
-            await self._proxy.start()
-            self.call_from_thread(self._update_status)
-            self.call_from_thread(self._update_proxy_screen_labels)
-            self.call_from_thread(self._update_dashboard_proxy_status, True)
-            self.call_from_thread(self.notify, f"● Proxy :{self._proxy.port}", "success")
-            logger.info("Proxy started on port %s", self._proxy.port)
-            async with self._proxy._server:
-                await self._proxy._server.serve_forever()
-        except Exception as exc:
-            logger.error("Proxy error: %s", exc)
-            # Surface this to the user — previously only logged, so a
-            # "port already in use" / "another process holds this file"
-            # failure looked like the proxy silently did nothing when the
-            # toolbar button was pressed, with no clue why.
-            msg = str(exc) or type(exc).__name__
-            self.call_from_thread(
-                self.notify,
-                f"Proxy failed to start: {msg}",
-                severity="error",
-                timeout=6,
-            )
-        finally:
-            self.call_from_thread(self._update_status)
-            self.call_from_thread(self._update_proxy_screen_labels)
-            self.call_from_thread(self._update_dashboard_proxy_status, False)
-
-    def _stop_proxy(self) -> None:
-        logger.info("APP: _stop_proxy called")
-        if self._proxy and self._proxy.is_running and self._proxy_loop:
-            future = asyncio.run_coroutine_threadsafe(
-                self._proxy.stop(), self._proxy_loop
-            )
-            try:
-                # stop() itself now cancels tasks within a short grace
-                # (see _STOP_TASK_GRACE), so a short timeout here is enough —
-                # and on a normal quit the leftover connections are released
-                # by the process exit, so we never need the old 6s headroom.
-                future.result(timeout=1.5)
-            except Exception as e:
-                logger.warning("APP: proxy.stop() error or timeout: %s", e)
-                # Force-cancel anything still running in the proxy loop so
-                # the thread can exit even if stop() itself timed out
-                if self._proxy_loop and not self._proxy_loop.is_closed():
-                    try:
-                        def _cancel_all():
-                            for t in asyncio.all_tasks(self._proxy_loop):
-                                t.cancel()
-                        self._proxy_loop.call_soon_threadsafe(_cancel_all)
-                    except Exception:
-                        pass
-        if self._proxy_thread and self._proxy_thread.is_alive():
-            self._proxy_thread.join(timeout=1.5)
-            if self._proxy_thread.is_alive():
-                logger.warning("APP: proxy thread did not stop in 1.5s — port 8080 may still be in use")
-        self.call_after_refresh(self._update_status)
-        self.call_after_refresh(self._update_proxy_screen_labels)
-        self.call_after_refresh(self.notify, "○ Proxy stopped", "warning")
-
-    async def _stop_proxy_async(self) -> None:
-        """Async stop of the proxy that does NOT block the TUI thread.
-
-        Same robust path as `_stop_proxy()` (await proxy.stop() up to 6s,
-        force-cancel tasks on timeout, join the proxy thread) but expressed
-        as a coroutine. Intended to be awaited from an async worker context
-        (e.g. ProjectManager._do_switch) so that switching to a new project
-        does NOT freeze the UI for up to ~10s while the old proxy is being
-        wound down. _stop_proxy() remains the synchronous variant used by
-        the Stop button / Ctrl+Q.
-        """
-        logger.info("APP: _stop_proxy_async called")
-        if self._proxy and self._proxy.is_running and self._proxy_loop:
-            future = asyncio.run_coroutine_threadsafe(
-                self._proxy.stop(), self._proxy_loop
-            )
-            try:
-                await asyncio.wait_for(asyncio.wrap_future(future), timeout=1.5)
-            except asyncio.TimeoutError:
-                logger.warning("APP: proxy.stop() (async) timed out")
-        # Wait (in this async context) for the proxy thread to die so the
-        # 8080 port is released before the caller switches the project DB.
-        # Short bounded window — beyond it the port is released by the
-        # (soon-exiting) process, so we never block the caller for ~7s.
-        loop = asyncio.get_running_loop()
-        proxy_thread = self._proxy_thread
-        if proxy_thread is not None:
-            for _ in range(20):  # up to ~2s in 100ms steps
-                alive = await loop.run_in_executor(None, proxy_thread.is_alive)
-                if not alive:
-                    break
-                await asyncio.sleep(0.1)
-            self.call_after_refresh(self._update_status)
-            self.call_after_refresh(self._update_proxy_screen_labels)
-            self.call_after_refresh(self.notify, "○ Proxy stopped", "warning")
-        else:
-            self.call_after_refresh(self._update_status)
+    # Note: _proxy_main, _stop_proxy, _stop_proxy_async now live in
+    # ProxyRuntimeMixin (tui/mixins/proxy_runtime.py).
 
     # Sprint 3: _on_proxy_request and _proxy_request_done_cb removed — proxy emits via EventBus,
     # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted → _on_bus_proxy_captured/completed
