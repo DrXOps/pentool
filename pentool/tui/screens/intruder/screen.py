@@ -46,6 +46,7 @@ from pentool.api.intruder_api import (
     process_payload,
 )
 from pentool.tui.widgets.payload_serialization import deserialize_payloads, serialize_payloads
+from pentool.tui.widgets.intruder_results import matches_result_filters
 from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
@@ -1669,7 +1670,9 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
 
     def _on_result(self, result: IntruderResult) -> None:
         self._all_results.append(result)
-        if self._passes_filter(result):
+        if matches_result_filters(
+            result, self._filter_status, self._filter_len_gt, self._filter_len_lt
+        ):
             self._add_result_row(result)
         # Auto-save result to DB
         self._auto_save_result(result)
@@ -1999,23 +2002,15 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             pass
 
 
-    def _passes_filter(self, result: IntruderResult) -> bool:
-        if self._filter_status and str(result.response_status) != self._filter_status:
-            return False
-        length = result.response_length or 0
-        if self._filter_len_gt is not None and length <= self._filter_len_gt:
-            return False
-        if self._filter_len_lt is not None and length >= self._filter_len_lt:
-            return False
-        return True
-
     def _redraw_results(self) -> None:
         try:
             self.query_one("#results-table", DataTable).clear()
         except Exception:
             pass
         for result in self._all_results:
-            if self._passes_filter(result):
+            if matches_result_filters(
+                result, self._filter_status, self._filter_len_gt, self._filter_len_lt
+            ):
                 self._add_result_row(result)
 
     def _export_csv(self) -> None:
