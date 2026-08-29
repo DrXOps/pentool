@@ -58,3 +58,48 @@ class TestNotificationsMixin:
         app = _FakeApp()
         # query_one raises (unmounted) -> flash no-ops, does not raise.
         app.flash("x")  # should not raise
+
+    # ── "failed notification" regression guards ──────────────────────────────
+    # notify() is called from many contexts (proxy threads, timers, near
+    # teardown). It must NEVER raise — a raised notify surfaces to the user as
+    # an error toast / "failed notification" and can take down the action that
+    # triggered it.
+
+    def test_notify_does_not_raise_when_set_timer_missing(self):
+        """Host without set_timer (e.g. non-App, or winding down) -> no raise."""
+        app = _FakeApp()
+        app.set_timer = None  # type: ignore[assignment]
+        app.notify("x", timeout=2.0)  # should not raise
+
+    def test_notify_does_not_raise_when_refresh_missing(self):
+        """Host without _refresh_notifications -> timer scheduling skipped, no raise."""
+        # A host that does NOT define _refresh_notifications (e.g. a non-App
+        # object, or a class that dropped it). notify must not blow up.
+        class _NoRefresh(_FakeApp):
+            _refresh_notifications = None  # unavailable
+
+        app = _NoRefresh()
+        app.notify("x", timeout=2.0)  # should not raise
+        assert app.super_notified, "super().notify still called"
+
+    def test_notify_does_not_raise_when_sound_missing(self):
+        """_cfg without notifications_sound_enabled -> sound branch skipped."""
+        app = _FakeApp()
+        app._cfg = types.SimpleNamespace()  # no notifications_sound_enabled
+        app.notify("x")  # should not raise
+        assert app.super_notified
+
+    def test_notify_sound_failure_is_swallowed(self):
+        """play_notification_sound raising must not break notify."""
+        import unittest.mock as mock
+
+        app = _FakeApp()
+        app._cfg = types.SimpleNamespace(notifications_sound_enabled=True)
+        # notify imports play_notification_sound from pentool.core.notification_sound
+        # at call time; patch it there so the sound branch raises.
+        with mock.patch(
+            "pentool.core.notification_sound.play_notification_sound",
+            side_effect=RuntimeError("boom"),
+        ):
+            app.notify("x")  # should not raise
+        assert app.super_notified

@@ -56,8 +56,20 @@ class NotificationsMixin:
         # toasts when the rack is refreshed. If the app is busy it can leave an
         # expired toast sitting. Unless kept forever (critical), schedule a
         # refresh shortly after the timeout so it always dismisses on its own.
+        #
+        # Guarded: notify() runs from many contexts (proxy threads via
+        # call_from_thread, timers, right before/after screen teardown). If
+        # set_timer/_refresh_notifications are unavailable (app winding down,
+        # or a host that isn't a full Textual App) we still must never let a
+        # toast break the caller — the toast itself is the failure surface the
+        # user would see as "failed notification".
         if timeout is not None:
-            self.set_timer(timeout + 0.5, self._refresh_notifications)  # type: ignore[attr-defined]
+            try:
+                self.set_timer(timeout + 0.5, self._refresh_notifications)  # type: ignore[attr-defined]
+            except Exception:
+                # Timer unavailable — toast will just auto-expire on the next
+                # refresh; not fatal.
+                pass
         if sound:
             try:
                 if self._cfg.notifications_sound_enabled:  # type: ignore[attr-defined]
