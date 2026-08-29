@@ -131,7 +131,16 @@ class TerminalScreen(Widget):
                     if not data:
                         break
                     text = data.decode("utf-8", errors="replace")
-                    self.app.call_from_thread(self._append_output, text)
+                    try:
+                        self.app.call_from_thread(self._append_output, text)
+                    except Exception:
+                        # self.app (and thus call_from_thread) is unavailable
+                        # once the app is tearing down / not in the active
+                        # asyncio context from this background thread — a
+                        # LookupError/NoActiveAppError here used to surface as
+                        # "Exception in thread pty-reader … active_app.get()".
+                        # This is non-fatal at shutdown; stop the reader.
+                        break
             except OSError:
                 break
 
