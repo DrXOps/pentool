@@ -62,6 +62,7 @@ class SpiderAPI(ExportableAPI):
         max_pages: int = DEFAULT_MAX_PAGES,
         concurrency: int = 5,
         timeout: float = 10.0,
+        js_render: bool = False,
     ) -> "SpiderAPI":
         """Convenience factory method."""
         return cls(SpiderConfig(
@@ -69,6 +70,7 @@ class SpiderAPI(ExportableAPI):
             max_pages=max_pages,
             concurrency=concurrency,
             timeout=timeout,
+            js_render=js_render,
         ))
 
     async def crawl(

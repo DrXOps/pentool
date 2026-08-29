@@ -633,6 +633,12 @@ class TestSpiderJsRenderConfig:
         api = SpiderAPI.from_params(max_depth=1, max_pages=1)
         assert api.config.js_render is False
 
+    def test_spider_api_from_params_js_render_true(self):
+        """N2: from_params(js_render=True) propagates to the config."""
+        from pentool.api.spider_api import SpiderAPI
+        api = SpiderAPI.from_params(max_depth=1, max_pages=1, js_render=True)
+        assert api.config.js_render is True
+
 
 class TestPlaywrightFetchPage:
     """Tests for _fetch_page_playwright with mock objects."""
@@ -695,6 +701,66 @@ class TestPlaywrightFetchPage:
         assert "Timeout!" in result.errors[0]
 
     @pytest.mark.asyncio
+    async def test_crawl_spa_clicks_harvests_new_links(self):
+        """N1: SPA click pass surfaces a newly-rendered in-scope link."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        spider = AsyncSpider()
+        result = SpiderResult(base_url="https://example.com")
+        visited = set()
+        queue: list = []
+
+        page_mock = AsyncMock()
+        # One clickable candidate first, then nothing (empty) to terminate.
+        page_mock.eval_on_selector_all.side_effect = [
+            [{"i": 0, "k": "/menu"}],
+            [],
+        ]
+        page_mock.evaluate.return_value = None
+        page_mock.wait_for_load_state.return_value = None
+        page_mock.url = "https://example.com/"
+        # After the click, DOM reveals a new route.
+        page_mock.content.return_value = '<html><body><a href="/api/users/123">u</a></body></html>'
+
+        await spider._crawl_spa_clicks(
+            page_mock, "example.com", result, visited, queue, depth=0,
+        )
+
+        # The /api/users/123 route (rendered after the click) was harvested.
+        assert any(e.url == "https://example.com/api/users/123" and e.source == "spa" for e in result.endpoints)
+        assert any(u == "https://example.com/api/users/123" for u, _ in queue)
+
+    @pytest.mark.asyncio
+    async def test_crawl_spa_clicks_skips_out_of_scope_and_repeats(self):
+        """N1: out-of-scope links are not harvested; repeats not added twice."""
+        from unittest.mock import AsyncMock
+
+        spider = AsyncSpider()
+        result = SpiderResult(base_url="https://example.com")
+        visited = set()
+        queue: list = []
+
+        page_mock = AsyncMock()
+        # Two clickable candidates: an out-of-scope + an in-scope one.
+        page_mock.eval_on_selector_all.side_effect = [
+            [{"i": 0, "k": "external"}, {"i": 1, "k": "/tabs"}],
+            [],
+        ]
+        page_mock.evaluate.return_value = None
+        page_mock.wait_for_load_state.return_value = None
+        page_mock.url = "https://example.com/tab"
+        # DOM after click shows an in-scope route.
+        page_mock.content.return_value = '<html><a href="/level2">l2</a></html>'
+
+        await spider._crawl_spa_clicks(
+            page_mock, "example.com", result, visited, queue, depth=0,
+        )
+
+        # In-scope route harvested exactly once.
+        hits = [e for e in result.endpoints if e.url == "https://example.com/level2"]
+        assert len(hits) == 1
+
+    @pytest.mark.asyncio
     async def test_fetch_page_playwright_increments_requests(self):
         """_fetch_page_playwright increments total_requests on success."""
         spider = AsyncSpider()
@@ -749,6 +815,25 @@ class TestSpiderAPIStop:
         variants = spider._extract_path_variants(url, "example.com")
         # Ни один вариант не должен совпадать с оригинальным URL (дубль)
         assert url not in variants
+
+    def test_extract_path_variants_generates_injections(self):
+        """N4: numeric/UUID path segments become {id} injection variants."""
+        spider = AsyncSpider()
+        url = "https://example.com/api/users/123/profile"
+        variants = spider._extract_path_variants(url, "example.com")
+        # 123 is the only dynamic segment → one variant swapping it for {id}
+        assert "https://example.com/api/users/{id}/profile" in variants
+        assert len(variants) == 1
+
+    def test_extract_path_variants_uuid_and_multiple(self):
+        """N4: each numeric/UUID segment gets its own variant, query kept."""
+        spider = AsyncSpider()
+        url = "https://example.com/api/users/9e107d9d372bb6826bd81d3542a419d6/posts/42?page=2&tab=tab2"
+        variants = spider._extract_path_variants(url, "example.com")
+        # Each dynamic segment gets its own variant; query string is preserved.
+        assert "https://example.com/api/users/{id}/posts/42?page=2&tab=tab2" in variants
+        assert "https://example.com/api/users/9e107d9d372bb6826bd81d3542a419d6/posts/{id}?page=2&tab=tab2" in variants
+        assert len(variants) == 2
 
 
 class TestResolveScheme:
