@@ -18,7 +18,6 @@ from rich.text import Text
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
-from textual.message import Message as _Message
 from textual.widgets import (
     Button,
     DataTable,
@@ -58,133 +57,9 @@ from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar as _IntruderFilterBar
 
 logger = get_logger(__name__)
-
-
-class _IntruderFilterBar(Widget):
-    """Filter bar for the Intruder results table.
-
-    Encapsulates status / length-range / grep inputs that were previously
-    scattered as inline widgets inside IntruderScreen._compose_results.
-    Posts FilterChanged when the user applies or resets filters.
-    """
-
-    class FilterChanged(_Message):
-        """Emitted when the user clicks Apply or Reset."""
-        def __init__(self, filters: dict) -> None:
-            super().__init__()
-            self.filters = filters
-
-    DEFAULT_CSS = """
-    _IntruderFilterBar {
-        height: auto;
-        layout: vertical;
-    }
-    _IntruderFilterBar #results-filter-bar,
-    _IntruderFilterBar #grep-bar {
-        height: auto;
-        layout: horizontal;
-        padding: 0;
-    }
-    _IntruderFilterBar Label {
-        width: auto;
-        margin: 0 1;
-        color: $text-muted;
-    }
-    _IntruderFilterBar Input {
-        width: 12;
-        margin: 0 1;
-    }
-    _IntruderFilterBar Button {
-        margin: 0 1;
-    }
-    """
-
-    def compose(self) -> ComposeResult:
-        with Horizontal(id="results-filter-bar"):
-            yield Label("Status:")
-            yield Input(id="filter-status", placeholder="e.g. 200", compact=True)
-            yield Label("Length >")
-            yield Input(id="filter-len-gt", placeholder="0", compact=True)
-            yield Label("<")
-            yield Input(id="filter-len-lt", placeholder="∞", compact=True)
-            yield Button("Apply", id="btn-filter-apply")
-            yield Button("Reset filters", id="btn-filter-reset")
-        with Horizontal(id="grep-bar"):
-            yield Label("Grep:")
-            yield Input(id="grep-match-input", placeholder="regex — highlight matching rows", compact=True)
-            yield Label("Extract:")
-            yield Input(id="grep-extract-input", placeholder="regex — add column with extracted value", compact=True)
-            yield Button("Apply", id="btn-grep-apply")
-            yield Button("Clear grep", id="btn-grep-clear")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        bid = event.button.id
-        if bid == "btn-filter-apply":
-            self._emit_filters()
-        elif bid == "btn-filter-reset":
-            self._reset()
-        elif bid == "btn-grep-apply":
-            self._emit_grep()
-        elif bid == "btn-grep-clear":
-            self._clear_grep()
-
-    def _emit_filters(self) -> None:
-        """Build filter dict from current Input values and emit FilterChanged."""
-        filters: dict = {}
-        try:
-            status = self.query_one("#filter-status", Input).value.strip()
-            if status:
-                filters["status"] = status
-        except Exception:
-            pass
-        try:
-            gt = self.query_one("#filter-len-gt", Input).value.strip()
-            if gt:
-                filters["len_gt"] = int(gt)
-        except Exception:
-            pass
-        try:
-            lt = self.query_one("#filter-len-lt", Input).value.strip()
-            if lt:
-                filters["len_lt"] = int(lt)
-        except Exception:
-            pass
-        self.post_message(self.FilterChanged(filters))
-
-    def _reset(self) -> None:
-        try:
-            self.query_one("#filter-status", Input).value = ""
-            self.query_one("#filter-len-gt", Input).value = ""
-            self.query_one("#filter-len-lt", Input).value = ""
-        except Exception:
-            pass
-        self.post_message(self.FilterChanged({}))
-
-    def _emit_grep(self) -> None:
-        filters: dict = {}
-        try:
-            match = self.query_one("#grep-match-input", Input).value.strip()
-            if match:
-                filters["grep_match"] = match
-        except Exception:
-            pass
-        try:
-            extract = self.query_one("#grep-extract-input", Input).value.strip()
-            if extract:
-                filters["grep_extract"] = extract
-        except Exception:
-            pass
-        self.post_message(self.FilterChanged(filters))
-
-    def _clear_grep(self) -> None:
-        try:
-            self.query_one("#grep-match-input", Input).value = ""
-            self.query_one("#grep-extract-input", Input).value = ""
-        except Exception:
-            pass
-        self.post_message(self.FilterChanged({}))
 
 
 # Module constants
@@ -820,7 +695,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         if bid in ("btn-export-csv-results", "btn-export-csv"):
             self._export_csv()
 
-    def on__intruder_filter_bar_filter_changed(
+    @on(_IntruderFilterBar.FilterChanged)
+    def on_intruder_filter_bar_changed(
         self, event: _IntruderFilterBar.FilterChanged
     ) -> None:
         """React to _IntruderFilterBar posting a FilterChanged message."""
