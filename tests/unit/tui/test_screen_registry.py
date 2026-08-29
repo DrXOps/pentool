@@ -9,7 +9,7 @@ class TestScreenRegistry:
     def test_all_expected_modules_mapped(self):
         expected = {
             "dashboard", "proxy", "repeater", "intruder", "scanner", "target",
-            "decoder", "comparer", "sequencer", "extensions", "terminal", "settings",
+            "decoder", "comparer", "sequencer", "extensions", "settings",
         }
         assert set(SCREEN_MAP.keys()) == expected
 
