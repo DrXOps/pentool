@@ -54,3 +54,36 @@ async def test_extract_column_added_once_when_pattern_active():
 async def test_extract_column_not_added_without_pattern():
     table, names = await _with_pattern(active=False)
     assert not any(n.startswith("Extract") for n in names)
+
+
+@pytest.mark.asyncio
+async def test_remove_extract_column_restores_plain():
+    app = _Host()
+    screen = object.__new__(IntruderScreen)
+    screen._grep_extract_patterns = ["(user)"]
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen._ensure_extract_column(app.table)
+        await pilot.pause()
+        assert any(str(c.label).strip().startswith("Extract") for c in app.table.ordered_columns)
+
+        # now "clear" the pattern and remove the column
+        screen._grep_extract_patterns = []
+        screen._remove_extract_column(app.table)
+        await pilot.pause()
+        names = [str(c.label).strip() for c in app.table.ordered_columns]
+        assert not any(n.startswith("Extract") for n in names)
+        assert len(names) == 6
+
+
+@pytest.mark.asyncio
+async def test_remove_extract_column_idempotent():
+    app = _Host()
+    screen = object.__new__(IntruderScreen)
+    screen._grep_extract_patterns = []
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen._remove_extract_column(app.table)  # no Extract column -> no-op
+        await pilot.pause()
+        names = [str(c.label).strip() for c in app.table.ordered_columns]
+        assert not any(n.startswith("Extract") for n in names)

@@ -1699,12 +1699,35 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             except Exception:
                 pass
 
+    def _remove_extract_column(self, table: DataTable) -> None:
+        """Drop the dynamic "Extract" column once the grep-extract pattern is
+        cleared, so the columns return to the plain 6. Idempotent."""
+        try:
+            cols = getattr(table, "columns", None)
+            if not cols:
+                return
+            for k, col in list(cols.items()):
+                try:
+                    if str(getattr(col, "label", "") or "").startswith("Extract"):
+                        table.remove_column(k)
+                        return
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
     def _clear_results(self) -> None:
         try:
             self.query_one("#results-table", DataTable).clear()
         except Exception:
             pass
         self._all_results = []
+        # Full clear also drops the dynamic Extract column so a later Clear
+        # grep returns the table to its plain 6 columns.
+        try:
+            self._remove_extract_column(self.query_one("#results-table", DataTable))
+        except Exception:
+            pass
         try:
             self.query_one("#progress-label", Static).update("0/0 (0%)")
             self.query_one("#attack-progress", ProgressBar).update(total=100)
@@ -1904,7 +1927,12 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
 
     def _redraw_results(self) -> None:
         try:
-            self.query_one("#results-table", DataTable).clear()
+            table = self.query_one("#results-table", DataTable)
+            table.clear()
+            # If grep-extract was just cleared, drop the dynamic Extract column
+            # again so the filter bar's Clear/Reset restores the plain table.
+            if not self._grep_extract_patterns:
+                self._remove_extract_column(table)
         except Exception:
             pass
         for result in self._all_results:
