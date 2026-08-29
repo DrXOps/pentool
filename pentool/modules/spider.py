@@ -36,6 +36,11 @@ DEFAULT_MAX_DEPTH: int = 5
 DEFAULT_MAX_PAGES: int = 200
 DEFAULT_CONCURRENCY: int = 5
 
+# Interactive SPA discovery (N1): how many in-page clicks the JS crawl will
+# perform on a single page to surface client-side routes/tabs. Bounded so a
+# deep interactive app can't explode the request budget.
+_SPA_MAX_CLICKS_PER_PAGE: int = 12
+
 _PROC_POOL_ENABLED: bool = True
 _PROC_POOL_WORKERS: int = min(8, max(2, (os.cpu_count() or 4)))
 _PROC_THRESHOLD: int = 64
@@ -806,6 +811,17 @@ class AsyncSpider:
                         if self._normalize_url(link) not in visited:
                             queue.append((link, depth + 1))
 
+                # Interactive SPA discovery (N1): client-side apps build their
+                # next-level routes/tabs only after a click. After rendering the
+                # static DOM we click through a bounded set of interactive
+                # elements, re-read the DOM after each click, and harvest any
+                # *new* in-scope URLs — the classic XSS-Game /level4-style tab
+                # navigation, Angular/React pagination, etc. Without this a JS
+                # crawl only reads the initial shell and misses deep routes.
+                await self._crawl_spa_clicks(
+                    page, base_domain, result, visited, queue, depth,
+                )
+
                 if self.on_progress:
                     self.on_progress(
                         len(visited),
@@ -833,6 +849,104 @@ class AsyncSpider:
         except Exception as exc:
             result.errors.append(f"Playwright error {url}: {exc}")
             return None
+
+    async def _crawl_spa_clicks(
+        self,
+        page,
+        base_domain: str,
+        result: SpiderResult,
+        visited: set,
+        queue: list,
+        depth: int,
+    ) -> None:
+        """Click through client-side tabs/links to surface SPA routes (N1).
+
+        After the initial render of a JS page, many app frameworks (hash-based
+        tabs, React/Angular routing, image galleries) only materialise their
+        real endpoints after a user interaction. This bounded pass clicks the
+        interactive elements seen in the current DOM, re-reads the DOM after
+        each click (waiting for network idle so XHR-driven content lands), and
+        harvests any *new* in-scope URLs into the crawl queue and as endpoints.
+
+        It never mutates `visited` in a way that starves page — it only ADD
+        newly discovered URLs; normal crawl dedup still applies. `page` stays
+        on the last-clicked state, which is fine because the outer loop
+        re-navigates via page.goto() on the next queued URL.
+        """
+        import asyncio
+        from urllib.parse import urljoin
+
+        clicked: set[str] = set()
+        for _ in range(_SPA_MAX_CLICKS_PER_PAGE):
+            if self._stop or len(visited) >= self.max_pages:
+                break
+            try:
+                candidates = await page.eval_on_selector_all(
+                    "a[href], button, [role='tab'], .tab, [onclick]",
+                    """els => els.map((el, i) => {
+                        const h = el.getAttribute('href') || el.textContent || el.innerText || '';
+                        const k = h.trim().slice(0, 120);
+                        return {i, k};
+                    })""",
+                )
+            except Exception:
+                break
+            chosen = None
+            for cand in candidates:
+                key = cand.get("k", "")
+                # Skip elements with no text/href (empty tab, spacer) and
+                # anything already clicked on this page-pass.
+                if key and key not in clicked:
+                    chosen = cand
+                    break
+            if chosen is None:
+                break
+
+            idx = chosen.get("i")
+            key = chosen.get("k", "")
+            clicked.add(key)
+            try:
+                await page.evaluate(f"""() => {{
+                    const els = document.querySelectorAll("a[href], button, [role='tab'], .tab, [onclick]");
+                    const el = els[{idx}];
+                    if (el) el.click();
+                }}""")
+                # Give the client-side handler time to run and any XHR to land.
+                await page.wait_for_load_state("networkidle", timeout=2000)
+                await asyncio.sleep(0.2)
+            except Exception:
+                # Click or wait failed (nav/redirect) — move on, don't panic.
+                continue
+
+            try:
+                html = await page.content()
+            except Exception:
+                continue
+
+            links, forms, js_links = self._parse_html(html, page.url, base_domain)
+            result.forms.extend(forms)
+            result.js_files.extend(
+                j for j in js_links if j not in result.js_files
+            )
+            new_urls: list[str] = []
+            for raw in links + js_links:
+                try:
+                    abs_url = raw if raw.startswith("http") else urljoin(page.url, raw)
+                except Exception:
+                    continue
+                norm = self._normalize_url(abs_url)
+                if norm not in visited and self._in_scope(abs_url, base_domain):
+                    visited.add(norm)
+                    new_urls.append(norm)
+            # Surface the discovered SPA routes as endpoints AND push them back
+            # into the crawl queue (depth+1) so the outer playwright loop will
+            # navigate to them and audit their own forms/JS. `visited` guards
+            # against re-visiting; per-page click budget bounds the explosion.
+            result.endpoints.extend(
+                SpiderEndpoint(url=u, source="spa", method="GET") for u in new_urls
+            )
+            if depth < self.max_depth:
+                queue.extend((u, depth + 1) for u in new_urls)
 
     # ── HTML parsing ─────────────────────────────────────────────────────────
 
@@ -1057,10 +1171,35 @@ class AsyncSpider:
         Returns URLs with numeric/UUID segments as potential injection points.
         """
         variants: list[str] = []
-        urlparse(url)
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return variants
+        if not self._in_scope(url, base_domain):
+            return variants
 
-        # TODO: implement path variants (replace numeric/UUID segments with injection marker)
-        # Currently returns empty list to avoid adding duplicate original URLs to scan targets.
+        path = parsed.path
+        seen: set[str] = set()
+        origin = self._normalize_url(url)
+        query = f"?{parsed.query}" if parsed.query else ""
+        for match in _PATH_SEGMENT_RE.finditer(path):
+            # _PATH_SEGMENT_RE captures the value *after* the leading "/",
+            # so group(1) start/end delimit exactly the segment to replace.
+            seg_start, seg_end = match.start(1), match.end(1)
+            swapped = path[:seg_start] + "{id}" + path[seg_end:]
+            variant_url = f"{parsed.scheme}://{parsed.netloc}{swapped}{query}"
+            norm = self._normalize_url(variant_url)
+            # Never return the original URL itself (existing test contract),
+            # only the variant with the segment swapped out. Dedup on the
+            # normalized (query-free) form so ?page=2 vs ?page=3 collapse.
+            if norm and norm not in seen and norm != origin and not (
+                any(
+                    self._normalize_url(existing) == norm
+                    for existing in seen
+                )
+            ):
+                seen.add(norm)
+                variants.append(variant_url)
         return variants
 
     # ── utilities ─────────────────────────────────────────────────────────────

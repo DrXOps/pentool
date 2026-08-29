@@ -281,6 +281,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         super().__init__(**kwargs)
         self._proxy_service: ProxyService | None = proxy_service
         self._selected_req_id: int | None = None
+        # WebSocket-history selection is tracked separately from the HTTP one.
+        # The two tables share no id space (WS rows come from a different
+        # storage key), so reusing _selected_req_id for the WS guard made every
+        # WS load either silently drop (ids rarely match) or — worse — apply a
+        # stale entry when numeric ids collided. Keep a distinct value.
+        self._selected_ws_req_id: int | None = None
         # _rows_cache is kept in DISPLAY order: oldest first (top), newest
         # last (bottom) — matches the table's top-to-bottom rendering, so
         # new live requests append at the end instead of requiring a prepend
@@ -1079,11 +1085,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             # the cursor's position relative to the OLD tail *before* the
             # append, independent of focus: only follow the stream when the
             # cursor was at (or past) the last row already there.
-            old_tail = len(self._rows_cache) - len(new_rows) - 1
-            was_at_tail = table.cursor_row >= old_tail
-            table.add_rows(records)
-            if was_at_tail or table.cursor_row >= len(self._rows_cache) - 1:
-                table.scroll_end(animate=False)
         except Exception as exc:
             logger.debug("PROXY SCREEN: _flush_pending_rows: %s", exc)
         # Cap unbounded growth of the in-memory cache during very long
@@ -1196,6 +1197,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 row = self._ws_rows_cache[row_idx]
                 row_id = row.get("id")
                 if row_id is not None:
+                    if row_id == self._selected_ws_req_id:
+                        return
+                    self._selected_ws_req_id = row_id
                     self.run_worker(self._load_ws_row_details(row_id))
         except Exception as exc:
             logger.error("PROXY SCREEN: _select_ws_row crashed: %s", exc, exc_info=True)
@@ -1277,8 +1281,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         entry = await self._proxy_service.get_full_entry(row_id)
         if entry is None:
             return
-        # Same selection race guard as _load_row_details — ignore stale loads.
-        if self._selected_req_id is not None and row_id != self._selected_req_id:
+        # Same selection race guard as _load_row_details — ignore stale loads,
+        # but keyed on the WS table's own selection (see _selected_ws_req_id).
+        if self._selected_ws_req_id is not None and row_id != self._selected_ws_req_id:
             return
         self.call_after_refresh(self._load_ws_entry_details, entry)
 
@@ -1286,7 +1291,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         # Selection race guard (second layer) — skip drawing a stale entry
         # if the highlighted row changed after the async load finished.
         entry_id = entry.get("id")
-        if self._selected_req_id is not None and entry_id is not None and entry_id != self._selected_req_id:
+        if self._selected_ws_req_id is not None and entry_id is not None and entry_id != self._selected_ws_req_id:
             return
         from pentool.utils.parser import ParsedRequest
 
@@ -1957,6 +1962,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         except Exception:
             pass
         self._selected_req_id = None
+        self._selected_ws_req_id = None
 
     async def _do_clear_table(self) -> None:
         if self._proxy_service is not None and self._proxy_service.is_storage_ready():
