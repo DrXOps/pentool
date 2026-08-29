@@ -90,6 +90,7 @@ logger = get_logger(__name__)
 
 from pentool.tui.mixins.notifications import NotificationsMixin  # noqa: E402
 from pentool.tui.mixins.proxy_runtime import ProxyRuntimeMixin  # noqa: E402
+from pentool.tui.mixins.events_handlers import ProxyEventHandlersMixin  # noqa: E402
 from pentool.tui.screen_registry import SCREEN_MAP  # noqa: E402
 
 
@@ -139,7 +140,7 @@ def _setup_faulthandler(log_file: str) -> None:
         pass
 
 
-class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, App):
+class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin, App):
     """Main Pentool TUI application."""
 
     TITLE = "Pentool"
@@ -1229,43 +1230,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, App):
         setattr(self, cache_attr, screen)
         return screen
 
-    @on(ProxyRequestAdded)
-    def on_proxy_request_added(self, msg: ProxyRequestAdded) -> None:
-        """Proxy captured a new request → update ProxyScreen."""
-        if not (self._proxy and self._proxy.is_running):
-            return
-        try:
-            screen = self._get_proxy_screen()
-            if screen is None:
-                return  # quiet no-op — screen not mounted; do NOT log each call
-            screen.add_request_row(msg.req)
-            if self._proxy and self._proxy.intercept_enabled:
-                screen.show_intercepted_request(msg.req)  # type: ignore[arg-type]
-        except Exception as e:
-            logger.debug("on_proxy_request_added: %s", e)
-
-    @on(ProxyRequestDone)
-    def on_proxy_request_done(self, msg: ProxyRequestDone) -> None:
-        """Proxy completed a request/response cycle → update the row and SiteMap."""
-        # Remove from pending — the next request with this id will pass through again
-        req_id = getattr(msg.req, "id", None)
-        self._pending_done_ids.discard(req_id)
-        # Guard: msg.req must be InterceptedRequest
-        if not isinstance(msg.req, _IR):
-            logger.warning("on_proxy_request_done: msg.req is %s, skipping", type(msg.req))
-            return
-        try:
-            screen = self._get_proxy_screen()
-            if screen is None:
-                return  # quiet no-op — screen not mounted; do NOT log each call
-            screen.update_request_row(msg.req)
-            if self._proxy and self._proxy.intercept_enabled:
-                screen.show_intercept_response(msg.req)  # type: ignore[arg-type]
-        except Exception as e:
-            logger.debug("on_proxy_request_done (proxy screen): %s", e)
-        # Auto-build SiteMap
-        self.post_message(SendToTarget(msg.req))
-
     @on(SendToTarget)
     def on_send_to_target(self, msg: SendToTarget) -> None:
         try:
@@ -1432,23 +1396,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, App):
             target.add_request_from_proxy(msg.req)
         except Exception as e:
             logger.debug("on_send_url_to_target: %s", e)
-
-    @on(ProxyClearHistory)
-    def on_proxy_clear_history(self, msg: ProxyClearHistory) -> None:
-        try:
-            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
-            screen.action_clear_list()
-        except Exception as e:
-            logger.debug("on_proxy_clear_history: %s", e)
-
-    @on(ProxyLoadProject)
-    def on_proxy_load_project(self, msg: ProxyLoadProject) -> None:
-        """Reload the ProxyScreen table after loading a project."""
-        try:
-            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
-            screen.load_from_project()
-        except Exception as e:
-            logger.debug("on_proxy_load_project: %s", e)
 
     @on(TerminalStop)
     def on_terminal_stop(self, msg: TerminalStop) -> None:
@@ -1647,32 +1594,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, App):
     def _on_bus_scan_progress(self, event: ScanProgressEvent) -> None:
         """Scan progress → Dashboard (optional, for live updates)."""
         # Not used yet — Dashboard updates via ScanStarted/ScanFinished.
-
-    def _on_bus_proxy_captured(self, event: ProxyRequestCaptured) -> None:
-        """EventBus: proxy captured a new request.
-
-        Bridge: proxy emit from its thread → EventBus → this method is called
-        synchronously in the proxy thread → call_from_thread → Textual Message in TUI thread.
-        """
-        req = event.request
-        if req is None or not isinstance(req, _IR):
-            return
-        self.call_from_thread(self.post_message, ProxyRequestAdded(req))
-
-    def _on_bus_proxy_completed(self, event: ProxyRequestCompleted) -> None:
-        """EventBus: request through proxy completed.
-
-        Bridge: proxy emit from its thread → EventBus → call_from_thread → Textual Message.
-        """
-        req = event.request
-        if req is None or not isinstance(req, _IR):
-            return
-        req_id = req.id
-        # Deduplication: if already pending, ignore
-        if req_id in self._pending_done_ids:
-            return
-        self._pending_done_ids.add(req_id)
-        self.call_from_thread(self.post_message, ProxyRequestDone(req))
 
     def _on_bus_passive_toggled(self, event: PassiveScanToggled) -> None:
         """Passive scan enabled/disabled — update LED on Dashboard."""
