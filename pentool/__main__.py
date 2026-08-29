@@ -133,6 +133,25 @@ def _kill_orphaned_pentool() -> None:
         pass  # never block startup on cleanup
 
 
+def _log_exit_reason(reason: str) -> None:
+    """Append a short, unambiguous line to pentool_exit_dump.log naming WHY the
+    process is exiting — signal/SystemExit, an exception (crash), or the
+    clean-return path. Without this, a runaway/quiet exit produced only the
+    thread dump with no explicit cause, and it wasn't clear whether the app
+    quit normally or crashed silently.
+
+    Non-fatal: failures here must never mask the actual shutdown path.
+    """
+    try:
+        from pentool.core.config import DEFAULT_CONFIG_DIR
+        from pathlib import Path
+        (DEFAULT_CONFIG_DIR / "pentool_exit_dump.log").open("a").write(
+            f"--- EXIT: {reason} ({__import__('time').strftime('%Y-%m-%d %H:%M:%S')}) ---\n"
+        )
+    except Exception:
+        pass
+
+
 def main() -> None:
     unsafe_skip_pro_check = _UNSAFE_SKIP_PRO_CHECK_FLAG in sys.argv
     if unsafe_skip_pro_check:
@@ -284,11 +303,13 @@ def main() -> None:
         try:
             PentoolApp().run()
         except (KeyboardInterrupt, SystemExit):
+            _log_exit_reason("signal/SystemExit")
             # Let the interpreter shut down normally on signals/explicit exits
             # (PEP 8: never swallow these). The non-daemon-thread hang fix
             # below only targets the clean-return path (the `else` branch).
             raise
         except Exception as exc:
+            _log_exit_reason(f"crash: {type(exc).__name__}: {exc}")
             # Send anonymous crash report (if not disabled in settings)
             try:
                 from pentool.core.crash_reporter import send_crash
@@ -297,6 +318,7 @@ def main() -> None:
                 pass
             raise
         else:
+            _log_exit_reason("run() returned cleanly (not via action_quit)")
             # `run()` returned cleanly — not through `action_quit` (which
             # does its own os._exit deep inside the app). Dump all thread
             # stacks to the log for post-mortem diagnosis, then hard-exit so
