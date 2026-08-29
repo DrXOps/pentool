@@ -1190,6 +1190,48 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         setattr(self, cache_attr, screen)
         return screen
 
+    @on(ProxyRequestAdded)
+    def on_proxy_request_added(self, msg: ProxyRequestAdded) -> None:
+        """Proxy captured a new request → update ProxyScreen.
+
+        NOTE: must stay in the App class (not a mixin) — Textual only
+        introspects the direct App class for `@on(...)` handlers and would
+        silently skip a mixin MRO handler, breaking live history rows.
+        """
+        if not (self._proxy and self._proxy.is_running):
+            return
+        try:
+            screen = self._get_proxy_screen()
+            if screen is None:
+                return  # quiet no-op — screen not mounted; do NOT log each call
+            screen.add_request_row(msg.req)
+            if self._proxy and self._proxy.intercept_enabled:
+                screen.show_intercepted_request(msg.req)  # type: ignore[arg-type]
+        except Exception as e:
+            logger.debug("on_proxy_request_added: %s", e)
+
+    @on(ProxyRequestDone)
+    def on_proxy_request_done(self, msg: ProxyRequestDone) -> None:
+        """Proxy completed a request/response cycle → update the row and SiteMap."""
+        # Remove from pending — the next request with this id will pass through again
+        req_id = getattr(msg.req, "id", None)
+        self._pending_done_ids.discard(req_id)
+        # Guard: msg.req must be InterceptedRequest
+        if not isinstance(msg.req, _IR):
+            logger.warning("on_proxy_request_done: msg.req is %s, skipping", type(msg.req))
+            return
+        try:
+            screen = self._get_proxy_screen()
+            if screen is None:
+                return  # quiet no-op — screen not mounted; do NOT log each call
+            screen.update_request_row(msg.req)
+            if self._proxy and self._proxy.intercept_enabled:
+                screen.show_intercept_response(msg.req)  # type: ignore[arg-type]
+        except Exception as e:
+            logger.debug("on_proxy_request_done (proxy screen): %s", e)
+        # Auto-build SiteMap
+        self.post_message(SendToTarget(msg.req))
+
     @on(SendToTarget)
     def on_send_to_target(self, msg: SendToTarget) -> None:
         try:
@@ -1356,6 +1398,23 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             target.add_request_from_proxy(msg.req)
         except Exception as e:
             logger.debug("on_send_url_to_target: %s", e)
+
+    @on(ProxyClearHistory)
+    def on_proxy_clear_history(self, msg: ProxyClearHistory) -> None:
+        try:
+            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+            screen.action_clear_list()
+        except Exception as e:
+            logger.debug("on_proxy_clear_history: %s", e)
+
+    @on(ProxyLoadProject)
+    def on_proxy_load_project(self, msg: ProxyLoadProject) -> None:
+        """Reload the ProxyScreen table after loading a project."""
+        try:
+            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+            screen.load_from_project()
+        except Exception as e:
+            logger.debug("on_proxy_load_project: %s", e)
 
     @on(TerminalStop)
     def on_terminal_stop(self, msg: TerminalStop) -> None:
