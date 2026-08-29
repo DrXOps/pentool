@@ -1670,10 +1670,34 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             # Add Extract column if a pattern is set
             if self._grep_extract_patterns:
                 row.append(extract_val)
+                self._ensure_extract_column(table)
 
             table.add_row(*row, key=result.id)
         except Exception:
             pass
+
+    def _ensure_extract_column(self, table: DataTable) -> None:
+        """Add the dynamic "Extract" results-table column once, when a Grep
+        Extract pattern is active (variant A fix: it was being written into
+        rows without a declared column, producing a silent ValueError/blank).
+        Idempotent — column is added only if not already present."""
+        if not self._grep_extract_patterns:
+            return
+        try:
+            cols = getattr(table, "columns", None)
+            if cols is not None:
+                for k, col in cols.items():
+                    try:
+                        if str(getattr(col, "label", "") or "").startswith("Extract"):
+                            return
+                    except Exception:
+                        continue
+            table.add_column("Extract")
+        except Exception:
+            try:
+                table.add_column("Extract")
+            except Exception:
+                pass
 
     def _clear_results(self) -> None:
         try:
