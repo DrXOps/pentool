@@ -56,12 +56,12 @@ class Config:
     notifications_sound_enabled: bool = True  # play a short sound with customnotify() toasts
 
     # ── AI ────────────────────────────────────────────────────────────────────────
-    ai_enabled: bool = False           # мастер-выключатель AI-помощника
-    ai_model: str = ""                 # имя/путь к LLM-модели (GGUF)
-    ai_mcp_host: str = "127.0.0.1"    # MCP-сервер хост
+    ai_enabled: bool = False           # master switch for the AI assistant
+    ai_model: str = ""                 # LLM model name / path (GGUF)
+    ai_mcp_host: str = "127.0.0.1"    # MCP server host
     ai_mcp_port: int = 0              # 0 = stdio, >0 = TCP
-    ai_mcp_model_path: str = ""       # путь к GGUF-файлу
-    ai_mcp_auto_start: bool = False   # автостарт MCP-сервера при запуске pentool
+    ai_mcp_model_path: str = ""       # path to the GGUF file
+    ai_mcp_auto_start: bool = False   # auto-start the MCP server when pentool launches
 
     # Observer list — not serialized
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)

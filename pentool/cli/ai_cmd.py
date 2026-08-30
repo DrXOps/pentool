@@ -1,4 +1,4 @@
-"""CLI-команды для управления AI-помощником."""
+"""CLI commands for managing the AI assistant."""
 
 from __future__ import annotations
 
@@ -12,13 +12,13 @@ from pentool.core.config import get_config
 
 @click.group()
 def ai() -> None:
-    """AI-помощник: установка, запуск, управление."""
+    """AI assistant: install, launch, manage."""
 
 
 @ai.command("setup")
-@click.option("--force", is_flag=True, default=False, help="Переустановить даже если уже есть.")
+@click.option("--force", is_flag=True, default=False, help="Reinstall even if already present.")
 def ai_setup(force: bool) -> None:
-    """Установить LLM-модель и подготовить MCP-сервер."""
+    """Install the LLM model and prepare the MCP server."""
     from pentool.services.ai.factory import (
         AI_MODELS_DIR,
         ai_setup_required,
@@ -67,7 +67,7 @@ def ai_setup(force: bool) -> None:
 
 @ai.command("status")
 def ai_status() -> None:
-    """Показать статус AI-помощника и MCP-сервера."""
+    """Show the AI assistant and MCP server status."""
     from pentool.services.ai.factory import AI_MODELS_DIR
 
     cfg = get_config()
@@ -86,7 +86,7 @@ def ai_status() -> None:
 
 @ai.command("start")
 def ai_start() -> None:
-    """Запустить MCP-сервер (если не запущен)."""
+    """Start the MCP server (if not already running)."""
     cfg = get_config()
     if not cfg.ai_enabled:
         click.echo("AI-помощник отключён. Включи в настройках или используй pentool ai setup.")
@@ -114,17 +114,17 @@ def ai_start() -> None:
 
 @ai.command("stop")
 def ai_stop() -> None:
-    """Остановить MCP-сервер."""
-    # Активный бэкенд отслеживается глобально в services/ai/factory.py via
-    # get_active_backend(); его жизненный цикл завязан на процесс, поэтому
-    # этот CLI-стоп просто сообщает, что сервер завершится вместе с pentool.
+    """Stop the MCP server."""
+    # The active backend is tracked globally in services/ai/factory.py via
+    # get_active_backend(); its lifecycle is bound to the process, so this
+    # CLI stop just reports that the server will shut down with pentool.
     click.echo("MCP-сервер будет остановлен при выходе из pentool.")
 
 
 @ai.command("remove")
-@click.confirmation_option(prompt="Удалить LLM-модель и MCP-сервер?")
+@click.confirmation_option(prompt="Remove the LLM model and MCP server?")
 def ai_remove() -> None:
-    """Удалить LLM-модель и зависимости MCP-сервера."""
+    """Remove the LLM model and MCP-server dependencies."""
     import shutil
     from pathlib import Path
 

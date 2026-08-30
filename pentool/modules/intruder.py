@@ -800,7 +800,7 @@ class IntruderAttack:
         # the actual HTTP-send section concurrently — it did nothing to stop
         # every task from existing in memory at once. Identical pattern to the
         # one found and fixed in ScanEngine.run_active_on_requests (see
-        # MYPLANS/MEMORY_LEAK_INVESTIGATION_PLAN_2026-08-08.md, H1/H2).
+        # (memory-leak investigation), H1/H2).
         #
         # AFTER: a fixed pool of `threads` worker coroutines pulls the next
         # (req_num, payload_values) tuple off a single shared iterator and

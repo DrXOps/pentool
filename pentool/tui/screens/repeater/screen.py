@@ -82,7 +82,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self._search_current: int = 0
         self._search_query: str = ""
         self._search_regex: bool = False
-        self._search_target: str = "request"  # "request" | "response" — синхронизируется с SearchBar
+        self._search_target: str = "request"  # "request" | "response" — syncs with the SearchBar
         self._tab_click_time: float = 0.0
         self._tab_click_id: str | None = None
         # Single persistent RepeaterAPI for the screen's lifetime — created
@@ -349,12 +349,12 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
     # ── Project lifecycle ──────────────────────────────────────────────────────
 
     async def reset_for_new_project(self) -> None:
-        """Удалить все вкладки и создать одну чистую. Вызывается при Ctrl+N."""
+        """Remove all tabs and create a single clean one. Called on Ctrl+N."""
         await self._close_all_tabs()
         self.action_new_tab()
 
     async def reload_from_project(self, db_path: str) -> None:
-        """Загрузить вкладки из БД. Вызывается при открытии существующего проекта."""
+        """Load the tabs from the DB. Called when opening an existing project."""
         await self._close_all_tabs()
         # Cancel any in-flight workers (auto-save, _do_load_tabs) from a
         # previous on_mount or project switch BEFORE calling switch_db().
@@ -382,7 +382,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=True)
 
     async def _close_all_tabs(self) -> None:
-        """Удалить все существующие вкладки из TabbedContent и сбросить состояние.
+        """Remove all existing tabs from the TabbedContent and reset state.
 
         remove_pane() returns an AwaitComplete (Textual schedules the actual
         tab/pane removal, it does not happen synchronously) — this was
@@ -419,7 +419,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             pass
         self._tabs = []
         self._active_tab_id = None
-        self._tab_counter = 0  # сброс счётчика — нумерация всегда с 1
+        self._tab_counter = 0  # counter reset — numbering always starts at 1
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.tabbed_content.id != "repeater-tabs":

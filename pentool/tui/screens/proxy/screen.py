@@ -1606,13 +1606,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
     @on(ToolbarButton.Pressed, "#btn-show-comments")
     def on_btn_show_comments(self, event: ToolbarButton.Pressed) -> None:
         """Toggle: show only rows that have a comment.
-        Повторное нажатие сбрасывает фильтр и возвращает полную историю."""
+        A second press resets the filter and brings back the full history."""
         btn = event.button
         if "active" in btn.classes:
             btn.remove_class("active")
             btn.label = "📝 Show comments"
             self._filter_show_comments = False
-            # Сбрасываем и все фильтры FilterBar, чтобы вернуть полную историю
+            # Reset the FilterBar filters too, to bring back the full history.
             try:
                 fb = self.query_one("#filter-bar")
                 from pentool.tui.widgets.filter_bar import FilterBar

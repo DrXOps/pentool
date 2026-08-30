@@ -1,6 +1,6 @@
 """Level A — ScanEngine leak test БЕЗ сети (FakeHTTPClient).
 
-Гипотеза H1 (см. MYPLANS/MEMORY_LEAK_INVESTIGATION_PLAN_2026-08-08.md):
+Гипотеза H1 (см. (memory-leak investigation)):
 `ScanEngine.run_active_on_requests()` строит `tasks_list` = ВСЕ комбинации
 (seed_request × injection_point × check) и передаёт целиком в
 `asyncio.gather(*[_run_one(...) for ...])`. Семафор (Threads в UI)

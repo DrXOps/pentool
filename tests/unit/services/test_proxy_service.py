@@ -214,7 +214,7 @@ class TestProxyServiceUpdateResponse:
 class TestProxyServiceUpdateColorTagsComment:
     """Public wrappers added so ProxyScreen no longer reaches into
     ProxyService._storage directly (layer-violation audit, see
-    MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7)."""
+    (scanner refactor plan) section 2.7)."""
 
     @pytest.mark.asyncio
     async def test_update_color_noop_when_not_ready(self, service):

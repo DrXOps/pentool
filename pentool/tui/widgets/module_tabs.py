@@ -103,7 +103,7 @@ class ModuleTabs(Widget):
             pass
 
     def flash(self, message: str, severity: str = "information", timeout: float = 2.5) -> None:
-        """Показать краткое сообщение справа в строке модулей на timeout секунд.
+        """Flash a short message on the right of the module row for *timeout* seconds.
 
         severity: "information" | "warning" | "error" | "success"
         """
@@ -118,7 +118,7 @@ class ModuleTabs(Widget):
             tip = self.query_one("#tooltip2", Static)
             tip.update(f"[{color}]{message}[/{color}]")
             tip.display = True
-            # Отменяем предыдущий таймер если есть
+            # Cancel the previous tooltip timer, if any.
             if hasattr(self, "_tooltip2_timer") and self._tooltip2_timer is not None:
                 try:
                     self._tooltip2_timer.stop()
