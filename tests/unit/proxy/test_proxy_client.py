@@ -12,24 +12,24 @@ from pentool.proxy.client import ProxyClient
 
 def _make_client() -> ProxyClient:
     c = ProxyClient(host="127.0.0.1", port=1234)
-    c._sock = MagicMock()
+    c._cmd_sock = MagicMock()
     return c
 
 
 class TestCommand:
     def test_sends_json_and_parses_reply(self):
         c = _make_client()
-        c._sock.recv.return_value = b'{"ok": true, "running": true}\n'
+        c._cmd_sock.recv.return_value = b'{"ok": true, "running": true}\n'
         resp = c._command({"cmd": "status"})
         # sent one line ending with \n
-        sent = c._sock.sendall.call_args[0][0]
+        sent = c._cmd_sock.sendall.call_args[0][0]
         assert sent.endswith(b"\n")
         assert b'"cmd": "status"' in sent
         assert resp == {"ok": True, "running": True}
 
     def test_bad_reply_is_tolerated(self):
         c = _make_client()
-        c._sock.recv.return_value = b"not-json\n"
+        c._cmd_sock.recv.return_value = b"not-json\n"
         resp = c._command({"cmd": "status"})
         assert resp.get("ok") is False
 
@@ -62,17 +62,17 @@ class TestApi:
     def test_set_intercept_sends_command(self):
         c = _make_client()
         c.intercept_enabled = False
-        c._sock.recv.return_value = b'{"ok": true}\n'
+        c._cmd_sock.recv.return_value = b'{"ok": true}\n'
         c.set_intercept(True)
-        sent = c._sock.sendall.call_args[0][0]
+        sent = c._cmd_sock.sendall.call_args[0][0]
         assert b'"enabled": true' in sent
         assert c.intercept_enabled is True
 
     def test_set_scope_sends_hosts(self):
         c = _make_client()
-        c._sock.recv.return_value = b'{"ok": true}\n'
+        c._cmd_sock.recv.return_value = b'{"ok": true}\n'
         c.set_scope(["x.io"])
-        sent = c._sock.sendall.call_args[0][0]
+        sent = c._cmd_sock.sendall.call_args[0][0]
         assert b'"hosts": ["x.io"]' in sent
 
 
@@ -81,7 +81,7 @@ class TestCleanup:
         proc = MagicMock()
         c = ProxyClient()
         c._proc = proc
-        c._sock = MagicMock()
+        c._cmd_sock = MagicMock()
         c.cleanup()
         proc.terminate.assert_called_once()
         proc.wait.assert_called()
