@@ -13,6 +13,7 @@ from pentool.utils.parser import (
     ParsedResponse,
     parse_http_request,
     parse_http_response,
+    response_raw_from_parsed,
 )
 
 
@@ -75,6 +76,48 @@ class TestParsedResponse:
     def test_default_body_empty(self) -> None:
         resp = ParsedResponse(status=204)
         assert resp.body == ""
+
+
+class TestResponseRawFromParsed:
+    """response_raw_from_parsed — local replacement for PRO format_response_raw,
+    which was broken on aiohttp >= 3.14 (missing 'stream_writer')."""
+
+    def test_builds_full_raw(self) -> None:
+        resp = ParsedResponse(
+            status=200,
+            reason="OK",
+            headers={"Content-Type": "text/html", "Server": "nginx"},
+            body="hello",
+            _raw_body=b"hello",
+        )
+        raw = response_raw_from_parsed(resp)
+        assert raw == "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nServer: nginx\r\n\r\nhello"
+
+    def test_uses_raw_body_bytes(self) -> None:
+        # _raw_body wins over the decoded body (raw wire bytes preserved
+        # through encode); the result string contains the raw bytes text.
+        resp = ParsedResponse(status=200, reason="OK", body="decoded", _raw_body=b"WIRE-BYTES")
+        raw = response_raw_from_parsed(resp)
+        assert "WIRE-BYTES" in raw
+        assert "decoded" not in raw
+
+    def test_uses_body_when_no_raw_body(self) -> None:
+        resp = ParsedResponse(status=204, reason="No Content", body="")
+        raw = response_raw_from_parsed(resp)
+        assert raw == "HTTP/1.1 204 No Content\r\n\r\n"
+
+    def test_no_reason_omits_it(self) -> None:
+        resp = ParsedResponse(status=500, headers={"X-Err": "1"}, body="boom")
+        raw = response_raw_from_parsed(resp)
+        assert raw.startswith("HTTP/1.1 500\r\n")
+        assert "X-Err: 1\r\n" in raw
+
+    def test_binary_body_is_replaced_not_crashing(self) -> None:
+        # A truly binary _raw_body decodes with errors='replace' (no crash),
+        # matching the str-typed response_raw contract.
+        resp = ParsedResponse(status=200, body="", _raw_body=b"\x89PNG\r\n\x1a\n")
+        raw = response_raw_from_parsed(resp)
+        assert raw.startswith("HTTP/1.1 200")
 
 
 class TestParseHttpRequest:
