@@ -215,6 +215,8 @@ class WebSocketHandler:
         port = parsed.port or default_port
         use_ssl = parsed.scheme in ("wss", "https") or ireq.is_https
 
+        srv_reader: asyncio.StreamReader | None = None
+        srv_writer: asyncio.StreamWriter | None = None
         try:
             if use_ssl:
                 # Cached SSL context — ssl.create_default_context() calls
@@ -236,59 +238,86 @@ class WebSocketHandler:
                 )
             else:
                 srv_reader, srv_writer = await asyncio.open_connection(host, port)
-        except Exception as exc:
-            logger.debug("WS connect failed %s:%s: %s", host, port, exc)
-            client_writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
-            await client_writer.drain()
-            return
 
-        raw_req = build_http_request(req)
-        srv_writer.write(raw_req.encode("utf-8", errors="replace"))
-        await srv_writer.drain()
+            raw_req = build_http_request(req)
+            srv_writer.write(raw_req.encode("utf-8", errors="replace"))
+            await srv_writer.drain()
 
-        resp_lines: list[bytes] = []
-        while True:
-            line = await srv_reader.readline()
-            if not line or line in (b"\r\n", b"\n"):
+            resp_lines: list[bytes] = []
+            while True:
+                line = await srv_reader.readline()
+                if not line or line in (b"\r\n", b"\n"):
+                    resp_lines.append(line)
+                    break
                 resp_lines.append(line)
-                break
-            resp_lines.append(line)
 
-        resp_bytes = b"".join(resp_lines)
-        first_line = resp_bytes.split(b"\n")[0]
-        status = int(first_line.split()[1]) if len(first_line.split()) >= 2 else 0
-        if status != 101:
-            logger.debug("WS upgrade failed: %s", first_line)
+            resp_bytes = b"".join(resp_lines)
+            first_line = resp_bytes.split(b"\n")[0]
+            status = int(first_line.split()[1]) if len(first_line.split()) >= 2 else 0
+            if status != 101:
+                logger.debug("WS upgrade failed: %s", first_line)
+                client_writer.write(resp_bytes)
+                await client_writer.drain()
+                # Close the (unused) upstream connection before returning.
+                srv_writer.close()
+                try:
+                    await asyncio.wait_for(srv_writer.wait_closed(), timeout=_WRITER_CLOSE_GRACE)
+                except Exception:
+                    pass
+                return
+
+            try:
+                parsed_resp = parse_http_response(resp_bytes.decode("utf-8", errors="replace") + "\r\n")
+                ireq.response = parsed_resp
+            except Exception:
+                pass
+            ireq.state = "forwarded"
+
+            try:
+                from pentool.core.event_bus import get_event_bus
+                from pentool.core.events import ProxyRequestCompleted
+                get_event_bus().emit(ProxyRequestCompleted(
+                    source="proxy",
+                    request_id=ireq.id,
+                    status_code=101,
+                    request=ireq,
+                ))
+            except Exception as exc:
+                logger.debug("EventBus emit ProxyRequestCompleted (WS) error: %s", exc)
+
             client_writer.write(resp_bytes)
             await client_writer.drain()
-            return
 
-        try:
-            parsed_resp = parse_http_response(resp_bytes.decode("utf-8", errors="replace") + "\r\n")
-            ireq.response = parsed_resp
-        except Exception:
-            pass
-        ireq.state = "forwarded"
-
-        try:
-            from pentool.core.event_bus import get_event_bus
-            from pentool.core.events import ProxyRequestCompleted
-            get_event_bus().emit(ProxyRequestCompleted(
-                source="proxy",
+            # tunnel() owns both writers from here (it closes them in its
+            # finally, including on cancellation).
+            await self.tunnel(
                 request_id=ireq.id,
-                status_code=101,
-                request=ireq,
-            ))
-        except Exception as exc:
-            logger.debug("EventBus emit ProxyRequestCompleted (WS) error: %s", exc)
-
-        client_writer.write(resp_bytes)
-        await client_writer.drain()
-
-        await self.tunnel(
-            request_id=ireq.id,
-            client_reader=client_reader,
-            client_writer=client_writer,
-            srv_reader=srv_reader,
-            srv_writer=srv_writer,
-        )
+                client_reader=client_reader,
+                client_writer=client_writer,
+                srv_reader=srv_reader,
+                srv_writer=srv_writer,
+            )
+        except asyncio.CancelledError:
+            # Task cancelled (e.g. proxy.stop() or project switch) while we were
+            # still connecting / before tunnel() took ownership. Close both
+            # writers so no pending read/write future survives to loop teardown —
+            # a pending asyncio.gather/StreamWriter on a half-open socket is what
+            # produced "RuntimeError: coroutine ignored GeneratorExit".
+            for w in (client_writer, srv_writer):
+                if w is None:
+                    continue
+                try:
+                    w.close()
+                    await asyncio.wait_for(w.wait_closed(), timeout=_WRITER_CLOSE_GRACE)
+                except Exception:
+                    pass
+            raise
+        except Exception:
+            # On a non-101/upgrade failure we already close srv_writer above;
+            # any other failure should still release the upstream socket.
+            if srv_writer is not None:
+                try:
+                    srv_writer.close()
+                except Exception:
+                    pass
+            raise
