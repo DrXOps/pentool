@@ -418,6 +418,12 @@ class TestHybridJsCrawl:
         scanner_api.save_findings = AsyncMock(return_value=None)
         scanner_api.configure_engine = Mock(return_value=None)
 
+        # Pretend Lightpanda is installed so the flag (not binary presence)
+        # is what decides.
+        monkeypatch.setattr(
+            "pentool.services.scan_service.is_lightpanda_available", lambda: True
+        )
+
         service = ScanService(scanner_api, spider_api, None)
         config = ScanConfig(targets=["http://x.com/"], resume=False, hybrid_js=True)
 
@@ -452,6 +458,11 @@ class TestHybridJsCrawl:
         scanner_api.run_active_on_requests = AsyncMock(return_value=[])
         scanner_api.save_findings = AsyncMock(return_value=None)
         scanner_api.configure_engine = Mock(return_value=None)
+
+        # Even with Lightpanda present, hybrid_js=False must stay off.
+        monkeypatch.setattr(
+            "pentool.services.scan_service.is_lightpanda_available", lambda: True
+        )
 
         service = ScanService(scanner_api, spider_api, None)
         config = ScanConfig(targets=["http://x.com/"], resume=False, hybrid_js=False)

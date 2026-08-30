@@ -269,13 +269,6 @@ def _iter_form_inputs(form):
     return [el for el in form.iter() if el.tag in tags]
 
 
-def is_playwright_available() -> bool:
-    try:
-        import playwright  # noqa: F401
-        return True
-    except ImportError:
-        return False
-
 # Regex to find API endpoints in JS
 _JS_API_PATTERNS = [
     re.compile(r'["\'](/api/[^"\'?\s]{1,200})', re.IGNORECASE),
@@ -381,13 +374,9 @@ class AsyncSpider:
         self.on_progress = on_progress
         self._stop = False
         self.extra_headers: dict = extra_headers or {}
-        # JS rendering — enabled only if a JS engine is available
-        # (Lightpanda preferred; Playwright as fallback). Without either,
-        # crawl falls back to plain aiohttp (no JS executed).
-        self.js_render = js_render and (
-            is_lightpanda_available() or is_playwright_available()
-        )
-        self._js_engine = "lightpanda" if is_lightpanda_available() else "playwright"
+        # JS rendering — enabled only if the Lightpanda binary is available.
+        # Without it, crawl falls back to plain aiohttp (no JS executed).
+        self.js_render = js_render and is_lightpanda_available()
 
     def stop(self) -> None:
         self._stop = True
@@ -405,15 +394,10 @@ class AsyncSpider:
         semaphore = asyncio.Semaphore(self.concurrency)
 
         if self.js_render:
-            # JS rendering — Lightpanda preferred, Playwright fallback.
-            if self._js_engine == "lightpanda":
-                await self._crawl_lightpanda(
-                    start_url, base_domain, base_scheme, result, visited, queue, semaphore
-                )
-            else:
-                await self._crawl_playwright(
-                    start_url, base_domain, base_scheme, result, visited, queue, semaphore
-                )
+            # JS rendering via Lightpanda.
+            await self._crawl_lightpanda(
+                start_url, base_domain, base_scheme, result, visited, queue, semaphore
+            )
         else:
             # Regular aiohttp crawling
             import aiohttp
@@ -726,7 +710,7 @@ class AsyncSpider:
                 result.errors.append(f"Error {url}: {exc}")
                 return []
 
-    # ── Playwright JS rendering ───────────────────────────────────────────────
+    # ── JS rendering (Lightpanda) ─────────────────────────────────────────────
 
     async def _crawl_lightpanda(
         self,
@@ -743,8 +727,8 @@ class AsyncSpider:
         Uses only if lightpanda binary is installed and js_render=True.
         Each page's URL is fetched through Lightpanda, which executes JS and
         returns the post-JS rendered DOM — enough for SPA/level3/4 discovery.
-        (SPA click-through is a Playwright-only nicety; Lightpanda `fetch` has
-        no interactivity, so we skip clicks here.)
+        (SPA click-through is a Lightpanda limitation: `fetch` has no
+        interactivity, so we skip clicks here.)
         """
         while queue and not self._stop and len(visited) < self.max_pages:
             url, depth = queue.pop(0)
@@ -780,240 +764,6 @@ class AsyncSpider:
                     len(visited),
                     min(self.max_pages, len(visited) + len(queue)),
                 )
-
-    async def _crawl_playwright(
-        self,
-        start_url: str,
-        base_domain: str,
-        base_scheme: str,
-        result: SpiderResult,
-        visited: set,
-        queue: list,
-        semaphore: asyncio.Semaphore,
-    ) -> None:
-        """Crawling with JavaScript rendering via Playwright.
-
-        Used only if playwright is installed and js_render=True.
-        Launches Chromium in headless mode, loads pages, waits for
-        networkidle, then extracts HTML with executed JS.
-        """
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            logger.warning("playwright not available, falling back to aiohttp")
-            # Fallback to aiohttp
-            import aiohttp
-            aio_timeout = aiohttp.ClientTimeout(total=self.timeout)
-            headers = {
-                "User-Agent": self.user_agent,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            }
-            async with aiohttp.ClientSession(timeout=aio_timeout, headers=headers) as session:
-                await self._fetch_robots_sitemap(
-                    session, base_scheme, base_domain, result, visited, queue
-                )
-                while queue and not self._stop and len(visited) < self.max_pages:
-                    batch = []
-                    while queue and len(batch) < self.concurrency:
-                        url, depth = queue.pop(0)
-                        norm = self._normalize_url(url)
-                        if norm in visited:
-                            continue
-                        if self.respect_scope and not self._in_scope(url, base_domain):
-                            continue
-                        visited.add(norm)
-                        batch.append((url, depth))
-                    if not batch:
-                        break
-                    tasks = [
-                        self._fetch_page(session, url, depth, result, base_domain, semaphore)
-                        for url, depth in batch
-                    ]
-                    for i, page_result in enumerate(
-                        await asyncio.gather(*tasks, return_exceptions=True)
-                    ):
-                        if isinstance(page_result, Exception):
-                            result.errors.append(str(page_result))
-                            continue
-                        if page_result and batch[i][1] < self.max_depth:
-                            for link in page_result:
-                                if self._normalize_url(link) not in visited:
-                                    queue.append((link, batch[i][1] + 1))
-            return
-
-        async with async_playwright() as pw:
-            # Chromium — same browser as --real, reliable proxy/JS rendering.
-            browser = await pw.chromium.launch(headless=True)
-            context = await browser.new_context(
-                user_agent=self.user_agent,
-                ignore_https_errors=True,
-            )
-            page = await context.new_page()
-
-            while queue and not self._stop and len(visited) < self.max_pages:
-                url, depth = queue.pop(0)
-                norm = self._normalize_url(url)
-                if norm in visited:
-                    continue
-                if self.respect_scope and not self._in_scope(url, base_domain):
-                    continue
-                visited.add(norm)
-
-                html = await self._fetch_page_playwright(page, url, result)
-                if html is None:
-                    continue
-
-                if self.on_page:
-                    self.on_page(url)
-
-                result.pages.append(url)
-                links, forms, js_links = self._parse_html(html, url, base_domain)
-                result.forms.extend(forms)
-                result.js_files.extend(
-                    j for j in js_links if j not in result.js_files
-                )
-
-                if depth < self.max_depth:
-                    for link in links + js_links:
-                        if self._normalize_url(link) not in visited:
-                            queue.append((link, depth + 1))
-
-                # Interactive SPA discovery (N1): client-side apps build their
-                # next-level routes/tabs only after a click. After rendering the
-                # static DOM we click through a bounded set of interactive
-                # elements, re-read the DOM after each click, and harvest any
-                # *new* in-scope URLs — the classic XSS-Game /level4-style tab
-                # navigation, Angular/React pagination, etc. Without this a JS
-                # crawl only reads the initial shell and misses deep routes.
-                await self._crawl_spa_clicks(
-                    page, base_domain, result, visited, queue, depth,
-                )
-
-                if self.on_progress:
-                    self.on_progress(
-                        len(visited),
-                        min(self.max_pages, len(visited) + len(queue)),
-                    )
-
-            await browser.close()
-
-    async def _fetch_page_playwright(
-        self,
-        page,
-        url: str,
-        result: SpiderResult,
-    ) -> str | None:
-        try:
-            response = await page.goto(
-                url,
-                timeout=int(self.timeout * 1000),
-                wait_until="networkidle",
-            )
-            result.total_requests += 1
-            if response is None or not response.ok:
-                return None
-            return await page.content()
-        except Exception as exc:
-            result.errors.append(f"Playwright error {url}: {exc}")
-            return None
-
-    async def _crawl_spa_clicks(
-        self,
-        page,
-        base_domain: str,
-        result: SpiderResult,
-        visited: set,
-        queue: list,
-        depth: int,
-    ) -> None:
-        """Click through client-side tabs/links to surface SPA routes (N1).
-
-        After the initial render of a JS page, many app frameworks (hash-based
-        tabs, React/Angular routing, image galleries) only materialise their
-        real endpoints after a user interaction. This bounded pass clicks the
-        interactive elements seen in the current DOM, re-reads the DOM after
-        each click (waiting for network idle so XHR-driven content lands), and
-        harvests any *new* in-scope URLs into the crawl queue and as endpoints.
-
-        It never mutates `visited` in a way that starves page — it only ADD
-        newly discovered URLs; normal crawl dedup still applies. `page` stays
-        on the last-clicked state, which is fine because the outer loop
-        re-navigates via page.goto() on the next queued URL.
-        """
-        import asyncio
-        from urllib.parse import urljoin
-
-        clicked: set[str] = set()
-        for _ in range(_SPA_MAX_CLICKS_PER_PAGE):
-            if self._stop or len(visited) >= self.max_pages:
-                break
-            try:
-                candidates = await page.eval_on_selector_all(
-                    "a[href], button, [role='tab'], .tab, [onclick]",
-                    """els => els.map((el, i) => {
-                        const h = el.getAttribute('href') || el.textContent || el.innerText || '';
-                        const k = h.trim().slice(0, 120);
-                        return {i, k};
-                    })""",
-                )
-            except Exception:
-                break
-            chosen = None
-            for cand in candidates:
-                key = cand.get("k", "")
-                # Skip elements with no text/href (empty tab, spacer) and
-                # anything already clicked on this page-pass.
-                if key and key not in clicked:
-                    chosen = cand
-                    break
-            if chosen is None:
-                break
-
-            idx = chosen.get("i")
-            key = chosen.get("k", "")
-            clicked.add(key)
-            try:
-                await page.evaluate(f"""() => {{
-                    const els = document.querySelectorAll("a[href], button, [role='tab'], .tab, [onclick]");
-                    const el = els[{idx}];
-                    if (el) el.click();
-                }}""")
-                # Give the client-side handler time to run and any XHR to land.
-                await page.wait_for_load_state("networkidle", timeout=2000)
-                await asyncio.sleep(0.2)
-            except Exception:
-                # Click or wait failed (nav/redirect) — move on, don't panic.
-                continue
-
-            try:
-                html = await page.content()
-            except Exception:
-                continue
-
-            links, forms, js_links = self._parse_html(html, page.url, base_domain)
-            result.forms.extend(forms)
-            result.js_files.extend(
-                j for j in js_links if j not in result.js_files
-            )
-            new_urls: list[str] = []
-            for raw in links + js_links:
-                try:
-                    abs_url = raw if raw.startswith("http") else urljoin(page.url, raw)
-                except Exception:
-                    continue
-                norm = self._normalize_url(abs_url)
-                if norm not in visited and self._in_scope(abs_url, base_domain):
-                    visited.add(norm)
-                    new_urls.append(norm)
-            # Surface the discovered SPA routes as endpoints AND push them back
-            # into the crawl queue (depth+1) so the outer playwright loop will
-            # navigate to them and audit their own forms/JS. `visited` guards
-            # against re-visiting; per-page click budget bounds the explosion.
-            result.endpoints.extend(
-                SpiderEndpoint(url=u, source="spa", method="GET") for u in new_urls
-            )
-            if depth < self.max_depth:
-                queue.extend((u, depth + 1) for u in new_urls)
 
     # ── HTML parsing ─────────────────────────────────────────────────────────
 

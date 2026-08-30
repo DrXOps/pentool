@@ -15,7 +15,6 @@ from pentool.modules.spider import (
     SpiderForm,
     SpiderResult,
     is_lightpanda_available,
-    is_playwright_available,
     shutdown_proc_pool,
 )
 from pentool.utils.auth_headers import extract_auth_headers
@@ -31,7 +30,7 @@ def shutdown_spider_pool() -> None:
 # Re-export types — TUI uses them from here
 __all__ = [
     "SpiderAPI", "SpiderResult", "SpiderForm", "SpiderEndpoint", "SpiderConfig",
-    "is_lightpanda_available", "is_playwright_available",
+    "is_lightpanda_available",
 ]
 
 
@@ -46,7 +45,7 @@ class SpiderConfig:
     timeout: float = 10.0
     user_agent: str = "pentool/1.0"
     respect_scope: bool = True   # stay on the target host/subdomains — don't crawl external links
-    js_render: bool = False  # Playwright JS rendering (if installed)
+    js_render: bool = False  # JS rendering via Lightpanda (if installed)
 
 
 class SpiderAPI(ExportableAPI):

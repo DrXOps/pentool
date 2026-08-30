@@ -571,23 +571,17 @@ class TestActiveChecksInit:
             assert check.mitre_attack, f"{cls.__name__} should have mitre_attack"
 
 
-# ── TestPlaywrightSupport ─────────────────────────────────────────────────────
+# ── JS engine availability ────────────────────────────────────────────────────
 
-class TestPlaywrightAvailable:
-    def test_is_playwright_available_returns_bool(self):
-        from pentool.modules.spider import is_playwright_available
-        result = is_playwright_available()
+class TestLightpandaAvailable:
+    def test_is_lightpanda_available_returns_bool(self):
+        from pentool.modules.spider import is_lightpanda_available
+        result = is_lightpanda_available()
         assert isinstance(result, bool)
 
-    def test_is_playwright_available_no_crash(self):
-        """Function does not crash regardless of playwright availability."""
-        from pentool.modules.spider import is_playwright_available
-        # Just call it — should not raise an exception
-        is_playwright_available()
-
-    def test_spider_api_has_is_playwright_available(self):
-        from pentool.api.spider_api import is_playwright_available
-        assert callable(is_playwright_available)
+    def test_spider_api_has_is_lightpanda_available(self):
+        from pentool.api.spider_api import is_lightpanda_available
+        assert callable(is_lightpanda_available)
 
 
 class TestSpiderJsRenderConfig:
@@ -606,12 +600,12 @@ class TestSpiderJsRenderConfig:
         spider = AsyncSpider(js_render=False)
         assert spider.js_render is False
 
-    def test_async_spider_js_render_false_without_playwright(self):
-        """js_render=True without playwright should become False (fallback)."""
-        from pentool.modules.spider import is_playwright_available
+    def test_async_spider_js_render_false_without_lightpanda(self):
+        """js_render=True without lightpanda binary should become False (fallback)."""
+        from pentool.modules.spider import is_lightpanda_available
         spider = AsyncSpider(js_render=True)
-        # If playwright is not installed — js_render should be False
-        if not is_playwright_available():
+        # If lightpanda is not installed — js_render should be False
+        if not is_lightpanda_available():
             assert spider.js_render is False
         else:
             assert spider.js_render is True
@@ -639,142 +633,6 @@ class TestSpiderJsRenderConfig:
         api = SpiderAPI.from_params(max_depth=1, max_pages=1, js_render=True)
         assert api.config.js_render is True
 
-
-class TestPlaywrightFetchPage:
-    """Tests for _fetch_page_playwright with mock objects."""
-
-    @pytest.mark.asyncio
-    async def test_fetch_page_playwright_success(self):
-        """_fetch_page_playwright returns HTML on a successful response."""
-        spider = AsyncSpider()
-        result = SpiderResult(base_url="https://example.com")
-
-        page_mock = AsyncMock()
-        response_mock = MagicMock()
-        response_mock.ok = True
-        page_mock.goto.return_value = response_mock
-        page_mock.content.return_value = "<html><body>Hello</body></html>"
-
-        html = await spider._fetch_page_playwright(page_mock, "https://example.com", result)
-        assert html == "<html><body>Hello</body></html>"
-        assert result.total_requests == 1
-        assert len(result.errors) == 0
-
-    @pytest.mark.asyncio
-    async def test_fetch_page_playwright_non_ok_response(self):
-        """_fetch_page_playwright returns None on a non-OK response."""
-        spider = AsyncSpider()
-        result = SpiderResult(base_url="https://example.com")
-
-        page_mock = AsyncMock()
-        response_mock = MagicMock()
-        response_mock.ok = False
-        page_mock.goto.return_value = response_mock
-
-        html = await spider._fetch_page_playwright(page_mock, "https://example.com/404", result)
-        assert html is None
-
-    @pytest.mark.asyncio
-    async def test_fetch_page_playwright_none_response(self):
-        """_fetch_page_playwright returns None when goto returns None."""
-        spider = AsyncSpider()
-        result = SpiderResult(base_url="https://example.com")
-
-        page_mock = AsyncMock()
-        page_mock.goto.return_value = None
-
-        html = await spider._fetch_page_playwright(page_mock, "https://example.com", result)
-        assert html is None
-
-    @pytest.mark.asyncio
-    async def test_fetch_page_playwright_exception(self):
-        """_fetch_page_playwright records an error and returns None."""
-        spider = AsyncSpider()
-        result = SpiderResult(base_url="https://example.com")
-
-        page_mock = AsyncMock()
-        page_mock.goto.side_effect = Exception("Timeout!")
-
-        html = await spider._fetch_page_playwright(page_mock, "https://example.com", result)
-        assert html is None
-        assert len(result.errors) == 1
-        assert "Timeout!" in result.errors[0]
-
-    @pytest.mark.asyncio
-    async def test_crawl_spa_clicks_harvests_new_links(self):
-        """N1: SPA click pass surfaces a newly-rendered in-scope link."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        spider = AsyncSpider()
-        result = SpiderResult(base_url="https://example.com")
-        visited = set()
-        queue: list = []
-
-        page_mock = AsyncMock()
-        # One clickable candidate first, then nothing (empty) to terminate.
-        page_mock.eval_on_selector_all.side_effect = [
-            [{"i": 0, "k": "/menu"}],
-            [],
-        ]
-        page_mock.evaluate.return_value = None
-        page_mock.wait_for_load_state.return_value = None
-        page_mock.url = "https://example.com/"
-        # After the click, DOM reveals a new route.
-        page_mock.content.return_value = '<html><body><a href="/api/users/123">u</a></body></html>'
-
-        await spider._crawl_spa_clicks(
-            page_mock, "example.com", result, visited, queue, depth=0,
-        )
-
-        # The /api/users/123 route (rendered after the click) was harvested.
-        assert any(e.url == "https://example.com/api/users/123" and e.source == "spa" for e in result.endpoints)
-        assert any(u == "https://example.com/api/users/123" for u, _ in queue)
-
-    @pytest.mark.asyncio
-    async def test_crawl_spa_clicks_skips_out_of_scope_and_repeats(self):
-        """N1: out-of-scope links are not harvested; repeats not added twice."""
-        from unittest.mock import AsyncMock
-
-        spider = AsyncSpider()
-        result = SpiderResult(base_url="https://example.com")
-        visited = set()
-        queue: list = []
-
-        page_mock = AsyncMock()
-        # Two clickable candidates: an out-of-scope + an in-scope one.
-        page_mock.eval_on_selector_all.side_effect = [
-            [{"i": 0, "k": "external"}, {"i": 1, "k": "/tabs"}],
-            [],
-        ]
-        page_mock.evaluate.return_value = None
-        page_mock.wait_for_load_state.return_value = None
-        page_mock.url = "https://example.com/tab"
-        # DOM after click shows an in-scope route.
-        page_mock.content.return_value = '<html><a href="/level2">l2</a></html>'
-
-        await spider._crawl_spa_clicks(
-            page_mock, "example.com", result, visited, queue, depth=0,
-        )
-
-        # In-scope route harvested exactly once.
-        hits = [e for e in result.endpoints if e.url == "https://example.com/level2"]
-        assert len(hits) == 1
-
-    @pytest.mark.asyncio
-    async def test_fetch_page_playwright_increments_requests(self):
-        """_fetch_page_playwright increments total_requests on success."""
-        spider = AsyncSpider()
-        result = SpiderResult(base_url="https://example.com")
-        result.total_requests = 5
-
-        page_mock = AsyncMock()
-        resp = MagicMock()
-        resp.ok = True
-        page_mock.goto.return_value = resp
-        page_mock.content.return_value = "<html></html>"
-
-        await spider._fetch_page_playwright(page_mock, "https://example.com/page", result)
-        assert result.total_requests == 6
 
 
 class TestSpiderAPIStop:
@@ -964,19 +822,6 @@ class TestResolveScheme:
             scheme, url = await spider._resolve_scheme("https://x.com/", "https", "x.com")
         assert scheme == "https"
 
-
-class TestPlaywrightAvailable:
-    def test_false_when_import_error(self):
-        from pentool.modules.spider import is_playwright_available
-        import sys
-        real = sys.modules.get("playwright")
-        sys.modules.pop("playwright", None)
-        # Not actually installed likely — but ensure no crash either way
-        try:
-            is_playwright_available()
-        finally:
-            if real is not None:
-                sys.modules["playwright"] = real
 
 
 class TestAuthRedirectDetection:

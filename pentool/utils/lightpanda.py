@@ -11,10 +11,9 @@ that the crawler needs for SPA/level3-level4 discovery without a heavyweight
 browser dependency.
 
 Graceful-by-design: if the binary is not installed, availability returns False
-and callers fall back to the old no-JS path (exactly like when Playwright was
-missing). The binary is a third-party artifact, not a pip dependency — see
-docs (install via the official installer or a release asset under
-`lightpanda/browser` on GitHub).
+and callers fall back to the plain no-JS path. The binary is a third-party
+artifact, not a pip dependency — see docs (install via the official installer
+or a release asset under `lightpanda/browser` on GitHub).
 """
 
 from __future__ import annotations
