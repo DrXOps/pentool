@@ -19,12 +19,12 @@ from pentool.utils.cert import (
     _key_to_pem,
     _load_ctx_from_disk,
     _save_ctx_to_disk,
-    _SslCtxLRU,
     create_ssl_context_for_domain,
     generate_ca_cert,
     generate_domain_cert,
     load_or_create_ca,
 )
+from pentool.storage.lru_cache import LRUCache
 
 
 class TestRSAKeyGeneration:
@@ -353,12 +353,12 @@ class TestSslCtxLRU:
 
     def test_lru_cache_get_miss(self):
         """Cache miss returns None."""
-        cache = _SslCtxLRU(max_size=10)
+        cache = LRUCache(max_size=10)
         assert cache.get("key1") is None
 
     def test_lru_cache_put_and_get(self):
         """Put and get work correctly."""
-        cache = _SslCtxLRU(max_size=10)
+        cache = LRUCache(max_size=10)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 
         cache.put("key1", ctx)
@@ -368,7 +368,7 @@ class TestSslCtxLRU:
 
     def test_lru_cache_eviction(self):
         """LRU evicts oldest entry when full."""
-        cache = _SslCtxLRU(max_size=3)
+        cache = LRUCache(max_size=3)
         ctx1 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx2 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx3 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -386,7 +386,7 @@ class TestSslCtxLRU:
 
     def test_lru_cache_get_updates_order(self):
         """Get moves entry to end (most recent)."""
-        cache = _SslCtxLRU(max_size=3)
+        cache = LRUCache(max_size=3)
         ctx1 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx2 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx3 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -407,7 +407,7 @@ class TestSslCtxLRU:
 
     def test_lru_cache_put_updates_existing(self):
         """Put on existing key updates and moves to end."""
-        cache = _SslCtxLRU(max_size=3)
+        cache = LRUCache(max_size=3)
         ctx1 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx1_new = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx2 = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -463,7 +463,7 @@ class TestCreateSSLContextForDomain:
         ctx1 = create_ssl_context_for_domain("example.com", ca_cert_path, ca_key_path, cert_dir)
 
         # Clear memory cache
-        cert_module._ssl_ctx_cache = cert_module._SslCtxLRU(max_size=1000)
+        cert_module._ssl_ctx_cache = cert_module.LRUCache(max_size=1000)
 
         # Second call — should load from disk
         ctx2 = create_ssl_context_for_domain("example.com", ca_cert_path, ca_key_path, cert_dir)

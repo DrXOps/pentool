@@ -283,33 +283,8 @@ def _build_ssl_ctx(cert_pem: bytes, key_pem: bytes) -> ssl.SSLContext:
 
 
 # ── In-memory LRU cache for SSL contexts (1000 domains) ──────────────────────
-# TODO: consolidate with storage/lru_cache.py — key type differs (str vs int)
+# Shares the generic LRUCache from storage/lru_cache.py (страница 7.4
+# consolidation); key is the string "{domain}:{ca_cert_path}".
+from pentool.storage.lru_cache import LRUCache
 
-class _SslCtxLRU:
-    """Simple LRU cache for SSLContext objects.
-
-    Key — string "{domain}:{ca_cert_path}", value — ssl.SSLContext.
-    Maximum 1000 entries — approximately 1–2 MB of memory.
-    """
-    def __init__(self, max_size: int = 1000) -> None:
-        from collections import OrderedDict
-        self._data: "OrderedDict[str, ssl.SSLContext]" = OrderedDict()
-        self._max = max_size
-
-    def get(self, key: str) -> ssl.SSLContext | None:
-        if key not in self._data:
-            return None
-        self._data.move_to_end(key)
-        return self._data[key]
-
-    def put(self, key: str, ctx: ssl.SSLContext) -> None:
-        if key in self._data:
-            self._data.move_to_end(key)
-            self._data[key] = ctx
-            return
-        self._data[key] = ctx
-        if len(self._data) > self._max:
-            self._data.popitem(last=False)
-
-
-_ssl_ctx_cache = _SslCtxLRU(max_size=1000)
+_ssl_ctx_cache: LRUCache = LRUCache(max_size=1000)
