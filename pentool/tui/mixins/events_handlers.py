@@ -31,6 +31,24 @@ logger = logging.getLogger(__name__)
 class ProxyEventHandlersMixin:
     """Mix-in bridging proxy-thread events (EventBus) into the TUI loop."""
 
+    def _app_still_running(self) -> bool:
+        """Whether the Textual App is still mounted/running.
+
+        These handlers run in the *proxy thread* (via EventBus). When the App
+        is being torn down (its run() returned, not via action_quit), call_from_thread
+        on a non-running App raises 'App is not running' — which, arriving from the
+        proxy thread while the TUI has already exited, is exactly the
+        'run() returned cleanly (not via action_quit)' + 'App is not running' spam we
+        kept seeing. Guarding here stops bridging into a dead TUI.
+        """
+        # If the host has no `is_running` attribute (unit-test fake, plain object)
+        # treat it as running — only gate on a real App that reports False.
+        try:
+            val = getattr(self, "is_running", None)
+        except Exception:
+            return True
+        return True if val is None else bool(val)
+
     def _on_bus_proxy_captured(self, event: ProxyRequestCaptured) -> None:
         """EventBus: proxy captured a new request.
 
@@ -39,6 +57,8 @@ class ProxyEventHandlersMixin:
         """
         req = event.request
         if req is None or not isinstance(req, _IR):
+            return
+        if not self._app_still_running():  # type: ignore[attr-defined]
             return
         self.call_from_thread(  # type: ignore[attr-defined]
             self.post_message, ProxyRequestAdded(req)  # type: ignore[attr-defined]
@@ -51,6 +71,8 @@ class ProxyEventHandlersMixin:
         """
         req = event.request
         if req is None or not isinstance(req, _IR):
+            return
+        if not self._app_still_running():  # type: ignore[attr-defined]
             return
         req_id = req.id
         # Deduplication: if already pending, ignore
