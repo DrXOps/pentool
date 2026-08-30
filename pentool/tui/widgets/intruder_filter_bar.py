@@ -14,6 +14,49 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import Button, Input, Label
 
+
+class GrepOnlyToggle(Widget):
+    """Toggle button for 'Only matches' — a non-filtering grep a row must hit.
+
+    Mirrors the proxy ScopeToggle UX: one click toggles active/inactive. When
+    active, the Intruder results table shows rows that match the Grep-Match
+    pattern and hides the rest (highlighting already colors them).
+    """
+
+    DEFAULT_CSS = """
+    GrepOnlyToggle {
+        width: auto;
+        margin: 0 1;
+    }
+    GrepOnlyToggle.flash {
+        text-style: bold;
+    }
+    """
+
+    class Toggled(Message):
+        def __init__(self, active: bool) -> None:
+            super().__init__()
+            self.active = active
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__("○ Only matches", **kwargs)
+        self._active: bool = False
+
+    @property
+    def active(self) -> bool:
+        return self._active
+
+    def on_click(self) -> None:
+        self._active = not self._active
+        self.update("● Only matches" if self._active else "○ Only matches")
+        self.set_class(self._active, "flash")
+        self.post_message(self.Toggled(self._active))
+
+    def reset(self) -> None:
+        self._active = False
+        self.update("○ Only matches")
+        self.remove_class("flash")
+
 DEFAULT_CSS = """
 IntruderFilterBar {
     height: auto;
@@ -72,6 +115,7 @@ class IntruderFilterBar(Widget):
             yield Input(id="grep-match-input", placeholder="regex — highlight matching rows", compact=True)
             yield Label("Extract:")
             yield Input(id="grep-extract-input", placeholder="regex — add column with extracted value", compact=True)
+            yield GrepOnlyToggle(id="grep-only-toggle")
             yield Button("Apply", id="btn-grep-apply")
             yield Button("Clear grep", id="btn-grep-clear")
 
@@ -116,6 +160,10 @@ class IntruderFilterBar(Widget):
             self.query_one("#filter-len-lt", Input).value = ""
         except Exception:
             pass
+        try:
+            self.query_one("#grep-only-toggle", GrepOnlyToggle).reset()
+        except Exception:
+            pass
         self.post_message(self.FilterChanged({}))
 
     def _emit_grep(self) -> None:
@@ -132,12 +180,22 @@ class IntruderFilterBar(Widget):
                 filters["grep_extract"] = extract
         except Exception:
             pass
+        try:
+            toggle = self.query_one("#grep-only-toggle", GrepOnlyToggle)
+            if toggle.active:
+                filters["grep_only_match"] = True
+        except Exception:
+            pass
         self.post_message(self.FilterChanged(filters))
 
     def _clear_grep(self) -> None:
         try:
             self.query_one("#grep-match-input", Input).value = ""
             self.query_one("#grep-extract-input", Input).value = ""
+        except Exception:
+            pass
+        try:
+            self.query_one("#grep-only-toggle", GrepOnlyToggle).reset()
         except Exception:
             pass
         self.post_message(self.FilterChanged({}))
