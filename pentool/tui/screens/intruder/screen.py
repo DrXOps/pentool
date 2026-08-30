@@ -720,12 +720,16 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                 self._grep_match_patterns   = [f["grep_match"]]   if f.get("grep_match")   else []
                 self._grep_extract_patterns = [f["grep_extract"]] if f.get("grep_extract") else []
                 self._grep_only_match       = bool(f.get("grep_only_match"))
+                # No self.app.notify here: a toast is spawned on EVERY Apply/
+                # Clear/Reset, and under rapid clicking that floods the UI with
+                # toast + notification-sound threads (and previously, subprocess
+                # forks). A quiet debug line keeps the state visible without the
+                # cost. See core/notification_sound.py throttle note.
                 n_match   = len(self._grep_match_patterns)
                 n_extract = len(self._grep_extract_patterns)
-                self.app.notify(
-                    f"Grep Match: {n_match} pattern(s), Extract: {n_extract} pattern(s)"
-                    + (" M" if self._grep_only_match else ""),
-                    timeout=2,
+                logger.info(
+                    "INTRUDER: grep applied — match=%d extract=%d only_match=%s",
+                    n_match, n_extract, self._grep_only_match,
                 )
         self._redraw_results()
 
