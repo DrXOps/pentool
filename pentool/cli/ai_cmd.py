@@ -115,9 +115,9 @@ def ai_start() -> None:
 @ai.command("stop")
 def ai_stop() -> None:
     """Остановить MCP-сервер."""
-    from pentool.services.ai.provider import MCPBackend
-    # Для остановки используем прямой вызов, т.к. бэкенд мог уже быть создан
-    # TODO: хранить ссылку на активный бэкенд в глобальном менеджере
+    # Активный бэкенд отслеживается глобально в services/ai/factory.py via
+    # get_active_backend(); его жизненный цикл завязан на процесс, поэтому
+    # этот CLI-стоп просто сообщает, что сервер завершится вместе с pentool.
     click.echo("MCP-сервер будет остановлен при выходе из pentool.")
 
 
