@@ -74,6 +74,37 @@ uv run pentool --version
 
 ---
 
+## JS Rendering (optional, but recommended)
+
+Pentool's crawler can execute JavaScript to discover SPA/level-3 pages and
+hidden API endpoints. The default engine is **Lightpanda** — a fast, light
+browser (~20 MB RAM per run) that needs no full Chromium or Node.
+
+Install the Lightpanda binary (Linux/macOS x86_64 / aarch64 release asset):
+
+```bash
+# 1. download the release binary for your platform from the Lightpanda repo
+#    (lightpanda-io/browser), e.g. on Linux x86_64:
+curl -L -o lightpanda \
+  https://github.com/lightpanda-io/browser/releases/download/0.3.7/lightpanda-x86_64-linux
+chmod +x lightpanda
+# 2. put it somewhere on PATH, e.g.:
+mkdir -p ~/.local/bin && mv lightpanda ~/.local/bin/
+```
+
+Pentool auto-detects the binary on `PATH` (or via `~/.local/bin`, `/usr/local/bin`,
+`/usr/bin`, or the `LIGHTPANDA_BIN` env var). Without it, crawling still works but
+does not execute JavaScript (falls back to plain HTTP).
+
+> **`--real` mode** (loading a page through the proxy) still uses a full
+> Chromium via Playwright, which is separate from Lightpanda:
+
+```bash
+uv tool run --with playwright python -m playwright install chromium
+```
+
+---
+
 ## Platform-Specific Instructions
 
 ### Linux (Ubuntu/Debian)

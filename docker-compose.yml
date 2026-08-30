@@ -1,0 +1,25 @@
+# Pentool — example container for CI/CD / devops integration.
+#
+# By default it runs a one-shot headless scan (CLI) which is CI-friendly
+# (no TTY needed). For the interactive TUI, override the command and attach a
+# TTY:  docker compose run --rm pentool --rm-tty? (use `services`/`command` below).
+#
+# Example usages:
+#   docker compose build
+#   docker compose run --rm pentool --url https://example.com --headless --output /scan.json
+#
+# Data persists under ./pentool-data (config + databases).
+
+services:
+  pentool:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pentool:local
+    # One-shot headless scan by default — replace `command` for other modes.
+    command: ["--url", "https://example.com", "--headless", "--output", "/home/pentool/scan.json"]
+    volumes:
+      - ./pentool-data:/home/pentool/.config/pentool
+    # For the interactive TUI: uncomment the two lines below and drop `command`.
+    #stdin_open: true
+    #tty: true
