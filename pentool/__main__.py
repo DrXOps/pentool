@@ -338,6 +338,31 @@ def main() -> None:
                         _buf.write(f"\n--- app.exit()/exception ---\n{_exit_stack}\n")
                 except Exception:
                     pass
+                # One-line summary of every live *non-namespace* thread: name,
+                # daemon flag and, if known, the target callable it is running.
+                # Lets post-mortem answer "what was actually busy" (e.g. an
+                # executor worker from a payload-file load, the proxy asyncio
+                # loop, an aiohttp connector thread …) without eyeballing the
+                # per-thread stacks below.
+                try:
+                    import threading as _threading
+                    _thread_summary = []
+                    for _th in _threading.enumerate():
+                        try:
+                            _nm = getattr(_th, "name", "?")
+                            _tg = getattr(_th, "_target", None)
+                            _tg_name = getattr(_tg, "__qualname__", None) or getattr(_tg, "__name__", None) or repr(_tg)
+                            _dn = getattr(_th, "daemon", "?")
+                            _tidn = getattr(_th, "ident", None)
+                            _thread_summary.append(
+                                f"  ident={_tidn} name={_nm!r} daemon={_dn} target={_tg_name}"
+                            )
+                        except Exception:
+                            continue
+                    if _thread_summary:
+                        _buf.write("\n--- live threads (summary) ---\n" + "\n".join(_thread_summary) + "\n")
+                except Exception:
+                    pass
                 for _tid, _frame in _sys._current_frames().items():
                     _buf.write(f"\n--- Thread 0x{_tid:x} ---\n")
                     _tb.print_stack(_frame, file=_buf)
