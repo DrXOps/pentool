@@ -6,7 +6,7 @@ from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.message import Message
-from textual.widget import Widget
+from pentool.tui.widgets.filter_bar_base import FilterBarBase
 from textual.widgets import Button, Input, Static
 
 _CSS = (Path(__file__).parent / "filter_bar.tcss").read_text(encoding="utf-8")
@@ -144,10 +144,13 @@ class ColorFilterCycler(Static):
         self.post_message(self.Changed(self.value))
 
 
-class FilterBar(Widget):
+class FilterBar(FilterBarBase):
     """Filter row: Host, Method, Status, Search + Apply/Reset.
 
     Posts FilterChanged on Apply or Enter.
+
+    Declares its own `FilterChanged` (not inherited) so Textual's magic-name
+    dispatch keeps `on_filter_bar_filter_changed` working — see FilterBarBase.
     """
 
     DEFAULT_CSS = _CSS
@@ -204,7 +207,7 @@ class FilterBar(Widget):
     def _apply(self) -> None:
         filters: dict = {}
 
-        host = self.query_one("#fb-host", Input).value.strip()
+        host = self._input_value(self, "#fb-host")
         if host:
             filters["host"] = host
 
@@ -215,7 +218,7 @@ class FilterBar(Widget):
         except Exception:
             pass
 
-        status_raw = self.query_one("#fb-status", Input).value.strip()
+        status_raw = self._input_value(self, "#fb-status")
         if status_raw:
             if "-" in status_raw:
                 parts = status_raw.split("-", 1)
@@ -229,11 +232,14 @@ class FilterBar(Widget):
                 except ValueError:
                     pass
 
-        tag = self.query_one("#fb-color", ColorFilterCycler).value
-        if tag:
-            filters["color"] = tag
+        try:
+            tag = self.query_one("#fb-color", ColorFilterCycler).value
+            if tag:
+                filters["color"] = tag
+        except Exception:
+            pass
 
-        search = self.query_one("#fb-search", Input).value.strip()
+        search = self._input_value(self, "#fb-search")
         if search:
             filters["search"] = search
 
@@ -245,12 +251,12 @@ class FilterBar(Widget):
         except Exception:
             pass
 
-        self.post_message(self.FilterChanged(filters))
+        self.emit(self.FilterChanged, self, filters)
 
     def _reset(self) -> None:
-        self.query_one("#fb-host", Input).value = ""
-        self.query_one("#fb-status", Input).value = ""
-        self.query_one("#fb-search", Input).value = ""
+        self._set_input_value(self, "#fb-host", "")
+        self._set_input_value(self, "#fb-status", "")
+        self._set_input_value(self, "#fb-search", "")
         try:
             self.query_one("#fb-color", ColorFilterCycler).reset()
         except Exception:
@@ -263,7 +269,7 @@ class FilterBar(Widget):
             self.query_one("#fb-scope", ScopeToggle).reset()
         except Exception:
             pass
-        self.post_message(self.FilterChanged({}))
+        self.emit(self.FilterChanged, self, {})
 
     def get_filters(self) -> dict:
         self._apply()
