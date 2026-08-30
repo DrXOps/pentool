@@ -134,6 +134,29 @@ class TestSiteMap:
         assert node.in_scope is True
         assert "not-seen-yet.com" in sitemap.get_scope()
 
+    def test_get_tree_includes_scope_only_host(self, sitemap: SiteMap) -> None:
+        """A host added to scope with no traffic yet must appear in the tree.
+
+        Regression test: get_tree() previously returned only _nodes, so a
+        host added to scope from Proxy silently vanished from the Target
+        tree ("scope didn't sync"). It must surface as a bare host node.
+        """
+        sitemap.add_request(make_req("http://a.com/page"))
+        sitemap.set_in_scope("scope-only.com", True)
+        tree = sitemap.get_tree()
+        assert "a.com" in tree
+        assert "scope-only.com" in tree
+        assert tree["scope-only.com"] == []  # bare host, no paths yet
+
+    def test_get_tree_does_not_duplicate_port_host(self, sitemap: SiteMap) -> None:
+        """A scope-only host must not duplicate an existing host:port node."""
+        sitemap.add_request(make_req("http://example.com:8443/api"))
+        sitemap.set_in_scope("example.com", True)
+        tree = sitemap.get_tree()
+        # Only the node with real paths is present — no extra bare host alias.
+        assert "example.com:8443" in tree
+        assert "example.com" not in tree
+
     def test_set_in_scope_ignores_port_mismatch(self, sitemap: SiteMap) -> None:
         """A host:port node must be recognized as in-scope by its bare host.
 
