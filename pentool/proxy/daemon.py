@@ -142,6 +142,29 @@ class ProxyDaemon:
         if name == "set_enforce_scope":
             self._proxy.set_enforce_scope(bool(cmd.get("enabled", False)))
             return {"ok": True}
+        if name == "get_status":
+            return {"ok": True, "status": self._proxy.get_status()}
+        if name == "get_requests":
+            reqs = self._proxy.get_requests(
+                limit=cmd.get("limit", 100),
+                method=cmd.get("method"),
+                host=cmd.get("host"),
+            )
+            return {"ok": True, "requests": [r.to_dict() for r in reqs]}
+        if name == "forward":
+            self._proxy.forward(cmd.get("request_id", ""), cmd.get("modified"))
+            return {"ok": True}
+        if name == "drop":
+            self._proxy.drop(cmd.get("request_id", ""))
+            return {"ok": True}
+        if name == "clear_requests":
+            self._proxy.clear_requests()
+            return {"ok": True}
+        if name == "replace_requests":
+            from pentool.modules.proxy import InterceptedRequest
+            reqs = [InterceptedRequest.from_dict(d) for d in (cmd.get("requests") or [])]
+            self._proxy.replace_requests(reqs)
+            return {"ok": True}
         return {"ok": False, "error": f"unknown cmd: {name}"}
 
     # -- send events to all connected clients -------------------------------

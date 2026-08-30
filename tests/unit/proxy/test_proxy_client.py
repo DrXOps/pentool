@@ -85,3 +85,35 @@ class TestCleanup:
         c.cleanup()
         proc.terminate.assert_called_once()
         proc.wait.assert_called()
+
+
+class TestReadCommands:
+    def test_get_status_returns_staus(self):
+        c = _make_client()
+        c._command = lambda cmd: {"ok": True, "status": {"running": True}}
+        assert c.get_status() == {"running": True}
+
+    def test_get_requests_serializes(self):
+        c = _make_client()
+        c._command = lambda cmd: {"ok": True, "requests": [{"id": "x"}]}
+        r = c.get_requests(limit=5)
+        assert r == [{"id": "x"}]
+
+    def test_forward_sends_id_and_modified(self):
+        c = _make_client()
+        sent = {}
+        c._command = lambda cmd: sent.update(cmd) or {"ok": True}
+        c.forward("req1", "modified-raw")
+        assert sent["cmd"] == "forward"
+        assert sent["request_id"] == "req1"
+        assert sent["modified"] == "modified-raw"
+
+    def test_drop_and_clear(self):
+        drop_cmds, clear_cmds = [], []
+        c = _make_client()
+        c._command = lambda cmd: (drop_cmds.append(cmd) if cmd["cmd"] == "drop"
+                                  else (clear_cmds.append(cmd), {"ok": True})[1])
+        c.drop("r2")
+        c.clear_requests()
+        assert drop_cmds[0]["request_id"] == "r2"
+        assert clear_cmds[0]["cmd"] == "clear_requests"
