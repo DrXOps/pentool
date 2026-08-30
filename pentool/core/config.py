@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -55,12 +56,12 @@ class Config:
     notifications_sound_enabled: bool = True  # play a short sound with customnotify() toasts
 
     # ── AI ────────────────────────────────────────────────────────────────────────
-    ai_enabled: bool = False           # мастер-выключатель AI-помощника
-    ai_model: str = ""                 # имя/путь к LLM-модели (GGUF)
-    ai_mcp_host: str = "127.0.0.1"    # MCP-сервер хост
+    ai_enabled: bool = False           # master switch for the AI assistant
+    ai_model: str = ""                 # LLM model name / path (GGUF)
+    ai_mcp_host: str = "127.0.0.1"    # MCP server host
     ai_mcp_port: int = 0              # 0 = stdio, >0 = TCP
-    ai_mcp_model_path: str = ""       # путь к GGUF-файлу
-    ai_mcp_auto_start: bool = False   # автостарт MCP-сервера при запуске pentool
+    ai_mcp_model_path: str = ""       # path to the GGUF file
+    ai_mcp_auto_start: bool = False   # auto-start the MCP server when pentool launches
 
     # Observer list — not serialized
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)
@@ -186,3 +187,25 @@ def get_config() -> Config:
 def set_config(config: Config) -> None:
     global _config
     _config = config
+
+
+@contextmanager
+def override_config(config: Config | None):
+    """Context-managed replacement of the global config singleton.
+
+    Restores the previous instance (or None) on exit, so a test/subsystem can
+    install an isolated Config for a scoped block without leaking it into
+    later code — the same save/restore discipline `_pin_clean_session_license`
+    already applies to the license cache. `get_config()` continues to resolve
+    the active instance; existing callers are unchanged.
+
+    Unlike an unconditional `set_config`, this guarantees restoration even on
+    error. Intended for DI/isolated-test setup (Этап 7.1).
+    """
+    global _config
+    prev = _config
+    _config = config
+    try:
+        yield _config
+    finally:
+        _config = prev

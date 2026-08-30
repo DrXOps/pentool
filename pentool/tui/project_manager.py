@@ -365,7 +365,7 @@ class ProjectManager:
         # Single-line toast: no separate title (Textual's toast would render
         # the title on its own row above the message, duplicating "Opened/"
         # "Created" and making the card two rows tall).
-        self._app.customnotify(f"{action}: {os.path.basename(path)}", "success" if is_new else "information")
+        self._app.notify(f"{action}: {os.path.basename(path)}", severity="success" if is_new else "information")
 
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen
@@ -474,7 +474,9 @@ class ProjectManager:
         async def _reload_proxy() -> None:
             try:
                 screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
-                await screen._reload_from_storage()
+                # is_new lets the proxy screen start a brand-new project with
+                # an EMPTY scope (not inherited from the previous project).
+                await screen._reload_from_storage(is_new=is_new)
                 logger.info("_reload_project_screens: proxy reloaded from %s", path)
             except Exception as exc:
                 logger.debug("_reload_project_screens proxy: %s", exc)
@@ -572,8 +574,8 @@ class ProjectManager:
         except Exception as exc:
             logger.warning("_init_new_db: %s", exc)
 
-    # _switch_storage_db и _open_project_sequence оставлены для совместимости
-    # с app.py (_reload_project_screens, _switch_storage_db, _open_project_sequence)
+    # _switch_storage_db and _open_project_sequence are kept for compatibility
+    # with app.py (_reload_project_screens, _switch_storage_db, _open_project_sequence)
     async def _switch_storage_db(self, path: str) -> None:
         if self._proxy_service is not None:
             await self._proxy_service.switch_db(path)

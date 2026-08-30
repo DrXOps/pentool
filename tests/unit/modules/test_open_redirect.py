@@ -1,7 +1,7 @@
 """Unit tests for pentool/modules/scanner/checks/open_redirect.py.
 
 Written as regression coverage BEFORE migrating OpenRedirectCheck to
-BaseActiveCheck (see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md
+BaseActiveCheck (see (scanner refactor plan)
 section 2.5) — this check had no dedicated unit tests prior to this file.
 """
 

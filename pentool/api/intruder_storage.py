@@ -1,7 +1,7 @@
 """IntruderStorage — SQL for Intruder tab state and attack result persistence.
 
 Extracted from `IntruderAPI` (see
-MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md, section 2.6). Pure
+(scanner refactor plan), section 2.6). Pure
 data-access: no attack orchestration knowledge, only the `intruder_state`/
 `intruder_results` table CRUD that used to live directly on `IntruderAPI`.
 Behavior (upsert-by-delete-then-insert for state, column selection/ordering

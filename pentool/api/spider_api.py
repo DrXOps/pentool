@@ -62,6 +62,7 @@ class SpiderAPI(ExportableAPI):
         max_pages: int = DEFAULT_MAX_PAGES,
         concurrency: int = 5,
         timeout: float = 10.0,
+        js_render: bool = False,
     ) -> "SpiderAPI":
         """Convenience factory method."""
         return cls(SpiderConfig(
@@ -69,6 +70,7 @@ class SpiderAPI(ExportableAPI):
             max_pages=max_pages,
             concurrency=concurrency,
             timeout=timeout,
+            js_render=js_render,
         ))
 
     async def crawl(
@@ -110,6 +112,10 @@ class SpiderAPI(ExportableAPI):
 
         try:
             result = await self._spider.crawl(url)
+            # Expose which auth headers (Cookie/Authorization) were actually
+            # used so the caller (ScanService) can reuse the same session in
+            # its active-scan phase instead of sending unauthenticated probes.
+            result.auth_headers = merged_headers
             logger.info(
                 "SpiderAPI.crawl: %s -> %d pages, %d forms, %d endpoints",
                 url, len(result.pages), len(result.forms), len(result.endpoints),

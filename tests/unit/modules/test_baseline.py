@@ -2,7 +2,7 @@
 
 Regression coverage for a bug found while auditing checks alongside the
 BaseActiveCheck migration (see
-MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md addendum):
+(scanner refactor plan) addendum):
 BaselineCache.is_identical()/diff_score()/_make_entry() read
 `resp.status_code`/`resp.text`, but ParsedResponse only has
 `status`/`body` (aiohttp/requests-style names that never existed on this

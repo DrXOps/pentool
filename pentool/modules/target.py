@@ -167,10 +167,23 @@ class SiteMap(BaseSqliteStorage):
             )
 
     def get_tree(self) -> dict[str, list[SiteNode]]:
-        return {
+        # Start with hosts that have real traffic (nodes registered via add_request).
+        tree = {
             host: sorted(paths.values(), key=lambda n: n.path)
             for host, paths in self._nodes.items()
         }
+        # Include scope-only hosts that have NO traffic node yet. set_in_scope()
+        # tracks these in _scope_hosts independently of _nodes, but get_tree()
+        # previously omitted them — so a host added to scope from the Proxy
+        # history never appeared in the Target tree ("scope didn't sync").
+        # Only emit a bare (empty) host when no existing node shares its
+        # normalized host, so host:port nodes aren't duplicated.
+        for host in self._scope_hosts:
+            if any(self._norm_host(h) == host for h in self._nodes):
+                continue
+            if host not in tree:
+                tree[host] = []
+        return tree
 
     def get_hosts(self) -> list[str]:
         return sorted(self._nodes.keys())

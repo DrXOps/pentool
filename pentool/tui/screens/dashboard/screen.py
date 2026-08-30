@@ -405,10 +405,10 @@ class DashboardScreen(Widget):
                         yield Static("[dim]●[/dim] Active: [dim]IDLE[/dim]",    id="led-scan-bar",    classes="led-item")
                         yield Static("[dim]●[/dim] Spider: [dim]IDLE[/dim]",    id="led-spider-bar",  classes="led-item")
                         yield Static("[dim]●[/dim] MCP: [dim]OFF[/dim]",        id="led-mcp-bar",     classes="led-item")
+                        yield Static("[dim]●[/dim] AI: [dim]DISABLED[/dim]",    id="led-ai-bar",      classes="led-item")
                         yield Static("[dim]●[/dim] Threads: [dim]—[/dim]",      id="led-threads-bar", classes="led-item")
                 with Vertical(id="matrix-col"):
                     yield SeverityMatrix(id="vuln-matrix")
-                    yield Static(id="ai-status-panel", markup=True)
 
     def on_mount(self) -> None:
         self._ticker = self.set_interval(1.0, self._tick)
@@ -489,7 +489,7 @@ class DashboardScreen(Widget):
             self.app.notify(f"Opened: {os.path.basename(path)}", timeout=3)
 
     def _update_ai_status(self) -> None:
-        """Обновить виджет статуса AI-помощника."""
+        """Refresh the AI and MCP status rows in the STATUS block (under MCP)."""
         try:
             from pentool.services.ai.factory import ai_setup_required
             cfg = getattr(self.app, "_cfg", None)
@@ -508,25 +508,16 @@ class DashboardScreen(Widget):
             except Exception:
                 pass
 
-            panel = self.query_one("#ai-status-panel", Static)
-            if ai_enabled:
-                if needs_setup:
-                    panel.update("[dim]┌─ AI STATUS ──────────────────────[/dim]\n"
-                                 "[dim]● AI: [yellow]ENABLED[/yellow] (no model)[/dim]\n"
-                                 "[dim]  Run: pentool ai setup[/dim]\n"
-                                 "[dim]──────────────────────────────────[/dim]")
+            # AI row directly under MCP: "AI: disabled" / "AI: enabled".
+            try:
+                if ai_enabled:
+                    self._set_led_bar("led-ai-bar", "bold green",
+                                      "AI: [bold green]ENABLED[/bold green]")
                 else:
-                    mcp_txt = "RUNNING" if mcp_running else "OFF"
-                    mcp_color = "green" if mcp_running else "yellow"
-                    panel.update("[dim]┌─ AI STATUS ──────────────────────[/dim]\n"
-                                 f"[dim]● AI: [green]ENABLED[/green]   MCP: [{mcp_color}]{mcp_txt}[/{mcp_color}][/dim]\n"
-                                 "[dim]  [yellow]▶ Start MCP: pentool ai start[/yellow][/dim]\n"
-                                 "[dim]──────────────────────────────────[/dim]")
-            else:
-                panel.update("[dim]┌─ AI STATUS ──────────────────────[/dim]\n"
-                             "[dim]● AI: [dim]DISABLED[/dim][/dim]\n"
-                             "[dim]  Enable in Settings → AI[/dim]\n"
-                             "[dim]──────────────────────────────────[/dim]")
+                    self._set_led_bar("led-ai-bar", "dim",
+                                      "AI: [dim]disabled[/dim]")
+            except Exception:
+                pass
         except Exception:
             pass
 

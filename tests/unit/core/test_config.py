@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from pentool.core.config import Config, get_config, set_config
+from pentool.core.config import Config, get_config, override_config, set_config
 
 
 class TestConfigDefaults:
@@ -120,6 +120,39 @@ class TestConfigSingleton:
         assert get_config().proxy_port == 1
         set_config(Config(proxy_port=2))
         assert get_config().proxy_port == 2
+
+
+class TestConfigOverride:
+    """override_config — context-managed DI/isolation (Этап 7.1)."""
+
+    def test_restores_previous_after_block(self) -> None:
+        prev = Config(proxy_port=1)
+        inst = Config(proxy_port=2)
+        set_config(prev)
+        with override_config(inst):
+            assert get_config() is inst
+        assert get_config() is prev
+
+    def test_restores_even_on_exception(self) -> None:
+        prev = Config(proxy_port=1)
+        set_config(prev)
+        with pytest.raises(RuntimeError):
+            with override_config(Config(proxy_port=9)):
+                raise RuntimeError("boom")
+        assert get_config() is prev
+
+    def test_restores_none_when_unset_before(self) -> None:
+        set_config(None)  # simulate unset global
+        with override_config(Config(proxy_port=3)):
+            assert get_config().proxy_port == 3
+        assert get_config() is None or get_config().proxy_port != 3
+
+    def test_get_config_resolves_within_override(self) -> None:
+        inst = Config(proxy_port=777)
+        with override_config(inst):
+            a = get_config()
+            b = get_config()
+            assert a is inst and b is inst
 
 
 class TestConfigNetworkFields:

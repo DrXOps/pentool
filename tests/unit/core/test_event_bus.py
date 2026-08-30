@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from pentool.core.event_bus import EventBus, get_event_bus, reset_event_bus
+from pentool.core.event_bus import EventBus, get_event_bus, override_event_bus, reset_event_bus
 from pentool.core.events import (
     AppEvent,
     FindingDiscovered,
@@ -459,3 +459,38 @@ class TestGlobalSingleton:
         bus.subscribe(ProjectSaved, received.append)
         bus.emit(ProjectSaved(path="/tmp/x.json"))
         assert len(received) == 1
+
+
+class TestOverrideEventBus:
+    """override_event_bus — context-managed DI/isolation (Этап 7.1)."""
+
+    def test_restores_previous_after_block(self):
+        b1 = get_event_bus()
+        b2 = EventBus()
+        with override_event_bus(b2):
+            assert get_event_bus() is b2
+        assert get_event_bus() is b1
+
+    def test_restores_even_on_exception(self):
+        b1 = get_event_bus()
+        with pytest.raises(RuntimeError):
+            with override_event_bus(EventBus()):
+                raise RuntimeError("boom")
+        assert get_event_bus() is b1
+
+    def test_none_install_recreates_default_on_get(self):
+        b1 = get_event_bus()
+        with override_event_bus(None):
+            created = get_event_bus()  # None => get() builds a fresh default
+            assert created is not b1
+        assert get_event_bus() is b1
+
+    def test_isolated_bus_receives_events(self):
+        # A test can run against its own bus and not leak subscriptions.
+        iso = EventBus()
+        got = []
+        with override_event_bus(iso):
+            iso.subscribe(ProjectSaved, got.append)
+            iso.emit(ProjectSaved(path="/tmp/iso.json"))
+            assert len(got) == 1
+        assert get_event_bus() is not iso

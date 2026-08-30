@@ -54,17 +54,25 @@ class TestRepeaterServiceSendRequest:
         assert "Connection refused" in error
 
     @pytest.mark.asyncio
-    async def test_send_without_api_uses_http_client(self, service_no_api):
+    async def test_send_without_api_spins_up_own_api(self, service_no_api):
         from pentool.utils.parser import ParsedResponse
         resp = ParsedResponse(status=200, headers={}, body="OK")
 
-        with patch("pentool.services.repeater_service.HTTPClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.send = AsyncMock(return_value=resp)
-            mock_cls.return_value = mock_client
+        # 4.3: when no RepeaterAPI was injected, the service creates its own
+        # (single route through the API layer) rather than a raw HTTPClient.
+        from pentool.api.repeater_api import RepeaterAPI
+
+        with patch("pentool.services.repeater_service.RepeaterAPI") as mock_api_cls:
+            mock_api = AsyncMock()
+            mock_api.send = AsyncMock(return_value=resp)
+            mock_api_cls.return_value = mock_api
 
             raw = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
             result, elapsed, error = await service_no_api.send_request(raw)
+            # sent through the (self-created) API, without history (save=False)
+            mock_api.send.assert_awaited_once()
+            kwargs = mock_api.send.call_args.kwargs
+            assert kwargs.get("save") is False
             assert result is resp
 
     @pytest.mark.asyncio
@@ -85,10 +93,6 @@ class TestRepeaterServiceClose:
         await service.close()  # Should not raise
 
     @pytest.mark.asyncio
-    async def test_close_with_client(self, service_no_api):
-        mock_client = AsyncMock()
-        mock_client.close = AsyncMock()
-        service_no_api._http_client = mock_client
-        await service_no_api.close()
-        mock_client.close.assert_called_once()
-        assert service_no_api._http_client is None
+    async def test_close_no_standalone_client(self, service_no_api):
+        # 4.3: no standalone HTTP client anymore — close is a safe no-op.
+        await service_no_api.close()  # Should not raise

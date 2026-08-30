@@ -23,6 +23,7 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 logger = get_logger(__name__)
 
 from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
 from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
@@ -45,7 +46,7 @@ class _TabState:
         self.last_sent_text: str | None = None
         self.is_dirty: bool = False
 
-class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
+class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     """Repeater module screen."""
 
     DEFAULT_CSS = _CSS
@@ -81,7 +82,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._search_current: int = 0
         self._search_query: str = ""
         self._search_regex: bool = False
-        self._search_target: str = "request"  # "request" | "response" — синхронизируется с SearchBar
+        self._search_target: str = "request"  # "request" | "response" — syncs with the SearchBar
         self._tab_click_time: float = 0.0
         self._tab_click_id: str | None = None
         # Single persistent RepeaterAPI for the screen's lifetime — created
@@ -348,13 +349,26 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     # ── Project lifecycle ──────────────────────────────────────────────────────
 
     async def reset_for_new_project(self) -> None:
-        """Удалить все вкладки и создать одну чистую. Вызывается при Ctrl+N."""
+        """Remove all tabs and create a single clean one. Called on Ctrl+N."""
         await self._close_all_tabs()
         self.action_new_tab()
 
     async def reload_from_project(self, db_path: str) -> None:
-        """Загрузить вкладки из БД. Вызывается при открытии существующего проекта."""
+        """Load the tabs from the DB. Called when opening an existing project."""
         await self._close_all_tabs()
+        # Cancel any in-flight workers (auto-save, _do_load_tabs) from a
+        # previous on_mount or project switch BEFORE calling switch_db().
+        # switch_db() closes the old connection (close() → self._db = None),
+        # and a worker still running against the old connection would hit
+        # ProgrammingError('Cannot operate on a closed database.'), which
+        # with exit_on_error=True (the default) propagated as a FATAL
+        # exception that crashed the whole TUI. Cancelling first lets
+        # CancelledError propagate through the worker instead, which Textual
+        # handles silently. Mirrors IntruderScreen.reload_from_project.
+        try:
+            self.workers.cancel_node(self)
+        except Exception:
+            pass
         generation = self._tabs_generation
         # Point the persistent RepeaterAPI at the new project's DB instead of
         # constructing a fresh one — switch_db() closes the old connection
@@ -368,7 +382,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=True)
 
     async def _close_all_tabs(self) -> None:
-        """Удалить все существующие вкладки из TabbedContent и сбросить состояние.
+        """Remove all existing tabs from the TabbedContent and reset state.
 
         remove_pane() returns an AwaitComplete (Textual schedules the actual
         tab/pane removal, it does not happen synchronously) — this was
@@ -405,7 +419,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             pass
         self._tabs = []
         self._active_tab_id = None
-        self._tab_counter = 0  # сброс счётчика — нумерация всегда с 1
+        self._tab_counter = 0  # counter reset — numbering always starts at 1
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.tabbed_content.id != "repeater-tabs":
@@ -672,23 +686,17 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             if repeater_api is None:
                 return
 
-            worker_name = f"save-{state.tab_id}-{time.monotonic_ns()}"
-            self._running_save_tasks.append(worker_name)
+            worker_name = self._save_worker_name(f"save-{state.tab_id}")
+            self._track_save_worker(worker_name)
             self.run_worker(
-                self._do_auto_save(repeater_api, parsed, response, state.name, worker_name),
+                self._do_auto_save(
+                    repeater_api.save_to_history(parsed, response, tab_name=state.name),
+                    worker_name,
+                ),
                 exclusive=False, name=worker_name,
             )
         except Exception as exc:
             logger.debug("_auto_save_tab_to_db: %s", exc)
-
-    async def _do_auto_save(self, api, parsed, response, tab_name: str, worker_name: str) -> None:
-        """Auto-save wrapper — cleanup _running_save_tasks on completion."""
-        try:
-            await api.save_to_history(parsed, response, tab_name=tab_name)
-        except Exception:
-            pass
-        finally:
-            self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
     def _get_tab_state(self, tab_id: str) -> _TabState | None:
         for t in self._tabs:

@@ -1,4 +1,4 @@
-"""Фабрика AI-бэкендов и утилиты установки."""
+"""AI-backend factory and install helpers."""
 
 from __future__ import annotations
 
@@ -12,25 +12,25 @@ from pentool.services.ai.provider import AIBackend, MCPBackend
 
 log = logging.getLogger(__name__)
 
-# Путь к моделям LLM в ~/.pentool/ai/models/
+# Path to LLM models under ~/.pentool/ai/models/
 AI_MODELS_DIR = Path.home() / ".pentool" / "ai" / "models"
 AI_MCP_DIR = Path.home() / ".pentool" / "ai" / "mcp_server"
 
 
 def get_ai(config: Config) -> AIBackend | None:
-    """Вернуть настроенный AI-бэкенд или None, если AI выключен.
+    """Return the configured AI backend, or None when AI is disabled.
 
     Args:
-        config: текущий конфиг с ai_enabled и параметрами MCP.
+        config: current config carrying ai_enabled and the MCP parameters.
     """
     if not config.ai_enabled:
         return None
 
     if config.ai_mcp_port and config.ai_mcp_port > 0:
-        # TCP-режим — подключаемся к уже запущенному серверу
+        # TCP mode — connect to an already-running server
         return MCPBackend()
     else:
-        # stdio-режим — запускаем сервер как подпроцесс
+        # stdio mode — launch the server as a subprocess
         model_path = config.ai_mcp_model_path or _find_default_model()
         if not model_path:
             log.warning("AI: модель не найдена, AI-помощник недоступен")
@@ -41,7 +41,7 @@ def get_ai(config: Config) -> AIBackend | None:
 
 
 def _find_default_model() -> str | None:
-    """Найти GGUF-модель в ~/.pentool/ai/models/."""
+    """Find a GGUF model under ~/.pentool/ai/models/."""
     if not AI_MODELS_DIR.exists():
         return None
     for f in AI_MODELS_DIR.iterdir():
@@ -50,14 +50,13 @@ def _find_default_model() -> str | None:
     return None
 
 
-# Активный AI-бэкенд на процесс. Храним здесь (а не где-то в TUI), чтобы и
-# TUI, и CLI имели общую ссылку для start/stop/health — раньше вместо этого
-# был «TODO: хранить ссылку на активный бэкенд».
+# The active AI backend for this process, kept here (not inside the TUI) so
+# both the TUI and the CLI share one reference for start/stop/health.
 _ACTIVE_BACKEND: "MCPBackend | None" = None
 
 
 def is_ai_running() -> bool:
-    """True, если MCP-бэкенд создан и его subprocess жив."""
+    """True if an MCP backend was created and its subprocess is alive."""
     global _ACTIVE_BACKEND
     b = _ACTIVE_BACKEND
     if b is None:
@@ -70,7 +69,7 @@ def is_ai_running() -> bool:
 
 
 async def start_ai(config: Config) -> bool:
-    """Поднять MCP-сервер (если модель есть и AI включён). Лениво-идемпотентно."""
+    """Bring up the MCP server if a model exists and AI is enabled. Lazily idempotent."""
     global _ACTIVE_BACKEND
     if _ACTIVE_BACKEND is not None:
         return True
@@ -92,7 +91,7 @@ async def start_ai(config: Config) -> bool:
 
 
 async def stop_ai() -> None:
-    """Остановить MCP-сервер, если он запущен."""
+    """Stop the MCP server if it is running."""
     global _ACTIVE_BACKEND
     b = _ACTIVE_BACKEND
     _ACTIVE_BACKEND = None
@@ -104,19 +103,19 @@ async def stop_ai() -> None:
 
 
 def get_active_backend() -> "MCPBackend | None":
-    """Вернуть активный (запущенный) AI-бэкенд, если он поднят."""
+    """Return the active (running) AI backend, if one is up."""
     return _ACTIVE_BACKEND
 
 
 def _build_mcp_cmd(model_path: str) -> list[str]:
-    """Собрать команду запуска MCP-сервера.
+    """Build the MCP-server launch command.
 
-    Приоритет:
-      1. Установленный PyPI-пакет `pentool-mcp-server` (entry point
-         `pentool-mcp-server`) — предпочтительный вариант.
-      2. Локальный скрипт ~/.pentool/ai/mcp_server/server.py (fallback,
-         старый inline-механизм).
-      3. Заглушка `echo`, если сервер не установлен.
+    Priority:
+      1. Installed PyPI package `pentool-mcp-server` (entry point
+         `pentool-mcp-server`) — preferred.
+      2. Local script ~/.pentool/ai/mcp_server/server.py (fallback, the old
+         inline mechanism).
+      3. An `echo` stub when the server is not installed.
     """
     exe = shutil.which("pentool-mcp-server")
     if exe:
@@ -125,33 +124,33 @@ def _build_mcp_cmd(model_path: str) -> list[str]:
     server_script = AI_MCP_DIR / "server.py"
     if server_script.exists():
         return ["python", str(server_script), "--model", model_path]
-    # Если сервер не установлен — возвращаем заглушку
+    # If the server is not installed — return the echo stub.
     return ["echo", "MCP-сервер не установлен"]
 
 
-# ── Установка / доустановка AI-компонентов ─────────────────────────────────
+# ── AI component setup / re-setup ───────────────────────────────────────────
 
 
 def ai_setup_required() -> bool:
-    """Проверить, требуется ли первичная установка AI."""
+    """Check whether a first-time AI install is required."""
     return not AI_MODELS_DIR.exists() or not list(AI_MODELS_DIR.iterdir())
 
 
 def get_model_size_mb() -> int:
-    """Вернуть примерный размер GGUF-файла модели в MB для показа пользователю.
+    """Return the approximate GGUF file size in MB shown to the user.
 
-    LFM2.5-350M-heretic конвертируется в llama.cpp GGUF-Q8_0 — размер близок
-    к официальному LiquidAI/LFM2.5-350M-Q8_0 (361.7 MB), округляем до 363.
+    LFM2.5-350M-heretic converts to llama.cpp GGUF-Q8_0 — its size is close to
+    the official LiquidAI/LFM2.5-350M-Q8_0 (361.7 MB); we round to 363.
     """
     return 363
 
 
 def get_ai_system_requirements() -> dict[str, str]:
-    """Вернуть системные требования AI-модели для показа в вводном сообщении.
+    """Return the AI model's system requirements for the onboarding message.
 
-    Значения взяты из карточек LFM2.5-350M-heretic (Liquid AI + GGUF-репо
-    FadedRedStar): 350M параметров, контекст 131 072 токенов, работает на CPU
-    под 1 GB RAM — edge/on-device deployment, день-1 поддержка llama.cpp.
+    Values taken from the LFM2.5-350M-heretic cards (Liquid AI + GGUF repo
+    FadedRedStar): 350M parameters, 131072-token context, runs on CPU under
+    1 GB RAM — edge/on-device deployment, day-1 llama.cpp support.
     """
     return {
         "parameters": "350M",
@@ -164,31 +163,31 @@ def get_ai_system_requirements() -> dict[str, str]:
 
 
 async def install_ai_components(config: Config, progress_cb: Any = None) -> bool:
-    """Установить AI-компоненты: скачать модель + подготовить MCP-сервер.
+    """Install AI components: download the model + prepare the MCP server.
 
     Args:
-        config: конфиг (будет обновлён ai_enabled=True, ai_model_path)
-        progress_cb: опциональный колбэк для отображения прогресса
+        config: config (will be updated with ai_enabled=True, ai_model_path)
+        progress_cb: optional callback to surface progress
 
     Returns:
-        True при успешной установке
+        True on a successful install
     """
-    # 1. Создать директории
+    # 1. Create the directories.
     AI_MODELS_DIR.mkdir(parents=True, exist_ok=True)
     AI_MCP_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 2. Скачать готовый GGUF-файл модели (пользователь ничего не
-    #    конвертирует — квантизация уже готова и хостится на HuggingFace).
-    #    Никаких мнимых "успехов": при сетевой ошибке/404/неверном размере
-    #    возвращаем False, и вызывающий показывает ошибку пользователю.
+    # 2. Download the ready-made GGUF model file (the user does not convert
+    #    anything — the quantization is already done and hosted on HuggingFace).
+    #    No fake "success": on a network error / 404 / wrong size we return
+    #    False, and the caller surfaces the error to the user.
     model_path = AI_MODELS_DIR / "lfm-2.5-350m-heretic.gguf"
     if not model_path.exists():
         if not await _download_gguf(model_path, progress_cb=progress_cb):
             return False
 
-    # 3. MCP-сервер: предпочитаем отдельный PyPI-пакет `pentool-mcp-server`,
-    #    если он не установлен и доступен pip — доустанавливаем. Если pip
-    #    недоступен (оффлайн) — fallback на inline-заглушку.
+    # 3. MCP server: prefer the standalone PyPI package `pentool-mcp-server` —
+    #    install it if missing and pip is available. When pip is unavailable
+    #    (offline) fall back to the inline stub.
     if not _is_mcp_server_installed():
         if progress_cb:
             progress_cb("Установка MCP-сервера (pentool-mcp-server)...")
@@ -197,7 +196,7 @@ async def install_ai_components(config: Config, progress_cb: Any = None) -> bool
     elif progress_cb:
         progress_cb("MCP-сервер уже установлен")
 
-    # 4. Обновить конфиг
+    # 4. Update the config.
     config.ai_enabled = True
     config.ai_mcp_model_path = str(model_path)
 
@@ -205,12 +204,12 @@ async def install_ai_components(config: Config, progress_cb: Any = None) -> bool
 
 
 def _is_mcp_server_installed() -> bool:
-    """True, если доступен entry point `pentool-mcp-server`."""
+    """True if the `pentool-mcp-server` entry point is available."""
     return shutil.which("pentool-mcp-server") is not None
 
 
 def _try_pip_install_mcp_server() -> bool:
-    """Попытаться установить пакет pentool-mcp-server текущим pip/uv.
+    """Try to install the pentool-mcp-server package via the current pip/uv.
 
     Возвращает True при успешной установке. При недоступности pip/сети
     возвращает False (вызывающий fallback на inline-заглушку).
@@ -289,7 +288,7 @@ async def _download_gguf(dest: Path, progress_cb: Any = None) -> bool:
 
 
 def _ensure_mcp_server_stub() -> None:
-    """Создать минимальный MCP-сервер, если его нет."""
+    """Create a minimal MCP server when none is present."""
     server_py = AI_MCP_DIR / "server.py"
     if server_py.exists():
         return

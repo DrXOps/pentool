@@ -1,7 +1,7 @@
-"""Провайдеры AI-бэкенда.
+"""AI-backend providers.
 
-AIBackend — абстрактный базовый класс.
-MCPBackend — реализация через внешний MCP-сервер (llama-cpp-python + mcp SDK).
+AIBackend — abstract base class.
+MCPBackend — an implementation backed by an external MCP server (llama-cpp-python + mcp SDK).
 """
 
 from __future__ import annotations
@@ -39,26 +39,26 @@ def is_mcp_running() -> bool:
 
 
 class AIBackend(ABC):
-    """Абстрактный AI-бэкенд."""
+    """Abstract AI backend."""
 
     @abstractmethod
     async def generate(self, task_name: str, context: dict[str, Any] | None = None) -> dict[str, Any] | None:
-        """Вызвать AI для задачи task_name с переданным контекстом.
+        """Call AI for task_name with the given context.
 
-        Возвращает распарсенный JSON-ответ или None при ошибке/таймауте.
+        Returns the parsed JSON response, or None on error/timeout.
         """
 
     @abstractmethod
     async def health(self) -> bool:
-        """Проверить, что бэкенд жив и отвечает."""
+        """Check the backend is alive and responding."""
 
     @abstractmethod
     async def close(self) -> None:
-        """Освободить ресурсы."""
+        """Release resources."""
 
 
 class MCPBackend(AIBackend):
-    """MCP-клиент: общается с внешним MCP-сервером через stdio (JSON-RPC)."""
+    """MCP client: talks to an external MCP server over stdio (JSON-RPC)."""
 
     def __init__(self, mcp_cmd: list[str] | None = None) -> None:
         self._process: asyncio.subprocess.Process | None = None
@@ -67,7 +67,7 @@ class MCPBackend(AIBackend):
         self._stdout: Any = None  # asyncio StreamReader (process stdout)
 
     async def start(self) -> bool:
-        """Запустить MCP-сервер как подпроцесс."""
+        """Start the MCP server as a subprocess."""
         if not self._mcp_cmd:
             log.error("MCPBackend: команда запуска MCP-сервера не задана")
             return False
@@ -78,11 +78,11 @@ class MCPBackend(AIBackend):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            # Используем буферизованный binary I/O subprocess напрямую, а НЕ
-            # asyncio.StreamWriter/StreamReader поверх pipe: последние требуют
-            # корректного event loop при создании и падали с
-            # «'NoneType' object has no attribute 'create_future'» когда loop
-            # не был привязан. Чтение/запись ведём блокирующе в to_thread.
+            # Use the subprocess's buffered binary I/O directly, NOT an
+            # asyncio.StreamWriter/StreamReader over the pipe: the latter
+            # needs a live event loop at construction and crashed with
+            # "'NoneType' object has no attribute 'create_future'" when no
+            # loop was bound. Read/write are done blocking in to_thread.
             self._stdin = self._process.stdin
             self._stdout = self._process.stdout
             global _MCP_PROCESS_PID
@@ -94,7 +94,7 @@ class MCPBackend(AIBackend):
             return False
 
     async def _call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
-        """Вызвать tool MCP-сервера через JSON-RPC."""
+        """Call an MCP-server tool over JSON-RPC."""
         if not self._stdin or not self._stdout:
             log.warning("MCPBackend: сервер не запущен")
             return None
@@ -106,8 +106,8 @@ class MCPBackend(AIBackend):
         }
         try:
             payload = json.dumps(req, ensure_ascii=False)
-            # process.stdin/stdout от create_subprocess_exec — это asyncio
-            # StreamWriter/StreamReader, правильно привязанные к event loop.
+            # process.stdin/stdout from create_subprocess_exec are asyncio
+            # StreamWriter/StreamReader, correctly bound to the event loop.
             self._stdin.write((payload + "\n").encode("utf-8"))
             await self._stdin.drain()
 
@@ -126,10 +126,10 @@ class MCPBackend(AIBackend):
         return None
 
     async def generate(self, task_name: str, context: dict[str, Any] | None = None) -> dict[str, Any] | None:
-        """Вызвать MCP-сервер для задачи task_name.
+        """Call the MCP server for task_name.
 
-        MCP tools/call возвращает {"content": [{"type":"text","text":"<json>"}]}
-        — вытаскиваем и парсим text, чтобы клиент получил "чистый" dict/items.
+        MCP tools/call returns {"content": [{"type":"text","text":"<json>"}]} —
+        we pull out and parse `text` so the client gets a clean dict/items.
         """
         task = REGISTRY.get(task_name)
         if not task:
@@ -162,10 +162,10 @@ class MCPBackend(AIBackend):
             return None
 
     async def health(self) -> bool:
-        """Проверить здоровье MCP-сервера.
+        """Check the MCP server health.
 
-        Инструмент `health` существует на сервере (возвращает {ok, ...});
-        обращаться через него, а не через JSON-RPC-метод `ping`.
+        The `health` tool exists on the server (returns {ok, ...}) — use it
+        rather than the JSON-RPC `ping` method.
         """
         try:
             result = await self._call_tool("health", {})
@@ -182,7 +182,7 @@ class MCPBackend(AIBackend):
             return False
 
     async def close(self) -> None:
-        """Остановить MCP-сервер."""
+        """Stop the MCP server."""
         global _MCP_PROCESS_PID
         if self._process:
             try:
