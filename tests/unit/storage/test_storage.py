@@ -15,18 +15,18 @@ from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 class TestLRUCache:
     def test_put_and_get(self) -> None:
-        from pentool.storage.lru_cache import LRUCache
+        from pentool.utils.lru_cache import LRUCache
         cache = LRUCache(max_size=10)
         cache.put(1, {"data": "value"})
         assert cache.get(1) == {"data": "value"}
 
     def test_miss_returns_none(self) -> None:
-        from pentool.storage.lru_cache import LRUCache
+        from pentool.utils.lru_cache import LRUCache
         cache = LRUCache()
         assert cache.get(999) is None
 
     def test_evicts_least_recently_used(self) -> None:
-        from pentool.storage.lru_cache import LRUCache
+        from pentool.utils.lru_cache import LRUCache
         cache = LRUCache(max_size=2)
         cache.put(1, "a")
         cache.put(2, "b")
@@ -37,7 +37,7 @@ class TestLRUCache:
         assert cache.get(3) == "c"
 
     def test_update_moves_to_front(self) -> None:
-        from pentool.storage.lru_cache import LRUCache
+        from pentool.utils.lru_cache import LRUCache
         cache = LRUCache(max_size=2)
         cache.put(1, "old")
         cache.put(2, "b")
@@ -47,7 +47,7 @@ class TestLRUCache:
         assert cache.get(2) is None
 
     def test_capacity_of_one(self) -> None:
-        from pentool.storage.lru_cache import LRUCache
+        from pentool.utils.lru_cache import LRUCache
         cache = LRUCache(max_size=1)
         cache.put(1, "a")
         cache.put(2, "b")
@@ -55,14 +55,14 @@ class TestLRUCache:
         assert cache.get(2) == "b"
 
     def test_invalidate_removes_entry(self) -> None:
-        from pentool.storage.lru_cache import LRUCache
+        from pentool.utils.lru_cache import LRUCache
         cache = LRUCache()
         cache.put(1, "data")
         cache.invalidate(1)
         assert cache.get(1) is None
 
     def test_clear_empties_cache(self) -> None:
-        from pentool.storage.lru_cache import LRUCache
+        from pentool.utils.lru_cache import LRUCache
         cache = LRUCache()
         cache.put(1, "a")
         cache.put(2, "b")
@@ -71,7 +71,7 @@ class TestLRUCache:
         assert cache.get(2) is None
 
     def test_many_items(self) -> None:
-        from pentool.storage.lru_cache import LRUCache
+        from pentool.utils.lru_cache import LRUCache
         cache = LRUCache(max_size=100)
         for i in range(100):
             cache.put(i, f"value_{i}")

@@ -44,7 +44,7 @@ from pentool.api.intruder_api import (
     count_markers,
     process_payload,
 )
-from pentool.tui.widgets.payload_serialization import deserialize_payloads, serialize_payloads
+from pentool.api.payload_serialization import deserialize_payloads, serialize_payloads
 from pentool.tui.widgets.intruder_results import matches_grep, matches_result_filters
 from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater

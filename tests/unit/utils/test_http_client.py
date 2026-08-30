@@ -208,11 +208,12 @@ class TestGetSharedHttpClient:
 
         saved = get_config()
         try:
-            set_config(Config(
+            cfg = Config(
                 verify_ssl=True,
                 request_timeout=33,
-            ))
-            client = get_shared_http_client()
+            )
+            set_config(cfg)
+            client = get_shared_http_client(cfg=cfg)
             assert client._verify_ssl is True
             assert client._timeout.total == 33
             assert client._extra_headers == {}
@@ -225,10 +226,12 @@ class TestGetSharedHttpClient:
 
         saved = get_config()
         try:
-            set_config(Config())
+            cfg = Config()
+            set_config(cfg)
             client = get_shared_http_client(
                 follow_redirects=False,
                 extra_headers={"Cookie": "sid=1"},
+                cfg=cfg,
             )
             assert client._follow_redirects is False
             assert client._extra_headers == {"Cookie": "sid=1"}
