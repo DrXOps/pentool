@@ -182,15 +182,25 @@ class WebSocketHandler:
             await asyncio.gather(
                 _relay(client_reader, srv_writer, "client->server"),
                 _relay(srv_reader, client_writer, "server->client"),
-                return_exceptions=True,
+                return_exceptions=False,
             )
+        except asyncio.CancelledError:
+            # Task cancelled (proxy stop / app teardown). We cannot `await` in
+            # a finally here — at this point GeneratorExit is in flight and an
+            # await on a half-closed coroutine raises "RuntimeError: coroutine
+            # ignored GeneratorExit" (the very error that silently killed run()).
+            # Close both writers synchronously (no await), then re-raise.
+            for w in (client_writer, srv_writer):
+                try:
+                    w.close()
+                except Exception:
+                    pass
+            raise
         finally:
-            # Close BOTH writers even when the tunnel is cancelled mid-flight
-            # (one relay broke the other). Leaving srv_writer (upstream) open
-            # left _handle_client's wait_closed() pending forever; massed up,
-            # those pending tasks were finalized in a burst at loop teardown
-            # → _PyGen_Finalize heap corruption ("free(): corrupted unsorted
-            # chunks") SIGABRT. Bounded wait so we never block a cancel.
+            # Normal (non-cancel) teardown: one relay ended the tunnel. Close
+            # BOTH writers even when only one side broke — leaving srv_writer
+            # (upstream) open left _handle_client's wait_closed() pending
+            # forever. Bounded wait so we never block shutdown.
             for w in (client_writer, srv_writer):
                 try:
                     w.close()
