@@ -36,8 +36,12 @@ ENV PATH="/opt/pentool-venv/bin:${PATH}" \
     UV_SYSTEM_PYTHON=1
 
 # Lightpanda binary for JS crawling (fast, light headless JS engine).
+# python:slim has no curl — install it (and clean the apt cache) in one layer.
 ARG LIGHTPANDA_VERSION=0.3.7
 RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl ca-certificates; \
+    rm -rf /var/lib/apt/lists/*; \
     ARCH="$(uname -m)"; case "$ARCH" in \
       x86_64) LP_ARCH="x86_64" ;; \
       aarch64|arm64) LP_ARCH="aarch64" ;; \
@@ -45,8 +49,7 @@ RUN set -eux; \
     esac; \
     curl -fsSL -o /usr/local/bin/lightpanda \
       "https://github.com/lightpanda-io/browser/releases/download/${LIGHTPANDA_VERSION}/lightpanda-${LP_ARCH}-linux"; \
-    chmod +x /usr/local/bin/lightpanda; \
-    ln -s /usr/local/bin/lightpanda /usr/local/bin/lightpanda
+    chmod +x /usr/local/bin/lightpanda
 
 # Playwright Chromium is NOT included by default (heavy). If you need `--real`
 # mode inside the container, install it explicitly:
