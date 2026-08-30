@@ -427,14 +427,16 @@ class ProxyClient:
                 pass
 
     def forward(self, request_id: str, modified: str | None = None) -> None:
-        self._command({"cmd": "forward", "request_id": request_id,
-                       "modified": modified})
+        # Tolerate proxy-not-running: mirror ProxyServer.forward which is a
+        # silent no-op when the request isn't waiting (it never raises).
+        self._command_tolerant({"cmd": "forward", "request_id": request_id,
+                                "modified": modified})
 
     def drop(self, request_id: str) -> None:
-        self._command({"cmd": "drop", "request_id": request_id})
+        self._command_tolerant({"cmd": "drop", "request_id": request_id})
 
     def clear_requests(self) -> None:
-        self._command({"cmd": "clear_requests"})
+        self._command_tolerant({"cmd": "clear_requests"})
 
     # -- transport -----------------------------------------------------------
 
@@ -477,3 +479,19 @@ class ProxyClient:
             return json.loads(line.decode("utf-8", "replace"))
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": str(exc)}
+
+    def _command_tolerant(self, cmd: dict) -> dict:
+        """Send a command, never raising when the proxy is not connected.
+
+        Control commands like forward/drop/clear are safe no-ops when the
+        daemon isn't up (mirrors in-memory ProxyServer which silently ignores
+        actions for requests that aren't waiting). Used where the TUI must not
+        crash because the proxy happens to be stopped (e.g. intercept button
+        handlers exercised by tests without a live proxy).
+        """
+        if self._cmd_sock is None:
+            return {"ok": True}
+        try:
+            return self._command(cmd)
+        except Exception:  # noqa: BLE001
+            return {"ok": True, "error": "proxy client not connected"}
