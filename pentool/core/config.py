@@ -30,6 +30,9 @@ class Config:
     plugins_dir: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "plugins"))
     scope: list[str] = field(default_factory=list)
     intercept_enabled: bool = False
+    # Proxy backend: 'daemon' (isolated subprocess, default) or 'memory'
+    # (legacy ProxyServer on a daemon thread in the TUI process — fallback).
+    proxy_engine: str = "daemon"
     recent_projects: list[str] = field(default_factory=list)
     auto_save_enabled: bool = False
     auto_save_interval: int = 5  # minutes
@@ -116,6 +119,7 @@ class Config:
             "plugins_dir": self.plugins_dir,
             "scope": self.scope,
             "intercept_enabled": self.intercept_enabled,
+            "proxy_engine": self.proxy_engine,
             "recent_projects": self.recent_projects,
             "auto_save_enabled": self.auto_save_enabled,
             "auto_save_interval": self.auto_save_interval,
@@ -162,6 +166,9 @@ class Config:
         for key, value in data.items():
             if hasattr(cfg, key) and not key.startswith("_"):
                 setattr(cfg, key, value)
+        # Normalize proxy backend — tolerate junk/legacy values in config.yaml
+        if cfg.proxy_engine not in ("daemon", "memory"):
+            cfg.proxy_engine = "daemon"
         # Remove non-existent paths from recent_projects on load
         before = len(cfg.recent_projects)
         cfg.recent_projects = [p for p in cfg.recent_projects if os.path.exists(p)]

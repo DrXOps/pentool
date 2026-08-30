@@ -5,28 +5,33 @@ from __future__ import annotations
 from pentool.api.base_api import ExportableAPI
 from pentool.core.logging import get_logger
 from pentool.modules.proxy import InterceptedRequest, MatchReplaceRule, ProxyServer
+from pentool.proxy.client import ProxyClient
 
 logger = get_logger(__name__)
 
 # Re-export types — TUI imports them from here, not from modules.proxy
 __all__ = ["ProxyAPI", "InterceptedRequest", "MatchReplaceRule", "ProxyServer"]
 
+# The proxy the TUI talks to is either an in-process ProxyServer (memory
+# engine) or a ProxyClient facade over the isolated daemon (daemon engine).
+ProxyLike = ProxyServer | ProxyClient | None
+
 
 class ProxyAPI(ExportableAPI):
 
     def __init__(self) -> None:
-        self._proxy: ProxyServer | None = None
+        self._proxy: ProxyLike = None
 
-    def set_proxy(self, proxy: ProxyServer) -> None:
+    def set_proxy(self, proxy: ProxyLike) -> None:
         logger.debug("ProxyAPI: set_proxy called, proxy=%s", proxy)
         self._proxy = proxy
 
-    def get_proxy(self) -> ProxyServer | None:
+    def get_proxy(self):
         return self._proxy
 
     @property
-    def proxy(self) -> ProxyServer | None:
-        """Direct access to ProxyServer through the API layer.
+    def proxy(self):
+        """Direct access to the proxy backend through the API layer.
 
         Used where direct server access is needed
         (proxy/screen.py for intercept, repeater/screen.py for scope).
@@ -92,7 +97,11 @@ class ProxyAPI(ExportableAPI):
         """
         if self._proxy is None:
             return None
-        return self._proxy._find_request(req_id)
+        # In-memory ProxyServer keeps its own _find_request; the daemon-backed
+        # ProxyClient resolves it over IPC.
+        find = self._proxy._find_request if isinstance(self._proxy, ProxyServer) \
+            else self._proxy.find_request
+        return find(req_id)
 
     def clear_requests(self) -> None:
         if self._proxy:

@@ -4,7 +4,10 @@ Extracted from PentoolApp (Этап 5.1, proxy-runtime domain) so the app class
 stays thin and the start/stop/toggle path is tested in one place.
 
 The mixin expects its host (the App) to expose:
-    _proxy            — ProxyServer instance (or None)
+    _proxy            — ProxyServer OR ProxyClient instance (or None)
+    _proxy_engine     — str: 'daemon' (isolated ProxyClient) or 'memory'
+                        (legacy in-process ProxyServer on a daemon thread). The
+                        host decides; default 'memory' keeps existing behaviour.
     _proxy_thread     — threading.Thread | None
     _proxy_loop       — asyncio.AbstractEventLoop | None
     _project_loaded   — bool (project DB switch finished)
@@ -24,7 +27,24 @@ logger = logging.getLogger(__name__)
 
 
 class ProxyRuntimeMixin:
-    """Mix-in for starting/stopping the proxy in a background thread."""
+    """Mix-in for starting/stopping the proxy.
+
+    Supports two backends selected by ``self._proxy_engine``:
+
+      * 'memory' — legacy: ProxyServer runs on a daemon thread inside the TUI
+        process (its own asyncio loop), started via the async coroutine path.
+      * 'daemon' — isolated: the proxy lives in its own subprocess (see
+        proxy/daemon.py) and ``self._proxy`` is a ProxyClient facade. start/stop
+        are synchronous socket commands; captured-request events come back over
+        a separate event socket and are re-emitted into the TUI EventBus.
+    """
+
+    def _engine(self) -> str:
+        """Which proxy backend is active (host decides; default 'memory')."""
+        try:
+            return getattr(self, "_proxy_engine", "memory")  # type: ignore[attr-defined]
+        except Exception:
+            return "memory"
 
     def action_toggle_proxy(self) -> None:
         if self._proxy is None:  # type: ignore[attr-defined]
@@ -59,6 +79,39 @@ class ProxyRuntimeMixin:
         # Sprint 3: callbacks removed — proxy emits via EventBus,
         # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted in on_mount
 
+        if self._engine() == "daemon":
+            self._start_proxy_daemon()
+            return
+        self._start_proxy_memory()
+
+    def _start_proxy_daemon(self) -> None:
+        """Start the isolated daemon-backed proxy (ProxyClient facade).
+
+        start() is synchronous here (spawns+connects, then pushes the startup
+        intercept/scope prefs). Event emission back into the TUI is handled by
+        the client's background reader re-emitting into the EventBus, so the
+        UI update calls below are identical to the in-memory path.
+        """
+        try:
+            self._proxy.start()  # type: ignore[attr-defined]
+            self._update_status()  # type: ignore[attr-defined]
+            self._update_proxy_screen_labels()  # type: ignore[attr-defined]
+            self._update_dashboard_proxy_status(True)  # type: ignore[attr-defined]
+            self.notify(  # type: ignore[attr-defined]
+                f"● Proxy :{self._proxy.port}", severity="success"  # type: ignore[attr-defined]
+            )
+            logger.info("Proxy started on port %s (daemon engine)", self._proxy.port)  # type: ignore[attr-defined]
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc) or type(exc).__name__
+            logger.error("Proxy (daemon) failed to start: %s", exc)
+            self.notify(  # type: ignore[attr-defined]
+                f"Proxy failed to start: {msg}",
+                severity="error",
+                timeout=6,
+            )
+
+    def _start_proxy_memory(self) -> None:
+        """Start the legacy in-memory ProxyServer on a daemon thread."""
         def _run_proxy_loop() -> None:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -107,6 +160,8 @@ class ProxyRuntimeMixin:
 
     def _stop_proxy(self) -> None:
         logger.info("APP: _stop_proxy called")
+        if self._engine() == "daemon":
+            return self._stop_proxy_daemon()
         if self._proxy and self._proxy.is_running and self._proxy_loop:  # type: ignore[attr-defined]
             future = asyncio.run_coroutine_threadsafe(
                 self._proxy.stop(), self._proxy_loop  # type: ignore[attr-defined]
@@ -151,6 +206,8 @@ class ProxyRuntimeMixin:
         the Stop button / Ctrl+Q.
         """
         logger.info("APP: _stop_proxy_async called")
+        if self._engine() == "daemon":
+            return self._stop_proxy_daemon_async()
         if self._proxy and self._proxy.is_running and self._proxy_loop:  # type: ignore[attr-defined]
             future = asyncio.run_coroutine_threadsafe(
                 self._proxy.stop(), self._proxy_loop  # type: ignore[attr-defined]
@@ -178,3 +235,35 @@ class ProxyRuntimeMixin:
             )
         else:
             self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
+
+    def _stop_proxy_daemon(self) -> None:
+        """Stop the daemon-backed proxy synchronously (Stop button / Ctrl+Q)."""
+        logger.info("APP: _stop_proxy_daemon called")
+        try:
+            if self._proxy:
+                self._proxy.stop()  # type: ignore[attr-defined]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("APP: proxy (daemon) stop error: %s", exc)
+        self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
+        self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
+        self.call_after_refresh(  # type: ignore[attr-defined]
+            self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
+        )
+
+    async def _stop_proxy_daemon_async(self) -> None:
+        """Stop the daemon-backed proxy without blocking the TUI thread.
+
+        stop() is a bounded socket command that itself terminates the daemon
+        process; run it off the TUI thread so the UI thread isn't frozen.
+        """
+        logger.info("APP: _stop_proxy_daemon_async called")
+        try:
+            if self._proxy:
+                await asyncio.to_thread(self._proxy.stop)  # type: ignore[attr-defined]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("APP: proxy (daemon) stop async error: %s", exc)
+        self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
+        self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
+        self.call_after_refresh(  # type: ignore[attr-defined]
+            self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
+        )

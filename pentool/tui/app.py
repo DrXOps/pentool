@@ -28,6 +28,7 @@ Checkbox.BUTTON_RIGHT = "]"
 
 from pentool.api.proxy_api import InterceptedRequest as _IR
 from pentool.api.proxy_api import ProxyAPI, ProxyServer
+from pentool.proxy.client import ProxyClient
 from pentool.core.config import get_config
 from pentool.core.db_schema import init_db
 from pentool.core.event_bus import get_event_bus
@@ -293,7 +294,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def __init__(self) -> None:
         super().__init__()
         self._cfg = get_config()
-        self._proxy: ProxyServer | None = None
+        # Proxy backend: 'daemon' (default, isolated subprocess via ProxyClient)
+        # or 'memory' (legacy ProxyServer on a daemon thread). Selected from
+        # config.proxy_engine so the isolated path can be reverted instantly.
+        self._proxy_engine: str = getattr(self._cfg, "proxy_engine", "daemon")
+        self._proxy: ProxyServer | ProxyClient | None = None
         self._proxy_api: ProxyAPI = ProxyAPI()
         self._proxy_service: ProxyService | None = None
         self._proxy_thread: threading.Thread | None = None
@@ -504,19 +509,34 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         except Exception as exc:
             logger.warning("DB init failed: %s", exc)
 
-        self._proxy = ProxyServer(
-            host=self._cfg.proxy_host,
-            port=self._cfg.proxy_port,
-            cert_dir=self._cfg.cert_dir,
-            db_path=self._cfg.db_path,
-        )
+        if self._proxy_engine == "daemon":
+            # Isolated: ProxyClient facade over the daemon subprocess. Events
+            # come back over the event socket and are re-emitted into the TUI
+            # EventBus by the client's reader thread, so downstream subscribers
+            # (ProxyService → HttpStorage, ProxyScreen) behave as before.
+            self._proxy = ProxyClient(
+                host=self._cfg.proxy_host,
+                port=self._cfg.proxy_port,
+                cert_dir=self._cfg.cert_dir,
+                db_path=self._cfg.db_path,
+            )
+        else:
+            # Legacy fallback: in-process ProxyServer on a daemon thread.
+            self._proxy = ProxyServer(
+                host=self._cfg.proxy_host,
+                port=self._cfg.proxy_port,
+                cert_dir=self._cfg.cert_dir,
+                db_path=self._cfg.db_path,
+            )
+        # Startup prefs. For ProxyClient these property setters only cache the
+        # value while no socket exists; start() pushes them into the daemon.
         self._proxy.intercept_enabled = self._cfg.intercept_enabled
-        # Sync scope from config into ProxyServer
+        # Sync scope from config into Proxy
         if self._cfg.scope:
             self._proxy.scope = list(self._cfg.scope)
             logger.info("APP: scope loaded from config: %s", self._cfg.scope)
 
-        # Inject ProxyServer into the API layer
+        # Inject Proxy into the API layer
         self._proxy_api.set_proxy(self._proxy)
 
         # Create ProxyService and pass it to ProxyScreen — before init_storage
