@@ -20,13 +20,13 @@ docs (install via the official installer or a release asset under
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import shutil
 from pathlib import Path
 
-from pentool.core.logging import get_logger
-
-logger = get_logger(__name__)
+# stdlib logging (NOT pentool.core.logging) — utils/ must not import core/.
+logger = logging.getLogger(__name__)
 
 # Conventional install locations (env override read dynamically in the finder).
 _INSTALL_HINTS = (
