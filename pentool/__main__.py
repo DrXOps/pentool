@@ -300,8 +300,10 @@ def main() -> None:
         _kill_orphaned_pentool()
 
         from pentool.tui.app import PentoolApp
+        _app: PentoolApp | None = None
         try:
-            PentoolApp().run()
+            _app = PentoolApp()
+            _app.run()
         except (KeyboardInterrupt, SystemExit):
             _log_exit_reason("signal/SystemExit")
             # Let the interpreter shut down normally on signals/explicit exits
@@ -320,7 +322,16 @@ def main() -> None:
         else:
             _log_exit_reason("run() returned cleanly (not via action_quit)")
             # `run()` returned cleanly — not through `action_quit` (which
-            # does its own os._exit deep inside the app). Dump all thread
+            # does its own os._exit deep inside the app). The proxy daemon
+            # thread may still be running and emitting events; wind it down
+            # before exit so the interpreter isn't left with live background
+            # work (this was a recurring "TUI just vanished → hang/crash").
+            if _app is not None:
+                try:
+                    _app._stop_proxy()  # noqa: SLF001 — internal runtime bridge
+                except Exception:
+                    pass
+            # Dump all thread
             # stacks to the log for post-mortem diagnosis, then hard-exit so
             # the interpreter doesn't hang on orphan non-daemon threads.
             import io, sys as _sys, time as _time, traceback as _tb
