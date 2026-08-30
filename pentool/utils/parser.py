@@ -51,6 +51,36 @@ class ParsedResponse:
     _raw_body: bytes | None = field(default=None, repr=False, compare=False)
 
 
+def response_raw_from_parsed(resp: ParsedResponse) -> str:
+    """Rebuild the full raw HTTP response text from a ParsedResponse.
+
+    A local, dependency-free replacement for the PRO `format_response_raw`
+    helper. The installed PRO package builds this by instantiating an
+    `aiohttp.raw_request.RawResponseMessage`-adjacent/explicit
+    `aiohttp.ClientResponse` the old way, which breaks on aiohttp >= 3.14
+    (`ClientResponse.__init__() missing required argument: 'stream_writer'`)
+    and made every Intruder attack request fail. Building the wire text here
+    needs no aiohttp at all.
+
+    Body bytes are taken from `_raw_body` when available (keeps the exact
+    downloaded bytes, e.g. binary) and fall back to `body` otherwise.
+    """
+    header_block = "".join(
+        f"{k}: {v}\r\n" for k, v in resp.headers.items()
+    )
+    body = resp._raw_body if resp._raw_body is not None else resp.body
+    if isinstance(body, str):
+        body_bytes = body.encode("utf-8", errors="replace")
+    else:
+        body_bytes = bytes(body or b"")
+    status_line = (
+        f"{getattr(resp, 'http_version', 'HTTP/1.1')} {resp.status}"
+        + (f" {resp.reason}" if resp.reason else "")
+    )
+    head = f"{status_line}\r\n{header_block}\r\n".encode("utf-8")
+    return (head + body_bytes).decode("utf-8", errors="replace")
+
+
 def parse_http_request(raw: str) -> ParsedRequest:
     """Parse a raw HTTP request string into a ParsedRequest.
 
