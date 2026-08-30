@@ -770,45 +770,50 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         proxy_host = self._proxy.host or "127.0.0.1"
         proxy_port = self._proxy.port or 8080
         proxy_url = f"http://{proxy_host}:{proxy_port}"
-        _proxy_arg = f"--proxy-server={proxy_url}"
-        _script = (
-            "import asyncio,sys\n"
-            "async def _run():\n"
-            "    from playwright.async_api import async_playwright\n"
-            "    async with async_playwright() as pw:\n"
-            "        b=await pw.chromium.launch(headless=True,args=[%r,%r])\n"
-            "        p=await b.new_page()\n"
-            "        for u in sys.argv[1:]:\n"
-            "            try:\n"
-            "                await p.goto(u,timeout=30000,wait_until='domcontentloaded')\n"
-            "                print('--real child visited',u,flush=True)\n"
-            "            except Exception as e:\n"
-            "                print('--real child visit failed',u,repr(e),flush=True)\n"
-            "        await b.close()\n"
-            "asyncio.run(_run())\n"
-        ) % (_proxy_arg, "--ignore-certificate-errors")
 
-        logger.info("--real: running browser child via subprocess in executor (py=%s)", sys.executable)
+        # Lightpanda binary (third-party, not a pip dep) drives --real now. It
+        # executes JS and, with --http-proxy + --ca-cert, sends the real request
+        # through OUR MITM proxy so it lands in HTTP History + Target (same as
+        # the old Chromium/Playwright path, without the Node/browser stack).
+        import pentool.utils.lightpanda as _lp
+        binary = _lp.find_lightpanda_binary()
+        if binary is None:
+            logger.warning("--real: lightpanda binary not installed — cannot fetch")
+            return False
+
+        cmd = [binary, "fetch"]
+        cmd.extend(urls)
+        cmd += [
+            "--dump", "html",
+            "--http-proxy", proxy_url,
+            "--wait-ms", "3000",
+        ]
+        # Trust our MITM CA so HTTPS captures work (not just HTTP).
+        ca_path = os.path.join(self._cfg.cert_dir, "ca.crt")
+        if os.path.isfile(ca_path):
+            cmd += ["--ca-cert", ca_path]
+
+        logger.info("--real: running lightpanda fetch via subprocess in executor (bin=%s)", binary)
         try:
             result = subprocess.run(
-                [sys.executable, "-c", _script, *urls],
+                cmd,
                 capture_output=True, text=True, timeout=120,
             )
-            logger.info("--real: child returned rc=%s", result.returncode)
+            logger.info("--real: lightpanda returned rc=%s", result.returncode)
             out = (result.stdout or "").strip()
             err = (result.stderr or "").strip()
-            for line in out.splitlines():
-                logger.info("--real: %s", line)
+            for line in err.splitlines():
+                logger.debug("--real: %s", line)
             if result.returncode != 0:
-                logger.warning("--real: child exited %s: %s",
+                logger.warning("--real: lightpanda exited %s: %s",
                                result.returncode, (err.splitlines()[-1] if err else ""))
                 return False
-            return "--real child visited" in out
+            return bool(out)
         except subprocess.TimeoutExpired:
-            logger.warning("--real: child timed out")
+            logger.warning("--real: lightpanda timed out")
             return False
         except Exception as exc:
-            logger.warning("--real: browser capture error: %s", exc)
+            logger.warning("--real: lightpanda capture error: %s", exc)
             return False
 
     def _refresh_target_tree(self) -> None:

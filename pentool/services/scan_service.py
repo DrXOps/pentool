@@ -21,7 +21,6 @@ from pentool.core.events import (
 from pentool.core.logging import get_logger
 from pentool.modules.spider import DEFAULT_MAX_DEPTH, DEFAULT_MAX_PAGES
 from pentool.services.base_service import BaseService
-from pentool.modules.spider import is_playwright_available as _playwright_available
 from pentool.utils.auth_headers import extract_auth_headers
 from pentool.utils.lightpanda import is_lightpanda_available
 
@@ -56,7 +55,7 @@ class ScanConfig:
     # should never silently log into third-party sites without an explicit opt-in.
     auto_login: bool = False
     login: tuple[str, str] | None = None  # (username, password)
-    # Hybrid JS crawl (Этап 2.4): when True and Playwright is installed, if the
+    # Hybrid JS crawl (Этап 2.4): when True and Lightpanda is installed, if the
     # static crawl only reaches the entry page, re-crawl with js_render to pull
     # client-side-built links (levels 3+). Off by default.
     hybrid_js: bool = False
@@ -413,16 +412,15 @@ class ScanService(BaseService):
                 self._auth_headers = dict(result.auth_headers)
 
             # Hybrid JS crawl (Этап 2.4): when the caller opted in (hybrid_js)
-            # and a JS engine (Lightpanda preferred, Playwright fallback) is
-            # available, if the static crawl surfaced almost nothing (only
-            # reached the entry page — typical for a JS/SPA app whose
-            # level-2/3 links are built client-side), re-crawl with js_render
-            # to catch them. Graceful: no-ops if no engine is installed.
-            # Off by default so scans stay deterministic/fast unless the user
-            # explicitly wants JS recovery.
+            # and a JS engine (Lightpanda) is available, if the static crawl
+            # surfaced almost nothing (only reached the entry page — typical
+            # for a JS/SPA app whose level-2/3 links are built client-side),
+            # re-crawl with js_render to catch them. Graceful: no-ops if no
+            # engine is installed. Off by default so scans stay
+            # deterministic/fast unless the user explicitly wants JS recovery.
             if (
                 getattr(config, "hybrid_js", False)
-                and (is_lightpanda_available() or _playwright_available())
+                and is_lightpanda_available()
                 and not self._stop_requested
                 and len(getattr(result, "pages", [])) < 2
             ):

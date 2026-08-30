@@ -368,8 +368,8 @@ async def _probe_graphql(url: str) -> bool:
 async def _js_render_probe(url: str) -> str | None:
     """Render page and return the post-JS HTML if the target is an SPA.
 
-    Uses Lightpanda (preferred) for a cheap JS render; falls back to the old
-    Playwright crawl path only when Lightpanda is unavailable.
+    Uses Lightpanda for a cheap JS render; the SpiderAPI crawl below is a
+    second Lightpanda-backed attempt if the direct fetch returns nothing.
     """
     try:
         from pentool.utils.lightpanda import is_lightpanda_available, lightpanda_fetch_html
