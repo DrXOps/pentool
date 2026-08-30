@@ -11,13 +11,12 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.message import Message
 from textual.containers import Horizontal
-from textual.widget import Widget
-from textual.widgets import Button, Input, Label
+from textual.widgets import Button, Input, Label, Static
 
 from pentool.tui.widgets.filter_bar_base import FilterBarBase
 
 
-class GrepOnlyToggle(Widget):
+class GrepOnlyToggle(Static):
     """Toggle button for 'Only matches' — a non-filtering grep a row must hit.
 
     Mirrors the proxy ScopeToggle UX: one click toggles active/inactive. When
