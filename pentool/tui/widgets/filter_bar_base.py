@@ -38,7 +38,7 @@ class FilterBarBase(Widget):
         tests can inject a fake query_one. Returns "" on any lookup failure.
         """
         try:
-            return bar.query_one(selector, Input).value.strip()
+            return str(bar.query_one(selector, Input).value).strip()
         except Exception:
             return ""
 
