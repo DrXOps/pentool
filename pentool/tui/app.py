@@ -1609,6 +1609,35 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         except Exception:
             pass
 
+    async def _on_exit_app(self) -> None:
+        """Diagnostics: log why the app is exiting.
+
+        Textual's run() returns silently when the main loop ends on its own
+        (not via action_quit) — the cause never reached the logger. This hook
+        fires at the moment run() is about to return; record whether a
+        deliberate quit was in flight, the active screen, and the current task,
+        so an abnormal exit leaves a trace instead of a silent `run() returned
+        cleanly`.
+        """
+        import asyncio
+        import traceback
+
+        try:
+            quitting = bool(getattr(self, "_is_quitting", False))
+            screen = getattr(self, "screen", None)
+            screen_id = getattr(screen, "id", None) if screen is not None else None
+            task = asyncio.current_task()
+            logger.info(
+                "APP: run() exiting — quitting=%s active_screen=%r "
+                "current_task=%r app_running=%s",
+                quitting, screen_id, task.name if task else None,
+                getattr(self, "is_running", False),
+            )
+            logger.info("APP: exit stack:\n%s", "".join(traceback.format_stack()))
+        except Exception:
+            pass
+        await super()._on_exit_app()
+
     async def action_quit(self) -> None:
         # Deliberate quit underway — suppress the abnormal-exit diagnostic in
         # on_screen_unmounted (which would otherwise fire during this normal
