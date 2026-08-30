@@ -14,6 +14,7 @@ from pentool.modules.spider import (
     SpiderEndpoint,
     SpiderForm,
     SpiderResult,
+    is_lightpanda_available,
     is_playwright_available,
     shutdown_proc_pool,
 )
@@ -30,7 +31,7 @@ def shutdown_spider_pool() -> None:
 # Re-export types — TUI uses them from here
 __all__ = [
     "SpiderAPI", "SpiderResult", "SpiderForm", "SpiderEndpoint", "SpiderConfig",
-    "is_playwright_available",
+    "is_lightpanda_available", "is_playwright_available",
 ]
 
 

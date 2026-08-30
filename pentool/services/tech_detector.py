@@ -82,7 +82,7 @@ async def detect_tech(url: str, force: bool = False, js_render: bool = False) ->
     Args:
         url: Target URL.
         force: Re-detect even if cached.
-        js_render: Enable headless Chromium rendering for SPA detection.
+        js_render: Enable headless JS rendering (Lightpanda) for SPA detection.
 
     Returns a dict with keys:
         language, framework, cms, database, server, spa, waf, waf_name,
@@ -366,13 +366,25 @@ async def _probe_graphql(url: str) -> bool:
 
 
 async def _js_render_probe(url: str) -> str | None:
-    """Render page in headless Chromium and return HTML if SPA detected."""
+    """Render page and return the post-JS HTML if the target is an SPA.
+
+    Uses Lightpanda (preferred) for a cheap JS render; falls back to the old
+    Playwright crawl path only when Lightpanda is unavailable.
+    """
+    try:
+        from pentool.utils.lightpanda import is_lightpanda_available, lightpanda_fetch_html
+        if is_lightpanda_available():
+            html = await lightpanda_fetch_html(url, timeout=20.0)
+            if html:
+                return html
+    except Exception:
+        pass
     try:
         from pentool.api.spider_api import SpiderAPI, SpiderConfig
         spider = SpiderAPI(config=SpiderConfig(js_render=True))
         result = await spider.crawl(url, max_pages=1)
         if result and result.pages:
-            return result.pages[0].get("html", "")
+            return result.pages[0] if isinstance(result.pages[0], str) else None
     except Exception:
         pass
     return None
