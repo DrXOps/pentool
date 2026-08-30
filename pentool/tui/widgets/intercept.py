@@ -17,13 +17,41 @@ mixin __init__ is needed and the screen keeps ownership of its attributes.
 
 from __future__ import annotations
 
+from typing import Any, Protocol
+
+from pentool.api.proxy_api import InterceptedRequest
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+
+class _InterceptHost(Protocol):
+    """What a class mixing in InterceptMixin must provide.
+
+    Declares the Widget/AppMixin surface the mixin relies on so mypy can
+    type-check the methods here without a circular import of ProxyScreen.
+    """
+
+    def _get_proxy(self): ...
+    def query_one(self, selector: str | type, expect_type: type | tuple[type, ...] | None = None, /, **kwargs: Any) -> Any: ...
+    @property
+    def app(self) -> Any: ...
+
+    # Mixin's own methods are present on the host (ProxyScreen inherits the
+    # mixin), so cross-calls between them satisfy this protocol too.
+    def _display_intercept_req(self, req: InterceptedRequest) -> None: ...
+    def _disable_intercept_buttons(self, hint: str = "") -> None: ...
+    def _apply_intercept_highlight(self, raw: str) -> None: ...
+    def _sync_intercept_button(self) -> None: ...
+
+    _intercept_req: InterceptedRequest | None
+    _intercept_pending: list[InterceptedRequest]
+    _intercept_show_special_chars: bool
+    _intercept_raw_full: str
 
 
 class InterceptMixin:
     """Intercept-tab controller mixed into ProxyScreen."""
 
-    def action_forward(self) -> None:
+    def action_forward(self: _InterceptHost) -> None:
         from textual.widgets import TextArea
 
         from pentool.tui.widgets.request_editor import HttpView
@@ -65,7 +93,7 @@ class InterceptMixin:
             # Disable buttons — response will arrive asynchronously via show_intercept_response
             self._disable_intercept_buttons(hint="⏳ Forwarded — waiting for response…")
 
-    def action_drop(self) -> None:
+    def action_drop(self: _InterceptHost) -> None:
         from textual.widgets import TextArea
 
         from pentool.tui.widgets.request_editor import HttpView
@@ -97,7 +125,7 @@ class InterceptMixin:
         except Exception:
             pass
 
-    def _toggle_intercept_special_chars(self, btn: ToolbarButton) -> None:
+    def _toggle_intercept_special_chars(self: _InterceptHost, btn: ToolbarButton) -> None:
         """Toggle display of literal \\r\\n / \\n special chars in the Intercept editor."""
         try:
             from pentool.tui.widgets.request_editor import (
@@ -129,7 +157,7 @@ class InterceptMixin:
             editor.load_text(self._intercept_raw_full)
             self._apply_intercept_highlight(self._intercept_raw_full)
 
-    def _apply_intercept_highlight(self, raw: str) -> None:
+    def _apply_intercept_highlight(self: _InterceptHost, raw: str) -> None:
         """Apply HTTP header syntax highlighting directly on the (full-text) intercept editor."""
         try:
             from collections import defaultdict
@@ -145,7 +173,7 @@ class InterceptMixin:
         except Exception:
             pass
 
-    def _disable_intercept_buttons(self, hint: str = "") -> None:
+    def _disable_intercept_buttons(self: _InterceptHost, hint: str = "") -> None:
         """Disable Forward/Drop and update the hint."""
         from textual.widgets import Label
 
@@ -160,7 +188,7 @@ class InterceptMixin:
             except Exception:
                 pass
 
-    def show_intercepted_request(self, req: object) -> None:
+    def show_intercepted_request(self: _InterceptHost, req: InterceptedRequest) -> None:
         """Called from app when a request is intercepted — displays it in the Intercept Tab.
 
         If another request is already waiting (Forward/Drop not yet pressed),
@@ -181,7 +209,7 @@ class InterceptMixin:
             return
         self._display_intercept_req(req)
 
-    def _display_intercept_req(self, req: object) -> None:
+    def _display_intercept_req(self: _InterceptHost, req: InterceptedRequest) -> None:
         """Display a request in the Intercept Tab (both initial display and next-in-queue)."""
         from textual.widgets import Label, TabbedContent
 
@@ -232,7 +260,7 @@ class InterceptMixin:
         except Exception:
             pass
 
-    def show_intercept_response(self, req: object) -> None:
+    def show_intercept_response(self: _InterceptHost, req: InterceptedRequest) -> None:
         from textual.widgets import Label
 
         from pentool.tui.widgets.request_editor import HttpView
@@ -255,7 +283,7 @@ class InterceptMixin:
         except Exception:
             pass
 
-    def action_toggle_intercept(self) -> None:
+    def action_toggle_intercept(self: _InterceptHost) -> None:
         self.app.action_toggle_intercept()  # type: ignore[attr-defined]
         self._sync_intercept_button()
         # When intercept is disabled — reset current request and queue,
@@ -266,7 +294,7 @@ class InterceptMixin:
             self._intercept_pending.clear()
             self._disable_intercept_buttons(hint="(Intercept disabled)")
 
-    def _sync_intercept_button(self) -> None:
+    def _sync_intercept_button(self: _InterceptHost) -> None:
         proxy = self._get_proxy()
         try:
             btn = self.query_one("#btn-intercept", ToolbarButton)

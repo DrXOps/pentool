@@ -85,7 +85,7 @@ def _play_windows(severity: str) -> None:
         # Short single beep per severity tier (frequency varies a little);
         # winsound is in-process (no subprocess), so it is safe to keep.
         freq = {"information": 880, "success": 1175, "warning": 660, "error": 440, "critical": 330}.get(severity, 880)
-        winsound.Beep(freq, 80)
+        winsound.Beep(freq, 80)  # type: ignore[attr-defined]  # platform-specific win module
         return
     except Exception:
         # No audio device / unsupported — fall back to the terminal bell.
