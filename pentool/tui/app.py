@@ -411,21 +411,54 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             import textual.screen as _tss
             if getattr(_tss.Screen, "_pentool_guard_done", False):
                 return
-            _orig = _tss.Screen._forward_event
+            _tss.Screen._pentool_guard_done = True
 
-            def _guarded(self, event) -> None:
+            def _is_layout_race(exc: BaseException) -> bool:
+                """True if *exc* is the known 'widget layout changed under the
+                mouse' race, which must degrade to a no-op rather than kill the
+                TUI (the "TUI just vanished" class)."""
+                if isinstance(exc, AttributeError):
+                    return "has no attribute 'region'" in str(exc)
+                # textual.errors.NoWidget — hover under a coordinate that no
+                # longer has a widget (history table rebuilt under traffic).
+                if type(exc).__name__ == "NoWidget":
+                    return True
+                return False
+
+            # 1) Guard Screen._forward_event (mouse dispatch) against the
+            #    parent.region dereference race.
+            _orig_fwd = _tss.Screen._forward_event
+
+            def _guarded_fwd(self, event) -> None:
                 try:
-                    _orig(self, event)
-                except AttributeError as _ae:
-                    if "has no attribute 'region'" in str(_ae):
+                    _orig_fwd(self, event)
+                except Exception as _e:  # noqa: BLE001
+                    if _is_layout_race(_e):
                         return
                     raise
 
-            _guarded.__name__ = "_forward_event"
-            _guarded.__qualname__ = "Screen._forward_event"
-            _tss.Screen._forward_event = _guarded
-            _tss.Screen._pentool_guard_done = True
-            logger.debug("APP: Screen._forward_event guarded against layout race")
+            _guarded_fwd.__name__ = "_forward_event"
+            _guarded_fwd.__qualname__ = "Screen._forward_event"
+            _tss.Screen._forward_event = _guarded_fwd
+
+            # 2) Guard Screen._handle_mouse_move against NoWidget (hover under a
+            #    coordinate with no widget while the layout is being refreshed).
+            if hasattr(_tss.Screen, "_handle_mouse_move"):
+                _orig_mm = _tss.Screen._handle_mouse_move
+
+                def _guarded_mm(self, event) -> None:
+                    try:
+                        _orig_mm(self, event)
+                    except Exception as _e:  # noqa: BLE001
+                        if _is_layout_race(_e):
+                            return
+                        raise
+
+                _guarded_mm.__name__ = "_handle_mouse_move"
+                _guarded_mm.__qualname__ = "Screen._handle_mouse_move"
+                _tss.Screen._handle_mouse_move = _guarded_mm
+
+            logger.debug("APP: Screen mouse-dispatch guarded against layout races")
         except Exception:
             pass
 
