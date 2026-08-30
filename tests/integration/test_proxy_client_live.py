@@ -23,6 +23,14 @@ def test_client_starts_daemon_and_controls_it():
         resp = client._command({"cmd": "status"})
         assert resp.get("ok") is True
         assert resp.get("port") == client.port
+
+        # read/control commands over IPC
+        status = client.get_status()
+        assert isinstance(status, dict)
+        reqs = client.get_requests(limit=5)
+        assert isinstance(reqs, list)
+        client.clear_requests()
+        assert client.get_requests() == []
     finally:
         client.stop()
 

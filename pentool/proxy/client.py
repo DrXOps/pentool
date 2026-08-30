@@ -169,6 +169,26 @@ class ProxyClient:
     def set_enforce_scope(self, enabled: bool) -> None:
         self._command({"cmd": "set_enforce_scope", "enabled": bool(enabled)})
 
+    def get_status(self) -> dict:
+        resp = self._command({"cmd": "get_status"})
+        return resp.get("status") or {}
+
+    def get_requests(self, limit: int = 100, method: str | None = None,
+                     host: str | None = None) -> list:
+        resp = self._command({"cmd": "get_requests", "limit": limit,
+                              "method": method, "host": host})
+        return resp.get("requests") or []
+
+    def forward(self, request_id: str, modified: str | None = None) -> None:
+        self._command({"cmd": "forward", "request_id": request_id,
+                       "modified": modified})
+
+    def drop(self, request_id: str) -> None:
+        self._command({"cmd": "drop", "request_id": request_id})
+
+    def clear_requests(self) -> None:
+        self._command({"cmd": "clear_requests"})
+
     # -- transport -----------------------------------------------------------
 
     def _apply_status(self, resp: dict) -> None:
