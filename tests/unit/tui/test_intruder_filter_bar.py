@@ -7,16 +7,17 @@ the shared filters dict, reset empty, and empty-reset posting.
 from __future__ import annotations
 
 import types
-from unittest.mock import patch
 
 from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar
 
 
-def _make_bar(input_values: dict):
+def _make_bar(input_values: dict, grep_only_active: bool = False):
     bar = object.__new__(IntruderFilterBar)
     posted = []
 
     def _query_one(selector, cls=None):
+        if selector.lstrip("#") == "grep-only-toggle":
+            return types.SimpleNamespace(active=grep_only_active, reset=lambda: None)
         value = input_values.get(selector.lstrip("#"), "")
         return types.SimpleNamespace(value=value)
 
@@ -64,4 +65,24 @@ class TestGrep:
     def test_clear_grep_posts_empty(self):
         bar, posted = _make_bar({"grep-match-input": "x"})
         bar._clear_grep()
+        assert posted[0].filters == {}
+
+    def test_emit_grep_applies_only_match_toggle(self):
+        bar, posted = _make_bar(
+            {"grep-match-input": "sql"}, grep_only_active=True
+        )
+        bar._emit_grep()
+        assert posted[0].filters == {"grep_match": "sql", "grep_only_match": True}
+
+    def test_emit_grep_toggle_off_omits_flag(self):
+        bar, posted = _make_bar(
+            {"grep-match-input": "sql"}, grep_only_active=False
+        )
+        bar._emit_grep()
+        assert posted[0].filters == {"grep_match": "sql"}
+
+    def test_reset_clears_toggle(self):
+        bar, posted = _make_bar({}, grep_only_active=True)
+        bar._reset()
+        # Reset drops everything (posts empty dict), toggle is reset internally
         assert posted[0].filters == {}

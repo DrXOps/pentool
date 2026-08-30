@@ -45,7 +45,7 @@ from pentool.api.intruder_api import (
     process_payload,
 )
 from pentool.tui.widgets.payload_serialization import deserialize_payloads, serialize_payloads
-from pentool.tui.widgets.intruder_results import matches_result_filters
+from pentool.tui.widgets.intruder_results import matches_grep, matches_result_filters
 from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
@@ -131,6 +131,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         self._filter_status: str | None = None
         self._filter_len_gt: int | None = None
         self._filter_len_lt: int | None = None
+        self._grep_only_match: bool = False
         self._sort_col: int | None = None
         self._sort_reverse: bool = False
         # NOT named `_running` — that name collides with
@@ -708,19 +709,22 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             self._filter_len_lt  = None
             self._grep_match_patterns   = []
             self._grep_extract_patterns = []
+            self._grep_only_match       = False
         else:
             if "status" in f or "len_gt" in f or "len_lt" in f:
                 # Filter change
                 self._filter_status = f.get("status")
                 self._filter_len_gt = f.get("len_gt")
                 self._filter_len_lt = f.get("len_lt")
-            if "grep_match" in f or "grep_extract" in f:
+            if "grep_match" in f or "grep_extract" in f or "grep_only_match" in f:
                 self._grep_match_patterns   = [f["grep_match"]]   if f.get("grep_match")   else []
                 self._grep_extract_patterns = [f["grep_extract"]] if f.get("grep_extract") else []
+                self._grep_only_match       = bool(f.get("grep_only_match"))
                 n_match   = len(self._grep_match_patterns)
                 n_extract = len(self._grep_extract_patterns)
                 self.app.notify(
-                    f"Grep Match: {n_match} pattern(s), Extract: {n_extract} pattern(s)",
+                    f"Grep Match: {n_match} pattern(s), Extract: {n_extract} pattern(s)"
+                    + (" M" if self._grep_only_match else ""),
                     timeout=2,
                 )
         self._redraw_results()
@@ -1547,7 +1551,12 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
     def _on_result(self, result: IntruderResult) -> None:
         self._all_results.append(result)
         if matches_result_filters(
-            result, self._filter_status, self._filter_len_gt, self._filter_len_lt
+            result,
+            self._filter_status,
+            self._filter_len_gt,
+            self._filter_len_lt,
+            self._grep_match_patterns,
+            self._grep_only_match,
         ):
             self._add_result_row(result)
         # Auto-save result to DB
@@ -1640,19 +1649,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                         pass
 
             # Grep Match: check if the result row matches the pattern
-            matched = False
-            if self._grep_match_patterns:
-                search_str = (
-                    f"{result.response_status} {result.response_length} "
-                    f"{' '.join(result.payload_values)}"
-                )
-                for pat in self._grep_match_patterns:
-                    try:
-                        if re.search(pat, search_str, re.IGNORECASE):
-                            matched = True
-                            break
-                    except re.error:
-                        pass
+            matched = matches_grep(result, self._grep_match_patterns)
 
             status_str = str(result.response_status or "-")
             # Highlight matched rows
@@ -1937,7 +1934,12 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             pass
         for result in self._all_results:
             if matches_result_filters(
-                result, self._filter_status, self._filter_len_gt, self._filter_len_lt
+                result,
+                self._filter_status,
+                self._filter_len_gt,
+                self._filter_len_lt,
+                self._grep_match_patterns,
+                self._grep_only_match,
             ):
                 self._add_result_row(result)
 
