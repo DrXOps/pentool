@@ -1,7 +1,7 @@
 """Unit tests for pentool/modules/scanner/checks/nosql_injection.py.
 
 Coverage for the migration of NoSQLInjectionCheck onto BaseActiveCheck
-(see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.5). The
+(see (scanner refactor plan) section 2.5). The
 check is a single-phase per-payload analyze() check (MongoDB error-marker
 detection in the response body) with no multi-phase logic, so it now uses
 the inherited BaseActiveCheck cycle instead of the engine's analyze()-API

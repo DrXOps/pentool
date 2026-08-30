@@ -17,16 +17,17 @@ from pentool.utils.scope import domain_in_scope
 
 logger = get_logger(__name__)
 
-# ── CPU-оптимизация (GIL) ──────────────────────────────────────────────────
-# Профиль показал: ~55% CPU спайдера уходит на urllib-обработку ссылок в
-# _add_link (urljoin/urlparse/urlsplit/normalize) — это Python-код под GIL.
-# Выносим эту работу в ProcessPoolExecutor на ПАЧКАХ ссылок (даёт ~4x на
-# бенчмарке), НО только когда пачка достаточно большая, чтобы оправдать
-# IPC-перенос (на мелких — IPC задавит: 0.1x). Парсинг же ускоряем lxml
-# (11x, C-реализация, освобождает GIL) — см. bench_cpu_parsing.py.
+# ── CPU optimization (GIL) ─────────────────────────────────────────────────
+# Profiling showed ~55% of the spider's CPU goes to urllib link processing in
+# _add_link (urljoin/urlparse/urlsplit/normalize) — Python code under the GIL.
+# This is offloaded to a ProcessPoolExecutor over BATCHES of links (~4x on the
+# benchmark), but only when the batch is large enough to justify the IPC
+# transfer (small batches are dominated by IPC overhead: ~0.1x). Parsing is
+# instead sped up with lxml (11x, C implementation, releases the GIL) — see
+# bench_cpu_parsing.py.
 #
-# Порог: если страница даёт меньше _PROC_THRESHOLD кандидатов-ссылок,
-# обрабатываем синхронно (дешёвле), иначе — пачкой через пул.
+# Threshold: when a page yields fewer than _PROC_THRESHOLD link candidates they
+# are processed synchronously (cheaper); otherwise they go through the pool.
 # ── Single source of truth for the crawler's default limits ──────────────
 # Consumed by AsyncSpider, SpiderConfig/SpiderAPI, ScanConfig/ScanService,
 # the Spider screen, and the Scanner screen's crawl options — so the default
@@ -36,18 +37,23 @@ DEFAULT_MAX_DEPTH: int = 5
 DEFAULT_MAX_PAGES: int = 200
 DEFAULT_CONCURRENCY: int = 5
 
+# Interactive SPA discovery (N1): how many in-page clicks the JS crawl will
+# perform on a single page to surface client-side routes/tabs. Bounded so a
+# deep interactive app can't explode the request budget.
+_SPA_MAX_CLICKS_PER_PAGE: int = 12
+
 _PROC_POOL_ENABLED: bool = True
 _PROC_POOL_WORKERS: int = min(8, max(2, (os.cpu_count() or 4)))
 _PROC_THRESHOLD: int = 64
 
-# Ленивый module-level пул процессов: один на процесс, делится всеми
-# спайдерами. Создаётся только при первом использовании.
+# Lazy module-level process pool: one per process, shared by all spiders.
+# Created only on first use.
 #
-# Пул намеренно закрывают явно через shutdown_proc_pool() при выходе
-# приложения (action_quit): fork воркеры наследуют все открытые fd родителя,
-# включая слушающий сокет прокси на 8080. Если оставить их висеть, после
-# штатного выхода TUI они осиротеют (PPID=1) и будут держать 8080 — следующий
-# запуск падал с "address already in use".
+# The pool is deliberately closed explicitly via shutdown_proc_pool() when the
+# app exits (action_quit): fork workers inherit all of the parent's open fds,
+# including the proxy's listening socket on 8080. If left running they orphan
+# (PPID=1) after a normal TUI exit and hold onto 8080 — the next launch failed
+# with "address already in use".
 _PROC_POOL: ProcessPoolExecutor | None = None
 
 
@@ -57,11 +63,11 @@ def _get_proc_pool() -> ProcessPoolExecutor | None:
         return None
     if _PROC_POOL is None:
         try:
-            # fork (spawn небезопасен: при установке через uv console-script
-            # __main__ не является .py модулем, и spawn-воркеры не могут его
-            # переимпортировать — пул падал/зависал на *start up*). При fork
-            # воркеры наследуют fd 8080, поэтому пул закрывают явно через
-            # shutdown_proc_pool() при выходе приложения (action_quit).
+            # fork (spawn is unsafe: when installed via a uv console-script,
+            # __main__ is not a .py module, so spawn workers cannot re-import
+            # it — the pool failed/hung at *start up*). With fork, workers
+            # inherit fd 8080, so the pool is closed explicitly via
+            # shutdown_proc_pool() on app exit (action_quit).
             _PROC_POOL = ProcessPoolExecutor(max_workers=_PROC_POOL_WORKERS)
         except (ImportError, OSError, RuntimeError):
             _PROC_POOL = None
@@ -87,11 +93,11 @@ def shutdown_proc_pool() -> None:
 
 
 def _normalize_url_cpu(url: str) -> str:
-    """Модульная urllib-нормализация (fragment, trailing slash) — picklizable.
+    """Modular urllib normalization (fragment, trailing slash) — picklizable.
 
-    Одна и та же логика используется и в sync-пути, и работающими в
-    процессах воркерами пула (ProcessPoolExecutor требует модульную функцию,
-    а не метод инстанса — иначе не попиклизуется).
+    The same logic is used by the sync path and by pool workers running in
+    separate processes (ProcessPoolExecutor needs a module-level function,
+    not an instance method — otherwise it won't pickle).
     """
     try:
         parsed = urlparse(url)
@@ -103,14 +109,14 @@ def _normalize_url_cpu(url: str) -> str:
 
 def _link_cpu_work(raw: str, page_url: str, base_domain: str,
                    respect_scope: bool) -> tuple[bool, str, str]:
-    """Модульная CPU-половина _add_link: тяжёлая urllib-обработка одной ссылки.
+    """Modular CPU half of _add_link: the heavy urllib handling of one link.
 
-    Возвращает (ok, abs_url, norm_url):
-      ok      — True если ссылку надо добавить (протокол http(s), в scope)
-      abs_url — абсолютный URL (для result.links)
-      norm_url— нормализованный (fragment без trailing slash) для дедупликации
-    Дедупликация (seen_links) остаётся в ОСНОВНОМ потоке — сеть сета set-add
-    дёшева и не требует GIL-обхода.
+    Returns (ok, abs_url, norm_url):
+      ok       — True if the link should be added (http(s) protocol, in scope)
+      abs_url  — absolute URL (for result.links)
+      norm_url — normalized (fragment/trailing-slash-free) for dedup
+    Dedup (seen_links) stays in the MAIN thread — a set add is cheap and does
+    not need the GIL workaround.
     """
     if not raw:
         return False, "", ""
@@ -132,42 +138,44 @@ def _link_cpu_work(raw: str, page_url: str, base_domain: str,
 
 def _bulk_links_cpu(cands, page_url: str, base_domain: str,
                     respect_scope: bool) -> list[tuple[bool, str, str]]:
-    """Батч-версия _link_cpu_work: обрабатывает весь СПИСОК кандидатов.
+    """Batch version of _link_cpu_work: processes the whole list of candidates.
 
-    Нужен для ProcessPoolExecutor: если отдавать в пул по одной ссылке
-    (pool.map(_link_cpu_work, cands)), каждая ссылка — отдельный IPC-перенос
-    (одна микро-задача туда + результат обратно). На пачке из тысяч ссылок
-    IPC-накладные > выигрыша от распараллеливания. Батч передаёт весь список
-    одним IPC (pickle), воркер перебирает его построчно и возвращает список
-    результатов одним IPC — всего 2 IPC на пачку, а urllib-работа выполняется
-    в подпроцессе без GIL (см. bench_cpu_parsing.py: urllib-задача 4.16x).
+    Needed for ProcessPoolExecutor: if you hand the pool one link at a time
+    (pool.map(_link_cpu_work, cands)) each link is a separate IPC transfer (one
+    micro-task out and one result back). On a batch of thousands of links the
+    IPC overhead outweighs the parallelism win. The batch sends the whole list
+    in a single IPC (pickle), the worker iterates it line by line and returns
+    the results list in one IPC — just 2 IPCs per batch, and the urllib work
+    runs in the subprocess without the GIL (see bench_cpu_parsing.py: the
+    urllib task is 4.16x).
     """
     return [_link_cpu_work(c, page_url, base_domain, respect_scope)
             for c in cands]
 
 
-# ── lxml/bs4 единый интерфейс для парсинга ─────────────────────────────────
+# ── lxml/bs4 unified parsing interface ──────────────────────────────────────
 
 class _LxmlSoup:
-    """Тонкая адаптация lxml.html.Element → bs4-подобный find_all/get.
+    """Thin adaptation of lxml.html.Element → bs4-like find_all/get.
 
-    Позволяет писать общий код итерации по soup независимо от того, парсим
-    lxml (быстро, C-код) или bs4 (фолбэк). find_all по имени тега возвращает
+    Lets iteration code be written against one soup interface regardless of
+    whether parsing via lxml (fast, C code) or bs4 (fallback). find_all by tag
+    name returns
     список-подобный объект, у которого элементы имеют .get(name)/.text.
     """
 
     __slots__ = ("_tree",)
 
     def __init__(self, html: str, lxml_html) -> None:
-        # fromstring бросает на пустом/мусорном HTML; делаем tolerant через
-        # разбор в фрагмент: lxml.html.document_fromstring требует полный док.
+        # fromstring raises on empty/junk HTML; be tolerant by parsing into
+        # a fragment: lxml.html.document_fromstring requires a full document.
         try:
             self._tree = lxml_html.fromstring(html)
         except Exception:
             self._tree = lxml_html.Element("html")
 
     def find_all(self, name):
-        """Все элементы с тегом name (str или list[str]) либо все (True)."""
+        """All elements with the tag *name* (str or list[str]) or everything (True)."""
         if name is True:
             return list(self._tree.iter())
         if isinstance(name, (list, tuple)):
@@ -179,7 +187,7 @@ class _LxmlSoup:
 
 
     def get_text_strip(self, el) -> str:
-        # lxml Element.text_content — полный текстовый контент (аналог bs4 get_text)
+        # lxml Element.text_content — full text content (bs4 get_text equivalent)
         if hasattr(el, "text_content"):
             return el.text_content() or ""
         return el.text or ""
@@ -197,7 +205,7 @@ def _el_get(el, attr: str, default: str = "") -> str:
 
 
 def _iter_hrefs(soup, tags):
-    """<a>/<link> href-значения."""
+    """<a>/<link> href values."""
     for tag in soup.find_all(tags if not isinstance(tags, str) else tags):
         href = _el_get(tag, "href")
         if href:
@@ -205,7 +213,7 @@ def _iter_hrefs(soup, tags):
 
 
 def _iter_attr_urls(soup):
-    """data-url/href/src/action/content атрибуты на всех тегах."""
+    """data-url/href/src/action/content attributes on every tag."""
     for tag in soup.find_all(True):
         for attr in _URL_ATTRIBUTES:
             val = _el_get(tag, attr)
@@ -214,9 +222,9 @@ def _iter_attr_urls(soup):
 
 
 def _iter_meta_refresh(soup):
-    """content у <meta http-equiv>.lxml атрибуты регистрозависимы — http-equiv
-    может быть передано как http-quiv; lxml сохраняет регистр атрибута. Пробуем
-    оба варианта."""
+    """The content of <meta http-equiv>. lxml attributes are case-sensitive —
+    http-equiv may arrive as http-quiv; lxml keeps the attribute's case. Try
+    both variants."""
     for tag in soup.find_all("meta"):
         eq = _el_get(tag, "http-equiv", _el_get(tag, "http_equiv"))
         if eq and "refresh" in eq.lower():
@@ -229,7 +237,7 @@ def _iter_script_src(soup):
 
 
 def _iter_inline_scripts(soup):
-    """Текстовый контент инлайн-скриптов (без src)."""
+    """The text content of inline scripts (ones without a src)."""
     for script in soup.find_all("script"):
         if _el_get(script, "src"):
             continue
@@ -248,14 +256,14 @@ def _iter_forms(soup):
 
 
 def _iter_form_inputs(form):
-    """input/textarea/select внутри формы. Работает и с bs4, и с lxml-элементом."""
-    # bs4: .find_all([...]); lxml: .iter() по тегам
+    """input/textarea/select inside a form. Works with both bs4 and lxml elements."""
+    # bs4: .find_all([...]); lxml: .iter() over tags
     if hasattr(form, "find_all"):
         try:
             return list(form.find_all(["input", "textarea", "select"]))
         except Exception:
             return list(form.find_all(True))
-    # lxml-элемент — итерируем по тегам через iter()
+    # lxml element — iterate tags via iter()
     tags = ("input", "textarea", "select")
     return [el for el in form.iter() if el.tag in tags]
 
@@ -329,6 +337,10 @@ class SpiderResult:
     js_files: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     total_requests: int = 0
+    # Headers the crawler actually used after merging Proxy-discovered auth
+    # + explicit extra_headers. Filled by SpiderAPI.crawl; lets the scanner
+    # reuse the same session (Cookie/Authorization) in its own active phase.
+    auth_headers: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -595,6 +607,22 @@ class AsyncSpider:
 
     # ── page fetch ───────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _is_auth_redirect(final_url: str, requested_url: str) -> bool:
+        """True if a redirected final URL lands on a login/signin page.
+
+        Distinct -> login only when the final URL actually changed AND it
+        looks like an auth entry point. Benign redirects (e.g. "/" ->
+        "/index.html") are not flagged.
+        """
+        if final_url.rstrip("/") == requested_url.rstrip("/"):
+            return False
+        low = final_url.lower()
+        return any(
+            marker in low
+            for marker in ("/login", "login.php", "signin", "/auth", "logon")
+        )
+
     async def _fetch_page(
         self,
         session,
@@ -613,6 +641,21 @@ class AsyncSpider:
 
                     if self.on_page:
                         self.on_page(url)
+
+                    # Detect "the server quietly bounced us to a login page".
+                    # With allow_redirects=True a 302 → /login.php resolves to a
+                    # 200 on the login page, so this code would otherwise
+                    # silently treat the login page as a successful crawl page
+                    # (0 findings, empty errors) instead of telling the user the
+                    # target needs auth. Only flag when the FINAL URL is a
+                    # login/signin/auth page to avoid noise on benign redirects
+                    # (e.g. "/" -> "/index.html").
+                    if self._is_auth_redirect(str(resp.url), url):
+                        result.errors.append(
+                            f"Auth required: {url} redirected to {resp.url} "
+                            f"(login page) — session/Cookie needed to crawl protected pages"
+                        )
+                        return []
 
                     if "javascript" in content_type or url.split("?")[0].endswith(".js"):
                         # JS file — find API endpoints and add to list
@@ -771,6 +814,17 @@ class AsyncSpider:
                         if self._normalize_url(link) not in visited:
                             queue.append((link, depth + 1))
 
+                # Interactive SPA discovery (N1): client-side apps build their
+                # next-level routes/tabs only after a click. After rendering the
+                # static DOM we click through a bounded set of interactive
+                # elements, re-read the DOM after each click, and harvest any
+                # *new* in-scope URLs — the classic XSS-Game /level4-style tab
+                # navigation, Angular/React pagination, etc. Without this a JS
+                # crawl only reads the initial shell and misses deep routes.
+                await self._crawl_spa_clicks(
+                    page, base_domain, result, visited, queue, depth,
+                )
+
                 if self.on_progress:
                     self.on_progress(
                         len(visited),
@@ -799,6 +853,104 @@ class AsyncSpider:
             result.errors.append(f"Playwright error {url}: {exc}")
             return None
 
+    async def _crawl_spa_clicks(
+        self,
+        page,
+        base_domain: str,
+        result: SpiderResult,
+        visited: set,
+        queue: list,
+        depth: int,
+    ) -> None:
+        """Click through client-side tabs/links to surface SPA routes (N1).
+
+        After the initial render of a JS page, many app frameworks (hash-based
+        tabs, React/Angular routing, image galleries) only materialise their
+        real endpoints after a user interaction. This bounded pass clicks the
+        interactive elements seen in the current DOM, re-reads the DOM after
+        each click (waiting for network idle so XHR-driven content lands), and
+        harvests any *new* in-scope URLs into the crawl queue and as endpoints.
+
+        It never mutates `visited` in a way that starves page — it only ADD
+        newly discovered URLs; normal crawl dedup still applies. `page` stays
+        on the last-clicked state, which is fine because the outer loop
+        re-navigates via page.goto() on the next queued URL.
+        """
+        import asyncio
+        from urllib.parse import urljoin
+
+        clicked: set[str] = set()
+        for _ in range(_SPA_MAX_CLICKS_PER_PAGE):
+            if self._stop or len(visited) >= self.max_pages:
+                break
+            try:
+                candidates = await page.eval_on_selector_all(
+                    "a[href], button, [role='tab'], .tab, [onclick]",
+                    """els => els.map((el, i) => {
+                        const h = el.getAttribute('href') || el.textContent || el.innerText || '';
+                        const k = h.trim().slice(0, 120);
+                        return {i, k};
+                    })""",
+                )
+            except Exception:
+                break
+            chosen = None
+            for cand in candidates:
+                key = cand.get("k", "")
+                # Skip elements with no text/href (empty tab, spacer) and
+                # anything already clicked on this page-pass.
+                if key and key not in clicked:
+                    chosen = cand
+                    break
+            if chosen is None:
+                break
+
+            idx = chosen.get("i")
+            key = chosen.get("k", "")
+            clicked.add(key)
+            try:
+                await page.evaluate(f"""() => {{
+                    const els = document.querySelectorAll("a[href], button, [role='tab'], .tab, [onclick]");
+                    const el = els[{idx}];
+                    if (el) el.click();
+                }}""")
+                # Give the client-side handler time to run and any XHR to land.
+                await page.wait_for_load_state("networkidle", timeout=2000)
+                await asyncio.sleep(0.2)
+            except Exception:
+                # Click or wait failed (nav/redirect) — move on, don't panic.
+                continue
+
+            try:
+                html = await page.content()
+            except Exception:
+                continue
+
+            links, forms, js_links = self._parse_html(html, page.url, base_domain)
+            result.forms.extend(forms)
+            result.js_files.extend(
+                j for j in js_links if j not in result.js_files
+            )
+            new_urls: list[str] = []
+            for raw in links + js_links:
+                try:
+                    abs_url = raw if raw.startswith("http") else urljoin(page.url, raw)
+                except Exception:
+                    continue
+                norm = self._normalize_url(abs_url)
+                if norm not in visited and self._in_scope(abs_url, base_domain):
+                    visited.add(norm)
+                    new_urls.append(norm)
+            # Surface the discovered SPA routes as endpoints AND push them back
+            # into the crawl queue (depth+1) so the outer playwright loop will
+            # navigate to them and audit their own forms/JS. `visited` guards
+            # against re-visiting; per-page click budget bounds the explosion.
+            result.endpoints.extend(
+                SpiderEndpoint(url=u, source="spa", method="GET") for u in new_urls
+            )
+            if depth < self.max_depth:
+                queue.extend((u, depth + 1) for u in new_urls)
+
     # ── HTML parsing ─────────────────────────────────────────────────────────
 
     def _parse_html(
@@ -817,16 +969,17 @@ class AsyncSpider:
     def _parse_html_internal(
         self, html: str, page_url: str, base_domain: str
     ) -> tuple[list[str], list[SpiderForm], list[str]]:
-        """Внутренняя реализация _parse_html (lxml + пачечная обработка URL).
+        """Internal implementation of _parse_html (lxml + batched URL handling).
 
-        Парсинг: предпочитаем lxml (C-код, ~11x быстрее bs4/html.parser и
-        освобождает GIL). Если lxml не установлен — фолбэк на BeautifulSoup.
+        Parsing: prefer lxml (C code, ~11x faster than bs4/html.parser and it
+        releases the GIL). When lxml is not installed — fall back to (BeautifulSoup).
 
-        Обработка ссылок: собираем все raw-кандидаты в один список, затем
-        if len(candidates) >= _PROC_THRESHOLD — обрабатываем пачкой через
-        ProcessPoolExecutor (_link_cpu_work, urllib-Часть в подпроцессах,
-        обходит GIL, ~4x), иначе синхронно построчно (тот же _link_cpu_work,
-        но в текущем процессе). Дедупликация (seen_links) всегда в основном
+        Link handling: gather all raw candidates into one list, then
+        if len(candidates) >= _PROC_THRESHOLD — process them as a batch through
+        ProcessPoolExecutor (_link_cpu_work, the urllib part in subprocesses,
+        works around the GIL, ~4x), otherwise synchronously line by line (the
+        same _link_cpu_work, but in the current process). Dedup (seen_links) is
+        always in the main
         потоке — сеть set-add дешёва. Итог идентичен прежнему bs4-пути.
         """
         soup = self._make_soup(html)
@@ -851,27 +1004,27 @@ class AsyncSpider:
             if m:
                 candidates.append(m.group(1))
 
-        # JS files (<script src>) — отдельно, не через пул (немного urljoin)
+        # JS files (<script src>) — kept separate, not through the pool (just urljoin)
         for src in _iter_script_src(soup):
             if src:
                 abs_url = urljoin(page_url, src)
                 if urlparse(abs_url).scheme in ("http", "https"):
                     js_links.append(abs_url)
 
-        # Inline <script> — search in them too (не через пул: извлекает
-        # endpoints, а не просто нормализует ссылку)
+        # Inline <script> — search in them too (not through the pool: it extracts
+        # endpoints, not just normalizes a link)
         for inline in _iter_inline_scripts(soup):
             if inline and len(inline) > 20:
                 endpoints = self._extract_js_endpoints(inline, page_url)
                 for ep in endpoints:
                     candidates.append(ep.url)
 
-        # ── Обработка пачки кандидатов (пул или синхронно) ────────────────
+        # ── Candidate batch handling (pool or sync) ────────────────────────
         if candidates:
             links = self._commit_links(
                 candidates, page_url, base_domain, seen_links)
 
-        # ── Forms (по-прежнему bs4/lxml-итерация, без пула) ───────────────
+        # ── Forms (still bs4/lxml iteration, no pool) ──────────────────────
         for form in _iter_forms(soup):
             action = (form.get("action") or page_url)
             action = urljoin(page_url, action)
@@ -907,7 +1060,7 @@ class AsyncSpider:
                     query = urlencode([(f.name, f.value) for f in fields])
                     if query:
                         sep = "&" if urlparse(action).query else "?"
-                        # form-query трактуем как кандидата (может попасть в пул)
+                        # treat the form query as a candidate (may reach the pool)
                         candidates2 = [f"{action}{sep}{query}"]
                         links.extend(self._commit_links(
                             candidates2, page_url, base_domain, seen_links))
@@ -915,7 +1068,7 @@ class AsyncSpider:
         return links, forms, js_links
 
     def _make_soup(self, html: str):
-        """Парсер: lxml (быстро) или bs4 (фолбэк), с защитой от ImportError."""
+        """Parser: lxml (fast) or bs4 (fallback), guarded against ImportError."""
         try:
             import lxml.html as lxml_html
             return _LxmlSoup(html, lxml_html)
@@ -928,18 +1081,19 @@ class AsyncSpider:
             return _EmptySoup()
 
     def _commit_links(self, candidates, page_url, base_domain, seen_links):
-        """Обработать пачку кандидатов через пул/синхронно, вернуть добавленные.
+        """Process a batch of candidates via pool/sync, return the added ones.
 
-        Использует _link_cpu_work (модульную): если кандидатов много — через
-        ProcessPoolExecutor (обход GIL), иначе синхронно. Дедуп — здесь.
+        Uses the modular _link_cpu_work: when there are many candidates it
+        goes through ProcessPoolExecutor (works around the GIL), otherwise
+        synchronously. Dedup happens here.
         """
         if not candidates:
             return []
-        # Пытаемся через пул, если кандидатов достаточно. Используем БАТЧ:
-        # pool.submit(_bulk_links_cpu, candidates) — весь список одним IPC
-        #  туда и результатом — обратно (всего 2 IPC на пачку). НЕ pool.map
-        #  по одной ссылке: то было бы N IPC на микро-задачу и вредило бы
-        #  (см. Ремарка в _bulk_links_cpu).
+        # Try the pool when candidates are plenty. Use one BATCH call:
+        # pool.submit(_bulk_links_cpu, candidates) — the whole list in a single
+        # IPC in and one result — back (2 IPC per batch total). NOT pool.map
+        # per link: that would be N IPCs per micro-task and would hurt
+        # (see the note in _bulk_links_cpu).
         pool = _get_proc_pool() if len(candidates) >= _PROC_THRESHOLD else None
         respect_scope = self.respect_scope
         if pool is not None:
@@ -951,8 +1105,8 @@ class AsyncSpider:
                 results = fut.result(timeout=60)
             except (BrokenProcessPool, PicklingError, RuntimeError, OSError,
                     TimeoutError):
-                # Пул сломался/завис — падаем на синхронный путь (тот же
-                # движок _link_cpu_work, результат не меняется)
+                # Pool broke/hung — fall back to the synchronous path (same
+                # _link_cpu_work engine, result unchanged)
                 results = [_link_cpu_work(c, page_url, base_domain, respect_scope)
                            for c in candidates]
         else:
@@ -1022,10 +1176,35 @@ class AsyncSpider:
         Returns URLs with numeric/UUID segments as potential injection points.
         """
         variants: list[str] = []
-        urlparse(url)
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return variants
+        if not self._in_scope(url, base_domain):
+            return variants
 
-        # TODO: implement path variants (replace numeric/UUID segments with injection marker)
-        # Currently returns empty list to avoid adding duplicate original URLs to scan targets.
+        path = parsed.path
+        seen: set[str] = set()
+        origin = self._normalize_url(url)
+        query = f"?{parsed.query}" if parsed.query else ""
+        for match in _PATH_SEGMENT_RE.finditer(path):
+            # _PATH_SEGMENT_RE captures the value *after* the leading "/",
+            # so group(1) start/end delimit exactly the segment to replace.
+            seg_start, seg_end = match.start(1), match.end(1)
+            swapped = path[:seg_start] + "{id}" + path[seg_end:]
+            variant_url = f"{parsed.scheme}://{parsed.netloc}{swapped}{query}"
+            norm = self._normalize_url(variant_url)
+            # Never return the original URL itself (existing test contract),
+            # only the variant with the segment swapped out. Dedup on the
+            # normalized (query-free) form so ?page=2 vs ?page=3 collapse.
+            if norm and norm not in seen and norm != origin and not (
+                any(
+                    self._normalize_url(existing) == norm
+                    for existing in seen
+                )
+            ):
+                seen.add(norm)
+                variants.append(variant_url)
         return variants
 
     # ── utilities ─────────────────────────────────────────────────────────────

@@ -57,7 +57,7 @@ class IntruderAPI(ExportableAPI):
     ) -> None:
         self._db_path = db_path
         # Optional injected HTTPClient (DIP — see
-        # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.2).
+        # (scanner refactor plan) section 2.2).
         # IntruderAttack already accepted this as an optional constructor
         # param (reusing one HTTPClient/connection pool across the whole
         # attack — see the БАГ-D fix in modules/intruder.py) but IntruderAPI
@@ -73,7 +73,7 @@ class IntruderAPI(ExportableAPI):
         self._task: asyncio.Task | None = None
         self._restored_results: list = []
         # SQL for tab state / attack results lives in IntruderStorage
-        # (see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.6)
+        # (see (scanner refactor plan) section 2.6)
         # — mirrors ScannerTabRepository, the same extraction already done
         # for Scanner. IntruderAPI keeps its existing public method names
         # as a thin facade so no caller needs to change.
@@ -133,7 +133,7 @@ class IntruderAPI(ExportableAPI):
         runs to completion or stop() only (see modules/intruder_turbo.py).
         Before this API method was actually reachable from IntruderScreen,
         turbo_mode was silently never honored there (a pre-existing bug —
-        see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7),
+        see (scanner refactor plan) section 2.7),
         so Pause/Resume during a real Turbo run was never exercised. Guard
         with hasattr so enabling real Turbo mode doesn't crash Pause.
         """
@@ -155,7 +155,7 @@ class IntruderAPI(ExportableAPI):
             if hasattr(self._attack, 'get_results'):
                 return self._attack.get_results()
             return self._attack.results
-        # Fallback: восстановленные из БД данные
+        # Fallback: results restored from the DB
         return list(getattr(self, '_restored_results', []))
 
     def get_progress(self) -> tuple[int, int]:

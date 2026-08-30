@@ -18,7 +18,6 @@ from rich.text import Text
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
-from textual.message import Message as _Message
 from textual.widgets import (
     Button,
     DataTable,
@@ -45,142 +44,22 @@ from pentool.api.intruder_api import (
     count_markers,
     process_payload,
 )
+from pentool.tui.widgets.payload_serialization import deserialize_payloads, serialize_payloads
+from pentool.tui.widgets.intruder_results import matches_grep, matches_result_filters
 from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.autosave import AutoSaveMixin
+from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar as _IntruderFilterBar
 
 logger = get_logger(__name__)
-
-
-class _IntruderFilterBar(Widget):
-    """Filter bar for the Intruder results table.
-
-    Encapsulates status / length-range / grep inputs that were previously
-    scattered as inline widgets inside IntruderScreen._compose_results.
-    Posts FilterChanged when the user applies or resets filters.
-    """
-
-    class FilterChanged(_Message):
-        """Emitted when the user clicks Apply or Reset."""
-        def __init__(self, filters: dict) -> None:
-            super().__init__()
-            self.filters = filters
-
-    DEFAULT_CSS = """
-    _IntruderFilterBar {
-        height: auto;
-        layout: vertical;
-    }
-    _IntruderFilterBar #results-filter-bar,
-    _IntruderFilterBar #grep-bar {
-        height: auto;
-        layout: horizontal;
-        padding: 0;
-    }
-    _IntruderFilterBar Label {
-        width: auto;
-        margin: 0 1;
-        color: $text-muted;
-    }
-    _IntruderFilterBar Input {
-        width: 12;
-        margin: 0 1;
-    }
-    _IntruderFilterBar Button {
-        margin: 0 1;
-    }
-    """
-
-    def compose(self) -> ComposeResult:
-        with Horizontal(id="results-filter-bar"):
-            yield Label("Status:")
-            yield Input(id="filter-status", placeholder="e.g. 200", compact=True)
-            yield Label("Length >")
-            yield Input(id="filter-len-gt", placeholder="0", compact=True)
-            yield Label("<")
-            yield Input(id="filter-len-lt", placeholder="∞", compact=True)
-            yield Button("Apply", id="btn-filter-apply")
-            yield Button("Reset filters", id="btn-filter-reset")
-        with Horizontal(id="grep-bar"):
-            yield Label("Grep:")
-            yield Input(id="grep-match-input", placeholder="regex — highlight matching rows", compact=True)
-            yield Label("Extract:")
-            yield Input(id="grep-extract-input", placeholder="regex — add column with extracted value", compact=True)
-            yield Button("Apply", id="btn-grep-apply")
-            yield Button("Clear grep", id="btn-grep-clear")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        bid = event.button.id
-        if bid == "btn-filter-apply":
-            self._emit_filters()
-        elif bid == "btn-filter-reset":
-            self._reset()
-        elif bid == "btn-grep-apply":
-            self._emit_grep()
-        elif bid == "btn-grep-clear":
-            self._clear_grep()
-
-    def _emit_filters(self) -> None:
-        """Build filter dict from current Input values and emit FilterChanged."""
-        filters: dict = {}
-        try:
-            status = self.query_one("#filter-status", Input).value.strip()
-            if status:
-                filters["status"] = status
-        except Exception:
-            pass
-        try:
-            gt = self.query_one("#filter-len-gt", Input).value.strip()
-            if gt:
-                filters["len_gt"] = int(gt)
-        except Exception:
-            pass
-        try:
-            lt = self.query_one("#filter-len-lt", Input).value.strip()
-            if lt:
-                filters["len_lt"] = int(lt)
-        except Exception:
-            pass
-        self.post_message(self.FilterChanged(filters))
-
-    def _reset(self) -> None:
-        try:
-            self.query_one("#filter-status", Input).value = ""
-            self.query_one("#filter-len-gt", Input).value = ""
-            self.query_one("#filter-len-lt", Input).value = ""
-        except Exception:
-            pass
-        self.post_message(self.FilterChanged({}))
-
-    def _emit_grep(self) -> None:
-        filters: dict = {}
-        try:
-            match = self.query_one("#grep-match-input", Input).value.strip()
-            if match:
-                filters["grep_match"] = match
-        except Exception:
-            pass
-        try:
-            extract = self.query_one("#grep-extract-input", Input).value.strip()
-            if extract:
-                filters["grep_extract"] = extract
-        except Exception:
-            pass
-        self.post_message(self.FilterChanged(filters))
-
-    def _clear_grep(self) -> None:
-        try:
-            self.query_one("#grep-match-input", Input).value = ""
-            self.query_one("#grep-extract-input", Input).value = ""
-        except Exception:
-            pass
-        self.post_message(self.FilterChanged({}))
 
 
 # Module constants
@@ -219,7 +98,7 @@ _PAYLOAD_LIST_PREVIEW_LIMIT = 500
 # of these instead of iterating the whole set into ListItem widgets.
 _LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
 
-class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
+class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
     """Intruder module screen."""
 
     DEFAULT_CSS = _CSS
@@ -233,7 +112,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
     # RequestContextMenuMixin config
     _cm_show_copy_url = False
     _cm_show_send_repeater = True
-    _cm_show_send_intruder = False  # не отправляем в себя
+    _cm_show_send_intruder = False  # do not send back into itself
     _cm_show_send_scanner = False
 
     def __init__(self, **kwargs) -> None:
@@ -248,10 +127,11 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self._attack_type: AttackType = AttackType.SNIPER
         self._api = None
         self._all_results: list[IntruderResult] = []
-        self._current_result: IntruderResult | None = None  # для детальной панели
+        self._current_result: IntruderResult | None = None  # for the detail panel
         self._filter_status: str | None = None
         self._filter_len_gt: int | None = None
         self._filter_len_lt: int | None = None
+        self._grep_only_match: bool = False
         self._sort_col: int | None = None
         self._sort_reverse: bool = False
         # NOT named `_running` — that name collides with
@@ -400,7 +280,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                 zebra_stripes=True,
             )
 
-            # Детальная панель (изначально скрыта)
+            # Detail panel (hidden initially)
             with Horizontal(id="intruder-detail-panel", classes="intruder-detail-panel"):
                 with Vertical(id="detail-request-col", classes="detail-col"):
                     yield Static("Request", classes="detail-label")
@@ -434,13 +314,13 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self._setup_tooltips()
         # Load saved state from DB
         self._load_state_from_db()
-        # Скрыть детальную панель изначально
+        # Hide the detail panel initially.
         try:
             panel = self.query_one("#intruder-detail-panel")
             panel.display = False
         except Exception:
             pass
-        # Применить ограничения для FREE лицензии
+        # Apply FREE-license limits.
         self._apply_license_limits()
 
     def _get_api(self) -> "IntruderAPI | None":
@@ -577,7 +457,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self.run_worker(self._do_load_state(api), exclusive=False, exit_on_error=False)
 
     def _apply_license_limits(self) -> None:
-        """Применить ограничения для FREE лицензии."""
+        """Apply the FREE-license limits."""
         from pentool.core.license import get_session_license
         license_info = get_session_license()
         # NOTE: "pro" is not a feature name — the backend's feature lists
@@ -596,13 +476,13 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             turbo_checkbox = self.query_one("#chk-turbo", Checkbox)
 
             if not is_pro:
-                # FREE: threads max 5, delay min 100ms, Turbo недоступен
+                # FREE: threads max 5, delay min 100ms, Turbo unavailable
                 threads_input.placeholder = "Max 5"
                 delay_input.placeholder = "Min 100"
                 turbo_checkbox.disabled = True
                 turbo_checkbox.tooltip = "⚡ Turbo mode requires PRO license"
             else:
-                # PRO: без ограничений
+                # PRO: no limits
                 threads_input.placeholder = "Max 200"
                 delay_input.placeholder = "0"
                 turbo_checkbox.disabled = False
@@ -638,7 +518,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             # a multi-GB file just to restore state.
             payloads = state.get("payloads", [[]])
             if payloads and isinstance(payloads, list):
-                self._payloads = self._deserialize_payloads(payloads)
+                self._payloads = deserialize_payloads(payloads)
                 self._update_payload_select()
                 # Use call_after_refresh — ListView must be in DOM first
                 self.call_after_refresh(self._refresh_payload_list)
@@ -646,79 +526,6 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         except Exception as exc:
             from pentool.core.logging import get_logger
             get_logger(__name__).debug("_do_load_state: %s", exc)
-
-    @staticmethod
-    def _deserialize_payloads(raw_sets: list) -> list:
-        """Inverse of _serialize_payloads — see its docstring."""
-        result = []
-        for entry in raw_sets:
-            if isinstance(entry, dict) and "__file__" in entry:
-                result.append(FilePayloadSource(entry["__file__"], count=entry.get("count")))
-            elif isinstance(entry, dict) and "__numeric__" in entry:
-                result.append(NumericPayloadSource(
-                    entry.get("start", 0), entry.get("end", 0), entry.get("step", 1)
-                ))
-            elif isinstance(entry, dict) and "__charset__" in entry:
-                result.append(CharPayloadSource(
-                    entry.get("__charset__", ""), entry.get("min_len", 1), entry.get("max_len", 1)
-                ))
-            elif isinstance(entry, dict) and "__chained__" in entry:
-                result.append(ChainedPayloadSource(
-                    *IntruderScreen._deserialize_payloads(entry["__chained__"])
-                ))
-            elif isinstance(entry, list):
-                result.append(entry)
-            else:
-                result.append([])
-        return result
-
-    @staticmethod
-    def _serialize_payloads(sets: list) -> list:
-        """JSON-serializable form of self._payloads for save_state().
-
-        A plain list[str] set serializes as-is. A FilePayloadSource set
-        serializes as {"__file__": path, "count": N} — its file path and
-        (if already known) line count, NOT its contents. Writing out every
-        line of a multi-GB payload file into the intruder_state.payloads_json
-        column on every auto-save would itself be the same "load a 30GB file
-        into memory/into a DB column" problem this feature exists to avoid;
-        the file already lives on disk at `path` and is re-streamed from
-        there on demand (attack start, or re-opening this tab — see
-        _deserialize_payloads).
-
-        NumericPayloadSource/CharPayloadSource serialize the same way — as
-        their small constructor params (a range or a charset+lengths),
-        never their (potentially huge) enumerated contents — and are
-        reconstructed fresh (still lazy) on load, same rationale.
-
-        A ChainedPayloadSource (result of appending Generate…/Smart onto an
-        existing set — see _append_to_active_set) serializes as a
-        {"__chained__": [...]} envelope wrapping each inner source's own
-        serialized form recursively, so it never materializes either —
-        only a plain `list[str]` (the base case) is ever actually iterated
-        into a JSON array here.
-        """
-        result = []
-        for entry in sets:
-            if isinstance(entry, FilePayloadSource):
-                result.append({"__file__": entry.path, "count": entry.cached_count})
-            elif isinstance(entry, NumericPayloadSource):
-                result.append({
-                    "__numeric__": True,
-                    "start": entry.start, "end": entry.end, "step": entry.step,
-                })
-            elif isinstance(entry, CharPayloadSource):
-                result.append({
-                    "__charset__": entry.charset,
-                    "min_len": entry.min_len, "max_len": entry.max_len,
-                })
-            elif isinstance(entry, ChainedPayloadSource):
-                result.append({
-                    "__chained__": IntruderScreen._serialize_payloads(list(entry._sources)),
-                })
-            else:
-                result.append(list(entry))
-        return result
 
     def _auto_save_state(self) -> None:
         """Auto-save current state (template, attack type, payloads) to DB."""
@@ -736,7 +543,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                         tab_name=self._tab_name,
                         template=template,
                         attack_type=self._attack_type.value,
-                        payloads=self._serialize_payloads(self._payloads),
+                        payloads=serialize_payloads(self._payloads),
                     ),
                     worker_name,
                 ),
@@ -766,24 +573,6 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             )
         except Exception:
             pass
-
-    async def _do_auto_save(self, coro, worker_name: str) -> None:
-        """Auto-save wrapper — cleanup _running_save_tasks on completion."""
-        try:
-            await coro
-        except Exception:
-            pass
-        finally:
-            self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
-
-    def _cancel_save_workers(self) -> None:
-        """Cancel all tracked auto-save workers."""
-        for wname in list(self._running_save_tasks):
-            try:
-                self.workers.cancel(wname)
-            except Exception:
-                pass
-        self._running_save_tasks.clear()
 
     def _setup_tooltips(self) -> None:
         tips = {
@@ -907,7 +696,8 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         if bid in ("btn-export-csv-results", "btn-export-csv"):
             self._export_csv()
 
-    def on__intruder_filter_bar_filter_changed(
+    @on(_IntruderFilterBar.FilterChanged)
+    def on_intruder_filter_bar_changed(
         self, event: _IntruderFilterBar.FilterChanged
     ) -> None:
         """React to _IntruderFilterBar posting a FilterChanged message."""
@@ -919,20 +709,27 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self._filter_len_lt  = None
             self._grep_match_patterns   = []
             self._grep_extract_patterns = []
+            self._grep_only_match       = False
         else:
             if "status" in f or "len_gt" in f or "len_lt" in f:
                 # Filter change
                 self._filter_status = f.get("status")
                 self._filter_len_gt = f.get("len_gt")
                 self._filter_len_lt = f.get("len_lt")
-            if "grep_match" in f or "grep_extract" in f:
+            if "grep_match" in f or "grep_extract" in f or "grep_only_match" in f:
                 self._grep_match_patterns   = [f["grep_match"]]   if f.get("grep_match")   else []
                 self._grep_extract_patterns = [f["grep_extract"]] if f.get("grep_extract") else []
+                self._grep_only_match       = bool(f.get("grep_only_match"))
+                # No self.app.notify here: a toast is spawned on EVERY Apply/
+                # Clear/Reset, and under rapid clicking that floods the UI with
+                # toast + notification-sound threads (and previously, subprocess
+                # forks). A quiet debug line keeps the state visible without the
+                # cost. See core/notification_sound.py throttle note.
                 n_match   = len(self._grep_match_patterns)
                 n_extract = len(self._grep_extract_patterns)
-                self.app.notify(
-                    f"Grep Match: {n_match} pattern(s), Extract: {n_extract} pattern(s)",
-                    timeout=2,
+                logger.info(
+                    "INTRUDER: grep applied — match=%d extract=%d only_match=%s",
+                    n_match, n_extract, self._grep_only_match,
                 )
         self._redraw_results()
 
@@ -1656,7 +1453,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             self.app.notify("No payloads configured", severity="warning", timeout=3)
             return
 
-        # Применить лимиты в зависимости от лицензии
+        # Apply per-license limits.
         # (see _apply_license_limits above for why is_pro() and not
         # has_feature("pro") — "pro" is not one of the backend's feature
         # names, so has_feature("pro") always returned False even for a
@@ -1680,7 +1477,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             if not is_pro:
                 delay_ms = max(100, delay_ms)  # FREE: min 100ms
             else:
-                delay_ms = max(0, delay_ms)  # PRO: без ограничений
+                delay_ms = max(0, delay_ms)  # PRO: no limits
         except Exception:
             delay_ms = 100 if not is_pro else 0
 
@@ -1705,7 +1502,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             if is_pro:
                 turbo_mode = self.query_one("#chk-turbo", Checkbox).value
             else:
-                # FREE: принудительно выключить Turbo
+                # FREE: force Turbo off.
                 self.query_one("#chk-turbo", Checkbox).value = False
         except Exception:
             pass
@@ -1718,7 +1515,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         total_payloads = sum(len(ps) for ps in payload_sets)
         mode_label = " [⚡ Turbo]" if turbo_mode else ""
         limit_label = "" if is_pro else " [FREE: limited]"
-        self.app.customnotify(
+        self.app.notify(
             f"Attack started: {total_payloads} payload(s){mode_label}{limit_label}",
             severity="success",
             title="Intruder",
@@ -1741,7 +1538,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             # turbo_mode was silently ignored here (IntruderAttack is always
             # non-Turbo; only IntruderAPI.start_attack() picks
             # TurboIntruderAttack vs IntruderAttack based on the flag). See
-            # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7.
+            # (scanner refactor plan) section 2.7.
             await self._api.start_attack(config, on_result, on_progress, turbo_mode=turbo_mode)
         except Exception as exc:
             logger.error("INTRUDER: _run_attack error: %s", exc, exc_info=True)
@@ -1757,7 +1554,14 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
 
     def _on_result(self, result: IntruderResult) -> None:
         self._all_results.append(result)
-        if self._passes_filter(result):
+        if matches_result_filters(
+            result,
+            self._filter_status,
+            self._filter_len_gt,
+            self._filter_len_lt,
+            self._grep_match_patterns,
+            self._grep_only_match,
+        ):
             self._add_result_row(result)
         # Auto-save result to DB
         self._auto_save_result(result)
@@ -1800,7 +1604,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self._attack_running = False
         self._paused = False
         self._set_running_state(False)
-        self.app.customnotify("Attack stopped", severity="warning")
+        self.app.notify("Attack stopped", severity="warning")
 
     def on_worker_state_changed(self, event) -> None:
         """Safety net: reset _attack_running on any attack-worker outcome."""
@@ -1849,19 +1653,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
                         pass
 
             # Grep Match: check if the result row matches the pattern
-            matched = False
-            if self._grep_match_patterns:
-                search_str = (
-                    f"{result.response_status} {result.response_length} "
-                    f"{' '.join(result.payload_values)}"
-                )
-                for pat in self._grep_match_patterns:
-                    try:
-                        if re.search(pat, search_str, re.IGNORECASE):
-                            matched = True
-                            break
-                    except re.error:
-                        pass
+            matched = matches_grep(result, self._grep_match_patterns)
 
             status_str = str(result.response_status or "-")
             # Highlight matched rows
@@ -1879,8 +1671,49 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             # Add Extract column if a pattern is set
             if self._grep_extract_patterns:
                 row.append(extract_val)
+                self._ensure_extract_column(table)
 
             table.add_row(*row, key=result.id)
+        except Exception:
+            pass
+
+    def _ensure_extract_column(self, table: DataTable) -> None:
+        """Add the dynamic "Extract" results-table column once, when a Grep
+        Extract pattern is active (variant A fix: it was being written into
+        rows without a declared column, producing a silent ValueError/blank).
+        Idempotent — column is added only if not already present."""
+        if not self._grep_extract_patterns:
+            return
+        try:
+            cols = getattr(table, "columns", None)
+            if cols is not None:
+                for k, col in cols.items():
+                    try:
+                        if str(getattr(col, "label", "") or "").startswith("Extract"):
+                            return
+                    except Exception:
+                        continue
+            table.add_column("Extract")
+        except Exception:
+            try:
+                table.add_column("Extract")
+            except Exception:
+                pass
+
+    def _remove_extract_column(self, table: DataTable) -> None:
+        """Drop the dynamic "Extract" column once the grep-extract pattern is
+        cleared, so the columns return to the plain 6. Idempotent."""
+        try:
+            cols = getattr(table, "columns", None)
+            if not cols:
+                return
+            for k, col in list(cols.items()):
+                try:
+                    if str(getattr(col, "label", "") or "").startswith("Extract"):
+                        table.remove_column(k)
+                        return
+                except Exception:
+                    continue
         except Exception:
             pass
 
@@ -1890,6 +1723,12 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         except Exception:
             pass
         self._all_results = []
+        # Full clear also drops the dynamic Extract column so a later Clear
+        # grep returns the table to its plain 6 columns.
+        try:
+            self._remove_extract_column(self.query_one("#results-table", DataTable))
+        except Exception:
+            pass
         try:
             self.query_one("#progress-label", Static).update("0/0 (0%)")
             self.query_one("#attack-progress", ProgressBar).update(total=100)
@@ -1960,7 +1799,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """При выборе строки — показать детали."""
+        """On row selection — show the details."""
         if event.data_table.id != "results-table":
             return
         result = self._result_at_row(event.data_table, event.cursor_row)
@@ -1969,24 +1808,24 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         self._show_detail(result)
 
     def _show_detail(self, result: IntruderResult) -> None:
-        """Показать детальную панель с request/response."""
+        """Show the detail panel with request/response."""
         self._current_result = result
 
         req_raw = result.request_raw or ""
         resp_raw = result.response_raw or ""
 
-        # Показать панель
+        # Show the panel.
         try:
             panel = self.query_one("#intruder-detail-panel")
             panel.display = True
         except Exception:
             pass
 
-        # Загрузить контент
+        # Load the content.
         self.call_after_refresh(self._load_detail_content, req_raw, resp_raw)
 
     def _load_detail_content(self, req_raw: str, resp_raw: str) -> None:
-        """Загрузить HTTP request/response в виджеты."""
+        """Load the HTTP request/response into the widgets."""
         try:
             req_view = self.query_one("#detail-request", HttpView)
             req_view.load_raw_http(req_raw)
@@ -2002,7 +1841,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             logger.debug("_load_detail_content: resp_view error: %s", exc)
 
     def action_hide_detail(self) -> None:
-        """Скрыть детальную панель (Escape)."""
+        """Hide the detail panel (Escape)."""
         try:
             panel = self.query_one("#intruder-detail-panel")
             panel.display = False
@@ -2011,11 +1850,11 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def on__base_http_widget_context_menu_request(self, event) -> None:
-        """Правый клик на HttpView → контекстное меню."""
+        """Right-click on HttpView → context menu."""
         self.cm_open_text_menu(event.screen_x, event.screen_y)
 
     def _cm_get_raw_request(self) -> str:
-        """Raw HTTP из текущего результата для контекстного меню."""
+        """Raw HTTP from the current result, for the context menu."""
         if self._current_result:
             return self._current_result.request_raw
         return ""
@@ -2087,23 +1926,25 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             pass
 
 
-    def _passes_filter(self, result: IntruderResult) -> bool:
-        if self._filter_status and str(result.response_status) != self._filter_status:
-            return False
-        length = result.response_length or 0
-        if self._filter_len_gt is not None and length <= self._filter_len_gt:
-            return False
-        if self._filter_len_lt is not None and length >= self._filter_len_lt:
-            return False
-        return True
-
     def _redraw_results(self) -> None:
         try:
-            self.query_one("#results-table", DataTable).clear()
+            table = self.query_one("#results-table", DataTable)
+            table.clear()
+            # If grep-extract was just cleared, drop the dynamic Extract column
+            # again so the filter bar's Clear/Reset restores the plain table.
+            if not self._grep_extract_patterns:
+                self._remove_extract_column(table)
         except Exception:
             pass
         for result in self._all_results:
-            if self._passes_filter(result):
+            if matches_result_filters(
+                result,
+                self._filter_status,
+                self._filter_len_gt,
+                self._filter_len_lt,
+                self._grep_match_patterns,
+                self._grep_only_match,
+            ):
                 self._add_result_row(result)
 
     def _export_csv(self) -> None:
@@ -2148,6 +1989,14 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
         return process_payload(payload, ops)
 
     def load_request(self, raw: str) -> None:
+        # A new target's raw request arriving here (Send to Intruder) means the
+        # user is starting fresh — drop any leftover rows from a previous
+        # host's attack so they don't obscure the new target. Same
+        # leftover-artifact fix as _reload_project_screens does across projects.
+        try:
+            self._clear_results()
+        except Exception:
+            pass
         try:
             editor = self.query_one("#template-editor", TextArea)
             _load_into_textarea(editor, raw, ["§"])
@@ -2157,7 +2006,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def get_intruder_export(self) -> dict:
-        """Экспорт данных Intruder для сохранения проекта."""
+        """Export Intruder data for project saving."""
         api = getattr(self, "_api", None)
         if api is None:
             return {"results": []}
@@ -2167,7 +2016,7 @@ class IntruderScreen(AppMixin, RequestContextMenuMixin, Widget):
             return {"results": []}
 
 
-class _InputDialog(ModalScreen):
+class _InputDialog(DialogCancelMixin, ModalScreen):
     """Payload add dialog — does not close after ADD, accumulates the list."""
 
     DEFAULT_CSS = _CSS
@@ -2195,7 +2044,7 @@ class _InputDialog(ModalScreen):
 
     @on(ToolbarButton.Pressed, "#btn-cancel")
     def _cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.dismiss(None)
+        self.action_cancel()  # DialogCancelMixin -> dismiss(None)
 
     def _do_add(self) -> None:
         try:
@@ -2210,11 +2059,11 @@ class _InputDialog(ModalScreen):
 
     def on_key(self, event) -> None:
         if event.key == "escape":
-            self.dismiss(None)
+            self.action_cancel()  # DialogCancelMixin -> dismiss(None)
         elif event.key == "enter":
             self._do_add()
 
-class _GenerateDialog(ModalScreen):
+class _GenerateDialog(DialogCancelMixin, ModalScreen):
     """Generate… dialog — Numeric range or Char (alphabet brute-force) mode.
 
     Returns a lazy NumericPayloadSource/CharPayloadSource (never a
@@ -2322,13 +2171,13 @@ class _GenerateDialog(ModalScreen):
 
     @on(ToolbarButton.Pressed, "#btn-gen-cancel")
     def _gen_cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.dismiss(None)
+        self.action_cancel()  # DialogCancelMixin -> dismiss(None)
 
     def on_key(self, event) -> None:
         if event.key == "escape":
-            self.dismiss(None)
+            self.action_cancel()
 
-class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
+class _SmartPayloadsDialog(DialogCancelMixin, ModalScreen[list[str] | None]):
     """PRO Smart Payload Generator — dialog for generating context-aware payloads."""
 
     DEFAULT_CSS = """
@@ -2426,7 +2275,7 @@ class _SmartPayloadsDialog(ModalScreen[list[str] | None]):
 
     @on(ToolbarButton.Pressed, "#btn-smart-cancel")
     def _smart_cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.dismiss(None)
+        self.action_cancel()  # DialogCancelMixin -> dismiss(None)
 
     def _generate(self) -> None:
         try:

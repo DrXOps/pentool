@@ -654,7 +654,7 @@ class SettingsScreen(Widget):
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
     def _save_ai_settings(self) -> None:
-        """Сохранить AI-настройки."""
+        """Save the AI settings."""
         try:
             from pentool.services.ai.factory import AI_MODELS_DIR
             cfg = getattr(self.app, "_cfg", None)

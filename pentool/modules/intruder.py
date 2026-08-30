@@ -800,7 +800,7 @@ class IntruderAttack:
         # the actual HTTP-send section concurrently — it did nothing to stop
         # every task from existing in memory at once. Identical pattern to the
         # one found and fixed in ScanEngine.run_active_on_requests (see
-        # MYPLANS/MEMORY_LEAK_INVESTIGATION_PLAN_2026-08-08.md, H1/H2).
+        # (memory-leak investigation), H1/H2).
         #
         # AFTER: a fixed pool of `threads` worker coroutines pulls the next
         # (req_num, payload_values) tuple off a single shared iterator and
@@ -866,9 +866,13 @@ class IntruderAttack:
             body = resp.body if isinstance(resp.body, (bytes, str)) else b""
             length = len(body) if isinstance(body, bytes) else len(body.encode("utf-8", errors="replace"))
 
-            # Build response_raw
-            from pentool.modules.scanner.checks.helpers import format_response_raw
-            response_raw = format_response_raw(resp)
+            # Build response_raw locally — the PRO format_response_raw
+            # instantiates aiohttp.ClientResponse the pre-3.14 way and crashes
+            # on aiohttp >= 3.14 (missing 'stream_writer'), which broke every
+            # Intruder attack request. response_raw_from_parsed([...]) is a
+            # local, aiohttp-free equivalent.
+            from pentool.utils.parser import response_raw_from_parsed
+            response_raw = response_raw_from_parsed(resp)
         except Exception as exc:
             error_msg = str(exc)
             logger.warning("INTRUDER: _send_request #%d error: %s", req_num, exc)

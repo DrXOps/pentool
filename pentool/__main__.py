@@ -133,6 +133,25 @@ def _kill_orphaned_pentool() -> None:
         pass  # never block startup on cleanup
 
 
+def _log_exit_reason(reason: str) -> None:
+    """Append a short, unambiguous line to pentool_exit_dump.log naming WHY the
+    process is exiting — signal/SystemExit, an exception (crash), or the
+    clean-return path. Without this, a runaway/quiet exit produced only the
+    thread dump with no explicit cause, and it wasn't clear whether the app
+    quit normally or crashed silently.
+
+    Non-fatal: failures here must never mask the actual shutdown path.
+    """
+    try:
+        from pentool.core.config import DEFAULT_CONFIG_DIR
+        from pathlib import Path
+        (DEFAULT_CONFIG_DIR / "pentool_exit_dump.log").open("a").write(
+            f"--- EXIT: {reason} ({__import__('time').strftime('%Y-%m-%d %H:%M:%S')}) ---\n"
+        )
+    except Exception:
+        pass
+
+
 def main() -> None:
     unsafe_skip_pro_check = _UNSAFE_SKIP_PRO_CHECK_FLAG in sys.argv
     if unsafe_skip_pro_check:
@@ -284,11 +303,13 @@ def main() -> None:
         try:
             PentoolApp().run()
         except (KeyboardInterrupt, SystemExit):
+            _log_exit_reason("signal/SystemExit")
             # Let the interpreter shut down normally on signals/explicit exits
             # (PEP 8: never swallow these). The non-daemon-thread hang fix
             # below only targets the clean-return path (the `else` branch).
             raise
         except Exception as exc:
+            _log_exit_reason(f"crash: {type(exc).__name__}: {exc}")
             # Send anonymous crash report (if not disabled in settings)
             try:
                 from pentool.core.crash_reporter import send_crash
@@ -297,6 +318,7 @@ def main() -> None:
                 pass
             raise
         else:
+            _log_exit_reason("run() returned cleanly (not via action_quit)")
             # `run()` returned cleanly — not through `action_quit` (which
             # does its own os._exit deep inside the app). Dump all thread
             # stacks to the log for post-mortem diagnosis, then hard-exit so
@@ -314,6 +336,31 @@ def main() -> None:
                     _exit_stack = getattr(PentoolApp, '_exit_caller_stack', '')
                     if _exit_stack:
                         _buf.write(f"\n--- app.exit()/exception ---\n{_exit_stack}\n")
+                except Exception:
+                    pass
+                # One-line summary of every live *non-namespace* thread: name,
+                # daemon flag and, if known, the target callable it is running.
+                # Lets post-mortem answer "what was actually busy" (e.g. an
+                # executor worker from a payload-file load, the proxy asyncio
+                # loop, an aiohttp connector thread …) without eyeballing the
+                # per-thread stacks below.
+                try:
+                    import threading as _threading
+                    _thread_summary = []
+                    for _th in _threading.enumerate():
+                        try:
+                            _nm = getattr(_th, "name", "?")
+                            _tg = getattr(_th, "_target", None)
+                            _tg_name = getattr(_tg, "__qualname__", None) or getattr(_tg, "__name__", None) or repr(_tg)
+                            _dn = getattr(_th, "daemon", "?")
+                            _tidn = getattr(_th, "ident", None)
+                            _thread_summary.append(
+                                f"  ident={_tidn} name={_nm!r} daemon={_dn} target={_tg_name}"
+                            )
+                        except Exception:
+                            continue
+                    if _thread_summary:
+                        _buf.write("\n--- live threads (summary) ---\n" + "\n".join(_thread_summary) + "\n")
                 except Exception:
                     pass
                 for _tid, _frame in _sys._current_frames().items():
