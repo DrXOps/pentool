@@ -284,6 +284,11 @@ class IntruderAPI(ExportableAPI):
 
         loaded = 0
         for rd in results_data:
+            # Legacy projects may hold non-dict entries (old serialized format);
+            # skip those quietly — they carry no usable data and the warning
+            # spam on every load polluted the log.
+            if not isinstance(rd, dict):
+                continue
             try:
                 ts_raw = rd.get("timestamp", "")
                 try:

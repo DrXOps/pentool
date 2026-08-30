@@ -398,6 +398,15 @@ class ScanService(BaseService):
             result = await self._spider.crawl(
                 base_url, extra_headers=auth_headers, db_path=config.db_path,
             )
+            # Guard against an unexpected return shape (older spiders could
+            # return a bare list instead of a SpiderResult). Fail silently but
+            # stop here — a crawl returning a list has no pages/endpoints to use.
+            if not hasattr(result, "pages"):
+                logger.warning(
+                    "ScanService._crawl_target: unexpected crawl return type %s — skipping target",
+                    type(result).__name__,
+                )
+                return
             # Carry the headers the crawler actually used (Proxy-discovered
             # session + seed) into the active phase via _auth_headers.
             if getattr(result, "auth_headers", None):
