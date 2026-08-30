@@ -57,3 +57,36 @@ def test_client_unknown_command_graceful():
         assert resp.get("ok") is False
     finally:
         client.stop()
+
+
+def test_client_scope_and_predicates_over_ipc():
+    """is_in_scope + match_replace_rules resolved in the daemon over IPC."""
+    from pentool.modules.match_replace import MatchReplaceRule
+
+    client = ProxyClient(host="127.0.0.1", port=0)
+    try:
+        client.start()
+        client.set_scope(["example.com", "*.github.com"])
+        assert client.is_in_scope("example.com") is True
+        assert client.is_in_scope("api.github.com") is True       # *.github.com
+        assert client.is_in_scope("unrelated.io") is False
+
+        client.match_replace_rules = [
+            MatchReplaceRule(match="foo", replace="bar", target="request")
+        ]
+        rules = client.match_replace_rules
+        assert len(rules) == 1
+        assert rules[0]["match"] == "foo"
+    finally:
+        client.stop()
+
+
+def test_client_scope_empty_means_everything_in_scope():
+    """Mirror ProxyServer: empty scope => all hosts in scope."""
+    client = ProxyClient(host="127.0.0.1", port=0)
+    try:
+        client.start()
+        client.set_scope([])
+        assert client.is_in_scope("anything.example") is True
+    finally:
+        client.stop()
