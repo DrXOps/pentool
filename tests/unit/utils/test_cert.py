@@ -24,7 +24,7 @@ from pentool.utils.cert import (
     generate_domain_cert,
     load_or_create_ca,
 )
-from pentool.storage.lru_cache import LRUCache
+from pentool.utils.lru_cache import LRUCache
 
 
 class TestRSAKeyGeneration:

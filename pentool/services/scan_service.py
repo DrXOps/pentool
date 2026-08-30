@@ -293,8 +293,11 @@ class ScanService(BaseService):
         _on_request_sent = getattr(config, "on_request_sent", None)
         _on_total_estimate = getattr(config, "on_total_estimate", None)
 
+        from pentool.core.config import get_config
         from pentool.utils.http_client import get_shared_http_client
-        http_client = get_shared_http_client(follow_redirects=True, extra_headers=auth_headers)
+        http_client = get_shared_http_client(
+            follow_redirects=True, extra_headers=auth_headers, cfg=get_config()
+        )
         self._scanner.configure_engine(
             http_client=http_client,
             concurrency=config.threads,

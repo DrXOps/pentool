@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pentool.tui.widgets.payload_serialization import serialize_payloads, deserialize_payloads
+from pentool.api.payload_serialization import serialize_payloads, deserialize_payloads
 from pentool.modules.intruder import (
     CharPayloadSource,
     ChainedPayloadSource,

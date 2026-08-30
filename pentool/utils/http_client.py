@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Callable
+from typing import Any, Callable
 
 import aiohttp
 
@@ -143,17 +143,26 @@ class HTTPClient:
 def get_shared_http_client(
     follow_redirects: bool = True,
     extra_headers: dict | None = None,
+    cfg: Any | None = None,  # noqa: ANN401 — injected Config (core layer, not importable here)
 ) -> "HTTPClient":
-    """Build an HTTPClient configured from the current app Config.
+    """Build an HTTPClient configured from a Config.
 
-    One factory for the repeated ``get_config() -> HTTPClient(verify_ssl=...,
-    timeout=...)`` block scattered across services/modules. Returns a NEW
+    One factory for the repeated ``HTTPClient(verify_ssl=..., timeout=...)``
+    block that used to be scattered across services/modules. Returns a NEW
     client per call (callers still own and close it as before); "shared"
     refers to the single source of truth (the config) being used everywhere.
-    """
-    from pentool.core.config import get_config
 
-    cfg = get_config()
+    *cfg* is injected by the caller (services/modules, which may import
+    core.config) so this utilities module keeps no dependency on any other
+    penTool layer.
+    """
+    if cfg is None:
+        return HTTPClient(
+            verify_ssl=True,
+            timeout=10,
+            follow_redirects=follow_redirects,
+            extra_headers=extra_headers,
+        )
     return HTTPClient(
         verify_ssl=cfg.verify_ssl,
         timeout=cfg.request_timeout,
