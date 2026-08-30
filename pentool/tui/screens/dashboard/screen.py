@@ -489,7 +489,7 @@ class DashboardScreen(Widget):
             self.app.notify(f"Opened: {os.path.basename(path)}", timeout=3)
 
     def _update_ai_status(self) -> None:
-        """Обновить строки статуса AI и MCP в блоке STATUS (под MCP)."""
+        """Refresh the AI and MCP status rows in the STATUS block (under MCP)."""
         try:
             from pentool.services.ai.factory import ai_setup_required
             cfg = getattr(self.app, "_cfg", None)

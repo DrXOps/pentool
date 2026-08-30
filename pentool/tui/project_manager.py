@@ -574,8 +574,8 @@ class ProjectManager:
         except Exception as exc:
             logger.warning("_init_new_db: %s", exc)
 
-    # _switch_storage_db и _open_project_sequence оставлены для совместимости
-    # с app.py (_reload_project_screens, _switch_storage_db, _open_project_sequence)
+    # _switch_storage_db and _open_project_sequence are kept for compatibility
+    # with app.py (_reload_project_screens, _switch_storage_db, _open_project_sequence)
     async def _switch_storage_db(self, path: str) -> None:
         if self._proxy_service is not None:
             await self._proxy_service.switch_db(path)

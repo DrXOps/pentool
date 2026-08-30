@@ -283,7 +283,7 @@ def _build_ssl_ctx(cert_pem: bytes, key_pem: bytes) -> ssl.SSLContext:
 
 
 # ── In-memory LRU cache for SSL contexts (1000 domains) ──────────────────────
-# Shares the generic LRUCache from storage/lru_cache.py (страница 7.4
+# Shares the generic LRUCache from storage/lru_cache.py (Этап 7.4
 # consolidation); key is the string "{domain}:{ca_cert_path}".
 from pentool.storage.lru_cache import LRUCache
 

@@ -112,7 +112,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
     # RequestContextMenuMixin config
     _cm_show_copy_url = False
     _cm_show_send_repeater = True
-    _cm_show_send_intruder = False  # не отправляем в себя
+    _cm_show_send_intruder = False  # do not send back into itself
     _cm_show_send_scanner = False
 
     def __init__(self, **kwargs) -> None:
@@ -127,7 +127,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         self._attack_type: AttackType = AttackType.SNIPER
         self._api = None
         self._all_results: list[IntruderResult] = []
-        self._current_result: IntruderResult | None = None  # для детальной панели
+        self._current_result: IntruderResult | None = None  # for the detail panel
         self._filter_status: str | None = None
         self._filter_len_gt: int | None = None
         self._filter_len_lt: int | None = None
@@ -280,7 +280,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                 zebra_stripes=True,
             )
 
-            # Детальная панель (изначально скрыта)
+            # Detail panel (hidden initially)
             with Horizontal(id="intruder-detail-panel", classes="intruder-detail-panel"):
                 with Vertical(id="detail-request-col", classes="detail-col"):
                     yield Static("Request", classes="detail-label")
@@ -314,13 +314,13 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         self._setup_tooltips()
         # Load saved state from DB
         self._load_state_from_db()
-        # Скрыть детальную панель изначально
+        # Hide the detail panel initially.
         try:
             panel = self.query_one("#intruder-detail-panel")
             panel.display = False
         except Exception:
             pass
-        # Применить ограничения для FREE лицензии
+        # Apply FREE-license limits.
         self._apply_license_limits()
 
     def _get_api(self) -> "IntruderAPI | None":
@@ -457,7 +457,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         self.run_worker(self._do_load_state(api), exclusive=False, exit_on_error=False)
 
     def _apply_license_limits(self) -> None:
-        """Применить ограничения для FREE лицензии."""
+        """Apply the FREE-license limits."""
         from pentool.core.license import get_session_license
         license_info = get_session_license()
         # NOTE: "pro" is not a feature name — the backend's feature lists
@@ -476,13 +476,13 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             turbo_checkbox = self.query_one("#chk-turbo", Checkbox)
 
             if not is_pro:
-                # FREE: threads max 5, delay min 100ms, Turbo недоступен
+                # FREE: threads max 5, delay min 100ms, Turbo unavailable
                 threads_input.placeholder = "Max 5"
                 delay_input.placeholder = "Min 100"
                 turbo_checkbox.disabled = True
                 turbo_checkbox.tooltip = "⚡ Turbo mode requires PRO license"
             else:
-                # PRO: без ограничений
+                # PRO: no limits
                 threads_input.placeholder = "Max 200"
                 delay_input.placeholder = "0"
                 turbo_checkbox.disabled = False
@@ -1453,7 +1453,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             self.app.notify("No payloads configured", severity="warning", timeout=3)
             return
 
-        # Применить лимиты в зависимости от лицензии
+        # Apply per-license limits.
         # (see _apply_license_limits above for why is_pro() and not
         # has_feature("pro") — "pro" is not one of the backend's feature
         # names, so has_feature("pro") always returned False even for a
@@ -1477,7 +1477,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             if not is_pro:
                 delay_ms = max(100, delay_ms)  # FREE: min 100ms
             else:
-                delay_ms = max(0, delay_ms)  # PRO: без ограничений
+                delay_ms = max(0, delay_ms)  # PRO: no limits
         except Exception:
             delay_ms = 100 if not is_pro else 0
 
@@ -1502,7 +1502,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             if is_pro:
                 turbo_mode = self.query_one("#chk-turbo", Checkbox).value
             else:
-                # FREE: принудительно выключить Turbo
+                # FREE: force Turbo off.
                 self.query_one("#chk-turbo", Checkbox).value = False
         except Exception:
             pass
@@ -1538,7 +1538,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             # turbo_mode was silently ignored here (IntruderAttack is always
             # non-Turbo; only IntruderAPI.start_attack() picks
             # TurboIntruderAttack vs IntruderAttack based on the flag). See
-            # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7.
+            # (scanner refactor plan) section 2.7.
             await self._api.start_attack(config, on_result, on_progress, turbo_mode=turbo_mode)
         except Exception as exc:
             logger.error("INTRUDER: _run_attack error: %s", exc, exc_info=True)
@@ -1799,7 +1799,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """При выборе строки — показать детали."""
+        """On row selection — show the details."""
         if event.data_table.id != "results-table":
             return
         result = self._result_at_row(event.data_table, event.cursor_row)
@@ -1808,24 +1808,24 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         self._show_detail(result)
 
     def _show_detail(self, result: IntruderResult) -> None:
-        """Показать детальную панель с request/response."""
+        """Show the detail panel with request/response."""
         self._current_result = result
 
         req_raw = result.request_raw or ""
         resp_raw = result.response_raw or ""
 
-        # Показать панель
+        # Show the panel.
         try:
             panel = self.query_one("#intruder-detail-panel")
             panel.display = True
         except Exception:
             pass
 
-        # Загрузить контент
+        # Load the content.
         self.call_after_refresh(self._load_detail_content, req_raw, resp_raw)
 
     def _load_detail_content(self, req_raw: str, resp_raw: str) -> None:
-        """Загрузить HTTP request/response в виджеты."""
+        """Load the HTTP request/response into the widgets."""
         try:
             req_view = self.query_one("#detail-request", HttpView)
             req_view.load_raw_http(req_raw)
@@ -1841,7 +1841,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             logger.debug("_load_detail_content: resp_view error: %s", exc)
 
     def action_hide_detail(self) -> None:
-        """Скрыть детальную панель (Escape)."""
+        """Hide the detail panel (Escape)."""
         try:
             panel = self.query_one("#intruder-detail-panel")
             panel.display = False
@@ -1850,11 +1850,11 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def on__base_http_widget_context_menu_request(self, event) -> None:
-        """Правый клик на HttpView → контекстное меню."""
+        """Right-click on HttpView → context menu."""
         self.cm_open_text_menu(event.screen_x, event.screen_y)
 
     def _cm_get_raw_request(self) -> str:
-        """Raw HTTP из текущего результата для контекстного меню."""
+        """Raw HTTP from the current result, for the context menu."""
         if self._current_result:
             return self._current_result.request_raw
         return ""
@@ -2006,7 +2006,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def get_intruder_export(self) -> dict:
-        """Экспорт данных Intruder для сохранения проекта."""
+        """Export Intruder data for project saving."""
         api = getattr(self, "_api", None)
         if api is None:
             return {"results": []}

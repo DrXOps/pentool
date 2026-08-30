@@ -1,7 +1,7 @@
 """Unit tests for pentool/api/intruder_storage.py.
 
 Regression coverage for the extraction done in
-MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.6 —
+(scanner refactor plan) section 2.6 —
 IntruderStorage now owns the SQL that used to live directly on
 IntruderAPI (save_state/load_state/save_result/get_results_from_db).
 IntruderAPI keeps identical public method names delegating to this class.

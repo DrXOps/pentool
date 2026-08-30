@@ -1,7 +1,7 @@
 """Unit tests for pentool/modules/scanner/checks/sqli.py::SQLiUnionCheck.
 
 Regression coverage for the migration of SQLiUnionCheck onto BaseActiveCheck
-(see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.5).
+(see (scanner refactor plan) section 2.5).
 
 Before this fix SQLiUnionCheck declared `uses_scan_pipeline = True` but its
 own `scan()` was a `return []` stub — the exact "never runs in a real scan"
