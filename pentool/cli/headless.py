@@ -67,8 +67,6 @@ def run_headless_scan(urls: list[str], output: str | None, check_names: list[str
             concurrency=concurrency,
             request_delay=delay,
         )
-        if api._active_task:
-            await api._active_task
 
     click.echo(f"[headless] Active scan on {len(urls)} target(s)...")
     asyncio.run(_run())

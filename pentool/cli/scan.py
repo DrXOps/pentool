@@ -74,9 +74,6 @@ def scan_active(
             concurrency=concurrency,
             request_delay=delay,
         )
-        # Wait for the task to complete
-        if api._active_task:
-            await api._active_task
 
     click.echo(f"Starting active scan on {len(urls)} target(s)...")
     asyncio.run(_run())

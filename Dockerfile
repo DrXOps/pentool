@@ -51,9 +51,9 @@ RUN set -eux; \
       "https://github.com/lightpanda-io/browser/releases/download/${LIGHTPANDA_VERSION}/lightpanda-${LP_ARCH}-linux"; \
     chmod +x /usr/local/bin/lightpanda
 
-# Playwright Chromium is NOT included by default (heavy). If you need `--real`
-# mode inside the container, install it explicitly:
-#   RUN pip install playwright && python -m playwright install --with-deps chromium
+# Lightpanda (installed above) is the only JS engine — it powers both JS
+# crawl (js_render) and `--real` (via --http-proxy/--ca-cert through the
+# MITM proxy). No Playwright/Node/browser is needed.
 
 USER pentool
 

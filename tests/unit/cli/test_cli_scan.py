@@ -68,7 +68,6 @@ def _fake_scanner_api():
     api = MagicMock()
     api.db_path = "x"
     api.start_active_scan = AsyncMock()
-    api._active_task = None
     api.get_findings = AsyncMock(return_value=[])
     api.generate_report = AsyncMock()
     return api
