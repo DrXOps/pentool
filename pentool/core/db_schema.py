@@ -132,7 +132,9 @@ async def init_db(db_path: str) -> None:
     """
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiosqlite.connect(db_path) as db:
+    from pentool.utils.aiosql_daemon import make_aiosqlite_daemon
+    _raw_db = make_aiosqlite_daemon(aiosqlite.connect(db_path))
+    async with _raw_db as db:
         await db.executescript(_SCHEMA)
         await db.commit()
         # Migration: add new columns to vulnerabilities (for old DBs)
@@ -252,7 +254,9 @@ async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
     Yields:
         aiosqlite.Connection object.
     """
-    async with aiosqlite.connect(db_path) as db:
+    from pentool.utils.aiosql_daemon import make_aiosqlite_daemon
+    _raw_db = make_aiosqlite_daemon(aiosqlite.connect(db_path))
+    async with _raw_db as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA foreign_keys = ON")
         await db.execute("PRAGMA journal_mode = WAL")
