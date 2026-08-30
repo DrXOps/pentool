@@ -14,6 +14,8 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import Button, Input, Label
 
+from pentool.tui.widgets.filter_bar_base import FilterBarBase
+
 
 class GrepOnlyToggle(Widget):
     """Toggle button for 'Only matches' — a non-filtering grep a row must hit.
@@ -83,7 +85,7 @@ IntruderFilterBar Button {
 """
 
 
-class IntruderFilterBar(Widget):
+class IntruderFilterBar(FilterBarBase):
     """Filter bar for the Intruder results table.
 
     Encapsulates status / length-range / grep inputs that were previously
@@ -133,69 +135,54 @@ class IntruderFilterBar(Widget):
     def _emit_filters(self) -> None:
         """Build filter dict from current Input values and emit FilterChanged."""
         filters: dict = {}
-        try:
-            status = self.query_one("#filter-status", Input).value.strip()
-            if status:
-                filters["status"] = status
-        except Exception:
-            pass
-        try:
-            gt = self.query_one("#filter-len-gt", Input).value.strip()
-            if gt:
+        status = self._input_value(self, "#filter-status")
+        if status:
+            filters["status"] = status
+        gt = self._input_value(self, "#filter-len-gt")
+        if gt:
+            try:
                 filters["len_gt"] = int(gt)
-        except Exception:
-            pass
-        try:
-            lt = self.query_one("#filter-len-lt", Input).value.strip()
-            if lt:
+            except Exception:
+                pass
+        lt = self._input_value(self, "#filter-len-lt")
+        if lt:
+            try:
                 filters["len_lt"] = int(lt)
-        except Exception:
-            pass
-        self.post_message(self.FilterChanged(filters))
+            except Exception:
+                pass
+        self.emit(self.FilterChanged, self, filters)
 
     def _reset(self) -> None:
-        try:
-            self.query_one("#filter-status", Input).value = ""
-            self.query_one("#filter-len-gt", Input).value = ""
-            self.query_one("#filter-len-lt", Input).value = ""
-        except Exception:
-            pass
+        self._set_input_value(self, "#filter-status", "")
+        self._set_input_value(self, "#filter-len-gt", "")
+        self._set_input_value(self, "#filter-len-lt", "")
         try:
             self.query_one("#grep-only-toggle", GrepOnlyToggle).reset()
         except Exception:
             pass
-        self.post_message(self.FilterChanged({}))
+        self.emit(self.FilterChanged, self, {})
 
     def _emit_grep(self) -> None:
         filters: dict = {}
-        try:
-            match = self.query_one("#grep-match-input", Input).value.strip()
-            if match:
-                filters["grep_match"] = match
-        except Exception:
-            pass
-        try:
-            extract = self.query_one("#grep-extract-input", Input).value.strip()
-            if extract:
-                filters["grep_extract"] = extract
-        except Exception:
-            pass
+        match = self._input_value(self, "#grep-match-input")
+        if match:
+            filters["grep_match"] = match
+        extract = self._input_value(self, "#grep-extract-input")
+        if extract:
+            filters["grep_extract"] = extract
         try:
             toggle = self.query_one("#grep-only-toggle", GrepOnlyToggle)
             if toggle.active:
                 filters["grep_only_match"] = True
         except Exception:
             pass
-        self.post_message(self.FilterChanged(filters))
+        self.emit(self.FilterChanged, self, filters)
 
     def _clear_grep(self) -> None:
-        try:
-            self.query_one("#grep-match-input", Input).value = ""
-            self.query_one("#grep-extract-input", Input).value = ""
-        except Exception:
-            pass
+        self._set_input_value(self, "#grep-match-input", "")
+        self._set_input_value(self, "#grep-extract-input", "")
         try:
             self.query_one("#grep-only-toggle", GrepOnlyToggle).reset()
         except Exception:
             pass
-        self.post_message(self.FilterChanged({}))
+        self.emit(self.FilterChanged, self, {})
