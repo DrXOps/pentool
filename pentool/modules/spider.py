@@ -13,6 +13,7 @@ from typing import Callable
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from pentool.core.logging import get_logger
+from pentool.utils.lightpanda import is_lightpanda_available, lightpanda_fetch_html
 from pentool.utils.scope import domain_in_scope
 
 logger = get_logger(__name__)
@@ -380,8 +381,13 @@ class AsyncSpider:
         self.on_progress = on_progress
         self._stop = False
         self.extra_headers: dict = extra_headers or {}
-        # Playwright JS rendering — enabled only if playwright is installed
-        self.js_render = js_render and is_playwright_available()
+        # JS rendering — enabled only if a JS engine is available
+        # (Lightpanda preferred; Playwright as fallback). Without either,
+        # crawl falls back to plain aiohttp (no JS executed).
+        self.js_render = js_render and (
+            is_lightpanda_available() or is_playwright_available()
+        )
+        self._js_engine = "lightpanda" if is_lightpanda_available() else "playwright"
 
     def stop(self) -> None:
         self._stop = True
@@ -399,10 +405,15 @@ class AsyncSpider:
         semaphore = asyncio.Semaphore(self.concurrency)
 
         if self.js_render:
-            # Playwright JS rendering
-            await self._crawl_playwright(
-                start_url, base_domain, base_scheme, result, visited, queue, semaphore
-            )
+            # JS rendering — Lightpanda preferred, Playwright fallback.
+            if self._js_engine == "lightpanda":
+                await self._crawl_lightpanda(
+                    start_url, base_domain, base_scheme, result, visited, queue, semaphore
+                )
+            else:
+                await self._crawl_playwright(
+                    start_url, base_domain, base_scheme, result, visited, queue, semaphore
+                )
         else:
             # Regular aiohttp crawling
             import aiohttp
@@ -716,6 +727,59 @@ class AsyncSpider:
                 return []
 
     # ── Playwright JS rendering ───────────────────────────────────────────────
+
+    async def _crawl_lightpanda(
+        self,
+        start_url: str,
+        base_domain: str,
+        base_scheme: str,
+        result: SpiderResult,
+        visited: set,
+        queue: list,
+        semaphore: asyncio.Semaphore,
+    ) -> None:
+        """Crawl with JS rendering via Lightpanda `fetch --dump html`.
+
+        Uses only if lightpanda binary is installed and js_render=True.
+        Each page's URL is fetched through Lightpanda, which executes JS and
+        returns the post-JS rendered DOM — enough for SPA/level3/4 discovery.
+        (SPA click-through is a Playwright-only nicety; Lightpanda `fetch` has
+        no interactivity, so we skip clicks here.)
+        """
+        while queue and not self._stop and len(visited) < self.max_pages:
+            url, depth = queue.pop(0)
+            norm = self._normalize_url(url)
+            if norm in visited:
+                continue
+            if self.respect_scope and not self._in_scope(url, base_domain):
+                continue
+            visited.add(norm)
+
+            html = await lightpanda_fetch_html(
+                url, timeout=self.timeout, user_agent=self.user_agent
+            )
+            if html is None:
+                # Can't render via Lightpanda for this URL (timeout/error).
+                continue
+
+            if self.on_page:
+                self.on_page(url)
+
+            result.pages.append(url)
+            links, forms, js_links = self._parse_html(html, url, base_domain)
+            result.forms.extend(forms)
+            result.js_files.extend(j for j in js_links if j not in result.js_files)
+
+            if depth < self.max_depth:
+                for link in links + js_links:
+                    if self._normalize_url(link) not in visited:
+                        queue.append((link, depth + 1))
+
+            if self.on_progress:
+                self.on_progress(
+                    len(visited),
+                    min(self.max_pages, len(visited) + len(queue)),
+                )
 
     async def _crawl_playwright(
         self,
