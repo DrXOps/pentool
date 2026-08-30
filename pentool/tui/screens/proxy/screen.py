@@ -42,6 +42,7 @@ from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.context_menu import ContextMenu
 from pentool.tui.widgets.filter_bar import FilterBar
+from pentool.tui.widgets.http_history_filters import build_history_filters
 from pentool.tui.widgets.inspector_panel import InspectorPanel
 from pentool.tui.widgets.intercept import InterceptMixin
 from pentool.tui.widgets.request_editor import HttpView
@@ -512,10 +513,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             return
         try:
             # Add has_comment filter if toggle is active
-            if self._filter_show_comments:
-                f = dict(filters) if filters else {}
-                f["has_comment"] = True
-                filters = f
+            filters = build_history_filters(filters, self._filter_show_comments)
             logger.info("PROXY SCREEN: _reload_table called, filters=%s", filters)
             newest_first_rows = await self._proxy_service.get_history(
                 limit=_HISTORY_PAGE_SIZE, filters=filters,
