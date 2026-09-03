@@ -246,7 +246,11 @@ async def test_dashboard_live_tab(assert_snapshot) -> None:
         svg = app.export_screenshot()
     assert_snapshot(svg, "dashboard_live_tab")
 
-    """Sequencer screen: token entropy analysis."""
+
+@pytest.mark.snapshot
+@pytest.mark.asyncio
+async def test_sequencer_screen(assert_snapshot) -> None:
+    """Sequencer screen: token entropy analysis toolbar."""
     from pentool.tui.app import PentoolApp
     app = PentoolApp()
     app._skip_project_guard = True
