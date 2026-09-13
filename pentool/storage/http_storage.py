@@ -223,14 +223,33 @@ class HttpStorage(BaseSqliteStorage):
         ct = resp_headers.get("Content-Type", resp_headers.get("content-type", ""))
         mime_type = ct.split(";")[0].strip()
 
+        # Large response body → write to disk (analogous to add_request)
+        resp_body_store: str | None = None
+        resp_body_ref: str | None = None
+        if rb and len(rb) > _LARGE_BODY_THRESHOLD:
+            resp_body_ref = "__large__"
+            resp_body_store = None
+        else:
+            resp_body_store = rb
+
         await self._db.execute(
             """UPDATE requests SET
                status_code=?, length=?, mime_type=?,
-               response_headers=?, response_body=?
+               response_headers=?, response_body=?, response_body_ref=?
                WHERE id=?""",
-            (status_code, length, mime_type, json.dumps(resp_headers), rb, row_id),
+            (status_code, length, mime_type,
+             json.dumps(resp_headers), resp_body_store, None, row_id),
         )
         await self._db.commit()
+
+        # Save large body with the real row_id
+        if resp_body_ref == "__large__" and rb:
+            from pentool.storage.large_body_handler import LargeBodyHandler
+            ref = LargeBodyHandler.store(row_id, "resp", rb.encode())
+            await self._db.execute(
+                "UPDATE requests SET response_body_ref=? WHERE id=?", (ref, row_id)
+            )
+            await self._db.commit()
         logger.debug("HttpStorage: update_response row_id=%d status=%s", row_id, status_code)
 
     async def delete(self, row_id: int) -> None:
