@@ -2228,36 +2228,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         req_id = self._selected_req_id
         if not req_id:
             return
-        from textual.screen import ModalScreen
-
-        color_options = self._COLOR_OPTIONS
-
-        class ColorPickScreen(ModalScreen):
-            DEFAULT_CSS = """
-            ColorPickScreen > Vertical {
-                width: 30;
-                height: auto;
-                border: round $primary;
-                padding: 1 2;
-                background: $panel;
-            }
-            ColorPickScreen Button { margin: 0; width: 100%; }
-            """
-
-            def compose(self) -> ComposeResult:
-                with Vertical():
-                    yield Label("Mark color:")
-                    for label, val in color_options:
-                        btn = Button(label, id=f"col-{val or 'clear'}")
-                        yield btn
-
-            def on_button_pressed(self, event: Button.Pressed) -> None:
-                bid = event.button.id or ""
-                if bid.startswith("col-"):
-                    val = bid[4:]
-                    self.dismiss("" if val == "clear" else val)
-                else:
-                    self.dismiss(None)
+        from pentool.tui.dialogs.color_pick import ColorPickScreen
 
         def _on_color(color: str | None) -> None:
             if color is not None:
