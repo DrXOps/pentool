@@ -15,33 +15,48 @@ from __future__ import annotations
 
 import re
 import time
+from collections import OrderedDict
+from threading import Lock
 from typing import Any
 
 # Cache TTL in seconds (4 hours)
 _CACHE_TTL: float = 14400.0
-_TECH_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}  # host -> (timestamp, profile)
+# Bounded LRU cache with a lock — prevents unbounded growth under spider/scan
+# of many hosts and avoids read-during-delete races across threads.
+_CACHE_MAX_SIZE: int = 500
+_TECH_CACHE: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
+_cache_lock: Lock = Lock()
 
 
 def _clear_cache() -> None:
-    _TECH_CACHE.clear()
+    with _cache_lock:
+        _TECH_CACHE.clear()
 
 
 def get_cached_tech(url: str) -> dict[str, Any] | None:
     """Return cached tech profile for the given URL's host, or None if expired/missing."""
     from urllib.parse import urlparse
     host = urlparse(url).hostname or url
-    entry = _TECH_CACHE.get(host)
-    if entry is None:
-        return None
-    ts, profile = entry
-    if time.monotonic() - ts > _CACHE_TTL:
-        del _TECH_CACHE[host]
-        return None
-    return profile
+    with _cache_lock:
+        entry = _TECH_CACHE.get(host)
+        if entry is None:
+            return None
+        ts, profile = entry
+        if time.monotonic() - ts > _CACHE_TTL:
+            del _TECH_CACHE[host]
+            return None
+        # Move to end (most recently used) on access.
+        _TECH_CACHE.move_to_end(host)
+        return profile
 
 
 def _cache_set(host: str, profile: dict[str, Any]) -> None:
-    _TECH_CACHE[host] = (time.monotonic(), profile)
+    with _cache_lock:
+        _TECH_CACHE[host] = (time.monotonic(), profile)
+        _TECH_CACHE.move_to_end(host)
+        # Evict oldest entries if over limit.
+        while len(_TECH_CACHE) > _CACHE_MAX_SIZE:
+            _TECH_CACHE.popitem(last=False)
 
 
 # ── WAF signatures ──────────────────────────────────────────────────────────
