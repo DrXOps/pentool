@@ -471,16 +471,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         yield ModuleTabs(id="module-tabs")
         with ContentSwitcher(initial="screen-dashboard"):
             yield DashboardScreen(id="screen-dashboard")
-            yield ProxyScreen(id="screen-proxy")
-            yield RepeaterScreen(id="screen-repeater")
-            yield IntruderScreen(id="screen-intruder")
-            yield ScannerScreen(id="screen-scanner")
-            yield TargetScreen(id="screen-target")
-            yield DecoderScreen(id="screen-decoder")
-            yield ComparerScreen(id="screen-comparer")
-            yield SequencerScreen(id="screen-sequencer")
-            yield ExtensionsScreen(id="screen-extensions")
-            yield SettingsScreen(id="screen-settings")
+            # Остальные экраны монтируются лениво, при первом переключении
+            # на вкладку (см. _switch_to). Это экономит ~2-3с старта.
         # Footer and StatusBar both used to `dock: bottom` independently —
         # in Textual, multiple independently-docked widgets at the same
         # edge don't stack, they all pin to the same row and overlap each
@@ -538,6 +530,13 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
         # Inject Proxy into the API layer
         self._proxy_api.set_proxy(self._proxy)
+
+        # Монтируем ProxyScreen принудительно — он нужен в on_mount
+        # для query_one(SCREEN_PROXY, ProxyScreen), хотя compose() больше
+        # не включает его (ленивое монтирование остальных экранов).
+        if not self.query_one(ContentSwitcher).query(SCREEN_PROXY):
+            proxy_screen = ProxyScreen(id="screen-proxy")
+            self.query_one(ContentSwitcher).mount(proxy_screen)
 
         # Create ProxyService and pass it to ProxyScreen — before init_storage
         self._proxy_service = ProxyService(
@@ -1109,7 +1108,18 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                     return
             except Exception:
                 pass
-        self.query_one(ContentSwitcher).current = f"screen-{module_id}"
+        # Ленивое монтирование: если экран ещё не смонтирован — создаём
+        # его из SCREEN_MAP и монтируем в ContentSwitcher.
+        screen_id = f"screen-{module_id}"
+        try:
+            self.query_one(f"#{screen_id}")  # проверяем, есть ли уже
+        except Exception:
+            if module_id not in SCREEN_MAP:
+                return
+            screen_class = SCREEN_MAP[module_id]
+            screen_instance = screen_class(id=screen_id)
+            self.query_one(ContentSwitcher).mount(screen_instance)
+        self.query_one(ContentSwitcher).current = screen_id
         self._active_module = module_id
         # Refresh AI-dependent UI whenever we switch to Target: the "🤖 Use AI"
         # checkbox visibility tracks the global ai_enabled, and this must be
