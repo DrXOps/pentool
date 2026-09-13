@@ -343,14 +343,6 @@ def main() -> None:
                 _buf = io.StringIO()
                 _buf.write(f"--- run() returned cleanly, {_time.strftime('%Y-%m-%d %H:%M:%S')} "
                            f"pid={os.getpid()} ---\n")
-                # If the app captured a Textual-swallowed exception, log it.
-                try:
-                    from pentool.tui.app import PentoolApp
-                    _exit_stack = getattr(PentoolApp, '_exit_caller_stack', '')
-                    if _exit_stack:
-                        _buf.write(f"\n--- app.exit()/exception ---\n{_exit_stack}\n")
-                except Exception:
-                    pass
                 # One-line summary of every live *non-namespace* thread: name,
                 # daemon flag and, if known, the target callable it is running.
                 # Lets post-mortem answer "what was actually busy" (e.g. an

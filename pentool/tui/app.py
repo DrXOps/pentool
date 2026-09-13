@@ -320,7 +320,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # escapes run() — it sets an internal flag and the event loop winds down
         # naturally.  Without a probe, the "clean return" case (no exception =>
         # no traceback) has no way to name the caller.
-        self._exit_caller_stack: str = ""
+        # _exit_caller_stack removed — was dead code (always empty, no writer)
         # Cached module screens + last time we re-resolved them. Live proxy
         # traffic calls on_proxy_request_* / on_send_to_target *per request*;
         # each call used to do a fresh `query_one(SCREEN_*)`. When a module
@@ -490,11 +490,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         _setup_faulthandler(self._cfg.log_file)
         self._guard_forward_event()
 
-        # Keep a _exit_caller_stack slot — __main__.py reads it on clean exit.
-        # Currently unused (was filled by the _handle_exception / exit() probes
-        # removed after the "TUI just vanished" bug was diagnosed), but reserved
-        # for future diagnostic use.
-        self._exit_caller_stack = ""
+        # _exit_caller_stack removed — dead code (was always empty, see __init__).
 
         try:
             await init_db(self._cfg.db_path)
