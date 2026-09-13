@@ -71,7 +71,7 @@ CREATE TRIGGER IF NOT EXISTS requests_au AFTER UPDATE ON requests BEGIN
 END;
 """
 
-_LARGE_BODY_THRESHOLD = 1 * 1024 * 1024  # 1 MB
+from pentool.storage.large_body_handler import THRESHOLD as _LARGE_BODY_THRESHOLD
 
 
 class HttpStorage(BaseSqliteStorage):
