@@ -58,6 +58,9 @@ from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar as _IntruderFilterBar
+from pentool.tui.dialogs.intruder_input import InputDialog
+from pentool.tui.dialogs.intruder_generate import GenerateDialog
+from pentool.tui.dialogs.intruder_smart_payloads import SmartPayloadsDialog
 
 logger = get_logger(__name__)
 
@@ -1148,7 +1151,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             # Auto-save state when payload added
             self._auto_save_state()
 
-        self.app.push_screen(_InputDialog("Add payload", "Enter payload value:", on_add=_on_add))
+        self.app.push_screen(InputDialog("Add payload", "Enter payload value:", on_add=_on_add))
 
     def _remove_selected_payload(self) -> None:
         if self._active_set_idx < len(self._payloads) and isinstance(
@@ -1364,7 +1367,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         return added
 
     def _open_generate_dialog(self) -> None:
-        self.app.push_screen(_GenerateDialog(), self._on_payloads_generated)
+        self.app.push_screen(GenerateDialog(), self._on_payloads_generated)
 
     def _on_payloads_generated(self, source) -> None:
         """Callback from _GenerateDialog — `source` is a lazy
@@ -1385,7 +1388,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                 timeout=4,
             )
             return
-        self.app.push_screen(_SmartPayloadsDialog(), self._on_smart_payloads_generated)  # type: ignore[attr-defined]
+        self.app.push_screen(SmartPayloadsDialog(), self._on_smart_payloads_generated)  # type: ignore[attr-defined]
 
     def _on_smart_payloads_generated(self, payloads: list[str] | None) -> None:
         if payloads:
@@ -2015,300 +2018,3 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         except Exception:
             return {"results": []}
 
-
-class _InputDialog(DialogCancelMixin, ModalScreen):
-    """Payload add dialog — does not close after ADD, accumulates the list."""
-
-    DEFAULT_CSS = _CSS
-
-    def __init__(self, title: str, prompt: str, on_add=None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._title = title
-        self._prompt = prompt
-        self._on_add = on_add  # callback(value: str) called on each ADD
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            yield Label(self._prompt, id="prompt-label")
-            yield Input(id="input-value", placeholder="value...", compact=True)
-            with Horizontal(id="buttons"):
-                yield ToolbarButton("✔ Add",   "btn-ok")
-                yield ToolbarButton("✕ Close", "btn-cancel")
-
-    def on_mount(self) -> None:
-        self.query_one("#input-value", Input).focus()
-
-    @on(ToolbarButton.Pressed, "#btn-ok")
-    def _ok(self, _: ToolbarButton.Pressed) -> None:
-        self._do_add()
-
-    @on(ToolbarButton.Pressed, "#btn-cancel")
-    def _cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.action_cancel()  # DialogCancelMixin -> dismiss(None)
-
-    def _do_add(self) -> None:
-        try:
-            inp = self.query_one("#input-value", Input)
-            value = inp.value.strip()
-            if value and self._on_add:
-                self._on_add(value)
-                inp.value = ""
-                inp.focus()
-        except Exception:
-            pass
-
-    def on_key(self, event) -> None:
-        if event.key == "escape":
-            self.action_cancel()  # DialogCancelMixin -> dismiss(None)
-        elif event.key == "enter":
-            self._do_add()
-
-class _GenerateDialog(DialogCancelMixin, ModalScreen):
-    """Generate… dialog — Numeric range or Char (alphabet brute-force) mode.
-
-    Returns a lazy NumericPayloadSource/CharPayloadSource (never a
-    materialized list) via dismiss() — see _on_payloads_generated, which
-    appends it to the active payload set without enumerating it. This
-    matters most for Char mode: a modest charset/length is already a
-    combinatorial explosion (see CharPayloadSource's docstring), and even
-    Numeric mode used to freeze the UI once _refresh_payload_list() tried
-    to render tens of thousands of ListItem widgets for an eagerly
-    generated range.
-    """
-
-    DEFAULT_CSS = _CSS
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            with Horizontal(classes="row"):
-                yield Label("Mode:")
-                yield OptionCycler(
-                    [("Numeric range", "numeric"), ("Char brute-force", "char")],
-                    initial="numeric", id="mode-select",
-                )
-            with Vertical(id="numeric-fields"):
-                with Horizontal(classes="row"):
-                    yield Label("From:")
-                    yield Input("0", id="gen-start", compact=True)
-                with Horizontal(classes="row"):
-                    yield Label("To:")
-                    yield Input("100", id="gen-end", compact=True)
-                with Horizontal(classes="row"):
-                    yield Label("Step:")
-                    yield Input("1", id="gen-step", compact=True)
-            with Vertical(id="char-fields"):
-                with Horizontal(classes="row"):
-                    yield Label("Charset:")
-                    yield Input("abcdefghijklmnopqrstuvwxyz0123456789", id="gen-charset", compact=True)
-                with Horizontal(classes="row"):
-                    yield Label("Min len:")
-                    yield Input("1", id="gen-minlen", compact=True)
-                with Horizontal(classes="row"):
-                    yield Label("Max len:")
-                    yield Input("3", id="gen-maxlen", compact=True)
-            yield Static("", id="preview-label")
-            with Horizontal(id="buttons"):
-                yield ToolbarButton("✔ Generate", "btn-gen-ok")
-                yield ToolbarButton("✕ Cancel",   "btn-gen-cancel")
-
-    def on_mount(self) -> None:
-        self._sync_mode_visibility()
-        self._update_preview()
-
-    def _sync_mode_visibility(self) -> None:
-        mode = self.query_one("#mode-select", OptionCycler).value
-        try:
-            self.query_one("#numeric-fields").display = (mode == "numeric")
-            self.query_one("#char-fields").display = (mode == "char")
-        except Exception:
-            pass
-
-    def _build_source(self):
-        """Build the lazy source for the currently-selected mode, or None
-        if the current field values don't parse (never raises)."""
-        mode = self.query_one("#mode-select", OptionCycler).value
-        try:
-            if mode == "numeric":
-                start = int(self.query_one("#gen-start", Input).value or "0")
-                end   = int(self.query_one("#gen-end",   Input).value or "100")
-                step  = int(self.query_one("#gen-step",  Input).value or "1")
-                return NumericPayloadSource(start, end, step)
-            else:
-                charset = self.query_one("#gen-charset", Input).value or ""
-                min_len = int(self.query_one("#gen-minlen", Input).value or "1")
-                max_len = int(self.query_one("#gen-maxlen", Input).value or "1")
-                return CharPayloadSource(charset, min_len, max_len)
-        except Exception:
-            return None
-
-    def _update_preview(self) -> None:
-        """Show the resulting count — computed via len() (O(1)/closed-form
-        for both source types, see their docstrings) so previewing a huge
-        range/charset never enumerates it."""
-        try:
-            label = self.query_one("#preview-label", Static)
-        except Exception:
-            return
-        source = self._build_source()
-        if source is None:
-            label.update("[dim]invalid input[/dim]")
-            return
-        n = len(source)
-        label.update(f"[dim]→ {n:,} payload(s)[/dim]")
-
-    @on(OptionCycler.Changed, "#mode-select")
-    def _mode_changed(self, _: OptionCycler.Changed) -> None:
-        self._sync_mode_visibility()
-        self._update_preview()
-
-    @on(Input.Changed)
-    def _field_changed(self, _: Input.Changed) -> None:
-        self._update_preview()
-
-    @on(ToolbarButton.Pressed, "#btn-gen-ok")
-    def _gen_ok(self, _: ToolbarButton.Pressed) -> None:
-        self.dismiss(self._build_source())
-
-    @on(ToolbarButton.Pressed, "#btn-gen-cancel")
-    def _gen_cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.action_cancel()  # DialogCancelMixin -> dismiss(None)
-
-    def on_key(self, event) -> None:
-        if event.key == "escape":
-            self.action_cancel()
-
-class _SmartPayloadsDialog(DialogCancelMixin, ModalScreen[list[str] | None]):
-    """PRO Smart Payload Generator — dialog for generating context-aware payloads."""
-
-    DEFAULT_CSS = """
-    _SmartPayloadsDialog {
-        align: center middle;
-    }
-    _SmartPayloadsDialog #dialog {
-        width: 60;
-        height: auto;
-        background: $surface;
-        border: solid $primary;
-        padding: 1 2;
-    }
-    _SmartPayloadsDialog #title-bar {
-        height: 1;
-        layout: horizontal;
-        margin-bottom: 1;
-    }
-    _SmartPayloadsDialog #title-bar Static {
-        width: 1fr;
-        color: $primary;
-    }
-    _SmartPayloadsDialog #title-bar Button {
-        width: 3;
-        min-width: 3;
-        background: transparent;
-        border: none;
-    }
-    _SmartPayloadsDialog .row {
-        height: auto;
-        layout: horizontal;
-        align: left middle;
-        margin-bottom: 1;
-    }
-    _SmartPayloadsDialog .row Label {
-        width: 14;
-        color: $text-muted;
-    }
-    _SmartPayloadsDialog Select {
-        width: 24;
-    }
-    _SmartPayloadsDialog Input {
-        width: 10;
-        background: $panel;
-        border: none;
-    }
-    _SmartPayloadsDialog #buttons {
-        height: auto;
-        layout: horizontal;
-        margin-top: 1;
-        align: center middle;
-    }
-    _SmartPayloadsDialog #buttons ToolbarButton {
-        margin: 0 1;
-    }
-    """
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            with Horizontal(id="title-bar"):
-                yield Static("🧠 Smart Payload Generator (PRO)")
-                yield Button("✕", id="btn-close-smart")
-            with Horizontal(classes="row"):
-                yield Label("Context:")
-                yield Select(
-                    [("String", "string"), ("Numeric", "numeric"), ("JSON", "json"),
-                     ("XML", "xml"), ("URL", "url"), ("Cookie", "cookie"),
-                     ("Header", "header"), ("Path", "path")],
-                    id="smart-context", value="string",
-                )
-            with Horizontal(classes="row"):
-                yield Label("Tech hint:")
-                yield Select(
-                    [("Unknown", "unknown"), ("PHP", "php"), ("Java", "java"),
-                     ("Node.js", "node"), ("Python", "python"), (".NET", "dotnet")],
-                    id="smart-tech", value="unknown",
-                )
-            with Horizontal(classes="row"):
-                yield Label("WAF profile:")
-                yield Select(
-                    [("None", "none"), ("Generic", "generic"), ("Cloudflare", "cloudflare"),
-                     ("ModSecurity", "modsec"), ("F5", "f5")],
-                    id="smart-waf", value="none",
-                )
-            with Horizontal(classes="row"):
-                yield Label("Count:")
-                yield Input("50", id="smart-count", compact=True)
-            with Horizontal(id="buttons"):
-                yield ToolbarButton("✔ Generate", "btn-smart-ok")
-                yield ToolbarButton("✕ Cancel",   "btn-smart-cancel")
-
-    @on(ToolbarButton.Pressed, "#btn-smart-ok")
-    def _smart_ok(self, _: ToolbarButton.Pressed) -> None:
-        self._generate()
-
-    @on(ToolbarButton.Pressed, "#btn-smart-cancel")
-    def _smart_cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.action_cancel()  # DialogCancelMixin -> dismiss(None)
-
-    def _generate(self) -> None:
-        try:
-            from pentool.core.plugin_manager import load_pro_module
-            payloads_pro = load_pro_module("payloads_pro")
-            ctx = str(self.query_one("#smart-context", Select).value or "string")
-            tech = str(self.query_one("#smart-tech", Select).value or "unknown")
-            waf = str(self.query_one("#smart-waf", Select).value or "none")
-            count = int(self.query_one("#smart-count", Input).value or "50")
-            payloads = payloads_pro.generate_smart_payloads(
-                context=ctx,  # type: ignore[arg-type]
-                tech_hint=tech,  # type: ignore[arg-type]
-                waf_profile=waf,  # type: ignore[arg-type]
-                count=max(1, min(count, 500)),
-            )
-            self.dismiss(payloads)
-        except Exception as exc:
-            # Used to silently self.dismiss(None) here — the user just saw
-            # the dialog close with zero payloads and no explanation.
-            logger.error("Smart Payload Generator failed: %s", exc, exc_info=True)
-            try:
-                self.app.notify(  # type: ignore[attr-defined]
-                    f"Smart Payload Generator failed: {exc}",
-                    severity="error", timeout=6,
-                )
-            except Exception:
-                pass
-            self.dismiss(None)
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-close-smart":
-            self.dismiss(None)
-
-    def on_key(self, event) -> None:
-        if event.key == "escape":
-            self.dismiss(None)
