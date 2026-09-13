@@ -104,15 +104,6 @@ class TestDOMXSSCheckScan:
 class TestDOMXSSEngineIntegration:
     """DOM XSS surfaced through ScanEngine's passive run."""
 
-    @pytest.fixture(autouse=True)
-    def _reset_session_license(self) -> None:
-        import pentool.core.license as lic_mod
-
-        saved = lic_mod._session_license
-        lic_mod._session_license = None
-        yield
-        lic_mod._session_license = saved
-
     @pytest.mark.asyncio
     async def test_engine_surfaces_dom_xss(self) -> None:
         # DOM XSS is a PASSIVE check — it never runs in the active phase

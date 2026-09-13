@@ -112,17 +112,6 @@ class TestAnalyze:
 
 
 class TestEngineIntegration:
-    @pytest.fixture(autouse=True)
-    def _reset_session_license(self):
-        # See identical fixture/explanation in test_nosql_injection.py:
-        # another test module leaves a stale plan="pro"/features=[]
-        # LicenseInfo in the process-global session-license cache, which
-        # makes BaseCheck.is_available() filter this check out regardless
-        # of test order.
-        import pentool.core.license as lic_mod
-        lic_mod._session_license = None
-        yield
-        lic_mod._session_license = None
 
     @pytest.mark.asyncio
     async def test_engine_detects_prototype_pollution(self):
