@@ -9,7 +9,6 @@ order and row formatting stay in sync.
 from __future__ import annotations
 
 import datetime
-import pyarrow as pa
 
 # Column order for the HTTP history table. Shared by _row_to_record and
 # _rows_to_arrow so both stay in sync.
@@ -25,8 +24,9 @@ _COLOR_DOTS: dict[str, str] = {
 }
 
 
-def make_empty_table() -> pa.Table:
+def make_empty_table():
     """Empty Arrow table with the required columns."""
+    import pyarrow as pa
     return pa.table({
         "ID":     pa.array([], type=pa.int64()),
         "Host":   pa.array([], type=pa.string()),
@@ -79,8 +79,9 @@ def row_to_record(r: dict) -> tuple:
     )
 
 
-def rows_to_arrow(rows: list[dict]) -> pa.Table:
+def rows_to_arrow(rows: list[dict]):
     """Convert a list of dicts from HttpStorage into an Arrow table."""
+    import pyarrow as pa
     if not rows:
         return make_empty_table()
     ids, hosts, methods, urls, statuses, sizes, times = [], [], [], [], [], [], []
