@@ -679,7 +679,9 @@ class AsyncSpider:
                     # JS files added to queue
                     for js_url in js_links:
                         self._normalize_url(js_url)
-                        if js_url not in result.js_files:
+                        # O(n²) → O(1) via set lookup for both js_files and endpoints
+                        _known_js = set(result.js_files)
+                        if js_url not in _known_js:
                             result.js_files.append(js_url)
 
                     # Extract parameters from current page URL
@@ -694,8 +696,9 @@ class AsyncSpider:
 
                     # Detect path parameters (numbers and UUIDs in path)
                     path_variants = self._extract_path_variants(url, base_domain)
+                    _known_urls = {ep.url for ep in result.endpoints}
                     for pv in path_variants:
-                        if pv not in [ep.url for ep in result.endpoints]:
+                        if pv not in _known_urls:
                             result.endpoints.append(SpiderEndpoint(
                                 url=pv, source="path", method="GET",
                             ))
@@ -752,7 +755,8 @@ class AsyncSpider:
             result.pages.append(url)
             links, forms, js_links = self._parse_html(html, url, base_domain)
             result.forms.extend(forms)
-            result.js_files.extend(j for j in js_links if j not in result.js_files)
+            known_js = set(result.js_files)
+            result.js_files.extend(j for j in js_links if j not in known_js)
 
             if depth < self.max_depth:
                 for link in links + js_links:
