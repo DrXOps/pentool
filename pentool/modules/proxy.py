@@ -194,8 +194,9 @@ class ProxyServer:
         # WebSocket handler
         self._ws_handler = WebSocketHandler()
 
-        # Queue of requests waiting for decision in interactive mode
-        self.intercept_queue: asyncio.Queue[InterceptedRequest] = asyncio.Queue()
+        # Queue of requests waiting for decision in interactive mode.
+        # Bounded to 2000 to prevent unbounded memory growth under burst.
+        self.intercept_queue: asyncio.Queue[InterceptedRequest] = asyncio.Queue(maxsize=2000)
 
         # All intercepted requests (in-memory history, bounded ring).
         # Full HTTP history is persisted to SQLite via HttpStorage — this
@@ -900,7 +901,13 @@ class ProxyServer:
         with self._requests_lock:
             self.requests.append(req)
             if len(self.requests) > self._requests_max:
-                self.requests = self.requests[-self._requests_max:]
+                # Don't evict requests still waiting for a decision —
+                # they'd be missing when forward/drop tries to find them,
+                # and would hang until _INTERCEPT_TIMEOUT.
+                self.requests = [r for r in self.requests if not (r.state == "waiting")]
+                # Still enforce the bound on the rest.
+                if len(self.requests) > self._requests_max:
+                    self.requests = self.requests[-self._requests_max:]
 
     def get_requests(
         self,
