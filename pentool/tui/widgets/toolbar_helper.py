@@ -29,22 +29,21 @@ from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
 def build_toolbar(
-    *items: tuple[str, str],
+    *items: tuple,
     id: str = "toolbar",
-    btn_props: dict | None = None,
 ) -> Generator[ComposeResult, None, None]:
     """Yield a Horizontal toolbar with ToolbarButtons separated by │.
 
     Args:
-        *items: (label, id) pairs for ToolbarButton.
+        *items: (label, id) or (label, id, props_dict) tuples.
         id: widget ID for the Horizontal container.
-        btn_props: optional kwargs for every button (e.g. classes="disabled").
     """
     with Horizontal(id=id):
         first = True
-        for label, btn_id in items:
+        for item in items:
             if not first:
                 yield Static(" │ ", classes="toolbar-sep")
             first = False
-            kwargs = {"id": btn_id, **(btn_props or {})}
-            yield ToolbarButton(label, **kwargs)
+            label, btn_id = item[0], item[1]
+            kwargs = dict(item[2]) if len(item) > 2 else {}
+            yield ToolbarButton(label, btn_id, **kwargs)
