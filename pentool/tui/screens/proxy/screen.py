@@ -175,8 +175,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         # highlight within the window triggers a load.
         self._highlight_debounce_handle = None
 
-    def compose(self) -> ComposeResult:
-        # Toolbar (outside SubTabs — all btn-* IDs are always in the DOM)
+    def _build_toolbar(self) -> ComposeResult:
         with Horizontal(id="toolbar"):
             yield ToolbarButton("○ Proxy",     "btn-proxy",     classes="inactive")
             yield Static(" │ ", classes="toolbar-sep")
@@ -202,122 +201,126 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Clear",       "btn-clear")
 
-        # Proxy sub-tabs
-        with TabbedContent(id="proxy-subtabs"):
-            with TabPane("Intercept", id="tab-intercept"):
-                with Horizontal(id="intercept-toolbar"):
-                    yield ToolbarButton("⏩ Forward", "btn-forward", classes="disabled")
-                    yield ToolbarButton("✖ Drop",    "btn-drop",    classes="disabled")
-                    yield Static(" │ ", classes="toolbar-sep")
-                    yield ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars")
-                    yield Static(" │ ", classes="toolbar-sep")
-                    yield Label("(enable Intercept to capture requests)", id="intercept-hint")
-                with Vertical(id="intercept-req-area"):
-                    yield TextArea(
-                        "(No requests waiting for intercept)",
-                        id="intercept-editor",
-                        read_only=False,
-                    )
-                yield ResizeHandle(
-                    "intercept-req-area", "intercept-bottom-area",
-                    vertical=True,
-                    id="resize-intercept",
+    def _compose_intercept_tab(self) -> ComposeResult:
+        with TabPane("Intercept", id="tab-intercept"):
+            with Horizontal(id="intercept-toolbar"):
+                yield ToolbarButton("⏩ Forward", "btn-forward", classes="disabled")
+                yield ToolbarButton("✖ Drop",    "btn-drop",    classes="disabled")
+                yield Static(" │ ", classes="toolbar-sep")
+                yield ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars")
+                yield Static(" │ ", classes="toolbar-sep")
+                yield Label("(enable Intercept to capture requests)", id="intercept-hint")
+            with Vertical(id="intercept-req-area"):
+                yield TextArea(
+                    "(No requests waiting for intercept)",
+                    id="intercept-editor",
+                    read_only=False,
                 )
-                with Horizontal(id="intercept-bottom-area"):
-                    with Vertical(id="intercept-sent-panel"):
-                        yield Static("Sent Request", classes="panel-title")
-                        yield HttpView(id="intercept-sent-req")
+            yield ResizeHandle(
+                "intercept-req-area", "intercept-bottom-area",
+                vertical=True,
+                id="resize-intercept",
+            )
+            with Horizontal(id="intercept-bottom-area"):
+                with Vertical(id="intercept-sent-panel"):
+                    yield Static("Sent Request", classes="panel-title")
+                    yield HttpView(id="intercept-sent-req")
+                yield ResizeHandle(
+                    "intercept-sent-panel", "intercept-resp-panel",
+                    id="resize-intercept-sent-resp",
+                )
+                with Vertical(id="intercept-resp-panel"):
+                    yield Static("Response", classes="panel-title")
+                    yield HttpView(id="intercept-resp-viewer")
+
+    def _compose_history_tab(self) -> ComposeResult:
+        with TabPane("HTTP History", id="tab-http-history"):
+            with Horizontal(id="body"):
+                with Vertical(id="main-panel"):
+                    with Vertical(id="table-area"):
+                        yield FilterBar(id="filter-bar")
+                        yield DataTable(
+                            backend=ArrowBackend(_make_empty_table()),
+                            id="request-list",
+                            cursor_type="row",
+                            zebra_stripes=True,
+                            max_column_content_width=120,
+                            column_widths=[5, 20, 8, 60, 6, 8, 8],
+                        )
+                        yield Static("", id="history-count", classes="history-count")
                     yield ResizeHandle(
-                        "intercept-sent-panel", "intercept-resp-panel",
-                        id="resize-intercept-sent-resp",
+                        "table-area", "detail-area",
+                        vertical=True,
+                        id="resize-table-detail",
                     )
-                    with Vertical(id="intercept-resp-panel"):
-                        yield Static("Response", classes="panel-title")
-                        yield HttpView(id="intercept-resp-viewer")
+                    with Horizontal(id="detail-area"):
+                        with Vertical(id="req-panel"):
+                            yield Static("Request", classes="panel-title")
+                            yield HttpView(id="req-editor")
+                        yield ResizeHandle(
+                            "req-panel", "resp-panel",
+                            id="resize-req-resp",
+                        )
+                        with Vertical(id="resp-panel"):
+                            yield Static("Response", classes="panel-title")
+                            yield HttpView(id="resp-viewer")
+                yield InspectorPanel(id="inspector-panel")
 
-            with TabPane("HTTP History", id="tab-http-history"):
-                with Horizontal(id="body"):
-                    with Vertical(id="main-panel"):
-                        # Top section: FilterBar + DataTable
-                        with Vertical(id="table-area"):
-                            yield FilterBar(id="filter-bar")
-                            yield DataTable(
-                                backend=ArrowBackend(_make_empty_table()),
-                                id="request-list",
-                                cursor_type="row",
-                                zebra_stripes=True,
-                                max_column_content_width=120,
-                                column_widths=[5, 20, 8, 60, 6, 8, 8],
-                            )
-                            yield Static("", id="history-count", classes="history-count")
-                        # ResizeHandle between the table and the detail panel
-                        yield ResizeHandle(
-                            "table-area", "detail-area",
-                            vertical=True,
-                            id="resize-table-detail",
+    def _compose_ws_tab(self) -> ComposeResult:
+        with TabPane("WS History", id="tab-ws-history"):
+            with Horizontal(id="ws-body"):
+                with Vertical(id="ws-main-panel"):
+                    with Vertical(id="ws-table-area"):
+                        yield DataTable(
+                            backend=ArrowBackend(_make_empty_table()),
+                            id="ws-request-list",
+                            cursor_type="row",
+                            zebra_stripes=True,
+                            column_widths=[5, 20, 8, 60, 6, 8, 8],
                         )
-                        # Lower part: Request | ResizeHandle | Response
-                        with Horizontal(id="detail-area"):
-                            with Vertical(id="req-panel"):
-                                yield Static("Request", classes="panel-title")
-                                yield HttpView(id="req-editor")
-                            yield ResizeHandle(
-                                "req-panel", "resp-panel",
-                                id="resize-req-resp",
-                            )
-                            with Vertical(id="resp-panel"):
-                                yield Static("Response", classes="panel-title")
-                                yield HttpView(id="resp-viewer")
-                    # Inspector (hidden by default)
-                    yield InspectorPanel(id="inspector-panel")
+                        yield Static("", id="ws-history-count", classes="history-count")
+                    yield ResizeHandle(
+                        "ws-table-area", "ws-detail-area",
+                        vertical=True,
+                        id="resize-ws-table-detail",
+                    )
+                    with Horizontal(id="ws-detail-area"):
+                        with Vertical(id="ws-req-panel"):
+                            yield Static("Request", classes="panel-title")
+                            yield HttpView(id="ws-req-editor")
+                        yield ResizeHandle(
+                            "ws-req-panel", "ws-resp-panel",
+                            id="resize-ws-req-resp",
+                        )
+                        with Vertical(id="ws-resp-panel"):
+                            yield Static("Response", classes="panel-title")
+                            yield HttpView(id="ws-resp-viewer")
+                    yield ResizeHandle(
+                        "ws-detail-area", "ws-messages-area",
+                        vertical=True,
+                        id="resize-ws-detail-msg",
+                    )
+                    with Vertical(id="ws-messages-area"):
+                        yield Static(
+                            "WebSocket Messages",
+                            id="ws-msg-label",
+                            classes="panel-title",
+                        )
+                        from textual.widgets import RichLog
+                        yield RichLog(
+                            id="ws-msg-log",
+                            highlight=True,
+                            markup=True,
+                            wrap=True,
+                            max_lines=1000,
+                        )
 
-            with TabPane("WS History", id="tab-ws-history"):
-                with Horizontal(id="ws-body"):
-                    with Vertical(id="ws-main-panel"):
-                        with Vertical(id="ws-table-area"):
-                            yield DataTable(
-                                backend=ArrowBackend(_make_empty_table()),
-                                id="ws-request-list",
-                                cursor_type="row",
-                                zebra_stripes=True,
-                                column_widths=[5, 20, 8, 60, 6, 8, 8],
-                            )
-                            yield Static("", id="ws-history-count", classes="history-count")
-                        yield ResizeHandle(
-                            "ws-table-area", "ws-detail-area",
-                            vertical=True,
-                            id="resize-ws-table-detail",
-                        )
-                        with Horizontal(id="ws-detail-area"):
-                            with Vertical(id="ws-req-panel"):
-                                yield Static("Request", classes="panel-title")
-                                yield HttpView(id="ws-req-editor")
-                            yield ResizeHandle(
-                                "ws-req-panel", "ws-resp-panel",
-                                id="resize-ws-req-resp",
-                            )
-                            with Vertical(id="ws-resp-panel"):
-                                yield Static("Response", classes="panel-title")
-                                yield HttpView(id="ws-resp-viewer")
-                        yield ResizeHandle(
-                            "ws-detail-area", "ws-messages-area",
-                            vertical=True,
-                            id="resize-ws-detail-msg",
-                        )
-                        with Vertical(id="ws-messages-area"):
-                            yield Static(
-                                "WebSocket Messages",
-                                id="ws-msg-label",
-                                classes="panel-title",
-                            )
-                            from textual.widgets import RichLog
-                            yield RichLog(
-                                id="ws-msg-log",
-                                highlight=True,
-                                markup=True,
-                                wrap=True,
-                                max_lines=1000,
-                            )
+    def compose(self) -> ComposeResult:
+        yield from self._build_toolbar()
+        with TabbedContent(id="proxy-subtabs"):
+            yield from self._compose_intercept_tab()
+            yield from self._compose_history_tab()
+            yield from self._compose_ws_tab()
 
         yield Static(
             "Ctrl+R: Repeater  │  Ctrl+U: Copy URL  │  M: Context menu  │  I: Inspector  │  H: HTTP History  │  N: Intercept  │  W: WS History",
