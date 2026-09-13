@@ -121,13 +121,6 @@ class TestScanErrorBased:
 class TestEngineIntegration:
     """End-to-end through ScanEngine — error-based SQLi surfaced."""
 
-    @pytest.fixture(autouse=True)
-    def _reset_session_license(self):
-        import pentool.core.license as lic_mod
-        saved = lic_mod._session_license
-        lic_mod._session_license = None
-        yield
-        lic_mod._session_license = saved
 
     @pytest.mark.asyncio
     async def test_engine_detects_sqli(self):
