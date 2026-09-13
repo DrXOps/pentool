@@ -134,7 +134,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run performance tests
-        run: uv run pytest tests/performance/ -v --tb=short -m "performance or slow"
+        run: uv run pytest tests/performance/ -v --tb=short -m "perf or slow"
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         continue-on-error: true  # performance bounds may vary on CI
