@@ -78,13 +78,8 @@ class MCPBackend(AIBackend):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            # Use the subprocess's buffered binary I/O directly, NOT an
-            # asyncio.StreamWriter/StreamReader over the pipe: the latter
-            # needs a live event loop at construction and crashed with
-            # "'NoneType' object has no attribute 'create_future'" when no
-            # loop was bound. Read/write are done blocking in to_thread.
-            self._stdin = self._process.stdin
-            self._stdout = self._process.stdout
+            # stdin/stdout from create_subprocess_exec are asyncio
+            # StreamWriter/StreamReader, correctly bound to the event loop.
             global _MCP_PROCESS_PID
             _MCP_PROCESS_PID = self._process.pid
             log.info("MCP-сервер запущен (PID=%s)", self._process.pid)
