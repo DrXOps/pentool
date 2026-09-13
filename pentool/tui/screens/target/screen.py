@@ -237,6 +237,11 @@ class TargetScreen(Widget):
 
     def on_key(self, event) -> None:
         if event.key == "m":
+            # Don't intercept when a TextArea/Input is focused (typing "m").
+            focused = self.focused
+            if focused and hasattr(focused, "text"):
+                event.prevent_default()
+                return
             self._show_context_menu_for_selected()
             event.prevent_default()
 

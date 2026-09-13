@@ -635,6 +635,35 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # MCP server and make AI controls visible right away. If OFF, hide them.
         self._start_ai_if_enabled()
 
+        # -- DEV-ONLY (промо-скринкасты) ------------------------------
+        # Минисервер координат виджетов для точных xdotool-кликов при записи
+        # видео. Подключается СТРОГО опционально и никогда не ломает release:
+        # нужен только если задан PENTOOL_COORDS_FILE=<абс.путь> (gitignored
+        # tools/dev/coords_server.py) И PENTOOL_COORDS_PORT. В обычной
+        # разработке/релизе env-переменных нет — тут просто тихий return.
+        try:
+            import importlib.util
+            import os as _os
+
+            _cspath = _os.environ.get("PENTOOL_COORDS_FILE")
+            if _cspath and _os.path.exists(_cspath):
+                _spec = importlib.util.spec_from_file_location(
+                    "_dev_coords_server", _cspath
+                )
+                if _spec and _spec.loader:
+                    _mod = importlib.util.module_from_spec(_spec)
+                    _spec.loader.exec_module(_mod)
+                    _mod.activate_coords_worker(self)
+        except Exception as exc:  # логируем в /tmp (диагностика съёмки)
+            try:
+                import traceback as _tb
+
+                with open("/tmp/pentool_coords_err.log", "a") as _f:
+                    _f.write(f"PENTOOL coords activation error: {exc!r}\n")
+                    _tb.print_exc(file=_f)
+            except Exception:
+                pass
+
     def on_screen_unmounted(self, event) -> None:
         """Diagnostic: catch the "TUI just vanished" exit path.
 

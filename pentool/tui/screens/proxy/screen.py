@@ -1345,7 +1345,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         elif event.key == "ctrl+u":
             self._copy_selected_url()
             event.prevent_default()
-        elif event.key == "m":
+        elif event.key == "m" and not self._is_text_input_focused():
             self._show_context_menu_at_cursor()
             event.prevent_default()
 

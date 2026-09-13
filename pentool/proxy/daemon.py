@@ -260,30 +260,9 @@ class ProxyDaemon:
             except Exception:
                 pass
 
-    async def _handle_evt_client(self, conn: socket.socket) -> None:
-        """Hold an event connection open until the peer disconnects.
-
-        Events are pushed by the daemon (send_event → _event_clients); the
-        peer does not have to send anything. We just keep the socket alive so
-        the accept loop doesn't leak connections.
-        """
-        try:
-            loop = asyncio.get_running_loop()
-            while True:
-                data = await loop.sock_recv(conn, 4096)
-                if not data:
-                    break
-                # Ignore anything the reader sends; it is a one-way channel.
-        except (ConnectionResetError, BrokenPipeError, EOFError):
-            pass
-        except Exception:  # noqa: BLE001
-            pass
-        finally:
-            self._event_clients.discard(conn)
-            try:
-                conn.close()
-            except Exception:
-                pass
+    # NOTE: _handle_evt_client is defined at line 189 above, with the correct
+    # signature (conn + optional queue) matching what _accept_loop(register_evt=True)
+    # calls. That is the canonical version; there is no second definition.
 
     async def _dispatch(self, cmd: dict) -> dict:
         """Execute a command dict and return a JSON-serializable response."""

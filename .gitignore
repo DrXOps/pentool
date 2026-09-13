@@ -81,3 +81,20 @@ tests/perf/_data/
 # Load-test report artifacts (tests/perf/load_*.md) — regenerated on each run
 # by load_scanner.py / load_intruder.py / load_spider.py, never committed
 tests/perf/load_*.md
+
+# >>> DEV-ONLY: минисервер координат для промо-скринкастов (см. memory) <<<
+# Код только локальный (требуется для xdotool-кликов при видеозаписи).
+# В релиз не включается; в app.py вызывается необязательным try/except import.
+tools/dev/
+
+# Промо-видео — генерируются локально, не нужны в репозитории
+docs/promo/*.mp4
+docs/promo/mapping.json
+
+# Скринкаст-дебаг и случайные файлы
+dbgcoords2.py
+frame_raw.png
+tools/pentool_promocoords.py
+
+# Документация архитектуры — пока не готова, переехала в memory/
+docs/ARCHITECTURE.md

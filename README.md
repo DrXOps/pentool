@@ -51,7 +51,7 @@ can start auditing immediately. No lag, no heavy setup.
 
 - **🕷 Spider**  
   Crawl targets automatically — collect pages, forms, API endpoints, and JS files.  
-  JavaScript rendering supported (Lightpanda by default, fast & light; Playwright optional).
+  JavaScript rendering supported (Lightpanda — fast & lightweight, built-in).
 
 - **🎯 Target / Site Map**  
   Build a site map from proxy traffic, manage testing scope, and filter hosts directly from the UI.
@@ -85,10 +85,7 @@ uv tool install pentool
 pentool --url https://example.com
 
 # Same, but actually load the target in a headless browser THROUGH the proxy,
-# so real traffic lands in HTTP History + Target (requires Chromium + Playwright)
-# install:  uv tool run --with playwright python -m playwright install chromium
-# (note: JS crawling uses Lightpanda by default — fast; `--real` is the only path
-#  that still wants a full Chromium to load the page through the proxy)
+# so real traffic lands in HTTP History + Target (requires Chromium installed)
 pentool --url https://example.com --real
 
 # Headless scan — perfect for CI/CD (GitLab CI, GitHub Actions, Jenkins)
