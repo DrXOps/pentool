@@ -901,13 +901,17 @@ class ProxyServer:
         with self._requests_lock:
             self.requests.append(req)
             if len(self.requests) > self._requests_max:
-                # Don't evict requests still waiting for a decision —
-                # they'd be missing when forward/drop tries to find them,
-                # and would hang until _INTERCEPT_TIMEOUT.
-                self.requests = [r for r in self.requests if not (r.state == "waiting")]
-                # Still enforce the bound on the rest.
-                if len(self.requests) > self._requests_max:
-                    self.requests = self.requests[-self._requests_max:]
+                # Evict only non-waiting requests (already decided —
+                # forwarded/dropped/cleared). Waiting requests must be
+                # preserved or forward/drop will miss them → hang until
+                # _INTERCEPT_TIMEOUT. If all are waiting, tolerate temporary
+                # overflow rather than risking a lost intercepted request.
+                non_waiting = [r for r in self.requests if r.state != "waiting"]
+                waiting = [r for r in self.requests if r.state == "waiting"]
+                to_evict = len(self.requests) - self._requests_max
+                self.requests = (non_waiting[to_evict:]
+                                 if len(non_waiting) >= to_evict
+                                 else []) + waiting
 
     def get_requests(
         self,
