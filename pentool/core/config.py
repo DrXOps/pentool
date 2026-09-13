@@ -136,6 +136,18 @@ class Config:
             "check_updates": self.check_updates,
             "theme": self.theme,
             "notifications_sound_enabled": self.notifications_sound_enabled,
+            "ai_enabled": self.ai_enabled,
+            "ai_model": self.ai_model,
+            "ai_mcp_host": self.ai_mcp_host,
+            "ai_mcp_port": self.ai_mcp_port,
+            "ai_mcp_model_path": self.ai_mcp_model_path,
+            "ai_mcp_auto_start": self.ai_mcp_auto_start,
+            "ai_enabled": self.ai_enabled,
+            "ai_model": self.ai_model,
+            "ai_mcp_host": self.ai_mcp_host,
+            "ai_mcp_port": self.ai_mcp_port,
+            "ai_mcp_model_path": self.ai_mcp_model_path,
+            "ai_mcp_auto_start": self.ai_mcp_auto_start,
         }
 
     def add_recent_project(self, path: str) -> None:

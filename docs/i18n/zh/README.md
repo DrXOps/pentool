@@ -45,7 +45,7 @@ CA 证书到无头浏览器、发送首个请求并填充项目，即可立即�
 
 - **🕷 Spider（爬虫）**  
   自动爬取目标——收集页面、表单、API 端点和 JS 文件。  
-  支持通过 Playwright 进行 JavaScript 渲染。
+  支持通过 Lightpanda 进行 JavaScript 渲染（快速且轻量，已内置）。
 
 - **🎯 Target / Site Map（目标/站点地图）**  
   基于代理流量构建站点地图，直接在界面中管理测试范围和过滤主机。

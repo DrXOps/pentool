@@ -101,6 +101,26 @@ class TestConfigSaveLoad:
         assert d["proxy_port"] == 5555
         assert d["log_level"] == "WARNING"
 
+    def test_ai_fields_round_trip(self, tmp_path: Path) -> None:
+        """AI-поля сохраняются через save→load (регрессия бага #1 аудита)."""
+        cfg = Config(
+            ai_enabled=True,
+            ai_model="test.gguf",
+            ai_mcp_host="0.0.0.0",
+            ai_mcp_port=9999,
+            ai_mcp_model_path="/models/test.gguf",
+            ai_mcp_auto_start=True,
+        )
+        p = tmp_path / "ai_config.yaml"
+        cfg.save(p)
+        loaded = Config.load(p)
+        assert loaded.ai_enabled is True
+        assert loaded.ai_model == "test.gguf"
+        assert loaded.ai_mcp_host == "0.0.0.0"
+        assert loaded.ai_mcp_port == 9999
+        assert loaded.ai_mcp_model_path == "/models/test.gguf"
+        assert loaded.ai_mcp_auto_start is True
+
 
 class TestConfigSingleton:
     def test_set_config_overrides_singleton(self) -> None:
