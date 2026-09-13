@@ -48,8 +48,8 @@ def _run_target_mode(argv: list[str]) -> None:
                 urls.append(argv[i + 1])
                 i += 2
             else:
-                urls.append("")
-                i += 1
+                print(f"Error: {arg} requires a URL value", file=sys.stderr)
+                sys.exit(1)
         elif arg == "--headless":
             headless = True
             i += 1
