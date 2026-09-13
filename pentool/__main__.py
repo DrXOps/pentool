@@ -114,13 +114,15 @@ def _kill_orphaned_pentool() -> None:
                 ppid = int((stat[1].split(" "))[1]) if len(stat) > 1 else -1
                 if ppid != 1:
                     continue  # has a live parent — not an orphan
-                cmdline = open(f"/proc/{pid}/cmdline", "rb").read().decode(errors="replace")
-                # Match our own binary name in the command line (e.g. .../pentool)
-                if exe_basename and exe_basename not in cmdline and "pentool" not in cmdline:
+                # Resolve the target process's executable path and match it
+                # against our own binary name (pentool). Do NOT match on
+                # cmdline substring — "vi pentool_notes.md" or "man pentool"
+                # would be SIGKILL'd.
+                try:
+                    exe_path = os.readlink(f"/proc/{pid}/exe")
+                except (OSError, FileNotFoundError):
                     continue
-                # Ignore the current process tree's own helpers we never spawn as
-                # orphans — only kill pentool entrypoints.
-                if "pentool" not in cmdline:
+                if os.path.basename(exe_path) != exe_basename:
                     continue
                 import signal
                 os.kill(pid, signal.SIGKILL)
