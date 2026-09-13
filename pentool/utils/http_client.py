@@ -78,7 +78,6 @@ class HTTPClient:
         async with session.request(request.method, request.url, **kwargs) as resp:
             # Read raw bytes — aiohttp decodes gzip/deflate automatically via read()
             resp_body_bytes: bytes = await resp.read()
-            int((time.monotonic() - start) * 1000)
 
             # Decode for storage in ParsedResponse (for TUI/reports)
             try:
