@@ -499,23 +499,38 @@ class SettingsScreen(Widget):
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
+    # ── Generic settings save helper ──────────────────────────────────────────
+
+    def _save_settings(self, changes: dict, msg: str) -> None:
+        """Fire an async save worker with *changes* and *msg*.
+
+        Shared by the per-section save methods to eliminate the 5× clone of the
+        try/cfg/run_worker pattern.
+        """
+        if not changes:
+            return
+        self.run_worker(
+            self._async_save_config(changes, msg),
+            exclusive=False, thread=False,
+        )
+
+    def _collect_proxy_changes(self) -> dict:
+        from pentool.core.config import get_config
+        cfg = get_config()
+        host = self.query_one("#set-proxy-host", Input).value.strip()
+        port_str = self.query_one("#set-proxy-port", Input).value.strip()
+        changes: dict = {}
+        if host and host != cfg.proxy_host:
+            changes["proxy_host"] = host
+        if port_str.isdigit() and int(port_str) != cfg.proxy_port:
+            changes["proxy_port"] = int(port_str)
+        return changes
+
     def _save_proxy_settings(self) -> None:
         try:
-            from pentool.core.config import get_config
-            cfg = get_config()
-            host = self.query_one("#set-proxy-host", Input).value.strip()
-            port_str = self.query_one("#set-proxy-port", Input).value.strip()
-            changes: dict = {}
-            if host and host != cfg.proxy_host:
-                changes["proxy_host"] = host
-            if port_str.isdigit() and int(port_str) != cfg.proxy_port:
-                changes["proxy_port"] = int(port_str)
-            self.run_worker(
-                self._async_save_config(changes, "Proxy settings saved (restart proxy to apply)"),
-                exclusive=False, thread=False,
-            )
+            self._save_settings(self._collect_proxy_changes(), "Proxy settings saved (restart proxy to apply)")
         except Exception as e:
-            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
+            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
     def _save_project_settings(self) -> None:
         try:
@@ -536,12 +551,9 @@ class SettingsScreen(Widget):
                         changes["auto_save_interval"] = interval
             except Exception:
                 pass
-            self.run_worker(
-                self._async_save_config(changes, "Project settings saved"),
-                exclusive=False, thread=False,
-            )
+            self._save_settings(changes, "Project settings saved")
         except Exception as e:
-            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
+            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
     def _open_ca_cert(self) -> None:
         try:
@@ -619,10 +631,7 @@ class SettingsScreen(Widget):
             except Exception:
                 pass
 
-            self.run_worker(
-                self._async_save_config(changes, "Network settings saved"),
-                exclusive=False, thread=False,
-            )
+            self._save_settings(changes, "Network settings saved")
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
@@ -646,10 +655,7 @@ class SettingsScreen(Widget):
             except Exception:
                 pass
 
-            self.run_worker(
-                self._async_save_config(changes, "Privacy settings saved"),
-                exclusive=False, thread=False,
-            )
+            self._save_settings(changes, "Privacy settings saved")
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
@@ -684,10 +690,7 @@ class SettingsScreen(Widget):
             except Exception:
                 pass
 
-            self.run_worker(
-                self._async_save_config(changes, "AI settings saved"),
-                exclusive=False, thread=False,
-            )
+            self._save_settings(changes, "AI settings saved")
         except Exception as e:
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
