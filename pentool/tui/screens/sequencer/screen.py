@@ -50,20 +50,17 @@ class SequencerScreen(Widget):
 
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────
-        with Horizontal(id="seq-toolbar"):
-            yield ToolbarButton("▶ Capture",   "btn-seq-capture")
-            yield Static(" │ ", classes="seq-sep")
-            yield ToolbarButton("■ Stop",      "btn-seq-stop",    classes="disabled")
-            yield Static(" │ ", classes="seq-sep")
-            yield ToolbarButton("⚡ Analyze",   "btn-seq-analyze")
-            yield Static(" │ ", classes="seq-sep")
-            yield ToolbarButton("📂 Load File", "btn-seq-load")
-            yield Static(" │ ", classes="seq-sep")
-            yield ToolbarButton("🗑 Clear",     "btn-seq-clear")
-            yield Static(" │ ", classes="seq-sep")
-            yield ToolbarButton("📋 Copy",      "btn-seq-copy")
-            yield Static(" │ ", classes="seq-sep")
-            yield ToolbarButton("💾 Export",    "btn-seq-export")
+        from pentool.tui.widgets.toolbar_helper import build_toolbar
+        yield from build_toolbar(
+            ("▶ Capture",  "btn-seq-capture"),
+            ("■ Stop",     "btn-seq-stop",   {"classes": "disabled"}),
+            ("⚡ Analyze",  "btn-seq-analyze"),
+            ("📂 Load File","btn-seq-load"),
+            ("🗑 Clear",    "btn-seq-clear"),
+            ("📋 Copy",     "btn-seq-copy"),
+            ("💾 Export",   "btn-seq-export"),
+            id="seq-toolbar",
+        )
 
         # ── Config row ─────────────────────────────────────────────────────────
         with Horizontal(id="seq-config-row"):
