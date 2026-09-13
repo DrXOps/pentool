@@ -1599,77 +1599,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         self._update_history_count_label()
 
     def action_open_scope(self) -> None:
-        proxy = self._get_proxy()
-        current = proxy.scope if proxy else []
-
-        def _norm_host(pattern: str) -> str:
-            """Strip a wildcard prefix ('*.example.com' -> 'example.com') so
-            the plain host can be sent to Target's per-host in_scope flag.
-            Target's site map is keyed by concrete hostnames, not patterns —
-            a wildcard entry has no single matching node to flag/unflag, so
-            we sync the base domain it implies. Best-effort only."""
-            p = pattern.strip().lstrip("*.")
-            return p
-
-        from pentool.tui.dialogs.scope_dialog import ScopeDialog
-
-        def _apply(result: list[str] | None) -> None:
-            if result is not None and proxy is not None:
-                old_scope = set(current or [])
-                new_scope = set(result)
-                proxy.set_scope(result)
-                # Persist scope per-project (DB) — this is the source of
-                # truth restored on project switch (see _load_scope_setting).
-                self.run_worker(self._save_scope_setting(result))
-                # Also mirror into the global Config so a brand-new project
-                # (no project_settings row yet) starts from the last-used
-                # scope instead of empty — see _load_scope_setting fallback.
-                try:
-                    from pentool.core.config import get_config
-                    cfg = get_config()
-                    cfg.scope = list(result)
-                    cfg.save()
-                except Exception as e:
-                    logger.warning("action_open_scope: failed to save scope to config: %s", e)
-                # Mirror the diff into TargetScreen's in_scope flags — the
-                # same SyncScopeToTarget message the context-menu "Add/Remove
-                # to Scope" actions already use. Without this, editing Scope
-                # via this dialog (bulk text edit) never reached Target,
-                # while the per-host context-menu action did — an
-                # inconsistency the user could see: the ★ marker in Target
-                # updated for one path but not the other.
-                for pattern in new_scope - old_scope:
-                    host = _norm_host(pattern)
-                    if host:
-                        self._sync_target_host_scope(host, True)
-                for pattern in old_scope - new_scope:
-                    host = _norm_host(pattern)
-                    if host:
-                        self._sync_target_host_scope(host, False)
-                # Update ScopeToggle state in FilterBar
-                scope_toggle_was_active = False
-                try:
-                    from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
-                    filter_bar = self.query_one("#filter-bar", FilterBar)
-                    st = filter_bar.query_one("#fb-scope", ScopeToggle)
-                    scope_toggle_was_active = st.active
-                    st.set_scope_empty(not bool(result))
-                except Exception:
-                    pass
-                # If ScopeToggle was already active — reload the table with the new scope
-                if scope_toggle_was_active and result:
-                    self.run_worker(self._reload_table({"scope_only": True}))
-                elif not result:
-                    # Scope cleared — remove filter and show everything
-                    self.run_worker(self._reload_table(None))
-                if result is not None:
-                    n = len(result)
-                    self.app.notify(
-                        f"Scope updated: {n} host{'s' if n != 1 else ''}",
-                        timeout=3,
-                    )
-
-        self.app.push_screen(ScopeDialog(current), _apply)
+        from pentool.tui.screens.proxy.scope_handler import open_scope as _scope_open
+        self.run_worker(_scope_open(self))
 
     def action_toggle_enforce_scope(self) -> None:
         """Toggle the 'Skip out-of-scope' capture filter (per-project, persisted to DB)."""
@@ -1709,40 +1640,20 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             )
 
     async def _save_enforce_scope_setting(self, enabled: bool) -> None:
-        try:
-            from pentool.core.db_schema import set_project_setting
-            db_path = self._get_db_path()
-            if db_path:
-                await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
-        except Exception as exc:
-            logger.debug("_save_enforce_scope_setting: %s", exc)
+        from pentool.tui.screens.proxy.scope_handler import save_enforce_scope_setting
+        await save_enforce_scope_setting(self, enabled)
+
+    async def _save_scope_setting(self, hosts: list[str]) -> None:
+        from pentool.tui.screens.proxy.scope_handler import save_scope_setting
+        await save_scope_setting(self, hosts)
+
+    async def _load_scope_setting(self, is_new: bool = False) -> None:
+        from pentool.tui.screens.proxy.scope_handler import load_scope_setting
+        await load_scope_setting(self, is_new)
 
     async def _load_enforce_scope_setting(self) -> None:
-        """Load the persisted 'Skip out-of-scope' flag for the current project's DB.
-
-        Called after a project switch (and on initial mount) — the flag is
-        stored per-project so it doesn't leak between different projects the
-        way the global Scope host list used to (see _load_scope_setting,
-        which now fixes that too).
-        """
-        proxy = self._get_proxy()
-        if proxy is None:
-            return
-        try:
-            from pentool.core.db_schema import get_project_setting
-            db_path = self._get_db_path()
-            value = await get_project_setting(db_path, "proxy.enforce_scope", "0") if db_path else "0"
-            enabled = value == "1"
-        except Exception as exc:
-            logger.debug("_load_enforce_scope_setting: %s", exc)
-            enabled = False
-        proxy.set_enforce_scope(enabled)
-        # Pass `enabled` explicitly — same rationale as in
-        # action_toggle_enforce_scope: set_enforce_scope() defers the actual
-        # attribute write onto the proxy's own event loop when it's running,
-        # so re-reading proxy.enforce_scope right after calling it could
-        # still observe the pre-call value.
-        self._sync_enforce_scope_button(enabled)
+        from pentool.tui.screens.proxy.scope_handler import load_enforce_scope_setting
+        await load_enforce_scope_setting(self)
 
     async def _save_scope_setting(self, hosts: list[str]) -> None:
         """Persist the Scope host list into the current project's DB.
@@ -1765,59 +1676,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
                 await set_project_setting(db_path, "proxy.scope", json.dumps(hosts))
         except Exception as exc:
             logger.debug("_save_scope_setting: %s", exc)
-
-    async def _load_scope_setting(self, is_new: bool = False) -> None:
-        """Load the persisted Scope host list for the current project's DB.
-
-        Called after a project switch (and on initial mount), alongside
-        _load_enforce_scope_setting — same per-project rationale. Falls
-        back to the global Config.scope only if this project's DB has no
-        saved scope yet (e.g. a DB created before this fix, or a pre-existing
-        project that hasn't had Scope configured), so behavior for old
-        single-project setups doesn't regress.
-
-        For a brand-NEW project (is_new=True) we deliberately do NOT inherit
-        the global Config.scope (which mirrors whatever the previously-open
-        project last saved) — a new project starts with an empty scope. The
-        caller (ProjectManager._do_switch → _reload_proxy) passes is_new when
-        it created the project.
-        """
-        proxy = self._get_proxy()
-        if proxy is None:
-            return
-        hosts: list[str] | None = None
-        try:
-            import json
-            from pentool.core.db_schema import get_project_setting
-            db_path = self._get_db_path()
-            raw = await get_project_setting(db_path, "proxy.scope", None) if db_path else None
-            if raw is not None:
-                hosts = json.loads(raw)
-        except Exception as exc:
-            logger.debug("_load_scope_setting: %s", exc)
-            hosts = None
-        if hosts is None and not is_new:
-            # Existing project (or no per-project row yet): fall back to the
-            # global Config.scope so old setups don't regress. A brand-new
-            # project skips this and stays empty.
-            try:
-                from pentool.core.config import get_config
-                hosts = list(get_config().scope)
-            except Exception:
-                hosts = []
-        if hosts is None:
-            hosts = []
-        logger.info(
-            "PROXY SCREEN: _load_scope_setting is_new=%s -> %d host(s): %r",
-            is_new, len(hosts), hosts,
-        )
-        proxy.set_scope(hosts)
-        try:
-            from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
-            filter_bar = self.query_one("#filter-bar", FilterBar)
-            filter_bar.query_one("#fb-scope", ScopeToggle).set_scope_empty(not bool(hosts))
-        except Exception:
-            pass
 
     def _sync_enforce_scope_button(self, enabled: bool | None = None) -> None:
         """Sync the '☐/☑ Skip out-of-scope' button label/class.
