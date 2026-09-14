@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from typing import Any
+
+from pentool.core.config import get_config, Callable
 
 import aiohttp
 
+from pentool.core.logging import get_logger
 from pentool.utils.parser import ParsedRequest, ParsedResponse
+
+logger = get_logger(__name__)
 
 # Callback type: called after each request
 RequestCallback = Callable[[ParsedRequest, ParsedResponse], None]
@@ -33,6 +38,21 @@ class HTTPClient:
         self._follow_redirects = follow_redirects
         self._verify_ssl = verify_ssl
         self._on_request_sent = on_request_sent
+        # Если extra_headers не передан явно — автоматом подтягиваем
+        # scan_marker из глобального конфига (X-Scanner: pentool/1.0).
+        if extra_headers is None:
+            try:
+                cfg = get_config()
+                if cfg.scan_marker_enabled:
+                    extra_headers = {cfg.scan_marker_name: cfg.scan_marker_value}
+                    logger.debug("HTTPClient: scan_marker injected: %s: %s",
+                                 cfg.scan_marker_name, cfg.scan_marker_value)
+                else:
+                    extra_headers = {}
+                    logger.debug("HTTPClient: scan_marker disabled in config")
+            except Exception as exc:
+                logger.debug("HTTPClient: scan_marker cfg read failed: %s", exc)
+                extra_headers = {}
         self._extra_headers = extra_headers or {}
         self._session: aiohttp.ClientSession | None = None
 

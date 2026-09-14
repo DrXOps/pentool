@@ -34,8 +34,8 @@ class Config:
     # (legacy ProxyServer on a daemon thread in the TUI process — fallback).
     proxy_engine: str = "daemon"
     recent_projects: list[str] = field(default_factory=list)
-    auto_save_enabled: bool = False
-    auto_save_interval: int = 5  # minutes
+    auto_save_enabled: bool = True
+    auto_save_interval: int = 2  # minutes
     # ── Network / Scanner settings ─────────────────────────────────────────────
     default_user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

@@ -498,14 +498,12 @@ class TargetScreen(Widget):
             except Exception:
                 pass
 
+        # Создаём один SpiderAPI на весь краул, а не на каждый host
+        # (предотвращает утечку процесс-пула).
         try:
+            spider = SpiderAPI(config=SpiderConfig(js_render=True))
             for host in hosts:
                 url = host if "://" in host else f"https://{host}"
-                # respect_scope defaults True — stay on the target host/subdomains,
-                # never crawl external links. js_render=True renders pages in a
-                # headless Chromium so JS-generated links (e.g. XSS Game /level3,
-                # /level4) are discovered — otherwise they'd be missed.
-                spider = SpiderAPI(config=SpiderConfig(js_render=True))
                 try:
                     result = await spider.crawl(url, db_path=db_path, on_page=_on_page_async)
                 except Exception as exc:

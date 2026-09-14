@@ -22,6 +22,10 @@ import threading
 # features unavailable (same as if no PRO package were installed).
 _UNSAFE_SKIP_PRO_CHECK_FLAG = "--unsafe-skip-pro-compat-check"
 
+# CI/CD флаги — не проверять обновления при запуске / автообновлять без диалога
+_NO_CHECK_UPDATES_FLAG = "--no-check-updates"
+_AUTO_UPDATE_FLAG = "--auto-update"
+
 # Top-level one-shot mode flags handled by _run_target_mode (a click.group
 # can't take bare options without a subcommand, so we intercept these here).
 _URL_FLAGS = ("--url",)
@@ -154,10 +158,20 @@ def _log_exit_reason(reason: str) -> None:
         pass
 
 
-def _ensure_pro_compatible(unsafe_skip: bool = False) -> None:
+def _ensure_pro_compatible(
+    unsafe_skip: bool = False,
+    auto_update: bool = False,
+    no_check: bool = False,
+) -> None:
     """Check PRO package compatibility and self-heal if possible.
+
+    *auto_update* — молча обновить без диалога (CI/CD режим).
+    *no_check* — пропустить проверку полностью.
     Exits with SystemExit(1) if the mismatch cannot be resolved.
     """
+    if no_check:
+        return
+
     try:
         from pentool.core.license import is_pro_package_compatible
         compatible, warning = is_pro_package_compatible()
@@ -165,17 +179,40 @@ def _ensure_pro_compatible(unsafe_skip: bool = False) -> None:
         compatible, warning = True, ""
 
     if not compatible:
-        try:
-            import asyncio
-            from pentool.core.license import check_and_update_pro_package
-            result = asyncio.run(check_and_update_pro_package())
-            if result.updated:
-                print("[pentool] PRO package was out of sync — re-downloaded.", file=sys.stderr)
-                compatible, warning = True, ""
-            elif not result.warning:
-                compatible, warning = is_pro_package_compatible()
-        except Exception:
-            pass
+        if auto_update:
+            # CI/CD: молча обновляем без диалога
+            try:
+                import asyncio
+                from pentool.core.license import check_and_update_pro_package
+                result = asyncio.run(check_and_update_pro_package())
+                if result.updated:
+                    print("[pentool] PRO package was out of sync — auto-updated.", file=sys.stderr)
+                    compatible, warning = True, ""
+                elif not result.warning:
+                    compatible, warning = is_pro_package_compatible()
+            except Exception:
+                pass
+        else:
+            # Интерактивный режим: спросить пользователя
+            try:
+                import asyncio
+                from pentool.core.license import check_and_update_pro_package
+                _warn_pro_mismatch(warning)
+                choice = input("> ").strip().lower()
+                if choice in ("y", "yes"):
+                    result = asyncio.run(check_and_update_pro_package())
+                    if result.updated:
+                        print("[pentool] PRO package updated. Restart to use it.", file=sys.stderr)
+                        raise SystemExit(0)
+                    elif not result.warning:
+                        compatible, warning = is_pro_package_compatible()
+                elif choice in ("n", "no"):
+                    pass  # продолжить без PRO
+                elif choice in ("s", "skip"):
+                    print("[pentool] Skipping PRO check. Use --no-check-updates to silence.", file=sys.stderr)
+                    return  # вообще пропустить проверку в этой сессии
+            except Exception:
+                pass
 
     if not compatible:
         if not unsafe_skip:
@@ -184,6 +221,21 @@ def _ensure_pro_compatible(unsafe_skip: bool = False) -> None:
         else:
             print("[pentool] UNSAFE: --unsafe-skip-pro-compat-check set — starting anyway. "
                   "PRO features stay disabled.", file=sys.stderr)
+
+
+def _warn_pro_mismatch(warning: str) -> None:
+    """Показать диалог PRO mismatch в терминале."""
+    print()
+    print("╔══════════════════════════════════════════════════╗")
+    print("║ ⚠ PRO package version mismatch                 ║")
+    print(f"║  {warning[:56]:56s} ║")
+    print("║                                                ║")
+    print("║  [Y] Yes — update PRO now and restart          ║")
+    print("║  [N] No  — start without PRO features          ║")
+    print("║  [S] Skip — skip check this time               ║")
+    print("║                                                ║")
+    print("║  (Use --auto-update for CI/CD mode)            ║")
+    print("╚══════════════════════════════════════════════════╝")
 
 
 def _start_tui() -> None:
@@ -302,6 +354,13 @@ def main() -> None:
     if unsafe_skip_pro_check:
         sys.argv.remove(_UNSAFE_SKIP_PRO_CHECK_FLAG)
 
+    # CI/CD флаги
+    no_check_updates = _NO_CHECK_UPDATES_FLAG in sys.argv
+    auto_update = _AUTO_UPDATE_FLAG in sys.argv
+    for _flag in (_NO_CHECK_UPDATES_FLAG, _AUTO_UPDATE_FLAG):
+        while _flag in sys.argv:
+            sys.argv.remove(_flag)
+
     if len(sys.argv) > 1 and "--url" in sys.argv:
         _run_target_mode(sys.argv[1:])
         return
@@ -310,7 +369,11 @@ def main() -> None:
         from pentool.cli.main import cli
         cli()
     else:
-        _ensure_pro_compatible(unsafe_skip=unsafe_skip_pro_check)
+        _ensure_pro_compatible(
+            unsafe_skip=unsafe_skip_pro_check,
+            auto_update=auto_update,
+            no_check=no_check_updates,
+        )
         _start_tui()
 
 

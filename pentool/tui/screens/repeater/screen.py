@@ -85,6 +85,13 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self._search_target: str = "request"  # "request" | "response" — syncs with the SearchBar
         self._tab_click_time: float = 0.0
         self._tab_click_id: str | None = None
+        # Generation counter to stale-load protection — bumped on every
+        # reset_for_new_project()/reload_from_project() so deferred workers
+        # from a prior project no-op instead of resurrecting stale tabs.
+        self._tabs_generation: int = 0
+        self._running_save_tasks: list[str] = []  # worker names for auto-save, cancelled on exit
+        # Single persistent RepeaterAPI — created lazily via _get_api()
+        self._repeater_api = None
 
     # ── Query-one short-hands ──────────────────────────────────────────────
     # All 43 query_one() calls replaced with property/helper accessors below
@@ -92,54 +99,35 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     @property
     def _tabs_w(self) -> TabbedContent:
-        return self._tabs_w
+        return self.query_one("#repeater-tabs", TabbedContent)
 
     @property
     def _search_bar(self) -> SearchBar:
-        return self._search_bar
+        return self.query_one("#repeater-search-bar", SearchBar)
 
     @property
     def _cancel_btn(self) -> ToolbarButton:
-        return self._cancel_btn
+        return self.query_one("#btn-cancel", ToolbarButton)
+
+    @property
+    def _send_btn(self) -> ToolbarButton:
+        return self.query_one("#btn-send", ToolbarButton)
 
     @property
     def _status_bar(self) -> Static:
-        return self._status_bar
+        return self.query_one("#status-bar", Static)
 
     @property
     def _diff_panel(self) -> DiffPanel:
-        return self._diff_panel
+        return self.query_one("#repeater-diff-panel", DiffPanel)
 
     def _editor(self, tab_id: str | None = None) -> RequestEditor:
         tid = tab_id or self._active_tab_id
-        try:
-            return self._editor({tid})
-        except Exception:
-            # Fallback for tests / incomplete init
-            return self._editor({tid})
+        return self.query_one(f"#req-editor-{tid}", RequestEditor)
 
     def _viewer(self, tab_id: str | None = None) -> ResponseViewer:
         tid = tab_id or self._active_tab_id
-        return self._viewer({tid})
-
-        # Single persistent RepeaterAPI for the screen's lifetime — created
-        # lazily via _get_api() and pointed at a different project DB on
-        # switch via reload_from_project()/switch_db(), mirroring
-        # IntruderScreen._get_api(). Previously every send/autosave/history
-        # read constructed a fresh RepeaterAPI (and thus opened+closed a new
-        # SQLite connection per call).
-        self._repeater_api = None
-        # Bumped by reset_for_new_project()/reload_from_project()/_close_all_tabs().
-        # on_mount()'s initial _load_tabs_from_db() reads whatever DB was
-        # configured at app startup (before the user creates/opens a
-        # project) and schedules tab creation via call_after_refresh — those
-        # deferred callbacks used to fire even after a project switch had
-        # already reset the screen, resurrecting a stale tab (e.g. one
-        # named "Example" from a previous session) alongside the fresh
-        # project's tab. Each loader captures the generation at call time
-        # and no-ops if it no longer matches when its callback runs.
-        self._tabs_generation: int = 0
-        self._running_save_tasks: list[str] = []  # worker names for auto-save, cancelled on exit
+        return self.query_one(f"#resp-viewer-{tid}", ResponseViewer)
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="top-bar"):
@@ -809,7 +797,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             if self._sending:
                 self._sending = False
                 try:
-                    self.query_one("#btn-send", ToolbarButton).disabled = False
+                    self._send_btn.disabled = False
                     self._cancel_btn.disabled = True
                 except Exception:
                     pass

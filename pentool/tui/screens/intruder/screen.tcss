@@ -231,52 +231,6 @@ _InputDialog #buttons ToolbarButton {
     margin: 0 0 0 1;
 }
 
-_GenerateDialog {
-    align: center middle;
-}
-_GenerateDialog #dialog {
-    width: 44;
-    height: auto;
-    border: solid $primary;
-    background: $surface;
-    padding: 1 2;
-}
-_GenerateDialog .row {
-    height: 1;
-    layout: horizontal;
-    align: left middle;
-    margin-bottom: 1;
-}
-_GenerateDialog .row Label {
-    width: 8;
-    color: $text-muted;
-}
-_GenerateDialog Input {
-    width: 12;
-    background: $surface-darken-1;
-}
-_GenerateDialog #mode-select {
-    width: 26;
-}
-_GenerateDialog #numeric-fields,
-_GenerateDialog #char-fields {
-    height: auto;
-    layout: vertical;
-}
-_GenerateDialog #preview-label {
-    height: 1;
-    color: $text-muted;
-    margin-bottom: 1;
-}
-_GenerateDialog #buttons {
-    height: 1;
-    layout: horizontal;
-    align: right middle;
-    margin-top: 1;
-}
-_GenerateDialog #buttons ToolbarButton {
-    margin: 0 0 0 1;
-}
 /* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
 .toolbar-sep { width: auto; }
 

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Input, Label, Static
@@ -16,7 +17,57 @@ from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
-_CSS = (Path(__file__).parent.parent / "screens" / "intruder" / "screen.tcss").read_text(encoding="utf-8")
+_CSS = r"""
+GenerateDialog {
+    align: center middle;
+    height: 15;
+    width: 50;
+}
+GenerateDialog #dialog {
+    height: auto;
+    width: 100%;
+    padding: 1 2;
+    border: round $primary;
+    background: $surface;
+    layout: vertical;
+}
+GenerateDialog .row {
+    height: 1;
+    layout: horizontal;
+    align: left middle;
+    margin-bottom: 1;
+}
+GenerateDialog .row Label {
+    width: 8;
+    color: $text-muted;
+}
+GenerateDialog Input {
+    width: 12;
+    background: $surface-darken-1;
+}
+GenerateDialog #mode-select {
+    width: 26;
+}
+GenerateDialog #numeric-fields,
+GenerateDialog #char-fields {
+    height: auto;
+    layout: vertical;
+}
+GenerateDialog #preview-label {
+    height: 1;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+GenerateDialog #buttons {
+    height: 1;
+    layout: horizontal;
+    align: right middle;
+    margin-top: 1;
+}
+GenerateDialog #buttons ToolbarButton {
+    margin: 0 0 0 1;
+}
+"""
 
 
 class GenerateDialog(DialogCancelMixin, ModalScreen):
@@ -27,9 +78,23 @@ class GenerateDialog(DialogCancelMixin, ModalScreen):
     """
 
     DEFAULT_CSS = _CSS
+    # Force the outer ModalScreen itself to a small size. Textual's CSS
+    # selector uses the Python class name, but mixin MRO can confuse it —
+    # as a belt-and-suspenders, also pass styles in compose elements.
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
+        # Belt-and-suspenders: set fixed size on the screen's own DOM node
+        # so the ModalScreen never stretches full-terminal when CSS fails.
+        self.styles.width = 50
+        self.styles.height = 18
+        self.styles.align = ("center", "middle")
+        with Vertical(id="dialog") as dlg:
+            dlg.styles.width = 48
+            dlg.styles.height = 16
+            dlg.styles.align = ("center", "middle")
             with Horizontal(classes="row"):
                 yield Label("Mode:")
                 yield OptionCycler(
@@ -59,7 +124,7 @@ class GenerateDialog(DialogCancelMixin, ModalScreen):
             yield Static("", id="preview-label")
             with Horizontal(id="buttons"):
                 yield ToolbarButton("✔ Generate", "btn-gen-ok")
-                yield ToolbarButton("✕ Cancel",   "btn-gen-cancel")
+                yield ToolbarButton("✕ Cancel", "btn-gen-cancel")
 
     def on_mount(self) -> None:
         self._sync_mode_visibility()
