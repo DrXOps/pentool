@@ -731,7 +731,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         """Called from app when a request is fully complete (with response)."""
         if not isinstance(req, InterceptedRequest):
             return
-        status = req.response.status if req.response else None
+        status = req.get_response().status if req.get_response() else None
         logger.info("PROXY SCREEN: update_request_row: %s %s → %s (id=%s)", req.method, req.url, status, req.id)
         self.run_worker(self._update_and_reload(req))
 
@@ -762,9 +762,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         _t1 = time.monotonic()
         actual_row_id = self._pending_req_ids.pop(req.id, None)
         self._pending_req_ids_ts.pop(req.id, None)
-        if actual_row_id and actual_row_id != -1 and req.response is not None:
-            await self._proxy_service.update_response(actual_row_id, req.response)
-        elif req.response is not None:
+        if actual_row_id and actual_row_id != -1 and req.get_response() is not None:
+            await self._proxy_service.update_response(actual_row_id, req.get_response())
+        elif req.get_response() is not None:
             # Either never stored (actual_row_id is None) or _wait_for_row_id
             # timed out while _store_request was still in flight, leaving the
             # -1 sentinel behind (actual_row_id == -1). In both cases the
@@ -831,8 +831,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             "host": parsed.headers.get("Host", "").split(":")[0] or url.split("/")[2] if "://" in url else url,
             "method": req.method or "",
             "url": url,
-            "status_code": req.response.status if req.response else None,
-            "length": len((req.response.body or "").encode("utf-8")) if req.response else None,
+            "status_code": req.get_response().status if req.get_response() else None,
+            "length": len((req.get_response().body or "").encode("utf-8")) if req.get_response() else None,
             "timestamp": ts,
             "is_websocket": req.is_websocket,
         }
@@ -947,7 +947,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             "host": parsed.headers.get("Host", "").split(":")[0] or url.split("/")[2] if "://" in url else url,
             "method": req.method or "",
             "url": url,
-            "status_code": req.response.status if req.response else None,
+            "status_code": req.get_response().status if req.get_response() else None,
             "length": len((req.response.body or "").encode("utf-8")) if req.response else None,
             "timestamp": ts,
             "is_websocket": True,
