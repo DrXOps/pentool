@@ -267,10 +267,26 @@ class ProxyDaemon:
     async def _dispatch(self, cmd: dict) -> dict:
         """Execute a command dict and return a JSON-serializable response."""
         name = cmd.get("cmd")
+        try:
+            return await self._dispatch_inner(cmd)
+        except Exception as exc:  # noqa: BLE001
+            # Never let a handler error take the daemon down or drop the
+            # connection silently — report it back so the client can show
+            # the real cause instead of a misleading "Broken pipe".
+            logger.error("daemon dispatch '%s' failed: %s", name, exc, exc_info=True)
+            return {"ok": False, "error": f"{exc}"}
+
+    async def _dispatch_inner(self, cmd: dict) -> dict:
+        """Execute a command dict and return a JSON-serializable response."""
+        name = cmd.get("cmd")
         if name == "start":
-            await self._proxy.start()
-            return {"ok": True, "running": self._proxy.is_running,
-                    "port": self._proxy.port}
+            try:
+                await self._proxy.start()
+                return {"ok": True, "running": self._proxy.is_running,
+                        "port": self._proxy.port}
+            except Exception as exc:
+                logger.error("daemon start failed: %s", exc, exc_info=True)
+                return {"ok": False, "error": f"proxy.start() failed: {exc}"}
         if name == "stop":
             await self._proxy.stop()
             return {"ok": True, "running": self._proxy.is_running}

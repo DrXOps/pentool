@@ -452,8 +452,19 @@ class ProxyClient:
         if self._cmd_sock is None:
             raise RuntimeError("proxy client not connected")
         payload = (json.dumps(cmd) + "\n").encode("utf-8")
-        with self._lock:
+        try:
             self._cmd_sock.sendall(payload)
+        except (BrokenPipeError, ConnectionResetError, OSError) as exc:
+            # The daemon is no longer accepting commands — it exited or
+            # crashed between the connect and the send. Collect any stderr
+            # the process left behind so the caller can report the real cause.
+            detail = self._collect_daemon_error()
+            msg = f"proxy daemon closed the command socket while sending '{cmd.get('cmd')}'"
+            if detail:
+                msg += f": {detail}"
+            logger.error("%s (%s)", msg, exc)
+            raise RuntimeError(msg) from exc
+        with self._lock:
             data = b""
             # Bound each command's wait so a slow/closed daemon reply can never
             # hang the TUI socket loop (e.g. stop() cancelling proxy tasks).
@@ -479,6 +490,25 @@ class ProxyClient:
             return json.loads(line.decode("utf-8", "replace"))
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": str(exc)}
+
+    def _collect_daemon_error(self) -> str | None:
+        """Try to read stderr from the died daemon process for diagnostics."""
+        proc = self._proc
+        if proc is None:
+            return None
+        try:
+            ret = proc.poll()
+            if ret is None:
+                return None  # still running
+            # Read stderr only if we piped it — DEVNULL means no detail
+            stderr = getattr(proc, "stderr", None)
+            if stderr is not None:
+                text = stderr.read(1024).decode("utf-8", "replace").strip()
+                if text:
+                    return f"exit={ret}, stderr: {text}"
+            return f"exit={ret}"
+        except Exception as exc:
+            return f"failed to read daemon error: {exc}"
 
     def _command_tolerant(self, cmd: dict) -> dict:
         """Send a command, never raising when the proxy is not connected.

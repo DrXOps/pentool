@@ -38,6 +38,22 @@ class TestCommand:
         with pytest.raises(RuntimeError):
             c._command({"cmd": "status"})
 
+    def test_dead_socket_raises_runtime_error(self):
+        c = _make_client()
+        c._cmd_sock.sendall.side_effect = BrokenPipeError(32, "Broken pipe")
+        c._proc = MagicMock()
+        c._proc.poll.return_value = 1
+        with pytest.raises(RuntimeError, match="proxy daemon closed the command socket"):
+            c._command({"cmd": "start"})
+
+    def test_dead_socket_connection_reset(self):
+        c = _make_client()
+        c._cmd_sock.sendall.side_effect = ConnectionResetError(104, "Connection reset")
+        c._proc = MagicMock()
+        c._proc.poll.return_value = 2
+        with pytest.raises(RuntimeError, match="exit=2"):
+            c._command({"cmd": "start"})
+
 
 class TestApi:
     def test_is_running_false_when_no_process(self):
