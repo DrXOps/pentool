@@ -68,7 +68,11 @@ InterceptState = Literal["waiting", "forwarded", "dropped"]
 
 @dataclass
 class InterceptedRequest:
-    """Intercepted request with state and response."""
+    """Intercepted request with state and response.
+
+    Thread-safe: state and response are guarded by a Lock because they
+    are written from the proxy worker threads and read from the TUI thread.
+    """
 
     id: str
     method: str
@@ -86,6 +90,31 @@ class InterceptedRequest:
     )
     # If the user edited the request before forwarding
     _modified_raw: str | None = field(default=None, repr=False, compare=False)
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        """Ensure the lock is always a fresh instance (dataclass field factory
+        only runs once at class definition time — see field(default_factory=...))."""
+        if not hasattr(self, "_lock") or self._lock is None:
+            object.__setattr__(self, "_lock", threading.Lock())
+
+    def set_response(self, resp: ParsedResponse | None) -> None:
+        with self._lock:
+            object.__setattr__(self, "response", resp)
+
+    def get_response(self) -> ParsedResponse | None:
+        with self._lock:
+            return self.response
+
+    def set_state(self, state: InterceptState) -> None:
+        with self._lock:
+            object.__setattr__(self, "state", state)
+
+    def get_state(self) -> InterceptState:
+        with self._lock:
+            return self.state
 
     def to_parsed_request(self) -> ParsedRequest:
         """Convert to ParsedRequest for sending via HTTPClient."""
@@ -726,8 +755,8 @@ class ProxyServer:
         if response is None:
             writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\nProxy error")
             await writer.drain()
-            ireq.state = "forwarded"
-            ireq.response = None
+            ireq.set_state("forwarded")
+            ireq.set_response(None)
             # Was a silent early-return — no ProxyRequestCompleted was ever
             # emitted for network failures (DNS error, connection refused,
             # timeout, unreachable host, etc). That meant:
@@ -765,9 +794,9 @@ class ProxyServer:
             except ValueError:
                 pass
 
-        ireq.response = response
-        if ireq.state == "waiting":
-            ireq.state = "forwarded"
+        ireq.set_response(response)
+        if ireq.get_state() == "waiting":
+            ireq.set_state("forwarded")
 
         # Notify subscribers via EventBus (main channel)
         try:
