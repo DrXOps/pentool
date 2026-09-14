@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -85,6 +86,10 @@ class ProxyClient:
             "--cert-dir", self.cert_dir,
             "--db", self.db_path,
         ]
+        # Kill any leftover proxy daemon holding our port before spawning a
+        # new one. This prevents EADDRINUSE when a previous instance crashes
+        # without releasing the port (common in development / fast toggle).
+        self._kill_stale_daemon()
         self._proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
@@ -129,6 +134,39 @@ class ProxyClient:
         except Exception:
             self.cleanup()
             raise
+
+    def _kill_stale_daemon(self) -> None:
+        """Find and kill a previous pentool proxy daemon process still holding
+        *self.port*, if one exists.  Idempotent — does nothing when none found
+        or on permission errors."""
+        import psutil
+        try:
+            target_pid = None
+            for conn in psutil.net_connections(kind="inet"):
+                if conn.status == "LISTEN" and conn.laddr.port == self.port:
+                    try:
+                        proc = psutil.Process(conn.pid)
+                        cmd = " ".join(proc.cmdline())
+                        if "pentool.proxy.daemon" in cmd:
+                            target_pid = conn.pid
+                            break
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+            if target_pid is not None:
+                logger.info("Killing stale proxy daemon PID=%s holding port %s",
+                            target_pid, self.port)
+                os.kill(target_pid, signal.SIGTERM)
+                import time as _time
+                for _ in range(50):
+                    _time.sleep(0.05)
+                    try:
+                        psutil.Process(target_pid)
+                    except psutil.NoSuchProcess:
+                        break
+        except (psutil.AccessDenied, PermissionError, OSError):
+            logger.warning("_kill_stale_daemon: cannot scan connections on this system")
+        except Exception as exc:
+            logger.debug("_kill_stale_daemon: %s", exc)
 
     def _wait_socket(self, path: str) -> socket.socket | None:
         """Wait up to ~10s for `path` to appear and be connectable."""

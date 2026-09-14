@@ -235,6 +235,8 @@ class ProxyServer:
             self._handle_client,
             host=self.host,
             port=self.port,
+            reuse_address=True,
+            reuse_port=True,
         )
         self._running = True
         addr = self._server.sockets[0].getsockname()
