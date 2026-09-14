@@ -2,77 +2,27 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
 from pentool.core.logging import get_logger
-from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
+from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
+
+_CSS = (Path(__file__).parent / "intruder_smart_payloads.tcss").read_text(encoding="utf-8")
 
 logger = get_logger(__name__)
 
 
-class SmartPayloadsDialog(DialogCancelMixin, ModalScreen[list[str] | None]):
+class SmartPayloadsDialog(BaseDialog):
     """PRO Smart Payload Generator — dialog for generating context-aware payloads."""
 
-    DEFAULT_CSS = """
-    SmartPayloadsDialog {
-        align: center middle;
-    }
-    SmartPayloadsDialog #dialog {
-        width: 60;
-        height: auto;
-        background: $surface;
-        border: solid $primary;
-        padding: 1 2;
-    }
-    SmartPayloadsDialog #title-bar {
-        height: 1;
-        layout: horizontal;
-        margin-bottom: 1;
-    }
-    SmartPayloadsDialog #title-bar Static {
-        width: 1fr;
-        color: $primary;
-    }
-    SmartPayloadsDialog #title-bar Button {
-        width: 3;
-        min-width: 3;
-        background: transparent;
-        border: none;
-    }
-    SmartPayloadsDialog .row {
-        height: auto;
-        layout: horizontal;
-        align: left middle;
-        margin-bottom: 1;
-    }
-    SmartPayloadsDialog .row Label {
-        width: 14;
-        color: $text-muted;
-    }
-    SmartPayloadsDialog Select {
-        width: 24;
-    }
-    SmartPayloadsDialog Input {
-        width: 10;
-        background: $panel;
-        border: none;
-    }
-    SmartPayloadsDialog #buttons {
-        height: auto;
-        layout: horizontal;
-        margin-top: 1;
-        align: center middle;
-    }
-    SmartPayloadsDialog #buttons ToolbarButton {
-        margin: 0 1;
-    }
-    """
+    DEFAULT_CSS = _CSS
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):

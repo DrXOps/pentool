@@ -7,17 +7,16 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Input, Label
 
-from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
+from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
-_CSS = (Path(__file__).parent.parent / "screens" / "intruder" / "screen.tcss").read_text(encoding="utf-8")
+_CSS = (Path(__file__).parent / "intruder_input.tcss").read_text(encoding="utf-8")
 
 
-class InputDialog(DialogCancelMixin, ModalScreen[None]):
+class InputDialog(BaseDialog):
     """Payload add dialog — does not close after ADD, accumulates the list."""
 
     DEFAULT_CSS = _CSS
