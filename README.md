@@ -85,7 +85,7 @@ uv tool install pentool
 pentool --url https://example.com
 
 # Same, but actually load the target in a headless browser THROUGH the proxy,
-# so real traffic lands in HTTP History + Target (requires Chromium installed)
+# so real traffic lands in HTTP History + Target (requires Lightpanda)
 pentool --url https://example.com --real
 
 # Headless scan — perfect for CI/CD (GitLab CI, GitHub Actions, Jenkins)
