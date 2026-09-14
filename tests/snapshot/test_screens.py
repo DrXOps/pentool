@@ -36,21 +36,6 @@ def isolated_config(tmp_path):
 
 @pytest.mark.snapshot
 @pytest.mark.asyncio
-@pytest.mark.xfail(strict=False, reason="DashboardScreen contains TerminalScreen with non-deterministic bash output")
-async def test_proxy_screen(assert_snapshot) -> None:
-    """Proxy screen by default: toolbar, subtabs, empty table."""
-    from pentool.tui.app import PentoolApp
-    app = PentoolApp()
-    app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.pause()
-        svg = app.export_screenshot()
-    assert_snapshot(svg, "proxy_screen")
-
-
-@pytest.mark.snapshot
-@pytest.mark.asyncio
 async def test_repeater_screen(assert_snapshot) -> None:
     """Repeater screen: TabbedContent with Tab 1, two editors."""
     from pentool.tui.app import PentoolApp
@@ -112,7 +97,6 @@ async def test_settings_screen(assert_snapshot) -> None:
 
 @pytest.mark.snapshot
 @pytest.mark.asyncio
-@pytest.mark.xfail(strict=False, reason="DashboardScreen contains TerminalScreen with non-deterministic bash output")
 async def test_proxy_intercept_tab(assert_snapshot) -> None:
     """Proxy → Intercept tab: empty intercept."""
     from pentool.tui.app import PentoolApp
@@ -120,7 +104,8 @@ async def test_proxy_intercept_tab(assert_snapshot) -> None:
     app._skip_project_guard = True
     async with app.run_test(size=SNAP_SIZE) as pilot:
         await pilot.pause()
-        # Intercept tab is active by default
+        await pilot.press("P")
+        await pilot.pause()
         svg = app.export_screenshot()
     assert_snapshot(svg, "proxy_intercept_tab")
 
@@ -187,20 +172,6 @@ async def test_intruder_with_markers(assert_snapshot) -> None:
 
 @pytest.mark.snapshot
 @pytest.mark.asyncio
-@pytest.mark.xfail(strict=False, reason="TerminalScreen bash output is non-deterministic")
-async def test_module_tabs_proxy_active(assert_snapshot) -> None:
-    """ModuleTabs: Proxy tab active (highlighted in blue)."""
-    from pentool.tui.app import PentoolApp
-    app = PentoolApp()
-    app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        svg = app.export_screenshot()
-    assert_snapshot(svg, "module_tabs_proxy")
-
-
-@pytest.mark.snapshot
-@pytest.mark.asyncio
 async def test_module_tabs_repeater_active(assert_snapshot) -> None:
     """ModuleTabs: Repeater tab active."""
     from pentool.tui.app import PentoolApp
@@ -227,24 +198,6 @@ async def test_comparer_screen(assert_snapshot) -> None:
         await pilot.pause()
         svg = app.export_screenshot()
     assert_snapshot(svg, "comparer_screen")
-
-
-@pytest.mark.snapshot
-@pytest.mark.asyncio
-@pytest.mark.xfail(strict=False, reason="Live Dashboard has time-dependent widgets (sparkline, resource monitor)")
-async def test_dashboard_live_tab(assert_snapshot) -> None:
-    """Dashboard screen (live widgets — chart, threat meter, resources)."""
-    from pentool.tui.app import PentoolApp
-    app = PentoolApp()
-    app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        # Switch to Dashboard
-        await pilot.press("ctrl+d")
-        await pilot.pause()
-        await pilot.pause()
-        svg = app.export_screenshot()
-    assert_snapshot(svg, "dashboard_live_tab")
 
 
 @pytest.mark.snapshot

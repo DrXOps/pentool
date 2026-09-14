@@ -11,9 +11,15 @@ pentool --url https://example.com --headless --output result.json
 - `--url` — target(s); repeat for multiple: `--url a --url b`.
 - `--headless` — no TUI, no display, no interaction.
 - `--output` — report path: `.json`, `.html`, or `.csv`. Omit to print findings only.
+- `--auto-update` — silently update PRO package if version mismatch detected (recommended for CI).
+- `--no-check-updates` — skip update checks entirely (faster startup, use when you control the environment).
 
 On success exits with status `0`; a `1` means the scanner (PRO feature) is not
 installed — run `pentool license trial` for a 14-day free trial in CI.
+
+> **PRO version mismatch in CI:** add `--auto-update` to avoid interactive prompts
+> when the installed PRO package doesn't match the free version — CI pipelines have
+> no stdin to answer with:
 
 ## GitHub Actions
 
@@ -37,7 +43,7 @@ jobs:
         run: uv tool install pentool
       - name: Headless scan
         run: |
-          pentool --url https://example.com --headless --output result.json
+          pentool --url https://example.com --headless --auto-update --output result.json
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
@@ -58,7 +64,7 @@ scan:
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - export PATH="$HOME/.local/bin:$PATH"
     - uv tool install pentool
-    - pentool --url https://example.com --headless --output result.json
+    - pentool --url https://example.com --headless --auto-update --output result.json
   artifacts:
     paths:
       - result.json

@@ -98,6 +98,7 @@ class Repeater(BaseSqliteStorage):
     ) -> ParsedResponse:
         async with HTTPClient(timeout=self._timeout, verify_ssl=self._verify_ssl) as client:
             logger.info("REPEATER: sending %s %s", request.method, request.url)
+            logger.debug("REPEATER: extra_headers=%s", client._extra_headers)
             response = await client.send(request)
             logger.info(
                 "REPEATER: response %s %s -> %d (%d bytes)",
