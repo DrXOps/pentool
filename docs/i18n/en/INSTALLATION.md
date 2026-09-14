@@ -96,12 +96,9 @@ Pentool auto-detects the binary on `PATH` (or via `~/.local/bin`, `/usr/local/bi
 `/usr/bin`, or the `LIGHTPANDA_BIN` env var). Without it, crawling still works but
 does not execute JavaScript (falls back to plain HTTP).
 
-> **`--real` mode** (loading a page through the proxy) still uses a full
-> Chromium via Playwright, which is separate from Lightpanda:
-
-```bash
-uv tool run --with playwright python -m playwright install chromium
-```
+> **`--real` mode** (loading a page through the proxy) also uses Lightpanda
+> for headless browsing — no separate Playwright/Chromium installation needed.
+> Lightpanda handles JS rendering for the `--real` CLI mode and the Spider module.
 
 ---
 

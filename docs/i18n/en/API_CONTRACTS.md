@@ -242,7 +242,7 @@ class SpiderConfig:
     timeout: float = 10.0
     user_agent: str = "pentool/1.0"
     respect_scope: bool = False
-    js_render: bool = False  # requires Playwright
+    js_render: bool = False  # requires Lightpanda
 ```
 
 ### Methods

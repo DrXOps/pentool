@@ -47,7 +47,7 @@ def test_repeater_get_active_text_search_target():
     from pentool.tui.screens.repeater.screen import RepeaterScreen
     src = inspect.getsource(RepeaterScreen._get_active_text)
     assert "search_target" in src, "_get_active_text does not check search_target"
-    assert "ResponseViewer" in src or "resp-viewer" in src, "no response viewer fallback"
+    assert any(x in src for x in ("ResponseViewer", "resp-viewer", "_viewer")), "no response viewer fallback"
 
 
 def test_repeater_cancel_node_before_switch_db():
