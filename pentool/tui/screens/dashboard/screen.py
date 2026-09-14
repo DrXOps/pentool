@@ -406,7 +406,7 @@ class DashboardScreen(Widget):
                         yield Static("[dim]●[/dim] Spider: [dim]IDLE[/dim]",    id="led-spider-bar",  classes="led-item")
                         yield Static("[dim]●[/dim] MCP: [dim]OFF[/dim]",        id="led-mcp-bar",     classes="led-item")
                         yield Static("[dim]●[/dim] AI: [dim]DISABLED[/dim]",    id="led-ai-bar",      classes="led-item")
-                        yield Static("[dim]●[/dim] Threads: [dim]—[/dim]",      id="led-threads-bar", classes="led-item")
+                        yield Static("[dim]●[/dim] Scan workers: [dim]—[/dim]", id="led-threads-bar", classes="led-item")
                 with Vertical(id="matrix-col"):
                     yield SeverityMatrix(id="vuln-matrix")
 
@@ -708,10 +708,10 @@ class DashboardScreen(Widget):
         if scanning:
             self._set_led_bar("led-scan-bar", "bold yellow", f"Active: [bold yellow]SCANNING {progress}%[/bold yellow]")
             if threads > 0:
-                self._set_led_bar("led-threads-bar", "cyan", f"Threads: [cyan]{threads} active[/cyan]")
+                self._set_led_bar("led-threads-bar", "cyan", f"Scan workers: [cyan]{threads} active[/cyan]")
         else:
             self._set_led_bar("led-scan-bar", "dim", "Active: [dim]IDLE[/dim]")
-            self._set_led_bar("led-threads-bar", "dim", "Threads: [dim]—[/dim]")
+            self._set_led_bar("led-threads-bar", "dim", "Scan workers: [dim]—[/dim]")
 
     def update_spider_status(self, running: bool, pages: int = 0) -> None:
         if running:

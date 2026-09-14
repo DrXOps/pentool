@@ -6,71 +6,19 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Input, Label, Static
 
 from pentool.api.intruder_api import CharPayloadSource, NumericPayloadSource
-from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
+from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
-_CSS = r"""
-GenerateDialog {
-    align: center middle;
-    height: 15;
-    width: 50;
-}
-GenerateDialog #dialog {
-    height: auto;
-    width: 100%;
-    padding: 1 2;
-    border: round $primary;
-    background: $surface;
-    layout: vertical;
-}
-GenerateDialog .row {
-    height: 1;
-    layout: horizontal;
-    align: left middle;
-    margin-bottom: 1;
-}
-GenerateDialog .row Label {
-    width: 8;
-    color: $text-muted;
-}
-GenerateDialog Input {
-    width: 12;
-    background: $surface-darken-1;
-}
-GenerateDialog #mode-select {
-    width: 26;
-}
-GenerateDialog #numeric-fields,
-GenerateDialog #char-fields {
-    height: auto;
-    layout: vertical;
-}
-GenerateDialog #preview-label {
-    height: 1;
-    color: $text-muted;
-    margin-bottom: 1;
-}
-GenerateDialog #buttons {
-    height: 1;
-    layout: horizontal;
-    align: right middle;
-    margin-top: 1;
-}
-GenerateDialog #buttons ToolbarButton {
-    margin: 0 0 0 1;
-}
-"""
+_CSS = (Path(__file__).parent / "intruder_generate.tcss").read_text(encoding="utf-8")
 
 
-class GenerateDialog(DialogCancelMixin, ModalScreen):
+class GenerateDialog(BaseDialog):
     """Generate dialog — Numeric range or Char (alphabet brute-force) mode.
 
     Returns a lazy NumericPayloadSource/CharPayloadSource (never a
@@ -78,23 +26,9 @@ class GenerateDialog(DialogCancelMixin, ModalScreen):
     """
 
     DEFAULT_CSS = _CSS
-    # Force the outer ModalScreen itself to a small size. Textual's CSS
-    # selector uses the Python class name, but mixin MRO can confuse it —
-    # as a belt-and-suspenders, also pass styles in compose elements.
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-    ]
 
     def compose(self) -> ComposeResult:
-        # Belt-and-suspenders: set fixed size on the screen's own DOM node
-        # so the ModalScreen never stretches full-terminal when CSS fails.
-        self.styles.width = 50
-        self.styles.height = 18
-        self.styles.align = ("center", "middle")
-        with Vertical(id="dialog") as dlg:
-            dlg.styles.width = 48
-            dlg.styles.height = 16
-            dlg.styles.align = ("center", "middle")
+        with Vertical(id="dialog"):
             with Horizontal(classes="row"):
                 yield Label("Mode:")
                 yield OptionCycler(
@@ -132,11 +66,8 @@ class GenerateDialog(DialogCancelMixin, ModalScreen):
 
     def _sync_mode_visibility(self) -> None:
         mode = self.query_one("#mode-select", OptionCycler).value
-        try:
-            self.query_one("#numeric-fields").display = (mode == "numeric")
-            self.query_one("#char-fields").display = (mode == "char")
-        except Exception:
-            pass
+        self.query_one("#numeric-fields").display = (mode == "numeric")
+        self.query_one("#char-fields").display = (mode == "char")
 
     def _build_source(self):
         mode = self.query_one("#mode-select", OptionCycler).value
@@ -155,10 +86,7 @@ class GenerateDialog(DialogCancelMixin, ModalScreen):
             return None
 
     def _update_preview(self) -> None:
-        try:
-            label = self.query_one("#preview-label", Static)
-        except Exception:
-            return
+        label = self.query_one("#preview-label", Static)
         source = self._build_source()
         if source is None:
             label.update("[dim]invalid input[/dim]")
@@ -182,7 +110,3 @@ class GenerateDialog(DialogCancelMixin, ModalScreen):
     @on(ToolbarButton.Pressed, "#btn-gen-cancel")
     def _gen_cancel(self, _: ToolbarButton.Pressed) -> None:
         self.action_cancel()
-
-    def on_key(self, event) -> None:
-        if event.key == "escape":
-            self.action_cancel()

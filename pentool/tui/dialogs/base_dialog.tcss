@@ -1,0 +1,11 @@
+BaseDialog {
+    align: center middle;
+}
+BaseDialog #dialog {
+    width: 50;
+    height: auto;
+    border: round $primary;
+    background: $surface;
+    padding: 1 2;
+    layout: vertical;
+}

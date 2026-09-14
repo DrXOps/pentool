@@ -1,0 +1,36 @@
+GenerateDialog .row {
+    height: 1;
+    layout: horizontal;
+    align: left middle;
+    margin-bottom: 1;
+}
+GenerateDialog .row Label {
+    width: 8;
+    color: $text-muted;
+}
+GenerateDialog Input {
+    width: 12;
+    background: $surface-darken-1;
+}
+GenerateDialog #mode-select {
+    width: 26;
+}
+GenerateDialog #numeric-fields,
+GenerateDialog #char-fields {
+    height: auto;
+    layout: vertical;
+}
+GenerateDialog #preview-label {
+    height: 1;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+GenerateDialog #buttons {
+    height: 1;
+    layout: horizontal;
+    align: right middle;
+    margin-top: 1;
+}
+GenerateDialog #buttons ToolbarButton {
+    margin: 0 0 0 1;
+}

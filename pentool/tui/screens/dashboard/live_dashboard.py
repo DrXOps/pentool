@@ -82,7 +82,7 @@ class ResourceMonitor(Widget):
                 proc = psutil.Process(os.getpid())
                 threads = proc.num_threads()
                 self.query_one("#res-extra", Static).update(
-                    f"[dim]threads: {threads}[/dim]"
+                    f"[dim]system threads: {threads}[/dim]"
                 )
             except Exception:
                 pass
