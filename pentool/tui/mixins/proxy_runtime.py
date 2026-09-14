@@ -39,6 +39,14 @@ class ProxyRuntimeMixin:
         a separate event socket and are re-emitted into the TUI EventBus.
     """
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # Guard against concurrent proxy start/stop races (e.g. toggle button
+        # pressed twice quickly, or an auto-start racing a manual stop). Holding
+        # this lock serialises start() vs stop() so the daemon is never spawned
+        # while a previous one still holds the port.
+        self._proxy_transition_lock = threading.Lock()
+
     def _engine(self) -> str:
         """Which proxy backend is active (host decides; default 'memory')."""
         try:
@@ -75,14 +83,19 @@ class ProxyRuntimeMixin:
     def _start_proxy(self) -> None:
         if self._proxy is None or self._proxy.is_running:  # type: ignore[attr-defined]
             return
-        logger.info("APP: _start_proxy: starting proxy on %s:%d", self._proxy.host, self._proxy.port)
-        # Sprint 3: callbacks removed — proxy emits via EventBus,
-        # app subscribes to ProxyRequestCaptured / ProxyRequestCompleted in on_mount
-
-        if self._engine() == "daemon":
-            self._start_proxy_daemon()
+        if not self._proxy_transition_lock.acquire(blocking=False):
+            logger.warning("APP: _start_proxy skipped — another start/stop is in progress")
             return
-        self._start_proxy_memory()
+        try:
+            logger.info("APP: _start_proxy: starting proxy on %s:%d",
+                        self._proxy.host, self._proxy.port)
+
+            if self._engine() == "daemon":
+                self._start_proxy_daemon()
+            else:
+                self._start_proxy_memory()
+        finally:
+            self._proxy_transition_lock.release()
 
     def _start_proxy_daemon(self) -> None:
         """Start the isolated daemon-backed proxy (ProxyClient facade).
@@ -239,11 +252,12 @@ class ProxyRuntimeMixin:
     def _stop_proxy_daemon(self) -> None:
         """Stop the daemon-backed proxy synchronously (Stop button / Ctrl+Q)."""
         logger.info("APP: _stop_proxy_daemon called")
-        try:
-            if self._proxy:
-                self._proxy.stop()  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("APP: proxy (daemon) stop error: %s", exc)
+        with self._proxy_transition_lock:
+            try:
+                if self._proxy:
+                    self._proxy.stop()  # type: ignore[attr-defined]
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("APP: proxy (daemon) stop error: %s", exc)
         self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
         self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
         self.call_after_refresh(  # type: ignore[attr-defined]
@@ -257,11 +271,14 @@ class ProxyRuntimeMixin:
         process; run it off the TUI thread so the UI thread isn't frozen.
         """
         logger.info("APP: _stop_proxy_daemon_async called")
-        try:
-            if self._proxy:
-                await asyncio.to_thread(self._proxy.stop)  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("APP: proxy (daemon) stop async error: %s", exc)
+        # Serialise against a concurrent start so we never stop() the proxy
+        # mid-spawn (which would leave the port half-bound and a stray daemon).
+        with self._proxy_transition_lock:
+            try:
+                if self._proxy:
+                    await asyncio.to_thread(self._proxy.stop)  # type: ignore[attr-defined]
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("APP: proxy (daemon) stop async error: %s", exc)
         self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
         self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
         self.call_after_refresh(  # type: ignore[attr-defined]

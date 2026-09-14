@@ -20,6 +20,7 @@ class _FakeApp(ProxyRuntimeMixin):
     """Host with all state/attrs the mixin touches, plus recorded calls."""
 
     def __init__(self):
+        super().__init__()
         self._proxy = None
         self._proxy_thread: threading.Thread | None = None
         self._proxy_loop = None
