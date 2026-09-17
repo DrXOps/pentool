@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+
+import aiohttp
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
@@ -15,6 +17,11 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from pentool.core.logging import get_logger
 from pentool.utils.lightpanda import is_lightpanda_available, lightpanda_fetch_html
 from pentool.utils.scope import domain_in_scope
+
+# ── Retry settings for page fetching ──────────────────────────────────────────
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_BASE_DELAY = 1.0  # seconds
+_RETRY_MAX_DELAY = 8.0   # seconds
 
 logger = get_logger(__name__)
 
@@ -632,90 +639,121 @@ class AsyncSpider:
         semaphore: asyncio.Semaphore,
     ) -> list[str]:
         async with semaphore:
-            try:
-                async with session.get(url, allow_redirects=True, ssl=False) as resp:
-                    result.total_requests += 1
-                    content_type = resp.headers.get("Content-Type", "")
-                    body = await resp.text(errors="replace")
+            # Retry loop with exponential backoff for transient errors
+            last_error: Exception | None = None
+            for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
+                try:
+                    async with session.get(url, allow_redirects=True, ssl=False) as resp:
+                        result.total_requests += 1
+                        content_type = resp.headers.get("Content-Type", "")
+                        body = await resp.text(errors="replace")
 
-                    if self.on_page:
-                        self.on_page(url)
+                        if self.on_page:
+                            self.on_page(url)
 
-                    # Detect "the server quietly bounced us to a login page".
-                    # With allow_redirects=True a 302 → /login.php resolves to a
-                    # 200 on the login page, so this code would otherwise
-                    # silently treat the login page as a successful crawl page
-                    # (0 findings, empty errors) instead of telling the user the
-                    # target needs auth. Only flag when the FINAL URL is a
-                    # login/signin/auth page to avoid noise on benign redirects
-                    # (e.g. "/" -> "/index.html").
-                    if self._is_auth_redirect(str(resp.url), url):
-                        result.errors.append(
-                            f"Auth required: {url} redirected to {resp.url} "
-                            f"(login page) — session/Cookie needed to crawl protected pages"
-                        )
-                        return []
+                        # Detect "the server quietly bounced us to a login page".
+                        # With allow_redirects=True a 302 → /login.php resolves to a
+                        # 200 on the login page, so this code would otherwise
+                        # silently treat the login page as a successful crawl page
+                        # (0 findings, empty errors) instead of telling the user the
+                        # target needs auth. Only flag when the FINAL URL is a
+                        # login/signin/auth page to avoid noise on benign redirects
+                        # (e.g. "/" -> "/index.html").
+                        if self._is_auth_redirect(str(resp.url), url):
+                            result.errors.append(
+                                f"Auth required: {url} redirected to {resp.url} "
+                                f"(login page) — session/Cookie needed to crawl protected pages"
+                            )
+                            return []
 
-                    if "javascript" in content_type or url.split("?")[0].endswith(".js"):
-                        # JS file — find API endpoints and add to list
-                        result.js_files.append(url)
-                        endpoints = self._extract_js_endpoints(body, url)
-                        result.endpoints.extend(endpoints)
-                        # Also extract pages from JS endpoints for crawling
-                        js_page_links = [
-                            ep.url for ep in endpoints
-                            if ep.url.startswith("http")
-                            and self._in_scope(ep.url, base_domain)
-                        ]
-                        return js_page_links
+                        if "javascript" in content_type or url.split("?")[0].endswith(".js"):
+                            # JS file — find API endpoints and add to list
+                            result.js_files.append(url)
+                            endpoints = self._extract_js_endpoints(body, url)
+                            result.endpoints.extend(endpoints)
+                            # Also extract pages from JS endpoints for crawling
+                            js_page_links = [
+                                ep.url for ep in endpoints
+                                if ep.url.startswith("http")
+                                and self._in_scope(ep.url, base_domain)
+                            ]
+                            return js_page_links
 
-                    if "html" not in content_type and "text/plain" not in content_type:
-                        return []
+                        if "html" not in content_type and "text/plain" not in content_type:
+                            return []
 
-                    result.pages.append(url)
+                        result.pages.append(url)
 
-                    # HTML parsing
-                    links, forms, js_links = self._parse_html(body, url, base_domain)
+                        # HTML parsing
+                        links, forms, js_links = self._parse_html(body, url, base_domain)
 
-                    # Add forms
-                    result.forms.extend(forms)
+                        # Add forms
+                        result.forms.extend(forms)
 
-                    # JS files added to queue
-                    for js_url in js_links:
-                        self._normalize_url(js_url)
-                        # O(n²) → O(1) via set lookup for both js_files and endpoints
-                        _known_js = set(result.js_files)
-                        if js_url not in _known_js:
-                            result.js_files.append(js_url)
+                        # JS files added to queue
+                        for js_url in js_links:
+                            self._normalize_url(js_url)
+                            # O(n²) → O(1) via set lookup for both js_files and endpoints
+                            _known_js = set(result.js_files)
+                            if js_url not in _known_js:
+                                result.js_files.append(js_url)
 
-                    # Extract parameters from current page URL
-                    params = parse_qs(urlparse(url).query)
-                    if params:
-                        result.endpoints.append(SpiderEndpoint(
-                            url=url,
-                            source="param",
-                            method="GET",
-                            params=list(params.keys()),
-                        ))
-
-                    # Detect path parameters (numbers and UUIDs in path)
-                    path_variants = self._extract_path_variants(url, base_domain)
-                    _known_urls = {ep.url for ep in result.endpoints}
-                    for pv in path_variants:
-                        if pv not in _known_urls:
+                        # Extract parameters from current page URL
+                        params = parse_qs(urlparse(url).query)
+                        if params:
                             result.endpoints.append(SpiderEndpoint(
-                                url=pv, source="path", method="GET",
+                                url=url,
+                                source="param",
+                                method="GET",
+                                params=list(params.keys()),
                             ))
 
-                    # Return links + JS (JS also goes to crawl queue)
-                    return links + js_links
+                        # Detect path parameters (numbers and UUIDs in path)
+                        path_variants = self._extract_path_variants(url, base_domain)
+                        _known_urls = {ep.url for ep in result.endpoints}
+                        for pv in path_variants:
+                            if pv not in _known_urls:
+                                result.endpoints.append(SpiderEndpoint(
+                                    url=pv, source="path", method="GET",
+                                ))
 
-            except asyncio.TimeoutError:
-                result.errors.append(f"Timeout: {url}")
-                return []
-            except Exception as exc:
-                result.errors.append(f"Error {url}: {exc}")
-                return []
+                        # Return links + JS (JS also goes to crawl queue)
+                        return links + js_links
+
+                except asyncio.TimeoutError:
+                    if attempt < _RETRY_MAX_ATTEMPTS - 1:
+                        delay = min(_RETRY_BASE_DELAY * (2 ** (attempt - 1)), _RETRY_MAX_DELAY)
+                        logger.debug("spider: timeout %s (attempt %d/%d, retry in %.1fs)",
+                                     url, attempt, _RETRY_MAX_ATTEMPTS, delay)
+                        await asyncio.sleep(delay)
+                        last_error = asyncio.TimeoutError(f"Timeout: {url}")
+                        continue
+                    result.errors.append(f"Timeout: {url}")
+                    return []
+                except (aiohttp.ClientError, ConnectionError, OSError) as exc:
+                    if attempt < _RETRY_MAX_ATTEMPTS - 1:
+                        delay = min(_RETRY_BASE_DELAY * (2 ** (attempt - 1)), _RETRY_MAX_DELAY)
+                        logger.debug("spider: transient error %s (attempt %d/%d, retry in %.1fs): %s",
+                                     url, attempt, _RETRY_MAX_ATTEMPTS, delay, exc)
+                        await asyncio.sleep(delay)
+                        last_error = exc
+                        continue
+                    result.errors.append(f"Error {url}: {exc}")
+                    return []
+                except Exception as exc:
+                    # Non-transient errors — no retry
+                    result.errors.append(f"Error {url}: {exc}")
+                    return []
+
+            # All retries exhausted
+            if last_error:
+                result.errors.append(f"Error {url}: {last_error} (after {_RETRY_MAX_ATTEMPTS} attempts)")
+            return []
+
+            # All retries exhausted
+            if last_error:
+                result.errors.append(f"Error {url}: {last_error} (after {_RETRY_MAX_ATTEMPTS} attempts)")
+            return []
 
     # ── JS rendering (Lightpanda) ─────────────────────────────────────────────
 

@@ -368,23 +368,24 @@ class HttpStorage(BaseSqliteStorage):
 
         result = []
         from pentool.storage.large_body_handler import LargeBodyHandler
+        # Batch-load all large bodies to avoid N+1 disk reads
+        req_refs = [r.get("request_body_ref") for r in rows]
+        resp_refs = [r.get("response_body_ref") for r in rows]
+        all_refs = list(set(filter(None, req_refs + resp_refs)))
+        loaded = LargeBodyHandler.load_batch(all_refs)
         for row in rows:
             entry = dict(row)
-            # Load large bodies
-            if entry.get("request_body_ref"):
-                try:
-                    entry["request_body"] = LargeBodyHandler.load(
-                        entry["request_body_ref"]
-                    ).decode("utf-8", errors="replace")
-                except Exception:
-                    entry["request_body"] = ""
-            if entry.get("response_body_ref"):
-                try:
-                    entry["response_body"] = LargeBodyHandler.load(
-                        entry["response_body_ref"]
-                    ).decode("utf-8", errors="replace")
-                except Exception:
-                    entry["response_body"] = ""
+            # Load large bodies from batch cache
+            ref = entry.get("request_body_ref")
+            if ref and ref in loaded:
+                entry["request_body"] = loaded[ref].decode("utf-8", errors="replace")
+            elif entry.get("request_body_ref"):
+                entry["request_body"] = ""
+            ref = entry.get("response_body_ref")
+            if ref and ref in loaded:
+                entry["response_body"] = loaded[ref].decode("utf-8", errors="replace")
+            elif entry.get("response_body_ref"):
+                entry["response_body"] = ""
             # Deserialize headers
             import json as _json
             for key in ("request_headers", "response_headers"):
