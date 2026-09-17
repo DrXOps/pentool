@@ -26,8 +26,9 @@ _UNSAFE_SKIP_PRO_CHECK_FLAG = "--unsafe-skip-pro-compat-check"
 _NO_CHECK_UPDATES_FLAG = "--no-check-updates"
 _AUTO_UPDATE_FLAG = "--auto-update"
 
-# Top-level one-shot mode flags handled by _run_target_mode (a click.group
-# can't take bare options without a subcommand, so we intercept these here).
+# Top-level one-shot mode: handled by cli/main.py click group,
+# not by a separate parser here. _run_target_mode was removed in
+# the audit (P1.3) — it duplicated click's argument parsing.
 _URL_FLAGS = ("--url",)
 
 
@@ -44,126 +45,60 @@ def _ensure_lightpanda() -> None:
 def _run_target_mode(argv: list[str]) -> None:
     """Handle ``pentool --url <url> [options]``.
 
-    Headless flags (CI/CD):
-      --headless        Run without TUI
-      --output PATH     Save report to file
-      --check NAMES     Comma-separated check names
-      --threads N       Parallel threads (default 10)
-      --delay SEC       Delay between requests (default 0.0)
-      --use-ai          Enable AI-assisted scanning
-      --crawl           Crawl target before scanning
-      --depth N         Crawl depth (default 3)
-      --max-pages N     Max crawl pages (default 100)
-      --format FORMAT   Report format: json, html, csv (default: auto)
-
-    TUI flags:
-      --real            Launch TUI, proxy on, fetch target through proxy
+    Replaced by click (cli/main.py) in P1.3 audit — kept as a thin
+    compatibility shim that delegates to click's own argument parsing
+    (which already handles --url, --headless, --output, --check, --threads,
+    --delay, --use-ai, --crawl, --depth, --max-pages, --format).
+    The only flag NOT handled by click is --real (TUI + proxy on), which
+    is intercepted here before delegating the remaining args to click.
     """
-    urls: list[str] = []
-    headless = False
-    real = False
-    output: str | None = None
-    checks: list[str] = []
-    threads: int = 10
-    delay: float = 0.0
-    use_ai = False
-    crawl = False
-    crawl_depth: int = 3
-    max_pages: int = 100
-    report_format: str = "auto"
+    real = "--real" in argv
+    remaining = [a for a in argv if a != "--real"]
 
+    if real:
+        _ensure_lightpanda()
+
+    if not real or not any(a.startswith("--headless") for a in remaining):
+        # --real without --headless: launch TUI with pending URLs
+        if real:
+            urls = _extract_urls(remaining)
+            if not urls:
+                print("Error: --url requires at least one URL.", file=sys.stderr)
+                raise SystemExit(2)
+            _ensure_lightpanda()
+            from pentool.tui.app import PentoolApp
+            app = PentoolApp()
+            app._pending_start_urls = urls
+            app._pending_start_real = True
+            app.run()
+            return
+
+    # Delegate remaining args (--url, --headless, etc.) to click
+    from pentool.cli.main import cli
+    # Remove script name from argv so click sees the right args
+    old_argv = sys.argv
+    try:
+        sys.argv = [sys.argv[0]] + remaining
+        cli()
+    finally:
+        sys.argv = old_argv
+
+
+def _extract_urls(argv: list[str]) -> list[str]:
+    """Extract URL values from argv (--url <url> pairs)."""
+    urls: list[str] = []
     i = 0
     while i < len(argv):
-        arg = argv[i]
-        if arg in _URL_FLAGS:
+        a = argv[i]
+        if a in ("--url",):
             if i + 1 < len(argv):
                 urls.append(argv[i + 1])
                 i += 2
             else:
-                print(f"Error: {arg} requires a URL value", file=sys.stderr)
-                sys.exit(1)
-        elif arg == "--headless":
-            headless = True
-            i += 1
-        elif arg == "--real":
-            real = True
-            i += 1
-        elif arg == "--output":
-            if i + 1 < len(argv):
-                output = argv[i + 1]
-                i += 2
-            else:
                 i += 1
-        elif arg == "--check" and i + 1 < len(argv):
-            for c in argv[i + 1].split(","):
-                c = c.strip()
-                if c:
-                    checks.append(c)
-            i += 2
-        elif arg == "--threads" and i + 1 < len(argv):
-            try:
-                threads = int(argv[i + 1])
-            except ValueError:
-                pass
-            i += 2
-        elif arg == "--delay" and i + 1 < len(argv):
-            try:
-                delay = float(argv[i + 1])
-            except ValueError:
-                pass
-            i += 2
-        elif arg == "--use-ai":
-            use_ai = True
-            i += 1
-        elif arg == "--crawl":
-            crawl = True
-            i += 1
-        elif arg == "--depth" and i + 1 < len(argv):
-            try:
-                crawl_depth = int(argv[i + 1])
-            except ValueError:
-                pass
-            i += 2
-        elif arg == "--max-pages" and i + 1 < len(argv):
-            try:
-                max_pages = int(argv[i + 1])
-            except ValueError:
-                pass
-            i += 2
-        elif arg == "--format" and i + 1 < len(argv):
-            report_format = argv[i + 1].lower()
-            i += 2
         else:
             i += 1
-
-    urls = [u for u in urls if u]
-    if not urls:
-        print("Error: --url requires at least one URL.", file=sys.stderr)
-        raise SystemExit(2)
-
-    if headless:
-        from pentool.cli.headless import run_headless_scan
-        sys.exit(run_headless_scan(
-            urls,
-            output=output,
-            check_names=checks or None,
-            concurrency=threads,
-            delay=delay,
-            use_ai=use_ai,
-            crawl=crawl,
-            crawl_depth=crawl_depth,
-            max_pages=max_pages,
-            report_format=report_format,
-        ))
-    else:
-        # Auto-install Lightpanda binary if missing — needed for --real
-        # capture, JS crawl, and technology detection.
-        _ensure_lightpanda()
-        from pentool.tui.app import PentoolApp
-        app = PentoolApp()
-        app._pending_start_urls = urls
-        app._pending_start_real = real
-        app.run()
+    return [u for u in urls if u]
 
 
 def _kill_orphaned_pentool() -> None:
@@ -442,11 +377,11 @@ def main() -> None:
         while _flag in sys.argv:
             sys.argv.remove(_flag)
 
-    if len(sys.argv) > 1 and "--url" in sys.argv:
-        _run_target_mode(sys.argv[1:])
-        return
-
     if len(sys.argv) > 1:
+        if "--url" in sys.argv and "--real" in sys.argv:
+            # --real flag intercepted before click: launch TUI with proxy on
+            _run_target_mode(sys.argv[1:])
+            return
         from pentool.cli.main import cli
         cli()
     else:
