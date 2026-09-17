@@ -152,8 +152,8 @@ class ProxyDaemon:
         if os.path.exists(path):
             try:
                 os.unlink(path)
-            except OSError:
-                pass
+            except OSError as _e:
+                logger.debug("daemon: could not unlink %s: %s", path, _e)
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             sock.bind(path)
@@ -201,16 +201,16 @@ class ProxyDaemon:
                 if not data:
                     break
         except (ConnectionResetError, BrokenPipeError, EOFError):
-            pass
+            pass  # expected on socket close
         except Exception:  # noqa: BLE001
-            pass
+            logger.debug("daemon: event reader error", exc_info=True)
         finally:
             self._event_queues.pop(conn, None)
             self._event_clients.discard(conn)
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("daemon: event conn close error: %s", _e)
 
     async def _event_writer(self, conn: socket.socket,
                             queue: asyncio.Queue) -> None:
@@ -250,15 +250,15 @@ class ProxyDaemon:
                     resp = await self._dispatch(json.loads(line.decode("utf-8", "replace")))
                     await loop.sock_sendall(conn, (json.dumps(resp) + "\n").encode("utf-8"))
         except (ConnectionResetError, BrokenPipeError, EOFError):
-            pass
+            pass  # expected on connection close
         except Exception as exc:  # noqa: BLE001
             logger.debug("proxy-daemon client error: %s", exc)
         finally:
             self._clients.discard(conn)
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("daemon: cmd conn close error: %s", _e)
 
     # NOTE: _handle_evt_client is defined at line 189 above, with the correct
     # signature (conn + optional queue) matching what _accept_loop(register_evt=True)
@@ -339,7 +339,7 @@ class ProxyDaemon:
             self._proxy.clear_requests()
             return {"ok": True}
         if name == "replace_requests":
-            from pentool.modules.proxy import InterceptedRequest
+            from pentool.utils.intercepted_request import InterceptedRequest
             reqs = [InterceptedRequest.from_dict(d) for d in (cmd.get("requests") or [])]
             self._proxy.replace_requests(reqs)
             return {"ok": True}
@@ -363,13 +363,13 @@ class ProxyDaemon:
                 try:
                     queue.get_nowait()
                 except asyncio.QueueEmpty:
-                    pass
+                    pass  # race with consumer — expected
                 try:
                     queue.put_nowait(payload)
                 except asyncio.QueueFull:
-                    pass
-            except Exception:
-                pass
+                    pass  # another race — drop this event
+            except Exception as _e:
+                logger.debug("daemon: event broadcast error: %s", _e)
 
 
 def main(argv: list[str] | None = None) -> None:

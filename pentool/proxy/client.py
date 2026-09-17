@@ -124,13 +124,13 @@ class ProxyClient:
             if self._intercept_enabled:
                 try:
                     self.set_intercept(True)
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as _e:  # noqa: BLE001
+                    logger.debug("client: could not push intercept pref: %s", _e)
             if self._scope:
                 try:
                     self.set_scope(list(self._scope))
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as _e:  # noqa: BLE001
+                    logger.debug("client: could not push scope pref: %s", _e)
         except Exception:
             self.cleanup()
             raise
@@ -245,7 +245,7 @@ class ProxyClient:
         request_obj = None
         if req:
             try:
-                from pentool.modules.proxy import InterceptedRequest
+                from pentool.utils.intercepted_request import InterceptedRequest
                 try:
                     request_obj = InterceptedRequest.from_dict(req)
                 except Exception:  # noqa: BLE001
@@ -283,8 +283,8 @@ class ProxyClient:
         try:
             if self._cmd_sock is not None:
                 self._command({"cmd": "stop"})
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("client: stop command error: %s", _e)
         finally:
             self.cleanup()
 
@@ -301,23 +301,23 @@ class ProxyClient:
                 if s is not None:
                     try:
                         s.close()
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("client: socket close error (%s): %s", attr, _e)
                 setattr(self, attr, None)
             proc = self._proc
             self._proc = None
         if proc is not None:
             try:
                 proc.terminate()
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("client: proc terminate error: %s", _e)
             try:
                 proc.wait(timeout=2)
-            except Exception:
+            except Exception as _e:
                 try:
                     proc.kill()
                 except Exception:
-                    pass
+                    pass  # process already gone
         for path in (self._cmd_sock_path, self._evt_sock_path):
             if path and os.path.exists(path):
                 try:
@@ -413,7 +413,7 @@ class ProxyClient:
         if not data:
             return None
         try:
-            from pentool.modules.proxy import InterceptedRequest
+            from pentool.utils.intercepted_request import InterceptedRequest
             return InterceptedRequest.from_dict(data)
         except Exception:  # noqa: BLE001
             return None

@@ -64,12 +64,17 @@ def _get_proc_pool() -> ProcessPoolExecutor | None:
         return None
     if _PROC_POOL is None:
         try:
-            # fork (spawn is unsafe: when installed via a uv console-script,
-            # __main__ is not a .py module, so spawn workers cannot re-import
-            # it — the pool failed/hung at *start up*). With fork, workers
-            # inherit fd 8080, so the pool is closed explicitly via
-            # shutdown_proc_pool() on app exit (action_quit).
-            _PROC_POOL = ProcessPoolExecutor(max_workers=_PROC_POOL_WORKERS)
+            import multiprocessing as _mp
+            # Use spawn context to avoid inheriting parent's file descriptors
+            # (notably the proxy's listening socket on 8080). With fork, workers
+            # inherit all fds and block the port if they orphan. spawn is safe
+            # here because the worker function is a simple pickleable callable
+            # (not dependent on __main__).
+            _ctx = _mp.get_context("spawn")
+            _PROC_POOL = ProcessPoolExecutor(
+                max_workers=_PROC_POOL_WORKERS,
+                mp_context=_ctx,
+            )
         except (ImportError, OSError, RuntimeError):
             _PROC_POOL = None
     return _PROC_POOL
@@ -78,10 +83,9 @@ def _get_proc_pool() -> ProcessPoolExecutor | None:
 def shutdown_proc_pool() -> None:
     """Stop the shared CPU pool, releasing its workers' inherited fds.
 
-    Only needed for long-lived processes (the TUI). Without this, a pool
-    created via fork leaves workers that remain after the main process
-    exits (orphans with PPID=1) and keep the proxy's 8080 listener fd open.
-    Terminating them cleanly on quit releases the port for the next launch.
+    With fork, workers inherit all parent fds including the proxy's listening
+    socket on 8080. With spawn (current), workers don't inherit fds, but the
+    pool should still be shut down cleanly on exit to avoid orphan processes.
     """
     global _PROC_POOL
     pool = _PROC_POOL

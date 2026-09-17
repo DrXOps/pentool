@@ -307,8 +307,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self._project_path: str | None = None
         self._project_loaded: bool = False  # Flag: project created or opened
         self._skip_project_guard: bool = False  # True in tests to bypass the guard
-        # Protection against message storm: set of pending req_ids for deduplication
+        # Protection against message storm: set of pending req_ids for deduplication.
+        # Guarded by a Lock because it is read/written from both the TUI event
+        # loop thread and the proxy's reader thread (via EventBus callbacks).
         self._pending_done_ids: set[str] = set()
+        self._pending_done_lock: threading.Lock = threading.Lock()
         # Set when a deliberate quit (action_quit / Ctrl+Q) is underway, so the
         # on_screen_unmounted diagnostic doesn't fire on the normal shutdown
         # that action_quit performs. Cleared... reset per run() naturally since
@@ -1308,7 +1311,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         """Proxy completed a request/response cycle → update the row and SiteMap."""
         # Remove from pending — the next request with this id will pass through again
         req_id = getattr(msg.req, "id", None)
-        self._pending_done_ids.discard(req_id)
+        with self._pending_done_lock:
+            self._pending_done_ids.discard(req_id)
         # Guard: msg.req must be InterceptedRequest
         if not isinstance(msg.req, _IR):
             logger.warning("on_proxy_request_done: msg.req is %s, skipping", type(msg.req))
