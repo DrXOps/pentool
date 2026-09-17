@@ -236,7 +236,7 @@ def _log_exit_reason(reason: str) -> None:
             f"--- EXIT: {reason} ({__import__('time').strftime('%Y-%m-%d %H:%M:%S')}) ---\n"
         )
     except Exception:
-        pass
+        pass  # best-effort logging
 
 
 def _ensure_pro_compatible(

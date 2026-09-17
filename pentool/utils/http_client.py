@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
-
-from pentool.core.config import get_config, Callable
+from typing import Any, Callable
 
 import aiohttp
 
@@ -32,27 +30,20 @@ class HTTPClient:
         verify_ssl: bool = False,
         on_request_sent: RequestCallback | None = None,
         extra_headers: dict | None = None,
+        scan_marker_name: str | None = None,
+        scan_marker_value: str | None = None,
+        scan_marker_enabled: bool = False,
     ) -> None:
         self._proxy_url = proxy_url
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._follow_redirects = follow_redirects
         self._verify_ssl = verify_ssl
         self._on_request_sent = on_request_sent
-        # Если extra_headers не передан явно — автоматом подтягиваем
-        # scan_marker из глобального конфига (X-Scanner: pentool/1.0).
-        if extra_headers is None:
-            try:
-                cfg = get_config()
-                if cfg.scan_marker_enabled:
-                    extra_headers = {cfg.scan_marker_name: cfg.scan_marker_value}
-                    logger.debug("HTTPClient: scan_marker injected: %s: %s",
-                                 cfg.scan_marker_name, cfg.scan_marker_value)
-                else:
-                    extra_headers = {}
-                    logger.debug("HTTPClient: scan_marker disabled in config")
-            except Exception as exc:
-                logger.debug("HTTPClient: scan_marker cfg read failed: %s", exc)
-                extra_headers = {}
+        # scan_marker injected from outside (Config layer) — no direct import of core.config
+        if extra_headers is None and scan_marker_enabled and scan_marker_name and scan_marker_value:
+            extra_headers = {scan_marker_name: scan_marker_value}
+            logger.debug("HTTPClient: scan_marker injected: %s: %s",
+                         scan_marker_name, scan_marker_value)
         self._extra_headers = extra_headers or {}
         self._session: aiohttp.ClientSession | None = None
 
@@ -187,4 +178,7 @@ def get_shared_http_client(
         timeout=cfg.request_timeout,
         follow_redirects=follow_redirects,
         extra_headers=extra_headers,
+        scan_marker_name=getattr(cfg, "scan_marker_name", None),
+        scan_marker_value=getattr(cfg, "scan_marker_value", None),
+        scan_marker_enabled=getattr(cfg, "scan_marker_enabled", False),
     )

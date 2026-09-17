@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pentool.api.base_api import ExportableAPI
 from pentool.core.logging import get_logger
-from pentool.modules.proxy import InterceptedRequest, MatchReplaceRule, ProxyServer
+from pentool.modules.proxy import MatchReplaceRule, ProxyServer
 from pentool.proxy.client import ProxyClient
+from pentool.utils.intercepted_request import InterceptedRequest
 
 logger = get_logger(__name__)
 
