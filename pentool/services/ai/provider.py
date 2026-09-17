@@ -23,6 +23,16 @@ log = logging.getLogger(__name__)
 # the PID is actually alive.
 _MCP_PROCESS_PID: int | None = None
 
+# Счётчик активных запросов к MCP — инкрементится перед generate, декрементится
+# после. ActivityIndicator.AI смотрит на него: мигает только когда > 0.
+_MCP_PENDING_REQUESTS: int = 0
+
+
+def is_mcp_busy() -> bool:
+    """True if there are pending AI requests being processed."""
+    global _MCP_PENDING_REQUESTS
+    return _MCP_PENDING_REQUESTS > 0
+
 
 def is_mcp_running() -> bool:
     """True if an MCP subprocess is currently alive in this process."""
@@ -80,6 +90,8 @@ class MCPBackend(AIBackend):
             )
             # stdin/stdout from create_subprocess_exec are asyncio
             # StreamWriter/StreamReader, correctly bound to the event loop.
+            self._stdin = self._process.stdin
+            self._stdout = self._process.stdout
             global _MCP_PROCESS_PID
             _MCP_PROCESS_PID = self._process.pid
             log.info("MCP-сервер запущен (PID=%s)", self._process.pid)
@@ -125,7 +137,12 @@ class MCPBackend(AIBackend):
 
         MCP tools/call returns {"content": [{"type":"text","text":"<json>"}]} —
         we pull out and parse `text` so the client gets a clean dict/items.
+
+        Tracks pending request count via _MCP_PENDING_REQUESTS so the
+        ActivityIndicator's AI glyph blinks only while a request is in flight.
         """
+        global _MCP_PENDING_REQUESTS
+
         task = REGISTRY.get(task_name)
         if not task:
             log.warning("MCPBackend: неизвестная задача %s", task_name)
@@ -140,7 +157,12 @@ class MCPBackend(AIBackend):
         if context:
             prompt_data["context"] = context
 
-        resp = await self._call_tool("generate_payload", prompt_data)
+        _MCP_PENDING_REQUESTS += 1
+        try:
+            resp = await self._call_tool("generate_payload", prompt_data)
+        finally:
+            _MCP_PENDING_REQUESTS -= 1
+
         if not resp:
             return None
         # tools/call → {"content": [{"type":"text","text":"<json>"}], ...}

@@ -22,6 +22,105 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 logger = get_logger(__name__)
 
 
+def _format_tech_profile(profile: dict) -> str:
+    """Format TechProfile dict into a short human-readable string.
+
+    Supports two profile formats:
+    - New: {"language": "Go", "framework": "Django", "cms": "WordPress",
+            "server": "nginx", "waf": True, "waf_name": "Cloudflare"}
+    - Legacy: {"is_php": True, "is_django": True, "server_header": "nginx",
+               "waf": {"detected": True, "name": "Cloudflare"}}
+    """
+    parts = []
+
+    # WAF (both formats)
+    waf = profile.get("waf", {})
+    waf_name = profile.get("waf_name")
+    if isinstance(waf, dict) and waf.get("detected"):
+        parts.append(f"WAF: {waf.get('name', '?')}")
+    elif waf is True and waf_name:
+        parts.append(f"WAF: {waf_name}")
+    elif waf is True:
+        parts.append("WAF")
+
+    # Language (new format)
+    lang = profile.get("language")
+    if lang and lang != "Unknown":
+        parts.append(lang)
+
+    # Legacy language flags
+    for key, label in [
+        ("is_php", "PHP"), ("is_java", "Java"), ("is_dotnet", ".NET"),
+        ("is_nodejs", "Node.js"), ("is_python", "Python"), ("is_golang", "Go"),
+        ("is_ruby", "Ruby"),
+    ]:
+        if profile.get(key):
+            if label not in parts:
+                parts.append(label)
+
+    # Framework (new format)
+    fw = profile.get("framework")
+    if fw:
+        parts.append(fw)
+
+    # Legacy framework flags
+    for key, label in [
+        ("is_django", "Django"), ("is_flask", "Flask"), ("is_laravel", "Laravel"),
+        ("is_rails", "Rails"), ("is_spring", "Spring"), ("is_express", "Express"),
+    ]:
+        if profile.get(key):
+            if label not in parts:
+                parts.append(label)
+
+    # CMS (new format)
+    cms = profile.get("cms")
+    if cms:
+        parts.append(cms)
+
+    # CDN (new format)
+    cdn = profile.get("cdn")
+    if cdn:
+        parts.append(f"CDN:{cdn}")
+
+    # SPA (new format)
+    spa = profile.get("spa")
+    if spa:
+        parts.append(spa)
+
+    # Frontend JS (может быть списком ['jQuery', 'HTMX'] или строкой 'jQuery, HTMX')
+    frontend_js = profile.get("frontend_js", [])
+    if isinstance(frontend_js, list):
+        parts.extend(frontend_js)
+    elif isinstance(frontend_js, str) and frontend_js.strip():
+        parts.append(frontend_js)
+
+    # CSS framework
+    css_fw = profile.get("css_framework", [])
+    if isinstance(css_fw, list):
+        parts.extend(css_fw)
+    elif isinstance(css_fw, str) and css_fw.strip():
+        parts.append(css_fw)
+
+    # OS
+    os_type = profile.get("os") or profile.get("os_type")
+    if os_type:
+        parts.append(os_type)
+
+    # Auth methods (может быть списком ['Session', 'CSRF'] или строкой 'Session, CSRF Token')
+    auth = profile.get("auth_methods", [])
+    if isinstance(auth, list) and auth:
+        parts.append(f"Auth:{','.join(auth[:3])}")
+    elif isinstance(auth, str) and auth.strip():
+        parts.append(f"Auth:{auth}")
+
+    # Server (both formats)
+    server = profile.get("server_header", "") or profile.get("powered_by", "") or profile.get("server", "")
+    if server and server not in parts:
+        parts.append(server)
+
+    return " | ".join(parts) if parts else ""
+
+
 class TargetScreen(Widget):
     """Tree view of discovered hosts and URLs."""
 
@@ -159,6 +258,21 @@ class TargetScreen(Widget):
                 host_label = f"{host} ({total_reqs})"
             host_node = root.add(host_label, data={"type": "host", "host": host, "in_scope": in_scope})
 
+            # TechDetect нода — если есть кэшированный профиль, показываем технологии
+            if in_scope:
+                try:
+                    from pentool.modules.scanner.tech_cache import TechCache
+                    cached = TechCache().get(host)
+                    if cached:
+                        tech_str = _format_tech_profile(cached)
+                        if tech_str:
+                            host_node.add_leaf(
+                                f"[dim cyan]{tech_str}[/dim cyan]",
+                                data={"type": "tech", "host": host},
+                            )
+                except Exception:
+                    pass
+
             # Multi-level tree: split each path into segments so endpoints like
             # /api/users/123 become api → users → 123 rather than a flat list.
             for node in nodes:
@@ -215,6 +329,18 @@ class TargetScreen(Widget):
             scope_str = "[green]YES[/green]" if in_scope else "[red]NO[/red]"
             log.write(f"[bold]{host}[/bold]")
             log.write(f"In scope: {scope_str}")
+
+            # TechDetect — читаем из кэша
+            try:
+                from pentool.modules.scanner.tech_cache import TechCache
+                cached = TechCache().get(host)
+                if cached:
+                    tech_str = _format_tech_profile(cached)
+                    if tech_str:
+                        log.write(f"[dim cyan]Tech: {tech_str}[/dim cyan]")
+            except Exception:
+                pass
+
             log.write(f"Endpoints: {len(nodes)}")
             total = sum(n.request_count for n in nodes)
             log.write(f"Total requests: {total}")
@@ -393,16 +519,32 @@ class TargetScreen(Widget):
 
     async def _auto_detect_tech(self, host: str) -> None:
         """Fire-and-forget tech detection when a host is added to scope."""
+        logger.info("TECHDETECT: starting for host=%s", host)
         try:
             from pentool.services.tech_detector import detect_tech
             url = host if "://" in host else f"https://{host}"
+            logger.info("TECHDETECT: fetching %s", url)
             profile = await detect_tech(url)
-            tech_str = f"{profile.get('language') or '?'} / {profile.get('framework') or '?'}"
+            logger.info("TECHDETECT: profile=%s for host=%s", profile, host)
+            if not profile:
+                self.app.notify(f"⚠️ TechDetect for {host}: no profile returned", timeout=5)
+                return
+            # Проверяем что в профиле есть хоть что-то осмысленное
+            has_data = any(profile.get(k) for k in ("language", "framework", "cms", "server", "waf"))
+            logger.info("TECHDETECT: has_data=%s profile_keys=%s", has_data, list(profile.keys()))
+            if not has_data:
+                self.app.notify(f"⚠️ TechDetect for {host}: empty profile (no headers matched)", timeout=5)
+                return
+            tech_str = _format_tech_profile(profile) or f"{profile.get('language') or '?'} / {profile.get('framework') or '?'}"
             if profile.get('cms'):
                 tech_str += f" / {profile['cms']}"
-            self.app.notify(f"🔍 {host}: {tech_str}", timeout=4)
-        except Exception:
-            pass
+            self.app.notify(f"🔍 {host}: {tech_str}", timeout=6)
+            logger.info("TECHDETECT: updating tree node for %s with tech=%s", host, tech_str)
+            # Обновляем дерево — добавляем tech-ноду под хостом
+            self._update_tech_node(host, profile)
+        except Exception as exc:
+            logger.error("TECHDETECT: error for %s: %s", host, exc, exc_info=True)
+            self.app.notify(f"⚠️ TechDetect error for {host}: {exc}", timeout=5)
 
     def action_clear(self) -> None:
         self._clear_worker()
@@ -697,6 +839,35 @@ class TargetScreen(Widget):
         finally:
             if worker_name:
                 self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
+
+    def _update_tech_node(self, host: str, profile: dict) -> None:
+        """Update or add a tech-info leaf under the host node in the tree.
+
+        Called from auto_scope.py after TechDetect completes.
+        """
+        try:
+            tree = self.query_one("#site-tree", Tree)
+            # Find the host node by scanning root children
+            for child in tree.root.children:
+                data = child.data
+                if isinstance(data, dict) and data.get("host") == host:
+                    # Remove old tech node if exists
+                    to_remove = [
+                        c for c in child.children
+                        if isinstance(c.data, dict) and c.data.get("type") == "tech"
+                    ]
+                    for c in to_remove:
+                        child.remove(c)
+                    # Add new tech node
+                    tech_str = _format_tech_profile(profile)
+                    if tech_str:
+                        child.add_leaf(
+                            f"[dim cyan]{tech_str}[/dim cyan]",
+                            data={"type": "tech", "host": host},
+                        )
+                    break
+        except Exception as exc:
+            logger.debug("_update_tech_node: %s", exc)
 
     def _refresh_tree(self) -> None:
         try:

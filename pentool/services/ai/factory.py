@@ -107,6 +107,30 @@ def get_active_backend() -> "MCPBackend | None":
     return _ACTIVE_BACKEND
 
 
+async def ensure_backend(config: Config | None = None) -> "MCPBackend | None":
+    """Return the running backend, starting it lazily if needed.
+
+    Unlike ``get_active_backend()`` which returns None when the backend
+    hasn't been started yet, this waits for the subprocess to be ready.
+    Safe to call multiple times — idempotent.
+    """
+    global _ACTIVE_BACKEND
+    if _ACTIVE_BACKEND is not None:
+        # Already started — verify the subprocess is alive
+        from pentool.services.ai.provider import is_mcp_running
+        if is_mcp_running():
+            return _ACTIVE_BACKEND
+        log.warning("AI: backend subprocess died — restarting")
+        _ACTIVE_BACKEND = None
+
+    if config is None:
+        from pentool.core.config import get_config
+        config = get_config()
+
+    ok = await start_ai(config)
+    return _ACTIVE_BACKEND if ok else None
+
+
 def _build_mcp_cmd(model_path: str) -> list[str]:
     """Build the MCP-server launch command.
 

@@ -65,6 +65,10 @@ class Config:
     ai_mcp_port: int = 0              # 0 = stdio, >0 = TCP
     ai_mcp_model_path: str = ""       # path to the GGUF file
     ai_mcp_auto_start: bool = False   # auto-start the MCP server when pentool launches
+    # Debug — подробное логирование процесса скана и AI-воркера
+    scan_debug: bool = False           # показать/скрыть детальный вывод скана
+    # Auto-Scope — автоматически добавлять хост в Scope при отправке в модуль
+    auto_scope: bool = False           # если True — хост из контекстного меню → в Scope
 
     # Observer list — not serialized
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)
@@ -142,12 +146,16 @@ class Config:
             "ai_mcp_port": self.ai_mcp_port,
             "ai_mcp_model_path": self.ai_mcp_model_path,
             "ai_mcp_auto_start": self.ai_mcp_auto_start,
+            "scan_debug": self.scan_debug,
+            "auto_scope": self.auto_scope,
             "ai_enabled": self.ai_enabled,
             "ai_model": self.ai_model,
             "ai_mcp_host": self.ai_mcp_host,
             "ai_mcp_port": self.ai_mcp_port,
             "ai_mcp_model_path": self.ai_mcp_model_path,
             "ai_mcp_auto_start": self.ai_mcp_auto_start,
+            "scan_debug": self.scan_debug,
+            "auto_scope": self.auto_scope,
         }
 
     def add_recent_project(self, path: str) -> None:

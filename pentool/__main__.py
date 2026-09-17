@@ -31,6 +31,16 @@ _AUTO_UPDATE_FLAG = "--auto-update"
 _URL_FLAGS = ("--url",)
 
 
+def _ensure_lightpanda() -> None:
+    """Auto-install Lightpanda binary if not present.
+
+    Runs synchronously before the event loop starts. Prints progress to stderr.
+    Silently falls back if download fails — callers check is_lightpanda_available().
+    """
+    from pentool.utils.lightpanda import ensure_lightpanda_installed_sync
+    ensure_lightpanda_installed_sync()
+
+
 def _run_target_mode(argv: list[str]) -> None:
     """Handle `pentool --url <url> [--headless] [--output file] [--real]`.
 
@@ -43,6 +53,9 @@ def _run_target_mode(argv: list[str]) -> None:
     headless = False
     real = False
     output: str | None = None
+    checks: list[str] = []
+    threads: int = 10
+    delay: float = 0.0
 
     i = 0
     while i < len(argv):
@@ -66,6 +79,21 @@ def _run_target_mode(argv: list[str]) -> None:
                 i += 2
             else:
                 i += 1
+        elif arg == "--check" and i + 1 < len(argv):
+            checks.append(argv[i + 1])
+            i += 2
+        elif arg == "--threads" and i + 1 < len(argv):
+            try:
+                threads = int(argv[i + 1])
+            except ValueError:
+                pass
+            i += 2
+        elif arg == "--delay" and i + 1 < len(argv):
+            try:
+                delay = float(argv[i + 1])
+            except ValueError:
+                pass
+            i += 2
         else:
             i += 1
 
@@ -76,8 +104,14 @@ def _run_target_mode(argv: list[str]) -> None:
 
     if headless:
         from pentool.cli.headless import run_headless_scan
-        sys.exit(run_headless_scan(urls, output))
+        sys.exit(run_headless_scan(urls, output,
+                                   check_names=checks or None,
+                                   concurrency=threads,
+                                   delay=delay))
     else:
+        # Auto-install Lightpanda binary if missing — needed for --real
+        # capture, JS crawl, and technology detection.
+        _ensure_lightpanda()
         from pentool.tui.app import PentoolApp
         app = PentoolApp()
         app._pending_start_urls = urls

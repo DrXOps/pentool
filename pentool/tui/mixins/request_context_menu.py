@@ -221,6 +221,8 @@ class RequestContextMenuMixin:
         if not raw.strip():
             self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
+        from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+        _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         from pentool.tui.messages import SendToRepeater
         self.app.post_message(SendToRepeater(raw))  # type: ignore[attr-defined]
 
@@ -228,6 +230,8 @@ class RequestContextMenuMixin:
         if not raw.strip():
             self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
+        from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+        _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         from pentool.tui.messages import SendToIntruder
         self.app.post_message(SendToIntruder(raw))  # type: ignore[attr-defined]
 
@@ -236,6 +240,8 @@ class RequestContextMenuMixin:
             self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         try:
+            from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+            _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
             from pentool.tui.messages import SendRequestToScanner
             from pentool.utils.parser import parse_http_request
             req = parse_http_request(raw)
@@ -245,8 +251,12 @@ class RequestContextMenuMixin:
 
     def _cm_do_send_decoder(self, raw: str) -> None:
         """Requires AppMixin in the inheritance chain."""
+        from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+        _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         self._send_to_decoder(raw)  # type: ignore[attr-defined]
 
     def _cm_do_send_comparer(self, raw: str) -> None:
         """Requires AppMixin in the inheritance chain."""
+        from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+        _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         self._send_to_comparer(raw, label="Request")  # type: ignore[attr-defined]

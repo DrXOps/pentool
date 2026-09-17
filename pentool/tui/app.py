@@ -745,6 +745,20 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
         logger.info("seed: --real=%s proxy_started=%s proxy_running=%s", real, proxy_started,
                     bool(self._proxy and self._proxy.is_running))
+        # Auto-scope: добавляем хост в скоуп ВСЕГДА при --real, даже если
+        # fetch не удался. Без этого хост не попадает ни в SiteMap.scope,
+        # ни в ProxyServer.scope, и техдетект не запускается.
+        for target_url in urls:
+            try:
+                from pentool.tui.mixins.auto_scope import _force_scope_host
+                from urllib.parse import urlparse
+                parsed = urlparse(target_url)
+                host = parsed.netloc or parsed.hostname or target_url
+                logger.info("seed: force-scope %s (real=%s)", host, real)
+                _force_scope_host(host, self)
+            except Exception as exc:
+                logger.warning("seed: force-scope error for %s: %s", target_url, exc)
+
         if real:
             # Actually fetch the target(s) through the proxy so real requests
             # show up in the project (not just a dry seed entry).

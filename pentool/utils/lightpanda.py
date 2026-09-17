@@ -22,6 +22,7 @@ import asyncio
 import logging
 import os
 import shutil
+import sys
 from pathlib import Path
 
 # stdlib logging (NOT pentool.core.logging) — utils/ must not import core/.
@@ -59,6 +60,104 @@ def find_lightpanda_binary() -> str | None:
 
 def is_lightpanda_available() -> bool:
     return find_lightpanda_binary() is not None
+
+
+# ── Auto-install ──────────────────────────────────────────────────────────
+
+_LIGHTPANDA_VERSION = "0.3.7"
+_LIGHTPANDA_URL_TEMPLATE = (
+    "https://github.com/lightpanda-io/browser/releases/download/"
+    f"{_LIGHTPANDA_VERSION}/"
+    "lightpanda-{arch}-linux"
+)
+
+
+def _detect_arch() -> str:
+    """Return the architecture part of the Lightpanda release asset name."""
+    arch = "x86_64"  # default
+    machine = os.uname().machine.lower()
+    if machine in ("aarch64", "arm64"):
+        arch = "aarch64"
+    return arch
+
+
+def ensure_lightpanda_installed_sync() -> bool:
+    """Synchronous wrapper — call before event loop starts (from __main__).
+
+    Downloads Lightpanda if missing. Prints progress to stderr.
+    Returns True if the binary is available after the call.
+    """
+    if find_lightpanda_binary() is not None:
+        return True
+    # Run the async installer in a fresh event loop (we are pre-asyncio here).
+    try:
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(ensure_lightpanda_installed())
+        loop.close()
+        return result
+    except Exception as exc:
+        logger.error("Lightpanda auto-install failed: %s", exc)
+        return False
+
+
+async def ensure_lightpanda_installed(force: bool = False) -> bool:
+    """Download Lightpanda binary if not already installed.
+
+    Args:
+        force: If True, re-download even if the binary exists.
+
+    Returns:
+        True if the binary is available after the call.
+    """
+    if not force and find_lightpanda_binary() is not None:
+        return True
+
+    dest_dir = Path.home() / ".local" / "bin"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / "lightpanda"
+
+    arch = _detect_arch()
+    url = _LIGHTPANDA_URL_TEMPLATE.format(arch=arch)
+
+    logger.info("Lightpanda not found — downloading %s …", url)
+    print(f"  ↻ Downloading Lightpanda {_LIGHTPANDA_VERSION} ({arch})…",
+          file=sys.stderr, flush=True)
+
+    import urllib.request
+
+    tmp = dest.with_suffix(".part")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            total = int(resp.headers.get("Content-Length") or 0)
+            downloaded = 0
+            chunk_size = 1 << 20  # 1 MiB
+            with open(tmp, "wb") as f:
+                while True:
+                    chunk = resp.read(chunk_size)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total:
+                        pct = downloaded * 100 // total
+                        print(f"  ↻ {pct}% ({downloaded >> 20} MiB / {total >> 20} MiB)",
+                              file=sys.stderr, flush=True)
+        # Проверка размера — минимум 5 MiB
+        if not tmp.exists() or tmp.stat().st_size < 5_000_000:
+            logger.error("Lightpanda download too small — aborting")
+            tmp.unlink(missing_ok=True)
+            return False
+        tmp.chmod(0o755)
+        tmp.replace(dest)
+        logger.info("Lightpanda installed → %s (%s bytes)", dest, dest.stat().st_size)
+        print(f"  ✓ Lightpanda {_LIGHTPANDA_VERSION} installed → {dest}",
+              file=sys.stderr, flush=True)
+        return True
+    except Exception as exc:
+        logger.error("Lightpanda download failed: %s", exc)
+        tmp.unlink(missing_ok=True)
+        return False
 
 
 async def lightpanda_fetch_html(
