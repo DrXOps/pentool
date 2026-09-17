@@ -1740,6 +1740,52 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             pass
         await super()._on_exit_app()
 
+    async def _close_all_storages(self) -> None:
+        """Close all persistent SQLite connections and stop background workers.
+
+        Called from action_quit() — consolidates the per-storage cleanup that
+        used to be inline (4 repeated try/except/log blocks).
+        """
+        # ProxyService (HttpStorage)
+        try:
+            if self._proxy_service is not None:
+                await self._proxy_service.close()
+                logger.info("APP: HttpStorage closed on quit")
+        except Exception as e:
+            logger.warning("APP: HttpStorage close error on quit: %s", e)
+
+        # Per-screen storages: Intruder, Target, Repeater
+        _storage_screens: list[tuple[str, type, str, str]] = [
+            (SCREEN_INTRUDER, IntruderScreen, "_api", "Intruder"),
+            (SCREEN_TARGET, TargetScreen, "_target_api", "Target"),
+            (SCREEN_REPEATER, RepeaterScreen, "_repeater_api", "Repeater"),
+        ]
+        for selector, cls, api_attr, name in _storage_screens:
+            try:
+                screen = self.query_one(selector, cls)
+                if hasattr(screen, "_cancel_save_workers"):
+                    screen._cancel_save_workers()
+                api = getattr(screen, api_attr, None)
+                if api is not None:
+                    await api.close()
+                    logger.info("APP: %s storage closed on quit", name)
+            except Exception as e:
+                logger.warning("APP: %s storage close error on quit: %s", name, e)
+
+        # Spider CPU pool
+        try:
+            from pentool.api.spider_api import shutdown_spider_pool
+            shutdown_spider_pool()
+        except Exception:
+            pass
+
+        # AI MCP server
+        try:
+            from pentool.services.ai.factory import stop_ai
+            await stop_ai()
+        except Exception:
+            pass
+
     async def action_quit(self) -> None:
         # Deliberate quit underway — suppress the abnormal-exit diagnostic in
         # on_screen_unmounted (which would otherwise fire during this normal
@@ -1764,57 +1810,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # with a busy proxy instead of the old ~11s (6s stop + 5s join).
         if self._proxy and self._proxy.is_running:
             await self._stop_proxy_async()
-        # Close SQLite storage — flush WAL to disk
-        try:
-            if self._proxy_service is not None:
-                await self._proxy_service.close()
-                logger.info("APP: HttpStorage closed on quit")
-        except Exception as e:
-            logger.warning("APP: HttpStorage close error on quit: %s", e)
-        # Close Intruder's persistent SQLite connection (see IntruderScreen
-        # _get_api()/reload_from_project() — mirrors HttpStorage above).
-        try:
-            intruder_screen = self.query_one(SCREEN_INTRUDER, IntruderScreen)
-            intruder_screen._cancel_save_workers()
-            if intruder_screen._api is not None:
-                await intruder_screen._api.close()
-                logger.info("APP: Intruder storage closed on quit")
-        except Exception as e:
-            logger.warning("APP: Intruder storage close error on quit: %s", e)
-        # Close Target/SiteMap's persistent SQLite connection (BaseSqliteStorage).
-        try:
-            target_screen = self.query_one(SCREEN_TARGET, TargetScreen)
-            target_screen._cancel_save_workers()
-            if target_screen._target_api is not None:
-                await target_screen._target_api.close()
-                logger.info("APP: Target storage closed on quit")
-        except Exception as e:
-            logger.warning("APP: Target storage close error on quit: %s", e)
-        # Close Repeater's persistent SQLite connection (BaseSqliteStorage).
-        try:
-            repeater_screen = self.query_one(SCREEN_REPEATER, RepeaterScreen)
-            if repeater_screen._repeater_api is not None:
-                await repeater_screen._repeater_api.close()
-                logger.info("APP: Repeater storage closed on quit")
-        except Exception as e:
-            logger.warning("APP: Repeater storage close error on quit: %s", e)
-        # Stop the spider CPU pool BEFORE the hard os._exit() below. exit() is
-        # followed synchronously by os._exit(), which by-passes atexit/finally —
-        # so a process-pool created via fork leaves orphaned workers (PPID=1)
-        # holding the inherited 8080 listener fd, and the next launch fails
-        # with "address already in use". shutdown_proc_pool() terminates them
-        # cleanly so the port is released on a normal quit.
-        try:
-            from pentool.api.spider_api import shutdown_spider_pool
-            shutdown_spider_pool()
-        except Exception:
-            pass
-        # Stop the AI MCP server (subprocess) so no orphan LLM process lingers.
-        try:
-            from pentool.services.ai.factory import stop_ai
-            await stop_ai()
-        except Exception:
-            pass
+        # Close all storages in one consolidated call
+        await self._close_all_storages()
         self.exit()
         # Force-terminate the process — kills non-daemon threads
         # (jemalloc_bg_thd from pyarrow) that would otherwise block exit.
