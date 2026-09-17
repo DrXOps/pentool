@@ -42,12 +42,22 @@ def _ensure_lightpanda() -> None:
 
 
 def _run_target_mode(argv: list[str]) -> None:
-    """Handle `pentool --url <url> [--headless] [--output file] [--real]`.
+    """Handle ``pentool --url <url> [options]``.
 
-    Headless       → run an active scan and emit a report (CI/CD).
-    --real         → launch the TUI, proxy on, and actually fetch the target
-                     through the proxy so real traffic lands in the project.
-    Otherwise      → launch the TUI pre-seeded with the URL(s).
+    Headless flags (CI/CD):
+      --headless        Run without TUI
+      --output PATH     Save report to file
+      --check NAMES     Comma-separated check names
+      --threads N       Parallel threads (default 10)
+      --delay SEC       Delay between requests (default 0.0)
+      --use-ai          Enable AI-assisted scanning
+      --crawl           Crawl target before scanning
+      --depth N         Crawl depth (default 3)
+      --max-pages N     Max crawl pages (default 100)
+      --format FORMAT   Report format: json, html, csv (default: auto)
+
+    TUI flags:
+      --real            Launch TUI, proxy on, fetch target through proxy
     """
     urls: list[str] = []
     headless = False
@@ -56,6 +66,11 @@ def _run_target_mode(argv: list[str]) -> None:
     checks: list[str] = []
     threads: int = 10
     delay: float = 0.0
+    use_ai = False
+    crawl = False
+    crawl_depth: int = 3
+    max_pages: int = 100
+    report_format: str = "auto"
 
     i = 0
     while i < len(argv):
@@ -80,7 +95,10 @@ def _run_target_mode(argv: list[str]) -> None:
             else:
                 i += 1
         elif arg == "--check" and i + 1 < len(argv):
-            checks.append(argv[i + 1])
+            for c in argv[i + 1].split(","):
+                c = c.strip()
+                if c:
+                    checks.append(c)
             i += 2
         elif arg == "--threads" and i + 1 < len(argv):
             try:
@@ -94,6 +112,27 @@ def _run_target_mode(argv: list[str]) -> None:
             except ValueError:
                 pass
             i += 2
+        elif arg == "--use-ai":
+            use_ai = True
+            i += 1
+        elif arg == "--crawl":
+            crawl = True
+            i += 1
+        elif arg == "--depth" and i + 1 < len(argv):
+            try:
+                crawl_depth = int(argv[i + 1])
+            except ValueError:
+                pass
+            i += 2
+        elif arg == "--max-pages" and i + 1 < len(argv):
+            try:
+                max_pages = int(argv[i + 1])
+            except ValueError:
+                pass
+            i += 2
+        elif arg == "--format" and i + 1 < len(argv):
+            report_format = argv[i + 1].lower()
+            i += 2
         else:
             i += 1
 
@@ -104,10 +143,18 @@ def _run_target_mode(argv: list[str]) -> None:
 
     if headless:
         from pentool.cli.headless import run_headless_scan
-        sys.exit(run_headless_scan(urls, output,
-                                   check_names=checks or None,
-                                   concurrency=threads,
-                                   delay=delay))
+        sys.exit(run_headless_scan(
+            urls,
+            output=output,
+            check_names=checks or None,
+            concurrency=threads,
+            delay=delay,
+            use_ai=use_ai,
+            crawl=crawl,
+            crawl_depth=crawl_depth,
+            max_pages=max_pages,
+            report_format=report_format,
+        ))
     else:
         # Auto-install Lightpanda binary if missing — needed for --real
         # capture, JS crawl, and technology detection.
