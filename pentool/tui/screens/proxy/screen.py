@@ -24,13 +24,11 @@ from textual.widgets import (
     TabPane,
     TextArea,
 )
-from textual_fastdatatable import ArrowBackend
-
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.core.logging import get_logger
+from pentool.tui.widgets.data_table import ArrowBackendDataTable
 from pentool.tui.widgets.proxy_table import (
     COL_NAMES as _COL_NAMES,
-    make_empty_table as _make_empty_table,
     row_to_record as _row_to_record,
     rows_to_arrow as _rows_to_arrow,
 )
@@ -239,8 +237,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
                 with Vertical(id="main-panel"):
                     with Vertical(id="table-area"):
                         yield FilterBar(id="filter-bar")
-                        yield DataTable(
-                            backend=ArrowBackend(_make_empty_table()),
+                        yield ArrowBackendDataTable(
+                            columns=_COL_NAMES,
                             id="request-list",
                             cursor_type="row",
                             zebra_stripes=True,
@@ -271,8 +269,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             with Horizontal(id="ws-body"):
                 with Vertical(id="ws-main-panel"):
                     with Vertical(id="ws-table-area"):
-                        yield DataTable(
-                            backend=ArrowBackend(_make_empty_table()),
+                        yield ArrowBackendDataTable(
+                            columns=_COL_NAMES,
                             id="ws-request-list",
                             cursor_type="row",
                             zebra_stripes=True,
@@ -440,7 +438,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             self._history_oldest_offset = max(total - len(rows), 0)
             arrow = _rows_to_arrow(rows)
             table = self.query_one("#request-list", DataTable)
-            table.backend = ArrowBackend(arrow)
+            table.set_data(arrow)
             table._ordered_columns = None
             try:
                 for col in table.ordered_columns:
@@ -518,7 +516,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             try:
                 table = self.query_one("#request-list", DataTable)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.backend = ArrowBackend(arrow)
+                table.set_data(arrow)
                 table._ordered_columns = None
                 table._clear_caches()
                 table._require_update_dimensions = True
@@ -574,7 +572,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             try:
                 table = self.query_one("#ws-request-list", DataTable)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.backend = ArrowBackend(arrow)
+                table.set_data(arrow)
                 table._ordered_columns = None
                 table._clear_caches()
                 table._require_update_dimensions = True
@@ -613,7 +611,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
                 table = self.query_one("#ws-request-list", DataTable)
             except Exception:
                 return
-            table.backend = ArrowBackend(arrow)
+            table.set_data(arrow)
             table._ordered_columns = None
             try:
                 for col in table.ordered_columns:
@@ -922,7 +920,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             try:
                 table = self.query_one("#request-list", DataTable)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.backend = ArrowBackend(arrow)
+                table.set_data(arrow)
                 table._ordered_columns = None
                 table._clear_caches()
                 table._require_update_dimensions = True
@@ -985,7 +983,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             try:
                 table = self.query_one("#ws-request-list", DataTable)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.backend = ArrowBackend(arrow)
+                table.set_data(arrow)
                 table._ordered_columns = None
                 table._clear_caches()
                 table._require_update_dimensions = True
@@ -1206,10 +1204,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             table = self.query_one("#request-list", DataTable)
             if not self._rows_cache:
                 return
-            from textual_fastdatatable import ArrowBackend
             import pentool.tui.screens.proxy.screen as _ps
             arrow = _ps._rows_to_arrow(self._rows_cache)
-            table.backend = ArrowBackend(arrow)
+            table.set_data(arrow)
             table._ordered_columns = None
             table._clear_caches()
             table._require_update_dimensions = True
@@ -1592,7 +1589,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         self._history_oldest_offset = 0
         try:
             table = self.query_one("#request-list", DataTable)
-            table.backend = ArrowBackend(_make_empty_table())
+            table.clear_data()
             table.refresh()
         except Exception:
             pass
