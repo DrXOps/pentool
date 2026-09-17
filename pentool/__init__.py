@@ -1,16 +1,19 @@
 """Pentool — professional web security testing toolkit with Textual TUI."""
 
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+import tomllib
+from pathlib import Path
 
+# Single source of truth: version lives ONLY in pyproject.toml.
+# This file reads it at import time so there is one canonical value
+# used by both the installed package metadata (pip setuptools-scm /
+# manual stamping) and the source tree itself. No more fallback
+# literals that drift out of sync.
+_PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 try:
-    # Single source of truth: the version pip actually installed (matches
-    # `pentool --version` / `pip show pentool`), including dev-build suffixes
-    # like "0.2.8.dev5" that CI stamps only into the package metadata, not
-    # into this file. Falls back to the literal below for editable/dev
-    # checkouts where the package isn't registered in the environment.
-    __version__ = _pkg_version("pentool")
-except PackageNotFoundError:
-    __version__ = "0.2.11"
+    with open(_PYPROJECT, "rb") as _f:
+        __version__: str = tomllib.load(_f)["project"]["version"]
+except Exception:
+    __version__ = "0.0.0"  # last resort — should never happen in a valid install
 
 __author__ = "pentool"
 

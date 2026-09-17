@@ -32,6 +32,10 @@ def run_headless_scan(urls: list[str], output: str | None, check_names: list[str
                       concurrency: int = 5, delay: float = 0.0) -> int:
     """Run an active scan against ``urls`` and exit with a process status.
 
+    Unlike ScannerAPI.start_active_scan (which scans the bare URL only),
+    this uses SpiderAPI to crawl the target first, then scans all discovered
+    pages — matching what the TUI ScanService does.
+
     Args:
         urls: target URL(s).
         output: optional report path (.json / .html / .csv). None = print only.
@@ -44,6 +48,10 @@ def run_headless_scan(urls: list[str], output: str | None, check_names: list[str
     ScannerAPI = _import_scanner_api()
 
     from pentool.core.config import get_config
+    from pentool.utils.http_client import get_shared_http_client
+    from pentool.api.spider_api import SpiderAPI
+    from pentool.utils.parser import ParsedRequest
+    from pentool.utils.lightpanda import is_lightpanda_available
 
     cfg = get_config()
     api = ScannerAPI(db_path=cfg.db_path)
@@ -58,17 +66,72 @@ def run_headless_scan(urls: list[str], output: str | None, check_names: list[str
     def on_progress(done: int, total: int) -> None:
         click.echo(f"\r  Progress: {done}/{total}", nl=False)
 
+    def on_request_sent(req_sent: int, threads_active: int,
+                        check_name: str, param_name: str, url: str) -> None:
+        pass  # keep the engine's progress-reporting proxy working
+
     async def _run() -> None:
-        await api.start_active_scan(
-            urls,
-            check_names=check_names,
-            on_finding=on_finding,
-            on_progress=on_progress,
+        # 1. Crawl the targets — with JS if Lightpanda is available
+        all_targets: list[str] = []
+        use_js = is_lightpanda_available()
+        spider = SpiderAPI.from_params(max_depth=3, max_pages=100,
+                                       js_render=use_js)
+        click.echo(f"[headless] Crawling {len(urls)} target(s) js_render={use_js}...")
+        for url in urls:
+            try:
+                result = await spider.crawl(url, db_path=cfg.db_path)
+                if hasattr(result, "pages") and result.pages:
+                    all_targets.append(url)
+                    for page in result.pages:
+                        if page not in all_targets:
+                            all_targets.append(page)
+                    click.echo(f"  → {url}: {len(result.pages)} pages")
+                else:
+                    all_targets.append(url)
+            except Exception as exc:
+                click.echo(f"  ⚠ crawl failed for {url}: {exc}", err=True)
+                all_targets.append(url)
+
+        click.echo(f"  Total unique targets: {len(all_targets)}")
+
+        # 2. Configure engine with http_client
+        http_client = get_shared_http_client(
+            follow_redirects=True, cfg=cfg,
+        )
+        api.configure_engine(
+            http_client=http_client,
             concurrency=concurrency,
             request_delay=delay,
         )
 
-    click.echo(f"[headless] Active scan on {len(urls)} target(s)...")
+        # 3. Build ParsedRequest list and run active scan
+        reqs = [
+            ParsedRequest(method="GET", url=u, headers={}, body="")
+            for u in all_targets
+        ]
+        click.echo(f"[headless] Active scan on {len(reqs)} request(s)...")
+        active_findings = await api.run_active_on_requests(
+            seed_requests=reqs,
+            check_names=check_names,
+            on_finding=on_finding,
+            on_progress=on_progress,
+            on_request_sent=on_request_sent,
+        )
+        for f in active_findings:
+            if not any(getattr(x, "id", None) == f.id for x in findings):
+                findings.append(f)
+
+        # Save findings to DB so generate_report can read them
+        if findings:
+            await api.save_findings(findings)
+
+        # Close the shared http_client to avoid unclosed session warnings
+        try:
+            await http_client.close()
+        except Exception:
+            pass
+
+    click.echo(f"[headless] Starting scan on {len(urls)} target(s)...")
     asyncio.run(_run())
     click.echo(f"\nDone. Found {len(findings)} finding(s).")
 

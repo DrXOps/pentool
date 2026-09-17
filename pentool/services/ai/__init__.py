@@ -2,6 +2,7 @@
 
 from pentool.services.ai.factory import (  # noqa: F401
     ai_setup_required,
+    ensure_backend,
     get_active_backend,
     get_ai,
     is_ai_running,
