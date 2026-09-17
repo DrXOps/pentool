@@ -36,6 +36,24 @@ class LargeBodyHandler:
         return Path(path).read_bytes()
 
     @classmethod
+    def load_batch(cls, paths: list[str | None]) -> dict[str, bytes]:
+        """Load multiple large bodies in one batch.
+
+        Avoids N+1 disk reads in export_all_requests. Returns a dict mapping
+        path → bytes for every non-None, existing path. Missing paths are
+        silently skipped (logged at debug).
+        """
+        result: dict[str, bytes] = {}
+        for p in paths:
+            if not p:
+                continue
+            try:
+                result[p] = Path(p).read_bytes()
+            except Exception as _e:
+                logger.debug("LargeBodyHandler: batch load failed for %s: %s", p, _e)
+        return result
+
+    @classmethod
     def delete(cls, path: str) -> None:
         try:
             Path(path).unlink(missing_ok=True)

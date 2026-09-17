@@ -38,6 +38,30 @@ def _get_metadata() -> dict[str, Any]:
     }
 
 
+def _save_local_crash(exc: BaseException, tb_text: str | None = None) -> None:
+    """Write crash traceback to a local file as fallback.
+
+    Used when the network send fails or aiohttp is unavailable — ensures
+    the crash information is never silently lost.
+    """
+    try:
+        from pentool.core.config import DEFAULT_CONFIG_DIR
+        from datetime import datetime
+        crash_log = DEFAULT_CONFIG_DIR / "crash_last.log"
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(crash_log, "a", encoding="utf-8") as f:
+            f.write(f"\n=== CRASH {ts} ===\n")
+            f.write(f"Exception: {type(exc).__name__}: {exc}\n")
+            if tb_text:
+                f.write(tb_text)
+            else:
+                import traceback as _tb
+                _tb.print_exc(file=f)
+            f.write(f"=== END CRASH {ts} ===\n")
+    except Exception:
+        pass  # last resort — nothing we can do
+
+
 def _anonymize(text: str) -> str:
     """Remove paths and potential tokens from traceback text."""
     import re
@@ -49,25 +73,32 @@ def _anonymize(text: str) -> str:
 
 
 async def send_crash_async(exc: BaseException, endpoint: str = f"{_API_BASE}/api/crash") -> None:
-    """Send crash report asynchronously. Silently ignores any errors."""
+    """Send crash report asynchronously. Silently ignores any errors.
+
+    Falls back to a local crash log if the HTTP request fails — never loses
+    the traceback entirely.
+    """
     try:
         import aiohttp  # type: ignore[import]
     except ImportError:
-        return  # aiohttp not available — skip silently
+        _save_local_crash(exc)
+        return  # aiohttp not available — save locally
+
+    tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__)
+    tb_text = _anonymize("".join(tb_lines))
+    payload = {
+        "traceback": tb_text,
+        "exception": type(exc).__name__,
+        **_get_metadata(),
+    }
 
     try:
-        tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__)
-        tb_text = _anonymize("".join(tb_lines))
-        payload = {
-            "traceback": tb_text,
-            "exception": type(exc).__name__,
-            **_get_metadata(),
-        }
         timeout = aiohttp.ClientTimeout(total=8)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             await session.post(endpoint, json=payload, ssl=False)
     except Exception:
-        pass  # never propagate errors from crash reporter
+        # Network failed — save locally so the traceback is not lost
+        _save_local_crash(exc, tb_text)
 
 
 def send_crash(exc: BaseException) -> None:

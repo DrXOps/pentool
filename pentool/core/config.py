@@ -112,51 +112,14 @@ class Config:
             self.notify_observers(changed)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dict for serialization."""
-        return {
-            "proxy_host": self.proxy_host,
-            "proxy_port": self.proxy_port,
-            "cert_dir": self.cert_dir,
-            "db_path": self.db_path,
-            "log_file": self.log_file,
-            "log_level": self.log_level,
-            "plugins_dir": self.plugins_dir,
-            "scope": self.scope,
-            "intercept_enabled": self.intercept_enabled,
-            "proxy_engine": self.proxy_engine,
-            "recent_projects": self.recent_projects,
-            "auto_save_enabled": self.auto_save_enabled,
-            "auto_save_interval": self.auto_save_interval,
-            "default_user_agent": self.default_user_agent,
-            "request_timeout": self.request_timeout,
-            "connect_timeout": self.connect_timeout,
-            "collaborator_url": self.collaborator_url,
-            "max_redirects": self.max_redirects,
-            "verify_ssl": self.verify_ssl,
-            "scan_marker_enabled": self.scan_marker_enabled,
-            "scan_marker_name": self.scan_marker_name,
-            "scan_marker_value": self.scan_marker_value,
-            "send_crash_reports": self.send_crash_reports,
-            "check_updates": self.check_updates,
-            "theme": self.theme,
-            "notifications_sound_enabled": self.notifications_sound_enabled,
-            "ai_enabled": self.ai_enabled,
-            "ai_model": self.ai_model,
-            "ai_mcp_host": self.ai_mcp_host,
-            "ai_mcp_port": self.ai_mcp_port,
-            "ai_mcp_model_path": self.ai_mcp_model_path,
-            "ai_mcp_auto_start": self.ai_mcp_auto_start,
-            "scan_debug": self.scan_debug,
-            "auto_scope": self.auto_scope,
-            "ai_enabled": self.ai_enabled,
-            "ai_model": self.ai_model,
-            "ai_mcp_host": self.ai_mcp_host,
-            "ai_mcp_port": self.ai_mcp_port,
-            "ai_mcp_model_path": self.ai_mcp_model_path,
-            "ai_mcp_auto_start": self.ai_mcp_auto_start,
-            "scan_debug": self.scan_debug,
-            "auto_scope": self.auto_scope,
-        }
+        """Convert to dict for serialization.
+
+        Uses dataclasses.fields() so every field is included automatically —
+        no more manual enumeration that drifts out of sync (the bug that caused
+        ai_* and scan_debug fields to be duplicated here).
+        """
+        import dataclasses as _dc
+        return {f.name: getattr(self, f.name) for f in _dc.fields(self)}
 
     def add_recent_project(self, path: str) -> None:
         path = str(path)

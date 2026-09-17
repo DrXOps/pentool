@@ -8,6 +8,7 @@ import signal
 import sys
 import threading
 import time
+from typing import Any
 from pathlib import Path
 
 from textual import on
@@ -26,6 +27,7 @@ Checkbox.BUTTON_LEFT = "["
 Checkbox.BUTTON_INNER = "✓"
 Checkbox.BUTTON_RIGHT = "]"
 
+from pentool import __version__
 from pentool.api.proxy_api import InterceptedRequest as _IR
 from pentool.api.proxy_api import ProxyAPI, ProxyServer
 from pentool.proxy.client import ProxyClient
@@ -1150,6 +1152,55 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     def get_proxy_api(self) -> ProxyAPI:
         return self._proxy_api
+
+    async def health(self) -> dict[str, Any]:
+        """Return a health-check dict for monitoring / diagnostics.
+
+        Checks:
+          - DB connection (via proxy_service)
+          - Proxy status (running / stopped)
+          - EventBus subscriber count
+          - Spider activity
+          - AI server status
+
+        Returns a dict suitable for ``pentool status --verbose``.
+        """
+        status: dict[str, Any] = {
+            "app": "Pentool",
+            "version": __version__,
+            "proxy_running": bool(self._proxy and self._proxy.is_running),
+            "proxy_port": self._proxy.port if self._proxy else self._cfg.proxy_port,
+            "spider_active": self.is_spider_active(),
+            "project_loaded": self._project_loaded,
+            "active_module": self._active_module,
+        }
+        # DB health
+        try:
+            if self._proxy_service is not None:
+                await self._proxy_service._storage.count()
+                status["db"] = "ok"
+            else:
+                status["db"] = "not_initialized"
+        except Exception as e:
+            status["db"] = f"error: {e}"
+
+        # EventBus stats
+        try:
+            bus = get_event_bus()
+            s = bus.stats()
+            status["eventbus_handlers"] = s.get("total_handlers", 0)
+            status["eventbus_history"] = s.get("history_size", 0)
+        except Exception:
+            pass
+
+        # AI status
+        try:
+            from pentool.services.ai.factory import is_ai_running
+            status["ai_running"] = is_ai_running()
+        except Exception:
+            status["ai_running"] = False
+
+        return status
 
 
 
