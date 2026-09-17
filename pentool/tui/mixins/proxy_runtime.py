@@ -172,23 +172,25 @@ class ProxyRuntimeMixin:
             self.call_from_thread(self._update_dashboard_proxy_status, False)  # type: ignore[attr-defined]
 
     def _stop_proxy(self) -> None:
+        """Synchronous proxy stop (Stop button, Ctrl+Q, sync callers).
+
+        Delegates to the async variant via a temporary event loop when the
+        engine is 'memory' (the only case that truly needs async). For the
+        daemon engine stop() is a socket command that works from either
+        context, so the sync variant calls it directly — no event loop dance.
+        """
         logger.info("APP: _stop_proxy called")
         if self._engine() == "daemon":
             return self._stop_proxy_daemon()
+        # 'memory' engine — run async stop synchronously
         if self._proxy and self._proxy.is_running and self._proxy_loop:  # type: ignore[attr-defined]
             future = asyncio.run_coroutine_threadsafe(
                 self._proxy.stop(), self._proxy_loop  # type: ignore[attr-defined]
             )
             try:
-                # stop() itself now cancels tasks within a short grace
-                # (see _STOP_TASK_GRACE), so a short timeout here is enough —
-                # and on a normal quit the leftover connections are released
-                # by the process exit, so we never need the old 6s headroom.
                 future.result(timeout=1.5)
             except Exception as e:
                 logger.warning("APP: proxy.stop() error or timeout: %s", e)
-                # Force-cancel anything still running in the proxy loop so
-                # the thread can exit even if stop() itself timed out
                 if self._proxy_loop and not self._proxy_loop.is_closed():  # type: ignore[attr-defined]
                     try:
                         def _cancel_all():
@@ -203,20 +205,16 @@ class ProxyRuntimeMixin:
                 logger.warning("APP: proxy thread did not stop in 1.5s — port 8080 may still be in use")
         self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
         self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
-        self.call_after_refresh(  # type: ignore[attr-defined]
+        self.call_after_refresh(
             self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
         )
 
     async def _stop_proxy_async(self) -> None:
-        """Async stop of the proxy that does NOT block the TUI thread.
+        """Async proxy stop for use from async workers (project switch, quit).
 
-        Same robust path as `_stop_proxy()` (await proxy.stop() up to 6s,
-        force-cancel tasks on timeout, join the proxy thread) but expressed
-        as a coroutine. Intended to be awaited from an async worker context
-        (e.g. ProjectManager._do_switch) so that switching to a new project
-        does NOT freeze the UI for up to ~10s while the old proxy is being
-        wound down. _stop_proxy() remains the synchronous variant used by
-        the Stop button / Ctrl+Q.
+        For 'memory' engine: awaits proxy.stop() in the proxy loop without
+        blocking the TUI thread, then polls for thread exit in 100ms steps
+        (up to ~2s). For 'daemon' engine: delegates to the async daemon stop.
         """
         logger.info("APP: _stop_proxy_async called")
         if self._engine() == "daemon":
@@ -229,25 +227,19 @@ class ProxyRuntimeMixin:
                 await asyncio.wait_for(asyncio.wrap_future(future), timeout=1.5)
             except asyncio.TimeoutError:
                 logger.warning("APP: proxy.stop() (async) timed out")
-        # Wait (in this async context) for the proxy thread to die so the
-        # 8080 port is released before the caller switches the project DB.
-        # Short bounded window — beyond it the port is released by the
-        # (soon-exiting) process, so we never block the caller for ~7s.
         loop = asyncio.get_running_loop()
         proxy_thread = self._proxy_thread  # type: ignore[attr-defined]
         if proxy_thread is not None:
-            for _ in range(20):  # up to ~2s in 100ms steps
+            for _ in range(20):
                 alive = await loop.run_in_executor(None, proxy_thread.is_alive)
                 if not alive:
                     break
                 await asyncio.sleep(0.1)
-            self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
-            self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
-            self.call_after_refresh(  # type: ignore[attr-defined]
-                self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
-            )
-        else:
-            self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
+        self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
+        self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
+        self.call_after_refresh(
+            self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
+        )
 
     def _stop_proxy_daemon(self) -> None:
         """Stop the daemon-backed proxy synchronously (Stop button / Ctrl+Q)."""
