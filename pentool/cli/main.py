@@ -24,6 +24,8 @@ from pentool.core.logging import setup_logging
               help="Number of parallel scan threads.")
 @click.option("--delay", "cli_delay", default=0.0, type=float, show_default=True,
               help="Delay between requests (seconds).")
+@click.option("--real", "cli_real", is_flag=True, default=False,
+              help="Launch TUI, proxy on, fetch target through proxy (requires --url).")
 @click.option("--use-ai", "cli_use_ai", is_flag=True, default=False,
               help="Enable AI-assisted scanning (endpoint discovery, WAF bypass).")
 @click.option("--crawl", "cli_crawl", is_flag=True, default=False,
@@ -39,6 +41,7 @@ from pentool.core.logging import setup_logging
 def cli(ctx: click.Context,
         config_path: str | None, verbose: bool,
         cli_urls: tuple[str, ...] | None, headless: bool,
+        cli_real: bool,
         cli_output: str | None,
         cli_checks: str | None,
         cli_threads: int,
@@ -93,7 +96,9 @@ def cli(ctx: click.Context,
                 report_format=cli_format,
             )
         else:
+            # --url without --headless: launch TUI with pending URLs
             from pentool.tui.app import PentoolApp
             app = PentoolApp()
             app._pending_start_urls = urls
+            app._pending_start_real = cli_real
             app.run()
