@@ -23,14 +23,7 @@ logger = get_logger(__name__)
 
 
 def _format_tech_profile(profile: dict) -> str:
-    """Format TechProfile dict into a short human-readable string.
-
-    Supports two profile formats:
-    - New: {"language": "Go", "framework": "Django", "cms": "WordPress",
-            "server": "nginx", "waf": True, "waf_name": "Cloudflare"}
-    - Legacy: {"is_php": True, "is_django": True, "server_header": "nginx",
-               "waf": {"detected": True, "name": "Cloudflare"}}
-    """
+    """Format TechProfile dict (new and legacy format) to short string."""
     parts = []
 
     # WAF (both formats)

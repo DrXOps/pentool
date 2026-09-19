@@ -51,21 +51,7 @@ def cli(ctx: click.Context,
         cli_depth: int,
         cli_max_pages: int,
         cli_format: str) -> None:
-    """Pentool — web application security testing toolkit.
-
-    Run without arguments to open the TUI:
-
-        pentool
-
-    One-shot / CI/CD:
-
-        pentool --url https://example.com --headless --output result.json
-
-    Full CI/CD options:
-
-        pentool --url https://example.com --headless --check xss,sqli \\
-                --threads 20 --delay 0.5 --use-ai --crawl --output report.json
-    """
+    """Pentool — web app security toolkit (TUI, CLI/CI/CD with --url --headless --check)."""
     ctx.ensure_object(dict)
 
     cfg = get_config()

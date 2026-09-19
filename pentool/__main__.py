@@ -43,15 +43,7 @@ def _ensure_lightpanda() -> None:
 
 
 def _run_target_mode(argv: list[str]) -> None:
-    """Handle ``pentool --url <url> [options]``.
-
-    Replaced by click (cli/main.py) in P1.3 audit — kept as a thin
-    compatibility shim that delegates to click's own argument parsing
-    (which already handles --url, --headless, --output, --check, --threads,
-    --delay, --use-ai, --crawl, --depth, --max-pages, --format).
-    The only flag NOT handled by click is --real (TUI + proxy on), which
-    is intercepted here before delegating the remaining args to click.
-    """
+    """Handle ``pentool --url <url> [options]`` — thin compatibility shim delegating to click."""
     real = "--real" in argv
     remaining = [a for a in argv if a != "--real"]
 
@@ -102,23 +94,7 @@ def _extract_urls(argv: list[str]) -> list[str]:
 
 
 def _kill_orphaned_pentool() -> None:
-    """Kill orphaned pentool processes left behind by a previous run.
-
-    When `pentool` is killed forcefully (kill -9 / crash / terminal closed
-    mid-scan), its ProcessPoolExecutor workers (fork'd) survive as orphans
-    (PPID=1) and keep the proxy's 8080 listener fd open — the next launch
-    then fails with "address already in use" until they are killed manually.
-    This scans /proc for live processes whose command is our own pentool
-    entrypoint, whose PPID is 1 (orphaned), and that are not the current
-    process, and SIGKILLs them so the port is free before this instance
-    starts. Cheap, safe (only touches our own binary), and idempotent.
-
-    Kept deliberate: it runs only on script entry, before any proxy bind, so
-    it can't kill a legitimately-running proxy of a *concurrent* session we
-    don't want to disturb? No — it kills orphans only (PPID==1), never a
-    running foreground session (PPID != 1). A real second session has a live
-    parent and won't match.
-    """
+    """Kill orphaned pentool processes (PPID=1) so next launch doesn't hit 'address already in use'."""
     try:
         self_pid = os.getpid()
         exe_basename = os.path.basename(sys.argv[0])
@@ -156,14 +132,7 @@ def _kill_orphaned_pentool() -> None:
 
 
 def _log_exit_reason(reason: str) -> None:
-    """Append a short, unambiguous line to pentool_exit_dump.log naming WHY the
-    process is exiting — signal/SystemExit, an exception (crash), or the
-    clean-return path. Without this, a runaway/quiet exit produced only the
-    thread dump with no explicit cause, and it wasn't clear whether the app
-    quit normally or crashed silently.
-
-    Non-fatal: failures here must never mask the actual shutdown path.
-    """
+    """Log exit reason to pentool_exit_dump.log (best-effort, non-fatal)."""
     try:
         from pentool.core.config import DEFAULT_CONFIG_DIR
         from pathlib import Path
@@ -179,12 +148,7 @@ def _ensure_pro_compatible(
     auto_update: bool = False,
     no_check: bool = False,
 ) -> None:
-    """Check PRO package compatibility and self-heal if possible.
-
-    *auto_update* — молча обновить без диалога (CI/CD режим).
-    *no_check* — пропустить проверку полностью.
-    Exits with SystemExit(1) if the mismatch cannot be resolved.
-    """
+    """Check PRO compatibility; exit(1) if unresolvable mismatch."""
     if no_check:
         return
 

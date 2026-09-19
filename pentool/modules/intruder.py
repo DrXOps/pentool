@@ -174,26 +174,10 @@ def load_payloads_from_file(path: str) -> list[str]:
 
 
 class FilePayloadSource:
-    """Lazily-iterated payload set backed by a file on disk.
+    """Streaming file-backed payload set — one line at a time, O(1) memory.
 
-    Reads and yields one payload line at a time using Python's normal
-    buffered text-file iteration (`for line in f:`) — this already streams
-    the file rather than loading it whole, unlike `load_payloads_from_file()`
-    above (which calls `Path(path).read_text()` + `.splitlines()`, materializing
-    the entire file — and a second full copy as a list of lines — in memory).
-    That eager path is fine for small payload files (kept for backward
-    compatibility) but is the wrong tool for a "load a 30GB payload file"
-    requirement: this class exists so the Intruder TUI/attack engine never
-    has to hold more than one line at a time in memory for such a file.
-
-    Blank lines and lines starting with '#' are skipped — same convention
-    as `load_payloads_from_file()`.
-
-    Supports repeated iteration (`for x in source` more than once, needed by
-    Pitchfork's `zip()` over multiple sets and Cluster Bomb's cartesian
-    product re-iterating inner sets) by reopening the file fresh on every
-    `__iter__()` call — each pass costs one more disk read of the file, but
-    memory stays O(1) regardless of file size or how many passes are made.
+    Supports repeated iteration (reopens file on each __iter__).
+    Skips blank lines and '#" comments.
     """
 
     __slots__ = ("path", "encoding", "_count")
@@ -276,13 +260,7 @@ class FilePayloadSource:
 
 
 class NumericPayloadSource:
-    """Lazily-iterated numeric range payload set — same contract/pattern as
-    `FilePayloadSource` (iterable, `len()`/`bool()` O(1), `head()` for
-    previews) but backed by a `range()` instead of a file.
-
-    Before this class, "Generate…" (numeric mode) called
-    `generate_numeric_payloads()`, which eagerly built a `list[str]` of
-    every value in the range — for a small range (hundreds) that's fine,
+    """Lazily-iterated numeric range (same interface as FilePayloadSource, backed by range())."""
     but `_refresh_payload_list()` used to render one `ListItem`/`Label`
     Textual widget PER element of a plain list with no cap (unlike
     `FilePayloadSource`, whose preview is already capped at
@@ -326,21 +304,7 @@ class NumericPayloadSource:
 
 
 class CharPayloadSource:
-    """Lazily-iterated charset brute-force payload set — same contract as
-    `FilePayloadSource`/`NumericPayloadSource` (iterable, O(1) `len()`,
-    `head()` for previews), backed by `itertools.product` over `charset`
-    for each length in `[min_len, max_len]`.
-
-    `generate_char_payloads()` (kept for backward compatibility/tests) is
-    eager: `itertools.product(charset, repeat=length)` materialized into a
-    growing `list[str]` — for even a modest charset/length this is a
-    combinatorial explosion (e.g. 26 lowercase letters, max_len=5 is
-    26**5 ≈ 11.9M strings) computed and held in memory all at once before
-    the dialog could even close. This class streams the same sequence
-    on demand and computes its count via the closed-form
-    sum(len(charset)**length for length in range(min_len, max_len+1))
-    instead of actually enumerating anything to answer `len()`.
-    """
+    """Lazily-iterated charset brute-force generator (streaming, O(1) len, head)."""
 
     __slots__ = ("charset", "min_len", "max_len")
 
@@ -382,21 +346,7 @@ class CharPayloadSource:
 
 
 class ChainedPayloadSource:
-    """Lazily concatenates several payload sets (plain lists and/or lazy
-    sources like FilePayloadSource/NumericPayloadSource/CharPayloadSource)
-    into one, without ever materializing any of them.
-
-    Exists for "Generate…"/"🧠 Smart…" appending to a payload set that
-    already holds a lazy source — e.g. the active set is a
-    NumericPayloadSource from a previous Generate, and the user generates
-    again or manually adds one more value. Before this class, appending to
-    a lazy source had no representation: the old eager code did
-    `self._payloads[idx].extend(payloads)`, which only works on a plain
-    `list`. Wraps the pair as `ChainedPayloadSource(existing, [new_values])`
-    instead of forcing a re-materialization of `existing` (which, if it was
-    e.g. a CharPayloadSource over a large charset, would defeat the whole
-    point of it being lazy in the first place).
-    """
+    """Concatenates lazy payload sources without materializing them."""
 
     __slots__ = ("_sources",)
 
@@ -439,27 +389,10 @@ def count_lines_with_progress(
     encoding: str = "utf-8",
     on_progress: Callable[[int, int, int], None] | None = None,
 ) -> int:
-    """Stream-count qualifying (non-blank, non-comment) lines in `path`.
+    """Stream-count non-blank lines in path via binary chunks (GIL-friendly).
 
-    Meant to run in a worker thread (via loop.run_in_executor) while the TUI
-    shows a live "N lines counted so far" readout — `on_progress(count,
-    bytes_read, total_bytes)` fires at most a few times per second (NOT once
-    per line — for a file with hundreds of millions of lines, calling back
-    into the TUI thread that often would itself become the bottleneck).
-
-    Reads in binary chunks and splits on b"\\n" instead of iterating the file
-    in text mode line-by-line. Text-mode iteration decodes + strips one line
-    at a time entirely in the Python interpreter loop, which holds the GIL
-    almost continuously for a large file — measured on a 47MB/6M-line file:
-    the text-mode version stalled the asyncio event loop thread for the
-    *entire* duration of the read (this function always runs in a worker
-    thread via run_in_executor, but the GIL is process-wide — a Python-level
-    tight loop in one thread can still starve another). This is the root
-    cause behind "the whole TUI freezes when loading a 100+MB payload file".
-    Chunked binary reads + bytes.split do the bulk of the work in C, which
-    releases the GIL far more often and keeps the UI thread responsive.
-    Splitting only on b"\\n" is UTF-8-safe even for multi-byte chars split
-    across a chunk boundary, since 0x0A never appears as a continuation byte.
+    Runs in a worker thread; fires on_progress(count, bytes_read, total_bytes)
+    a few times/sec so TUI can show live progress without being starved.
     """
     import time
 
@@ -595,7 +528,7 @@ def _lazy_cartesian_product(*sets):
 
 
 class IntruderAttack:
-    """Executes an intruder attack of the specified type."""
+    """Runs an intruder attack (sniper/batteringram/pitchfork/clusterbomb)."""
 
     def __init__(
         self,

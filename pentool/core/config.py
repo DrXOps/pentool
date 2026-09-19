@@ -181,17 +181,7 @@ def set_config(config: Config) -> None:
 
 @contextmanager
 def override_config(config: Config | None):
-    """Context-managed replacement of the global config singleton.
-
-    Restores the previous instance (or None) on exit, so a test/subsystem can
-    install an isolated Config for a scoped block without leaking it into
-    later code — the same save/restore discipline `_pin_clean_session_license`
-    already applies to the license cache. `get_config()` continues to resolve
-    the active instance; existing callers are unchanged.
-
-    Unlike an unconditional `set_config`, this guarantees restoration even on
-    error. Intended for DI/isolated-test setup (Этап 7.1).
-    """
+    """Context manager: temporarily replace global config singleton, restore on exit."""
     global _config
     prev = _config
     _config = config

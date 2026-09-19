@@ -196,14 +196,7 @@ class ProxyClient:
         self._reader.start()
 
     def _reader_loop(self) -> None:
-        """Read JSON lines from the event socket, re-emit into TUI EventBus.
-
-        Runs in a daemon thread. Each line is a push event
-        ``{"kind":"event","name":...,"data":...}``. We translate proxy capture/
-        completion events back into EventBus events in the TUI process so all
-        existing subscribers (HTTP History storage, ProxyScreen, SiteMap) work
-        as if the proxy still lived in-memory.
-        """
+        """Read daemon event socket and re-emit proxy events into TUI EventBus (daemon thread)."""
         sock = self._evt_sock
         if sock is None:
             return
@@ -549,14 +542,7 @@ class ProxyClient:
             return f"failed to read daemon error: {exc}"
 
     def _command_tolerant(self, cmd: dict) -> dict:
-        """Send a command, never raising when the proxy is not connected.
-
-        Control commands like forward/drop/clear are safe no-ops when the
-        daemon isn't up (mirrors in-memory ProxyServer which silently ignores
-        actions for requests that aren't waiting). Used where the TUI must not
-        crash because the proxy happens to be stopped (e.g. intercept button
-        handlers exercised by tests without a live proxy).
-        """
+        """Send command without raising when proxy not connected (safe no-op)."""
         if self._cmd_sock is None:
             return {"ok": True}
         try:

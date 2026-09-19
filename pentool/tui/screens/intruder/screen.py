@@ -327,20 +327,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         self._apply_license_limits()
 
     def _get_api(self) -> "IntruderAPI | None":
-        """Return this screen's single persistent IntruderAPI instance.
-
-        Created lazily on first use and reused for every subsequent call
-        (state load/save, result save, attacks) — mirrors ProxyService
-        holding one HttpStorage for the app's lifetime. Previously each of
-        _load_state_from_db/_auto_save_state/_auto_save_result/
-        action_start_attack constructed its own `IntruderAPI(db_path=...)`,
-        which opened+closed a fresh SQLite connection to the project DB on
-        every call — for _auto_save_result specifically, once per attack
-        result (thousands/sec during a fast attack), which is what caused
-        the connection-exhaustion crash this refactor fixes. See
-        reload_from_project() for how this instance follows project
-        switches instead of being recreated.
-        """
+        """Lazy singleton IntruderAPI (avoids per-call SQLite connection)."""
         from pentool.api.intruder_api import IntruderAPI
         if self._api is None:
             db_path = self._get_db_path()
@@ -350,14 +337,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         return self._api
 
     async def reload_from_project(self, db_path: str) -> None:
-        """Point the persistent IntruderAPI at a different project DB file.
-
-        Called from project_manager._reload_project_screens() on project
-        switch — mirrors RepeaterScreen.reload_from_project /
-        ProxyService.switch_db. Creates the API if this is the first
-        project opened this session, otherwise switches the existing
-        instance's underlying connection instead of leaking the old one.
-        """
+        """Point persistent IntruderAPI at a different project DB (project switch)."""
         from pentool.api.intruder_api import IntruderAPI
         # Cancel any in-flight auto-save workers before touching the DB connection
         self._cancel_save_workers()
@@ -637,14 +617,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
 
     @on(TextArea.Changed, "#template-editor")
     def on_template_text_changed(self, event: TextArea.Changed) -> None:
-        """Recompute payload sets whenever the template text itself changes.
-
-        Previously _update_payload_select() only ran on explicit actions
-        (Add marker/Clear markers/attack type change/load_request) — typing
-        or pasting a raw request directly into the editor (e.g. §marker§
-        pasted by hand) left the "Set N" button and payload-set count stale
-        until some other action happened to trigger a refresh.
-        """
+        """Recompute payload sets on template text change (covers paste/typing)."""
         self._update_payload_select()
         # Auto-save state when template changes
         if self._state_loaded:
@@ -965,20 +938,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def _update_payload_select(self) -> None:
-        """Sync the «Set N» button and payload list with the current state.
-
-        Number of payload sets needed depends on the ATTACK TYPE, not just
-        the marker count — Sniper and Battering Ram only ever read from
-        Set 1 (see IntruderAttack._iter_sniper/_iter_battering_ram, which
-        both do `payloads = self._config.payload_sets[0]`), while Pitchfork
-        and Cluster Bomb need one set per marked position. Previously this
-        always used `max(1, count_markers(template))` regardless of
-        self._attack_type, so switching attack type never changed the
-        Set 1/2/3 selector shown to the user — e.g. marking 3 positions then
-        picking Sniper still showed "Set 1/3" even though the attack only
-        ever substitutes from Set 1, and switching from Cluster Bomb back to
-        Sniper didn't collapse the selector back down either.
-        """
+        """Sync Set-N selector: number of sets depends on attack type (not just marker count)."""
         try:
             template = self.query_one("#template-editor", TextArea).text
         except Exception:
@@ -1056,21 +1016,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def _update_payload_count_label(self) -> None:
-        """Refresh the line-count readout above the payload list.
-
-        For a FilePayloadSource this reads the cached count only — NEVER
-        `len(source)` directly, which for an unknown count triggers a full
-        synchronous streaming pass over the file and would freeze the TUI
-        for however long that file takes to read (potentially minutes for
-        30GB). The count is instead computed by a background worker (see
-        _load_payloads_from_file) which calls back into this method as it
-        progresses and once finished.
-
-        NumericPayloadSource/CharPayloadSource are safe to call `len()` on
-        directly here — both compute their count via closed-form arithmetic
-        (range length / sum-of-powers), never by enumerating values, so it's
-        always O(1) regardless of how many values the set represents.
-        """
+        """Refresh payload count — cached for FilePayloadSource, O(1) for arithmetic sources."""
         try:
             label = self.query_one("#payload-count-label", Static)
         except Exception:
@@ -1220,15 +1166,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         )
 
     async def _load_file_async(self, path: str, target_idx: int) -> None:
-        """Load a payload file — eagerly for small files, streamed (lazy,
-        with a live line-count readout) for anything above
-        _EAGER_LOAD_MAX_BYTES, up to and including a 30GB+ wordlist.
-
-        Either way this never blocks the Textual event loop: the actual
-        file I/O runs in a worker thread via run_in_executor, and the
-        streaming-count path reports progress back to the UI every ~200ms
-        instead of only once at the very end.
-        """
+        """Load payload file (eager for small, streaming for large, always in worker thread)."""
         try:
             size = await asyncio.get_running_loop().run_in_executor(
                 None, lambda: Path(path).stat().st_size
@@ -1336,24 +1274,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         return Path(path).read_text(encoding="utf-8", errors="replace")
 
     def _append_to_active_set(self, new_source) -> int:
-        """Append `new_source` (a plain list or a lazy source) to the active
-        payload set, without forcing either side to materialize.
-
-        - list + list -> plain list.extend() (unchanged fast path).
-        - existing set is empty (nothing manually entered yet — the common
-          case for a first Generate…/Smart Payloads call on a fresh set)
-          -> `new_source` replaces it directly, no wrapper. Keeps a single
-          NumericPayloadSource/CharPayloadSource as itself instead of an
-          unnecessary ChainedPayloadSource([], source).
-        - otherwise (existing set has content, and either side is lazy)
-          -> wrap both in ChainedPayloadSource instead of eagerly reading/
-          enumerating the existing set just to concatenate. This is what
-          makes a second Generate… onto an existing Numeric/Char set (or a
-          manual add after generating) lazy too.
-
-        Returns the count of newly added items (O(1) for lazy sources,
-        cheap for lists) for the caller's notify() message.
-        """
+        """Append payloads without materializing (uses ChainedPayloadSource for lazy+lazy)."""
         while self._active_set_idx >= len(self._payloads):
             self._payloads.append([])
         existing = self._payloads[self._active_set_idx]
@@ -1739,12 +1660,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def _result_at_row(self, table: DataTable, row_index: int) -> IntruderResult | None:
-        """Resolve an IntruderResult for a table row index, independent of
-        sort order. table.add_row(..., key=result.id) means the row_key's
-        string value always equals the result's id — cursor_row alone is
-        NOT reliable once the table has been sorted (sort() reorders row
-        _display_ position without touching self._all_results, which stays
-        in insertion order)."""
+        """Resolve result by row_key (works with sorted table, not just cursor_row)."""
         try:
             from textual.coordinate import Coordinate
             row_key = table.coordinate_to_cell_key(Coordinate(row_index, 0)).row_key
@@ -1763,16 +1679,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
 
     @staticmethod
     def _numeric_sort_key(raw) -> int:
-        """Extract a comparable int from a results-table cell.
-
-        Cells are plain strings (`str(result.response_length)`, etc.), some
-        wrapped in Rich markup (Status uses `[bold yellow]200✓[/bold yellow]`
-        for matched rows) or "-" for a missing value. Without this,
-        DataTable.sort()'s default key (the raw string) sorts
-        lexicographically — "1024" < "2048" < "512" — which reads as
-        "sorting doesn't work" for any numeric column. Non-numeric/missing
-        cells sort first (treated as the lowest possible value).
-        """
+        """Extract int from Rich-markup cell string for correct numeric DataTable sorting."""
         text = re.sub(r"\[/?[^\]]+\]", "", str(raw)).replace("✓", "").strip()
         m = re.search(r"-?\d+", text)
         return int(m.group(0)) if m else -1

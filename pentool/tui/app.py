@@ -96,22 +96,7 @@ from pentool.tui.screen_registry import SCREEN_MAP  # noqa: E402
 
 
 def _setup_faulthandler(log_file: str) -> None:
-    """Install faulthandler to dump Python thread stacks into the log file.
-
-    Purpose: catch the "TUI just vanished silently" failure mode. When the
-    Textual main loop exits on its own (not through `action_quit`) under a wall
-    of traffic, the root cause never reached the logger — only a sudden
-    `app.run()` return, after which the process previously hung on non-daemon
-    threads. With faulthandler enabled:
-
-      * SIGSEGV/SIGABRT (C-level or interpreter abort) print every thread's
-        Python stack into the log file immediately;
-      * `kill -USR1 <pid>` dumps all threads on demand, so a live hang can be
-        caught without sudo/py-spy.
-
-    Writes to the same file the logger uses (append), so it survives a
-    pty/terminal teardown. Best-effort — never throws into the app.
-    """
+    """Install faulthandler to dump thread stacks on crash (best-effort)."""
     try:
         import faulthandler
         import signal as _signal
@@ -295,23 +280,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     @staticmethod
     def _guard_forward_event() -> None:
-        """Neutralize a Textual mouse-path crash at its source.
-
-        Textual's `Screen._forward_event` (screen.py) dereferences
-        `content_widget.parent.region`; when a mouse event lands while a widget
-        under the cursor has no laid-out parent (e.g. the History table rebuilt
-        under live traffic), `parent` is None and it raises
-        `AttributeError: 'NoneType' object has no attribute 'region'`. That is
-        raised inside the message-pump dispatch, which Textual treats as fatal
-        and tears the whole app down ("TUI just vanished").
-
-        We patch the source method once so that exact race degrades to a quiet
-        no-op instead of killing the app. A per-table guard in the DataTable is
-        not enough — App.on_event → screen._forward_event runs for mouse events
-        the table never sees. Doing it here (once, globally) is the only safe
-        seam; it never touches on_event/MessagePump, so normal event flow is
-        unaffected.
-        """
+        """Monkey-patch Textual Screen._forward_event to degrade layout-race crash to no-op."""
         try:
             import textual.screen as _tss
             if getattr(_tss.Screen, "_pentool_guard_done", False):
@@ -561,17 +530,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 pass
 
     def on_screen_unmounted(self, event) -> None:
-        """Diagnostic: catch the "TUI just vanished" exit path.
-
-        When the main loop dies on its own (not via action_quit), Textual strips
-        every module screen and falls back to the bare `_default` Screen — the
-        point at which `app.run()` is about to return. That moment never reached
-        the logger before (Textual's own exit diagnostics go to the lost stderr).
-        If we see the last screen unmount while the app still considers itself
-        running (i.e. NOT an in-progress, deliberate quit), dump every thread's
-        Python stack into the log — that shows what the main thread was doing
-        right as the loop collapsed, i.e. the actual trigger we've been hunting.
-        """
+        """Diagnostic: log thread stacks when app exits abnormally (not via action_quit)."""
         try:
             if self._is_quitting:
                 return
@@ -607,14 +566,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self._pm.switch_project_db(path, is_new=False)
 
     async def _seed_pending_urls(self, urls: list[str]) -> None:
-        """Seed targets passed via `pentool --url ...` (launch-TUI branch).
-
-        Starts the proxy (CA cert is pre-warmed on mount) and populates the
-        Target / Site Map with each URL, so the user lands on a NEW project for
-        the target (rather than the last-used project). Headless-browser import
-        + issuing the first request is part of the interactive auto-setup
-        feature (roadmap) — see docs/i18n/en/CI_CD.md.
-        """
+        """Seed targets from --url flag into Target/SiteMap."""
         await asyncio.sleep(0.6)  # let the TUI render first
 
         # Create a NEW project for this target (do not reuse the last project).
@@ -684,14 +636,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self.notify(f"New project for {len(urls)} URL(s) — {'proxy on, ready to audit' if (proxy_started or (self._proxy and self._proxy.is_running)) else 'ready to audit'}.", timeout=6)
 
     def _do_real_fetch_sync(self, urls: list[str]) -> bool:
-        """Fetch each URL with a real headless Chrome THROUGH the proxy.
-
-        Runs entirely in an executor thread (no asyncio/Textual-loop primitives —
-        `time.sleep` only), so Textual's worker can never hang on `await
-        asyncio.sleep()`. Launches a child process that points Chromium at our
-        proxy; ProxyServer's MITM captures the real request into HTTP History +
-        Target automatically. Returns whether the browser reached the target.
-        """
+        """Fetch URLs through proxy via headless Chrome in executor thread (avoids asyncio hang)."""
         import subprocess
         import time
 
@@ -801,20 +746,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             logger.debug("APP: update check failed: %s", exc)
 
     async def _check_for_pro_update(self) -> None:
-        """Re-download the PRO package in the background if a newer build
-        has been published, then notify so the user knows to restart.
-
-        No-op (silently) if there's no active PRO license or the package was
-        never downloaded in the first place. If the check/refresh couldn't
-        reach the server AND the PRO package on disk is stale/version-
-        mismatched, warns the user via notify() instead of staying silent —
-        see pentool.core.license.check_and_update_pro_package /
-        is_pro_package_compatible. (The TUI itself already refused to start
-        at all in this situation — see __main__.main() — this notify only
-        fires for the "was fine at startup, went stale mid-session" case,
-        e.g. FREE got upgraded via a separate `pentool update` invocation
-        while this TUI instance kept running.)
-        """
+        """Re-download PRO package if newer build published (no-op if no PRO)."""
         import asyncio as _asyncio
         await _asyncio.sleep(4.0)  # after the pip-update check, UI settled
         try:
@@ -834,14 +766,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             logger.debug("APP: PRO update check failed: %s", exc)
 
     def _cfg_observer_cb(self, changed_fields: dict) -> None:
-        """Config Observer callback — called from any context (R-16).
-
-        Renamed away from _on_config_changed intentionally: Textual's dispatch
-        looks for cls.__dict__.get('_on_<message_name>') as a fallback handler,
-        so a method named _on_config_changed would be called with the ConfigChanged
-        *object* (not a dict), triggering post_message(ConfigChanged(msg)) →
-        infinite message loop → UI freeze with 20M log entries.
-        """
+        """Config Observer callback (named to avoid Textual _on_* dispatch collision)."""
         self.post_message(ConfigChanged(changed_fields))
 
     def on_resize(self, event) -> None:
@@ -868,7 +793,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             pass
 
     def on_key(self, event) -> None:
-        """Global key handler: Ctrl+A select-all + vim proxy tab sequences."""
+        """Ctrl+A select-all, Ctrl+E export, F2-F4 module tabs."""
         import time as _time_mod
         key = event.key
 
@@ -1100,16 +1025,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
 
     def _on_storage_error(self, message: str) -> None:
-        """ProxyService.init_storage()/switch_db() failed to open the DB.
-
-        Most common cause: the project's .db file is locked by another
-        process (e.g. a second Pentool instance already has it open) or the
-        path is unwritable. Previously this was logged only — requests
-        silently stopped being saved to history with no visible indication
-        why. init_storage()/switch_db() both run on the app's own event
-        loop (awaited directly, never from a worker thread), so a plain
-        notify() here is safe without call_from_thread.
-        """
+        """Show error notify when ProxyService fails to open DB (locked/unwritable)."""
         self.notify(
             f"{message}. Requests will not be saved until this is fixed — "
             f"check that no other Pentool instance has this project open.",
@@ -1658,15 +1574,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             pass
 
     async def _on_exit_app(self) -> None:
-        """Diagnostics: log why the app is exiting.
-
-        Textual's run() returns silently when the main loop ends on its own
-        (not via action_quit) — the cause never reached the logger. This hook
-        fires at the moment run() is about to return; record whether a
-        deliberate quit was in flight, the active screen, and the current task,
-        so an abnormal exit leaves a trace instead of a silent `run() returned
-        cleanly`.
-        """
+        """Log exit reason (Textual run() returns silently on non-action_quit exits)."""
         import asyncio
         import traceback
 

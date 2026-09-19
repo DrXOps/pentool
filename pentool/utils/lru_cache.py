@@ -10,13 +10,7 @@ V = TypeVar("V")
 
 
 class LRUCache(Generic[K, V]):
-    """In-memory LRU cache. Eviction follows the Least Recently Used principle.
-
-    Generic over key/value types so it serves both keyed storage (e.g.
-    HttpStorage's row-id → full-entry cache) and string-keyed caches such as
-    the SSL-context cache in utils/cert.py (domain → SSLContext), replacing
-    the copy that used to live there (Этап 7.4 consolidation).
-    """
+    """In-memory LRU cache (generic over K/V, used by HttpStorage and cert cache)."""
 
     def __init__(self, max_size: int = 500) -> None:
         self._max_size = max_size

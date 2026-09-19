@@ -19,13 +19,7 @@ _CSS = (Path(__file__).parent / "option_cycler.tcss").read_text(encoding="utf-8"
 
 
 class OptionCycler(Static):
-    """Option toggle button — each click cycles through values.
-
-    Drop-in-ish replacement for a `Select` with a small, fixed set of
-    options where a dropdown is more chrome than the choice needs — the
-    label shows the current value directly, and clicking advances to the
-    next option (wrapping around), posting a `Changed` message each time.
-    """
+    """Click-to-cycle toggle button (lighter alternative to Select for small option sets)."""
 
     DEFAULT_CSS = _CSS
 

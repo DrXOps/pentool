@@ -56,14 +56,7 @@ class RepeaterAPI(ExportableAPI):
         return await self._repeater.delete_entry(entry_id)
 
     async def switch_db(self, db_path: str) -> None:
-        """Point this API's Repeater at a different project DB file.
-
-        Lets RepeaterScreen keep ONE persistent Repeater/RepeaterAPI instance
-        for the app's lifetime (mirrors IntruderScreen._get_api /
-        BaseSqliteStorage.switch_db) instead of constructing a new one — and
-        therefore a new SQLite connection — on every send/autosave/history
-        read.
-        """
+        """Point Repeater at different project DB (one persistent connection, mirrors IntruderAPI)."""
         self._db_path = db_path
         await self._repeater.switch_db(db_path)
 

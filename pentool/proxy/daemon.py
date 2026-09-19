@@ -83,13 +83,7 @@ class ProxyDaemon:
             pass
 
     def _subscribe_proxy_events(self) -> None:
-        """Bridge ProxyServer's EventBus emissions to the event socket.
-
-        The ProxyServer in this process publishes ProxyRequestCaptured /
-        ProxyRequestCompleted onto the process-local EventBus (get_event_bus()).
-        We subscribe to those and forward them to all event-socket clients so
-        the TUI-side ProxyClient reader can re-emit them into the TUI's bus.
-        """
+        """Forward ProxyServer EventBus events to event-socket clients (for TUI ProxyClient)."""
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import (

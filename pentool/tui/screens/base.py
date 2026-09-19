@@ -16,18 +16,10 @@ _log = get_logger(__name__)
 
 
 class BaseModuleScreen(Widget):
-    """Base widget for all tabbed module screens.
+    """Base for tabbed module screens (double-click-to-rename).
 
-    Provides double-click-to-rename tab behaviour (previously in TabRenameMixin).
-
-    Subclasses must set class attributes:
-        _rename_input_id: str        — id of the rename Input widget
-        _rename_tab_prefix: str      — expected pane_id prefix
-        _rename_tabs_widget_id: str  — id of the TabbedContent that owns the tabs
-
-    Subclasses must implement:
-        _start_rename(tab_id: str) -> None
-        _rename_tab(tab_id: str, new_name: str) -> None
+    Subclasses set _rename_input_id, _rename_tab_prefix, _rename_tabs_widget_id.
+    Subclasses implement _start_rename and _rename_tab.
     """
 
     # ── Config (set in subclass) ───────────────────────────────────────────────

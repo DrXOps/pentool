@@ -93,21 +93,7 @@ class IntruderAPI(ExportableAPI):
         on_progress=None,
         turbo_mode: bool = False,
     ) -> str:
-        """Run the attack to completion and return its attack_id.
-
-        NOTE: this method awaits the whole attack — it does NOT return as
-        soon as the attack starts. Before this fix it fired the attack via
-        `asyncio.create_task(...)` and returned immediately without
-        awaiting it, so a caller doing `await api.start_attack(...)` got
-        control back right after the attack merely started, not when it
-        finished — `get_results()` called right after would see a near-
-        empty/partial result set (see IntruderService.start_attack, which
-        relies on start_attack() having completed the attack before it
-        reads get_results() and emits IntruderFinished). The task handle is
-        still kept on self._task so stop()/pause()/resume() and callers
-        that want to cancel mid-attack (via self._task) keep working the
-        same way as before.
-        """
+        """Run attack to completion and return attack_id (awaits full completion, not just start)."""
         if turbo_mode:
             # Turbo Mode: connection pooling + Keep-Alive
             from pentool.modules.intruder_turbo import TurboIntruderAttack
@@ -127,21 +113,12 @@ class IntruderAPI(ExportableAPI):
         return self._attack.attack_id if hasattr(self._attack, 'attack_id') else "turbo"
 
     async def pause(self) -> None:
-        """Pause the running attack, if supported.
-
-        TurboIntruderAttack has no pause/resume — Turbo mode intentionally
-        runs to completion or stop() only (see modules/intruder_turbo.py).
-        Before this API method was actually reachable from IntruderScreen,
-        turbo_mode was silently never honored there (a pre-existing bug —
-        see (scanner refactor plan) section 2.7),
-        so Pause/Resume during a real Turbo run was never exercised. Guard
-        with hasattr so enabling real Turbo mode doesn't crash Pause.
-        """
+        """Pause the attack (Turbo mode unsupported — guarded by hasattr)."""
         if self._attack and hasattr(self._attack, "pause"):
             await self._attack.pause()
 
     async def resume(self) -> None:
-        """Resume the attack after a pause, if supported (see pause() note)."""
+        """Resume attack after pause (guarded by hasattr)."""
         if self._attack and hasattr(self._attack, "resume"):
             await self._attack.resume()
 
@@ -209,7 +186,7 @@ class IntruderAPI(ExportableAPI):
         await self._repo.save_state(tab_name, template, attack_type, payloads, tab_uid=tab_uid)
 
     async def load_state(self, tab_name: str, tab_uid: str = "") -> dict | None:
-        """Load Intruder tab state from DB."""
+        """Load tab state from DB."""
         return await self._repo.load_state(tab_name, tab_uid=tab_uid)
 
     async def get_tabs(self) -> list[dict]:
@@ -221,13 +198,7 @@ class IntruderAPI(ExportableAPI):
         await self._repo.delete_tab(tab_uid)
 
     async def switch_db(self, db_path: str) -> None:
-        """Point this API's repository at a different project DB file.
-
-        Lets IntruderScreen keep ONE persistent IntruderAPI/IntruderStorage
-        instance for the app's lifetime (mirrors ProxyService/HttpStorage)
-        instead of constructing a new one — and therefore a new SQLite
-        connection — on every single call. See BaseSqliteStorage.switch_db.
-        """
+        """Point at a different project DB (one persistent instance per app lifetime)."""
         self._db_path = db_path
         await self._repo.switch_db(db_path)
 

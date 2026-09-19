@@ -16,17 +16,7 @@ _GRACE_PERIOD_DAYS = 7
 
 
 def _base_version(v: str) -> str:
-    """Strip a dev/pre/post/local suffix so version comparison only cares
-    about the X.Y.Z release line (e.g. "0.2.8.dev6" -> "0.2.8").
-
-    Needed because __version__ now reflects the exact installed package
-    metadata (via importlib.metadata), which for CI dev-builds includes a
-    ".devN" suffix. The PRO package is built once per FREE release and is
-    compatible with every dev build of that same release, so compatibility
-    checks must compare base versions, not exact strings — otherwise every
-    dev build looks like a version mismatch even though nothing actually
-    changed release-wise.
-    """
+    """Strip dev/pre/suffix for X.Y.Z comparison (dev builds mismatch PRO otherwise)."""
     try:
         from packaging.version import Version
         return Version(v).base_version
@@ -156,13 +146,7 @@ def _verify_license_signature(
     valid: bool, plan: str, features: list[str], expires: str | None,
     machine_id: str, ts: int, sig_b64: str,
 ) -> bool:
-    """Verify the server's ed25519 signature over a license verdict.
-
-    This is what makes ~/.pentool/license.dat tamper-evident: without the
-    server's private key (held only in pentool-backend's Cloudflare secret),
-    nobody can hand-craft a {"valid": true, "plan": "pro", ...} blob that
-    passes this check — editing any signed field invalidates the signature.
-    """
+    """Verify ed25519 signature over license verdict (tamper-evident)."""
     try:
         from cryptography.exceptions import InvalidSignature
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -181,19 +165,7 @@ def _verify_license_signature(
 
 
 def get_license() -> LicenseInfo:
-    """Load and verify the cached license verdict from disk.
-
-    Returns valid=False (downgrades to FREE) unless ALL of the following hold:
-      1. A cached verdict exists and has a signature.
-      2. The signature verifies against the server's public key over the
-         exact cached fields (valid/plan/features/expires/machine_id/ts) —
-         this is what prevents hand-editing license.dat to fake PRO.
-      3. The signature's machine_id matches this machine's current id — a
-         verdict signed for one machine cannot be copied onto another.
-      4. The signature is not older than _SIGNATURE_MAX_AGE_SECONDS — bounds
-         how long a license can be used fully offline before requiring a
-         fresh online check (same grace-period contract as before).
-    """
+    """Load and verify cached license verdict (signature, machine_id, age checks)."""
     cached = _load_cached()
     my_machine_id = get_machine_id()
 
@@ -500,26 +472,13 @@ _PRO_BUILD_MARKER = PRO_PACKAGE_DIR / ".build_id"
 
 @dataclass
 class ProSyncResult:
-    """Outcome of a check_and_update_pro_package() call.
-
-    `warning` is meant to be shown to the user verbatim (TUI notify / CLI
-    stderr) whenever the locally installed PRO package is stale or was built
-    for a different FREE version than the one currently running — silently
-    running on a mismatched PRO package is what risks a hard crash (it ships
-    a compiled Cython extension; an ABI/version mismatch there can segfault
-    instead of raising a catchable Python exception).
-    """
+    """Result of PRO auto-update: updated flag + user-facing warning."""
     updated: bool = False
     warning: str = ""
 
 
 def _read_pro_meta() -> dict:
-    """Read the PRO package's build metadata (build_id + the FREE pentool
-    version it was downloaded for). Falls back to the legacy plain-text
-    .build_id file with an empty free_version if the JSON meta file isn't
-    there yet — is_pro_package_compatible() then correctly treats that as
-    "unknown version, don't trust it" rather than crashing on missing data.
-    """
+    """Read PRO build metadata (build_id + free_version). Falls back to legacy .build_id file."""
     try:
         if _PRO_META_FILE.exists():
             data = json.loads(_PRO_META_FILE.read_text(encoding="utf-8"))
@@ -610,22 +569,7 @@ def is_pro_package_compatible() -> tuple[bool, str]:
 
 
 async def download_pro_package(key: str, machine_id: str) -> bool:
-    """Download, verify, and install the obfuscated PRO package.
-
-    Fetches both the archive and its detached ed25519 signature from
-    /api/download, verifies the signature against the embedded public key
-    (see _PRO_PACKAGE_PUBLIC_KEY_B64) BEFORE ever extracting anything, then
-    unpacks into ~/.pentool/pro/ for plugin_manager to pick up.
-
-    Since the CodeEnigma-based build (2026-08), pentool-pro's CI publishes
-    one archive per OS (linux/macos/windows) instead of a single
-    platform-agnostic one — CodeEnigma's runtime package includes a
-    compiled Cython extension (.so/.pyd), which is platform-specific.
-    `platform` is sent to the server so it returns the right asset.
-
-    Returns True on success, False otherwise (never raises — a failed PRO
-    package download should not block FREE functionality).
-    """
+    """Download, verify (ed25519), and install per-platform PRO archive. Returns True on success."""
     plat = _current_platform()
     try:
         import aiohttp
@@ -701,14 +645,7 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
 
 
 async def _fetch_pro_build_id(plat: str) -> str | None:
-    """Query /api/pro/version for the current PRO release's build_id.
-
-    No license key needed — this only identifies which build is published,
-    not whether the caller is entitled to it (that's still enforced by
-    /api/download re-validating the key server-side). Returns None on any
-    failure (network, missing asset, etc.) — callers should treat that as
-    "couldn't check, don't act on it" rather than "no update available".
-    """
+    """Query /api/pro/version for current PRO build_id (None on failure)."""
     try:
         import aiohttp
         async with aiohttp.ClientSession(
@@ -735,36 +672,9 @@ async def _fetch_pro_build_id(plat: str) -> str | None:
 
 
 async def check_and_update_pro_package() -> "ProSyncResult":
-    """Re-download the PRO package if a newer build has been published, or if
-    the currently-installed one no longer matches the running FREE version.
+    """Re-download PRO if a newer build exists or current one mismatches FREE version.
 
-    Called on TUI startup (background worker, same pattern as
-    _check_for_updates for the pip package) and after `pentool update` — this
-    is what closes the gap where pentool-pro ships a fix but a machine that
-    already activated its license keeps running the stale code from
-    ~/.pentool/pro/ forever, because download_pro_package() otherwise only
-    ever runs once, at initial activation/trial-start.
-
-    Crucially, this is also the ONLY place that re-syncs PRO after a FREE
-    upgrade (`pip install --upgrade pentool` / `pentool update`) — if this
-    step can't reach the license server (network down, or the *unrelated*
-    FREE-side GitHub version check already failed and the caller never even
-    got here), the PRO package silently stays on its old build while FREE
-    moves on. Since the PRO package ships a compiled Cython extension, that
-    mismatch can segfault the process instead of raising a Python exception.
-    So on every "couldn't sync" path below, this now also checks
-    is_pro_package_compatible() and returns a non-empty `warning` if the
-    installed PRO build is stale/unknown — callers (TUI, CLI) must surface
-    that warning to the user rather than silently doing nothing.
-
-    Returns a ProSyncResult:
-      - updated=True  — a new build was found and successfully installed.
-      - updated=False, warning=""    — nothing to do (no PRO license, PRO
-        never installed, or already on the latest compatible build).
-      - updated=False, warning="..." — could not verify/refresh the PRO
-        package AND the installed one is stale or version-mismatched;
-        `warning` is a user-facing message to display.
-    """
+    Returns ProSyncResult: updated, warning."""
     info = get_license()
     if not info.valid or not info.features:
         return ProSyncResult(updated=False, warning="")

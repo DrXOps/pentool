@@ -207,14 +207,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=False)
 
     async def _do_load_tabs(self, repeater_api, generation: int | None = None) -> None:
-        """Async worker to load tabs from DB.
-
-        `generation` pins this call to the _tabs_generation value at the
-        time it was scheduled — if reset_for_new_project()/reload_from_project()
-        bump the counter before this worker's deferred UI callbacks run
-        (e.g. the startup load racing a just-created/opened project), those
-        callbacks silently no-op instead of resurrecting a stale tab.
-        """
+        """Load tabs from DB (generation guards against stale callbacks after project switch)."""
         if generation is None:
             generation = self._tabs_generation
         try:
@@ -407,23 +400,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=True)
 
     async def _close_all_tabs(self) -> None:
-        """Remove all existing tabs from the TabbedContent and reset state.
-
-        remove_pane() returns an AwaitComplete (Textual schedules the actual
-        tab/pane removal, it does not happen synchronously) — this was
-        previously called without awaiting it, so action_new_tab() right
-        after could create a new pane with the same id (e.g. "tab-1", since
-        _tab_counter is reset to 0) before the old one had actually been
-        removed from the DOM. That raced with Textual's own ID uniqueness
-        check and produced a stray, blank/unlabeled tab to the left of the
-        first real tab — reproducible specifically right after creating a
-        new project (reset_for_new_project), not after a full app restart.
-
-        Also cancels any in-flight auto-save workers to prevent
-        ProgrammingError('Cannot operate on a closed database.') when the
-        database is closed during exit or project switch while a
-        save_to_history commit is still pending.
-        """
+        """Remove all tabs and reset state (await remove_pane to avoid race with action_new_tab)."""
         # Cancel all in-flight save workers
         for worker_name in list(self._running_save_tasks):
             try:
