@@ -1244,6 +1244,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         elif event.key == "m" and not self._is_text_input_focused():
             self._show_context_menu_at_cursor()
             event.prevent_default()
+        elif event.key == "shift+b":
+            self._open_in_lightpanda()
+            event.prevent_default()
 
     def _show_context_menu_at_cursor(self) -> None:
         try:
@@ -1294,6 +1297,19 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             self.app.post_message(SendToTarget(parsed))  # type: ignore[attr-defined]
         except Exception:
             pass
+
+    def _open_in_lightpanda(self) -> None:
+        """Open selected URL in Lightpanda viewer modal."""
+        if self._selected_req_id is None:
+            return
+        self.run_worker(self._do_lightpanda())
+
+    async def _do_lightpanda(self) -> None:
+        parsed = await self._get_selected_parsed()
+        if parsed is None or not parsed.url:
+            return
+        from pentool.tui.dialogs.lightpanda_viewer import LightpandaViewer
+        self.app.push_screen(LightpandaViewer(parsed.url))
 
     def _copy_selected_url(self) -> None:
         if self._selected_req_id is None:
@@ -1995,7 +2011,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             logger.error("Failed to mark request: %s", exc)
 
     def _comment_dialog(self, initial_comment: str | None = None) -> None:
-        """Show comment edit modal (on-demand, context-menu or click).""
+        """Show comment edit modal (on-demand, context-menu or click)."""
         req_id = self._selected_req_id
         if not req_id:
             return
