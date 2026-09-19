@@ -26,7 +26,6 @@ from textual.widgets import (
 )
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.core.logging import get_logger
-from pentool.tui.widgets.data_table import ArrowBackendDataTable
 from pentool.tui.widgets.proxy_table import (
     COL_NAMES as _COL_NAMES,
     row_to_record as _row_to_record,
@@ -237,7 +236,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
                 with Vertical(id="main-panel"):
                     with Vertical(id="table-area"):
                         yield FilterBar(id="filter-bar")
-                        yield ArrowBackendDataTable(
+                        yield DataTable(
                             columns=_COL_NAMES,
                             id="request-list",
                             cursor_type="row",
@@ -269,7 +268,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             with Horizontal(id="ws-body"):
                 with Vertical(id="ws-main-panel"):
                     with Vertical(id="ws-table-area"):
-                        yield ArrowBackendDataTable(
+                        yield DataTable(
                             columns=_COL_NAMES,
                             id="ws-request-list",
                             cursor_type="row",
@@ -456,7 +455,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
                 table.move_cursor(row=len(rows) - 1)
             self._update_history_count_label()
         except Exception as exc:
-            logger.error("_reload_table failed: %s", exc)
+            logger.error("_reload_table failed: %s", exc, exc_info=True)
 
     def _update_history_count_label(self) -> None:
         try:
@@ -875,7 +874,16 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             _t2 = time.monotonic()
             old_tail = len(self._rows_cache) - len(new_rows) - 1
             was_at_tail = table.cursor_row >= old_tail
-            table.add_rows(records)
+            try:
+                table.add_rows(records)
+            except Exception as exc:
+                logger.error("PROXY SCREEN: _flush_pending_rows: add_rows crashed: %s", exc, exc_info=True)
+                # Fall back to full rebuild (slow but safe)
+                arrow = _rows_to_arrow(self._rows_cache)
+                table.set_data(arrow)
+                table._ordered_columns = None
+                table._clear_caches()
+                table._require_update_dimensions = True
             _t3 = time.monotonic()
             if was_at_tail or table.cursor_row >= len(self._rows_cache) - 1:
                 table.scroll_end(animate=False)
@@ -968,7 +976,15 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             records = [_row_to_record(r) for r in new_rows]
             old_tail = len(self._ws_rows_cache) - len(new_rows) - 1
             was_at_tail = table.cursor_row >= old_tail
-            table.add_rows(records)
+            try:
+                table.add_rows(records)
+            except Exception as exc:
+                logger.error("PROXY SCREEN: _flush_pending_ws_rows: add_rows crashed: %s", exc, exc_info=True)
+                arrow = _rows_to_arrow(self._ws_rows_cache)
+                table.set_data(arrow)
+                table._ordered_columns = None
+                table._clear_caches()
+                table._require_update_dimensions = True
             if was_at_tail or table.cursor_row >= len(self._ws_rows_cache) - 1:
                 table.scroll_end(animate=False)
         except Exception as exc:
