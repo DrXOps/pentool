@@ -42,17 +42,7 @@ def deserialize_payloads(raw_sets: list) -> list:
 
 
 def serialize_payloads(sets: list) -> list:
-    """JSON-serializable form of a payload-set list.
-
-    A plain list[str] set serializes as-is. A FilePayloadSource set
-    serializes as {"__file__": path, "count": N} — its file path and
-    (if already known) line count, NOT its contents (writing out every line
-    of a multi-GB payload file would be the same "load a 30GB file into
-    memory" problem this avoids). Numeric/Char sources serialize as their
-    small constructor params. Chained sources wrap inner sources recursively
-    via a {"__chained__": [...]} envelope. Only a plain `list[str]` (the
-    base case) is ever actually iterated into a JSON array here.
-    """
+    """Serialize payload sets to JSON (file sources serialize as path, not contents)."""
     result = []
     for entry in sets:
         if isinstance(entry, FilePayloadSource):

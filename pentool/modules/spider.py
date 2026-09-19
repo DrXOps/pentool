@@ -121,15 +121,7 @@ def _normalize_url_cpu(url: str) -> str:
 
 def _link_cpu_work(raw: str, page_url: str, base_domain: str,
                    respect_scope: bool) -> tuple[bool, str, str]:
-    """Modular CPU half of _add_link: the heavy urllib handling of one link.
-
-    Returns (ok, abs_url, norm_url):
-      ok       — True if the link should be added (http(s) protocol, in scope)
-      abs_url  — absolute URL (for result.links)
-      norm_url — normalized (fragment/trailing-slash-free) for dedup
-    Dedup (seen_links) stays in the MAIN thread — a set add is cheap and does
-    not need the GIL workaround.
-    """
+    """Resolve one link candidate: returns (ok, abs_url, norm_url). Runs in subprocess."""
     if not raw:
         return False, "", ""
     raw = raw.strip()
@@ -150,17 +142,7 @@ def _link_cpu_work(raw: str, page_url: str, base_domain: str,
 
 def _bulk_links_cpu(cands, page_url: str, base_domain: str,
                     respect_scope: bool) -> list[tuple[bool, str, str]]:
-    """Batch version of _link_cpu_work: processes the whole list of candidates.
-
-    Needed for ProcessPoolExecutor: if you hand the pool one link at a time
-    (pool.map(_link_cpu_work, cands)) each link is a separate IPC transfer (one
-    micro-task out and one result back). On a batch of thousands of links the
-    IPC overhead outweighs the parallelism win. The batch sends the whole list
-    in a single IPC (pickle), the worker iterates it line by line and returns
-    the results list in one IPC — just 2 IPCs per batch, and the urllib work
-    runs in the subprocess without the GIL (see bench_cpu_parsing.py: the
-    urllib task is 4.16x).
-    """
+    """Batch link processing for ProcessPoolExecutor (avoids per-link IPC overhead)."""
     return [_link_cpu_work(c, page_url, base_domain, respect_scope)
             for c in cands]
 
@@ -493,18 +475,7 @@ class AsyncSpider:
     async def _resolve_scheme(
         self, start_url: str, scheme: str, domain: str,
     ) -> tuple[str, str]:
-        """If `scheme` is https and the target actually only speaks plain
-        HTTP (common on internal/test targets with non-standard ports —
-        e.g. dvwa.local:7474), fall back to http:// after one quick probe.
-
-        Only probes when scheme == "https" — an explicit http:// URL is
-        never "corrected" to https, and a working https target pays only
-        one extra GET (same host, already about to be crawled anyway).
-        Any failure other than the specific SSL handshake mismatch (timeout,
-        DNS error, connection refused, real cert error, ...) is left alone
-        so the existing crawl (and its own error reporting) still runs and
-        surfaces the real problem instead of masking it as a scheme issue.
-        """
+        """Probe https and fall back to http if target doesn't speak SSL."""
         if scheme != "https" or not domain:
             return scheme, start_url
 
@@ -767,13 +738,7 @@ class AsyncSpider:
         queue: list,
         semaphore: asyncio.Semaphore,
     ) -> None:
-        """Crawl with JS rendering via Lightpanda `fetch --dump html`.
-
-        Uses only if lightpanda binary is installed and js_render=True.
-        Each page's URL is fetched through Lightpanda, which executes JS and
-        returns the post-JS rendered DOM — enough for SPA/level3/4 discovery.
-        (SPA click-through is a Lightpanda limitation: `fetch` has no
-        interactivity, so we skip clicks here.)
+        """Crawl with Lightpanda JS rendering (fetch --dump html, no click-through).
         """
         while queue and not self._stop and len(visited) < self.max_pages:
             url, depth = queue.pop(0)
@@ -816,32 +781,13 @@ class AsyncSpider:
     def _parse_html(
         self, html: str, page_url: str, base_domain: str
     ) -> tuple[list[str], list[SpiderForm], list[str]]:
-        """Parse HTML: links, forms, JS files, data attributes.
-
-        CPU-оптимизация (см. header): парсинг — lxml (C, освобождает GIL),
-        урllib-обработка ссылок — пачкой через ProcessPoolExecutor, когда
-        кандидатов достаточно; в противном случае синхронно (тот же движок).
-        Результат (дедуплицированные links/forms/js) идентичен прежнему bs4+
-        построчному _add_link — это покрыто тестами test_spider.py.
-        """
+        """Parse HTML for links/forms/JS (lxml + batch ProcessPoolExecutor)."""
         return self._parse_html_internal(html, page_url, base_domain)
 
     def _parse_html_internal(
         self, html: str, page_url: str, base_domain: str
     ) -> tuple[list[str], list[SpiderForm], list[str]]:
-        """Internal implementation of _parse_html (lxml + batched URL handling).
-
-        Parsing: prefer lxml (C code, ~11x faster than bs4/html.parser and it
-        releases the GIL). When lxml is not installed — fall back to (BeautifulSoup).
-
-        Link handling: gather all raw candidates into one list, then
-        if len(candidates) >= _PROC_THRESHOLD — process them as a batch through
-        ProcessPoolExecutor (_link_cpu_work, the urllib part in subprocesses,
-        works around the GIL, ~4x), otherwise synchronously line by line (the
-        same _link_cpu_work, but in the current process). Dedup (seen_links) is
-        always in the main
-        потоке — сеть set-add дешёва. Итог идентичен прежнему bs4-пути.
-        """
+        """Parse HTML via lxml (fast, releases GIL), process links in batches via ProcessPoolExecutor."""
         soup = self._make_soup(html)
         links: list[str] = []
         js_links: list[str] = []

@@ -76,18 +76,7 @@ class CustomNotifyCard(Widget):
         yield Static(self._message, id="toast-body", markup=False)
 
     def on_mount(self) -> None:
-        """Animate the card in so it doesn't just pop into the layout.
-
-        The zone lives in the real layout (above the StatusBar), so we can
-        animate it like any normal widget — fade in from transparent and
-        slide up into place.
-
-        The animation is cosmetic: a fallback timer forces the final styles
-        even if the animation never runs (e.g. when mounted from a background
-        call or on an overlay-adjacent frame), so a card is never left stuck
-        at opacity:0 — invisible but still mounted, which is how it used to
-        fail with e2e green but nothing visible at runtime.
-        """
+        """Animate card appearance (fade in + slide up, with fallback)."""
         try:
             self.styles.opacity = 0.0
             self.styles.offset_y = 2

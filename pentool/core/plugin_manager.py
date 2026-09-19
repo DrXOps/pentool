@@ -22,17 +22,7 @@ USER_PLUGINS_DIR = Path.home() / ".pentool" / "plugins"
 
 
 class BasePlugin:
-    """Base class for all Pentool plugins.
-
-    Each plugin must declare class attributes:
-        name             — unique ID (snake_case)
-        version          — version string ("1.0")
-        author           — author name
-        description      — short description
-        api_version      — Plugin API version (currently 1)
-        required_feature — feature string from LicenseInfo.features, or ""
-                           (empty string = free plugin, no PRO required)
-    """
+    """Base for Pentool plugins. Subclasses declare name, version, author, description, api_version, required_feature."""
 
     name: str = ""
     version: str = "0.1"
@@ -343,15 +333,7 @@ class PluginManager:
 
 
 def _candidate_pro_builtin_dirs() -> list[Path]:
-    """Locations where PRO builtin plugin .py files may live.
-
-    Two scenarios are supported:
-    1. Dev checkout: the `pro/` git submodule next to the repo root
-       (pro/pentool/plugins/builtin/*.py).
-    2. Installed/end-user: the obfuscated PRO package downloaded via
-       `pentool license trial`/`activate` into PRO_PACKAGE_DIR
-       (~/.pentool/pro/pentool/plugins/builtin/*.py).
-    """
+    """PRO plugin locations: dev submodule (pro/) or installed (~/.pentool/pro/)."""
     dirs: list[Path] = []
     try:
         from pentool.core.license import PRO_PACKAGE_DIR
@@ -365,29 +347,9 @@ def _candidate_pro_builtin_dirs() -> list[Path]:
 
 
 def load_pro_module(module_stem: str):
-    """Load a single PRO builtin plugin module by filename stem, e.g. "payloads_pro".
+    """Load a PRO plugin module by stem (e.g. "payloads_pro") via importlib, not namespace import.
 
-    Unlike PluginManager.load_plugins() (which calls register(hook) and
-    only exposes screens/scanners/passive_checks), this is used by code
-    that needs direct access to a plugin's public functions
-    (e.g. Intruder's Smart Payload Generator calling
-    generate_smart_payloads()). A bare `import pentool.plugins.builtin.X`
-    does NOT work here — that package path only exists in the test suite,
-    where conftest.py manually extends __path__; in the running app the
-    PRO plugin is not on any importable namespace, so this loads it the
-    same way PluginManager._load_file() does (importlib.util.spec_from_file_location).
-
-    Raises FileNotFoundError if the module isn't found in any known PRO
-    location (dev submodule or installed package) — callers should show
-    this to the user instead of silently failing.
-
-    Raises RuntimeError if the installed PRO package (PRO_PACKAGE_DIR) was
-    built for a different FREE version than the one currently running — see
-    pentool.core.license.is_pro_package_compatible(). Refusing to import it
-    is deliberate: it's a compiled Cython extension, and importing a
-    mismatched build can segfault the process instead of raising a
-    catchable Python exception. Does NOT apply to the dev `pro/` submodule
-    checkout, which is always the same source tree as the running FREE code.
+    Raises FileNotFoundError if not found; RuntimeError if version-mismatched (Cython ABI can segfault).
     """
     module_name = f"_pentool_plugin_{module_stem}"
     if module_name in sys.modules:

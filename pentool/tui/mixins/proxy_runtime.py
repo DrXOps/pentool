@@ -27,17 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class ProxyRuntimeMixin:
-    """Mix-in for starting/stopping the proxy.
-
-    Supports two backends selected by ``self._proxy_engine``:
-
-      * 'memory' — legacy: ProxyServer runs on a daemon thread inside the TUI
-        process (its own asyncio loop), started via the async coroutine path.
-      * 'daemon' — isolated: the proxy lives in its own subprocess (see
-        proxy/daemon.py) and ``self._proxy`` is a ProxyClient facade. start/stop
-        are synchronous socket commands; captured-request events come back over
-        a separate event socket and are re-emitted into the TUI EventBus.
-    """
+    """Mix-in for proxy start/stop (memory or daemon backend)."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -98,13 +88,7 @@ class ProxyRuntimeMixin:
             self._proxy_transition_lock.release()
 
     def _start_proxy_daemon(self) -> None:
-        """Start the isolated daemon-backed proxy (ProxyClient facade).
-
-        start() is synchronous here (spawns+connects, then pushes the startup
-        intercept/scope prefs). Event emission back into the TUI is handled by
-        the client's background reader re-emitting into the EventBus, so the
-        UI update calls below are identical to the in-memory path.
-        """
+        """Start daemon proxy (synchronous, events re-emitted to EventBus)."""
         try:
             self._proxy.start()  # type: ignore[attr-defined]
             self._update_status()  # type: ignore[attr-defined]
@@ -172,13 +156,7 @@ class ProxyRuntimeMixin:
             self.call_from_thread(self._update_dashboard_proxy_status, False)  # type: ignore[attr-defined]
 
     def _stop_proxy(self) -> None:
-        """Synchronous proxy stop (Stop button, Ctrl+Q, sync callers).
-
-        Delegates to the async variant via a temporary event loop when the
-        engine is 'memory' (the only case that truly needs async). For the
-        daemon engine stop() is a socket command that works from either
-        context, so the sync variant calls it directly — no event loop dance.
-        """
+        """Synchronous proxy stop (direct socket cmd for daemon, async for memory engine)."""
         logger.info("APP: _stop_proxy called")
         if self._engine() == "daemon":
             return self._stop_proxy_daemon()

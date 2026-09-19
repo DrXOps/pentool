@@ -72,16 +72,7 @@ InterceptState = InterceptState  # noqa: PLC0104
 
 
 class ProxyServer:
-    """Asynchronous HTTP/HTTPS proxy server with traffic interception.
-
-    Runs as an asyncio server. Supports:
-    - HTTP and HTTPS interception (via CONNECT + dynamic certificates)
-    - Interactive mode (intercept): pauses request until user decision
-    - Scope: host filtering
-    - Match/Replace: automatic replacement in requests/responses (via MatchReplaceEngine)
-    - Logging to SQLite via core/db_schema
-    - Notifications via EventBus: ProxyRequestCaptured, ProxyRequestCompleted
-    """
+    """Async HTTP/HTTPS proxy (intercept, scope, match-replace, EventBus).""
 
     def __init__(
         self,

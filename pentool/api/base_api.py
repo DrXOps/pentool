@@ -6,22 +6,7 @@ from abc import ABC, abstractmethod
 
 
 class ExportableAPI(ABC):
-    """Mixin for API classes that support project data export/import.
-
-    Subclasses must implement export_project_data and import_project_data.
-    These methods are called by core.project.save_project/load_project.
-
-    Usage::
-
-        class MyAPI(ExportableAPI):
-            def export_project_data(self) -> dict:
-                return {"my_data": [...]}
-
-            def import_project_data(self, data: dict) -> int:
-                items = data.get("my_data", [])
-                # restore items
-                return len(items)
-    """
+    """Mixin for API classes with export/import project data (save_project/load_project)."""
 
     @abstractmethod
     def export_project_data(self) -> dict:

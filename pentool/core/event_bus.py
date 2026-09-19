@@ -267,14 +267,7 @@ def reset_event_bus() -> None:
 
 @contextmanager
 def override_event_bus(bus: EventBus | None):
-    """Context-managed replacement of the global EventBus singleton.
-
-    Installs *bus* for the duration of the block and restores whatever was
-    active before (including None) on exit — symmetric to
-    `config.override_config`. Lets a test run against an isolated bus (or
-    against none) without a hand-rolled save/restore around
-    `reset_event_bus`, and never leaks into later code (Этап 7.1).
-    """
+    """Context manager: temporarily replace global EventBus singleton (for tests)."""
     global _bus
     prev = _bus
     with _bus_lock:

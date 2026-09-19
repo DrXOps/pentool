@@ -382,25 +382,7 @@ class ProjectManager:
     # ── Internal async helpers ────────────────────────────────────────────────
 
     async def _do_switch(self, path: str, is_new: bool) -> None:
-        """Single entry point for all project switches.
-
-        Runs in an exclusive worker — no two switches can overlap.
-        Order:
-          0. Wait for the proxy thread to fully exit (if _stop_proxy was
-             called but the thread didn't die within join(timeout) — the
-             old loop may still hold the SQLite WAL lock or the TCP port).
-          1. init_db (CREATE TABLE IF NOT EXISTS, migrations)
-          2. switch_db on ProxyService (close old connection, open new one)
-          3. clear in-memory proxy state if new project
-          4. set _project_loaded — DB is ready, Start Proxy is now safe,
-             even though the other screens (Repeater/Scanner/Target/Dashboard)
-             may still be reloading in the background (step 5). Proxy only
-             depends on the HttpStorage connection from step 2, not on any
-             of those screens, so there is no reason to make the user wait
-             for all of them before allowing Start Proxy.
-          5. reload the remaining screens — run concurrently (they read
-             independent tables/state), not sequentially.
-        """
+        """Switch project DB: stop proxy → init schema → switch storage → reload screens."""
         # 0. Stop the proxy (async) and wait for its thread to die before
         # touching the DB. Runs in this async worker, so the TUI thread is
         # NOT blocked — this is what previously froze the UI for ~10s on

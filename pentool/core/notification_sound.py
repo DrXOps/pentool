@@ -38,13 +38,7 @@ _BUSY = threading.Lock()
 
 
 def play_notification_sound(severity: str = "information") -> None:
-    """Best-effort, non-blocking notification sound for `severity`.
-
-    Fully swallows any error — sound is a nice-to-have, never a hard
-    dependency of the notification itself. Runs the (cheap, non-forking)
-    playback on a daemon thread so it never blocks the Textual event loop.
-    Skips playback entirely if a previous sound is still in flight.
-    """
+    """Play notification sound (best-effort, non-blocking, swallowed on error)."""
     # Atomically claim the single-playback slot; if another sound is still
     # playing, drop this one instead of stacking another thread.
     if not _BUSY.acquire(blocking=False):

@@ -220,14 +220,7 @@ class ProxyService(BaseService):
             )
 
     async def update_color(self, request_id: int, color: str) -> None:
-        """Set the color mark for a request.
-
-        Public wrapper — before this, ProxyScreen._mark_request() and
-        _save_comment() reached past ProxyService into its private
-        `_storage` attribute directly (a layer violation identical to the
-        one found in ScanService._get_engine() usage, see
-        (scanner refactor plan) section 2.4/2.7).
-        """
+        """Set color mark (public wrapper, avoids layer violation)."""
         if not self._storage_ready:
             return
         try:

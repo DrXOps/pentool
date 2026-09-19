@@ -15,14 +15,7 @@ class AppEvent:
     source: str = ""  # source module name, for debugging
 
     def for_history(self) -> "AppEvent":
-        """Return the object retained in EventBus._history (ring buffer).
-
-        Default: return self unchanged. Override in event types that carry
-        heavy payloads (e.g. a full request/response object) to strip them
-        before they get retained long-term in the ring buffer — live
-        subscribers still receive the full original event via
-        emit()/emit_threadsafe(), only the *stored* copy is stripped.
-        """
+        """Return lightweight copy for ring buffer (strip heavy payloads)."""
         return self
 
 
@@ -52,23 +45,9 @@ class ScanProgressEvent(AppEvent):
 
 @dataclass
 class FindingDiscovered(AppEvent):
-    """Vulnerability discovered (active or passive scan).
+    """Finding discovered by active/passive scanner.
 
-    finding: full Finding object (Any to avoid a modules -> core import —
-    Finding lives in pentool.modules.scanner.base).
-
-    NOTE on memory: like ProxyRequestCaptured/ProxyRequestCompleted, this
-    event's `finding` carries heavy payloads (request_raw/response_raw —
-    full HTTP request/response text). Nothing replays FindingDiscovered
-    from EventBus history (no get_history(event_type=FindingDiscovered)
-    caller in the codebase) — the only consumers are live subscribers
-    (Dashboard, ScannerScreen), which already get the full event via
-    emit()/emit_threadsafe(). Without for_history(), up to `max_history`
-    (10_000) full Finding objects — each with its own request/response
-    bodies — could accumulate in the ring buffer on a long/noisy scan
-    session, retained purely for a replay feature nothing uses.
-    for_history() keeps the lightweight identifying fields and drops the
-    heavy raw text.
+    for_history() strips heavy request/response bodies to limit ring buffer memory.
     """
     finding: Any = None
     scan_source: str = "active"  # "active" | "passive"
@@ -130,19 +109,7 @@ class IntruderFinished(AppEvent):
 class ProxyRequestCaptured(AppEvent):
     """Proxy intercepted a new request.
 
-    request: full InterceptedRequest object (Any to avoid
-    circular imports modules -> core).
-
-    NOTE on memory: `request` carries the full InterceptedRequest (headers,
-    body, response). Live subscribers (app.py, PassiveScanner) need the full
-    object and get it via emit()/emit_threadsafe() as before. But EventBus
-    also retains a copy of every event in its `_history` ring buffer
-    (maxlen=10_000) — retaining the full request there too means up to
-    10_000 full HTTP requests/responses held in memory just for history/
-    replay purposes, which nothing actually replays (no code calls
-    `get_history()`/`replay()` for this event type). `for_history()` strips
-    `request` down to None before it enters `_history`, keeping only the
-    lightweight metadata fields already present (request_id/method/url/host).
+    for_history() strips heavy request obj to limit ring buffer memory.
     """
     request_id: str = ""
     method: str = ""
@@ -166,15 +133,7 @@ class ProxyRequestCaptured(AppEvent):
 
 @dataclass
 class ProxyRequestCompleted(AppEvent):
-    """Request through proxy completed (response received).
-
-    request: full InterceptedRequest object (Any to avoid
-    circular imports modules -> core).
-
-    See ProxyRequestCaptured.for_history() docstring — same rationale:
-    nothing replays this event type from history, so the full request/
-    response body should not be retained in the ring buffer.
-    """
+    """Proxy request completed (response received). for_history() strips heavy payload."""
     request_id: str = ""
     status_code: int = 0
     request: Any = None  # InterceptedRequest

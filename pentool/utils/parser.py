@@ -52,19 +52,7 @@ class ParsedResponse:
 
 
 def response_raw_from_parsed(resp: ParsedResponse) -> str:
-    """Rebuild the full raw HTTP response text from a ParsedResponse.
-
-    A local, dependency-free replacement for the PRO `format_response_raw`
-    helper. The installed PRO package builds this by instantiating an
-    `aiohttp.raw_request.RawResponseMessage`-adjacent/explicit
-    `aiohttp.ClientResponse` the old way, which breaks on aiohttp >= 3.14
-    (`ClientResponse.__init__() missing required argument: 'stream_writer'`)
-    and made every Intruder attack request fail. Building the wire text here
-    needs no aiohttp at all.
-
-    Body bytes are taken from `_raw_body` when available (keeps the exact
-    downloaded bytes, e.g. binary) and fall back to `body` otherwise.
-    """
+    """Rebuild raw HTTP response from ParsedResponse (no aiohttp dependency, works on >=3.14)."""
     header_block = "".join(
         f"{k}: {v}\r\n" for k, v in resp.headers.items()
     )

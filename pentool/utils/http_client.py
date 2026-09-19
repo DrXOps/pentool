@@ -153,19 +153,9 @@ class HTTPClient:
 def get_shared_http_client(
     follow_redirects: bool = True,
     extra_headers: dict | None = None,
-    cfg: Any | None = None,  # noqa: ANN401 — injected Config (core layer, not importable here)
+    cfg: Any | None = None,
 ) -> "HTTPClient":
-    """Build an HTTPClient configured from a Config.
-
-    One factory for the repeated ``HTTPClient(verify_ssl=..., timeout=...)``
-    block that used to be scattered across services/modules. Returns a NEW
-    client per call (callers still own and close it as before); "shared"
-    refers to the single source of truth (the config) being used everywhere.
-
-    *cfg* is injected by the caller (services/modules, which may import
-    core.config) so this utilities module keeps no dependency on any other
-    penTool layer.
-    """
+    """Build an HTTPClient from Config (new per call, config is single source of truth)."""
     if cfg is None:
         return HTTPClient(
             verify_ssl=True,

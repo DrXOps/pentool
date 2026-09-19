@@ -135,18 +135,7 @@ class SpiderAPI(ExportableAPI):
                 pass
 
     async def _discover_auth_headers(self, url: str, db_path: str) -> dict:
-        """Look up the most recent Proxy-captured request for this host and
-        pull out any auth-looking headers (Cookie, Authorization, ...).
-
-        Best-effort: opens a short-lived HttpStorage connection (same
-        pattern as ScannerAPI.get_history_requests — a temp connection just
-        for this one lookup, not the live Proxy connection), reads the
-        single most recent row for the target host, and returns whatever
-        extract_auth_headers() finds in its request_headers. Returns {} on
-        any failure (no project DB yet, host never seen, corrupt row,
-        column missing on an old DB) — this is a convenience fallback, not
-        a hard dependency; crawling must still work with no history at all.
-        """
+        """Look up Proxy history for auth headers for this host (best-effort, returns {} on failure)."""
         try:
             host = urlparse(url).netloc
             if not host:

@@ -32,15 +32,7 @@ class ProxyEventHandlersMixin:
     """Mix-in bridging proxy-thread events (EventBus) into the TUI loop."""
 
     def _app_still_running(self) -> bool:
-        """Whether the Textual App is still mounted/running.
-
-        These handlers run in the *proxy thread* (via EventBus). When the App
-        is being torn down (its run() returned, not via action_quit), call_from_thread
-        on a non-running App raises 'App is not running' — which, arriving from the
-        proxy thread while the TUI has already exited, is exactly the
-        'run() returned cleanly (not via action_quit)' + 'App is not running' spam we
-        kept seeing. Guarding here stops bridging into a dead TUI.
-        """
+        """Guard: skip EventBus callbacks when TUI has already exited (prevents 'App is not running' spam)."""
         # If the host has no `is_running` attribute (unit-test fake, plain object)
         # treat it as running — only gate on a real App that reports False.
         try:

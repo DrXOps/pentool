@@ -77,16 +77,7 @@ def _strip_default_port(host: str) -> str:
 
 
 def _force_scope_host(host: str, app) -> None:
-    """Add *host* to Scope unconditionally (bypasses auto_scope config).
-
-    Used by --url --real to force the target into Scope + trigger TechDetect
-    regardless of the auto_scope setting. Idempotent — SafeMap.set_in_scope
-    is a no-op if already in scope.
-
-    Also syncs the host into ProxyServer.scope so proxy-based features (--real
-    capture, intercept filtering) see it as in-scope — without this the proxy
-    scope list stays empty and the host never matches.
-    """
+    """Add host to Scope unconditionally (bypasses auto_scope config), syncs into ProxyServer.scope."""
     if not host:
         return
     norm_host = _strip_default_port(host)

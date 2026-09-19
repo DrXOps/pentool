@@ -700,16 +700,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         self.run_worker(self._store_request(req))
 
     def _cleanup_pending_req_ids(self) -> None:
-        """БАГ-C: periodic cleanup of stale _pending_req_ids entries.
-
-        Normally every entry is removed in _update_and_reload() once the
-        response arrives. But if a request never completes (client aborts,
-        intercept dropped, proxy restarted mid-flight, etc.) the entry would
-        otherwise stay in the dict forever — unbounded memory growth over a
-        long-running session. Anything older than 10 minutes is stale and
-        safe to drop; _wait_for_row_id already bails out after ~5s so no
-        legitimate in-flight request should ever hit this threshold.
-        """
+        """Periodic cleanup of stale _pending_req_ids (requests never completed)."""
         cutoff = time.time() - 600  # 10 minutes
         stale_ids = [
             req_id for req_id, ts in self._pending_req_ids_ts.items()
@@ -850,15 +841,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             self._debounce_timer = self.set_timer(delay, self._flush_pending_rows)
 
     def _flush_pending_rows(self) -> None:
-        """Flush all pending rows into the table via incremental add_rows().
-
-        Rows are appended at the BOTTOM (matches _rows_cache's oldest-first/
-        newest-last order) using ArrowBackend.append_rows() instead of
-        rebuilding the whole backend from scratch — a full rebuild costs
-        ~11ms per 2000 existing rows (measured), while append_rows() only
-        touches the new rows. Auto-scrolls to the bottom so live traffic
-        stays visible, like `tail -f`/`less -f`.
-        """
+        """Append pending rows incrementally (add_rows, no full rebuild), tail-scroll."""
         self._debounce_timer = None
         if not self._pending_append_rows:
             return
@@ -1082,15 +1065,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             pass
 
     def _debounced_load(self, row_id: int | None) -> None:
-        """Safely run _load_row_details from a debounce timer callback.
-
-        Textual's set_timer may fire its callback after the widget has been
-        removed from the DOM (e.g. during project switch or shutdown). In that
-        case the widget is unmounted and run_worker raises an exception that
-        Textual may silently swallow by tearing down the screen stack — causing
-        a clean run() return with no traceback ("TUI just vanished"). Check
-        is_running before scheduling the async worker.
-        """
+        """Run _load_row_details with guard against widget-removed race."""
         try:
             app = self.app
             if not app.is_running:
@@ -1669,18 +1644,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         await load_enforce_scope_setting(self)
 
     async def _save_scope_setting(self, hosts: list[str]) -> None:
-        """Persist the Scope host list into the current project's DB.
-
-        Mirrors _save_enforce_scope_setting — before this, the host list
-        was only ever saved to the GLOBAL ~/.config/pentool/config.yaml
-        (Config.scope), never per-project. That meant reopening an older
-        project after working in a different one restored the wrong scope
-        (whatever Config.scope happened to hold last), which both left the
-        '★ Scope' filter button looking stuck/inactive (ScopeToggle synced
-        off Config.scope, not proxy.scope) and made "Skip out-of-scope"
-        appear to do nothing (enforce_scope=True but proxy.scope didn't
-        match what the user actually configured for THIS project).
-        """
+        """Save scope host list per-project (was global Config only, broke project switching)."""
         try:
             import json
             from pentool.core.db_schema import set_project_setting
@@ -1691,16 +1655,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             logger.debug("_save_scope_setting: %s", exc)
 
     def _sync_enforce_scope_button(self, enabled: bool | None = None) -> None:
-        """Sync the '☐/☑ Skip out-of-scope' button label/class.
-
-        `enabled` lets a caller that just called `proxy.set_enforce_scope()`
-        pass the value it's setting explicitly, instead of this method
-        re-reading `proxy.enforce_scope` — which may not have been written
-        yet if the proxy loop is running (see set_enforce_scope's
-        call_soon_threadsafe). Callers that run after the write is known to
-        have landed (on_mount, after awaiting _load_enforce_scope_setting)
-        can omit it and this falls back to reading the live value.
-        """
+        """Sync Skip-out-of-scope button (enabled param avoids reading stale proxy attribute)."""
         proxy = self._get_proxy()
         if enabled is None:
             enabled = bool(proxy and proxy.enforce_scope)
@@ -2040,17 +1995,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             logger.error("Failed to mark request: %s", exc)
 
     def _comment_dialog(self, initial_comment: str | None = None) -> None:
-        """Show a modal to view/edit the comment for the selected request.
-
-        Replaces the old always-visible Comment input field below the
-        Request panel — comments are now edited on demand via context menu
-        or by clicking the 💬 marker in the list, keeping the detail panel
-        uncluttered.
-
-        `initial_comment` lets callers (e.g. the row-click 💬 handler) pass
-        the value straight from the synchronous row cache; falls back to
-        `self._current_comment`, populated by the async detail-load worker.
-        """
+        """Show comment edit modal (on-demand, context-menu or click).""
         req_id = self._selected_req_id
         if not req_id:
             return

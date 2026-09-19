@@ -56,13 +56,7 @@ class IntruderStorage(BaseSqliteStorage):
         payloads: list[list[str]],
         tab_uid: str = "",
     ) -> None:
-        """Save Intruder tab state (template, attack type, payloads) to DB.
-
-        When `tab_uid` is given, upserts by that stable identity (matches
-        ScannerTabRepository.save_tab's rationale — tab_name alone can't
-        distinguish two same-named tabs across restarts). When omitted,
-        falls back to the original delete-by-tab_name-then-insert behavior
-        for backward compatibility with single-tab callers.
+        """Save tab state to DB (upserts by tab_uid when given).
         """
         if not await self.ensure_open():
             return
