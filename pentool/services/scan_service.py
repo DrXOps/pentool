@@ -393,10 +393,33 @@ class ScanService(BaseService):
                             if _on_ai_action:
                                 _on_ai_action()
 
+                        # AIWorker found a new endpoint → re-crawl + scan
+                        _discovered_for_scan: list[str] = []
+
+                        async def _on_ai_endpoint(url: str) -> None:
+                            if url in _discovered_for_scan:
+                                return
+                            _discovered_for_scan.append(url)
+                            self._log(f"[dim]AI endpoint: {url} — crawling[/dim]")
+                            try:
+                                extra_targets: list[str] = []
+                                extra_forms: list = []
+                                await self._crawl_target(
+                                    url, config, extra_targets, extra_forms
+                                )
+                                if extra_targets:
+                                    self._log(
+                                        f"[green]AI: crawled {len(extra_targets)} page(s)"
+                                        f" from {url}[/green]"
+                                    )
+                            except Exception as exc:
+                                logger.debug("AI endpoint crawl error: %s", exc)
+
                         worker = AIWorker(
                             target_urls=all_scan_targets,
                             on_log=_ai_log,
                             on_ai_action=_ai_action,
+                            on_endpoint=_on_ai_endpoint,
                             tech_profile=_collected_tech[0] if _collected_tech else None,
                             payload_queue=ai_payload_queue,
                         )
