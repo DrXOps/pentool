@@ -153,3 +153,37 @@ _register(AITask(
     max_tokens=512,
     temperature=0.1,
 ))
+
+# === 5. AI payload generation: context-aware payloads ===
+_register(AITask(
+    name="generate_payloads",
+    system_prompt=(
+        "You are a penetration tester. Given a target URL, a parameter name, "
+        "its current value, and the detected technology stack, generate up to 10 "
+        "realistic vulnerability-specific payloads tailored to this exact context. "
+        "The goal is to find reflected XSS, SQL injection, or other injection points.\n\n"
+        "Rules:\n"
+        "- Payloads must be context-aware: if the parameter expects a number, "
+        "use numeric variants; if it expects a string with HTML, use HTML variants.\n"
+        "- Do NOT include generic test payloads — only ones that stand a realistic "
+        "chance of triggering a vulnerability in the given tech stack.\n"
+        "- If the context is unclear, provide a mix of common injection types.\n\n"
+        "Return a JSON array of objects. NO text outside JSON:\n"
+        '- {{"payload": "...", "description": "short context note", "confidence": "high"}}\n'
+        "confidence: high | medium | low."
+    ),
+    expected_json_schema={
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "payload": {"type": "string"},
+                "description": {"type": "string"},
+                "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+            },
+            "required": ["payload", "description", "confidence"],
+        },
+    },
+    max_tokens=1024,
+    temperature=0.3,
+))
