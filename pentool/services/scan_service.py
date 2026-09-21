@@ -367,6 +367,44 @@ class ScanService(BaseService):
                 config.resume,
             )
 
+            # ── Parallel AIWorker ────────────────────────────────────────────
+            # Запускается ДО active-скан, передаёт сгенерированные пейлоады
+            # через очередь — движок забирает их в рантайме.
+            ai_payload_queue: asyncio.Queue | None = None
+            ai_discovered_urls = []
+            ai_task = None
+            if getattr(config, "use_ai", False):
+                from pentool.services.ai.factory import get_active_backend as _get_ab
+                _backend = _get_ab()
+                logger.info("AIWORKER: prepare use_ai=True backend=%s", _backend)
+                if _backend is not None:
+                    try:
+                        from pentool.modules.scanner.ai_worker import AIWorker
+
+                        ai_payload_queue = asyncio.Queue()
+
+                        def _ai_log(msg: str) -> None:
+                            self._log(msg)
+
+                        def _ai_action() -> None:
+                            _on_ai_action = getattr(config, "on_ai_action", None)
+                            if _on_ai_action:
+                                _on_ai_action()
+
+                        worker = AIWorker(
+                            target_urls=all_scan_targets,
+                            on_log=_ai_log,
+                            on_ai_action=_ai_action,
+                            tech_profile=_collected_tech[0] if _collected_tech else None,
+                            payload_queue=ai_payload_queue,
+                        )
+                        ai_task = asyncio.create_task(worker.run())
+                        logger.info("AIWORKER: task created")
+                    except Exception as exc:
+                        logger.warning("AIWorker init failed: %s", exc)
+                else:
+                    logger.info("AIWORKER: skipped — backend not available")
+
             active_findings = await self._scanner.run_active_on_requests(
                 seed_requests=all_reqs,
                 check_names=config.check_names,
@@ -377,82 +415,26 @@ class ScanService(BaseService):
                 resume=config.resume,
                 on_total_estimate=_on_total_estimate,
                 on_fingerprint=_on_fingerprint,
+                ai_payload_queue=ai_payload_queue,
             )
 
-            # ── Parallel AIWorker ────────────────────────────────────────────────
-            ai_discovered_urls = []
-            if getattr(config, "use_ai", False):
-                from pentool.services.ai.factory import get_active_backend as _get_ab
-                _backend = _get_ab()
-                logger.info("AIWORKER: prepare use_ai=True backend=%s", _backend)
-                if _backend is not None:
-                    try:
-                        from pentool.modules.scanner.ai_worker import AIWorker
-
-                        def _ai_log(msg: str) -> None:
-                            self._log(msg)
-
-                        def _ai_action() -> None:
-                            _on_ai_action = getattr(config, "on_ai_action", None)
-                            if _on_ai_action:
-                                _on_ai_action()
-
-                        tech_profile = _collected_tech[0] if _collected_tech else None
-                        # Если PRO Fingerprinter не сработал — пробуем FREE tech_detector
-                        if tech_profile is None:
-                            try:
-                                from pentool.services.tech_detector import detect_tech
-                                from pentool.modules.scanner.fingerprint import TechProfile
-                                first_url = all_scan_targets[0] if all_scan_targets else ""
-                                if first_url:
-                                    profile_dict = await detect_tech(first_url)
-                                    if profile_dict:
-                                        tech_profile = TechProfile.from_enriched_dict(profile_dict)
-                                        logger.info("AIWORKER: fallback to FREE tech_detector profile=%s", tech_profile)
-                            except Exception as exc:
-                                logger.debug("AIWORKER: FREE tech_detector fallback error: %s", exc)
-                        logger.info("AIWORKER: tech_profile=%s", tech_profile)
-                        worker = AIWorker(
-                            target_urls=all_scan_targets,
-                            on_log=_ai_log,
-                            on_ai_action=_ai_action,
-                            tech_profile=tech_profile,
-                        )
-                        ai_task = asyncio.create_task(worker.run())
-                        logger.info("AIWORKER: task created")
-                    except Exception as exc:
-                        logger.warning("AIWorker init failed: %s", exc)
-                else:
-                    logger.info("AIWORKER: skipped — backend not available")
-
-                # Collect AI-discovered URLs after the main scan finishes.
-                if ai_task is not None and not ai_task.done():
-                    try:
-                        ai_discovered_urls = await asyncio.wait_for(
-                            ai_task, timeout=5.0
-                        ) or []
-                        logger.info("AIWORKER: done discovered=%d", len(ai_discovered_urls))
-                    except asyncio.TimeoutError:
-                        ai_task.cancel()
-                        logger.warning("AIWORKER: timed out after 5s, cancelled")
-                    except Exception as exc:
-                        logger.warning("AIWORKER: error: %s", exc)
-                elif ai_task is not None:
-                    try:
-                        ai_discovered_urls = ai_task.result() or []
-                        logger.info("AIWORKER: done (completed) discovered=%d", len(ai_discovered_urls))
-                    except Exception as exc:
-                        logger.warning("AIWORKER: result error: %s", exc)
-                        try:
-                            ai_discovered_urls = ai_task.result() or []
-                        except Exception:
-                            pass
-
-                    if ai_discovered_urls:
-                        self._log(
-                            f"[green]AI: added {len(ai_discovered_urls)} "
-                            f"discovered URL(s) to scan results[/green]"
-                        )
+            # После скана — дожидаемся AIWorker (если ещё не finished)
+            if ai_task is not None:
+                try:
+                    ai_discovered_urls = await asyncio.wait_for(
+                        ai_task, timeout=5.0
+                    ) or []
+                    logger.info("AIWORKER: done discovered=%d", len(ai_discovered_urls))
+                except asyncio.TimeoutError:
+                    ai_task.cancel()
+                    logger.warning("AIWORKER: timed out after 5s, cancelled")
+                except Exception as exc:
+                    logger.warning("AIWORKER: result error: %s", exc)
+                if ai_discovered_urls:
+                    self._log(
+                        f"[green]AI: added {len(ai_discovered_urls)} "
+                        f"discovered URL(s) to scan results[/green]"
+                    )
             for f in active_findings:
                 f.scan_tab_uid = config.scan_tab_uid
                 f.scan_session_id = config.scan_session_id
