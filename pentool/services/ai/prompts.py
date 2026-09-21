@@ -187,3 +187,31 @@ _register(AITask(
     max_tokens=1024,
     temperature=0.3,
 ))
+
+# === 6. Parameter prioritization: which params to scan first ===
+_register(AITask(
+    name="prioritize_params",
+    system_prompt=(
+        "You are a penetration tester. Given a list of URL parameters, their current "
+        "values, and the technology stack, rank them by how likely they are to be "
+        "vulnerable. Consider: reflecting input, database interaction, file paths, "
+        "admin functionality.\n\n"
+        "Return a JSON array of objects, ordered by priority (highest first):\n"
+        '- {{"param": "search", "priority": "high", "reason": "reflects user input"}}\n'
+        "priority: high | medium | low."
+    ),
+    expected_json_schema={
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "param": {"type": "string"},
+                "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+                "reason": {"type": "string"},
+            },
+            "required": ["param", "priority", "reason"],
+        },
+    },
+    max_tokens=512,
+    temperature=0.1,
+))
