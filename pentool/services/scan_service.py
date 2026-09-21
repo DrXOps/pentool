@@ -371,6 +371,7 @@ class ScanService(BaseService):
             # Запускается ДО active-скан, передаёт сгенерированные пейлоады
             # через очередь — движок забирает их в рантайме.
             ai_payload_queue: asyncio.Queue | None = None
+            waf_bypass_queue: asyncio.Queue | None = None
             ai_discovered_urls = []
             ai_task = None
             if getattr(config, "use_ai", False):
@@ -382,6 +383,7 @@ class ScanService(BaseService):
                         from pentool.modules.scanner.ai_worker import AIWorker
 
                         ai_payload_queue = asyncio.Queue()
+                        waf_bypass_queue = asyncio.Queue()
 
                         def _ai_log(msg: str) -> None:
                             self._log(msg)
@@ -398,6 +400,7 @@ class ScanService(BaseService):
                             tech_profile=_collected_tech[0] if _collected_tech else None,
                             payload_queue=ai_payload_queue,
                         )
+                        worker._waf_bypass_queue = waf_bypass_queue
                         ai_task = asyncio.create_task(worker.run())
                         logger.info("AIWORKER: task created")
                     except Exception as exc:
@@ -416,6 +419,7 @@ class ScanService(BaseService):
                 on_total_estimate=_on_total_estimate,
                 on_fingerprint=_on_fingerprint,
                 ai_payload_queue=ai_payload_queue,
+                waf_bypass_queue=waf_bypass_queue,
             )
 
             # После скана — дожидаемся AIWorker (если ещё не finished)
