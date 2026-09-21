@@ -260,16 +260,17 @@ class FilePayloadSource:
 
 
 class NumericPayloadSource:
-    """Lazily-iterated numeric range (same interface as FilePayloadSource, backed by range())."""
-    but `_refresh_payload_list()` used to render one `ListItem`/`Label`
+    """Lazily-iterated numeric range (same interface as FilePayloadSource, backed by range()).
+
+    but ``_refresh_payload_list()`` used to render one ``ListItem``/``Label``
     Textual widget PER element of a plain list with no cap (unlike
-    `FilePayloadSource`, whose preview is already capped at
-    `_PAYLOAD_LIST_PREVIEW_LIMIT`) — generating/loading tens of thousands of
+    ``FilePayloadSource``, whose preview is already capped at
+    ``_PAYLOAD_LIST_PREVIEW_LIMIT``) — generating/loading tens of thousands of
     numeric payloads froze the UI while thousands of widgets were mounted
     synchronously. Wrapping the range in this lazy source instead means the
     list-view preview path (which already special-cases anything that
-    isn't a plain `list`/`FilePayloadSource` via `head()`) caps rendering
-    the same way a file-backed set does, and `range(start, end, step)`
+    isn't a plain ``list``/``FilePayloadSource`` via ``head()``) caps rendering
+    the same way a file-backed set does, and ``range(start, end, step)``
     itself is already O(1) memory regardless of how many values it spans.
     """
 
