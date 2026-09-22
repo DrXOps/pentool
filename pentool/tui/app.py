@@ -252,6 +252,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def is_spider_active(self) -> bool:
         return self._spider_active_count > 0
 
+    def notify(self, message: str, *, severity: str = "information", title: str | None = None, timeout: int | None = None) -> None:
+        """Override Textual App.notify — log error notifications to pentool.log."""
+        if severity == "error":
+            logger.error("UI NOTIFICATION: [%s] %s", severity, message)
+        super().notify(message, severity=severity, title=title, timeout=timeout)
+
     def _handle_exception(self, error: Exception) -> None:
         """Catch fatal exceptions — log before passing to Textual."""
         import traceback
@@ -1463,6 +1469,19 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             from pentool.tui.screens.dashboard.screen import DashboardScreen, SCREEN_DASHBOARD
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard._update_ai_status()
+        except Exception:
+            pass
+        # Scanner tab "Use AI" checkboxes — visible only when AI is enabled globally
+        try:
+            from pentool.tui.screens.scanner.screen import ScannerScreen, SCREEN_SCANNER
+            scanner = self.query_one(SCREEN_SCANNER, ScannerScreen)
+            for tab in scanner._tabs:
+                tid = tab.tab_id
+                try:
+                    box = scanner.query_one(f"#opt-ai-{tid}")
+                    box.display = ai_on
+                except Exception:
+                    pass
         except Exception:
             pass
 

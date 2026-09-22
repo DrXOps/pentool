@@ -176,6 +176,18 @@ class ScanService(BaseService):
             for base_url in config.targets:
                 if self._stop_requested:
                     break
+                # Если Target уже краулил этот хост — используем его результаты
+                from pentool.api.spider_api import SpiderAPI
+                if SpiderAPI.has_cached_result(base_url):
+                    cached_pages = SpiderAPI.get_cached_pages(base_url)
+                    self._log(
+                        f"[dim]Spider: using cached pages from Target crawl "
+                        f"({len(cached_pages)} pages)[/dim]"
+                    )
+                    for page_url in cached_pages:
+                        if page_url not in all_scan_targets:
+                            all_scan_targets.append(page_url)
+                    continue  # skip fresh crawl
                 await self._crawl_target(base_url, config, all_scan_targets, all_forms)
 
         return all_scan_targets, all_forms
@@ -354,10 +366,12 @@ class ScanService(BaseService):
             # The engine runs TechFingerprinter before the worker pool. We
             # catch it here so the parallel AI worker knows the WAF profile.
             _collected_tech: list | None = []
+            _tech_ready = asyncio.Event()  # AIWorker ждёт этот Event перед WAF-шагами
 
             def _on_fingerprint(tp) -> None:
                 _collected_tech.clear()
                 _collected_tech.append(tp)
+                _tech_ready.set()  # сигнал AIWorker
 
             logger.info(
                 "ACTIVE_SCAN: targets=%d reqs=%d checks=%s threads=%d delay=%.2fs use_ai=%s resume=%s",
@@ -375,8 +389,8 @@ class ScanService(BaseService):
             ai_discovered_urls = []
             ai_task = None
             if getattr(config, "use_ai", False):
-                from pentool.services.ai.factory import get_active_backend as _get_ab
-                _backend = _get_ab()
+                from pentool.services.ai.factory import ensure_backend as _ensure_ab
+                _backend = await _ensure_ab(_force=True)
                 logger.info("AIWORKER: prepare use_ai=True backend=%s", _backend)
                 if _backend is not None:
                     try:
@@ -422,12 +436,14 @@ class ScanService(BaseService):
                             on_endpoint=_on_ai_endpoint,
                             tech_profile=_collected_tech[0] if _collected_tech else None,
                             payload_queue=ai_payload_queue,
+                            tech_ready_event=_tech_ready,
                         )
                         worker._waf_bypass_queue = waf_bypass_queue
                         ai_task = asyncio.create_task(worker.run())
                         logger.info("AIWORKER: task created")
                     except Exception as exc:
                         logger.warning("AIWorker init failed: %s", exc)
+                        self._log(f"[red]AIWorker init error: {exc}[/red]")
                 else:
                     logger.info("AIWORKER: skipped — backend not available")
 
@@ -449,7 +465,7 @@ class ScanService(BaseService):
             if ai_task is not None:
                 try:
                     ai_discovered_urls = await asyncio.wait_for(
-                        ai_task, timeout=5.0
+                        ai_task, timeout=30.0
                     ) or []
                     logger.info("AIWORKER: done discovered=%d", len(ai_discovered_urls))
                 except asyncio.TimeoutError:

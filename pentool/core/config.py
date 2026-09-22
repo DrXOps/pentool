@@ -12,6 +12,8 @@ import yaml
 
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "pentool"
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.yaml"
+LOGS_DIR = DEFAULT_CONFIG_DIR / "logs"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Callback type: called when config changes
 ConfigObserver = Callable[[dict], None]
@@ -25,7 +27,7 @@ class Config:
     proxy_port: int = 8080
     cert_dir: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "certs"))
     db_path: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "pentool.db"))
-    log_file: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "pentool.log"))
+    log_file: str = field(default_factory=lambda: str(LOGS_DIR / "pentool.log"))
     log_level: str = "INFO"
     plugins_dir: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "plugins"))
     scope: list[str] = field(default_factory=list)

@@ -1,6 +1,7 @@
 """Application settings screen."""
 
 from __future__ import annotations
+from pentool.core.error_guard import err
 
 from enum import Enum
 from pathlib import Path
@@ -497,6 +498,7 @@ class SettingsScreen(Widget):
             await loop.run_in_executor(None, _do_save)
             self.app.notify(notify_msg, timeout=2)  # type: ignore[attr-defined]
         except Exception as e:
+            err(e, "Save failed", self)
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
     # ── Generic settings save helper ──────────────────────────────────────────
@@ -530,6 +532,7 @@ class SettingsScreen(Widget):
         try:
             self._save_settings(self._collect_proxy_changes(), "Proxy settings saved (restart proxy to apply)")
         except Exception as e:
+            err(e, "Save failed", self)
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
     def _save_project_settings(self) -> None:
@@ -553,6 +556,7 @@ class SettingsScreen(Widget):
                 pass
             self._save_settings(changes, "Project settings saved")
         except Exception as e:
+            err(e, "Save failed", self)
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
     def _open_ca_cert(self) -> None:
@@ -562,6 +566,7 @@ class SettingsScreen(Widget):
             proxy_screen = self.app.query_one(SCREEN_PROXY, ProxyScreen)
             proxy_screen.action_open_ca_cert()
         except Exception as e:
+            err(e, "Install CA cert failed", self)
             self.app.notify(f"Install CA cert failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
     def _save_network_settings(self) -> None:
@@ -633,6 +638,7 @@ class SettingsScreen(Widget):
 
             self._save_settings(changes, "Network settings saved")
         except Exception as e:
+            err(e, "Save failed", self)
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
     def _save_privacy_settings(self) -> None:
@@ -657,6 +663,7 @@ class SettingsScreen(Widget):
 
             self._save_settings(changes, "Privacy settings saved")
         except Exception as e:
+            err(e, "Save failed", self)
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
     def _save_ai_settings(self) -> None:
@@ -665,6 +672,7 @@ class SettingsScreen(Widget):
             from pentool.services.ai.factory import AI_MODELS_DIR
             cfg = getattr(self.app, "_cfg", None)
             if cfg is None:
+                logger.error("Config not loaded")
                 self.app.notify("Config not loaded", severity="error", timeout=4)
                 return
 
@@ -692,6 +700,7 @@ class SettingsScreen(Widget):
 
             self._save_settings(changes, "AI settings saved")
         except Exception as e:
+            err(e, "Save failed", self)
             self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
     # ── License actions ────────────────────────────────────────────────────────
@@ -716,8 +725,10 @@ class SettingsScreen(Widget):
             if info.valid:
                 self.app.notify(f"✓ License activated: {info.plan.upper()}", timeout=4)  # type: ignore[attr-defined]
             else:
+                logger.error("License activation failed: %s", info.error)
                 self.app.notify(f"✗ Activation failed: {info.error}", severity="error", timeout=5)  # type: ignore[attr-defined]
         except Exception as exc:
+            err(exc, "✗ Error", self)
             self.app.notify(f"✗ Error: {exc}", severity="error", timeout=5)  # type: ignore[attr-defined]
         self.call_after_refresh(self._refresh_license_ui)
 
@@ -729,5 +740,7 @@ class SettingsScreen(Widget):
             refresh_session_license()
             self.app.notify("License deactivated", timeout=3)  # type: ignore[attr-defined]
         except Exception as exc:
+            err(exc, "Deactivation error", self)
             self.app.notify(f"Deactivation error: {exc}", severity="error", timeout=4)  # type: ignore[attr-defined]
         self._refresh_license_ui()
+

@@ -50,6 +50,10 @@ class SpiderConfig:
 
 class SpiderAPI(ExportableAPI):
 
+    # Shared cache: last crawl result per host, populated by any module (Target/Scanner).
+    # Scanner checks this cache before re-crawling.
+    _last_results: dict[str, SpiderResult] = {}
+
     def __init__(self, config: SpiderConfig | None = None) -> None:
         self._config = config or SpiderConfig()
         self._spider: AsyncSpider | None = None
@@ -116,6 +120,10 @@ class SpiderAPI(ExportableAPI):
             # used so the caller (ScanService) can reuse the same session in
             # its active-scan phase instead of sending unauthenticated probes.
             result.auth_headers = merged_headers
+            # Cache result by host — Scanner checks this before re-crawling.
+            host = urlparse(url).netloc.split(":")[0]
+            if host:
+                self._last_results[host] = result
             logger.info(
                 "SpiderAPI.crawl: %s -> %d pages, %d forms, %d endpoints",
                 url, len(result.pages), len(result.forms), len(result.endpoints),
@@ -179,6 +187,26 @@ class SpiderAPI(ExportableAPI):
     def config(self) -> SpiderConfig:
         """Current crawler configuration (max_depth, max_pages, concurrency)."""
         return self._config
+
+    @classmethod
+    def has_cached_result(cls, url: str) -> bool:
+        """True if a crawl result for this URL's host exists in shared cache.
+
+        Used by Scanner to skip re-crawling when Target already crawled.
+        """
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.split(":")[0]
+        return host in cls._last_results and bool(cls._last_results[host].pages)
+
+    @classmethod
+    def get_cached_pages(cls, url: str) -> list[str]:
+        """Return cached page URLs for this host, or empty list."""
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.split(":")[0]
+        result = cls._last_results.get(host)
+        if result:
+            return [p.url for p in result.pages]
+        return []
 
     def export_project_data(self) -> dict:
         """Spider results are transient — no persistent state to serialize."""

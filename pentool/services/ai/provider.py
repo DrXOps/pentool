@@ -141,6 +141,8 @@ class MCPBackend(AIBackend):
         Tracks pending request count via _MCP_PENDING_REQUESTS so the
         ActivityIndicator's AI glyph blinks only while a request is in flight.
         """
+        from pentool.services.ai.audit_log import log as audit_log
+
         global _MCP_PENDING_REQUESTS
 
         task = REGISTRY.get(task_name)
@@ -164,6 +166,7 @@ class MCPBackend(AIBackend):
             _MCP_PENDING_REQUESTS -= 1
 
         if not resp:
+            audit_log(task=task_name, prompt_data=prompt_data, error="Empty response from MCP server")
             return None
         # tools/call → {"content": [{"type":"text","text":"<json>"}], ...}
         try:
@@ -173,9 +176,22 @@ class MCPBackend(AIBackend):
                 if isinstance(item, dict) and item.get("type") == "text":
                     text += str(item.get("text", ""))
             parsed = json.loads(text) if text.strip() else None
-            return parsed if isinstance(parsed, dict) else {"items": parsed} if isinstance(parsed, list) else None
+            result = parsed if isinstance(parsed, dict) else {"items": parsed} if isinstance(parsed, list) else None
+            audit_log(
+                task=task_name,
+                prompt_data=prompt_data,
+                raw_response=text,
+                parsed_response=result,
+            )
+            return result
         except Exception as exc:  # noqa: BLE001
             log.error("MCPBackend: не удалось распарсить ответ: %s", exc)
+            audit_log(
+                task=task_name,
+                prompt_data=prompt_data,
+                raw_response=text if 'text' in locals() else "",
+                error=str(exc),
+            )
             return None
 
     async def health(self) -> bool:

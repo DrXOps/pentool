@@ -17,13 +17,14 @@ AI_MODELS_DIR = Path.home() / ".pentool" / "ai" / "models"
 AI_MCP_DIR = Path.home() / ".pentool" / "ai" / "mcp_server"
 
 
-def get_ai(config: Config) -> AIBackend | None:
+def get_ai(config: Config, _force: bool = False) -> AIBackend | None:
     """Return the configured AI backend, or None when AI is disabled.
 
     Args:
         config: current config carrying ai_enabled and the MCP parameters.
+        _force: internal — skip the ai_enabled check (used by scan-time override).
     """
-    if not config.ai_enabled:
+    if not config.ai_enabled and not _force:
         return None
 
     if config.ai_mcp_port and config.ai_mcp_port > 0:
@@ -68,14 +69,18 @@ def is_ai_running() -> bool:
         return False
 
 
-async def start_ai(config: Config) -> bool:
-    """Bring up the MCP server if a model exists and AI is enabled. Lazily idempotent."""
+async def start_ai(config: Config, _force: bool = False) -> bool:
+    """Bring up the MCP server if a model exists and AI is enabled. Lazily idempotent.
+
+    ``_force=True`` starts the server even if ``config.ai_enabled`` is off,
+    used when the per-scan ``use_ai`` checkbox overrides the global master switch.
+    """
     global _ACTIVE_BACKEND
     if _ACTIVE_BACKEND is not None:
         return True
-    if not config.ai_enabled:
+    if not config.ai_enabled and not _force:
         return False
-    backend = get_ai(config)
+    backend = get_ai(config, _force=_force)
     if backend is None:
         log.warning("AI: start_ai — модель не найдена, AI недоступен")
         return False
@@ -100,6 +105,12 @@ async def stop_ai() -> None:
             await b.close()
         except Exception as exc:  # noqa: BLE001
             log.warning("AI: stop_ai close error: %s", exc)
+    # Close the audit log FD as well.
+    try:
+        from pentool.services.ai.audit_log import close as audit_close
+        audit_close()
+    except Exception:
+        pass
 
 
 def get_active_backend() -> "MCPBackend | None":
@@ -107,12 +118,19 @@ def get_active_backend() -> "MCPBackend | None":
     return _ACTIVE_BACKEND
 
 
-async def ensure_backend(config: Config | None = None) -> "MCPBackend | None":
+async def ensure_backend(
+    config: Config | None = None,
+    _force: bool = False,  # internal: start even if ai_enabled is off
+) -> "MCPBackend | None":
     """Return the running backend, starting it lazily if needed.
 
     Unlike ``get_active_backend()`` which returns None when the backend
     hasn't been started yet, this waits for the subprocess to be ready.
     Safe to call multiple times — idempotent.
+
+    ``_force`` is for internal use by ScanService: when the user checks
+    "Use AI" in the scanner UI, the backend starts even if the global
+    Settings → AI master switch is off.
     """
     global _ACTIVE_BACKEND
     if _ACTIVE_BACKEND is not None:
@@ -127,7 +145,7 @@ async def ensure_backend(config: Config | None = None) -> "MCPBackend | None":
         from pentool.core.config import get_config
         config = get_config()
 
-    ok = await start_ai(config)
+    ok = await start_ai(config, _force=_force)
     return _ACTIVE_BACKEND if ok else None
 
 

@@ -1,6 +1,7 @@
 """RequestContextMenuMixin — standardised context menu for HTTP requests."""
 
 from __future__ import annotations
+from pentool.core.error_guard import err
 
 
 class RequestContextMenuMixin:
@@ -172,6 +173,7 @@ class RequestContextMenuMixin:
         try:
             req = parse_http_request(raw)
         except Exception as exc:
+            err(exc, "Parse error", self)
             self.app.notify(f"Parse error: {exc}", severity="error")  # type: ignore[attr-defined]
             return
         _MAP = {
@@ -215,6 +217,7 @@ class RequestContextMenuMixin:
             save_request_txt(req, path)
             self.app.notify(f"Saved → {path}", timeout=3)  # type: ignore[attr-defined]
         except Exception as exc:
+            err(exc, "Save failed", self)
             self.app.notify(f"Save failed: {exc}", severity="error")  # type: ignore[attr-defined]
 
     def _cm_do_send_repeater(self, raw: str) -> None:
@@ -247,6 +250,7 @@ class RequestContextMenuMixin:
             req = parse_http_request(raw)
             self.app.post_message(SendRequestToScanner(req))  # type: ignore[attr-defined]
         except Exception as exc:
+            err(exc, "Send to Scanner failed", self)
             self.app.notify(f"Send to Scanner failed: {exc}", severity="error")  # type: ignore[attr-defined]
 
     def _cm_do_send_decoder(self, raw: str) -> None:
@@ -260,3 +264,4 @@ class RequestContextMenuMixin:
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
         _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         self._send_to_comparer(raw, label="Request")  # type: ignore[attr-defined]
+
