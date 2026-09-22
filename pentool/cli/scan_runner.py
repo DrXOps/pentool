@@ -152,7 +152,32 @@ class ScanRunner:
                 f"use_ai={self.use_ai}..."
             )
 
-            # 4. Run active scan
+            # 4. Run active scan — with optional AIWorker
+            if self.use_ai:
+                from pentool.modules.scanner.ai_worker import AIWorker
+                from pentool.services.ai.factory import ensure_backend
+                backend = await ensure_backend(_force=True)
+                if backend is not None:
+                    click.echo("[scan] Starting AIWorker (endpoint discovery, WAF bypass)...")
+                    ai_payload_queue: asyncio.Queue = asyncio.Queue()
+                    waf_bypass_queue: asyncio.Queue = asyncio.Queue()
+                    worker = AIWorker(
+                        target_urls=all_targets,
+                        tech_profile=None,
+                        payload_queue=ai_payload_queue,
+                    )
+                    worker._waf_bypass_queue = waf_bypass_queue
+                    ai_task = asyncio.create_task(worker.run())
+                else:
+                    click.echo("[scan] AI backend unavailable — skipping AIWorker", err=True)
+                    ai_task = None
+                    ai_payload_queue = None
+                    waf_bypass_queue = None
+            else:
+                ai_task = None
+                ai_payload_queue = None
+                waf_bypass_queue = None
+
             active_findings = await api.run_active_on_requests(
                 seed_requests=reqs,
                 check_names=self.check_names,

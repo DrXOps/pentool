@@ -96,8 +96,8 @@ Pentool находит бинарник автоматически (PATH, `~/.lo
 `/usr/bin` или переменная `LIGHTPANDA_BIN`). Без него краулинг работает, но НЕ
 выполняет JavaScript (фолбэк на обычный HTTP).
 
-> **Режим `--real`** (загрузка страницы через прокси) также использует Lightpanda —
-> отдельный Playwright/Chromium не нужен. Lightpanda обрабатывает JS для `--real`
+> **Режим `--smart`** (загрузка страницы через прокси) также использует Lightpanda —
+> отдельный Playwright/Chromium не нужен. Lightpanda обрабатывает JS для `--smart`
 > и для модуля Spider.
 
 ---

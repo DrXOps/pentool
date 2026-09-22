@@ -488,9 +488,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         pending = getattr(self, "_pending_start_urls", None)
         if pending:
             self.run_worker(self._seed_pending_urls(list(pending)), exclusive=False, thread=False)
-        else:
-            # Auto-open last project at startup (no arguments)
+        elif getattr(self, "_pending_open_last", False):
+            # --last flag: auto-open the most recent project
             self.run_worker(self._auto_open_last_project(), exclusive=False, thread=False)
+        # else: no --last, no --url — start with empty project
 
         # Check for updates in background (if enabled in settings)
         if getattr(self._cfg, "check_updates", True):
@@ -589,7 +590,23 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             except Exception as exc:
                 logger.debug("seed url %s: %s", url, exc)
 
-        real = bool(getattr(self, "_pending_start_real", False))
+        real = bool(getattr(self, "_pending_start_smart", False))
+        use_ai = bool(getattr(self, "_pending_start_ai", False))
+
+        # If --ai flag was passed, start the MCP server and enable AI
+        if use_ai:
+            try:
+                from pentool.services.ai.factory import start_ai
+                self.run_worker(start_ai(self._cfg, _force=True))
+                logger.info("seed: --ai: starting MCP server")
+            except Exception as exc:
+                logger.warning("seed: --ai start failed: %s", exc)
+            try:
+                from pentool.core.config import get_config
+                cfg = get_config()
+                cfg.ai_enabled = True
+            except Exception:
+                pass
 
         # Start the proxy so --real traffic (and subsequent manual use) can be
         # intercepted and land in the project.

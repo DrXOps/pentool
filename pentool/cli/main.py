@@ -24,10 +24,12 @@ from pentool.core.logging import setup_logging
               help="Number of parallel scan threads.")
 @click.option("--delay", "cli_delay", default=0.0, type=float, show_default=True,
               help="Delay between requests (seconds).")
-@click.option("--real", "cli_real", is_flag=True, default=False,
-              help="Launch TUI, proxy on, fetch target through proxy (requires --url).")
-@click.option("--use-ai", "cli_use_ai", is_flag=True, default=False,
-              help="Enable AI-assisted scanning (endpoint discovery, WAF bypass).")
+@click.option("--smart", "cli_smart", is_flag=True, default=False,
+              help="Launch TUI, proxy on, crawl target, detect tech (requires --url). Replaces --real.")
+@click.option("--ai", "cli_ai", is_flag=True, default=False,
+              help="Enable AI-assisted scanning (endpoint discovery, WAF bypass, payload gen).")
+@click.option("--last", "cli_last", is_flag=True, default=False,
+              help="Auto-open the most recent project on TUI start.")
 @click.option("--crawl", "cli_crawl", is_flag=True, default=False,
               help="Crawl the target before scanning (requires Lightpanda for JS).")
 @click.option("--depth", "cli_depth", default=3, type=int, show_default=True,
@@ -41,12 +43,11 @@ from pentool.core.logging import setup_logging
 def cli(ctx: click.Context,
         config_path: str | None, verbose: bool,
         cli_urls: tuple[str, ...] | None, headless: bool,
-        cli_real: bool,
+        cli_smart: bool, cli_ai: bool, cli_last: bool,
         cli_output: str | None,
         cli_checks: str | None,
         cli_threads: int,
         cli_delay: float,
-        cli_use_ai: bool,
         cli_crawl: bool,
         cli_depth: int,
         cli_max_pages: int,
@@ -75,16 +76,24 @@ def cli(ctx: click.Context,
                 check_names=names,
                 concurrency=cli_threads,
                 delay=cli_delay,
-                use_ai=cli_use_ai,
+                use_ai=cli_ai,
                 crawl=cli_crawl,
                 crawl_depth=cli_depth,
                 max_pages=cli_max_pages,
                 report_format=cli_format,
             )
         else:
-            # --url without --headless: launch TUI with pending URLs
             from pentool.tui.app import PentoolApp
             app = PentoolApp()
             app._pending_start_urls = urls
-            app._pending_start_real = cli_real
+            app._pending_start_smart = cli_smart
+            app._pending_start_ai = cli_ai
             app.run()
+    elif cli_last:
+        from pentool.tui.app import PentoolApp
+        app = PentoolApp()
+        app._pending_open_last = True
+        app.run()
+    else:
+        click.echo(ctx.get_help())
+        ctx.exit(0)

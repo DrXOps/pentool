@@ -44,30 +44,28 @@ def _ensure_lightpanda() -> None:
 
 def _run_target_mode(argv: list[str]) -> None:
     """Handle ``pentool --url <url> [options]`` — thin compatibility shim delegating to click."""
-    real = "--real" in argv
-    remaining = [a for a in argv if a != "--real"]
+    smart = "--smart" in argv
+    use_ai = "--ai" in argv
+    remaining = [a for a in argv if a not in ("--smart", "--real", "--ai")]
 
-    if real:
+    if smart:
         _ensure_lightpanda()
 
-    if not real or not any(a.startswith("--headless") for a in remaining):
-        # --real without --headless: launch TUI with pending URLs
-        if real:
-            urls = _extract_urls(remaining)
-            if not urls:
-                print("Error: --url requires at least one URL.", file=sys.stderr)
-                raise SystemExit(2)
-            _ensure_lightpanda()
-            from pentool.tui.app import PentoolApp
-            app = PentoolApp()
-            app._pending_start_urls = urls
-            app._pending_start_real = True
-            app.run()
-            return
+    if smart and not any(a.startswith("--headless") for a in remaining):
+        urls = _extract_urls(remaining)
+        if not urls:
+            print("Error: --url requires at least one URL.", file=sys.stderr)
+            raise SystemExit(2)
+        _ensure_lightpanda()
+        from pentool.tui.app import PentoolApp
+        app = PentoolApp()
+        app._pending_start_urls = urls
+        app._pending_start_smart = True
+        app._pending_start_ai = use_ai
+        app.run()
+        return
 
-    # Delegate remaining args (--url, --headless, etc.) to click
     from pentool.cli.main import cli
-    # Remove script name from argv so click sees the right args
     old_argv = sys.argv
     try:
         sys.argv = [sys.argv[0]] + remaining
@@ -218,8 +216,12 @@ def _warn_pro_mismatch(warning: str) -> None:
     print("╚══════════════════════════════════════════════════╝")
 
 
-def _start_tui() -> None:
-    """Start the Pentool TUI with ancillary setup (AI dialog, ping, kill orphans)."""
+def _start_tui(open_last: bool = False) -> None:
+    """Start the Pentool TUI with ancillary setup (AI dialog, ping, kill orphans).
+
+    Args:
+        open_last: auto-open the most recent project at startup.
+    """
 
     # Anonymous install-counter ping (fire-and-forget)
     try:
@@ -342,8 +344,7 @@ def main() -> None:
             sys.argv.remove(_flag)
 
     if len(sys.argv) > 1:
-        if "--url" in sys.argv and "--real" in sys.argv:
-            # --real flag intercepted before click: launch TUI with proxy on
+        if "--url" in sys.argv and ("--smart" in sys.argv or "--real" in sys.argv):
             _run_target_mode(sys.argv[1:])
             return
         from pentool.cli.main import cli
@@ -354,7 +355,7 @@ def main() -> None:
             auto_update=auto_update,
             no_check=no_check_updates,
         )
-        _start_tui()
+        _start_tui(open_last="--last" in sys.argv)
 
 
 if __name__ == "__main__":
