@@ -98,3 +98,4 @@ tools/pentool_promocoords.py
 
 # Документация архитектуры — пока не готова, переехала в memory/
 docs/ARCHITECTURE.md
+promo_assets/
