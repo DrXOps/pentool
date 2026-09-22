@@ -103,7 +103,8 @@ class ScanService(BaseService):
     def request_stop(self) -> None:
         """Request stop (thread-safe)."""
         self._stop_requested = True
-        self._spider.stop()
+        if self._spider is not None:
+            self._spider.stop()
         try:
             self._scanner.request_active_stop()
         except Exception:

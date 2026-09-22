@@ -118,7 +118,7 @@ class MCPBackend(AIBackend):
             self._stdin.write((payload + "\n").encode("utf-8"))
             await self._stdin.drain()
 
-            line = await asyncio.wait_for(self._stdout.readline(), timeout=60.0)
+            line = await asyncio.wait_for(self._stdout.readline(), timeout=120.0)
             if not line:
                 return None
             resp = json.loads(line.decode("utf-8").strip())
