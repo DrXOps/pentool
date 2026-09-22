@@ -14,7 +14,7 @@ pentool --url https://example.com --headless --output report.json
 pentool --url https://example.com --headless \\
     --check xss,sqli,lfi,ssti \\
     --threads 20 --delay 0.2 \\
-    --use-ai \\
+    --ai \\
     --crawl --depth 3 --max-pages 100 \\
     --format html --output results/report.html
 ```
@@ -29,7 +29,12 @@ pentool --url https://example.com --headless \\
 | `--check NAMES` | all | Comma-separated checks: `xss,sqli,lfi,ssti,xxe,ssrf,open_redirect,info_leak` |
 | `--threads N` | 10 | Parallel scan threads |
 | `--delay SEC` | 0.0 | Delay between requests |
-| `--use-ai` | — | AI-assisted scanning (endpoint discovery, WAF bypass) |
+| `--ai` | — | Enable AI-assisted scanning (endpoint discovery, WAF bypass, payload gen). Launches MCP server. |
+| `--smart` | — | Launch TUI, proxy on, crawl target, detect tech (replaces `--real`). |
+| `--crawl` | — | Crawl the target before scanning |
+| `--crawl --js` | — | Crawl with JS rendering (Lightpanda) |
+| `--crawl --ai` | — | Crawl + AI endpoint discovery |
+| `--crawl --js --ai` | — | Full: crawl + JS + AI |
 | `--crawl` | — | Crawl target before scanning |
 | `--depth N` | 3 | Crawl depth |
 | `--max-pages N` | 100 | Max crawl pages |
@@ -108,7 +113,7 @@ jobs:
         run: |
           pentool --url ${{ secrets.TARGET_URL }} --headless \\
             --threads 20 --delay 0.3 \\
-            --use-ai \\
+            --ai \\
             --crawl --depth 5 --max-pages 200 \\
             --format json --output results.json
 
