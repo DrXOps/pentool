@@ -716,7 +716,8 @@ class TargetScreen(Widget):
             from pentool.services.tech_detector import get_cached_tech
             cached = get_cached_tech(url)
             use_js = bool(cached and cached.get("spa"))
-            tech_profile = await detect_tech(url, js_render=use_js)
+            tech_profile_raw = await detect_tech(url, js_render=use_js)
+            tech_profile = tech_profile_raw if tech_profile_raw is None else getattr(tech_profile_raw, "to_context_dict", lambda: str(tech_profile_raw))()
             prompt_data = {
                 "url": url,
                 "tech_stack": tech_profile,

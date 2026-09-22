@@ -437,6 +437,7 @@ class ScanService(BaseService):
                             tech_profile=_collected_tech[0] if _collected_tech else None,
                             payload_queue=ai_payload_queue,
                             tech_ready_event=_tech_ready,
+                            shared_techref=_collected_tech,
                         )
                         worker._waf_bypass_queue = waf_bypass_queue
                         ai_task = asyncio.create_task(worker.run())
