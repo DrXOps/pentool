@@ -119,9 +119,13 @@ class Config:
         Uses dataclasses.fields() so every field is included automatically —
         no more manual enumeration that drifts out of sync (the bug that caused
         ai_* and scan_debug fields to be duplicated here).
+        Excludes _observers (not serializable — contains weakrefs/callbacks).
         """
         import dataclasses as _dc
-        return {f.name: getattr(self, f.name) for f in _dc.fields(self)}
+        return {
+            f.name: getattr(self, f.name) for f in _dc.fields(self)
+            if not f.name.startswith("_")
+        }
 
     def add_recent_project(self, path: str) -> None:
         path = str(path)
