@@ -50,6 +50,37 @@ def get_cached_tech(url: str) -> dict[str, Any] | None:
         return profile
 
 
+def get_tech_cache(host: str) -> dict | None:
+    """Обёртка над PRO TechCache для TUI — читает кэш технологий.
+
+    Используется target/screen.py и auto_scope.py для отображения tech info.
+    Избегает прямого импорта modules.scanner.tech_cache из TUI-слоя.
+    """
+    try:
+        from pentool.modules.scanner.tech_cache import TechCache
+        return TechCache().get(host)
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
+async def run_fingerprint(url: str, http_client) -> Any | None:
+    """Обёртка над PRO TechFingerprinter.
+
+    Позволяет TUI вызывать fingerprint без прямого импорта PRO-модуля.
+    Возвращает TechProfile или None при ошибке/отсутствии PRO.
+    """
+    try:
+        from pentool.modules.scanner.fingerprint import TechFingerprinter
+        fp = TechFingerprinter()
+        return await fp.fingerprint(url, http_client)
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
 def _cache_set(host: str, profile: dict[str, Any]) -> None:
     with _cache_lock:
         _TECH_CACHE[host] = (time.monotonic(), profile)

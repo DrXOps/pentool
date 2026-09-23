@@ -267,8 +267,8 @@ class TargetScreen(Widget):
             # TechDetect нода — если есть кэшированный профиль, показываем технологии
             if in_scope:
                 try:
-                    from pentool.modules.scanner.tech_cache import TechCache
-                    cached = TechCache().get(host)
+                    from pentool.services.tech_detector import get_tech_cache
+                    cached = get_tech_cache(host)
                     if cached:
                         tech_str = _format_tech_profile(cached)
                         if tech_str:
@@ -338,8 +338,8 @@ class TargetScreen(Widget):
 
             # TechDetect — читаем из кэша
             try:
-                from pentool.modules.scanner.tech_cache import TechCache
-                cached = TechCache().get(host)
+                from pentool.services.tech_detector import get_tech_cache
+                cached = get_tech_cache(host)
                 if cached:
                     tech_str = _format_tech_profile(cached)
                     if tech_str:
