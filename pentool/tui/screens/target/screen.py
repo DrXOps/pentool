@@ -578,14 +578,37 @@ class TargetScreen(Widget):
         if not hosts:
             self.app.notify("No hosts to crawl — Site Map is empty", severity="warning")
             return
-        self._crawl_hosts_worker(hosts)
+        self._maybe_crawl_hosts(hosts)
 
     def action_crawl_selected_host(self) -> None:
         """Crawl only the host currently selected in the tree."""
         if not self._selected_host:
             self.app.notify("Select a host in the tree first", severity="warning")
             return
-        self._crawl_hosts_worker([self._selected_host])
+        self._maybe_crawl_hosts([self._selected_host])
+
+    def _maybe_crawl_hosts(self, hosts: list[str]) -> None:
+        """Показать диалог подтверждения, если краул уже был."""
+        from pentool.api.spider_api import SpiderAPI
+        # Проверяем — был ли уже краул этих хостов
+        # Нормализуем URL: добавляем схему если нет
+        normalized = [h if "://" in h else f"https://{h}" for h in hosts]
+        all_cached = all(SpiderAPI.has_cached_result(h) for h in normalized)
+        if all_cached:
+            self._ask_recrawl(hosts)
+        else:
+            self._crawl_hosts_worker(hosts)
+
+    def _ask_recrawl(self, hosts: list[str]) -> None:
+        """Показать диалог: рекраул или skip."""
+        from pentool.tui.dialogs.recrawl_dialog import RecrawlDialog
+        host = hosts[0] if hosts else "unknown"
+
+        def on_dialog(result: str | None) -> None:
+            if result == "recrawl":
+                self._crawl_hosts_worker(hosts)
+
+        self.app.push_screen(RecrawlDialog(host), on_dialog)
 
     @work
     async def _crawl_hosts_worker(self, hosts: list[str]) -> None:
@@ -653,6 +676,8 @@ class TargetScreen(Widget):
                     ai_added = await self._ai_suggest_endpoints(api, url)
                     if ai_added:
                         self.app.notify(f"AI endpoints added: {ai_added}", timeout=3)
+        except asyncio.CancelledError:
+            raise  # re-raise after cleanup
         finally:
             try:
                 self.app.spider_crawl_finished()  # type: ignore[attr-defined]

@@ -8,7 +8,7 @@ from pentool.core.config import get_config
 from pentool.core.logging import setup_logging
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(package_name="pentool")
 @click.option("--config", "config_path", default=None, help="Path to the configuration file.")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Verbose output (DEBUG).")

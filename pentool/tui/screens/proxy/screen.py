@@ -1143,7 +1143,14 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         col_name = _COL_NAMES[idx] if idx < len(_COL_NAMES) else ""
         if col_name:
             direction = "descending" if self._sort_reverse else "ascending"
-            event.data_table.sort(by=[(col_name, direction)])
+            # Use safe_sort with crash guard
+            if hasattr(event.data_table, "safe_sort"):
+                event.data_table.safe_sort(col_name, direction)
+            else:
+                try:
+                    event.data_table.sort(by=[(col_name, direction)])
+                except Exception:
+                    pass
             # Update column labels — show sort arrow on active column
             try:
                 for i, name in enumerate(_COL_NAMES):

@@ -803,7 +803,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             editor.move_cursor(start)
             self._update_payload_select()
         except Exception as exc:
-            self.app.notify(f"ADD error: {exc}", severity="error", timeout=5)
+            from pentool.core.error_guard import err
+            err(exc, "Intruder ADD error", self, severity="error")
 
     def _clear_markers(self) -> None:
         try:
@@ -1172,7 +1173,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                 None, lambda: Path(path).stat().st_size
             )
         except Exception as exc:
-            self.app.notify(f"Failed to load: {exc}", severity="error", timeout=4)
+            from pentool.core.error_guard import err
+            err(exc, "Failed to load payload file", self, severity="error")
             return
 
         while target_idx >= len(self._payloads):
@@ -1194,7 +1196,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                 if line and not line.startswith("#"):
                     payloads.append(line)
         except Exception as exc:
-            self.app.notify(f"Failed to load: {exc}", severity="error", timeout=4)
+            from pentool.core.error_guard import err
+            err(exc, "Failed to load payload (eager)", self, severity="error")
             return
 
         existing = self._payloads[target_idx]
@@ -1241,7 +1244,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             )
             source.set_count(final_count)
         except Exception as exc:
-            self.app.notify(f"Line count failed (payload set still usable): {exc}", severity="warning", timeout=4)
+            from pentool.core.error_guard import err
+            err(exc, "Payload line count failed (still usable)", self, severity="warning")
         finally:
             self._payload_load_in_progress = False
             if target_idx == self._active_set_idx:
@@ -1465,8 +1469,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             # (scanner refactor plan) section 2.7.
             await self._api.start_attack(config, on_result, on_progress, turbo_mode=turbo_mode)
         except Exception as exc:
-            logger.error("INTRUDER: _run_attack error: %s", exc, exc_info=True)
-            self.app.notify(f"Attack error: {exc}", severity="error", timeout=5)
+            from pentool.core.error_guard import err
+            err(exc, "Intruder attack error", self, severity="error")
         finally:
             self._attack_running = False
             logger.info("INTRUDER: _run_attack finished, results=%d", len(self._all_results))
@@ -1873,7 +1877,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                     self._api.export_csv(path)
                     self.app.notify(f"Exported to {path}", timeout=4)
             except Exception as exc:
-                self.app.notify(f"Export failed: {exc}", severity="error", timeout=5)
+                from pentool.core.error_guard import err
+                err(exc, "Intruder export failed", self, severity="error")
 
         self.app.push_screen(
             FileSelectorDialog(mode=FileSelectorMode.SAVE, title="Save CSV"),

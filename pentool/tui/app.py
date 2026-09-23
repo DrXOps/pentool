@@ -653,8 +653,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 else:
                     self.notify("--real: browser fetch didn't capture traffic", severity="warning", timeout=6)
             except Exception as exc:
-                logger.warning("seed: real fetch failed: %s", exc)
-                self.notify(f"--real fetch failed: {exc}", severity="warning", timeout=6)
+                from pentool.core.error_guard import err
+                err(exc, "--real fetch failed", self, severity="warning")
 
         self.notify(f"New project for {len(urls)} URL(s) — {'proxy on, ready to audit' if (proxy_started or (self._proxy and self._proxy.is_running)) else 'ready to audit'}.", timeout=6)
 
@@ -1245,7 +1245,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             self.notify("→ Repeater", severity="information")
             self._add_raw_to_target(msg.raw)
         except Exception as exc:
-            self.notify(f"Send to Repeater failed: {exc}", severity="error", timeout=4)
+            from pentool.core.error_guard import err
+            err(exc, "Send to Repeater", self, severity="error")
 
     @on(SendToIntruder)
     def on_send_to_intruder(self, msg: SendToIntruder) -> None:
@@ -1256,7 +1257,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             self.notify("Sent to Intruder", severity="information", timeout=2)
             self._add_raw_to_target(msg.raw)
         except Exception as exc:
-            self.notify(f"Send to Intruder failed: {exc}", severity="error", timeout=4)
+            from pentool.core.error_guard import err
+            err(exc, "Send to Intruder", self, severity="error")
 
     @on(SyncScopeToTarget)
     def on_sync_scope_to_target(self, msg: SyncScopeToTarget) -> None:
@@ -1343,8 +1345,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             self.notify(f"✓ {host} → Scanner (new tab, F5 to start)", timeout=3)
             logger.info("SendHostToScanner: host=%s url=%s", host, url)
         except Exception as exc:
-            logger.error("SendHostToScanner error: %s", exc, exc_info=True)
-            self.notify(f"Scanner error: {exc}", severity="error", timeout=4)
+            from pentool.core.error_guard import err
+            err(exc, "SendHostToScanner", self, severity="error")
 
     @on(SendToScanner)
     def on_send_to_scanner(self, msg: SendToScanner) -> None:
@@ -1359,7 +1361,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             count = len(msg.urls.splitlines())
             self.notify(f"Sent {count} URL(s) to Scanner (new tab)", severity="information", timeout=2)
         except Exception as exc:
-            self.notify(f"Send to Scanner failed: {exc}", severity="error", timeout=4)
+            from pentool.core.error_guard import err
+            err(exc, "Send to Scanner", self, severity="error")
 
     @on(SendRequestToScanner)
     def on_send_request_to_scanner(self, msg: SendRequestToScanner) -> None:
@@ -1371,7 +1374,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             url = getattr(msg.request, "url", "?")
             self.notify(f"Sent to Scanner: {url[:60]}", severity="information", timeout=2)
         except Exception as exc:
-            self.notify(f"Send to Scanner failed: {exc}", severity="error", timeout=4)
+            from pentool.core.error_guard import err
+            err(exc, "SendRequestToScanner", self, severity="error")
 
     @on(SendUrlToTarget)
     def on_send_url_to_target(self, msg: SendUrlToTarget) -> None:

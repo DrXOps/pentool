@@ -6,10 +6,14 @@
 
 from __future__ import annotations
 
+import logging
+
 import pyarrow as pa
 from textual import events as _events
 from textual.message import Message
 from textual_fastdatatable import ArrowBackend, DataTable
+
+log = logging.getLogger(__name__)
 
 
 def _make_empty_arrow(columns: list[str]) -> pa.Table:
@@ -80,6 +84,26 @@ class ProxyDataTable(DataTable):
             self.backend = ArrowBackend(_make_empty_arrow(self._proxy_columns))
         else:
             self.clear()
+
+    def safe_sort(self, col_name: str, direction: str = "ascending") -> bool:
+        """Безопасная сортировка с crash-guard.
+
+        Вызывает ``ArrowBackend.sort()`` внутри try/except и проверяет
+        готовность таблицы. Возвращает True при успехе, False при ошибке.
+
+        Args:
+            col_name: имя колонки для сортировки.
+            direction: "ascending" или "descending".
+        """
+        if not self._mouse_ready():
+            log.warning("safe_sort: table not ready (skip)")
+            return False
+        try:
+            self.sort(by=[(col_name, direction)])
+            return True
+        except Exception as exc:
+            log.warning("safe_sort failed: %s", exc)
+            return False
 
     async def on_event(self, event: _events.Event) -> None:
         # Crash guard: while the table is being rebuilt or a sheet is mid-mount

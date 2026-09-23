@@ -86,6 +86,9 @@ class ProxyServer:
         self._requests_lock = threading.Lock()
         self.requests: list[InterceptedRequest] = []
         self._requests_max = 1000
+        # O(1) lookup cache: req_id → InterceptedRequest.
+        # Поддерживается в sync при append/evict.
+        self._request_cache: dict[str, InterceptedRequest] = {}
 
 
         self._server: asyncio.AbstractServer | None = None
@@ -237,10 +240,7 @@ class ProxyServer:
 
     def _find_request(self, req_id: str) -> InterceptedRequest | None:
         with self._requests_lock:
-            for r in reversed(self.requests):
-                if r.id == req_id:
-                    return r
-        return None
+            return self._request_cache.get(req_id)
 
     async def _handle_client(
         self,
@@ -696,14 +696,19 @@ class ProxyServer:
     def _add_request(self, req: InterceptedRequest) -> None:
         with self._requests_lock:
             self.requests.append(req)
+            self._request_cache[req.id] = req
             if len(self.requests) > self._requests_max:
- 
+
                 non_waiting = [r for r in self.requests if r.state != "waiting"]
                 waiting = [r for r in self.requests if r.state == "waiting"]
                 to_evict = len(self.requests) - self._requests_max
+                evicted = self.requests[:to_evict]
                 self.requests = (non_waiting[to_evict:]
                                  if len(non_waiting) >= to_evict
                                  else []) + waiting
+                # Удаляем из кэша вытесненные записи
+                for r in evicted:
+                    self._request_cache.pop(r.id, None)
 
     def get_requests(
         self,
@@ -722,12 +727,14 @@ class ProxyServer:
     def clear_requests(self) -> None:
         with self._requests_lock:
             self.requests.clear()
+            self._request_cache.clear()
 
     def replace_requests(self, requests: list[InterceptedRequest]) -> None:
         """Atomically replace the in-memory request history.
         """
         with self._requests_lock:
             self.requests = list(requests)
+            self._request_cache = {r.id: r for r in requests}
 
     @staticmethod
     def _request_to_raw(req: "ParsedRequest") -> str:

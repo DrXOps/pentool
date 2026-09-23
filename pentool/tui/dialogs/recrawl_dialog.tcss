@@ -1,0 +1,24 @@
+RecrawlDialog {
+    align: center middle;
+}
+RecrawlDialog #dialog {
+    width: 40;
+    height: auto;
+    border: round $primary;
+    background: $surface;
+    padding: 1 2;
+    layout: vertical;
+}
+RecrawlDialog #question {
+    margin: 1 0;
+    text-align: center;
+}
+RecrawlDialog #buttons {
+    align: center middle;
+    height: auto;
+    margin: 1 0;
+}
+RecrawlDialog #buttons Button {
+    margin: 0 1;
+    min-width: 8;
+}

@@ -75,6 +75,8 @@ class MCPBackend(AIBackend):
         self._mcp_cmd = mcp_cmd
         self._stdin: Any = None  # asyncio StreamWriter (process stdin)
         self._stdout: Any = None  # asyncio StreamReader (process stdout)
+        self._max_restarts: int = 3  # максимум перезапусков подряд
+        self._restart_count: int = 0  # счётчик перезапусков в этой сессии
 
     async def start(self) -> bool:
         """Start the MCP server as a subprocess."""
@@ -100,9 +102,40 @@ class MCPBackend(AIBackend):
             log.error("MCPBackend: не удалось запустить сервер: %s", exc)
             return False
 
+    async def _ensure_alive(self) -> bool:
+        """Проверить, жив ли процесс MCP сервера. Если нет — перезапустить.
+
+        Returns True если сервер жив (или успешно перезапущен).
+        """
+        if self._process is not None and self._process.returncode is None:
+            return True  # ещё жив
+
+        if self._restart_count >= self._max_restarts:
+            log.error("MCPBackend: превышен лимит перезапусков (%d)", self._max_restarts)
+            return False
+
+        log.warning(
+            "MCPBackend: процесс мёртв (rc=%s) — перезапуск %d/%d",
+            self._process.returncode if self._process else "?",
+            self._restart_count + 1,
+            self._max_restarts,
+        )
+        self._restart_count += 1
+        self._process = None
+        self._stdin = None
+        self._stdout = None
+        ok = await self.start()
+        if ok:
+            # Сбросить счётчик при успешном запуске, если проработал > 30 сек
+            self._restart_count = 0
+        return ok
+
     async def _call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
-        """Call an MCP-server tool over JSON-RPC."""
-        if not self._stdin or not self._stdout:
+        """Call an MCP-server tool over JSON-RPC.
+
+        При обрыве соединения — автоматический перезапуск сервера.
+        """
+        if not await self._ensure_alive():
             log.warning("MCPBackend: сервер не запущен")
             return None
         req = {

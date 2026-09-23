@@ -2,6 +2,12 @@
 
 Устраняет дублирование между ``cli/scan.py`` (scan active) и ``cli/headless.py``
 (run_headless_scan). Обе точки входа используют один и тот же класс.
+
+Использует ``ScanService`` (а не прямой вызов ScannerAPI), что даёт:
+- Fingerprint → tech_profile → AIWorker через _on_fingerprint
+- Правильные очереди payload/WAF
+- Crawl через SpiderAPI
+- Единый жизненный цикл (stop, error handling)
 """
 
 from __future__ import annotations
@@ -72,43 +78,46 @@ class ScanRunner:
         self._on_finding = on_finding
 
     def run(self) -> int:
-        """Execute the scan and return exit code (0 = success)."""
+        """Execute the scan and return exit code (0 = success).
+
+        Использует ``ScanService`` для полного жизненного цикла:
+        краул → fingerprint → AIWorker → активный скан → сохранение.
+        """
         ScannerAPI = _import_scanner_api()
         from pentool.core.config import get_config
-        from pentool.utils.http_client import get_shared_http_client
-        from pentool.utils.parser import ParsedRequest
+        from pentool.api.spider_api import SpiderAPI
+        from pentool.services.scan_service import ScanService, ScanConfig
+        from pentool.core.event_bus import EventBus
         from pentool.utils.lightpanda import is_lightpanda_available
 
         cfg = get_config()
         api = ScannerAPI(db_path=cfg.db_path)
 
-        findings: list = []
+        # Коллбэк для логирования в CLI
+        _findings: list = []
 
         def on_finding(f) -> None:
-            findings.append(f)
+            _findings.append(f)
             if self._on_finding:
                 self._on_finding(f)
             else:
                 sev = f.severity.upper()
                 click.echo(f"  [{sev}] {f.name} — {f.url}")
 
-        def on_progress(done: int, total: int) -> None:
-            click.echo(f"\r  Progress: {done}/{total}", nl=False)
+        def on_log(msg: str) -> None:
+            # Rich-теги не нужны в CLI, но их можно показывать
+            click.echo(f"  {msg}")
 
-        def on_request_sent(req_sent: int, threads_active: int,
-                            check_name: str, param_name: str, url: str) -> None:
-            pass  # keep the engine's progress-reporting proxy working
+        async def _run() -> int:
+            nonlocal _findings
 
-        async def _run() -> None:
-            nonlocal findings
-            all_targets: list[str] = list(self.urls)
-
-            # 1. Crawl (optional)
+            # 1. Spider (краул) — если запрошен
+            spider_api: SpiderAPI | None = None
             if self.crawl:
                 use_js = is_lightpanda_available()
-                from pentool.api.spider_api import SpiderAPI
-                spider = SpiderAPI.from_params(
-                    max_depth=self.crawl_depth, max_pages=self.max_pages,
+                spider_api = SpiderAPI.from_params(
+                    max_depth=self.crawl_depth,
+                    max_pages=self.max_pages,
                     js_render=use_js,
                 )
                 click.echo(
@@ -116,103 +125,89 @@ class ScanRunner:
                     f"js_render={use_js} depth={self.crawl_depth} "
                     f"max_pages={self.max_pages}..."
                 )
-                for url in self.urls:
-                    try:
-                        result = await spider.crawl(url, db_path=cfg.db_path)
-                        if hasattr(result, "pages") and result.pages:
-                            for page in result.pages:
-                                if page not in all_targets:
-                                    all_targets.append(page)
-                            click.echo(f"  → {url}: {len(result.pages)} pages")
-                        else:
-                            all_targets.append(url)
-                    except Exception as exc:
-                        click.echo(f"  ⚠ crawl failed for {url}: {exc}", err=True)
-                        all_targets.append(url)
-                click.echo(f"  Total unique targets: {len(all_targets)}")
+            else:
+                click.echo("[scan] Skipping crawl — using provided URLs directly")
 
-            # 2. Configure engine
-            http_client = get_shared_http_client(follow_redirects=True, cfg=cfg)
-            api.configure_engine(
-                http_client=http_client,
-                concurrency=self.concurrency,
-                request_delay=self.delay,
+            # 2. EventBus (для внутренних событий ScanService)
+            from pentool.core.events import FindingDiscovered, ScanProgressEvent
+            bus = EventBus()
+            # Подписываемся на события для вывода в CLI
+            findings_from_events: list = []
+
+            def on_finding_event(event: FindingDiscovered) -> None:
+                f = getattr(event, "finding", None)
+                if f:
+                    findings_from_events.append(f)
+                    on_finding(f)
+
+            bus.subscribe(FindingDiscovered, on_finding_event)
+
+            def on_progress_event(event: ScanProgressEvent) -> None:
+                done = getattr(event, "done", 0)
+                total = getattr(event, "total", 0)
+                if total > 0:
+                    click.echo(f"\r  Progress: {done}/{total}", nl=False)
+
+            bus.subscribe(ScanProgressEvent, on_progress_event)
+
+            # 3. ScanService — единый оркестратор
+            service = ScanService(
+                scanner_api=api,
+                spider_api=spider_api,
+                event_bus=bus,
+                tui_loop=None,
+                on_log=on_log,
             )
 
-            # 3. Build ParsedRequest list
-            reqs = [
-                ParsedRequest(method="GET", url=u, headers={}, body="")
-                for u in all_targets
-            ]
+            config = ScanConfig(
+                targets=self.urls,
+                check_names=self.check_names,
+                threads=self.concurrency,
+                delay_sec=self.delay,
+                max_depth=self.crawl_depth,
+                max_pages=self.max_pages,
+                db_path=cfg.db_path,
+                resume=not self.crawl,  # если краул выключен — используем URL как есть
+                use_ai=self.use_ai,
+            )
 
             click.echo(
-                f"[scan] Active scan on {len(reqs)} request(s) "
+                f"[scan] Active scan on {len(self.urls)} target(s) "
                 f"checks={self.check_names or 'all'} "
                 f"threads={self.concurrency} delay={self.delay}s "
                 f"use_ai={self.use_ai}..."
             )
 
-            # 4. Run active scan — with optional AIWorker
-            if self.use_ai:
-                from pentool.modules.scanner.ai_worker import AIWorker
-                from pentool.services.ai.factory import ensure_backend
-                backend = await ensure_backend(_force=True)
-                if backend is not None:
-                    click.echo("[scan] Starting AIWorker (endpoint discovery, WAF bypass)...")
-                    ai_payload_queue: asyncio.Queue = asyncio.Queue()
-                    waf_bypass_queue: asyncio.Queue = asyncio.Queue()
-                    worker = AIWorker(
-                        target_urls=all_targets,
-                        tech_profile=None,
-                        payload_queue=ai_payload_queue,
-                    )
-                    worker._waf_bypass_queue = waf_bypass_queue
-                    ai_task = asyncio.create_task(worker.run())
-                else:
-                    click.echo("[scan] AI backend unavailable — skipping AIWorker", err=True)
-                    ai_task = None
-                    ai_payload_queue = None
-                    waf_bypass_queue = None
-            else:
-                ai_task = None
-                ai_payload_queue = None
-                waf_bypass_queue = None
+            try:
+                findings = await service.run(config)
+            except Exception as exc:
+                click.echo(f"\n[scan] Scan failed: {exc}", err=True)
+                return 1
 
-            active_findings = await api.run_active_on_requests(
-                seed_requests=reqs,
-                check_names=self.check_names,
-                on_finding=on_finding,
-                on_progress=on_progress,
-                on_request_sent=on_request_sent,
-                use_ai=self.use_ai,
-            )
-            for f in active_findings:
-                if not any(getattr(x, "id", None) == f.id for x in findings):
-                    findings.append(f)
+            # findings уже содержит все результаты (ScanService сам их добавляет)
+            _findings = findings
 
-            # Save findings to DB so generate_report can read them
+            click.echo(f"\nDone. Found {len(findings)} finding(s).")
+
+            # Сохраняем findings (ScanService уже сохранил, но дубль безопасен)
             if findings:
                 await api.save_findings(findings)
 
-            try:
-                await http_client.close()
-            except Exception:
-                pass  # best-effort
+            # Генерируем отчёт
+            if self.output:
+                fmt = self._resolve_format()
+                await api.generate_report(self.output, fmt)
+                click.echo(f"[scan] Report saved: {self.output}")
+
+            return 0
 
         try:
             click.echo(f"[scan] Starting scan on {len(self.urls)} target(s)...")
-            asyncio.run(_run())
-            click.echo(f"\nDone. Found {len(findings)} finding(s).")
+            exit_code = asyncio.run(_run())
+            return exit_code
         except Exception as exc:
             click.echo(f"[scan] Scan failed: {exc}", err=True)
             return 1
-
-        if self.output:
-            fmt = self._resolve_format()
-            asyncio.run(api.generate_report(self.output, fmt))
-            click.echo(f"[scan] Report saved: {self.output}")
-
-        return 0
 
     def _resolve_format(self) -> str:
         """Determine output format from --format flag or file extension."""
