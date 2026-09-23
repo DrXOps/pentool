@@ -6,6 +6,10 @@ import time
 from pathlib import Path
 
 from textual import on, work
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pentool.tui.app import PentoolApp
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
@@ -176,7 +180,17 @@ class TargetScreen(Widget):
         )
 
     def on_mount(self) -> None:
-        pass  # data is only loaded explicitly via a project or the Refresh button
+        """Скрыть AI-чекбокс если AI выключен в настройках."""
+        self._refresh_ai_visibility()
+
+    def _refresh_ai_visibility(self) -> None:
+        """Показать/скрыть '🤖 Use AI' чекбокс в зависимости от ai_enabled."""
+        from pentool.core.config import get_config
+        ai_on = bool(getattr(get_config(), "ai_enabled", False))
+        try:
+            self.query_one("#cfg-ai-use").display = ai_on
+        except Exception:
+            pass
 
     def _get_api(self):
         if self._target_api is None:
