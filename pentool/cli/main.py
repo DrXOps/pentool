@@ -65,6 +65,8 @@ def cli(ctx: click.Context,
 
     ctx.obj["config"] = cfg
 
+    # click.group без invoke_without_command — cli() вызывается только когда
+    # нет подкоманды. Поэтому здесь обрабатываем --url --headless режим.
     if cli_urls:
         urls = list(cli_urls)
         if headless:
