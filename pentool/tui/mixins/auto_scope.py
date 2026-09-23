@@ -175,27 +175,25 @@ async def _tech_detect_and_cache(host: str, app) -> None:
     Uses Lightpanda to fetch the page, then TechFingerprinter to detect
     technologies. Results are cached in TechCache so repeat scans skip it.
     """
-    # 1. Check cache
-    from pentool.modules.scanner.tech_cache import TechCache
-    cache = TechCache()
-    cached = cache.get(host)
+    # 1. Check cache через services слой (не прямой импорт PRO)
+    from pentool.services.tech_detector import get_tech_cache
+    cached = get_tech_cache(host)
     if cached is not None:
         log.info("TECH_DETECT: %s — from cache", host)
         await _update_target_tree_tech(host, cached, app)
         return
 
-    # 2. Run fingerprint — сначала PRO TechFingerprinter
+    # 2. Run fingerprint — через services слой (не прямой импорт PRO)
     from pentool.utils.lightpanda import lightpanda_fetch_html, is_lightpanda_available
     from pentool.utils.http_client import get_shared_http_client
-    from pentool.modules.scanner.fingerprint import TechFingerprinter
 
     url = f"https://{host}/" if "://" not in host else host
 
     profile = None
     try:
         http_client = get_shared_http_client(follow_redirects=True)
-        fp = TechFingerprinter()
-        profile = await fp.fingerprint(url, http_client)
+        from pentool.services.tech_detector import run_fingerprint
+        profile = await run_fingerprint(url, http_client)
         await http_client.close()
     except Exception as exc:
         log.debug("TECH_DETECT: fingerprint error for %s: %s", host, exc)

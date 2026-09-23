@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Callable
 
 import aiohttp
 
-from pentool.core.logging import get_logger
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Callback type: called after each request
 RequestCallback = Callable[[ParsedRequest, ParsedResponse], None]
