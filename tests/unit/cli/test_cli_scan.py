@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import types
+
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from click.testing import CliRunner
