@@ -1480,12 +1480,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         """
         ai_on = bool(getattr(self._cfg, "ai_enabled", False))
         # Target toolbar "🤖 Use AI" checkbox — visible only when AI is enabled.
-        # query_one ищет глобально по DOM, но TargetScreen может быть не смонтирован.
-        # Поэтому дополнительно вызываем _refresh_ai_visibility у TargetScreen.
         try:
             from pentool.tui.screens.target.screen import TargetScreen
             target = self.query_one(TargetScreen)
-            target._refresh_ai_visibility()
+            box = target.query_one("#cfg-ai-use")
+            box.display = ai_on
         except Exception:
             pass
         # Dashboard MCP status LED gets refreshed from is_ai_running/ai_enabled.
