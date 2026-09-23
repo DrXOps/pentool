@@ -1,6 +1,6 @@
 # 🧩 Writing a Pentool Plugin
 
-Pentool's plugin system lets you extend the toolkit without touching core
+Pentool's plugin system lets you extend the tool without touching core
 code — add a new TUI screen, a CLI command, a custom active scanner, or a
 passive check that runs on every proxy request.
 

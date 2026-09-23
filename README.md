@@ -13,7 +13,7 @@
 
 ---
 
-Pentool is a **terminal-based (TUI) security toolkit** for penetration testers and security researchers.  
+Pentool is a **terminal-based (TUI) security tool** for penetration testers and security researchers.  
 It combines HTTP interception, vulnerability scanning, automated attacks, AI assistance, and data analysis — all inside your terminal.  
 Fast, transparent, and built for real-world testing.
 

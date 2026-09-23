@@ -621,7 +621,7 @@ Create payload files for common attacks:
 **Import/Export:**
 - Import/export raw requests
 - Familiar Proxy/Repeater/Intruder workflow for anyone coming from another
-  web pentesting toolkit
+  web pentesting tool
 
 **With curl:**
 ```bash
