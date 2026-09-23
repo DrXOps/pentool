@@ -14,7 +14,7 @@ from pentool.modules.spider import (
     SpiderEndpoint,
     SpiderForm,
     SpiderResult,
-    is_playwright_available,
+    is_lightpanda_available,
     shutdown_proc_pool,
 )
 from pentool.utils.auth_headers import extract_auth_headers
@@ -30,7 +30,7 @@ def shutdown_spider_pool() -> None:
 # Re-export types — TUI uses them from here
 __all__ = [
     "SpiderAPI", "SpiderResult", "SpiderForm", "SpiderEndpoint", "SpiderConfig",
-    "is_playwright_available",
+    "is_lightpanda_available",
 ]
 
 
@@ -45,10 +45,14 @@ class SpiderConfig:
     timeout: float = 10.0
     user_agent: str = "pentool/1.0"
     respect_scope: bool = True   # stay on the target host/subdomains — don't crawl external links
-    js_render: bool = False  # Playwright JS rendering (if installed)
+    js_render: bool = False  # JS rendering via Lightpanda (if installed)
 
 
 class SpiderAPI(ExportableAPI):
+
+    # Shared cache: last crawl result per host, populated by any module (Target/Scanner).
+    # Scanner checks this cache before re-crawling.
+    _last_results: dict[str, SpiderResult] = {}
 
     def __init__(self, config: SpiderConfig | None = None) -> None:
         self._config = config or SpiderConfig()
@@ -62,6 +66,7 @@ class SpiderAPI(ExportableAPI):
         max_pages: int = DEFAULT_MAX_PAGES,
         concurrency: int = 5,
         timeout: float = 10.0,
+        js_render: bool = False,
     ) -> "SpiderAPI":
         """Convenience factory method."""
         return cls(SpiderConfig(
@@ -69,6 +74,7 @@ class SpiderAPI(ExportableAPI):
             max_pages=max_pages,
             concurrency=concurrency,
             timeout=timeout,
+            js_render=js_render,
         ))
 
     async def crawl(
@@ -110,6 +116,14 @@ class SpiderAPI(ExportableAPI):
 
         try:
             result = await self._spider.crawl(url)
+            # Expose which auth headers (Cookie/Authorization) were actually
+            # used so the caller (ScanService) can reuse the same session in
+            # its active-scan phase instead of sending unauthenticated probes.
+            result.auth_headers = merged_headers
+            # Cache result by host — Scanner checks this before re-crawling.
+            host = urlparse(url).netloc.split(":")[0]
+            if host:
+                self._last_results[host] = result
             logger.info(
                 "SpiderAPI.crawl: %s -> %d pages, %d forms, %d endpoints",
                 url, len(result.pages), len(result.forms), len(result.endpoints),
@@ -129,18 +143,7 @@ class SpiderAPI(ExportableAPI):
                 pass
 
     async def _discover_auth_headers(self, url: str, db_path: str) -> dict:
-        """Look up the most recent Proxy-captured request for this host and
-        pull out any auth-looking headers (Cookie, Authorization, ...).
-
-        Best-effort: opens a short-lived HttpStorage connection (same
-        pattern as ScannerAPI.get_history_requests — a temp connection just
-        for this one lookup, not the live Proxy connection), reads the
-        single most recent row for the target host, and returns whatever
-        extract_auth_headers() finds in its request_headers. Returns {} on
-        any failure (no project DB yet, host never seen, corrupt row,
-        column missing on an old DB) — this is a convenience fallback, not
-        a hard dependency; crawling must still work with no history at all.
-        """
+        """Look up Proxy history for auth headers for this host (best-effort, returns {} on failure)."""
         try:
             host = urlparse(url).netloc
             if not host:
@@ -184,6 +187,26 @@ class SpiderAPI(ExportableAPI):
     def config(self) -> SpiderConfig:
         """Current crawler configuration (max_depth, max_pages, concurrency)."""
         return self._config
+
+    @classmethod
+    def has_cached_result(cls, url: str) -> bool:
+        """True if a crawl result for this URL's host exists in shared cache.
+
+        Used by Scanner to skip re-crawling when Target already crawled.
+        """
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.split(":")[0]
+        return host in cls._last_results and bool(cls._last_results[host].pages)
+
+    @classmethod
+    def get_cached_pages(cls, url: str) -> list[str]:
+        """Return cached page URLs for this host, or empty list."""
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.split(":")[0]
+        result = cls._last_results.get(host)
+        if result:
+            return [p.url for p in result.pages]
+        return []
 
     def export_project_data(self) -> dict:
         """Spider results are transient — no persistent state to serialize."""

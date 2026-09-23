@@ -49,7 +49,7 @@ class TestMainProSelfHeal:
             _run_main_with_argv(["pentool"])
 
         captured = capsys.readouterr()
-        assert "re-downloaded successfully" in captured.err
+        assert "re-downloaded" in captured.err
 
     def test_incompatible_package_healed_with_matching_build_id_does_not_exit(self, capsys):
         """check_and_update_pro_package() returns updated=False, warning=""

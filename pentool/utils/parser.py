@@ -51,6 +51,24 @@ class ParsedResponse:
     _raw_body: bytes | None = field(default=None, repr=False, compare=False)
 
 
+def response_raw_from_parsed(resp: ParsedResponse) -> str:
+    """Rebuild raw HTTP response from ParsedResponse (no aiohttp dependency, works on >=3.14)."""
+    header_block = "".join(
+        f"{k}: {v}\r\n" for k, v in resp.headers.items()
+    )
+    body = resp._raw_body if resp._raw_body is not None else resp.body
+    if isinstance(body, str):
+        body_bytes = body.encode("utf-8", errors="replace")
+    else:
+        body_bytes = bytes(body or b"")
+    status_line = (
+        f"{getattr(resp, 'http_version', 'HTTP/1.1')} {resp.status}"
+        + (f" {resp.reason}" if resp.reason else "")
+    )
+    head = f"{status_line}\r\n{header_block}\r\n".encode("utf-8")
+    return (head + body_bytes).decode("utf-8", errors="replace")
+
+
 def parse_http_request(raw: str) -> ParsedRequest:
     """Parse a raw HTTP request string into a ParsedRequest.
 

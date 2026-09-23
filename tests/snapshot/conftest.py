@@ -113,9 +113,17 @@ def assert_snapshot(request):
 
 
 def pytest_addoption(parser):
-    parser.addoption(
-        "--snapshot-update",
-        action="store_true",
-        default=False,
-        help="Update baseline SVG snapshots.",
-    )
+    # Idempotent: pytest may import this conftest module more than once during
+    # collection (under `tests.snapshot.conftest` and a bare `conftest` alias),
+    # which makes argparse fail with "conflicting option string". Registering
+    # only once keeps a single --snapshot-update flag.
+    try:
+        parser.addoption(
+            "--snapshot-update",
+            action="store_true",
+            default=False,
+            help="Update baseline SVG snapshots.",
+        )
+    except (ValueError, Exception):
+        # Option already registered by an earlier load of this conftest.
+        pass

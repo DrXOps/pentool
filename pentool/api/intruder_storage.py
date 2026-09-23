@@ -1,7 +1,7 @@
 """IntruderStorage — SQL for Intruder tab state and attack result persistence.
 
 Extracted from `IntruderAPI` (see
-MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md, section 2.6). Pure
+(scanner refactor plan), section 2.6). Pure
 data-access: no attack orchestration knowledge, only the `intruder_state`/
 `intruder_results` table CRUD that used to live directly on `IntruderAPI`.
 Behavior (upsert-by-delete-then-insert for state, column selection/ordering
@@ -56,13 +56,7 @@ class IntruderStorage(BaseSqliteStorage):
         payloads: list[list[str]],
         tab_uid: str = "",
     ) -> None:
-        """Save Intruder tab state (template, attack type, payloads) to DB.
-
-        When `tab_uid` is given, upserts by that stable identity (matches
-        ScannerTabRepository.save_tab's rationale — tab_name alone can't
-        distinguish two same-named tabs across restarts). When omitted,
-        falls back to the original delete-by-tab_name-then-insert behavior
-        for backward compatibility with single-tab callers.
+        """Save tab state to DB (upserts by tab_uid when given).
         """
         if not await self.ensure_open():
             return

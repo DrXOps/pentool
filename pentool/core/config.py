@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -11,6 +12,8 @@ import yaml
 
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "pentool"
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.yaml"
+LOGS_DIR = DEFAULT_CONFIG_DIR / "logs"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Callback type: called when config changes
 ConfigObserver = Callable[[dict], None]
@@ -24,14 +27,17 @@ class Config:
     proxy_port: int = 8080
     cert_dir: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "certs"))
     db_path: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "pentool.db"))
-    log_file: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "pentool.log"))
+    log_file: str = field(default_factory=lambda: str(LOGS_DIR / "pentool.log"))
     log_level: str = "INFO"
     plugins_dir: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "plugins"))
     scope: list[str] = field(default_factory=list)
     intercept_enabled: bool = False
+    # Proxy backend: 'daemon' (isolated subprocess, default) or 'memory'
+    # (legacy ProxyServer on a daemon thread in the TUI process — fallback).
+    proxy_engine: str = "daemon"
     recent_projects: list[str] = field(default_factory=list)
-    auto_save_enabled: bool = False
-    auto_save_interval: int = 5  # minutes
+    auto_save_enabled: bool = True
+    auto_save_interval: int = 2  # minutes
     # ── Network / Scanner settings ─────────────────────────────────────────────
     default_user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -55,12 +61,16 @@ class Config:
     notifications_sound_enabled: bool = True  # play a short sound with customnotify() toasts
 
     # ── AI ────────────────────────────────────────────────────────────────────────
-    ai_enabled: bool = False           # мастер-выключатель AI-помощника
-    ai_model: str = ""                 # имя/путь к LLM-модели (GGUF)
-    ai_mcp_host: str = "127.0.0.1"    # MCP-сервер хост
+    ai_enabled: bool = False           # master switch for the AI assistant
+    ai_model: str = ""                 # LLM model name / path (GGUF)
+    ai_mcp_host: str = "127.0.0.1"    # MCP server host
     ai_mcp_port: int = 0              # 0 = stdio, >0 = TCP
-    ai_mcp_model_path: str = ""       # путь к GGUF-файлу
-    ai_mcp_auto_start: bool = False   # автостарт MCP-сервера при запуске pentool
+    ai_mcp_model_path: str = ""       # path to the GGUF file
+    ai_mcp_auto_start: bool = False   # auto-start the MCP server when pentool launches
+    # Debug — подробное логирование процесса скана и AI-воркера
+    scan_debug: bool = False           # показать/скрыть детальный вывод скана
+    # Auto-Scope — автоматически добавлять хост в Scope при отправке в модуль
+    auto_scope: bool = False           # если True — хост из контекстного меню → в Scope
 
     # Observer list — not serialized
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)
@@ -104,33 +114,17 @@ class Config:
             self.notify_observers(changed)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dict for serialization."""
+        """Convert to dict for serialization.
+
+        Uses dataclasses.fields() so every field is included automatically —
+        no more manual enumeration that drifts out of sync (the bug that caused
+        ai_* and scan_debug fields to be duplicated here).
+        Excludes _observers (not serializable — contains weakrefs/callbacks).
+        """
+        import dataclasses as _dc
         return {
-            "proxy_host": self.proxy_host,
-            "proxy_port": self.proxy_port,
-            "cert_dir": self.cert_dir,
-            "db_path": self.db_path,
-            "log_file": self.log_file,
-            "log_level": self.log_level,
-            "plugins_dir": self.plugins_dir,
-            "scope": self.scope,
-            "intercept_enabled": self.intercept_enabled,
-            "recent_projects": self.recent_projects,
-            "auto_save_enabled": self.auto_save_enabled,
-            "auto_save_interval": self.auto_save_interval,
-            "default_user_agent": self.default_user_agent,
-            "request_timeout": self.request_timeout,
-            "connect_timeout": self.connect_timeout,
-            "collaborator_url": self.collaborator_url,
-            "max_redirects": self.max_redirects,
-            "verify_ssl": self.verify_ssl,
-            "scan_marker_enabled": self.scan_marker_enabled,
-            "scan_marker_name": self.scan_marker_name,
-            "scan_marker_value": self.scan_marker_value,
-            "send_crash_reports": self.send_crash_reports,
-            "check_updates": self.check_updates,
-            "theme": self.theme,
-            "notifications_sound_enabled": self.notifications_sound_enabled,
+            f.name: getattr(self, f.name) for f in _dc.fields(self)
+            if not f.name.startswith("_")
         }
 
     def add_recent_project(self, path: str) -> None:
@@ -161,6 +155,9 @@ class Config:
         for key, value in data.items():
             if hasattr(cfg, key) and not key.startswith("_"):
                 setattr(cfg, key, value)
+        # Normalize proxy backend — tolerate junk/legacy values in config.yaml
+        if cfg.proxy_engine not in ("daemon", "memory"):
+            cfg.proxy_engine = "daemon"
         # Remove non-existent paths from recent_projects on load
         before = len(cfg.recent_projects)
         cfg.recent_projects = [p for p in cfg.recent_projects if os.path.exists(p)]
@@ -186,3 +183,15 @@ def get_config() -> Config:
 def set_config(config: Config) -> None:
     global _config
     _config = config
+
+
+@contextmanager
+def override_config(config: Config | None):
+    """Context manager: temporarily replace global config singleton, restore on exit."""
+    global _config
+    prev = _config
+    _config = config
+    try:
+        yield _config
+    finally:
+        _config = prev

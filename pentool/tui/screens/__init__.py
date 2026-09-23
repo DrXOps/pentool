@@ -12,7 +12,6 @@ from pentool.tui.screens.repeater.screen import RepeaterScreen
 from pentool.tui.screens.sequencer.screen import SequencerScreen
 from pentool.tui.screens.settings.screen import SettingsScreen
 from pentool.tui.screens.target.screen import TargetScreen
-from pentool.tui.screens.terminal.screen import TerminalScreen
 
 # Scanner is a PRO-only module, downloaded separately into ~/.pentool/pro/
 # (see 'pentool license trial'/'activate'). Absent on a bare pip install —
@@ -39,5 +38,4 @@ __all__ = [
     "SequencerScreen",
     "ExtensionsScreen",
     "SettingsScreen",
-    "TerminalScreen",
 ]

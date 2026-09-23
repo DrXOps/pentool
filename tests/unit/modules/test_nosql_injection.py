@@ -1,7 +1,7 @@
 """Unit tests for pentool/modules/scanner/checks/nosql_injection.py.
 
 Coverage for the migration of NoSQLInjectionCheck onto BaseActiveCheck
-(see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.5). The
+(see (scanner refactor plan) section 2.5). The
 check is a single-phase per-payload analyze() check (MongoDB error-marker
 detection in the response body) with no multi-phase logic, so it now uses
 the inherited BaseActiveCheck cycle instead of the engine's analyze()-API
@@ -29,14 +29,11 @@ from pentool.modules.scanner.engine import ScanEngine
 from pentool.modules.scanner.mutator import InjectionPoint
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
-
 def _make_request(url: str, method: str = "GET", body: str = "") -> ParsedRequest:
     return ParsedRequest(method=method, url=url, headers={}, body=body)
 
-
 def _make_point(name: str, value: str = "1", kind: str = "get") -> InjectionPoint:
     return InjectionPoint(kind=kind, name=name, original_value=value)
-
 
 class TestMeta:
     def test_name(self):
@@ -57,7 +54,6 @@ class TestMeta:
         # to give this check for throughput.
         assert NoSQLInjectionCheck.use_baseline_diff_skip is True
 
-
 class TestHasNosqlError:
     def test_detects_mongo_error(self):
         found, evidence = _has_nosql_error("MongoError: bad query operator")
@@ -67,7 +63,6 @@ class TestHasNosqlError:
     def test_clean_body_not_detected(self):
         found, evidence = _has_nosql_error("<html>ok</html>")
         assert not found
-
 
 class TestAnalyze:
     @pytest.mark.asyncio
@@ -109,25 +104,9 @@ class TestAnalyze:
         assert finding.request_raw.startswith("GET ")
         assert "HTTP/1.1 0" not in finding.request_raw
 
-
 class TestEngineIntegration:
     """End-to-end through ScanEngine — this is what was actually broken:
     the check never fired at all when run through the real scan pipeline."""
-
-    @pytest.fixture(autouse=True)
-    def _reset_session_license(self):
-        # BaseCheck.is_available() consults get_session_license(), a
-        # process-global cache (pentool.core.license._session_license).
-        # Another test module (test_license.py::TestSessionCache) leaves a
-        # plan="pro"/features=[] LicenseInfo cached there without resetting
-        # it — has_feature("scanner_pro") then returns False for every check
-        # in the same test process, and BaseCheck.is_available() filters
-        # this check out of active_checks before it ever runs. Reset before
-        # and after so this test's outcome doesn't depend on suite order.
-        import pentool.core.license as lic_mod
-        lic_mod._session_license = None
-        yield
-        lic_mod._session_license = None
 
     @pytest.mark.asyncio
     async def test_engine_detects_nosql_injection(self):

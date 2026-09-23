@@ -51,7 +51,16 @@ class BaseSqliteStorage:
         """
         self._db_path = str(Path(path).expanduser())
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._db = await aiosqlite.connect(self._db_path)
+        from pentool.utils.aiosql_daemon import make_aiosqlite_daemon
+        # `aiosqlite.connect()` is synchronous: the worker thread is only
+        # started on the first `await` (via __await__ → _thread.start()). So we
+        # must flag it daemon BEFORE awaiting, or make_aiosqlite_daemon would
+        # hit "RuntimeError: cannot set daemon status of active thread" and
+        # silently no-op, leaving a non-daemon worker that hangs interpreter
+        # exit (the CI snapshot-job hang).
+        _pending = aiosqlite.connect(self._db_path)
+        make_aiosqlite_daemon(_pending)
+        self._db = await _pending
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA foreign_keys = ON")
         await self._db.execute("PRAGMA journal_mode = WAL")
@@ -83,6 +92,12 @@ class BaseSqliteStorage:
 
     async def close(self) -> None:
         if self._db:
+            try:
+                # WAL checkpoint so .db-wal/-shm don't linger on disk.
+                await self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                await self._db.commit()
+            except Exception:
+                pass
             await self._db.close()
             self._db = None
 

@@ -71,7 +71,7 @@ CREATE TRIGGER IF NOT EXISTS requests_au AFTER UPDATE ON requests BEGIN
 END;
 """
 
-_LARGE_BODY_THRESHOLD = 1 * 1024 * 1024  # 1 MB
+from pentool.storage.large_body_handler import THRESHOLD as _LARGE_BODY_THRESHOLD
 
 
 class HttpStorage(BaseSqliteStorage):
@@ -223,14 +223,33 @@ class HttpStorage(BaseSqliteStorage):
         ct = resp_headers.get("Content-Type", resp_headers.get("content-type", ""))
         mime_type = ct.split(";")[0].strip()
 
+        # Large response body → write to disk (analogous to add_request)
+        resp_body_store: str | None = None
+        resp_body_ref: str | None = None
+        if rb and len(rb) > _LARGE_BODY_THRESHOLD:
+            resp_body_ref = "__large__"
+            resp_body_store = None
+        else:
+            resp_body_store = rb
+
         await self._db.execute(
             """UPDATE requests SET
                status_code=?, length=?, mime_type=?,
-               response_headers=?, response_body=?
+               response_headers=?, response_body=?, response_body_ref=?
                WHERE id=?""",
-            (status_code, length, mime_type, json.dumps(resp_headers), rb, row_id),
+            (status_code, length, mime_type,
+             json.dumps(resp_headers), resp_body_store, None, row_id),
         )
         await self._db.commit()
+
+        # Save large body with the real row_id
+        if resp_body_ref == "__large__" and rb:
+            from pentool.storage.large_body_handler import LargeBodyHandler
+            ref = LargeBodyHandler.store(row_id, "resp", rb.encode())
+            await self._db.execute(
+                "UPDATE requests SET response_body_ref=? WHERE id=?", (ref, row_id)
+            )
+            await self._db.commit()
         logger.debug("HttpStorage: update_response row_id=%d status=%s", row_id, status_code)
 
     async def delete(self, row_id: int) -> None:
@@ -349,23 +368,24 @@ class HttpStorage(BaseSqliteStorage):
 
         result = []
         from pentool.storage.large_body_handler import LargeBodyHandler
+        # Batch-load all large bodies to avoid N+1 disk reads
+        req_refs = [r.get("request_body_ref") for r in rows]
+        resp_refs = [r.get("response_body_ref") for r in rows]
+        all_refs = list(set(filter(None, req_refs + resp_refs)))
+        loaded = LargeBodyHandler.load_batch(all_refs)
         for row in rows:
             entry = dict(row)
-            # Load large bodies
-            if entry.get("request_body_ref"):
-                try:
-                    entry["request_body"] = LargeBodyHandler.load(
-                        entry["request_body_ref"]
-                    ).decode("utf-8", errors="replace")
-                except Exception:
-                    entry["request_body"] = ""
-            if entry.get("response_body_ref"):
-                try:
-                    entry["response_body"] = LargeBodyHandler.load(
-                        entry["response_body_ref"]
-                    ).decode("utf-8", errors="replace")
-                except Exception:
-                    entry["response_body"] = ""
+            # Load large bodies from batch cache
+            ref = entry.get("request_body_ref")
+            if ref and ref in loaded:
+                entry["request_body"] = loaded[ref].decode("utf-8", errors="replace")
+            elif entry.get("request_body_ref"):
+                entry["request_body"] = ""
+            ref = entry.get("response_body_ref")
+            if ref and ref in loaded:
+                entry["response_body"] = loaded[ref].decode("utf-8", errors="replace")
+            elif entry.get("response_body_ref"):
+                entry["response_body"] = ""
             # Deserialize headers
             import json as _json
             for key in ("request_headers", "response_headers"):

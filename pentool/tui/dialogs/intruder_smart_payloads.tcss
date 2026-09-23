@@ -1,0 +1,49 @@
+SmartPayloadsDialog #title-bar {
+    height: 1;
+    layout: horizontal;
+    margin-bottom: 1;
+}
+SmartPayloadsDialog #title-bar Static {
+    width: 1fr;
+    color: $primary;
+}
+SmartPayloadsDialog #title-bar Button {
+    width: 3;
+    min-width: 3;
+    background: transparent;
+    border: none;
+}
+SmartPayloadsDialog .row {
+    height: auto;
+    layout: horizontal;
+    align: left middle;
+    margin-bottom: 1;
+}
+SmartPayloadsDialog .row Label {
+    width: 14;
+    color: $text-muted;
+}
+SmartPayloadsDialog > Select {
+    width: 24;
+    height: 1;
+}
+SmartPayloadsDialog Select > SelectCurrent {
+    padding: 0 1;
+}
+SmartPayloadsDialog Select > SelectOverlay {
+    max-height: 8;
+}
+SmartPayloadsDialog Input {
+    width: 10;
+    background: $panel;
+    border: none;
+}
+SmartPayloadsDialog #buttons {
+    height: auto;
+    layout: horizontal;
+    margin-top: 1;
+    align: center middle;
+}
+SmartPayloadsDialog #buttons ToolbarButton {
+    margin: 0 1;
+}

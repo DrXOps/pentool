@@ -25,8 +25,8 @@
 готовый способ встраивать проверку безопасности в пайплайны.
 См. [CI/CD гайд](CI_CD.md).
 
-**Реальный трафик:** `pentool --url https://example.com --real` — открывает цель в
-headless-браузере **через прокси** (нужен Playwright/Chromium), чтобы настоящий
+**Реальный трафик:** `pentool --url https://example.com --smart` — открывает цель в
+headless-браузере **через прокси**, чтобы настоящий
 перехваченный трафик попал в HTTP History и Target.
 
 > ⚠️ **Используйте современный терминал.** TUI Pentool построен на фреймворке [Textual](https://github.com/Textualize/textual) и опирается на поддержку мыши, true color и современный рендеринг. Легаси-терминалы (например, `cmd.exe` в Windows) будут отображаться некорректно. Рекомендуется: **Windows Terminal**, **iTerm2** (macOS), **GNOME Terminal / Kitty / Alacritty / WezTerm** (Linux). На Windows лучший опыт — запуск внутри **WSL**.
@@ -51,7 +51,7 @@ headless-браузере **через прокси** (нужен Playwright/Chr
 
 - **🕷 Spider**  
   Автоматический краулинг: страницы, формы, API-эндпоинты, JS-файлы.  
-  Поддерживается JavaScript-рендеринг через Playwright.
+  Поддерживается JavaScript-рендеринг (Lightpanda — быстрый и лёгкий, встроенный).
 
 - **🎯 Target / Site Map**  
   Карта сайта на основе прокси-трафика, управление scope и фильтрация хостов прямо из интерфейса.

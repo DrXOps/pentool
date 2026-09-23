@@ -1,7 +1,7 @@
 """Unit tests for pentool/modules/scanner/checks/prototype_pollution.py.
 
 Coverage for the migration of PrototypePollutionCheck onto BaseActiveCheck
-(see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.5). The
+(see (scanner refactor plan) section 2.5). The
 check is a single-phase per-payload analyze() check (SSPP marker / TypeError
 detection in the response body) with no multi-phase logic, so it now uses
 the inherited BaseActiveCheck cycle instead of the engine's analyze()-API
@@ -112,17 +112,6 @@ class TestAnalyze:
 
 
 class TestEngineIntegration:
-    @pytest.fixture(autouse=True)
-    def _reset_session_license(self):
-        # See identical fixture/explanation in test_nosql_injection.py:
-        # another test module leaves a stale plan="pro"/features=[]
-        # LicenseInfo in the process-global session-license cache, which
-        # makes BaseCheck.is_available() filter this check out regardless
-        # of test order.
-        import pentool.core.license as lic_mod
-        lic_mod._session_license = None
-        yield
-        lic_mod._session_license = None
 
     @pytest.mark.asyncio
     async def test_engine_detects_prototype_pollution(self):

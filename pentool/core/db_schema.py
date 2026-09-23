@@ -132,7 +132,9 @@ async def init_db(db_path: str) -> None:
     """
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiosqlite.connect(db_path) as db:
+    from pentool.utils.aiosql_daemon import make_aiosqlite_daemon
+    _raw_db = make_aiosqlite_daemon(aiosqlite.connect(db_path))
+    async with _raw_db as db:
         await db.executescript(_SCHEMA)
         await db.commit()
         # Migration: add new columns to vulnerabilities (for old DBs)
@@ -232,6 +234,31 @@ async def init_db(db_path: str) -> None:
 
         await db.commit()
 
+        # ── Performance indexes ──────────────────────────────────────────
+        # These are NOT in the initial _SCHEMA because CREATE INDEX IF NOT
+        # EXISTS is safe to run after the table exists — unlike ALTER TABLE
+        # migrations, they don't depend on column existence.
+        _extra_indexes = [
+            # requests table (HttpStorage): common query patterns
+            "CREATE INDEX IF NOT EXISTS idx_requests_id_ts ON requests (id DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_requests_host ON requests (host)",
+            "CREATE INDEX IF NOT EXISTS idx_requests_method ON requests (method)",
+            "CREATE INDEX IF NOT EXISTS idx_requests_status ON requests (status_code)",
+            # intruder_results: filtering by attack_id
+            "CREATE INDEX IF NOT EXISTS idx_intruder_results_attack ON intruder_results (attack_id)",
+            # vulnerabilities: filtering by host/url/severity
+            "CREATE INDEX IF NOT EXISTS idx_vulns_host ON vulnerabilities (host)",
+            "CREATE INDEX IF NOT EXISTS idx_vulns_severity ON vulnerabilities (severity)",
+            "CREATE INDEX IF NOT EXISTS idx_vulns_type ON vulnerabilities (type)",
+        ]
+        for _idx_sql in _extra_indexes:
+            try:
+                await db.execute(_idx_sql)
+            except Exception:
+                pass  # best-effort — index creation on a busy DB can fail
+
+        await db.commit()
+
 
 @asynccontextmanager
 async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
@@ -252,7 +279,9 @@ async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
     Yields:
         aiosqlite.Connection object.
     """
-    async with aiosqlite.connect(db_path) as db:
+    from pentool.utils.aiosql_daemon import make_aiosqlite_daemon
+    _raw_db = make_aiosqlite_daemon(aiosqlite.connect(db_path))
+    async with _raw_db as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA foreign_keys = ON")
         await db.execute("PRAGMA journal_mode = WAL")

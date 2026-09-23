@@ -492,7 +492,7 @@ class TestDownloadProPackage:
 
         with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
              patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license._PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
              patch("pentool.core.license._fetch_pro_build_id", _fail_if_called), \
              patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
             ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
@@ -515,7 +515,7 @@ class TestDownloadProPackage:
 
         with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
              patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license._PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
              patch("pentool.core.license._fetch_pro_build_id", _fake_fetch), \
              patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
             ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
@@ -542,7 +542,7 @@ class TestDownloadProPackage:
 
         with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
              patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license._PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
              patch("pentool.core.license._fetch_pro_build_id", _fake_fetch_fails), \
              patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
             ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
@@ -584,7 +584,7 @@ class TestDownloadProPackage:
 
         with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
              patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license._PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
+             patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
              patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
             ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
 

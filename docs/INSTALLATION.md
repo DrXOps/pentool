@@ -304,26 +304,26 @@ rm -rf ~/.local/share/pentool   # Projects
 
 ---
 
-## Docker (Experimental)
+## Docker
 
-```dockerfile
-FROM python:3.11-slim
-
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-WORKDIR /app
-COPY . /app
-
-RUN uv sync --frozen
-
-CMD ["uv", "run", "pentool"]
-```
+Pentool provides a multi-stage Docker image based on `python:3.12-slim`.
+Includes Lightpanda for JS crawling.
 
 ```bash
+# Build
 docker build -t pentool .
-docker run -it -p 8080:8080 pentool
+
+# Run headless scan (CI/CD)
+docker run --rm pentool --url https://example.com --headless --output /tmp/report.json
+
+# Run with TUI
+docker run -it --rm -p 8080:8080 pentool
+
+# Docker Compose
+docker compose up
 ```
+
+See [CI/CD Guide](CI_CD.md) for GitHub Actions and GitLab CI examples.
 
 ---
 

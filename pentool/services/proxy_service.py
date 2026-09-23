@@ -33,7 +33,7 @@ class ProxyService(BaseService):
         # of always constructing a real one internally. Optional with a
         # factory default, matching the pattern already used for
         # ScannerAPI(http_client=None)/IntruderAPI(http_client=None) — see
-        # MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.2.
+        # (scanner refactor plan) section 2.2.
         self._storage = storage if storage is not None else HttpStorage()
         self._storage_ready = False
         self._pre_storage_queue: list[InterceptedRequest] = []
@@ -220,14 +220,7 @@ class ProxyService(BaseService):
             )
 
     async def update_color(self, request_id: int, color: str) -> None:
-        """Set the color mark for a request.
-
-        Public wrapper — before this, ProxyScreen._mark_request() and
-        _save_comment() reached past ProxyService into its private
-        `_storage` attribute directly (a layer violation identical to the
-        one found in ScanService._get_engine() usage, see
-        MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.4/2.7).
-        """
+        """Set color mark (public wrapper, avoids layer violation)."""
         if not self._storage_ready:
             return
         try:
@@ -271,7 +264,7 @@ class ProxyService(BaseService):
 
         Public wrapper — before this, app.py reached past ProxyService into
         its private `_storage` to close it on shutdown (a layer violation,
-        see MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7).
+        see (scanner refactor plan) section 2.7).
         """
         try:
             await self._storage.close()
@@ -284,7 +277,7 @@ class ProxyService(BaseService):
 
         Public wrapper — before this, project_manager.py read the private
         `_storage` directly to export history (a layer violation, see
-        MYPLANS/ARCHITECTURE_REFACTOR_PLAN_2026-08-09.md section 2.7).
+        (scanner refactor plan) section 2.7).
         """
         if not self._storage_ready:
             return []

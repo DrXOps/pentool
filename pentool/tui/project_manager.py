@@ -365,7 +365,7 @@ class ProjectManager:
         # Single-line toast: no separate title (Textual's toast would render
         # the title on its own row above the message, duplicating "Opened/"
         # "Created" and making the card two rows tall).
-        self._app.customnotify(f"{action}: {os.path.basename(path)}", "success" if is_new else "information")
+        self._app.notify(f"{action}: {os.path.basename(path)}", severity="success" if is_new else "information")
 
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen
@@ -382,25 +382,7 @@ class ProjectManager:
     # ── Internal async helpers ────────────────────────────────────────────────
 
     async def _do_switch(self, path: str, is_new: bool) -> None:
-        """Single entry point for all project switches.
-
-        Runs in an exclusive worker — no two switches can overlap.
-        Order:
-          0. Wait for the proxy thread to fully exit (if _stop_proxy was
-             called but the thread didn't die within join(timeout) — the
-             old loop may still hold the SQLite WAL lock or the TCP port).
-          1. init_db (CREATE TABLE IF NOT EXISTS, migrations)
-          2. switch_db on ProxyService (close old connection, open new one)
-          3. clear in-memory proxy state if new project
-          4. set _project_loaded — DB is ready, Start Proxy is now safe,
-             even though the other screens (Repeater/Scanner/Target/Dashboard)
-             may still be reloading in the background (step 5). Proxy only
-             depends on the HttpStorage connection from step 2, not on any
-             of those screens, so there is no reason to make the user wait
-             for all of them before allowing Start Proxy.
-          5. reload the remaining screens — run concurrently (they read
-             independent tables/state), not sequentially.
-        """
+        """Switch project DB: stop proxy → init schema → switch storage → reload screens."""
         # 0. Stop the proxy (async) and wait for its thread to die before
         # touching the DB. Runs in this async worker, so the TUI thread is
         # NOT blocked — this is what previously froze the UI for ~10s on
@@ -474,7 +456,9 @@ class ProjectManager:
         async def _reload_proxy() -> None:
             try:
                 screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
-                await screen._reload_from_storage()
+                # is_new lets the proxy screen start a brand-new project with
+                # an EMPTY scope (not inherited from the previous project).
+                await screen._reload_from_storage(is_new=is_new)
                 logger.info("_reload_project_screens: proxy reloaded from %s", path)
             except Exception as exc:
                 logger.debug("_reload_project_screens proxy: %s", exc)
@@ -572,8 +556,8 @@ class ProjectManager:
         except Exception as exc:
             logger.warning("_init_new_db: %s", exc)
 
-    # _switch_storage_db и _open_project_sequence оставлены для совместимости
-    # с app.py (_reload_project_screens, _switch_storage_db, _open_project_sequence)
+    # _switch_storage_db and _open_project_sequence are kept for compatibility
+    # with app.py (_reload_project_screens, _switch_storage_db, _open_project_sequence)
     async def _switch_storage_db(self, path: str) -> None:
         if self._proxy_service is not None:
             await self._proxy_service.switch_db(path)

@@ -342,11 +342,11 @@ def _build_body_highlights(body_lines: list[str], lang: str, start_row: int) -> 
         import re as _re
         for bi, bline in enumerate(body_lines):
             row = start_row + bi
-            # Подсвечиваем теги: <tagname ...>
+            # Highlight tags: <tagname ...>
             for m in _re.finditer(r'(</?)([\w-]+)([^>]*)(/?>)', bline):
                 hl[row].append((m.start(1), m.end(1), "operator"))          # <
                 hl[row].append((m.start(2), m.end(2), "tag"))               # tagname
-                # атрибуты внутри тега
+                # attributes inside the tag
                 attr_re = _re.finditer(r'([\w-]+)(=)(["\'])(.*?)(\3)', m.group(3))
                 attr_offset = m.start(3)
                 for am in attr_re:
@@ -362,12 +362,12 @@ def _build_body_highlights(body_lines: list[str], lang: str, start_row: int) -> 
             _parsed = _json.loads("\n".join(body_lines))
         except Exception:
             _parsed = None
-        # JSON ключи подсвечиваем через regex
+        # Highlight JSON keys via regex
         import re as _re
         for bi, bline in enumerate(body_lines):
             row = start_row + bi
             for m in _re.finditer(r'("(?:[^"\\]|\\.)*")\s*:', bline):
-                hl[row].append((m.start(1), m.end(1), "function"))          # ключ
+                hl[row].append((m.start(1), m.end(1), "function"))          # key
     elif lang == "xml":
         import re as _re
         for bi, bline in enumerate(body_lines):
@@ -597,7 +597,7 @@ class ResponseViewer(_BaseHttpWidget):
         yield TextArea("", read_only=True, id="viewer-area", soft_wrap=False)
 
     def load_response(self, resp: ParsedResponse) -> None:
-        """Display ParsedResponse: raw HTTP с подсветкой headers+body."""
+        """Display ParsedResponse: raw HTTP with headers+body highlighting."""
         body = resp.body or ""
 
         status_line = f"HTTP/1.1 {resp.status} {resp.reason}"
@@ -620,13 +620,13 @@ class ResponseViewer(_BaseHttpWidget):
             area = self.query_one("#viewer-area", TextArea)
             normalized = raw.replace("\r\n", "\n")
 
-            # Всегда грузим с language=None — подсветка только через _highlights
+            # Always load with language=None — highlighting is via _highlights only.
             area.language = None
             area.load_text(normalized)
 
             hl: dict = defaultdict(list, _build_http_highlights(normalized))
 
-            # Если тело — html/json/xml, добавляем подсветку body-строк
+            # When the body is html/json/xml, add body-line highlighting.
             if lang in ("html", "json", "xml") and "\n\n" in normalized:
                 head_part, body_part = normalized.split("\n\n", 1)
                 if body_part.strip():

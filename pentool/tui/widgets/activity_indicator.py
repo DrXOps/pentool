@@ -152,11 +152,19 @@ class ActivityIndicator(Widget):
             except Exception:
                 return None
 
+        def _ai_active() -> bool | None:
+            try:
+                from pentool.services.ai.provider import is_mcp_busy
+                return is_mcp_busy()
+            except Exception:
+                return None
+
         return [
             _Tracked("proxy",    "🌐", "Proxy",    _proxy_active),
             _Tracked("spider",   "🕷️", "Spider",   _spider_active),
             _Tracked("scanner",  "🔍", "Scanner",  _scanner_active),
             _Tracked("intruder", "💥", "Intruder", _intruder_active),
+            _Tracked("ai",       "🤖", "AI MCP",   _ai_active),
         ]
 
     # ── compose / refresh ────────────────────────────────────────────────────
@@ -180,7 +188,17 @@ class ActivityIndicator(Widget):
         """Re-read each module's running-state attribute (cheap, ~1/s) and
         set each glyph's own tooltip — individually, not one shared tooltip
         for the whole strip, so hovering one glyph doesn't show the others'
-        state."""
+        state.
+
+        AI glyph is hidden when ai_enabled is off in config.
+        """
+        ai_cfg_on = False
+        try:
+            from pentool.core.config import get_config
+            ai_cfg_on = bool(getattr(get_config(), "ai_enabled", False))
+        except Exception:
+            pass
+
         for t in self._checkers:
             try:
                 active = bool(t.is_active())
@@ -192,6 +210,9 @@ class ActivityIndicator(Widget):
             except Exception:
                 continue
             widget.tooltip = f"{t.label}: {'running' if active else 'idle'}"
+            # AI glyph — show only when AI is enabled in config
+            if t.key == "ai":
+                widget.display = ai_cfg_on
 
     def _apply_blink(self) -> None:
         """Toggle blink phase and (re)apply CSS classes (~%.2gHz tick)."""

@@ -55,11 +55,6 @@ class TestMeta:
     def test_uses_scan_pipeline(self):
         assert BrokenAuthCheck.uses_scan_pipeline is True
 
-    def test_analyze_is_stub(self):
-        # Logic lives in scan(); analyze() returns None.
-        check = BrokenAuthCheck()
-        assert check.analyze is not None  # pragma: no cover - sanity
-
 
 class TestHelpers:
     def test_has_auth(self):
@@ -165,13 +160,6 @@ class TestEngineIntegration:
     """End-to-end through ScanEngine — scan()-pipeline check actually finds
     the vulnerability (fake client returns a useful body on every probe)."""
 
-    @pytest.fixture(autouse=True)
-    def _reset_session_license(self):
-        import pentool.core.license as lic_mod
-        saved = lic_mod._session_license
-        lic_mod._session_license = None
-        yield
-        lic_mod._session_license = saved
 
     @pytest.mark.asyncio
     async def test_engine_detects_broken_auth(self):

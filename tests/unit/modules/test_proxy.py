@@ -296,11 +296,25 @@ class TestProxyRequestHistory:
         server = ProxyServer()
         server._requests_max = 3
         for i in range(5):
+            req = InterceptedRequest(
+                id=str(i), method="GET", url=f"http://h/{i}", headers={},
+                body="", timestamp=datetime.now(timezone.utc))
+            req.state = "idle"  # not waiting, so eviction applies
+            server._add_request(req)
+        assert len(server.requests) == 3
+        assert server.requests[0].id == "2"
+
+    def test_add_no_eviction_of_waiting(self) -> None:
+        """Waiting requests are never evicted from the ring buffer."""
+        from pentool.modules.proxy import ProxyServer, InterceptedRequest
+        server = ProxyServer()
+        server._requests_max = 3
+        for i in range(5):
             server._add_request(InterceptedRequest(
                 id=str(i), method="GET", url=f"http://h/{i}", headers={},
                 body="", timestamp=datetime.now(timezone.utc)))
-        assert len(server.requests) == 3
-        assert server.requests[0].id == "2"
+        # All still waiting (state defaults to "waiting") — none evicted
+        assert len(server.requests) == 5
 
     def test_get_requests_filters(self) -> None:
         from pentool.modules.proxy import ProxyServer, InterceptedRequest

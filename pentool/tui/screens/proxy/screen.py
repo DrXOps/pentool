@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import os
 import time
 from pathlib import Path
 from urllib.parse import urlparse
 
-import pyarrow as pa
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.message import Message
 from textual.widget import Widget
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
@@ -27,25 +24,26 @@ from textual.widgets import (
     TabPane,
     TextArea,
 )
-from textual_fastdatatable import ArrowBackend
-from textual_fastdatatable import DataTable as _BaseDataTable
-
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.core.logging import get_logger
+from pentool.tui.widgets.proxy_table import (
+    COL_NAMES as _COL_NAMES,
+    row_to_record as _row_to_record,
+    rows_to_arrow as _rows_to_arrow,
+)
 from pentool.services.proxy_service import ProxyService
 from pentool.tui.messages import SendToIntruder, SendToRepeater, SendToTarget, SyncScopeToTarget
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.context_menu import ContextMenu
 from pentool.tui.widgets.filter_bar import FilterBar
+from pentool.tui.widgets.http_history_filters import build_history_filters
 from pentool.tui.widgets.inspector_panel import InspectorPanel
+from pentool.tui.widgets.intercept import InterceptMixin
 from pentool.tui.widgets.request_editor import HttpView
 from pentool.tui.widgets.resize_handle import ResizeHandle
 
 logger = get_logger(__name__)
-
-# HTTP History table columns
-_COL_NAMES = ["ID", "Host", "Method", "URL", "Status", "Size", "Time"]
 
 # Page size for HTTP History: initial load + each "scroll up to load more" page.
 # Matches ProxyService.get_history()'s default limit — the full history lives
@@ -61,198 +59,20 @@ _HISTORY_PAGE_SIZE = 300
 # drowning the renderer.
 _FILTER_RELOAD_DEBOUNCE_S = 0.6
 
-def _make_empty_table() -> pa.Table:
-    """Empty Arrow table with the required columns."""
-    return pa.table({
-        "ID":     pa.array([], type=pa.int64()),
-        "Host":   pa.array([], type=pa.string()),
-        "Method": pa.array([], type=pa.string()),
-        "URL":    pa.array([], type=pa.string()),
-        "Status": pa.array([], type=pa.string()),
-        "Size":   pa.array([], type=pa.string()),
-        "Time":   pa.array([], type=pa.string()),
-    })
+# HTTP-history table Arrow/row helpers (_make_empty_table, _rows_to_arrow,
+# _row_to_record, _COL_NAMES) moved to tui/widgets/proxy_table.py (Этап 6) —
+# imported at the top of this module under the same names.
 
-_COLOR_DOTS: dict[str, str] = {
-    "red":    "🔴",
-    "orange": "🟠",
-    "yellow": "🟡",
-    "green":  "🟢",
-    "blue":   "🔵",
-    "purple": "🟣",
-}
-
-
-def _row_to_record(r: dict) -> tuple:
-    """Convert one HttpStorage metadata dict into a DataTable row tuple.
-
-    Column order matches _COL_NAMES / _rows_to_arrow: ID, Host, Method, URL,
-    Status, Size, Time. Shared by the full rebuild path (_rows_to_arrow) and
-    the incremental append_rows() path (_flush_pending_rows) so both stay
-    in sync.
-    """
-    url = str(r.get("url", "") or "")
-    status = r.get("status_code")
-    length = r.get("length")
-    ts = r.get("timestamp")
-    if ts:
-        try:
-            time_str = datetime.datetime.fromtimestamp(ts).strftime("%H:%M:%S")
-        except Exception:
-            time_str = "-"
-    else:
-        time_str = "-"
-
-    # Prepend color dot and/or 💬 comment marker to Host column — both are
-    # left-aligned prefixes so marked/commented requests are visible in the
-    # list without opening them.
-    host = str(r.get("host", "") or "")
-    color = str(r.get("color", "") or "")
-    dot = _COLOR_DOTS.get(color, "")
-    comment = str(r.get("comment", "") or "")
-    comment_marker = "💬 " if comment.strip() else ""
-    prefix = f"{dot} " if dot else ""
-    host_display = f"{prefix}{comment_marker}{host}"
-
-    return (
-        r.get("id", 0),
-        host_display,
-        str(r.get("method", "") or ""),
-        url[:80] + "…" if len(url) > 80 else url,
-        str(status) if status is not None else "-",
-        str(length) if length is not None else "-",
-        time_str,
-    )
-
-
-def _rows_to_arrow(rows: list[dict]) -> pa.Table:
-    """Convert a list of dicts from HttpStorage into an Arrow table."""
-    if not rows:
-        return _make_empty_table()
-    ids, hosts, methods, urls, statuses, sizes, times = [], [], [], [], [], [], []
-    for r in rows:
-        rid, host, method, url, status, size, tstr = _row_to_record(r)
-        ids.append(rid)
-        hosts.append(host)
-        methods.append(method)
-        urls.append(url)
-        statuses.append(status)
-        sizes.append(size)
-        times.append(tstr)
-    return pa.table({
-        "ID":     pa.array(ids,      type=pa.int64()),
-        "Host":   pa.array(hosts,    type=pa.string()),
-        "Method": pa.array(methods,  type=pa.string()),
-        "URL":    pa.array(urls,     type=pa.string()),
-        "Status": pa.array(statuses, type=pa.string()),
-        "Size":   pa.array(sizes,    type=pa.string()),
-        "Time":   pa.array(times,    type=pa.string()),
-    })
-
-
-from textual import events as _events
 from textual import on
 
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
-class _ProxyDataTable(_BaseDataTable):
-    """DataTable for Proxy HTTP History.
+from pentool.tui.screens.proxy.data_table import ProxyDataTable
 
-    For Ctrl+left-click we post a custom ContextMenuRequest message so that
-    ProxyScreen can open the context menu without relying on event bubbling.
-    (Right-click button=3 does not reach Textual in a VTE terminal.)
-    """
+DataTable = ProxyDataTable
 
-    class ContextMenuRequest(Message):
-        """Request to open the context menu from a DataTable."""
-        def __init__(self, screen_x: int, screen_y: int) -> None:
-            super().__init__()
-            self.screen_x = screen_x
-            self.screen_y = screen_y
-
-    class ScrolledToTop(Message):
-        """Posted when the user scrolls to the very top of the table.
-
-        Used by ProxyScreen (request-list HTTP, ws-request-list WS) as the
-        trigger to load an older page of history from SQLite — see
-        ProxyScreen._load_more_history() / _load_more_ws_history().
-        """
-        def __init__(self, table_id: str) -> None:
-            super().__init__()
-            self.table_id = table_id
-
-    class CommentIconClicked(Message):
-        """Posted on a single left-click landing in the Host column — used
-        to open the comment dialog directly when the row has a 💬 marker,
-        without requiring Enter/double-click first."""
-        def __init__(self, row_index: int, column_index: int) -> None:
-            super().__init__()
-            self.row_index = row_index
-            self.column_index = column_index
-
-    async def on_event(self, event: _events.Event) -> None:
-        # Crash guard: while the table is being rebuilt (we swap `backend` in
-        # _load_more_history / _flush_pending_rows on every live request) or a
-        # sheet is mid (re)mount, the widget may momentarily have `parent is
-        # None` / a zeroed region. If a MouseDown lands in that instant, Textual's
-        # Screen._forward_event assumes `container = content_widget.parent` is a
-        # live node and dereferences it → AttributeError: 'NoneType' has no
-        # attribute 'region' → the whole App dies ("TUI just vanished"). Swallow
-        # the event instead of letting that crash tear down the app; the click is
-        # irrelevant on a table that isn't laid out yet anyway. We still handle
-        # movement/scroll (non-mouse events) normally below.
-        if isinstance(event, _events.MouseEvent) and not self._mouse_ready():
-            event.stop()
-            return
-        if isinstance(event, _events.MouseDown) and (
-            event.button == 3 or (event.button == 1 and event.ctrl)
-        ):
-            # Call the base handler first (moves cursor to the row)
-            await super().on_event(event)
-            # Post our own message — it always bubbles to the parent
-            self.post_message(self.ContextMenuRequest(event.screen_x, event.screen_y))
-        elif isinstance(event, _events.MouseUp) and event.button == 1 and not event.ctrl:
-            # Plain left-click release — figure out which cell it landed on
-            # via the same style.meta mechanism textual_fastdatatable itself
-            # uses for cursor placement, then let the base class handle the
-            # click as usual (cursor move, RowSelected, etc).
-            meta = getattr(event.style, "meta", None) if event.style else None
-            await super().on_event(event)
-            if meta and "row" in meta and "column" in meta:
-                self.post_message(self.CommentIconClicked(meta["row"], meta["column"]))
-        else:
-            await super().on_event(event)
-
-    def _mouse_ready(self) -> bool:
-        """True when the table has a live parent and a laid-out region, i.e. a
-        click can be resolved to a row safely. Textual's Screen._forward_event
-        requires a non-None `container` (widget parent) to build a SelectStart;
-        if we swallow the event while not ready, we avoid the
-        `AttributeError: 'NoneType' object has no attribute 'region'` crash
-        (see the guard in on_event)."""
-        try:
-            parent = self.parent
-            if parent is None:
-                return False
-            region = self.region
-            return region.width > 0 and region.height > 0
-        except Exception:
-            return False
-
-    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
-        super().watch_scroll_y(old_value, new_value)
-        # Both the HTTP History (id="request-list") and the WS History
-        # (id="ws-request-list") tables support scroll-up-to-load-more; the WS
-        # one used to load the whole history (now page-capped at 300) and had
-        # no pagination — older WS rows were unreachable. Both now share the
-        # same scroll-up pagination path.
-        if new_value <= 0 and old_value > 0 and self.id in ("request-list", "ws-request-list"):
-            self.post_message(self.ScrolledToTop(self.id or ""))
-
-DataTable = _ProxyDataTable
-
-class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
+class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
     """Full Proxy module screen."""
 
     DEFAULT_CSS = _CSS
@@ -281,6 +101,12 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         super().__init__(**kwargs)
         self._proxy_service: ProxyService | None = proxy_service
         self._selected_req_id: int | None = None
+        # WebSocket-history selection is tracked separately from the HTTP one.
+        # The two tables share no id space (WS rows come from a different
+        # storage key), so reusing _selected_req_id for the WS guard made every
+        # WS load either silently drop (ids rarely match) or — worse — apply a
+        # stale entry when numeric ids collided. Keep a distinct value.
+        self._selected_ws_req_id: int | None = None
         # _rows_cache is kept in DISPLAY order: oldest first (top), newest
         # last (bottom) — matches the table's top-to-bottom rendering, so
         # new live requests append at the end instead of requiring a prepend
@@ -346,8 +172,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         # highlight within the window triggers a load.
         self._highlight_debounce_handle = None
 
-    def compose(self) -> ComposeResult:
-        # Toolbar (outside SubTabs — all btn-* IDs are always in the DOM)
+    def _build_toolbar(self) -> ComposeResult:
         with Horizontal(id="toolbar"):
             yield ToolbarButton("○ Proxy",     "btn-proxy",     classes="inactive")
             yield Static(" │ ", classes="toolbar-sep")
@@ -373,122 +198,126 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("Clear",       "btn-clear")
 
-        # Proxy sub-tabs
-        with TabbedContent(id="proxy-subtabs"):
-            with TabPane("Intercept", id="tab-intercept"):
-                with Horizontal(id="intercept-toolbar"):
-                    yield ToolbarButton("⏩ Forward", "btn-forward", classes="disabled")
-                    yield ToolbarButton("✖ Drop",    "btn-drop",    classes="disabled")
-                    yield Static(" │ ", classes="toolbar-sep")
-                    yield ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars")
-                    yield Static(" │ ", classes="toolbar-sep")
-                    yield Label("(enable Intercept to capture requests)", id="intercept-hint")
-                with Vertical(id="intercept-req-area"):
-                    yield TextArea(
-                        "(No requests waiting for intercept)",
-                        id="intercept-editor",
-                        read_only=False,
-                    )
-                yield ResizeHandle(
-                    "intercept-req-area", "intercept-bottom-area",
-                    vertical=True,
-                    id="resize-intercept",
+    def _compose_intercept_tab(self) -> ComposeResult:
+        with TabPane("Intercept", id="tab-intercept"):
+            with Horizontal(id="intercept-toolbar"):
+                yield ToolbarButton("⏩ Forward", "btn-forward", classes="disabled")
+                yield ToolbarButton("✖ Drop",    "btn-drop",    classes="disabled")
+                yield Static(" │ ", classes="toolbar-sep")
+                yield ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars")
+                yield Static(" │ ", classes="toolbar-sep")
+                yield Label("(enable Intercept to capture requests)", id="intercept-hint")
+            with Vertical(id="intercept-req-area"):
+                yield TextArea(
+                    "(No requests waiting for intercept)",
+                    id="intercept-editor",
+                    read_only=False,
                 )
-                with Horizontal(id="intercept-bottom-area"):
-                    with Vertical(id="intercept-sent-panel"):
-                        yield Static("Sent Request", classes="panel-title")
-                        yield HttpView(id="intercept-sent-req")
+            yield ResizeHandle(
+                "intercept-req-area", "intercept-bottom-area",
+                vertical=True,
+                id="resize-intercept",
+            )
+            with Horizontal(id="intercept-bottom-area"):
+                with Vertical(id="intercept-sent-panel"):
+                    yield Static("Sent Request", classes="panel-title")
+                    yield HttpView(id="intercept-sent-req")
+                yield ResizeHandle(
+                    "intercept-sent-panel", "intercept-resp-panel",
+                    id="resize-intercept-sent-resp",
+                )
+                with Vertical(id="intercept-resp-panel"):
+                    yield Static("Response", classes="panel-title")
+                    yield HttpView(id="intercept-resp-viewer")
+
+    def _compose_history_tab(self) -> ComposeResult:
+        with TabPane("HTTP History", id="tab-http-history"):
+            with Horizontal(id="body"):
+                with Vertical(id="main-panel"):
+                    with Vertical(id="table-area"):
+                        yield FilterBar(id="filter-bar")
+                        yield DataTable(
+                            columns=_COL_NAMES,
+                            id="request-list",
+                            cursor_type="row",
+                            zebra_stripes=True,
+                            max_column_content_width=120,
+                            column_widths=[5, 20, 8, 60, 6, 8, 8],
+                        )
+                        yield Static("", id="history-count", classes="history-count")
                     yield ResizeHandle(
-                        "intercept-sent-panel", "intercept-resp-panel",
-                        id="resize-intercept-sent-resp",
+                        "table-area", "detail-area",
+                        vertical=True,
+                        id="resize-table-detail",
                     )
-                    with Vertical(id="intercept-resp-panel"):
-                        yield Static("Response", classes="panel-title")
-                        yield HttpView(id="intercept-resp-viewer")
+                    with Horizontal(id="detail-area"):
+                        with Vertical(id="req-panel"):
+                            yield Static("Request", classes="panel-title")
+                            yield HttpView(id="req-editor")
+                        yield ResizeHandle(
+                            "req-panel", "resp-panel",
+                            id="resize-req-resp",
+                        )
+                        with Vertical(id="resp-panel"):
+                            yield Static("Response", classes="panel-title")
+                            yield HttpView(id="resp-viewer")
+                yield InspectorPanel(id="inspector-panel")
 
-            with TabPane("HTTP History", id="tab-http-history"):
-                with Horizontal(id="body"):
-                    with Vertical(id="main-panel"):
-                        # Top section: FilterBar + DataTable
-                        with Vertical(id="table-area"):
-                            yield FilterBar(id="filter-bar")
-                            yield DataTable(
-                                backend=ArrowBackend(_make_empty_table()),
-                                id="request-list",
-                                cursor_type="row",
-                                zebra_stripes=True,
-                                max_column_content_width=120,
-                                column_widths=[5, 20, 8, 60, 6, 8, 8],
-                            )
-                            yield Static("", id="history-count", classes="history-count")
-                        # ResizeHandle between the table and the detail panel
-                        yield ResizeHandle(
-                            "table-area", "detail-area",
-                            vertical=True,
-                            id="resize-table-detail",
+    def _compose_ws_tab(self) -> ComposeResult:
+        with TabPane("WS History", id="tab-ws-history"):
+            with Horizontal(id="ws-body"):
+                with Vertical(id="ws-main-panel"):
+                    with Vertical(id="ws-table-area"):
+                        yield DataTable(
+                            columns=_COL_NAMES,
+                            id="ws-request-list",
+                            cursor_type="row",
+                            zebra_stripes=True,
+                            column_widths=[5, 20, 8, 60, 6, 8, 8],
                         )
-                        # Lower part: Request | ResizeHandle | Response
-                        with Horizontal(id="detail-area"):
-                            with Vertical(id="req-panel"):
-                                yield Static("Request", classes="panel-title")
-                                yield HttpView(id="req-editor")
-                            yield ResizeHandle(
-                                "req-panel", "resp-panel",
-                                id="resize-req-resp",
-                            )
-                            with Vertical(id="resp-panel"):
-                                yield Static("Response", classes="panel-title")
-                                yield HttpView(id="resp-viewer")
-                    # Inspector (hidden by default)
-                    yield InspectorPanel(id="inspector-panel")
+                        yield Static("", id="ws-history-count", classes="history-count")
+                    yield ResizeHandle(
+                        "ws-table-area", "ws-detail-area",
+                        vertical=True,
+                        id="resize-ws-table-detail",
+                    )
+                    with Horizontal(id="ws-detail-area"):
+                        with Vertical(id="ws-req-panel"):
+                            yield Static("Request", classes="panel-title")
+                            yield HttpView(id="ws-req-editor")
+                        yield ResizeHandle(
+                            "ws-req-panel", "ws-resp-panel",
+                            id="resize-ws-req-resp",
+                        )
+                        with Vertical(id="ws-resp-panel"):
+                            yield Static("Response", classes="panel-title")
+                            yield HttpView(id="ws-resp-viewer")
+                    yield ResizeHandle(
+                        "ws-detail-area", "ws-messages-area",
+                        vertical=True,
+                        id="resize-ws-detail-msg",
+                    )
+                    with Vertical(id="ws-messages-area"):
+                        yield Static(
+                            "WebSocket Messages",
+                            id="ws-msg-label",
+                            classes="panel-title",
+                        )
+                        from textual.widgets import RichLog
+                        yield RichLog(
+                            id="ws-msg-log",
+                            highlight=True,
+                            markup=True,
+                            wrap=True,
+                            max_lines=1000,
+                        )
 
-            with TabPane("WS History", id="tab-ws-history"):
-                with Horizontal(id="ws-body"):
-                    with Vertical(id="ws-main-panel"):
-                        with Vertical(id="ws-table-area"):
-                            yield DataTable(
-                                backend=ArrowBackend(_make_empty_table()),
-                                id="ws-request-list",
-                                cursor_type="row",
-                                zebra_stripes=True,
-                                column_widths=[5, 20, 8, 60, 6, 8, 8],
-                            )
-                            yield Static("", id="ws-history-count", classes="history-count")
-                        yield ResizeHandle(
-                            "ws-table-area", "ws-detail-area",
-                            vertical=True,
-                            id="resize-ws-table-detail",
-                        )
-                        with Horizontal(id="ws-detail-area"):
-                            with Vertical(id="ws-req-panel"):
-                                yield Static("Request", classes="panel-title")
-                                yield HttpView(id="ws-req-editor")
-                            yield ResizeHandle(
-                                "ws-req-panel", "ws-resp-panel",
-                                id="resize-ws-req-resp",
-                            )
-                            with Vertical(id="ws-resp-panel"):
-                                yield Static("Response", classes="panel-title")
-                                yield HttpView(id="ws-resp-viewer")
-                        yield ResizeHandle(
-                            "ws-detail-area", "ws-messages-area",
-                            vertical=True,
-                            id="resize-ws-detail-msg",
-                        )
-                        with Vertical(id="ws-messages-area"):
-                            yield Static(
-                                "WebSocket Messages",
-                                id="ws-msg-label",
-                                classes="panel-title",
-                            )
-                            from textual.widgets import RichLog
-                            yield RichLog(
-                                id="ws-msg-log",
-                                highlight=True,
-                                markup=True,
-                                wrap=True,
-                                max_lines=1000,
-                            )
+    def compose(self) -> ComposeResult:
+        yield from self._build_toolbar()
+        with TabbedContent(id="proxy-subtabs"):
+            yield from self._compose_intercept_tab()
+            yield from self._compose_history_tab()
+            yield from self._compose_ws_tab()
 
         yield Static(
             "Ctrl+R: Repeater  │  Ctrl+U: Copy URL  │  M: Context menu  │  I: Inspector  │  H: HTTP History  │  N: Intercept  │  W: WS History",
@@ -589,10 +418,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             return
         try:
             # Add has_comment filter if toggle is active
-            if self._filter_show_comments:
-                f = dict(filters) if filters else {}
-                f["has_comment"] = True
-                filters = f
+            filters = build_history_filters(filters, self._filter_show_comments)
             logger.info("PROXY SCREEN: _reload_table called, filters=%s", filters)
             newest_first_rows = await self._proxy_service.get_history(
                 limit=_HISTORY_PAGE_SIZE, filters=filters,
@@ -611,7 +437,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._history_oldest_offset = max(total - len(rows), 0)
             arrow = _rows_to_arrow(rows)
             table = self.query_one("#request-list", DataTable)
-            table.backend = ArrowBackend(arrow)
+            table.set_data(arrow)
             table._ordered_columns = None
             try:
                 for col in table.ordered_columns:
@@ -629,7 +455,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 table.move_cursor(row=len(rows) - 1)
             self._update_history_count_label()
         except Exception as exc:
-            logger.error("_reload_table failed: %s", exc)
+            logger.error("_reload_table failed: %s", exc, exc_info=True)
 
     def _update_history_count_label(self) -> None:
         try:
@@ -689,7 +515,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             try:
                 table = self.query_one("#request-list", DataTable)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.backend = ArrowBackend(arrow)
+                table.set_data(arrow)
                 table._ordered_columns = None
                 table._clear_caches()
                 table._require_update_dimensions = True
@@ -711,7 +537,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         finally:
             self._history_loading_more = False
 
-    def on__proxy_data_table_scrolled_to_top(self, event: _ProxyDataTable.ScrolledToTop) -> None:
+    def on__proxy_data_table_scrolled_to_top(self, event: ProxyDataTable.ScrolledToTop) -> None:
         if event.table_id == "ws-request-list":
             self.run_worker(self._load_more_ws_history())
         else:
@@ -745,7 +571,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             try:
                 table = self.query_one("#ws-request-list", DataTable)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.backend = ArrowBackend(arrow)
+                table.set_data(arrow)
                 table._ordered_columns = None
                 table._clear_caches()
                 table._require_update_dimensions = True
@@ -784,7 +610,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 table = self.query_one("#ws-request-list", DataTable)
             except Exception:
                 return
-            table.backend = ArrowBackend(arrow)
+            table.set_data(arrow)
             table._ordered_columns = None
             try:
                 for col in table.ordered_columns:
@@ -837,7 +663,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         await self._proxy_service.reload_from_proxy(self._get_proxy_api())
         await self._reload_table()
 
-    async def _reload_from_storage(self) -> None:
+    async def _reload_from_storage(self, is_new: bool = False) -> None:
         """Reload the table from current storage without clearing data."""
         if self._proxy_service is None:
             return
@@ -855,8 +681,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         # for the DB we just switched to — neither must leak from whatever
         # project was open before (see _load_scope_setting docstring for the
         # "★ Scope button stops working after reopening an older project"
-        # bug this fixes).
-        await self._load_scope_setting()
+        # bug this fixes). is_new propagates so a brand-new project starts
+        # with an empty scope rather than inheriting the previous project's.
+        await self._load_scope_setting(is_new=is_new)
         await self._load_enforce_scope_setting()
         logger.info("PROXY SCREEN: _reload_from_storage: tables reloaded")
 
@@ -873,16 +700,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self.run_worker(self._store_request(req))
 
     def _cleanup_pending_req_ids(self) -> None:
-        """БАГ-C: periodic cleanup of stale _pending_req_ids entries.
-
-        Normally every entry is removed in _update_and_reload() once the
-        response arrives. But if a request never completes (client aborts,
-        intercept dropped, proxy restarted mid-flight, etc.) the entry would
-        otherwise stay in the dict forever — unbounded memory growth over a
-        long-running session. Anything older than 10 minutes is stale and
-        safe to drop; _wait_for_row_id already bails out after ~5s so no
-        legitimate in-flight request should ever hit this threshold.
-        """
+        """Periodic cleanup of stale _pending_req_ids (requests never completed)."""
         cutoff = time.time() - 600  # 10 minutes
         stale_ids = [
             req_id for req_id, ts in self._pending_req_ids_ts.items()
@@ -901,7 +719,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         """Called from app when a request is fully complete (with response)."""
         if not isinstance(req, InterceptedRequest):
             return
-        status = req.response.status if req.response else None
+        status = req.get_response().status if req.get_response() else None
         logger.info("PROXY SCREEN: update_request_row: %s %s → %s (id=%s)", req.method, req.url, status, req.id)
         self.run_worker(self._update_and_reload(req))
 
@@ -932,9 +750,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         _t1 = time.monotonic()
         actual_row_id = self._pending_req_ids.pop(req.id, None)
         self._pending_req_ids_ts.pop(req.id, None)
-        if actual_row_id and actual_row_id != -1 and req.response is not None:
-            await self._proxy_service.update_response(actual_row_id, req.response)
-        elif req.response is not None:
+        if actual_row_id and actual_row_id != -1 and req.get_response() is not None:
+            await self._proxy_service.update_response(actual_row_id, req.get_response())
+        elif req.get_response() is not None:
             # Either never stored (actual_row_id is None) or _wait_for_row_id
             # timed out while _store_request was still in flight, leaving the
             # -1 sentinel behind (actual_row_id == -1). In both cases the
@@ -1001,8 +819,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             "host": parsed.headers.get("Host", "").split(":")[0] or url.split("/")[2] if "://" in url else url,
             "method": req.method or "",
             "url": url,
-            "status_code": req.response.status if req.response else None,
-            "length": len((req.response.body or "").encode("utf-8")) if req.response else None,
+            "status_code": req.get_response().status if req.get_response() else None,
+            "length": len((req.get_response().body or "").encode("utf-8")) if req.get_response() else None,
             "timestamp": ts,
             "is_websocket": req.is_websocket,
         }
@@ -1023,15 +841,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._debounce_timer = self.set_timer(delay, self._flush_pending_rows)
 
     def _flush_pending_rows(self) -> None:
-        """Flush all pending rows into the table via incremental add_rows().
-
-        Rows are appended at the BOTTOM (matches _rows_cache's oldest-first/
-        newest-last order) using ArrowBackend.append_rows() instead of
-        rebuilding the whole backend from scratch — a full rebuild costs
-        ~11ms per 2000 existing rows (measured), while append_rows() only
-        touches the new rows. Auto-scrolls to the bottom so live traffic
-        stays visible, like `tail -f`/`less -f`.
-        """
+        """Append pending rows incrementally (add_rows, no full rebuild), tail-scroll."""
         self._debounce_timer = None
         if not self._pending_append_rows:
             return
@@ -1047,7 +857,16 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             _t2 = time.monotonic()
             old_tail = len(self._rows_cache) - len(new_rows) - 1
             was_at_tail = table.cursor_row >= old_tail
-            table.add_rows(records)
+            try:
+                table.add_rows(records)
+            except Exception as exc:
+                logger.error("PROXY SCREEN: _flush_pending_rows: add_rows crashed: %s", exc, exc_info=True)
+                # Fall back to full rebuild (slow but safe)
+                arrow = _rows_to_arrow(self._rows_cache)
+                table.set_data(arrow)
+                table._ordered_columns = None
+                table._clear_caches()
+                table._require_update_dimensions = True
             _t3 = time.monotonic()
             if was_at_tail or table.cursor_row >= len(self._rows_cache) - 1:
                 table.scroll_end(animate=False)
@@ -1079,11 +898,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             # the cursor's position relative to the OLD tail *before* the
             # append, independent of focus: only follow the stream when the
             # cursor was at (or past) the last row already there.
-            old_tail = len(self._rows_cache) - len(new_rows) - 1
-            was_at_tail = table.cursor_row >= old_tail
-            table.add_rows(records)
-            if was_at_tail or table.cursor_row >= len(self._rows_cache) - 1:
-                table.scroll_end(animate=False)
         except Exception as exc:
             logger.debug("PROXY SCREEN: _flush_pending_rows: %s", exc)
         # Cap unbounded growth of the in-memory cache during very long
@@ -1097,7 +911,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             try:
                 table = self.query_one("#request-list", DataTable)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.backend = ArrowBackend(arrow)
+                table.set_data(arrow)
                 table._ordered_columns = None
                 table._clear_caches()
                 table._require_update_dimensions = True
@@ -1122,7 +936,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             "host": parsed.headers.get("Host", "").split(":")[0] or url.split("/")[2] if "://" in url else url,
             "method": req.method or "",
             "url": url,
-            "status_code": req.response.status if req.response else None,
+            "status_code": req.get_response().status if req.get_response() else None,
             "length": len((req.response.body or "").encode("utf-8")) if req.response else None,
             "timestamp": ts,
             "is_websocket": True,
@@ -1145,7 +959,15 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             records = [_row_to_record(r) for r in new_rows]
             old_tail = len(self._ws_rows_cache) - len(new_rows) - 1
             was_at_tail = table.cursor_row >= old_tail
-            table.add_rows(records)
+            try:
+                table.add_rows(records)
+            except Exception as exc:
+                logger.error("PROXY SCREEN: _flush_pending_ws_rows: add_rows crashed: %s", exc, exc_info=True)
+                arrow = _rows_to_arrow(self._ws_rows_cache)
+                table.set_data(arrow)
+                table._ordered_columns = None
+                table._clear_caches()
+                table._require_update_dimensions = True
             if was_at_tail or table.cursor_row >= len(self._ws_rows_cache) - 1:
                 table.scroll_end(animate=False)
         except Exception as exc:
@@ -1160,7 +982,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             try:
                 table = self.query_one("#ws-request-list", DataTable)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.backend = ArrowBackend(arrow)
+                table.set_data(arrow)
                 table._ordered_columns = None
                 table._clear_caches()
                 table._require_update_dimensions = True
@@ -1196,6 +1018,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
                 row = self._ws_rows_cache[row_idx]
                 row_id = row.get("id")
                 if row_id is not None:
+                    if row_id == self._selected_ws_req_id:
+                        return
+                    self._selected_ws_req_id = row_id
                     self.run_worker(self._load_ws_row_details(row_id))
         except Exception as exc:
             logger.error("PROXY SCREEN: _select_ws_row crashed: %s", exc, exc_info=True)
@@ -1207,7 +1032,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self._select_row(event.cursor_row)
 
     def on__proxy_data_table_comment_icon_clicked(
-        self, event: "_ProxyDataTable.CommentIconClicked"
+        self, event: "ProxyDataTable.CommentIconClicked"
     ) -> None:
         """Single left-click landing in the Host column opens the comment
         dialog directly when that row has a comment (💬 marker) — this is
@@ -1240,15 +1065,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             pass
 
     def _debounced_load(self, row_id: int | None) -> None:
-        """Safely run _load_row_details from a debounce timer callback.
-
-        Textual's set_timer may fire its callback after the widget has been
-        removed from the DOM (e.g. during project switch or shutdown). In that
-        case the widget is unmounted and run_worker raises an exception that
-        Textual may silently swallow by tearing down the screen stack — causing
-        a clean run() return with no traceback ("TUI just vanished"). Check
-        is_running before scheduling the async worker.
-        """
+        """Run _load_row_details with guard against widget-removed race."""
         try:
             app = self.app
             if not app.is_running:
@@ -1277,8 +1094,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         entry = await self._proxy_service.get_full_entry(row_id)
         if entry is None:
             return
-        # Same selection race guard as _load_row_details — ignore stale loads.
-        if self._selected_req_id is not None and row_id != self._selected_req_id:
+        # Same selection race guard as _load_row_details — ignore stale loads,
+        # but keyed on the WS table's own selection (see _selected_ws_req_id).
+        if self._selected_ws_req_id is not None and row_id != self._selected_ws_req_id:
             return
         self.call_after_refresh(self._load_ws_entry_details, entry)
 
@@ -1286,7 +1104,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         # Selection race guard (second layer) — skip drawing a stale entry
         # if the highlighted row changed after the async load finished.
         entry_id = entry.get("id")
-        if self._selected_req_id is not None and entry_id is not None and entry_id != self._selected_req_id:
+        if self._selected_ws_req_id is not None and entry_id is not None and entry_id != self._selected_ws_req_id:
             return
         from pentool.utils.parser import ParsedRequest
 
@@ -1325,7 +1143,14 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         col_name = _COL_NAMES[idx] if idx < len(_COL_NAMES) else ""
         if col_name:
             direction = "descending" if self._sort_reverse else "ascending"
-            event.data_table.sort(by=[(col_name, direction)])
+            # Use safe_sort with crash guard
+            if hasattr(event.data_table, "safe_sort"):
+                event.data_table.safe_sort(col_name, direction)
+            else:
+                try:
+                    event.data_table.sort(by=[(col_name, direction)])
+                except Exception:
+                    pass
             # Update column labels — show sort arrow on active column
             try:
                 for i, name in enumerate(_COL_NAMES):
@@ -1377,10 +1202,9 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             table = self.query_one("#request-list", DataTable)
             if not self._rows_cache:
                 return
-            from textual_fastdatatable import ArrowBackend
             import pentool.tui.screens.proxy.screen as _ps
             arrow = _ps._rows_to_arrow(self._rows_cache)
-            table.backend = ArrowBackend(arrow)
+            table.set_data(arrow)
             table._ordered_columns = None
             table._clear_caches()
             table._require_update_dimensions = True
@@ -1424,8 +1248,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         elif event.key == "ctrl+u":
             self._copy_selected_url()
             event.prevent_default()
-        elif event.key == "m":
+        elif event.key == "m" and not self._is_text_input_focused():
             self._show_context_menu_at_cursor()
+            event.prevent_default()
+        elif event.key == "shift+b":
+            self._open_in_lightpanda()
             event.prevent_default()
 
     def _show_context_menu_at_cursor(self) -> None:
@@ -1477,6 +1304,19 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             self.app.post_message(SendToTarget(parsed))  # type: ignore[attr-defined]
         except Exception:
             pass
+
+    def _open_in_lightpanda(self) -> None:
+        """Open selected URL in Lightpanda viewer modal."""
+        if self._selected_req_id is None:
+            return
+        self.run_worker(self._do_lightpanda())
+
+    async def _do_lightpanda(self) -> None:
+        parsed = await self._get_selected_parsed()
+        if parsed is None or not parsed.url:
+            return
+        from pentool.tui.dialogs.lightpanda_viewer import LightpandaViewer
+        self.app.push_screen(LightpandaViewer(parsed.url))
 
     def _copy_selected_url(self) -> None:
         if self._selected_req_id is None:
@@ -1685,13 +1525,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
     @on(ToolbarButton.Pressed, "#btn-show-comments")
     def on_btn_show_comments(self, event: ToolbarButton.Pressed) -> None:
         """Toggle: show only rows that have a comment.
-        Повторное нажатие сбрасывает фильтр и возвращает полную историю."""
+        A second press resets the filter and brings back the full history."""
         btn = event.button
         if "active" in btn.classes:
             btn.remove_class("active")
             btn.label = "📝 Show comments"
             self._filter_show_comments = False
-            # Сбрасываем и все фильтры FilterBar, чтобы вернуть полную историю
+            # Reset the FilterBar filters too, to bring back the full history.
             try:
                 fb = self.query_one("#filter-bar")
                 from pentool.tui.widgets.filter_bar import FilterBar
@@ -1708,221 +1548,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
 
     def action_load_history(self) -> None:
         self.run_worker(self._reload_table(self._current_filters))
-
-    def action_forward(self) -> None:
-        proxy = self._get_proxy()
-        if proxy is None or self._intercept_req is None:
-            return
-        req = self._intercept_req
-        try:
-            editor = self.query_one("#intercept-editor", TextArea)
-            modified = editor.text
-        except Exception:
-            modified = None
-        if modified is not None and self._intercept_show_special_chars:
-            try:
-                from pentool.tui.widgets.request_editor import decode_special_chars
-                modified = decode_special_chars(modified)
-            except Exception:
-                pass
-        # Display the sent request in the bottom-left panel
-        sent_text = modified if modified and modified.strip() else ""
-        try:
-            self.query_one("#intercept-sent-req", HttpView).load_raw_http(sent_text)
-        except Exception:
-            pass
-        # Clear the response panel — waiting for the server response
-        try:
-            self.query_one("#intercept-resp-viewer", HttpView).clear()
-        except Exception:
-            pass
-        proxy.forward(req.id, modified if modified and modified.strip() else None)
-        self._intercept_req = None
-        # If there are queued requests — show the next one immediately
-        if self._intercept_pending:
-            next_req = self._intercept_pending.pop(0)
-            self._display_intercept_req(next_req)
-        else:
-            # Disable buttons — response will arrive asynchronously via show_intercept_response
-            self._disable_intercept_buttons(hint="⏳ Forwarded — waiting for response…")
-
-    def action_drop(self) -> None:
-        proxy = self._get_proxy()
-        if proxy is None or self._intercept_req is None:
-            return
-        proxy.drop(self._intercept_req.id)
-        self._intercept_req = None
-        # If there are queued requests — show the next one immediately
-        if self._intercept_pending:
-            next_req = self._intercept_pending.pop(0)
-            self._display_intercept_req(next_req)
-            return
-        self._disable_intercept_buttons(hint="✖ Dropped")
-        # On Drop: clear the top editor and both bottom panels
-        try:
-            self.query_one("#intercept-editor", TextArea).load_text(
-                "(No requests waiting for intercept)"
-            )
-        except Exception:
-            pass
-        try:
-            self.query_one("#intercept-sent-req", HttpView).clear()
-        except Exception:
-            pass
-        try:
-            self.query_one("#intercept-resp-viewer", HttpView).clear()
-        except Exception:
-            pass
-
-    def _toggle_intercept_special_chars(self, btn: ToolbarButton) -> None:
-        """Toggle display of literal \\r\\n / \\n special chars in the Intercept editor."""
-        try:
-            from pentool.tui.widgets.request_editor import (
-                decode_special_chars,
-                visualize_special_chars,
-            )
-            editor = self.query_one("#intercept-editor", TextArea)
-        except Exception:
-            return
-        # Commit the current text before switching mode representation
-        current = editor.text
-        if self._intercept_show_special_chars:
-            # Currently showing literal escapes — decode back to raw control chars
-            decoded = decode_special_chars(current)
-            self._intercept_raw_full = decoded
-        else:
-            self._intercept_raw_full = current
-
-        self._intercept_show_special_chars = not self._intercept_show_special_chars
-        if self._intercept_show_special_chars:
-            btn.update("⏎ Special: ON")
-            btn.add_class("active")
-            editor.load_text(visualize_special_chars(self._intercept_raw_full))
-        else:
-            btn.update("⏎ Special: OFF")
-            btn.remove_class("active")
-            editor.load_text(self._intercept_raw_full)
-            self._apply_intercept_highlight(self._intercept_raw_full)
-
-    def _apply_intercept_highlight(self, raw: str) -> None:
-        """Apply HTTP header syntax highlighting directly on the (full-text) intercept editor."""
-        try:
-            from collections import defaultdict
-            from pentool.tui.widgets.request_editor import _build_http_highlights
-            editor = self.query_one("#intercept-editor", TextArea)
-            normalized = raw.replace("\r\n", "\n")
-            editor._highlights = defaultdict(list, _build_http_highlights(normalized))
-            editor._line_cache.clear()
-            editor.refresh()
-        except Exception:
-            pass
-
-    def _disable_intercept_buttons(self, hint: str = "") -> None:
-        """Disable Forward/Drop and update the hint."""
-        try:
-            self.query_one("#btn-forward", ToolbarButton).disabled = True
-            self.query_one("#btn-drop",    ToolbarButton).disabled = True
-        except Exception:
-            pass
-        if hint:
-            try:
-                self.query_one("#intercept-hint", Label).update(hint)
-            except Exception:
-                pass
-
-    def show_intercepted_request(self, req: InterceptedRequest) -> None:
-        """Called from app when a request is intercepted — displays it in the Intercept Tab.
-
-        If another request is already waiting (Forward/Drop not yet pressed),
-        the new request is queued. This way the user sees requests one at a time
-        and none are lost (the proxy correctly blocks each until resolved).
-        """
-        if self._intercept_req is not None:
-            # Already showing a request — queue the new one
-            self._intercept_pending.append(req)
-            try:
-                self.query_one("#intercept-hint", Label).update(
-                    f"⏸ {req.method} {req.url}  (+{len(self._intercept_pending)} queued)"
-                )
-            except Exception:
-                pass
-            return
-        self._display_intercept_req(req)
-
-    def _display_intercept_req(self, req: InterceptedRequest) -> None:
-        """Display a request in the Intercept Tab (used both for initial display and when moving to the next)."""
-        self._intercept_req = req
-        try:
-            from pentool.utils.parser import build_http_request
-            raw = build_http_request(req.to_parsed_request())
-        except Exception:
-            raw = f"{req.method} {req.url}\n\n(could not render request)"
-        self._intercept_raw_full = raw
-        try:
-            from pentool.tui.widgets.request_editor import visualize_special_chars
-            editor = self.query_one("#intercept-editor", TextArea)
-            if self._intercept_show_special_chars:
-                editor.load_text(visualize_special_chars(raw))
-            else:
-                editor.load_text(raw)
-                self._apply_intercept_highlight(raw)
-        except Exception:
-            pass
-        # Clear only the response panel — leave Sent Request as-is
-        # (it is updated only in action_forward/action_drop)
-        try:
-            self.query_one("#intercept-resp-viewer", HttpView).clear()
-        except Exception:
-            pass
-        try:
-            self.query_one("#btn-forward", ToolbarButton).disabled = False
-            self.query_one("#btn-drop",    ToolbarButton).disabled = False
-        except Exception:
-            pass
-        queued = len(self._intercept_pending)
-        hint = f"⏸ Intercepted: {req.method} {req.url}"
-        if queued:
-            hint += f"  (+{queued} queued)"
-        try:
-            self.query_one("#intercept-hint", Label).update(hint)
-        except Exception:
-            pass
-        # Switch to the Intercept tab
-        try:
-            tabs = self.query_one("#proxy-subtabs", TabbedContent)
-            tabs.active = "tab-intercept"
-        except Exception:
-            pass
-
-    def show_intercept_response(self, req: InterceptedRequest) -> None:
-        if req.response is None:
-            return
-        try:
-            resp = req.response
-            status_line = f"HTTP/1.1 {resp.status} {resp.reason}"
-            headers = "\r\n".join(f"{k}: {v}" for k, v in resp.headers.items())
-            body = resp.body or ""
-            raw = f"{status_line}\r\n{headers}\r\n\r\n{body}"
-            self.query_one("#intercept-resp-viewer", HttpView).load_raw_http(raw)
-        except Exception:
-            pass
-        try:
-            self.query_one("#intercept-hint", Label).update(
-                f"✓ Response: {req.response.status} — {req.method} {req.url}"
-            )
-        except Exception:
-            pass
-
-    def action_toggle_intercept(self) -> None:
-        self.app.action_toggle_intercept()  # type: ignore[attr-defined]
-        self._sync_intercept_button()
-        # When intercept is disabled — reset current request and queue,
-        # otherwise all queued requests will pop up on the next enable
-        proxy = self._get_proxy()
-        if proxy and not proxy.intercept_enabled:
-            self._intercept_req = None
-            self._intercept_pending.clear()
-            self._disable_intercept_buttons(hint="(Intercept disabled)")
 
     def action_toggle_proxy(self) -> None:
         proxy = self._get_proxy()
@@ -1957,6 +1582,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         except Exception:
             pass
         self._selected_req_id = None
+        self._selected_ws_req_id = None
 
     async def _do_clear_table(self) -> None:
         if self._proxy_service is not None and self._proxy_service.is_storage_ready():
@@ -1977,84 +1603,15 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         self._history_oldest_offset = 0
         try:
             table = self.query_one("#request-list", DataTable)
-            table.backend = ArrowBackend(_make_empty_table())
+            table.clear_data()
             table.refresh()
         except Exception:
             pass
         self._update_history_count_label()
 
     def action_open_scope(self) -> None:
-        proxy = self._get_proxy()
-        current = proxy.scope if proxy else []
-
-        def _norm_host(pattern: str) -> str:
-            """Strip a wildcard prefix ('*.example.com' -> 'example.com') so
-            the plain host can be sent to Target's per-host in_scope flag.
-            Target's site map is keyed by concrete hostnames, not patterns —
-            a wildcard entry has no single matching node to flag/unflag, so
-            we sync the base domain it implies. Best-effort only."""
-            p = pattern.strip().lstrip("*.")
-            return p
-
-        from pentool.tui.dialogs.scope_dialog import ScopeDialog
-
-        def _apply(result: list[str] | None) -> None:
-            if result is not None and proxy is not None:
-                old_scope = set(current or [])
-                new_scope = set(result)
-                proxy.set_scope(result)
-                # Persist scope per-project (DB) — this is the source of
-                # truth restored on project switch (see _load_scope_setting).
-                self.run_worker(self._save_scope_setting(result))
-                # Also mirror into the global Config so a brand-new project
-                # (no project_settings row yet) starts from the last-used
-                # scope instead of empty — see _load_scope_setting fallback.
-                try:
-                    from pentool.core.config import get_config
-                    cfg = get_config()
-                    cfg.scope = list(result)
-                    cfg.save()
-                except Exception as e:
-                    logger.warning("action_open_scope: failed to save scope to config: %s", e)
-                # Mirror the diff into TargetScreen's in_scope flags — the
-                # same SyncScopeToTarget message the context-menu "Add/Remove
-                # to Scope" actions already use. Without this, editing Scope
-                # via this dialog (bulk text edit) never reached Target,
-                # while the per-host context-menu action did — an
-                # inconsistency the user could see: the ★ marker in Target
-                # updated for one path but not the other.
-                for pattern in new_scope - old_scope:
-                    host = _norm_host(pattern)
-                    if host:
-                        self._sync_target_host_scope(host, True)
-                for pattern in old_scope - new_scope:
-                    host = _norm_host(pattern)
-                    if host:
-                        self._sync_target_host_scope(host, False)
-                # Update ScopeToggle state in FilterBar
-                scope_toggle_was_active = False
-                try:
-                    from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
-                    filter_bar = self.query_one("#filter-bar", FilterBar)
-                    st = filter_bar.query_one("#fb-scope", ScopeToggle)
-                    scope_toggle_was_active = st.active
-                    st.set_scope_empty(not bool(result))
-                except Exception:
-                    pass
-                # If ScopeToggle was already active — reload the table with the new scope
-                if scope_toggle_was_active and result:
-                    self.run_worker(self._reload_table({"scope_only": True}))
-                elif not result:
-                    # Scope cleared — remove filter and show everything
-                    self.run_worker(self._reload_table(None))
-                if result is not None:
-                    n = len(result)
-                    self.app.notify(
-                        f"Scope updated: {n} host{'s' if n != 1 else ''}",
-                        timeout=3,
-                    )
-
-        self.app.push_screen(ScopeDialog(current), _apply)
+        from pentool.tui.screens.proxy.scope_handler import open_scope as _scope_open
+        self.run_worker(_scope_open(self))
 
     def action_toggle_enforce_scope(self) -> None:
         """Toggle the 'Skip out-of-scope' capture filter (per-project, persisted to DB)."""
@@ -2094,54 +1651,23 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             )
 
     async def _save_enforce_scope_setting(self, enabled: bool) -> None:
-        try:
-            from pentool.core.db_schema import set_project_setting
-            db_path = self._get_db_path()
-            if db_path:
-                await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
-        except Exception as exc:
-            logger.debug("_save_enforce_scope_setting: %s", exc)
-
-    async def _load_enforce_scope_setting(self) -> None:
-        """Load the persisted 'Skip out-of-scope' flag for the current project's DB.
-
-        Called after a project switch (and on initial mount) — the flag is
-        stored per-project so it doesn't leak between different projects the
-        way the global Scope host list used to (see _load_scope_setting,
-        which now fixes that too).
-        """
-        proxy = self._get_proxy()
-        if proxy is None:
-            return
-        try:
-            from pentool.core.db_schema import get_project_setting
-            db_path = self._get_db_path()
-            value = await get_project_setting(db_path, "proxy.enforce_scope", "0") if db_path else "0"
-            enabled = value == "1"
-        except Exception as exc:
-            logger.debug("_load_enforce_scope_setting: %s", exc)
-            enabled = False
-        proxy.set_enforce_scope(enabled)
-        # Pass `enabled` explicitly — same rationale as in
-        # action_toggle_enforce_scope: set_enforce_scope() defers the actual
-        # attribute write onto the proxy's own event loop when it's running,
-        # so re-reading proxy.enforce_scope right after calling it could
-        # still observe the pre-call value.
-        self._sync_enforce_scope_button(enabled)
+        from pentool.tui.screens.proxy.scope_handler import save_enforce_scope_setting
+        await save_enforce_scope_setting(self, enabled)
 
     async def _save_scope_setting(self, hosts: list[str]) -> None:
-        """Persist the Scope host list into the current project's DB.
+        from pentool.tui.screens.proxy.scope_handler import save_scope_setting
+        await save_scope_setting(self, hosts)
 
-        Mirrors _save_enforce_scope_setting — before this, the host list
-        was only ever saved to the GLOBAL ~/.config/pentool/config.yaml
-        (Config.scope), never per-project. That meant reopening an older
-        project after working in a different one restored the wrong scope
-        (whatever Config.scope happened to hold last), which both left the
-        '★ Scope' filter button looking stuck/inactive (ScopeToggle synced
-        off Config.scope, not proxy.scope) and made "Skip out-of-scope"
-        appear to do nothing (enforce_scope=True but proxy.scope didn't
-        match what the user actually configured for THIS project).
-        """
+    async def _load_scope_setting(self, is_new: bool = False) -> None:
+        from pentool.tui.screens.proxy.scope_handler import load_scope_setting
+        await load_scope_setting(self, is_new)
+
+    async def _load_enforce_scope_setting(self) -> None:
+        from pentool.tui.screens.proxy.scope_handler import load_enforce_scope_setting
+        await load_enforce_scope_setting(self)
+
+    async def _save_scope_setting(self, hosts: list[str]) -> None:
+        """Save scope host list per-project (was global Config only, broke project switching)."""
         try:
             import json
             from pentool.core.db_schema import set_project_setting
@@ -2151,55 +1677,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         except Exception as exc:
             logger.debug("_save_scope_setting: %s", exc)
 
-    async def _load_scope_setting(self) -> None:
-        """Load the persisted Scope host list for the current project's DB.
-
-        Called after a project switch (and on initial mount), alongside
-        _load_enforce_scope_setting — same per-project rationale. Falls
-        back to the global Config.scope only if this project's DB has no
-        saved scope yet (e.g. a DB created before this fix, or a brand-new
-        project that hasn't had Scope configured), so behavior for
-        pre-existing single-project setups doesn't regress.
-        """
-        proxy = self._get_proxy()
-        if proxy is None:
-            return
-        hosts: list[str] | None = None
-        try:
-            import json
-            from pentool.core.db_schema import get_project_setting
-            db_path = self._get_db_path()
-            raw = await get_project_setting(db_path, "proxy.scope", None) if db_path else None
-            if raw is not None:
-                hosts = json.loads(raw)
-        except Exception as exc:
-            logger.debug("_load_scope_setting: %s", exc)
-            hosts = None
-        if hosts is None:
-            try:
-                from pentool.core.config import get_config
-                hosts = list(get_config().scope)
-            except Exception:
-                hosts = []
-        proxy.set_scope(hosts)
-        try:
-            from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
-            filter_bar = self.query_one("#filter-bar", FilterBar)
-            filter_bar.query_one("#fb-scope", ScopeToggle).set_scope_empty(not bool(hosts))
-        except Exception:
-            pass
-
     def _sync_enforce_scope_button(self, enabled: bool | None = None) -> None:
-        """Sync the '☐/☑ Skip out-of-scope' button label/class.
-
-        `enabled` lets a caller that just called `proxy.set_enforce_scope()`
-        pass the value it's setting explicitly, instead of this method
-        re-reading `proxy.enforce_scope` — which may not have been written
-        yet if the proxy loop is running (see set_enforce_scope's
-        call_soon_threadsafe). Callers that run after the write is known to
-        have landed (on_mount, after awaiting _load_enforce_scope_setting)
-        can omit it and this falls back to reading the live value.
-        """
+        """Sync Skip-out-of-scope button (enabled param avoids reading stale proxy attribute)."""
         proxy = self._get_proxy()
         if enabled is None:
             enabled = bool(proxy and proxy.enforce_scope)
@@ -2246,22 +1725,6 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             btn.remove_class("active")
             btn.add_class("inactive")
 
-    def _sync_intercept_button(self) -> None:
-        proxy = self._get_proxy()
-        try:
-            btn = self.query_one("#btn-intercept", ToolbarButton)
-        except Exception:
-            return
-        enabled = proxy and proxy.intercept_enabled
-        if enabled:
-            btn.label = "● Intercept"
-            btn.remove_class("inactive")
-            btn.add_class("active")
-        else:
-            btn.label = "○ Intercept"
-            btn.remove_class("active")
-            btn.add_class("inactive")
-
     def update_proxy_label(self, running: bool, port: int) -> None:
         self._sync_proxy_button()
 
@@ -2297,7 +1760,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             pass
         return False
 
-    def on__proxy_data_table_context_menu_request(self, event: _ProxyDataTable.ContextMenuRequest) -> None:
+    def on__proxy_data_table_context_menu_request(self, event: ProxyDataTable.ContextMenuRequest) -> None:
         """Handle a context menu request from the DataTable (Ctrl+click or right-click)."""
         try:
             table = self.query_one("#request-list", DataTable)
@@ -2522,36 +1985,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
         req_id = self._selected_req_id
         if not req_id:
             return
-        from textual.screen import ModalScreen
-
-        color_options = self._COLOR_OPTIONS
-
-        class ColorPickScreen(ModalScreen):
-            DEFAULT_CSS = """
-            ColorPickScreen > Vertical {
-                width: 30;
-                height: auto;
-                border: round $primary;
-                padding: 1 2;
-                background: $panel;
-            }
-            ColorPickScreen Button { margin: 0; width: 100%; }
-            """
-
-            def compose(self) -> ComposeResult:
-                with Vertical():
-                    yield Label("Mark color:")
-                    for label, val in color_options:
-                        btn = Button(label, id=f"col-{val or 'clear'}")
-                        yield btn
-
-            def on_button_pressed(self, event: Button.Pressed) -> None:
-                bid = event.button.id or ""
-                if bid.startswith("col-"):
-                    val = bid[4:]
-                    self.dismiss("" if val == "clear" else val)
-                else:
-                    self.dismiss(None)
+        from pentool.tui.dialogs.color_pick import ColorPickScreen
 
         def _on_color(color: str | None) -> None:
             if color is not None:
@@ -2584,17 +2018,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, Widget):
             logger.error("Failed to mark request: %s", exc)
 
     def _comment_dialog(self, initial_comment: str | None = None) -> None:
-        """Show a modal to view/edit the comment for the selected request.
-
-        Replaces the old always-visible Comment input field below the
-        Request panel — comments are now edited on demand via context menu
-        or by clicking the 💬 marker in the list, keeping the detail panel
-        uncluttered.
-
-        `initial_comment` lets callers (e.g. the row-click 💬 handler) pass
-        the value straight from the synchronous row cache; falls back to
-        `self._current_comment`, populated by the async detail-load worker.
-        """
+        """Show comment edit modal (on-demand, context-menu or click)."""
         req_id = self._selected_req_id
         if not req_id:
             return

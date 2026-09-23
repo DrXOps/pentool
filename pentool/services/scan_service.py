@@ -22,6 +22,7 @@ from pentool.core.logging import get_logger
 from pentool.modules.spider import DEFAULT_MAX_DEPTH, DEFAULT_MAX_PAGES
 from pentool.services.base_service import BaseService
 from pentool.utils.auth_headers import extract_auth_headers
+from pentool.utils.lightpanda import is_lightpanda_available
 
 logger = get_logger(__name__)
 
@@ -47,12 +48,27 @@ class ScanConfig:
     # tab showing every finding ever saved to the project DB.
     scan_tab_uid: str = ""
     scan_session_id: str = ""
+    # Optional automatic session-login (Этап 2.3). When True and `login` is
+    # set, ScanService tries to establish a cookie session against the first
+    # target (CSRF-protected form, e.g. DVWA) before the active scan, and
+    # reuses it via the shared _auth_headers. Off by default — the crawler
+    # should never silently log into third-party sites without an explicit opt-in.
+    auto_login: bool = False
+    login: tuple[str, str] | None = None  # (username, password)
+    # Hybrid JS crawl (Этап 2.4): when True and Lightpanda is installed, if the
+    # static crawl only reaches the entry page, re-crawl with js_render to pull
+    # client-side-built links (levels 3+). Off by default.
+    hybrid_js: bool = False
     # Called once, before active-scan work starts, with a rough estimate of
     # the total number of HTTP requests the scan will make — drives a
     # progress bar off request volume instead of (req, point, check) task
     # count, since one pipeline-check task (e.g. XSS) can be hundreds of
     # real requests.
     on_total_estimate: Callable[[int], None] | None = None
+    # Enable parallel AI assistant (endpoint discovery, WAF bypass).
+    use_ai: bool = False
+    # Called when the AI worker performs an action (bypass, discovery, ...)
+    on_ai_action: Callable[[], None] | None = None
 
 
 class ScanService(BaseService):
@@ -77,13 +93,18 @@ class ScanService(BaseService):
         self._scanner = scanner_api
         self._spider = spider_api
         self._stop_requested = False
+        # Auth headers (Cookie/Authorization) shared across phases — the
+        # crawler may establish/learn a session that the active scan must
+        # reuse (DVWA would redirect to /login.php for unauthenticated probes).
+        self._auth_headers: dict = {}
 
     # ── public API ─────────────────────────────────────────────────────────────
 
     def request_stop(self) -> None:
         """Request stop (thread-safe)."""
         self._stop_requested = True
-        self._spider.stop()
+        if self._spider is not None:
+            self._spider.stop()
         try:
             self._scanner.request_active_stop()
         except Exception:
@@ -97,6 +118,15 @@ class ScanService(BaseService):
             source="scanner",
         ))
 
+        # Session baseline: if seed requests carry auth headers (Cookie/
+        # Authorization), seed them so the ACTIVE phase can reuse them even
+        # before/without a crawl (e.g. resume). _crawl_target() may override
+        # this with the headers the crawler actually established.
+        from pentool.utils.auth_headers import extract_auth_headers as _extract_auth
+        self._auth_headers = {}
+        if config.seed_requests and config.seed_requests[0].headers:
+            self._auth_headers = _extract_auth(dict(config.seed_requests[0].headers))
+
         all_scan_targets, all_forms = await self._collect_targets(config)
         if self._stop_requested:
             self._log("[yellow]STOP[/yellow] Scan stopped after crawl.")
@@ -108,10 +138,20 @@ class ScanService(BaseService):
             f"[cyan]CRAWL[/cyan] Total: [bold]{len(all_scan_targets)}[/bold] URLs + "
             f"[bold]{len(all_forms)}[/bold] POST forms to test"
         )
+        if self._auth_headers:
+            self._log(f"[dim]AUTH[/dim] Reusing {len(self._auth_headers)} auth header(s) in active scan")
 
         self._emit(ScanProgressEvent(done=0, total=len(all_scan_targets), scanning=True, source="scanner"))
 
-        all_findings = await self._run_active_scan(config, all_scan_targets)
+        # Optional auto-login (Этап 2.3): if the caller opted in with creds and
+        # the crawl never learned a session, try to establish one so the active
+        # scan runs against a logged-in context (not redirected to /login.php).
+        if config.auto_login and config.login and not self._auth_headers:
+            await self._try_auto_login(config)
+
+        all_findings = await self._run_active_scan(
+            config, all_scan_targets, self._auth_headers, post_forms=all_forms,
+        )
 
         self._emit(ScanFinished(
             total_findings=len(all_findings),
@@ -137,14 +177,35 @@ class ScanService(BaseService):
             for base_url in config.targets:
                 if self._stop_requested:
                     break
+                # Если Target уже краулил этот хост — используем его результаты
+                from pentool.api.spider_api import SpiderAPI
+                if SpiderAPI.has_cached_result(base_url):
+                    cached_pages = SpiderAPI.get_cached_pages(base_url)
+                    self._log(
+                        f"[dim]Spider: using cached pages from Target crawl "
+                        f"({len(cached_pages)} pages)[/dim]"
+                    )
+                    for page_url in cached_pages:
+                        if page_url not in all_scan_targets:
+                            all_scan_targets.append(page_url)
+                    continue  # skip fresh crawl
                 await self._crawl_target(base_url, config, all_scan_targets, all_forms)
 
         return all_scan_targets, all_forms
 
+    # Cap how many distinct parameter-value variants we keep for one path
+    # template. `/vulnerabilities/sqli/?id=1` and `?id=2` collapse to the SAME
+    # template, but the different values may reflect differently in the
+    # active scan — keeping a small bundle (not just one representative)
+    # preserves that without an unbounded request explosion.
+    _MAX_VARIANTS_PER_TEMPLATE = 5
+
     def _filter_targets(self, all_scan_targets: list[str]) -> list[str]:
-        """Phase 2: remove static assets and deduplicate by URL template."""
+        """Phase 2: remove static assets and deduplicate by URL template,
+        keeping up to _MAX_VARIANTS_PER_TEMPLATE distinct URLs per template."""
         from pentool.modules.scanner.helpers import is_scannable_url, path_template
-        seen_templates: set[str] = set()
+        seen_templates: dict[str, int] = {}
+        seen_exact: set[str] = set()
         unique: list[str] = []
         skipped_static = 0
         skipped_dedup = 0
@@ -153,26 +214,78 @@ class ScanService(BaseService):
             if not is_scannable_url(t):
                 skipped_static += 1
                 continue
-            tmpl = path_template(t)
-            if tmpl in seen_templates:
+            # Exact duplicates are always collapsed regardless of template.
+            if t in seen_exact:
                 skipped_dedup += 1
                 continue
-            seen_templates.add(tmpl)
+            tmpl = path_template(t)
+            count = seen_templates.get(tmpl, 0)
+            if count >= self._MAX_VARIANTS_PER_TEMPLATE:
+                skipped_dedup += 1
+                continue
+            seen_exact.add(t)
+            seen_templates[tmpl] = count + 1
             unique.append(t)
 
         if skipped_static or skipped_dedup:
             self._log(
                 f"[dim]FILTER[/dim] Skipped [bold]{skipped_static}[/bold] static, "
-                f"[bold]{skipped_dedup}[/bold] duplicate templates"
+                f"[bold]{skipped_dedup}[/bold] duplicate templates (cap "
+                f"{self._MAX_VARIANTS_PER_TEMPLATE} variants/template)"
             )
         return unique
 
+    async def _try_auto_login(self, config: ScanConfig) -> None:
+        """Best-effort session login against the first target (Этап 2.3).
+
+        Uses pentool.utils.auth_login.build_session_headers() to submit a
+        CSRF-protected login form, then stores the resulting Cookie in
+        self._auth_headers so the active phase reuses it. Off by default and
+        only runs when the crawl didn't already learn a session.
+        """
+        if not config.targets or not config.login:
+            return
+        try:
+            from pentool.utils.auth_login import build_session_headers
+
+            username, password = config.login
+            base = config.targets[0]
+            headers = await build_session_headers(
+                url=base, username=username, password=password, use_cache=True,
+            )
+            if headers:
+                self._auth_headers = headers
+                self._log(
+                    f"[dim]AUTH[/dim] auto-login established session for {base} "
+                    f"({len(headers)} header(s))"
+                )
+        except Exception as exc:
+            self._log(f"[yellow]AUTH[/yellow] auto-login failed: {exc}")
+
+    # Action-URL substrings that signal a state-mutating/security-relevant
+    # endpoint. Auto-submitting these as POST could log the user out, delete
+    # data, or hit admin panels — so ScanService skips them (Этап 2.6 safety).
+    _RISKY_FORM_MARKERS = (
+        "/logout", "/signout", "/delete", "/remove", "/drop", "/purge",
+        "/reset", "/admin", "/truncate",
+    )
+
+    @staticmethod
+    def _is_risky_form_action(action_url: str) -> bool:
+        path = urlparse(action_url).path.lower()
+        return any(marker in path for marker in ScanService._RISKY_FORM_MARKERS)
+
     async def _run_active_scan(
-        self, config: ScanConfig, all_scan_targets: list[str]
+        self, config: ScanConfig, all_scan_targets: list[str], auth_headers: dict | None = None,
+        post_forms: list | None = None,
     ) -> list[Finding]:
         """Phase 3: run active checks on collected targets, return findings."""
-        from pentool.utils.http_client import HTTPClient
         from pentool.utils.parser import ParsedRequest
+
+        # Reuse any auth/session headers the crawl established, so active
+        # probes (and the TechFingerprinter baseline) target the SAME
+        # authenticated context instead of being redirected to a login page.
+        auth_headers = auth_headers or {}
 
         findings: list[Finding] = []
 
@@ -198,11 +311,9 @@ class ScanService(BaseService):
         _on_total_estimate = getattr(config, "on_total_estimate", None)
 
         from pentool.core.config import get_config
-        cfg = get_config()
-        http_client = HTTPClient(
-            timeout=cfg.request_timeout,
-            follow_redirects=True,
-            verify_ssl=cfg.verify_ssl,
+        from pentool.utils.http_client import get_shared_http_client
+        http_client = get_shared_http_client(
+            follow_redirects=True, extra_headers=auth_headers, cfg=get_config()
         )
         self._scanner.configure_engine(
             http_client=http_client,
@@ -212,23 +323,131 @@ class ScanService(BaseService):
 
         try:
             if config.seed_requests:
-                base_headers = dict(config.seed_requests[0].headers or {})
                 crawled_reqs = [
-                    ParsedRequest(method="GET", url=url, headers=base_headers, body="")
+                    ParsedRequest(method="GET", url=url, headers=auth_headers, body="")
                     for url in all_scan_targets
                     if not any(sr.url == url for sr in config.seed_requests)
                 ]
                 all_reqs = list(config.seed_requests) + crawled_reqs
             else:
                 all_reqs = [
-                    ParsedRequest(method="GET", url=url, headers={}, body="")
+                    ParsedRequest(method="GET", url=url, headers=auth_headers, body="")
                     for url in all_scan_targets
                 ]
+
+            # Auto-submit POST forms (Этап 2.6) with default field values so
+            # POST-only endpoints (e.g. sqli_blind/exec/upload) are reached.
+            # Skip dangerous actions (/logout, /delete, /admin, ...) to avoid
+            # real side-effects.
+            _form_reqs: list = []
+            for form in post_forms or []:
+                try:
+                    action = getattr(form, "action", "")
+                    fields = getattr(form, "fields", []) or []
+                    if not action.startswith("http") or not fields:
+                        continue
+                    if self._is_risky_form_action(action):
+                        self._log(f"[dim]FORM[/dim] skip POST {action} (destructive action)")
+                        continue
+                    body = urlencode([(f.name, f.value or "test") for f in fields])
+                    _form_reqs.append(ParsedRequest(
+                        method="POST", url=action, headers=auth_headers, body=body,
+                    ))
+                except Exception:
+                    continue
+            if _form_reqs:
+                all_reqs = all_reqs + _form_reqs
 
             self._log(
                 f"[bold green]SCAN[/bold green] Running active checks on "
                 f"[bold]{len(all_reqs)}[/bold] requests…"
             )
+
+            # ── Fingerprint capture for AIWorker ─────────────────────────────
+            # The engine runs TechFingerprinter before the worker pool. We
+            # catch it here so the parallel AI worker knows the WAF profile.
+            _collected_tech: list | None = []
+            _tech_ready = asyncio.Event()  # AIWorker ждёт этот Event перед WAF-шагами
+
+            def _on_fingerprint(tp) -> None:
+                _collected_tech.clear()
+                _collected_tech.append(tp)
+                _tech_ready.set()  # сигнал AIWorker
+
+            logger.info(
+                "ACTIVE_SCAN: targets=%d reqs=%d checks=%s threads=%d delay=%.2fs use_ai=%s resume=%s",
+                len(all_scan_targets), len(all_reqs),
+                config.check_names or "all", config.threads,
+                config.delay_sec, getattr(config, "use_ai", False),
+                config.resume,
+            )
+
+            # ── Parallel AIWorker ────────────────────────────────────────────
+            # Запускается ДО active-скан, передаёт сгенерированные пейлоады
+            # через очередь — движок забирает их в рантайме.
+            ai_payload_queue: asyncio.Queue | None = None
+            waf_bypass_queue: asyncio.Queue | None = None
+            ai_discovered_urls = []
+            ai_task = None
+            if getattr(config, "use_ai", False):
+                from pentool.services.ai.factory import ensure_backend as _ensure_ab
+                _backend = await _ensure_ab(_force=True)
+                logger.info("AIWORKER: prepare use_ai=True backend=%s", _backend)
+                if _backend is not None:
+                    try:
+                        from pentool.modules.scanner.ai_worker import AIWorker
+
+                        ai_payload_queue = asyncio.Queue()
+                        waf_bypass_queue = asyncio.Queue()
+
+                        def _ai_log(msg: str) -> None:
+                            self._log(msg)
+
+                        def _ai_action() -> None:
+                            _on_ai_action = getattr(config, "on_ai_action", None)
+                            if _on_ai_action:
+                                _on_ai_action()
+
+                        # AIWorker found a new endpoint → re-crawl + scan
+                        _discovered_for_scan: list[str] = []
+
+                        async def _on_ai_endpoint(url: str) -> None:
+                            if url in _discovered_for_scan:
+                                return
+                            _discovered_for_scan.append(url)
+                            self._log(f"[dim]AI endpoint: {url} — crawling[/dim]")
+                            try:
+                                extra_targets: list[str] = []
+                                extra_forms: list = []
+                                await self._crawl_target(
+                                    url, config, extra_targets, extra_forms
+                                )
+                                if extra_targets:
+                                    self._log(
+                                        f"[green]AI: crawled {len(extra_targets)} page(s)"
+                                        f" from {url}[/green]"
+                                    )
+                            except Exception as exc:
+                                logger.debug("AI endpoint crawl error: %s", exc)
+
+                        worker = AIWorker(
+                            target_urls=all_scan_targets,
+                            on_log=_ai_log,
+                            on_ai_action=_ai_action,
+                            on_endpoint=_on_ai_endpoint,
+                            tech_profile=_collected_tech[0] if _collected_tech else None,
+                            payload_queue=ai_payload_queue,
+                            tech_ready_event=_tech_ready,
+                            shared_techref=_collected_tech,
+                        )
+                        worker._waf_bypass_queue = waf_bypass_queue
+                        ai_task = asyncio.create_task(worker.run())
+                        logger.info("AIWORKER: task created")
+                    except Exception as exc:
+                        logger.warning("AIWorker init failed: %s", exc)
+                        self._log(f"[red]AIWorker init error: {exc}[/red]")
+                else:
+                    logger.info("AIWORKER: skipped — backend not available")
 
             active_findings = await self._scanner.run_active_on_requests(
                 seed_requests=all_reqs,
@@ -239,7 +458,28 @@ class ScanService(BaseService):
                 on_request_sent=_on_request_sent,
                 resume=config.resume,
                 on_total_estimate=_on_total_estimate,
+                on_fingerprint=_on_fingerprint,
+                ai_payload_queue=ai_payload_queue,
+                waf_bypass_queue=waf_bypass_queue,
             )
+
+            # После скана — дожидаемся AIWorker (если ещё не finished)
+            if ai_task is not None:
+                try:
+                    ai_discovered_urls = await asyncio.wait_for(
+                        ai_task, timeout=30.0
+                    ) or []
+                    logger.info("AIWORKER: done discovered=%d", len(ai_discovered_urls))
+                except asyncio.TimeoutError:
+                    ai_task.cancel()
+                    logger.warning("AIWORKER: timed out after 5s, cancelled")
+                except Exception as exc:
+                    logger.warning("AIWORKER: result error: %s", exc)
+                if ai_discovered_urls:
+                    self._log(
+                        f"[green]AI: added {len(ai_discovered_urls)} "
+                        f"discovered URL(s) to scan results[/green]"
+                    )
             for f in active_findings:
                 f.scan_tab_uid = config.scan_tab_uid
                 f.scan_session_id = config.scan_session_id
@@ -281,6 +521,58 @@ class ScanService(BaseService):
             result = await self._spider.crawl(
                 base_url, extra_headers=auth_headers, db_path=config.db_path,
             )
+            # Guard against an unexpected return shape (older spiders could
+            # return a bare list instead of a SpiderResult). Fail silently but
+            # stop here — a crawl returning a list has no pages/endpoints to use.
+            if not hasattr(result, "pages"):
+                logger.warning(
+                    "ScanService._crawl_target: unexpected crawl return type %s — skipping target",
+                    type(result).__name__,
+                )
+                return
+            # Carry the headers the crawler actually used (Proxy-discovered
+            # session + seed) into the active phase via _auth_headers.
+            if getattr(result, "auth_headers", None):
+                self._auth_headers = dict(result.auth_headers)
+
+            # Hybrid JS crawl (Этап 2.4): when the caller opted in (hybrid_js)
+            # and a JS engine (Lightpanda) is available, if the static crawl
+            # surfaced almost nothing (only reached the entry page — typical
+            # for a JS/SPA app whose level-2/3 links are built client-side),
+            # re-crawl with js_render to catch them. Graceful: no-ops if no
+            # engine is installed. Off by default so scans stay
+            # deterministic/fast unless the user explicitly wants JS recovery.
+            if (
+                getattr(config, "hybrid_js", False)
+                and is_lightpanda_available()
+                and not self._stop_requested
+                and len(getattr(result, "pages", [])) < 2
+            ):
+                try:
+                    from pentool.api.spider_api import SpiderAPI, SpiderConfig
+
+                    js_spider = SpiderAPI(config=SpiderConfig(js_render=True))
+                    js_result = await js_spider.crawl(
+                        base_url, extra_headers=auth_headers, db_path=config.db_path,
+                    )
+                    if js_result and js_result.pages:
+                        self._log(
+                            f"[dim]JS[/dim] hybrid crawl recovered "
+                            f"{len(js_result.pages)} extra page(s) from {base_url}"
+                        )
+                        result.pages = list(dict.fromkeys(
+                            list(result.pages) + list(js_result.pages)
+                        ))
+                        result.endpoints = list(result.endpoints) + [
+                            e for e in js_result.endpoints
+                            if not any(x.url == e.url for x in result.endpoints)
+                        ]
+                        # JS crawl may have learned a session too.
+                        if getattr(js_result, "auth_headers", None):
+                            self._auth_headers = dict(js_result.auth_headers)
+                except Exception as exc:
+                    self._log(f"[dim]JS crawl warn:[/dim] {exc}")
+
             base_host = urlparse(base_url).netloc
 
             self._log(

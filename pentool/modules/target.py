@@ -60,17 +60,7 @@ class SiteNode:
 
 
 class SiteMap(BaseSqliteStorage):
-    """Target tree, automatically populated from proxy traffic.
-
-    Connection lifecycle: inherits `BaseSqliteStorage` (see
-    pentool/storage/base_sqlite_storage.py). `save()`/`load()` open ONE
-    persistent aiosqlite connection lazily on first use (`ensure_open()`)
-    and reuse it for the object's lifetime instead of opening/closing a
-    fresh connection via `core.db_schema.get_db()` on every call — the same
-    consolidation already applied to HttpStorage and IntruderStorage.
-    Like those, `ensure_open()` returns False (safe no-op) when `db_path`
-    is falsy.
-    """
+    """Target tree from proxy traffic (lazy persistent SQLite connection)."""
 
     def __init__(self, db_path: str) -> None:
         super().__init__(db_path=db_path)
@@ -167,10 +157,23 @@ class SiteMap(BaseSqliteStorage):
             )
 
     def get_tree(self) -> dict[str, list[SiteNode]]:
-        return {
+        # Start with hosts that have real traffic (nodes registered via add_request).
+        tree = {
             host: sorted(paths.values(), key=lambda n: n.path)
             for host, paths in self._nodes.items()
         }
+        # Include scope-only hosts that have NO traffic node yet. set_in_scope()
+        # tracks these in _scope_hosts independently of _nodes, but get_tree()
+        # previously omitted them — so a host added to scope from the Proxy
+        # history never appeared in the Target tree ("scope didn't sync").
+        # Only emit a bare (empty) host when no existing node shares its
+        # normalized host, so host:port nodes aren't duplicated.
+        for host in self._scope_hosts:
+            if any(self._norm_host(h) == host for h in self._nodes):
+                continue
+            if host not in tree:
+                tree[host] = []
+        return tree
 
     def get_hosts(self) -> list[str]:
         return sorted(self._nodes.keys())
@@ -189,15 +192,7 @@ class SiteMap(BaseSqliteStorage):
         return sum(n.request_count for n in self._nodes.get(host, {}).values())
 
     def set_in_scope(self, host: str, in_scope: bool) -> None:
-        """Include/exclude a host from Scope.
-
-        Tracks the (normalized, port-stripped) host in `_scope_hosts`
-        independently of whether a matching node already exists in
-        `_nodes` — a host added to scope before any traffic for it has
-        been seen (or seen under a different host:port key) is still
-        remembered and will be applied to any node for that host,
-        present now or added later via add_request().
-        """
+        """Set scope status for host (tracked in _scope_hosts independently of _nodes)."""
         norm = self._norm_host(host)
         if in_scope:
             self._scope_hosts.add(norm)

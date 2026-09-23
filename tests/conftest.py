@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 
-from pentool.core.config import Config, set_config
+from pentool.core.config import Config, override_config
 from pentool.core.db_schema import init_db
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
@@ -66,6 +66,26 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_scanner)
 
 
+@pytest.fixture(autouse=True)
+def _pin_clean_session_license():
+    """Deterministic license state for every test regardless of file order.
+
+    `pentool.core.license._session_license` is a process-global module cache.
+    Some suites (scan_engine_resume, ssti, xxe, jwt_none, rce, ...) force a
+    PRO session; others (test_license) reset it to free. Without a central
+    reset, a suite that leaves the cache set could leak that value into a
+    later file and change its expectations — a cross-file race. This autouse
+    fixture pins the cache to a clean `None` (free) start before EVERY test;
+    any suite that needs PRO sets it itself via its own autouse fixture.
+    """
+    import pentool.core.license as lic_mod
+
+    saved = lic_mod._session_license
+    lic_mod._session_license = None
+    yield
+    lic_mod._session_license = saved
+
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "integration: integration tests (TUI, network)")
@@ -75,7 +95,14 @@ def pytest_configure(config):
 
 @pytest.fixture
 def test_config(tmp_path: Path) -> Config:
-    """Test configuration with isolated temporary paths."""
+    """Test configuration with isolated temporary paths.
+
+    Installed via the context-managed override so the previous global Config
+    is restored when the test ends — previously an unconditional set_config
+    leaked this instance into the process-global singleton for every later
+    test that doesn't build its own config (a cross-file state race), the same
+    class of bug `_pin_clean_session_license` guards against for the license.
+    """
     cfg = Config(
         proxy_host="127.0.0.1",
         proxy_port=19081,
@@ -86,8 +113,8 @@ def test_config(tmp_path: Path) -> Config:
         scope=[],
         intercept_enabled=False,
     )
-    set_config(cfg)
-    return cfg
+    with override_config(cfg):
+        yield cfg
 
 
 @pytest_asyncio.fixture

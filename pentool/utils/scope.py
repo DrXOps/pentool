@@ -14,19 +14,7 @@ from __future__ import annotations
 
 
 def host_in_scope(host: str, patterns: list[str], strip_port: bool = True) -> bool:
-    """Return True if `host` matches any of `patterns`.
-
-    - Empty `patterns` means "no scope configured" -> everything is in
-      scope (matches prior Proxy behavior).
-    - Patterns support a `*.example.com` wildcard, which also matches the
-      bare `example.com` itself (subdomain-or-exact), in addition to plain
-      exact-match patterns.
-    - strip_port: by default both `host` and each pattern have any
-      `:port` suffix removed before comparing — this is the unified
-      behavior Proxy already had. Pass `strip_port=False` for a
-      port-sensitive match; reserved for a possible future "match port"
-      toggle in the scope UI, not currently exposed anywhere.
-    """
+    """True if host matches any pattern (empty patterns = everything in scope). Supports *.wildcard."""
     if not patterns:
         return True
     h = host.lower()
@@ -48,14 +36,7 @@ def host_in_scope(host: str, patterns: list[str], strip_port: bool = True) -> bo
 
 
 def domain_in_scope(netloc: str, base_domain: str, strip_port: bool = True) -> bool:
-    """Spider-style scope check: `netloc` is in scope if it equals
-    `base_domain` or is a subdomain of it.
-
-    Thin wrapper around host_in_scope() expressed as two patterns (exact
-    match + wildcard subdomain match) — kept as a separate function
-    because Spider's call sites pass a URL's netloc plus a single crawl
-    base_domain, not a user-configured pattern list like Proxy's.
-    """
+    """Spider scope check: netloc equals base_domain or is subdomain (wrapper around host_in_scope)."""
     if not netloc:
         return True
     return host_in_scope(netloc, [base_domain, f"*.{base_domain}"], strip_port=strip_port)

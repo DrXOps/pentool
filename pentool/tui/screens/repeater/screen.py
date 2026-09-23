@@ -23,6 +23,7 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 logger = get_logger(__name__)
 
 from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
 from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
@@ -45,7 +46,7 @@ class _TabState:
         self.last_sent_text: str | None = None
         self.is_dirty: bool = False
 
-class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
+class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     """Repeater module screen."""
 
     DEFAULT_CSS = _CSS
@@ -81,27 +82,52 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._search_current: int = 0
         self._search_query: str = ""
         self._search_regex: bool = False
-        self._search_target: str = "request"  # "request" | "response" — синхронизируется с SearchBar
+        self._search_target: str = "request"  # "request" | "response" — syncs with the SearchBar
         self._tab_click_time: float = 0.0
         self._tab_click_id: str | None = None
-        # Single persistent RepeaterAPI for the screen's lifetime — created
-        # lazily via _get_api() and pointed at a different project DB on
-        # switch via reload_from_project()/switch_db(), mirroring
-        # IntruderScreen._get_api(). Previously every send/autosave/history
-        # read constructed a fresh RepeaterAPI (and thus opened+closed a new
-        # SQLite connection per call).
-        self._repeater_api = None
-        # Bumped by reset_for_new_project()/reload_from_project()/_close_all_tabs().
-        # on_mount()'s initial _load_tabs_from_db() reads whatever DB was
-        # configured at app startup (before the user creates/opens a
-        # project) and schedules tab creation via call_after_refresh — those
-        # deferred callbacks used to fire even after a project switch had
-        # already reset the screen, resurrecting a stale tab (e.g. one
-        # named "Example" from a previous session) alongside the fresh
-        # project's tab. Each loader captures the generation at call time
-        # and no-ops if it no longer matches when its callback runs.
+        # Generation counter to stale-load protection — bumped on every
+        # reset_for_new_project()/reload_from_project() so deferred workers
+        # from a prior project no-op instead of resurrecting stale tabs.
         self._tabs_generation: int = 0
         self._running_save_tasks: list[str] = []  # worker names for auto-save, cancelled on exit
+        # Single persistent RepeaterAPI — created lazily via _get_api()
+        self._repeater_api = None
+
+    # ── Query-one short-hands ──────────────────────────────────────────────
+    # All 43 query_one() calls replaced with property/helper accessors below
+    # so selector strings live in one place and the logic reads concisely.
+
+    @property
+    def _tabs_w(self) -> TabbedContent:
+        return self.query_one("#repeater-tabs", TabbedContent)
+
+    @property
+    def _search_bar(self) -> SearchBar:
+        return self.query_one("#repeater-search-bar", SearchBar)
+
+    @property
+    def _cancel_btn(self) -> ToolbarButton:
+        return self.query_one("#btn-cancel", ToolbarButton)
+
+    @property
+    def _send_btn(self) -> ToolbarButton:
+        return self.query_one("#btn-send", ToolbarButton)
+
+    @property
+    def _status_bar(self) -> Static:
+        return self.query_one("#status-bar", Static)
+
+    @property
+    def _diff_panel(self) -> DiffPanel:
+        return self.query_one("#repeater-diff-panel", DiffPanel)
+
+    def _editor(self, tab_id: str | None = None) -> RequestEditor:
+        tid = tab_id or self._active_tab_id
+        return self.query_one(f"#req-editor-{tid}", RequestEditor)
+
+    def _viewer(self, tab_id: str | None = None) -> ResponseViewer:
+        tid = tab_id or self._active_tab_id
+        return self.query_one(f"#resp-viewer-{tid}", ResponseViewer)
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="top-bar"):
@@ -181,14 +207,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=False)
 
     async def _do_load_tabs(self, repeater_api, generation: int | None = None) -> None:
-        """Async worker to load tabs from DB.
-
-        `generation` pins this call to the _tabs_generation value at the
-        time it was scheduled — if reset_for_new_project()/reload_from_project()
-        bump the counter before this worker's deferred UI callbacks run
-        (e.g. the startup load racing a just-created/opened project), those
-        callbacks silently no-op instead of resurrecting a stale tab.
-        """
+        """Load tabs from DB (generation guards against stale callbacks after project switch)."""
         if generation is None:
             generation = self._tabs_generation
         try:
@@ -235,7 +254,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             self._tabs = [t for t in self._tabs if t is not state]
             return
         try:
-            tabs = self.query_one("#repeater-tabs", TabbedContent)
+            tabs = self._tabs_w
             pane = TabPane(state.name, id=tab_id)
             tabs.add_pane(pane)
             self._active_tab_id = tab_id
@@ -251,7 +270,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         state = _TabState(tab_id, name)
         self._tabs.append(state)
 
-        tabs = self.query_one("#repeater-tabs", TabbedContent)
+        tabs = self._tabs_w
         pane = TabPane(name, id=tab_id)
         tabs.add_pane(pane)
         tabs.active = tab_id
@@ -316,7 +335,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
     def _init_tab_content(self, tab_id: str, state: _TabState) -> None:
         try:
-            editor = self.query_one(f"#req-editor-{tab_id}", RequestEditor)
+            editor = self._editor(tab_id)
             editor.load_raw(state.request_text)
         except Exception:
             pass
@@ -338,7 +357,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         tab_id = self._active_tab_id
         if tab_id is None:
             return
-        tabs = self.query_one("#repeater-tabs", TabbedContent)
+        tabs = self._tabs_w
         tabs.remove_pane(tab_id)
         self._tabs = [t for t in self._tabs if t.tab_id != tab_id]
         if self._tabs:
@@ -348,12 +367,12 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     # ── Project lifecycle ──────────────────────────────────────────────────────
 
     async def reset_for_new_project(self) -> None:
-        """Удалить все вкладки и создать одну чистую. Вызывается при Ctrl+N."""
+        """Remove all tabs and create a single clean one. Called on Ctrl+N."""
         await self._close_all_tabs()
         self.action_new_tab()
 
     async def reload_from_project(self, db_path: str) -> None:
-        """Загрузить вкладки из БД. Вызывается при открытии существующего проекта."""
+        """Load the tabs from the DB. Called when opening an existing project."""
         await self._close_all_tabs()
         # Cancel any in-flight workers (auto-save, _do_load_tabs) from a
         # previous on_mount or project switch BEFORE calling switch_db().
@@ -381,23 +400,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=True)
 
     async def _close_all_tabs(self) -> None:
-        """Удалить все существующие вкладки из TabbedContent и сбросить состояние.
-
-        remove_pane() returns an AwaitComplete (Textual schedules the actual
-        tab/pane removal, it does not happen synchronously) — this was
-        previously called without awaiting it, so action_new_tab() right
-        after could create a new pane with the same id (e.g. "tab-1", since
-        _tab_counter is reset to 0) before the old one had actually been
-        removed from the DOM. That raced with Textual's own ID uniqueness
-        check and produced a stray, blank/unlabeled tab to the left of the
-        first real tab — reproducible specifically right after creating a
-        new project (reset_for_new_project), not after a full app restart.
-
-        Also cancels any in-flight auto-save workers to prevent
-        ProgrammingError('Cannot operate on a closed database.') when the
-        database is closed during exit or project switch while a
-        save_to_history commit is still pending.
-        """
+        """Remove all tabs and reset state (await remove_pane to avoid race with action_new_tab)."""
         # Cancel all in-flight save workers
         for worker_name in list(self._running_save_tasks):
             try:
@@ -408,7 +411,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
         self._tabs_generation += 1  # invalidate any in-flight _do_load_tabs from on_mount
         try:
-            tabs = self.query_one("#repeater-tabs", TabbedContent)
+            tabs = self._tabs_w
             for state in list(self._tabs):
                 try:
                     await tabs.remove_pane(state.tab_id)
@@ -418,7 +421,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             pass
         self._tabs = []
         self._active_tab_id = None
-        self._tab_counter = 0  # сброс счётчика — нумерация всегда с 1
+        self._tab_counter = 0  # counter reset — numbering always starts at 1
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.tabbed_content.id != "repeater-tabs":
@@ -463,7 +466,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         an edit is detected (adds "*") — see on_text_area_changed.
         """
         try:
-            tabs = self.query_one("#repeater-tabs", TabbedContent)
+            tabs = self._tabs_w
             tab_widget = tabs.get_tab(state.tab_id)
             if tab_widget is not None:
                 suffix = "*" if state.is_dirty else ""
@@ -482,7 +485,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         if tab_id is None:
             return
         try:
-            editor = self.query_one(f"#req-editor-{tab_id}", RequestEditor)
+            editor = self._editor(tab_id)
         except Exception:
             return
         try:
@@ -512,7 +515,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         """Ctrl+D — toggle the side diff panel: current editor text vs. the
         text of the tab's last successful Send."""
         try:
-            panel = self.query_one("#repeater-diff-panel", DiffPanel)
+            panel = self._diff_panel
         except Exception:
             return
         now_visible = panel.toggle()
@@ -521,7 +524,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
     def _refresh_diff_panel_if_visible(self) -> None:
         try:
-            panel = self.query_one("#repeater-diff-panel", DiffPanel)
+            panel = self._diff_panel
         except Exception:
             return
         if "-visible" not in panel.classes:
@@ -540,7 +543,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
     def action_toggle_search(self) -> None:
         try:
-            bar = self.query_one("#repeater-search-bar", SearchBar)
+            bar = self._search_bar
             if bar.display:
                 bar.hide()
             else:
@@ -557,7 +560,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     def on_search_bar_target_toggle(self, event: SearchBar.TargetToggle) -> None:
         """User toggled search target (Req/Resp) in SearchBar — sync state."""
         try:
-            bar = self.query_one("#repeater-search-bar", SearchBar)
+            bar = self._search_bar
             self._search_target = bar._search_target
         except Exception:
             pass
@@ -591,7 +594,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._search_matches = matches
         if not matches:
             try:
-                self.query_one("#repeater-search-bar", SearchBar).set_count(0, 0)
+                self._search_bar.set_count(0, 0)
             except Exception:
                 pass
             return
@@ -603,7 +606,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
         self._jump_to_match(text, matches[self._search_current])
         try:
-            self.query_one("#repeater-search-bar", SearchBar).set_count(
+            self._search_bar.set_count(
                 self._search_current + 1, len(matches)
             )
         except Exception:
@@ -614,13 +617,13 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             return ""
         if self._search_target == "response":
             try:
-                viewer = self.query_one(f"#resp-viewer-{self._active_tab_id}", ResponseViewer)
+                viewer = self._viewer(self._active_tab_id)
                 area = viewer.query_one("#viewer-area", TextArea)
                 return area.text
             except Exception:
                 return ""
         try:
-            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+            editor = self._editor(self._active_tab_id)
             return editor.get_text()
         except Exception:
             return ""
@@ -632,10 +635,10 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         try:
             from textual.widgets import TextArea
             if self._search_target == "response":
-                viewer = self.query_one(f"#resp-viewer-{self._active_tab_id}", ResponseViewer)
+                viewer = self._viewer(self._active_tab_id)
                 area = viewer.query_one("#viewer-area", TextArea)
             else:
-                editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+                editor = self._editor(self._active_tab_id)
                 area = editor.query_one("#editor-area", TextArea)
             lines = text[:offset].split("\n")
             row = len(lines) - 1
@@ -657,7 +660,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         if state is None:
             return
         try:
-            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+            editor = self._editor(self._active_tab_id)
             state.request_text = editor.get_text()
             # Auto-save to DB (async, fire-and-forget)
             self._auto_save_tab_to_db(state)
@@ -685,23 +688,17 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             if repeater_api is None:
                 return
 
-            worker_name = f"save-{state.tab_id}-{time.monotonic_ns()}"
-            self._running_save_tasks.append(worker_name)
+            worker_name = self._save_worker_name(f"save-{state.tab_id}")
+            self._track_save_worker(worker_name)
             self.run_worker(
-                self._do_auto_save(repeater_api, parsed, response, state.name, worker_name),
+                self._do_auto_save(
+                    repeater_api.save_to_history(parsed, response, tab_name=state.name),
+                    worker_name,
+                ),
                 exclusive=False, name=worker_name,
             )
         except Exception as exc:
             logger.debug("_auto_save_tab_to_db: %s", exc)
-
-    async def _do_auto_save(self, api, parsed, response, tab_name: str, worker_name: str) -> None:
-        """Auto-save wrapper — cleanup _running_save_tasks on completion."""
-        try:
-            await api.save_to_history(parsed, response, tab_name=tab_name)
-        except Exception:
-            pass
-        finally:
-            self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
     def _get_tab_state(self, tab_id: str) -> _TabState | None:
         for t in self._tabs:
@@ -716,7 +713,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         if tab_id is None:
             return
         try:
-            editor = self.query_one(f"#req-editor-{tab_id}", RequestEditor)
+            editor = self._editor(tab_id)
             raw = editor.get_text()
         except Exception:
             return
@@ -725,7 +722,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         self._sending = True
         self._set_status("Sending...")
         try:
-            self.query_one("#btn-cancel", ToolbarButton).disabled = False
+            self._cancel_btn.disabled = False
         except Exception:
             pass
         self.run_worker(self._do_send(tab_id, raw), exclusive=False, name="repeater-send")
@@ -747,7 +744,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             return
 
         try:
-            viewer = self.query_one(f"#resp-viewer-{tab_id}", ResponseViewer)
+            viewer = self._viewer(tab_id)
             viewer.load_response(resp)
         except Exception:
             pass
@@ -763,7 +760,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         )
         self._sending = False
         try:
-            self.query_one("#btn-cancel", ToolbarButton).disabled = True
+            self._cancel_btn.disabled = True
         except Exception:
             pass
         self.app.notify(f"HTTP {resp.status} — {elapsed_ms}ms", timeout=2)
@@ -777,8 +774,8 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             if self._sending:
                 self._sending = False
                 try:
-                    self.query_one("#btn-send", ToolbarButton).disabled = False
-                    self.query_one("#btn-cancel", ToolbarButton).disabled = True
+                    self._send_btn.disabled = False
+                    self._cancel_btn.disabled = True
                 except Exception:
                     pass
 
@@ -787,8 +784,8 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         if tab_id is None:
             return
         try:
-            self.query_one(f"#req-editor-{tab_id}", RequestEditor).clear()
-            self.query_one(f"#resp-viewer-{tab_id}", ResponseViewer).clear()
+            self._editor(tab_id).clear()
+            self._viewer(tab_id).clear()
         except Exception:
             pass
         self._set_status("Cleared")
@@ -832,12 +829,12 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         req_ok = False
         resp_ok = False
         try:
-            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+            editor = self._editor(self._active_tab_id)
             req_ok = editor.beautify_body()
         except Exception:
             pass
         try:
-            viewer = self.query_one(f"#resp-viewer-{self._active_tab_id}", ResponseViewer)
+            viewer = self._viewer(self._active_tab_id)
             resp_ok = viewer.beautify_body()
         except Exception:
             pass
@@ -888,7 +885,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         if self._active_tab_id is None:
             return
         try:
-            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+            editor = self._editor(self._active_tab_id)
             editor.load_raw(raw)
         except Exception:
             pass
@@ -908,7 +905,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         if self._active_tab_id is None:
             return
         try:
-            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+            editor = self._editor(self._active_tab_id)
             editor.load_raw(raw)
         except Exception:
             # Widget not yet mounted — retry with an extra defer
@@ -922,7 +919,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         if self._active_tab_id is None:
             return
         try:
-            editor = self.query_one(f"#req-editor-{self._active_tab_id}", RequestEditor)
+            editor = self._editor(self._active_tab_id)
             editor.load_raw(raw)
         except Exception:
             pass
@@ -946,7 +943,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         if tab_id is None:
             return
         try:
-            editor = self.query_one(f"#req-editor-{tab_id}", RequestEditor)
+            editor = self._editor(tab_id)
             editor._raw_full = editor.get_text()
         except Exception:
             pass
@@ -958,7 +955,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
         try:
             from textual.widgets import TextArea
             from pentool.tui.widgets.request_editor import visualize_special_chars
-            editor = self.query_one(f"#req-editor-{tab_id}", RequestEditor)
+            editor = self._editor(tab_id)
             area = editor.query_one("#editor-area", TextArea)
             if self._show_special_chars:
                 raw = editor._raw_full or editor.get_text()
@@ -976,7 +973,7 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
 
     def _set_status(self, msg: str) -> None:
         try:
-            bar = self.query_one("#status-bar", Static)
+            bar = self._status_bar
             bar.update(msg)
         except Exception:
             pass
@@ -994,6 +991,6 @@ class RepeaterScreen(BaseModuleScreen, RequestContextMenuMixin, AppMixin):
             return ""
         try:
             from pentool.tui.widgets.request_editor import RequestEditor
-            return self.query_one(f"#req-editor-{tab_id}", RequestEditor).get_text()
+            return self._editor(tab_id).get_text()
         except Exception:
             return ""

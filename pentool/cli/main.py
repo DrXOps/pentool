@@ -8,28 +8,51 @@ from pentool.core.config import get_config
 from pentool.core.logging import setup_logging
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(package_name="pentool")
 @click.option("--config", "config_path", default=None, help="Path to the configuration file.")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Verbose output (DEBUG).")
-@click.option("--url", "cli_urls", multiple=True, default=None, help="Target URL(s). With --headless runs a headless scan; without, launches the TUI pre-seeded with this URL.")
-@click.option("--headless", is_flag=True, default=False, help="Run without the TUI (headless), for CI/CD automation.")
-@click.option("--output", "cli_output", default=None, help="Save headless findings to file (.json / .html / .csv). Requires --headless.")
+@click.option("--url", "cli_urls", multiple=True, default=None,
+              help="Target URL(s). With --headless runs a headless scan; without, launches the TUI.")
+@click.option("--headless", is_flag=True, default=False,
+              help="Run without the TUI (headless), for CI/CD automation.")
+@click.option("--output", "cli_output", default=None,
+              help="Save headless findings to file (.json / .html / .csv).")
+@click.option("--check", "cli_checks", default=None,
+              help="Comma-separated checks (e.g. xss,sqli,info_leak). Default: all.")
+@click.option("--threads", "cli_threads", default=10, type=int, show_default=True,
+              help="Number of parallel scan threads.")
+@click.option("--delay", "cli_delay", default=0.0, type=float, show_default=True,
+              help="Delay between requests (seconds).")
+@click.option("--smart", "cli_smart", is_flag=True, default=False,
+              help="Launch TUI, proxy on, crawl target, detect tech (requires --url). Replaces --real.")
+@click.option("--ai", "cli_ai", is_flag=True, default=False,
+              help="Enable AI-assisted scanning (endpoint discovery, WAF bypass, payload gen).")
+@click.option("--last", "cli_last", is_flag=True, default=False,
+              help="Auto-open the most recent project on TUI start.")
+@click.option("--crawl", "cli_crawl", is_flag=True, default=False,
+              help="Crawl the target before scanning (requires Lightpanda for JS).")
+@click.option("--depth", "cli_depth", default=3, type=int, show_default=True,
+              help="Crawl depth (requires --crawl).")
+@click.option("--max-pages", "cli_max_pages", default=100, type=int, show_default=True,
+              help="Max pages to crawl (requires --crawl).")
+@click.option("--format", "cli_format", default="auto",
+              type=click.Choice(["auto", "json", "html", "csv"], case_sensitive=False),
+              help="Report format (default: auto from --output extension).")
 @click.pass_context
-def cli(ctx: click.Context, config_path: str | None, verbose: bool,
-        cli_urls: tuple[str, ...] | None, headless: bool, cli_output: str | None) -> None:
-    """Pentool — a command-line tool for web application penetration testing.
-
-    Run without arguments to open the TUI:
-
-        pentool
-
-    Or use the commands below for command-line usage.
-
-    One-shot / CI/CD:
-
-        pentool --url https://example.com --headless --output result.json
-    """
+def cli(ctx: click.Context,
+        config_path: str | None, verbose: bool,
+        cli_urls: tuple[str, ...] | None, headless: bool,
+        cli_smart: bool, cli_ai: bool, cli_last: bool,
+        cli_output: str | None,
+        cli_checks: str | None,
+        cli_threads: int,
+        cli_delay: float,
+        cli_crawl: bool,
+        cli_depth: int,
+        cli_max_pages: int,
+        cli_format: str) -> None:
+    """Pentool — web app security toolkit (TUI, CLI/CI/CD with --url --headless --check)."""
     ctx.ensure_object(dict)
 
     cfg = get_config()
@@ -46,256 +69,31 @@ def cli(ctx: click.Context, config_path: str | None, verbose: bool,
         urls = list(cli_urls)
         if headless:
             from pentool.cli.headless import run_headless_scan
-            run_headless_scan(urls, cli_output)
+            names = [c.strip() for c in cli_checks.split(",")] if cli_checks else None
+            run_headless_scan(
+                urls,
+                output=cli_output,
+                check_names=names,
+                concurrency=cli_threads,
+                delay=cli_delay,
+                use_ai=cli_ai,
+                crawl=cli_crawl,
+                crawl_depth=cli_depth,
+                max_pages=cli_max_pages,
+                report_format=cli_format,
+            )
         else:
-            # Launch the TUI pre-seeded with the given URL(s). The proxy starts,
-            # a CA cert is generated/imported into a headless browser, and the
-            # first request is sent so the user lands on a ready project.
-            # (Full auto-setup is part of the interactive-mode feature; for now
-            # the URL is handed to the running app as a pending target.)
             from pentool.tui.app import PentoolApp
             app = PentoolApp()
             app._pending_start_urls = urls
+            app._pending_start_smart = cli_smart
+            app._pending_start_ai = cli_ai
             app.run()
-
-
-# Import and register command groups
-from pentool.cli.project import project  # noqa: E402
-
-cli.add_command(project)
-
-
-from pentool.cli.proxy import proxy  # noqa: E402
-
-cli.add_command(proxy)
-
-
-@cli.group()
-def repeater() -> None:
-    """Repeater module: manual request sending."""
-
-
-@repeater.command("send")
-@click.option("--request-file", required=True, type=click.Path(exists=True), help="File containing the HTTP request.")
-def repeater_send(request_file: str) -> None:
-    click.echo(f"Repeater send {request_file} — not implemented yet.")
-
-
-@cli.group()
-def intruder() -> None:
-    """Intruder module: automated attacks."""
-
-
-@intruder.command("run")
-@click.option("--request", "request_file", required=True, type=click.Path(exists=True))
-@click.option("--payloads", required=True, type=click.Path(exists=True))
-@click.option("--attack", default="sniper", show_default=True,
-              type=click.Choice(["sniper", "battering_ram", "pitchfork", "cluster_bomb"]))
-def intruder_run(request_file: str, payloads: str, attack: str) -> None:
-    click.echo(f"Intruder run [{attack}] — not implemented yet.")
-
-
-from pentool.cli.scan import scan  # noqa: E402
-
-cli.add_command(scan)
-
-
-from pentool.cli.ai_cmd import ai  # noqa: E402
-
-cli.add_command(ai)
-
-
-@cli.command("decode")
-@click.argument("operation", type=click.Choice([
-    "url_encode", "url_decode",
-    "base64_encode", "base64_decode",
-    "base64url_encode", "base64url_decode",
-    "html_encode", "html_decode",
-    "hex_encode", "hex_decode",
-    "unicode_escape", "unicode_unescape",
-    "md5", "sha1", "sha256",
-]))
-@click.argument("text")
-def decode_cmd(operation: str, text: str) -> None:
-    """Encode/decode/hash text."""
-    from pentool.utils.coder import apply_operation
-    try:
-        result = apply_operation(operation, text)
-        click.echo(result)
-    except ValueError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        raise SystemExit(1) from exc
-
-
-@cli.command("update")
-@click.option("--check", "check_only", is_flag=True, default=False,
-              help="Only check for updates without installing.")
-def update_cmd(check_only: bool) -> None:
-    """Check for and install Pentool updates."""
-    from pentool.core.updater import check_update_sync, do_pip_upgrade
-
-    click.echo("Checking for updates...")
-    info = check_update_sync()
-
-    if info.error:
-        click.echo(f"Could not check for updates: {info.error}", err=True)
-        # The FREE-version check above failing (network down, GitHub API
-        # rate-limited/404, ...) is unrelated to the PRO package, but it
-        # used to make this command bail out here BEFORE ever reaching
-        # _sync_pro_package_after_upgrade() below — silently leaving an
-        # already-installed PRO package on a stale build with no warning.
-        # Since PRO ships a compiled Cython extension, running a stale
-        # build against a since-upgraded FREE version can segfault the
-        # process with no log output — exactly the "just crashed, no idea
-        # why" report this is meant to prevent. So: still check/warn about
-        # PRO staleness before exiting, even though we can't do the FREE
-        # upgrade itself right now.
-        _warn_if_pro_incompatible()
-        raise SystemExit(1)
-
-    if not info.has_update:
-        click.echo(f"Already up to date (version {info.latest_version}).")
-        _warn_if_pro_incompatible()
-        return
-
-    click.echo(f"New version available: {info.latest_version}")
-    click.echo(f"Release notes: {info.url}")
-
-    if check_only:
-        _warn_if_pro_incompatible()
-        return
-
-    if click.confirm(f"Install {info.latest_version} now?", default=True):
-        click.echo("Upgrading via pip...")
-        if do_pip_upgrade():
-            click.echo("Upgrade successful. Restart Pentool to use the new version.")
-            _sync_pro_package_after_upgrade()
-        else:
-            click.echo(
-                "pip upgrade failed. You can update manually:\n"
-                "  pip install --upgrade pentool",
-                err=True,
-            )
-            raise SystemExit(1)
+    elif cli_last:
+        from pentool.tui.app import PentoolApp
+        app = PentoolApp()
+        app._pending_open_last = True
+        app.run()
     else:
-        _warn_if_pro_incompatible()
-
-
-def _warn_if_pro_incompatible() -> None:
-    """Print a warning to the terminal if the installed PRO package (if any)
-    was built for a different FREE version than the one currently running.
-
-    Called from every exit path of `pentool update` that does NOT go through
-    _sync_pro_package_after_upgrade() below — so a user is never left with a
-    stale/incompatible PRO package and zero indication of it, regardless of
-    which branch (FREE check failed, already up to date, --check, declined
-    to install) the command took.
-    """
-    from pentool.core.license import is_pro_package_compatible
-
-    compatible, warning = is_pro_package_compatible()
-    if not compatible:
-        click.echo(f"Warning: {warning}", err=True)
-
-
-def _sync_pro_package_after_upgrade() -> None:
-    """Re-download the PRO package too, if one is active on this machine.
-
-    `pip install --upgrade pentool` only touches the FREE package — the PRO
-    package lives separately in ~/.pentool/pro/ and is otherwise only ever
-    (re)downloaded by check_and_update_pro_package(), which normally runs in
-    the background on TUI startup. Doing it here too means a CLI-driven
-    upgrade doesn't leave a stale PRO build around until the next TUI launch.
-    Best-effort for the FREE upgrade's sake — a failure here never raises
-    SystemExit — but always surfaces a warning to the terminal if the PRO
-    package ends up (or remains) incompatible with the just-upgraded FREE
-    version, since that combination risks a crash on next launch.
-    """
-    import asyncio
-
-    from pentool.core.license import PRO_PACKAGE_DIR, check_and_update_pro_package
-
-    if not PRO_PACKAGE_DIR.exists():
-        return  # PRO was never activated on this machine — nothing to sync
-
-    try:
-        click.echo("Checking for a newer PRO build...")
-        result = asyncio.run(check_and_update_pro_package())
-        if result.updated:
-            click.echo("PRO package updated to the latest build.")
-        elif result.warning:
-            click.echo(f"Warning: {result.warning}", err=True)
-    except Exception as exc:
-        click.echo(f"Could not check for a PRO update: {exc}", err=True)
-        _warn_if_pro_incompatible()
-
-
-@cli.group()
-def license() -> None:
-    """License management: trial, activation, status."""
-
-
-@license.command("trial")
-def license_trial() -> None:
-    """Start a 14-day PRO trial (one per machine)."""
-    import asyncio
-
-    from pentool.core.license import start_trial
-
-    click.echo("Requesting a 14-day PRO trial...")
-    info = asyncio.run(start_trial())
-
-    if not info.valid:
-        click.echo(f"Could not start trial: {info.error}", err=True)
-        raise SystemExit(1)
-
-    click.echo(f"Trial started — key: {info.license_key}")
-    click.echo(f"Plan: {info.plan.upper()} | Expires: {info.expires_text}")
-    click.echo(f"Features: {', '.join(info.features) or 'none'}")
-
-
-@license.command("activate")
-@click.argument("key")
-def license_activate(key: str) -> None:
-    """Activate a license key (PROD-XXXX-XXXX-XXXX)."""
-    import asyncio
-
-    from pentool.core.license import activate_license, invalidate_session_license
-
-    click.echo(f"Activating license key {key}...")
-    info = asyncio.run(activate_license(key))
-    invalidate_session_license()
-
-    if not info.valid:
-        click.echo(f"Activation failed: {info.error}", err=True)
-        raise SystemExit(1)
-
-    click.echo(f"License activated — plan: {info.plan.upper()}")
-    click.echo(f"Expires: {info.expires_text}")
-    click.echo(f"Features: {', '.join(info.features) or 'none'}")
-
-
-@license.command("status")
-def license_status() -> None:
-    """Show the current license status."""
-    from pentool.core.license import get_license
-
-    info = get_license()
-    click.echo(f"Status:  {info.status_text}")
-    click.echo(f"Plan:    {info.plan}")
-    click.echo(f"Expires: {info.expires_text}")
-    click.echo(f"Machine: {info.machine_id}")
-    if info.features:
-        click.echo(f"Features: {', '.join(info.features)}")
-    if info.error:
-        click.echo(f"Note: {info.error}")
-
-
-@license.command("deactivate")
-def license_deactivate() -> None:
-    """Deactivate the current license (delete local cache)."""
-    from pentool.core.license import deactivate_license, invalidate_session_license
-
-    deactivate_license()
-    invalidate_session_license()
-    click.echo("License deactivated.")
+        click.echo(ctx.get_help())
+        ctx.exit(0)

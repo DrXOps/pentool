@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections import defaultdict, deque
+from contextlib import contextmanager
 from typing import Callable, TypeVar
 
 from pentool.core.events import AppEvent
@@ -262,3 +263,17 @@ def reset_event_bus() -> None:
     global _bus
     with _bus_lock:
         _bus = None
+
+
+@contextmanager
+def override_event_bus(bus: EventBus | None):
+    """Context manager: temporarily replace global EventBus singleton (for tests)."""
+    global _bus
+    prev = _bus
+    with _bus_lock:
+        _bus = bus
+    try:
+        yield _bus
+    finally:
+        with _bus_lock:
+            _bus = prev

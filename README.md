@@ -51,7 +51,7 @@ can start auditing immediately. No lag, no heavy setup.
 
 - **🕷 Spider**  
   Crawl targets automatically — collect pages, forms, API endpoints, and JS files.  
-  JavaScript rendering via Playwright is supported.
+  JavaScript rendering supported (Lightpanda — fast & lightweight, built-in).
 
 - **🎯 Target / Site Map**  
   Build a site map from proxy traffic, manage testing scope, and filter hosts directly from the UI.
@@ -85,8 +85,7 @@ uv tool install pentool
 pentool --url https://example.com
 
 # Same, but actually load the target in a headless browser THROUGH the proxy,
-# so real traffic lands in HTTP History + Target (needs Playwright/Chromium)
-# install:  uv tool run --with playwright python -m playwright install chromium
+# so real traffic lands in HTTP History + Target (requires Lightpanda)
 pentool --url https://example.com --real
 
 # Headless scan — perfect for CI/CD (GitLab CI, GitHub Actions, Jenkins)
@@ -104,17 +103,38 @@ pentool update --check
 
 ---
 
-## 🤖 CI/CD — headless security checks
+## 🤖 CI/CD — Headless Security Scanning
 
-For automation, run Pentool **without the TUI** and get a JSON audit report:
+Pentool runs fully headless for CI/CD pipelines. See the full [CI/CD Guide](docs/CI_CD.md).
 
 ```bash
+# Minimal
 pentool --url https://example.com --headless --output result.json
+
+# Full pipeline
+pentool --url https://example.com --headless \\
+    --check xss,sqli,info_leak \\
+    --threads 20 --delay 0.2 \\
+    --use-ai \\
+    --crawl --depth 3 --max-pages 100 \\
+    --format html --output report.html
 ```
 
-- Emits findings as machine-readable JSON for later audit / dashboards.
-- Works in **GitLab CI, GitHub Actions, Jenkins**, cron jobs, or any script.
-- No display, no terminal, no interaction required.
+### CLI Flags for CI/CD
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--url URL` | required | Target URL (repeatable) |
+| `--headless` | — | Run without TUI |
+| `--output PATH` | — | Save report |
+| `--check NAMES` | all | Comma-separated checks |
+| `--threads N` | 10 | Parallel threads |
+| `--delay SEC` | 0.0 | Request delay |
+| `--use-ai` | — | AI-assisted scanning |
+| `--crawl` | — | Crawl before scan |
+| `--depth N` | 3 | Crawl depth |
+| `--max-pages N` | 100 | Max pages |
+| `--format FMT` | auto | Report format (json/html/csv) |
 
 Full examples and a ready-to-copy GitHub Actions / GitLab CI template —
 see the **[CI/CD Guide](docs/i18n/en/CI_CD.md)**.

@@ -1,58 +1,28 @@
 """Pentool — professional web security testing toolkit with Textual TUI."""
 
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+import tomllib
+from pathlib import Path
 
+# Single source of truth: version lives ONLY in pyproject.toml.
+# This file reads it at import time so there is one canonical value
+# used by both the installed package metadata (pip setuptools-scm /
+# manual stamping) and the source tree itself. No more fallback
+# literals that drift out of sync.
+_PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 try:
-    # Single source of truth: the version pip actually installed (matches
-    # `pentool --version` / `pip show pentool`), including dev-build suffixes
-    # like "0.2.8.dev5" that CI stamps only into the package metadata, not
-    # into this file. Falls back to the literal below for editable/dev
-    # checkouts where the package isn't registered in the environment.
-    __version__ = _pkg_version("pentool")
-except PackageNotFoundError:
-    __version__ = "0.2.11"
+    with open(_PYPROJECT, "rb") as _f:
+        __version__: str = tomllib.load(_f)["project"]["version"]
+except Exception:
+    __version__ = "0.0.0"  # last resort — should never happen in a valid install
 
 __author__ = "pentool"
 
 
 def _bootstrap_pro() -> None:
-    """Extend pentool package __path__ entries with the PRO package.
+    """Add pentool/__path__ entries for dev (pro/ submodule) or installed (~/.pentool/pro/) PRO package.
 
-    Supports two scenarios:
-    1. Dev checkout: repo_root/pro/pentool/ (git submodule)
-    2. End-user: ~/.pentool/pro/pentool/ (downloaded via 'pentool license activate')
-
-    Only adds pro/pentool to pentool.__path__ and (if already loaded)
-    pentool.api.__path__. Intentionally does NOT import pentool.tui or
-    pentool.tui.screens here — those packages extend themselves via
-    pkgutil.extend_path in their own __init__.py files, and importing
-    them early would freeze their __path__ before the pro/ directory
-    is appended.
-
-    Also adds the PRO package's *root* dir (the parent of pro/pentool/) to
-    sys.path — this is where CodeEnigma's obfuscated build places
-    `codeenigma_runtime/`, a compiled Cython extension package that the
-    obfuscated pentool/**/*.py files import from at module load time
-    (`from codeenigma_runtime import execute_secure_code`). Without this,
-    every obfuscated PRO module fails to import with
-    `ModuleNotFoundError: No module named 'codeenigma_runtime'` even though
-    pentool/ itself resolves fine via __path__ extension above.
-
-    The installed (~/.pentool/pro/) PRO package is skipped entirely — not
-    even added to __path__ — if it was built for a different FREE version
-    than this one (core.license.is_pro_package_compatible()). This is the
-    scenario where a FREE upgrade (`pip install --upgrade pentool` /
-    `pentool update`) succeeded but the PRO package's own re-sync
-    afterwards failed or never ran (e.g. offline, or an unrelated version
-    check like the GitHub release lookup errored out first and stopped the
-    whole `pentool update` command before it got to the PRO sync step).
-    Loading a mismatched PRO build there risks a hard-to-diagnose crash: it
-    ships a compiled Cython extension, and an ABI/version mismatch can
-    segfault the process instead of raising a catchable Python exception.
-    The dev `pro/` submodule checkout is never version-mismatched (same
-    source tree as the running FREE code) and is always loaded normally.
-    A warning is printed to stderr so the user isn't left with unexplained
-    missing PRO features and no context.
+    Skips installed PRO if version-mismatched with FREE (ABI mismatch can segfault).
+    Adds PRO root to sys.path for codeenigma_runtime Cython extensions.
     """
     import sys
     from pathlib import Path

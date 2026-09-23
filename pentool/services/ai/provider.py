@@ -1,7 +1,7 @@
-"""Провайдеры AI-бэкенда.
+"""AI-backend providers.
 
-AIBackend — абстрактный базовый класс.
-MCPBackend — реализация через внешний MCP-сервер (llama-cpp-python + mcp SDK).
+AIBackend — abstract base class.
+MCPBackend — an implementation backed by an external MCP server (llama-cpp-python + mcp SDK).
 """
 
 from __future__ import annotations
@@ -23,6 +23,16 @@ log = logging.getLogger(__name__)
 # the PID is actually alive.
 _MCP_PROCESS_PID: int | None = None
 
+# Счётчик активных запросов к MCP — инкрементится перед generate, декрементится
+# после. ActivityIndicator.AI смотрит на него: мигает только когда > 0.
+_MCP_PENDING_REQUESTS: int = 0
+
+
+def is_mcp_busy() -> bool:
+    """True if there are pending AI requests being processed."""
+    global _MCP_PENDING_REQUESTS
+    return _MCP_PENDING_REQUESTS > 0
+
 
 def is_mcp_running() -> bool:
     """True if an MCP subprocess is currently alive in this process."""
@@ -39,35 +49,37 @@ def is_mcp_running() -> bool:
 
 
 class AIBackend(ABC):
-    """Абстрактный AI-бэкенд."""
+    """Abstract AI backend."""
 
     @abstractmethod
     async def generate(self, task_name: str, context: dict[str, Any] | None = None) -> dict[str, Any] | None:
-        """Вызвать AI для задачи task_name с переданным контекстом.
+        """Call AI for task_name with the given context.
 
-        Возвращает распарсенный JSON-ответ или None при ошибке/таймауте.
+        Returns the parsed JSON response, or None on error/timeout.
         """
 
     @abstractmethod
     async def health(self) -> bool:
-        """Проверить, что бэкенд жив и отвечает."""
+        """Check the backend is alive and responding."""
 
     @abstractmethod
     async def close(self) -> None:
-        """Освободить ресурсы."""
+        """Release resources."""
 
 
 class MCPBackend(AIBackend):
-    """MCP-клиент: общается с внешним MCP-сервером через stdio (JSON-RPC)."""
+    """MCP client: talks to an external MCP server over stdio (JSON-RPC)."""
 
     def __init__(self, mcp_cmd: list[str] | None = None) -> None:
         self._process: asyncio.subprocess.Process | None = None
         self._mcp_cmd = mcp_cmd
         self._stdin: Any = None  # asyncio StreamWriter (process stdin)
         self._stdout: Any = None  # asyncio StreamReader (process stdout)
+        self._max_restarts: int = 3  # максимум перезапусков подряд
+        self._restart_count: int = 0  # счётчик перезапусков в этой сессии
 
     async def start(self) -> bool:
-        """Запустить MCP-сервер как подпроцесс."""
+        """Start the MCP server as a subprocess."""
         if not self._mcp_cmd:
             log.error("MCPBackend: команда запуска MCP-сервера не задана")
             return False
@@ -78,11 +90,8 @@ class MCPBackend(AIBackend):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            # Используем буферизованный binary I/O subprocess напрямую, а НЕ
-            # asyncio.StreamWriter/StreamReader поверх pipe: последние требуют
-            # корректного event loop при создании и падали с
-            # «'NoneType' object has no attribute 'create_future'» когда loop
-            # не был привязан. Чтение/запись ведём блокирующе в to_thread.
+            # stdin/stdout from create_subprocess_exec are asyncio
+            # StreamWriter/StreamReader, correctly bound to the event loop.
             self._stdin = self._process.stdin
             self._stdout = self._process.stdout
             global _MCP_PROCESS_PID
@@ -93,9 +102,40 @@ class MCPBackend(AIBackend):
             log.error("MCPBackend: не удалось запустить сервер: %s", exc)
             return False
 
+    async def _ensure_alive(self) -> bool:
+        """Проверить, жив ли процесс MCP сервера. Если нет — перезапустить.
+
+        Returns True если сервер жив (или успешно перезапущен).
+        """
+        if self._process is not None and self._process.returncode is None:
+            return True  # ещё жив
+
+        if self._restart_count >= self._max_restarts:
+            log.error("MCPBackend: превышен лимит перезапусков (%d)", self._max_restarts)
+            return False
+
+        log.warning(
+            "MCPBackend: процесс мёртв (rc=%s) — перезапуск %d/%d",
+            self._process.returncode if self._process else "?",
+            self._restart_count + 1,
+            self._max_restarts,
+        )
+        self._restart_count += 1
+        self._process = None
+        self._stdin = None
+        self._stdout = None
+        ok = await self.start()
+        if ok:
+            # Сбросить счётчик при успешном запуске, если проработал > 30 сек
+            self._restart_count = 0
+        return ok
+
     async def _call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
-        """Вызвать tool MCP-сервера через JSON-RPC."""
-        if not self._stdin or not self._stdout:
+        """Call an MCP-server tool over JSON-RPC.
+
+        При обрыве соединения — автоматический перезапуск сервера.
+        """
+        if not await self._ensure_alive():
             log.warning("MCPBackend: сервер не запущен")
             return None
         req = {
@@ -106,12 +146,12 @@ class MCPBackend(AIBackend):
         }
         try:
             payload = json.dumps(req, ensure_ascii=False)
-            # process.stdin/stdout от create_subprocess_exec — это asyncio
-            # StreamWriter/StreamReader, правильно привязанные к event loop.
+            # process.stdin/stdout from create_subprocess_exec are asyncio
+            # StreamWriter/StreamReader, correctly bound to the event loop.
             self._stdin.write((payload + "\n").encode("utf-8"))
             await self._stdin.drain()
 
-            line = await asyncio.wait_for(self._stdout.readline(), timeout=60.0)
+            line = await asyncio.wait_for(self._stdout.readline(), timeout=120.0)
             if not line:
                 return None
             resp = json.loads(line.decode("utf-8").strip())
@@ -126,11 +166,18 @@ class MCPBackend(AIBackend):
         return None
 
     async def generate(self, task_name: str, context: dict[str, Any] | None = None) -> dict[str, Any] | None:
-        """Вызвать MCP-сервер для задачи task_name.
+        """Call the MCP server for task_name.
 
-        MCP tools/call возвращает {"content": [{"type":"text","text":"<json>"}]}
-        — вытаскиваем и парсим text, чтобы клиент получил "чистый" dict/items.
+        MCP tools/call returns {"content": [{"type":"text","text":"<json>"}]} —
+        we pull out and parse `text` so the client gets a clean dict/items.
+
+        Tracks pending request count via _MCP_PENDING_REQUESTS so the
+        ActivityIndicator's AI glyph blinks only while a request is in flight.
         """
+        from pentool.services.ai.audit_log import log as audit_log
+
+        global _MCP_PENDING_REQUESTS
+
         task = REGISTRY.get(task_name)
         if not task:
             log.warning("MCPBackend: неизвестная задача %s", task_name)
@@ -145,8 +192,14 @@ class MCPBackend(AIBackend):
         if context:
             prompt_data["context"] = context
 
-        resp = await self._call_tool("generate_payload", prompt_data)
+        _MCP_PENDING_REQUESTS += 1
+        try:
+            resp = await self._call_tool("generate_payload", prompt_data)
+        finally:
+            _MCP_PENDING_REQUESTS -= 1
+
         if not resp:
+            audit_log(task=task_name, prompt_data=prompt_data, error="Empty response from MCP server")
             return None
         # tools/call → {"content": [{"type":"text","text":"<json>"}], ...}
         try:
@@ -156,16 +209,29 @@ class MCPBackend(AIBackend):
                 if isinstance(item, dict) and item.get("type") == "text":
                     text += str(item.get("text", ""))
             parsed = json.loads(text) if text.strip() else None
-            return parsed if isinstance(parsed, dict) else {"items": parsed} if isinstance(parsed, list) else None
+            result = parsed if isinstance(parsed, dict) else {"items": parsed} if isinstance(parsed, list) else None
+            audit_log(
+                task=task_name,
+                prompt_data=prompt_data,
+                raw_response=text,
+                parsed_response=result,
+            )
+            return result
         except Exception as exc:  # noqa: BLE001
             log.error("MCPBackend: не удалось распарсить ответ: %s", exc)
+            audit_log(
+                task=task_name,
+                prompt_data=prompt_data,
+                raw_response=text if 'text' in locals() else "",
+                error=str(exc),
+            )
             return None
 
     async def health(self) -> bool:
-        """Проверить здоровье MCP-сервера.
+        """Check the MCP server health.
 
-        Инструмент `health` существует на сервере (возвращает {ok, ...});
-        обращаться через него, а не через JSON-RPC-метод `ping`.
+        The `health` tool exists on the server (returns {ok, ...}) — use it
+        rather than the JSON-RPC `ping` method.
         """
         try:
             result = await self._call_tool("health", {})
@@ -182,7 +248,7 @@ class MCPBackend(AIBackend):
             return False
 
     async def close(self) -> None:
-        """Остановить MCP-сервер."""
+        """Stop the MCP server."""
         global _MCP_PROCESS_PID
         if self._process:
             try:

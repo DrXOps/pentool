@@ -74,6 +74,34 @@ uv run pentool --version
 
 ---
 
+## JS-рендеринг (необязательно, но рекомендуется)
+
+Краулер Pentool может выполнять JavaScript, чтобы находить SPA-страницы и скрытые
+API-эндпоинты. Движок по умолчанию — **Lightpanda**: лёгкий и быстрый
+(~20 МБ памяти на запуск), не требует полного Chromium или Node.
+
+Установка бинарника Lightpanda (Linux/macOS, x86_64 / aarch64):
+
+```bash
+# 1. скачайте бинарник релиза для вашей платформы из репозитория Lightpanda
+#    (lightpanda-io/browser), например для Linux x86_64:
+curl -L -o lightpanda \
+  https://github.com/lightpanda-io/browser/releases/download/0.3.7/lightpanda-x86_64-linux
+chmod +x lightpanda
+# 2. положите его в PATH, например:
+mkdir -p ~/.local/bin && mv lightpanda ~/.local/bin/
+```
+
+Pentool находит бинарник автоматически (PATH, `~/.local/bin`, `/usr/local/bin`,
+`/usr/bin` или переменная `LIGHTPANDA_BIN`). Без него краулинг работает, но НЕ
+выполняет JavaScript (фолбэк на обычный HTTP).
+
+> **Режим `--smart`** (загрузка страницы через прокси) также использует Lightpanda —
+> отдельный Playwright/Chromium не нужен. Lightpanda обрабатывает JS для `--smart`
+> и для модуля Spider.
+
+---
+
 ## Инструкции для конкретных платформ
 
 ### Linux (Ubuntu/Debian)

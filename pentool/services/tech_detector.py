@@ -15,33 +15,48 @@ from __future__ import annotations
 
 import re
 import time
+from collections import OrderedDict
+from threading import Lock
 from typing import Any
 
 # Cache TTL in seconds (4 hours)
 _CACHE_TTL: float = 14400.0
-_TECH_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}  # host -> (timestamp, profile)
+# Bounded LRU cache with a lock — prevents unbounded growth under spider/scan
+# of many hosts and avoids read-during-delete races across threads.
+_CACHE_MAX_SIZE: int = 500
+_TECH_CACHE: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
+_cache_lock: Lock = Lock()
 
 
 def _clear_cache() -> None:
-    _TECH_CACHE.clear()
+    with _cache_lock:
+        _TECH_CACHE.clear()
 
 
 def get_cached_tech(url: str) -> dict[str, Any] | None:
     """Return cached tech profile for the given URL's host, or None if expired/missing."""
     from urllib.parse import urlparse
     host = urlparse(url).hostname or url
-    entry = _TECH_CACHE.get(host)
-    if entry is None:
-        return None
-    ts, profile = entry
-    if time.monotonic() - ts > _CACHE_TTL:
-        del _TECH_CACHE[host]
-        return None
-    return profile
+    with _cache_lock:
+        entry = _TECH_CACHE.get(host)
+        if entry is None:
+            return None
+        ts, profile = entry
+        if time.monotonic() - ts > _CACHE_TTL:
+            del _TECH_CACHE[host]
+            return None
+        # Move to end (most recently used) on access.
+        _TECH_CACHE.move_to_end(host)
+        return profile
 
 
 def _cache_set(host: str, profile: dict[str, Any]) -> None:
-    _TECH_CACHE[host] = (time.monotonic(), profile)
+    with _cache_lock:
+        _TECH_CACHE[host] = (time.monotonic(), profile)
+        _TECH_CACHE.move_to_end(host)
+        # Evict oldest entries if over limit.
+        while len(_TECH_CACHE) > _CACHE_MAX_SIZE:
+            _TECH_CACHE.popitem(last=False)
 
 
 # ── WAF signatures ──────────────────────────────────────────────────────────
@@ -82,7 +97,7 @@ async def detect_tech(url: str, force: bool = False, js_render: bool = False) ->
     Args:
         url: Target URL.
         force: Re-detect even if cached.
-        js_render: Enable headless Chromium rendering for SPA detection.
+        js_render: Enable headless JS rendering (Lightpanda) for SPA detection.
 
     Returns a dict with keys:
         language, framework, cms, database, server, spa, waf, waf_name,
@@ -174,20 +189,30 @@ def _make_profile(
         language = "PHP"
     elif "asp.net" in powered or "asp.net" in server_raw or "aspx" in text.lower():
         language = "C#"
-    elif "java" in powered or "jsessionid" in text.lower() or "servlet" in text.lower():
+    elif "java" in powered or "jsessionid" in text.lower() or "servlet" in text.lower() or "java" in server_raw:
         language = "Java"
-    elif "python" in powered or "django" in powered or "flask" in powered:
+    elif "python" in powered or "django" in powered or "flask" in powered or "gunicorn" in server_raw:
         language = "Python"
     elif "ruby" in powered or "rails" in powered or "passenger" in server_raw:
         language = "Ruby"
-    elif "node" in powered or "express" in powered.lower():
+    elif "node" in powered or "express" in powered.lower() or "node" in server_raw:
         language = "JS/Node"
-    elif "go" in server_raw or "gin" in powered:
+    elif "go" in server_raw or "gin" in powered or "go" in powered:
         language = "Go"
     elif "rust" in server_raw or "actix" in server_raw:
         language = "Rust"
     elif "perl" in powered or "catalyst" in powered:
         language = "Perl"
+    elif "haskell" in powered or "yesod" in text:
+        language = "Haskell"
+    elif "scala" in server_raw or "lift" in text or "play!" in text:
+        language = "Scala"
+    elif "elixir" in powered or "phoenix" in text:
+        language = "Elixir"
+    elif "swift" in powered or "vapor" in text:
+        language = "Swift"
+    elif "kotlin" in powered or "ktor" in text:
+        language = "Kotlin"
     elif server_raw and ("nginx" in server_raw or "apache" in server_raw or "iis" in server_raw):
         language = "Unknown"
 
@@ -260,6 +285,89 @@ def _make_profile(
     elif "nuxt" in tc:
         spa = "Nuxt"
 
+    # --- CDN detection ---
+    cdn = None
+    via = h.get("via", "")
+    cf_ray = h.get("cf-ray", "")
+    x_cache = h.get("x-cache", "")
+    server_lower = server_raw or ""
+    if cf_ray or "cloudflare" in server_lower or "cloudflare" in via:
+        cdn = "Cloudflare"
+    elif "cloudfront" in server_lower or "x-amz-cf" in str(h):
+        cdn = "CloudFront"
+    elif "fastly" in server_lower or "fastly" in via:
+        cdn = "Fastly"
+    elif "akamai" in server_lower or "akamai" in via:
+        cdn = "Akamai"
+    elif "stackpath" in server_lower:
+        cdn = "StackPath"
+    elif "keycdn" in server_lower or "keycdn" in via:
+        cdn = "KeyCDN"
+
+    # --- Frontend JS libraries ---
+    frontend_js = []
+    if re.search(r'jquery[.-]', tc):
+        frontend_js.append("jQuery")
+    if "htmx" in tc or "hx-trigger" in tc or "hx-get" in tc:
+        frontend_js.append("HTMX")
+    if "alpine" in tc and ("alpinejs" in tc or "alpine.js" in tc or "x-data" in tc):
+        frontend_js.append("Alpine.js")
+    if "stimulus" in tc:
+        frontend_js.append("Stimulus")
+    if "turbo" in tc or "turbolinks" in tc:
+        frontend_js.append("Turbo")
+    if "livewire" in tc:
+        frontend_js.append("Livewire")
+    if "hyperscript" in tc or "_hyperscript" in tc:
+        frontend_js.append("Hyperscript")
+
+    # --- CSS frameworks ---
+    css_fw = []
+    if "bootstrap" in tc or re.search(r'bootstrap\.min\.css', text, re.I):
+        css_fw.append("Bootstrap")
+    if "tailwind" in tc or re.search(r'tailwind\.min\.css', text, re.I):
+        css_fw.append("Tailwind")
+    if "materialize" in tc or "materialize" in tc:
+        css_fw.append("Materialize")
+    if "bulma" in tc:
+        css_fw.append("Bulma")
+    if "foundation" in tc and "foundation" in tc:
+        css_fw.append("Foundation")
+
+    # --- OS / Server platform ---
+    os_type = None
+    if "ubuntu" in server_lower or "ubuntu" in powered:
+        os_type = "Ubuntu"
+    elif "debian" in server_lower:
+        os_type = "Debian"
+    elif "centos" in server_lower or ".el" in server_lower:
+        os_type = "CentOS/RHEL"
+    elif "alpine" in server_lower:
+        os_type = "Alpine Linux"
+    elif "windows" in server_lower or "win64" in server_lower or "iis" in server_lower:
+        os_type = "Windows Server"
+    elif "freebsd" in server_lower:
+        os_type = "FreeBSD"
+    elif "amazon" in server_lower or "amzn" in server_lower:
+        os_type = "Amazon Linux"
+
+    # --- Auth cookies ---
+    auth_methods = []
+    cookies_str = " ".join(str(c) for c in signals.get("cookies", []))
+    if "sessionid" in cookies_str or "session" in cookies_str:
+        auth_methods.append("Session")
+    if "csrf" in cookies_str or "csrftoken" in cookies_str or "x-csrftoken" in str(h):
+        auth_methods.append("CSRF Token")
+    if "jwt" in cookies_str or "access_token" in cookies_str or "bearer" in str(h.get("authorization", "")):
+        auth_methods.append("JWT")
+    if "oidc" in cookies_str or "openid" in cookies_str:
+        auth_methods.append("OIDC")
+    if "remember" in cookies_str or "remember_me" in cookies_str:
+        auth_methods.append("Remember Me")
+    www_auth = h.get("www-authenticate", "")
+    if www_auth:
+        auth_methods.append(f"HTTP Auth ({www_auth})")
+
     return {
         "language": language,
         "framework": framework,
@@ -267,6 +375,11 @@ def _make_profile(
         "database": database,
         "server": server,
         "spa": spa,
+        "cdn": cdn,
+        "frontend_js": frontend_js,
+        "css_framework": css_fw,
+        "os": os_type,
+        "auth_methods": auth_methods,
         "waf": waf,
         "waf_name": waf_name,
         "graphql": None,
@@ -366,13 +479,25 @@ async def _probe_graphql(url: str) -> bool:
 
 
 async def _js_render_probe(url: str) -> str | None:
-    """Render page in headless Chromium and return HTML if SPA detected."""
+    """Render page and return the post-JS HTML if the target is an SPA.
+
+    Uses Lightpanda for a cheap JS render; the SpiderAPI crawl below is a
+    second Lightpanda-backed attempt if the direct fetch returns nothing.
+    """
+    try:
+        from pentool.utils.lightpanda import is_lightpanda_available, lightpanda_fetch_html
+        if is_lightpanda_available():
+            html = await lightpanda_fetch_html(url, timeout=20.0)
+            if html:
+                return html
+    except Exception:
+        pass
     try:
         from pentool.api.spider_api import SpiderAPI, SpiderConfig
         spider = SpiderAPI(config=SpiderConfig(js_render=True))
         result = await spider.crawl(url, max_pages=1)
         if result and result.pages:
-            return result.pages[0].get("html", "")
+            return result.pages[0] if isinstance(result.pages[0], str) else None
     except Exception:
         pass
     return None

@@ -153,3 +153,65 @@ _register(AITask(
     max_tokens=512,
     temperature=0.1,
 ))
+
+# === 5. AI payload generation: context-aware payloads ===
+_register(AITask(
+    name="generate_payloads",
+    system_prompt=(
+        "You are a penetration tester. Given a target URL, a parameter name, "
+        "its current value, and the detected technology stack, generate up to 10 "
+        "realistic vulnerability-specific payloads tailored to this exact context. "
+        "The goal is to find reflected XSS, SQL injection, or other injection points.\n\n"
+        "Rules:\n"
+        "- Payloads must be context-aware: if the parameter expects a number, "
+        "use numeric variants; if it expects a string with HTML, use HTML variants.\n"
+        "- Do NOT include generic test payloads — only ones that stand a realistic "
+        "chance of triggering a vulnerability in the given tech stack.\n"
+        "- If the context is unclear, provide a mix of common injection types.\n\n"
+        "Return a JSON array of objects. NO text outside JSON:\n"
+        '- {{"payload": "...", "description": "short context note", "confidence": "high"}}\n'
+        "confidence: high | medium | low."
+    ),
+    expected_json_schema={
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "payload": {"type": "string"},
+                "description": {"type": "string"},
+                "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+            },
+            "required": ["payload", "description", "confidence"],
+        },
+    },
+    max_tokens=1024,
+    temperature=0.3,
+))
+
+# === 6. Parameter prioritization: which params to scan first ===
+_register(AITask(
+    name="prioritize_params",
+    system_prompt=(
+        "You are a penetration tester. Given a list of URL parameters, their current "
+        "values, and the technology stack, rank them by how likely they are to be "
+        "vulnerable. Consider: reflecting input, database interaction, file paths, "
+        "admin functionality.\n\n"
+        "Return a JSON array of objects, ordered by priority (highest first):\n"
+        '- {{"param": "search", "priority": "high", "reason": "reflects user input"}}\n'
+        "priority: high | medium | low."
+    ),
+    expected_json_schema={
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "param": {"type": "string"},
+                "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+                "reason": {"type": "string"},
+            },
+            "required": ["param", "priority", "reason"],
+        },
+    },
+    max_tokens=512,
+    temperature=0.1,
+))

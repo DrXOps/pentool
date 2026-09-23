@@ -1,0 +1,15 @@
+InputDialog #prompt-label {
+    margin-bottom: 1;
+}
+InputDialog #input-value {
+    margin-bottom: 1;
+}
+InputDialog #buttons {
+    layout: horizontal;
+    height: auto;
+    align: right middle;
+    margin-top: 1;
+}
+InputDialog #buttons ToolbarButton {
+    margin-left: 1;
+}

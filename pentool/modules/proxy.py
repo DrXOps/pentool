@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import threading
 import uuid
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -14,6 +13,7 @@ from pentool.modules.match_replace import MatchReplaceEngine, MatchReplaceRule
 from pentool.modules.websocket_handler import WebSocketHandler
 from pentool.utils.cert import create_ssl_context_for_domain, load_or_create_ca
 from pentool.utils.http_client import HTTPClient
+from pentool.utils.intercepted_request import InterceptedRequest, InterceptState
 from pentool.utils.scope import host_in_scope
 from pentool.utils.parser import (
     ParsedRequest,
@@ -33,138 +33,29 @@ _READ_TIMEOUT = 30.0
 # Timeout waiting for user decision during interception (seconds)
 _INTERCEPT_TIMEOUT = 300.0
 
-# Grace window (seconds) for the listening server to fully close during
-# stop(). The listener closes synchronously; this only covers lingering
-# sockets, so it stays short — a long value here stalls app shutdown for
-# no benefit.
+
 _STOP_SERVER_GRACE = 0.4
 
-# Grace window (seconds) to await cancellation of in-flight per-connection
-# tasks (TLS tunnels, keep-alive, intercept waits) during stop(). The
-# listener's close() releases the 8080 port synchronously, so we only need
-# one short cancel wave here — waiting longer just slows a normal quit.
-# Residual connections get torn down by the process exiting.
+
 _STOP_TASK_GRACE = 0.6
 
-# DRAIN grace (seconds): after sending CancelledError we must actually let each
-# cancelled _handle_client task run to completion (its `finally` does
-# writer.close()/wait_closed()). If we don't wait it out, tens-to-hundreds of
-# pending _handle_client coroutines are destroyed by Python when the loop
-# finishes — a burst of _PyGen_Finalize over a live heap that was implicated in
-# "free(): corrupted unsorted chunks" crashes under heavy WebSocket traffic.
-# This is deliberately a bit longer than the cancel wave.
+
 _STOP_TASK_DRAIN = 2.0
 
-# How long _handle_client may wait for its writer to actually close before
-# giving up. Bounded so a wedged socket (open upstream tunnel that never got
-# its far side closed) cannot leave the task pending on wait_closed() forever —
-# see _handle_client's bound on wait_closed(), which is the fix for the mass
-# _PyGen_Finalize heap-corruption crash (mass-pending-tasks at loop teardown).
+
 _WRITER_CLOSE_GRACE = 0.5
 
 
 InterceptState = Literal["waiting", "forwarded", "dropped"]
 
 
-@dataclass
-class InterceptedRequest:
-    """Intercepted request with state and response."""
-
-    id: str
-    method: str
-    url: str
-    headers: dict[str, str]
-    body: str
-    timestamp: datetime
-    state: InterceptState = "waiting"
-    response: ParsedResponse | None = None
-    is_https: bool = False
-    is_websocket: bool = False
-    # asyncio.Event — set when the user has made a decision
-    _decision_event: asyncio.Event = field(
-        default_factory=asyncio.Event, repr=False, compare=False
-    )
-    # If the user edited the request before forwarding
-    _modified_raw: str | None = field(default=None, repr=False, compare=False)
-
-    def to_parsed_request(self) -> ParsedRequest:
-        """Convert to ParsedRequest for sending via HTTPClient."""
-        return ParsedRequest(
-            method=self.method,
-            url=self.url,
-            headers=self.headers,
-            body=self.body,
-        )
-
-    def to_dict(self) -> dict:
-        """Serialize the intercepted request to a dict (full format with response).
-
-        Symmetric with from_dict() — suitable for project persistence.
-        """
-        resp = self.response
-        return {
-            "id": self.id,
-            "method": self.method,
-            "url": self.url,
-            "headers": self.headers,
-            "body": self.body if isinstance(self.body, str) else self.body.decode("utf-8", errors="replace"),
-            "timestamp": self.timestamp.isoformat(),
-            "state": self.state,
-            "is_https": self.is_https,
-            "is_websocket": self.is_websocket,
-            "response": {
-                "status": resp.status,
-                "reason": resp.reason,
-                "headers": resp.headers,
-                "body": resp.body if isinstance(resp.body, str) else resp.body.decode("utf-8", errors="replace"),
-            } if resp else None,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "InterceptedRequest":
-        """Restore InterceptedRequest from a dict (deserialization from project)."""
-        from datetime import datetime, timezone
-        ts_raw = data.get("timestamp", "")
-        try:
-            ts = datetime.fromisoformat(ts_raw)
-        except Exception:
-            ts = datetime.now(timezone.utc)
-
-        resp_data = data.get("response")
-        response = None
-        if resp_data:
-            response = ParsedResponse(
-                status=resp_data.get("status", 0),
-                reason=resp_data.get("reason", ""),
-                headers=resp_data.get("headers", {}),
-                body=resp_data.get("body", ""),
-            )
-
-        return cls(
-            id=data["id"],
-            method=data["method"],
-            url=data["url"],
-            headers=data.get("headers", {}),
-            body=data.get("body", ""),
-            timestamp=ts,
-            state=data.get("state", "forwarded"),
-            is_https=data.get("is_https", False),
-            is_websocket=data.get("is_websocket", False),
-            response=response,
-        )
+# Re-export for backward compatibility
+InterceptedRequest = InterceptedRequest  # noqa: PLC0104
+InterceptState = InterceptState  # noqa: PLC0104
 
 
 class ProxyServer:
-    """Asynchronous HTTP/HTTPS proxy server with traffic interception.
-
-    Runs as an asyncio server. Supports:
-    - HTTP and HTTPS interception (via CONNECT + dynamic certificates)
-    - Interactive mode (intercept): pauses request until user decision
-    - Scope: host filtering
-    - Match/Replace: automatic replacement in requests/responses (via MatchReplaceEngine)
-    - Logging to SQLite via core/db_schema
-    - Notifications via EventBus: ProxyRequestCaptured, ProxyRequestCompleted
-    """
+    """Async HTTP/HTTPS proxy (intercept, scope, match-replace, EventBus)."""
 
     def __init__(
         self,
@@ -180,13 +71,7 @@ class ProxyServer:
 
         self.intercept_enabled: bool = False
         self.scope: list[str] = []  # Empty = intercept everything
-        # When False (default), scope is informational only — ALL traffic is
-        # captured/shown regardless of self.scope. Scope filtering (dropping
-        # out-of-scope requests from capture) only takes effect when this is
-        # explicitly turned on via the "Skip out-of-scope" toggle button.
-        # Without this flag, a leftover/stale `scope` list (e.g. saved from a
-        # previous project) would silently blackhole all non-matching traffic
-        # the moment the proxy starts, with no visible indication why.
+
         self.enforce_scope: bool = False
 
         # Match/Replace via dedicated engine
@@ -194,37 +79,29 @@ class ProxyServer:
         # WebSocket handler
         self._ws_handler = WebSocketHandler()
 
-        # Queue of requests waiting for decision in interactive mode
-        self.intercept_queue: asyncio.Queue[InterceptedRequest] = asyncio.Queue()
+        # Queue of requests waiting for decision in interactive mode.
+        # Bounded to 2000 to prevent unbounded memory growth under burst.
+        self.intercept_queue: asyncio.Queue[InterceptedRequest] = asyncio.Queue(maxsize=2000)
 
-        # All intercepted requests (in-memory history, bounded ring).
-        # Full HTTP history is persisted to SQLite via HttpStorage — this
-        # in-memory list only backs the legacy proxy.get_requests() API
-        # (Repeater "load from history", project export/import,
-        # reload_from_proxy() reconstruction). Lowered from 10000 to 1000:
-        # each entry holds a full InterceptedRequest (headers + body +
-        # response), and the persistent source of truth is SQLite, not this
-        # list — 1000 is plenty for the legacy in-memory consumers above.
-        # Mutated from the proxy's own thread (_add_request) and read from
-        # the TUI thread (get_requests, _find_request, export/import) —
-        # protect with a lock to avoid race conditions (torn reads, list
-        # mutation during iteration).
         self._requests_lock = threading.Lock()
         self.requests: list[InterceptedRequest] = []
         self._requests_max = 1000
+        # O(1) lookup cache: req_id → InterceptedRequest.
+        # Поддерживается в sync при append/evict.
+        self._request_cache: dict[str, InterceptedRequest] = {}
 
 
         self._server: asyncio.AbstractServer | None = None
         self._ca_cert_path: str | None = None
         self._ca_key_path: str | None = None
         self._running = False
-        # Proxy thread loop — saved on start, needed for thread-safe wakeup
+        # Proxy thread loop -- saved on start, needed for thread-safe wakeup
         self._loop: asyncio.AbstractEventLoop | None = None
-        # Singleton HTTP client — do not create on every request
+        # Singleton HTTP client -- do not create on every request
         self._http_client: HTTPClient | None = None
 
     async def start(self) -> None:
-        # Save the current thread's loop — needed for thread-safe event wakeup
+        # Save the current thread's loop -- needed for thread-safe event wakeup
         self._loop = asyncio.get_running_loop()
         # Load or create CA
         self._ca_cert_path, self._ca_key_path = load_or_create_ca(self.cert_dir)
@@ -234,6 +111,8 @@ class ProxyServer:
             self._handle_client,
             host=self.host,
             port=self.port,
+            reuse_address=True,
+            reuse_port=True,
         )
         self._running = True
         addr = self._server.sockets[0].getsockname()
@@ -257,11 +136,7 @@ class ProxyServer:
             except Exception as e:
                 logger.warning("ProxyServer.stop: http_client.close() error: %s", e)
             self._http_client = None
-        # Cancel all remaining active tasks (open TLS tunnels, keep-alive
-        # connections, intercept waits) so the event loop can exit promptly.
-        # Without this, _handle_connect loops on _READ_TIMEOUT=30s and
-        # _INTERCEPT_TIMEOUT=300s — the proxy thread would not exit for up to
-        # 5 minutes after stop(), blocking project switches and restarts.
+
         loop = asyncio.get_running_loop()
         current = asyncio.current_task()
         pending = [t for t in asyncio.all_tasks(loop) if t is not current and not t.done()]
@@ -269,13 +144,7 @@ class ProxyServer:
             logger.debug("ProxyServer.stop: cancelling %d active task(s)", len(pending))
             for task in pending:
                 task.cancel()
-            # Two phases so we don't leave a pile of half-cancelled _handle_client
-            # coroutines to be destroyed by Python when the loop tears down (that
-            # burst of _PyGen_Finalize over a fragmented heap was implicated in
-            # the "free(): corrupted unsorted chunks" crashes). Phase 1: a short
-            # bounded await so a normal quit stays fast. Phase 2: actually wait
-            # out the drain so every cancelled task runs its finally (writer
-            # close) — bounded so a genuinely stuck task can't hang shutdown.
+
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*pending, return_exceptions=True),
@@ -291,7 +160,7 @@ class ProxyServer:
                     )
                 except asyncio.TimeoutError:
                     logger.warning(
-                        "ProxyServer.stop: %d task(s) still pending after drain — "
+                        "ProxyServer.stop: %d task(s) still pending after drain -- "
                         "residual coroutines will be torn down at loop exit",
                         sum(1 for t in pending if not t.done()),
                     )
@@ -321,12 +190,6 @@ class ProxyServer:
     def is_in_scope(self, host: str) -> bool:
         """Check if a host is in scope.
 
-        If scope is empty — all hosts are in scope.
-        Supports wildcards: *.example.com
-
-        Delegates to the shared pentool.utils.scope.host_in_scope() —
-        also used by AsyncSpider (modules/spider.py) so both modules
-        implement scope matching once instead of twice.
         """
         return host_in_scope(host, self.scope)
 
@@ -350,7 +213,7 @@ class ProxyServer:
         if loop is not None and loop.is_running():
             loop.call_soon_threadsafe(event.set)
         else:
-            # Fallback — direct call (if loop is not running)
+            # Fallback -- direct call (if loop is not running)
             try:
                 event.set()
             except Exception as e:
@@ -358,11 +221,6 @@ class ProxyServer:
 
     def set_intercept(self, enabled: bool) -> None:
         """Thread-safe setting of intercept_enabled flag from any thread.
-
-        When called from the TUI thread (Textual) uses call_soon_threadsafe
-        to avoid race conditions: the proxy loop reads intercept_enabled
-        in an asyncio coroutine, and a direct write from another thread may
-        cause the flag to change after the check.
         """
         loop = self._loop
         if loop is not None and loop.is_running():
@@ -373,9 +231,6 @@ class ProxyServer:
     def set_enforce_scope(self, enabled: bool) -> None:
         """Thread-safe setting of enforce_scope flag from any thread.
 
-        Same rationale as set_intercept — the proxy loop reads this flag
-        in _handle_http/_handle_connect, so writes from the TUI thread must
-        go through call_soon_threadsafe to avoid a torn read.
         """
         loop = self._loop
         if loop is not None and loop.is_running():
@@ -385,10 +240,7 @@ class ProxyServer:
 
     def _find_request(self, req_id: str) -> InterceptedRequest | None:
         with self._requests_lock:
-            for r in reversed(self.requests):
-                if r.id == req_id:
-                    return r
-        return None
+            return self._request_cache.get(req_id)
 
     async def _handle_client(
         self,
@@ -405,16 +257,7 @@ class ProxyServer:
         finally:
             try:
                 writer.close()
-                # Bounded close, not an unbounded await. If this connection
-                # still holds a live upstream tunnel (an open _tunnel_raw /
-                # WS relay that never got its other side closed), wait_closed()
-                # would block forever — and under mass cancellation (proxy.stop
-                # with many in-flight WS/keep-alive tunnels) that left hundreds
-                # of _handle_client tasks pending on account of THIS line, which
-                # the loop then finalized in a burst (_PyGen_Finalize over a
-                # fragmented heap → "free(): corrupted unsorted chunks" SIGABRT).
-                # Give it a short grace so even a wedged socket cannot hold a
-                # task hostage; the fd is closed regardless at loop teardown.
+
                 await asyncio.wait_for(
                     writer.wait_closed(), timeout=_WRITER_CLOSE_GRACE
                 )
@@ -467,7 +310,7 @@ class ProxyServer:
         writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
         await writer.drain()
 
-        # If host is out of scope — just tunnel without interception
+        # If host is out of scope -- just tunnel without interception
         # (only enforced when the user turned on "Skip out-of-scope")
         if self.enforce_scope and not self.is_in_scope(domain):
             await self._tunnel_raw(domain, host_port, reader, writer)
@@ -483,9 +326,6 @@ class ProxyServer:
             logger.warning("SSL context error for %s: %s", domain, exc)
             return
 
-        # Upgrade TLS via start_tls with a new StreamReaderProtocol.
-        # connection_made must be called BEFORE start_tls so the protocol
-        # knows about the transport and the handshake proceeds correctly.
         logger.debug("TLS: upgrading %s", domain)
         try:
             loop = asyncio.get_running_loop()
@@ -561,12 +401,7 @@ class ProxyServer:
             except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
                 pass  # normal TCP tunnel termination
             except asyncio.CancelledError:
-                # CancelledError is a BaseException (not Exception) — it would
-                # otherwise slip past the generic handler below AND, if the
-                # peer pipe fell over mid-drain, leave the far-side writer
-                # open so the enclosing _handle_client's wait_closed() would
-                # never return. Nothing to log; the shared finally (outside
-                # this gather) closes both writers.
+
                 raise
             except Exception as e:
                 logger.debug("_tunnel_raw pipe error: %s", e)
@@ -583,13 +418,7 @@ class ProxyServer:
                 return_exceptions=True,
             )
         finally:
-            # Ensure BOTH ends are closed even when this whole tunnel is
-            # cancelled mid-flight (one pipe broke the other). Under mass
-            # cancellation this is what was leaking open writers → unbounded
-            # pending _handle_client tasks on wait_closed() → the _PyGen_Finalize
-            # heap-corruption crash. close() alone is sufficient (asyncio
-            # schedules the actual fd close); wait_closed is bounded here as a
-            # belt-and-braces so we never block a cancel.
+
             for w in (writer, rem_writer):
                 try:
                     w.close()
@@ -615,25 +444,7 @@ class ProxyServer:
         logger.debug("PROXY: _handle_http: %s %s (https=%s, intercept=%s, in_scope=%s)",
                     req.method, req.url, is_https, self.intercept_enabled, self.is_in_scope(host))
 
-        # Check scope on every request, HTTP and HTTPS alike.
-        # (only enforced when the user turned on "Skip out-of-scope")
-        #
-        # BEFORE: `not is_https` meant HTTPS requests were only scope-checked
-        # once, at CONNECT time (_handle_connect), before the TLS tunnel was
-        # established. A browser's keep-alive HTTPS connection can carry many
-        # requests over its lifetime — if that connection was opened (and
-        # deemed in-scope at the time, e.g. because enforce_scope was still
-        # OFF, or the domain hadn't been added to Scope yet) before the user
-        # turned "Skip out-of-scope" on / edited Scope, every subsequent
-        # request on that already-open connection kept sailing straight
-        # through here (is_https=True skipped the check entirely) and into
-        # History, with no way to filter it out short of closing the
-        # connection. This is exactly the reported symptom: enabling
-        # "Skip out-of-scope" with only dvwa.local:7474 in Scope still let
-        # already-open github.com keep-alive traffic keep appearing in
-        # History. Checking scope per-request here (not just per-connection
-        # in _handle_connect) makes each individual HTTPS request honor the
-        # current enforce_scope/Scope state, the same as HTTP already did.
+
         if self.enforce_scope and not self.is_in_scope(host):
             logger.debug("PROXY: _handle_http: host %s out of scope, forwarding direct", host)
             return await self._forward_direct(req, writer)
@@ -692,7 +503,7 @@ class ProxyServer:
                     ireq._decision_event.wait(), timeout=_INTERCEPT_TIMEOUT
                 )
             except asyncio.TimeoutError:
-                logger.warning("INTERCEPT: timeout on %s — request dropped after %.0fs", ireq.id, _INTERCEPT_TIMEOUT)
+                logger.warning("INTERCEPT: timeout on %s -- request dropped after %.0fs", ireq.id, _INTERCEPT_TIMEOUT)
                 ireq.state = "dropped"
 
             logger.debug("INTERCEPT: decision=%s on %s", ireq.state, ireq.id)
@@ -712,7 +523,7 @@ class ProxyServer:
                 except ValueError:
                     pass
 
-        # WebSocket upgrade — separate path (requires raw TCP tunnel)
+        # WebSocket upgrade -- separate path (requires raw TCP tunnel)
         if is_websocket:
             await self._handle_websocket(req, ireq, reader, writer)
             return None
@@ -723,23 +534,9 @@ class ProxyServer:
         if response is None:
             writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\nProxy error")
             await writer.drain()
-            ireq.state = "forwarded"
-            ireq.response = None
-            # Was a silent early-return — no ProxyRequestCompleted was ever
-            # emitted for network failures (DNS error, connection refused,
-            # timeout, unreachable host, etc). That meant:
-            #   1. on_proxy_request_done() in app.py never fired → the row
-            #      already in HTTP History (from the earlier
-            #      ProxyRequestCaptured/add_request_row on capture) never got
-            #      its status/response, so it looked "stuck"/incomplete.
-            #   2. SendToTarget never posted → TargetScreen.add_request_from_proxy
-            #      was never called for these requests — SiteMap silently
-            #      missed every host that had ANY failed request (very common
-            #      with ad/analytics/CDN domains that time out or get
-            #      DNS-blocked — exactly the "many requests fly past, Target
-            #      doesn't fill up" symptom).
-            # Emit here too so failed requests still show up (with no status)
-            # instead of vanishing from both History and the SiteMap.
+            ireq.set_state("forwarded")
+            ireq.set_response(None)
+
             try:
                 from pentool.core.event_bus import get_event_bus
                 from pentool.core.events import ProxyRequestCompleted
@@ -762,9 +559,9 @@ class ProxyServer:
             except ValueError:
                 pass
 
-        ireq.response = response
-        if ireq.state == "waiting":
-            ireq.state = "forwarded"
+        ireq.set_response(response)
+        if ireq.get_state() == "waiting":
+            ireq.set_state("forwarded")
 
         # Notify subscribers via EventBus (main channel)
         try:
@@ -790,12 +587,12 @@ class ProxyServer:
 
     @staticmethod
     def _parse_ws_frame(data: bytes) -> tuple[int, bool, bytes, int] | None:
-        """Backward compatibility — delegates to WebSocketHandler.parse_frame."""
+        """Backward compatibility -- delegates to WebSocketHandler.parse_frame."""
         return WebSocketHandler.parse_frame(data)
 
     @staticmethod
     def _build_ws_frame(opcode: int, payload: bytes, mask: bool = False) -> bytes:
-        """Backward compatibility — delegates to WebSocketHandler.build_frame."""
+        """Backward compatibility -- delegates to WebSocketHandler.build_frame."""
         return WebSocketHandler.build_frame(opcode, payload, mask)
 
     async def _ws_tunnel(
@@ -806,7 +603,7 @@ class ProxyServer:
         srv_reader: asyncio.StreamReader,
         srv_writer: asyncio.StreamWriter,
     ) -> None:
-        """Backward compatibility — delegates to WebSocketHandler.tunnel."""
+        """Backward compatibility -- delegates to WebSocketHandler.tunnel."""
         await self._ws_handler.tunnel(
             request_id=request_id,
             client_reader=client_reader,
@@ -822,7 +619,7 @@ class ProxyServer:
         client_reader: asyncio.StreamReader,
         client_writer: asyncio.StreamWriter,
     ) -> None:
-        """Backward compatibility — delegates to WebSocketHandler.connect_and_handle."""
+        """Backward compatibility -- delegates to WebSocketHandler.connect_and_handle."""
         await self._ws_handler.connect_and_handle(
             req=req,
             ireq=ireq,
@@ -847,8 +644,8 @@ class ProxyServer:
             # Use singleton client for connection pooling
             if self._http_client is None:
                 from pentool.core.config import get_config
-                cfg = get_config()
-                self._http_client = HTTPClient(verify_ssl=cfg.verify_ssl, timeout=cfg.request_timeout)
+                from pentool.utils.http_client import get_shared_http_client
+                self._http_client = get_shared_http_client(follow_redirects=True, cfg=get_config())
             return await self._http_client.send(req)
         except Exception as exc:
             logger.warning("Request failed %s %s: %s", req.method, req.url, exc)
@@ -899,8 +696,19 @@ class ProxyServer:
     def _add_request(self, req: InterceptedRequest) -> None:
         with self._requests_lock:
             self.requests.append(req)
+            self._request_cache[req.id] = req
             if len(self.requests) > self._requests_max:
-                self.requests = self.requests[-self._requests_max:]
+
+                non_waiting = [r for r in self.requests if r.state != "waiting"]
+                waiting = [r for r in self.requests if r.state == "waiting"]
+                to_evict = len(self.requests) - self._requests_max
+                evicted = self.requests[:to_evict]
+                self.requests = (non_waiting[to_evict:]
+                                 if len(non_waiting) >= to_evict
+                                 else []) + waiting
+                # Удаляем из кэша вытесненные записи
+                for r in evicted:
+                    self._request_cache.pop(r.id, None)
 
     def get_requests(
         self,
@@ -919,15 +727,14 @@ class ProxyServer:
     def clear_requests(self) -> None:
         with self._requests_lock:
             self.requests.clear()
+            self._request_cache.clear()
 
     def replace_requests(self, requests: list[InterceptedRequest]) -> None:
         """Atomically replace the in-memory request history.
-
-        Used by project import/export code that used to mutate
-        `self.requests` directly (bypassing the lock).
         """
         with self._requests_lock:
             self.requests = list(requests)
+            self._request_cache = {r.id: r for r in requests}
 
     @staticmethod
     def _request_to_raw(req: "ParsedRequest") -> str:
@@ -955,10 +762,8 @@ class ProxyServer:
     def _response_to_bytes(resp: ParsedResponse) -> bytes:
         """Serialize ParsedResponse to bytes for sending to the browser.
 
-        aiohttp already decoded gzip/deflate and removed chunked — need to
-        clean up the corresponding headers and set the correct Content-Length.
         """
-        # Body — raw bytes (already decoded by aiohttp)
+        # Body -- raw bytes (already decoded by aiohttp)
         if resp._raw_body is not None:
             body_bytes = resp._raw_body
         elif resp.body:

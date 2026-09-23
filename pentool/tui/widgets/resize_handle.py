@@ -11,16 +11,7 @@ _CSS = (Path(__file__).parent / "resize_handle.tcss").read_text(encoding="utf-8"
 
 
 class ResizeHandle(Widget):
-    """Draggable divider between two widgets.
-
-    Mechanics (no gaps, no lag):
-    - mouse_down: capture screen_x/y, left panel size and total pair size
-      (left.size + right.size). Total is cached and does not change during
-      drag — otherwise 1fr drifts.
-    - mouse_move: new_left = start_left + (screen_x - start_x).
-      new_right = total - new_left. Both panels in absolute units — no gaps.
-    - mouse_up: release_mouse.
-    """
+    """Draggable divider between two panels (no gaps, total cached on mousedown)."""
 
     DEFAULT_CSS = _CSS
 

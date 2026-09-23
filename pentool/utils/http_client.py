@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import time
-from typing import Callable
+from typing import Any, Callable
 
 import aiohttp
 
+from pentool.core.logging import get_logger
 from pentool.utils.parser import ParsedRequest, ParsedResponse
+
+logger = get_logger(__name__)
 
 # Callback type: called after each request
 RequestCallback = Callable[[ParsedRequest, ParsedResponse], None]
@@ -27,12 +30,20 @@ class HTTPClient:
         verify_ssl: bool = False,
         on_request_sent: RequestCallback | None = None,
         extra_headers: dict | None = None,
+        scan_marker_name: str | None = None,
+        scan_marker_value: str | None = None,
+        scan_marker_enabled: bool = False,
     ) -> None:
         self._proxy_url = proxy_url
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._follow_redirects = follow_redirects
         self._verify_ssl = verify_ssl
         self._on_request_sent = on_request_sent
+        # scan_marker injected from outside (Config layer) — no direct import of core.config
+        if extra_headers is None and scan_marker_enabled and scan_marker_name and scan_marker_value:
+            extra_headers = {scan_marker_name: scan_marker_value}
+            logger.debug("HTTPClient: scan_marker injected: %s: %s",
+                         scan_marker_name, scan_marker_value)
         self._extra_headers = extra_headers or {}
         self._session: aiohttp.ClientSession | None = None
 
@@ -78,7 +89,6 @@ class HTTPClient:
         async with session.request(request.method, request.url, **kwargs) as resp:
             # Read raw bytes — aiohttp decodes gzip/deflate automatically via read()
             resp_body_bytes: bytes = await resp.read()
-            int((time.monotonic() - start) * 1000)
 
             # Decode for storage in ParsedResponse (for TUI/reports)
             try:
@@ -138,3 +148,27 @@ class HTTPClient:
     async def __aexit__(self, *_: object) -> None:
         """Context manager support: close session on exit."""
         await self.close()
+
+
+def get_shared_http_client(
+    follow_redirects: bool = True,
+    extra_headers: dict | None = None,
+    cfg: Any | None = None,
+) -> "HTTPClient":
+    """Build an HTTPClient from Config (new per call, config is single source of truth)."""
+    if cfg is None:
+        return HTTPClient(
+            verify_ssl=True,
+            timeout=10,
+            follow_redirects=follow_redirects,
+            extra_headers=extra_headers,
+        )
+    return HTTPClient(
+        verify_ssl=cfg.verify_ssl,
+        timeout=cfg.request_timeout,
+        follow_redirects=follow_redirects,
+        extra_headers=extra_headers,
+        scan_marker_name=getattr(cfg, "scan_marker_name", None),
+        scan_marker_value=getattr(cfg, "scan_marker_value", None),
+        scan_marker_enabled=getattr(cfg, "scan_marker_enabled", False),
+    )

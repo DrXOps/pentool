@@ -143,13 +143,6 @@ class TestScanNoFinding:
 class TestEngineIntegration:
     """End-to-end through ScanEngine — XXE found via the scan()-pipeline."""
 
-    @pytest.fixture(autouse=True)
-    def _reset_session_license(self):
-        import pentool.core.license as lic_mod
-        saved = lic_mod._session_license
-        lic_mod._session_license = None
-        yield
-        lic_mod._session_license = saved
 
     @pytest.mark.asyncio
     async def test_engine_detects_xxe_from_xml_body(self):
