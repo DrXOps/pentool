@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from textual import on, work
+from textual.widgets import Checkbox
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
@@ -153,15 +154,22 @@ class TargetScreen(Widget):
                 "🕷 Crawl Host", "btn-crawl-host",
                 tooltip="Crawl the selected host in the tree with the Spider"
             )
-            yield Static(" │ ", classes="toolbar-sep")
-            yield Checkbox(
-                "🤖 Use AI", id="cfg-ai-use", value=False,
-                tooltip="When set, Spider adds AI-suggested endpoints after crawling"
-            )
-            yield Static(" │ ", classes="toolbar-sep")
+            # "🤖 Use AI" чекбокс + разделители — в one Horizontal для скрытия целиком
+            with Horizontal(id="ai-crawl-box"):
+                yield Static(" │ ", classes="toolbar-sep")
+                yield Checkbox(
+                    "🤖 Use AI", id="cfg-ai-use", value=False,
+                    tooltip="When set, Spider adds AI-suggested endpoints after crawling"
+                )
+                yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("🗑 Clear",             "btn-clear")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("📄 Export JSON",       "btn-export")
+
+        # При старте скрываем AI-секцию если ai_enabled выключен
+        from pentool.core.config import get_config
+        if not getattr(get_config(), "ai_enabled", False):
+            self._ai_hidden_on_compose = True
 
         with Horizontal(id="main-split"):
             yield Tree("Site Map", id="site-tree")
@@ -176,8 +184,12 @@ class TargetScreen(Widget):
         )
 
     def on_mount(self) -> None:
-        """Post-mount: app._update_ai_ui() скрывает AI-контролы централизованно."""
-        pass
+        """При старте скрыть AI-секцию если ai_enabled выключен."""
+        if getattr(self, "_ai_hidden_on_compose", False):
+            try:
+                self.query_one("#ai-crawl-box").display = False
+            except Exception:
+                pass
 
     def _get_api(self):
         if self._target_api is None:

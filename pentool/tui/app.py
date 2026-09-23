@@ -1479,14 +1479,15 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         "Use AI" checkbox additionally decides AI-crawl per target.
         """
         ai_on = bool(getattr(self._cfg, "ai_enabled", False))
-        # Target toolbar "🤖 Use AI" checkbox — visible only when AI is enabled.
+        # Target toolbar "🤖 Use AI" checkbox + разделители — visible only when AI is enabled.
+        # Скрываем контейнер #ai-crawl-box целиком (вместе с разделителями).
         try:
             from pentool.tui.screens.target.screen import TargetScreen
             target = self.query_one(TargetScreen)
-            box = target.query_one("#cfg-ai-use")
+            box = target.query_one("#ai-crawl-box")
             box.display = ai_on
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("_update_ai_ui: TargetScreen #ai-crawl-box hide: %s", exc)
         # Dashboard MCP status LED gets refreshed from is_ai_running/ai_enabled.
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen, SCREEN_DASHBOARD
