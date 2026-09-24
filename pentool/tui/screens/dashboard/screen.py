@@ -36,12 +36,20 @@ def _build_logo() -> str:
     Version line is centered within the same width as the other dashed
     lines in the logo (kept fixed regardless of version string length,
     so e.g. "0.2.8" vs "0.2.10" vs "0.2.8.dev4" don't visibly misalign
-    the block).
+    the block). If PRO package is loaded, appends a PRO badge.
     """
     from pentool import __version__
 
+    _pro_badge = ""
+    try:
+        from pentool.core.license import get_session_license
+        if get_session_license().is_pro():
+            _pro_badge = " [bold yellow](PRO)[/]"
+    except Exception:
+        pass
+
     inner_width = 77
-    label = f" Web Security Testing Platform v{__version__} "
+    label = f" Web Security Testing Platform v{__version__}{_pro_badge} "
     dashes_total = max(inner_width - len(label), 0)
     left = dashes_total // 2
     right = dashes_total - left

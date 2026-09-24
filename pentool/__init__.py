@@ -1,19 +1,24 @@
 """Pentool — professional web security testing toolkit with Textual TUI."""
 
-import tomllib
+import importlib.metadata
 from pathlib import Path
 
 # Single source of truth: version lives ONLY in pyproject.toml.
-# This file reads it at import time so there is one canonical value
-# used by both the installed package metadata (pip setuptools-scm /
-# manual stamping) and the source tree itself. No more fallback
-# literals that drift out of sync.
+# In an installed package (wheel) we read it from the dist-info metadata.
+# In a source checkout (pyproject.toml exists next to the package dir)
+# we fall back to reading it from there so development versions are always
+# current without manual stamping.
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+__version__: str = "0.0.0"  # type-safe init
 try:
-    with open(_PYPROJECT, "rb") as _f:
-        __version__: str = tomllib.load(_f)["project"]["version"]
-except Exception:
-    __version__ = "0.0.0"  # last resort — should never happen in a valid install
+    __version__ = importlib.metadata.version("pentool")
+except importlib.metadata.PackageNotFoundError:
+    try:
+        import tomllib
+        with open(_PYPROJECT, "rb") as _f:
+            __version__ = tomllib.load(_f)["project"]["version"]
+    except Exception:
+        __version__ = "0.0.0"  # last resort — should never happen in a valid install
 
 __author__ = "pentool"
 
@@ -51,6 +56,11 @@ def _bootstrap_pro() -> None:
             if not _compatible:
                 print(f"[pentool] {_warning}", file=sys.stderr)
                 continue
+            if _warning:
+                # Soft mismatch (e.g. free_version in meta is "0.0.0" from a
+                # previous broken install or version skew) — warn but load PRO
+                # anyway. The PRO package is pure Python, no ABI crash risk.
+                print(f"[pentool] {_warning}", file=sys.stderr)
 
         # 1. Extend top-level pentool.__path__ so that sub-packages
         #    resolved via pkgutil.extend_path below will find pro/pentool/XXX.

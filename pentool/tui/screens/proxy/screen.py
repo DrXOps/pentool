@@ -174,7 +174,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
 
     def _build_toolbar(self) -> ComposeResult:
         with Horizontal(id="toolbar"):
-            yield ToolbarButton("○ Proxy",     "btn-proxy",     classes="inactive")
+            yield ToolbarButton("▶ Proxy",     "btn-proxy",     classes="inactive")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("○ Intercept", "btn-intercept", classes="inactive")
             yield Static(" │ ", classes="toolbar-sep")
@@ -1569,7 +1569,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             except Exception:
                 pass
         self.app.action_toggle_proxy()  # type: ignore[attr-defined]
-        self.call_after_refresh(self._sync_proxy_button)
+        # NOTE: _sync_proxy_button убран отсюда намеренно — есть гонка:
+        # _stop_proxy_async / _start_proxy запускают асинхронный воркер,
+        # а _sync_proxy_button сразу после его запуска будет читать старое
+        # состояние is_running и вернёт кнопку обратно. Вместо этого
+        # каждый из методов _start_* / _stop_* сам вызывает
+        # _update_proxy_screen_labels при фактическом завершении операции,
+        # что корректно синхронизирует кнопку с реальным состоянием.
 
     def action_clear_list(self) -> None:
         proxy = self._get_proxy()
@@ -1717,11 +1723,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         except Exception:
             return
         if proxy and proxy.is_running:
-            btn.label = f"● Proxy:{proxy.port}"
+            btn.label = f"■ Proxy:{proxy.port}"
             btn.remove_class("inactive")
             btn.add_class("active")
         else:
-            btn.label = "○ Proxy"
+            btn.label = "▶ Proxy"
             btn.remove_class("active")
             btn.add_class("inactive")
 

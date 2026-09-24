@@ -981,13 +981,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # don't end up hidden underneath the freshly-shown tab (Textual's
         # toast rack can sit below a tab's own layers after a switch).
         self.call_after_refresh(self._refresh_notifications)
-        # _update_proxy_screen_labels() only refreshes the ProxyScreen label
-        # when it IS the active module — so if the proxy was stopped/started
-        # while the user was on a different tab (e.g. right after creating a
-        # new project, which force-stops the proxy while Dashboard is shown),
-        # the label update was skipped and stayed stale until the next actual
-        # start/stop toggle. Refresh it explicitly on every switch into Proxy.
+        # Do NOT auto-start/stop proxy on tab switch — that is reserved for the
+        # explicit toolbar button (▶/■ Proxy) and for --url/--smart seed mode
+        # (_seed_pending_urls). The tab-switch path was previously used to
+        # toggle proxy but it auto-started the proxy every time the user just
+        # looked at the Proxy screen, which broke the Burp-like expectation of
+        # explicit Start.
         if module_id == "proxy":
+            logger.info("APP: _switch_to -> proxy (labels only)")
             self._update_proxy_screen_labels()
 
     def get_proxy(self) -> ProxyServer | None:

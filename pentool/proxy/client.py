@@ -283,6 +283,7 @@ class ProxyClient:
 
     def cleanup(self) -> None:
         """Stop the reader, close sockets, terminate the daemon process."""
+        self._running = False
         self._reader_stop.set()
         reader = self._reader
         if reader is not None and reader.is_alive() and reader is not threading.current_thread():
