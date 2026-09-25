@@ -91,8 +91,8 @@ _PROXY_ENTRIES = [
     _e("ctrl+w",         "focus_tab_ws",         "WS History",    show=False),
     _e("ctrl+r",         "send_to_repeater",     "Send to Repeater", show=True),
     _e("ctrl+u",         "copy_url",             "Copy URL",      show=True),
-    _e("ctrl+shift+v",   "open_in_browser",      "View Browser",  show=True),
-    _e("ctrl+b",         "open_in_browser",      "",              show=False),
+    _e("o",   "open_in_browser",      "View Browser",  show=True),
+    _e("o",         "open_in_browser",      "",              show=False),
     _e("ctrl+s",         "send_to_scanner",      "Send to Scanner",  show=True),
     _e("m",              "context_menu",         "Context Menu",  show=False),
     _e("escape",         "hide_detail",          "Hide Detail",   show=True),
@@ -104,8 +104,8 @@ _REPEATER_ENTRIES = [
     _e("ctrl+space",     "send",                 "Send",          show=False, priority=True),
     _e("ctrl+f",         "toggle_search",        "Search",        show=True,  priority=True),
     _e("ctrl+d",         "toggle_diff",          "Diff",          show=True,  priority=True),
-    _e("ctrl+shift+v",   "open_in_browser",      "View Browser",  show=True),
-    _e("ctrl+b",         "open_in_browser",      "",              show=False),
+    _e("o",   "open_in_browser",      "View Browser",  show=True),
+    _e("o",         "open_in_browser",      "",              show=False),
     _e("ctrl+s",         "send_to_scanner",      "Send to Scanner",  show=True),
     _e("ctrl+tab",       "next_tab",             "Next Tab",      show=False),
 ]
@@ -114,8 +114,8 @@ _INTRUDER_ENTRIES = [
     _e("ctrl+enter",     "start_attack",         "Start Attack",  show=True),
     _e("ctrl+p",         "toggle_pause",         "Pause/Resume",  show=True),
     _e("escape",         "hide_detail",          "Hide Detail",   show=True),
-    _e("ctrl+shift+v",   "open_in_browser",      "View Browser",  show=True),
-    _e("ctrl+b",         "open_in_browser",      "",              show=False),
+    _e("o",   "open_in_browser",      "View Browser",  show=True),
+    _e("o",         "open_in_browser",      "",              show=False),
 ]
 
 _SCANNER_ENTRIES = [

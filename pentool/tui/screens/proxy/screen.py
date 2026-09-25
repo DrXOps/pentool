@@ -1243,10 +1243,11 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     def action_open_in_browser(self) -> None:
         """Open selected URL in Lightpanda viewer."""
-        import sys as _sys
-        print(f"[HOTKEY] action_open_in_browser called, req_id={self._selected_req_id}", file=_sys.stderr, flush=True)
-        logger.debug("action_open_in_browser called, _selected_req_id=%s", self._selected_req_id)
-        self._open_in_lightpanda()
+        logger.info("action_open_in_browser: req_id=%s", self._selected_req_id)
+        try:
+            self._open_in_lightpanda()
+        except Exception as exc:
+            logger.error("action_open_in_browser crashed: %s", exc, exc_info=True)
 
     def action_context_menu(self) -> None:
         """Show context menu for selected row."""
