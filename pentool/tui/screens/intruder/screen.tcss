@@ -253,6 +253,7 @@ IntruderScreen #intruder-detail-panel {
     height: 20;
     layout: horizontal;
     border-top: solid $primary;
+    display: none;
 }
 
 IntruderScreen .detail-col {

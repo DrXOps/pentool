@@ -26,7 +26,7 @@ from textual.widgets import (
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import build_proxy_bindings
-from pentool.tui.widgets.proxy_table import (
+from pentool.tui.widgets.proxy_helpers import (
     COL_NAMES as _COL_NAMES,
     row_to_record as _row_to_record,
     rows_to_arrow as _rows_to_arrow,
@@ -60,7 +60,7 @@ _HISTORY_PAGE_SIZE = 300
 _FILTER_RELOAD_DEBOUNCE_S = 0.6
 
 # HTTP-history table Arrow/row helpers (_make_empty_table, _rows_to_arrow,
-# _row_to_record, _COL_NAMES) moved to tui/widgets/proxy_table.py (Этап 6) —
+# _row_to_record, _COL_NAMES) moved to tui/widgets/proxy_helpers.py (Этап 6) —
 # imported at the top of this module under the same names.
 
 from textual import on
@@ -69,7 +69,7 @@ from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
-from pentool.tui.screens.proxy.data_table import ProxyDataTable
+from pentool.tui.widgets.proxy_data_table import ProxyDataTable
 
 DataTable = ProxyDataTable
 

@@ -13,13 +13,11 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from rich.text import Text
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 from textual.widgets import (
     Button,
-    DataTable,
     Input,
     Label,
     ListItem,
@@ -29,7 +27,6 @@ from textual.widgets import (
     Static,
     TextArea,
 )
-
 from pentool.api.intruder_api import (
     AttackType,
     ChainedPayloadSource,
@@ -53,12 +50,14 @@ from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
+from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar as _IntruderFilterBar
+from pentool.tui.widgets.intruder_results_table import IntruderResultsTable
 from pentool.tui.dialogs.intruder_input import InputDialog
 from pentool.tui.dialogs.intruder_generate import GenerateDialog
 from pentool.tui.dialogs.intruder_smart_payloads import SmartPayloadsDialog
@@ -101,8 +100,9 @@ _PAYLOAD_LIST_PREVIEW_LIMIT = 500
 # plain list). _refresh_payload_list() caps rendering to a preview for any
 # of these instead of iterating the whole set into ListItem widgets.
 _LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
+DataTable = IntruderResultsTable
 
-class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
+class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContextMenuMixin, Widget):
     """Intruder module screen."""
 
     DEFAULT_CSS = _CSS
@@ -132,8 +132,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         self._filter_len_gt: int | None = None
         self._filter_len_lt: int | None = None
         self._grep_only_match: bool = False
-        self._sort_col: int | None = None
-        self._sort_reverse: bool = False
+        # _sort_col / _sort_reverse — inherited from SortableTableMixin
         # NOT named `_running` — that name collides with
         # textual.message_pump.MessagePump._running, an internal attribute
         # every Widget already has (True while its own message loop is
@@ -274,11 +273,14 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             with Horizontal(id="progress-row"):
                 yield ProgressBar(total=100, id="attack-progress", show_eta=False)
                 yield Static("0/0 (0%)", id="progress-label")
-            yield DataTable(
-                id="results-table",
-                cursor_type="row",
-                zebra_stripes=True,
-            )
+                yield DataTable(
+                    id="results-table",
+                    columns=_RESULTS_COL_NAMES,
+                    column_widths=[5, 45, 8, 10, 10, 30],
+                    cursor_type="row",
+                    zebra_stripes=True,
+                    max_column_content_width=120,
+                )
 
             # Detail panel (hidden initially)
             with Horizontal(id="intruder-detail-panel", classes="intruder-detail-panel"):
@@ -295,6 +297,13 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             id="status-bar",
         )
 
+    def on_show(self) -> None:
+        """When Intruder becomes visible, force table re-render with actual widget size."""
+        try:
+            self.query_one("#results-table", DataTable).refresh()
+        except Exception:
+            pass
+
     def on_mount(self) -> None:
         # Reset on mount in case a previous session left this mid-attack
         # (e.g. app crashed/restarted). No longer strictly needed for the
@@ -303,23 +312,19 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         # reasonable safety net against stale state from a prior session.
         self._attack_running = False
         self._paused = False
-        table = self.query_one("#results-table", DataTable)
-        table.add_column("#",          width=5)
-        table.add_column("Payload(s)", width=45)
-        table.add_column("Status",     width=8)
-        table.add_column("Length",     width=10)
-        table.add_column("Time(ms)",   width=10)
-        table.add_column("Error",      width=30)
+        # FIXME: remove test row — verify table renders visibly
+        try:
+            self.query_one("#results-table", DataTable).add_rows([
+                ("1", "admin", "200", "1024", "150", ""),
+                ("2", "test", "404", "512", "200", "Not Found"),
+            ])
+        except Exception:
+            pass
         self._update_payload_select()
         self._setup_tooltips()
         # Load saved state from DB
         self._load_state_from_db()
-        # Hide the detail panel initially.
-        try:
-            panel = self.query_one("#intruder-detail-panel")
-            panel.display = False
-        except Exception:
-            pass
+        # Detail panel is hidden via CSS display:none initially.
         # Apply FREE-license limits.
         self._apply_license_limits()
 
@@ -675,8 +680,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
     ) -> None:
         """React to _IntruderFilterBar posting a FilterChanged message."""
         f = event.filters
+        had_extract = bool(self._grep_extract_patterns)
         if not f:
-            # Reset
             self._filter_status  = None
             self._filter_len_gt  = None
             self._filter_len_lt  = None
@@ -685,7 +690,6 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             self._grep_only_match       = False
         else:
             if "status" in f or "len_gt" in f or "len_lt" in f:
-                # Filter change
                 self._filter_status = f.get("status")
                 self._filter_len_gt = f.get("len_gt")
                 self._filter_len_lt = f.get("len_lt")
@@ -693,17 +697,25 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                 self._grep_match_patterns   = [f["grep_match"]]   if f.get("grep_match")   else []
                 self._grep_extract_patterns = [f["grep_extract"]] if f.get("grep_extract") else []
                 self._grep_only_match       = bool(f.get("grep_only_match"))
-                # No self.app.notify here: a toast is spawned on EVERY Apply/
-                # Clear/Reset, and under rapid clicking that floods the UI with
-                # toast + notification-sound threads (and previously, subprocess
-                # forks). A quiet debug line keeps the state visible without the
-                # cost. See core/notification_sound.py throttle note.
                 n_match   = len(self._grep_match_patterns)
                 n_extract = len(self._grep_extract_patterns)
                 logger.info(
                     "INTRUDER: grep applied — match=%d extract=%d only_match=%s",
                     n_match, n_extract, self._grep_only_match,
                 )
+
+        # Sync the Extract column — add when pattern appears, remove when cleared
+        has_extract = bool(self._grep_extract_patterns)
+        if has_extract != had_extract:
+            try:
+                table = self.query_one("#results-table", DataTable)
+                if has_extract:
+                    table.add_column("Extract")
+                else:
+                    table.remove_column("Extract")
+            except Exception:
+                pass
+
         self._redraw_results()
 
     def _open_attack_type_menu(self, btn: ToolbarButton) -> None:
@@ -1391,18 +1403,18 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         try:
             threads = int(self.query_one("#input-threads", Input).value or "10")
             if not is_pro:
-                threads = max(1, min(threads, 5))  # FREE: max 5
+                threads = max(1, min(threads, 5))
             else:
-                threads = max(1, min(threads, 200))  # PRO: max 200
+                threads = max(1, min(threads, 200))
         except Exception:
             threads = 5 if not is_pro else 10
 
         try:
             delay_ms = int(self.query_one("#input-delay", Input).value or "0")
             if not is_pro:
-                delay_ms = max(100, delay_ms)  # FREE: min 100ms
+                delay_ms = max(100, delay_ms)
             else:
-                delay_ms = max(0, delay_ms)  # PRO: no limits
+                delay_ms = max(0, delay_ms)
         except Exception:
             delay_ms = 100 if not is_pro else 0
 
@@ -1596,64 +1608,18 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             # Add Extract column if a pattern is set
             if self._grep_extract_patterns:
                 row.append(extract_val)
-                self._ensure_extract_column(table)
 
-            table.add_row(*row, key=result.id)
-        except Exception:
-            pass
-
-    def _ensure_extract_column(self, table: DataTable) -> None:
-        """Add the dynamic "Extract" results-table column once, when a Grep
-        Extract pattern is active (variant A fix: it was being written into
-        rows without a declared column, producing a silent ValueError/blank).
-        Idempotent — column is added only if not already present."""
-        if not self._grep_extract_patterns:
-            return
-        try:
-            cols = getattr(table, "columns", None)
-            if cols is not None:
-                for k, col in cols.items():
-                    try:
-                        if str(getattr(col, "label", "") or "").startswith("Extract"):
-                            return
-                    except Exception:
-                        continue
-            table.add_column("Extract")
-        except Exception:
-            try:
-                table.add_column("Extract")
-            except Exception:
-                pass
-
-    def _remove_extract_column(self, table: DataTable) -> None:
-        """Drop the dynamic "Extract" column once the grep-extract pattern is
-        cleared, so the columns return to the plain 6. Idempotent."""
-        try:
-            cols = getattr(table, "columns", None)
-            if not cols:
-                return
-            for k, col in list(cols.items()):
-                try:
-                    if str(getattr(col, "label", "") or "").startswith("Extract"):
-                        table.remove_column(k)
-                        return
-                except Exception:
-                    continue
+            table.add_rows([tuple(row)])
         except Exception:
             pass
 
     def _clear_results(self) -> None:
         try:
-            self.query_one("#results-table", DataTable).clear()
+            table = self.query_one("#results-table", IntruderResDataTableultsTable)
+            table.clear_data()
         except Exception:
             pass
         self._all_results = []
-        # Full clear also drops the dynamic Extract column so a later Clear
-        # grep returns the table to its plain 6 columns.
-        try:
-            self._remove_extract_column(self.query_one("#results-table", DataTable))
-        except Exception:
-            pass
         try:
             self.query_one("#progress-label", Static).update("0/0 (0%)")
             self.query_one("#attack-progress", ProgressBar).update(total=100)
@@ -1661,53 +1627,34 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
             pass
 
     def _result_at_row(self, table: DataTable, row_index: int) -> IntruderResult | None:
-        """Resolve result by row_key (works with sorted table, not just cursor_row)."""
-        try:
-            from textual.coordinate import Coordinate
-            row_key = table.coordinate_to_cell_key(Coordinate(row_index, 0)).row_key
-        except Exception:
-            return None
-        target_id = row_key.value
-        for result in self._all_results:
-            if result.id == target_id:
-                return result
+        """Resolve result by index in _all_results.
+
+        Works with sorted tables because we track the sort state and
+        apply it to _all_results as well — the row index directly
+        maps to the position in the sorted list.
+        """
+        # The filtered-and-sorted order matches what's shown in the table.
+        # We iterate _all_results through the same filter to get the Nth
+        # visible result.
+        n = 0
+        for r in self._all_results:
+            if matches_result_filters(
+                r,
+                self._filter_status,
+                self._filter_len_gt,
+                self._filter_len_lt,
+                self._grep_match_patterns,
+                self._grep_only_match,
+            ):
+                if n == row_index:
+                    return r
+                n += 1
         return None
-
-    # Columns that hold numeric data even though the DataTable stores every
-    # cell as a string — # (request number), Status, Length, Time(ms). Error
-    # and Payload(s) sort correctly as plain strings already.
-    _NUMERIC_SORT_COLS = {0, 2, 3, 4}
-
-    @staticmethod
-    def _numeric_sort_key(raw) -> int:
-        """Extract int from Rich-markup cell string for correct numeric DataTable sorting."""
-        text = re.sub(r"\[/?[^\]]+\]", "", str(raw)).replace("✓", "").strip()
-        m = re.search(r"-?\d+", text)
-        return int(m.group(0)) if m else -1
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
         if event.data_table.id != "results-table":
             return
-        idx = event.column_index
-        self._sort_reverse = (self._sort_col == idx) and not self._sort_reverse
-        self._sort_col = idx
-        table = event.data_table
-        if idx in self._NUMERIC_SORT_COLS:
-            table.sort(event.column_key, key=self._numeric_sort_key, reverse=self._sort_reverse)
-        else:
-            table.sort(event.column_key, reverse=self._sort_reverse)
-        # Update column labels — show sort arrow on active column
-        try:
-            for i, col in enumerate(table.ordered_columns):
-                name = _RESULTS_COL_NAMES[i] if i < len(_RESULTS_COL_NAMES) else str(col.label).split(" ")[0]
-                if i == idx:
-                    arrow = "▼" if self._sort_reverse else "▲"
-                    col.label = Text(f"{name} {arrow}")
-                else:
-                    col.label = Text(name)
-            table.refresh()
-        except Exception:
-            pass
+        self._sort_table(event, _RESULTS_COL_NAMES)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """On row selection — show the details."""
@@ -1851,11 +1798,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
     def _redraw_results(self) -> None:
         try:
             table = self.query_one("#results-table", DataTable)
-            table.clear()
-            # If grep-extract was just cleared, drop the dynamic Extract column
-            # again so the filter bar's Clear/Reset restores the plain table.
-            if not self._grep_extract_patterns:
-                self._remove_extract_column(table)
+            table.clear_data()
         except Exception:
             pass
         for result in self._all_results:
