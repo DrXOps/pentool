@@ -87,6 +87,7 @@ def _make_proxy() -> list[HotkeyEntry]:
         _e("ctrl+r",         "send_to_repeater",     "Send to Repeater", show=True),
         _e("ctrl+u",         "copy_url",             "Copy URL",      show=True),
         _e("ctrl+b",         "open_in_browser",      "Open in Browser", show=True, priority=True),
+        _e("ctrl+shift+b",   "open_in_browser",      "",                show=False, priority=True),
         _e("ctrl+s",         "send_to_scanner",      "Send to Scanner",  show=True),
         _e("m",              "context_menu",         "Context Menu",  show=False),
         _e("escape",         "hide_detail",          "Hide Detail",   show=True),
@@ -101,6 +102,7 @@ def _make_repeater() -> list[HotkeyEntry]:
         _e("ctrl+f",         "toggle_search",        "Search",        show=True,  priority=True),
         _e("ctrl+d",         "toggle_diff",          "Diff",          show=True,  priority=True),
         _e("ctrl+b",         "open_in_browser",      "Open in Browser", show=True, priority=True),
+        _e("ctrl+shift+b",   "open_in_browser",      "",                show=False, priority=True),
         _e("ctrl+s",         "send_to_scanner",      "Send to Scanner",  show=True),
         _e("ctrl+tab",       "next_tab",             "Next Tab",      show=False),
     ]

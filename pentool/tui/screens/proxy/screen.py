@@ -1221,7 +1221,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         elif event.key == "m" and not self._is_text_input_focused():
             self.action_context_menu()
             event.prevent_default()
-        elif event.key == "shift+b":
+        elif event.key in ("ctrl+b", "shift+b"):
             self.action_open_in_browser()
             event.prevent_default()
 
@@ -1246,6 +1246,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     def action_open_in_browser(self) -> None:
         """Open selected URL in Lightpanda viewer."""
+        logger.debug("action_open_in_browser called, _selected_req_id=%s", self._selected_req_id)
         self._open_in_lightpanda()
 
     def action_context_menu(self) -> None:
