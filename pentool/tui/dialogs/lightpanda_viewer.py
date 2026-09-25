@@ -13,12 +13,13 @@ from textual.widgets import Static, RichLog
 _CSS = """
 LightpandaViewer {
     align: center middle;
+    background: $surface 50%;
 }
 
 #lightpanda-dialog {
-    width: 80%;
-    height: 80%;
-    border: thick $primary;
+    width: 90%;
+    height: 90%;
+    border: round $primary;
     background: $surface;
 }
 
@@ -57,6 +58,8 @@ class LightpandaViewer(ModalScreen[None]):
     def __init__(self, url: str) -> None:
         super().__init__()
         self._url = url
+        import sys as _sys
+        print(f"[LIGHTPANDA] Opening viewer for: {url}", file=_sys.stderr, flush=True)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="lightpanda-dialog"):
