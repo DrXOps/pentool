@@ -89,6 +89,8 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
     _cm_show_send_scanner  = True
     _cm_show_send_decoder  = True
     _cm_show_send_comparer = True
+    _cm_show_export_md     = True
+    _cm_show_export_html   = True
 
     def __init__(self, proxy_service: ProxyService | None = None, **kwargs) -> None:
         super().__init__(**kwargs)

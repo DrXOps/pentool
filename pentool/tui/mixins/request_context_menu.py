@@ -19,6 +19,8 @@ class RequestContextMenuMixin:
     _cm_show_send_scanner:  bool = False
     _cm_show_send_decoder:  bool = False
     _cm_show_send_comparer: bool = False
+    _cm_show_export_md:     bool = False
+    _cm_show_export_html:   bool = False
 
     # ── Required interface ────────────────────────────────────────────────────
 
@@ -90,6 +92,15 @@ class RequestContextMenuMixin:
         if tool_items:
             items.append(("-", ""))
             items += tool_items
+        # Export group
+        export_items: list[tuple[str, str]] = []
+        if self._cm_show_export_md:
+            export_items.append(("export_md",   "📄 Export Markdown"))
+        if self._cm_show_export_html:
+            export_items.append(("export_html", "🌐 Export HTML"))
+        if export_items:
+            items.append(("-", ""))
+            items += export_items
         return items
 
     # ── Dispatcher ────────────────────────────────────────────────────────────
@@ -123,6 +134,10 @@ class RequestContextMenuMixin:
             self._cm_do_send_decoder(raw)
         elif action == "send_comparer":
             self._cm_do_send_comparer(raw)
+        elif action == "export_md":
+            self._cm_do_export_md(raw)
+        elif action == "export_html":
+            self._cm_do_export_html(raw)
 
     # ── Action implementations ────────────────────────────────────────────────
 
@@ -264,4 +279,21 @@ class RequestContextMenuMixin:
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
         _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         self._send_to_comparer(raw, label="Request")  # type: ignore[attr-defined]
+
+    # ── Export helpers ──────────────────────────────────────────────────────────
+
+    def _cm_do_export_md(self, raw: str) -> None:
+        """Export the current request/view as Markdown report."""
+        self._cm_do_export("md")
+
+    def _cm_do_export_html(self, raw: str) -> None:
+        """Export the current request/view as HTML report."""
+        self._cm_do_export("html")
+
+    def _cm_do_export(self, fmt: str) -> None:
+        """Generic export — override in subclass to provide ReportData."""
+        self.app.notify(  # type: ignore[attr-defined]
+            f"Export {fmt.upper()} not implemented for this module",
+            severity="warning", timeout=3,
+        )
 
