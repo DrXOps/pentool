@@ -1218,7 +1218,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         elif event.key == "ctrl+u":
             self.action_copy_url()
             event.prevent_default()
-        elif event.key == "m" and not self._is_text_input_focused():
+        elif event.key == "m" and not (hasattr(self.focused, 'text') or hasattr(self.focused, 'value')):
             self.action_context_menu()
             event.prevent_default()
 
@@ -1251,7 +1251,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     def action_context_menu(self) -> None:
         """Show context menu for selected row."""
-        if not self._is_text_input_focused():
+        if not (hasattr(self.focused, 'text') or hasattr(self.focused, 'value')):
             self._show_context_menu_at_cursor()
 
     def action_send_to_scanner(self) -> None:
