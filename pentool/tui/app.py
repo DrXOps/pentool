@@ -13,8 +13,8 @@ from pathlib import Path
 
 from textual import on
 from textual.app import App, ComposeResult
-from textual.binding import Binding
 from textual.containers import Vertical
+from textual.binding import BindingsMap
 from textual.widgets import Checkbox, ContentSwitcher, Footer
 
 # Nicer checkbox glyph applied project-wide — Checkbox is a subclass of
@@ -92,6 +92,8 @@ from pentool.tui.mixins.notifications import NotificationsMixin  # noqa: E402
 from pentool.tui.mixins.proxy_runtime import ProxyRuntimeMixin  # noqa: E402
 from pentool.tui.mixins.events_handlers import ProxyEventHandlersMixin  # noqa: E402
 from pentool.tui.mixins.project_autosave import ProjectAutoSaveMixin  # noqa: E402
+from pentool.tui.hotkeys import build_bindings_map, registry
+from pentool.tui.hotkeys.defaults import init_hotkeys
 from pentool.tui.screen_registry import SCREEN_MAP  # noqa: E402
 
 
@@ -134,44 +136,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     CSS = (Path(__file__).parent / "app.tcss").read_text(encoding="utf-8")
 
-    BINDINGS = [
-        Binding("ctrl+q", "quit", "Quit", show=True, priority=True),
-        Binding("ctrl+s", "save_project", "Save .db", show=False, priority=True),
-        Binding("ctrl+o", "open_project", "Open .db", show=False, priority=True),
-        Binding("ctrl+n", "new_project",  "New",  show=False, priority=True),
-        # JSON project (full export of all modules)
-        Binding("ctrl+shift+s", "save_project_json", "Save JSON", show=False, priority=True),
-        Binding("ctrl+shift+o", "open_project_json", "Open JSON", show=False, priority=True),
-        Binding("ctrl+comma", "switch_module('settings')", "Settings", show=False, priority=True),
-        # Navigation: Shift+letter (works in all terminals)
-        Binding("H", "switch_module('dashboard')",  "Dashboard",  show=False, priority=True),
-        Binding("P", "switch_module('proxy')",      "Proxy",      show=False, priority=True),
-        Binding("R", "switch_module('repeater')",   "Repeater",   show=False, priority=True),
-        Binding("I", "switch_module('intruder')",   "Intruder",   show=False, priority=True),
-        Binding("S", "switch_module('scanner')",    "Scanner",    show=False, priority=True),
-        Binding("T", "switch_module('target')",     "Target",     show=False, priority=True),
-        Binding("D", "switch_module('decoder')",    "Decoder",    show=False, priority=True),
-        Binding("C", "switch_module('comparer')",   "Comparer",   show=False, priority=True),
-        Binding("Q", "switch_module('sequencer')",  "Sequencer",  show=False, priority=True),
-        Binding("E", "switch_module('extensions')", "Extensions", show=False, priority=True),
-        # Shift+digit aliases for compatibility
-        Binding("exclamation_mark",   "switch_module('proxy')",      show=False, priority=True),
-        Binding("at",                 "switch_module('repeater')",   show=False, priority=True),
-        Binding("number_sign",        "switch_module('intruder')",   show=False, priority=True),
-        Binding("dollar_sign",        "switch_module('scanner')",    show=False, priority=True),
-        Binding("percent_sign",       "switch_module('decoder')",    show=False, priority=True),
-        Binding("circumflex_accent",  "switch_module('comparer')",   show=False, priority=True),
-        Binding("ampersand",          "switch_module('sequencer')",  show=False, priority=True),
-        Binding("left_parenthesis",   "switch_module('extensions')", show=False, priority=True),
-        # Proxy sub-tabs: use Ctrl+H/I/W for Proxy HTTP/Intercept/WS
-        Binding("ctrl+h", "proxy_tab('http')",      "HTTP History", show=False, priority=True),
-        Binding("ctrl+i", "proxy_tab('intercept')", "Intercept",    show=False, priority=True),
-        Binding("ctrl+w", "proxy_tab('ws')",        "WS History",   show=False, priority=True),
-        # Repeater send — ctrl+space arrives as ctrl-at (NUL/^@) in most terminals
-        # Handled at App level with priority so it fires regardless of focus depth
-        Binding("ctrl-at",    "repeater_send", "Send", show=False, priority=True),
-        Binding("ctrl+space", "repeater_send", "Send", show=False, priority=True),
-    ]
+    BINDINGS = []  # Filled in on_mount from the hotkey registry
 
     def __init__(self) -> None:
         super().__init__()
@@ -372,6 +337,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         setup_logging(self._cfg.log_file, self._cfg.log_level)
         _setup_faulthandler(self._cfg.log_file)
         self._guard_forward_event()
+
+        # ── Initialise central hotkey registry ──────────────────────────
+        init_hotkeys()
+        self._bindings = build_bindings_map(registry.get_all_bindings())
 
         # _exit_caller_stack removed — dead code (was always empty, see __init__).
 
@@ -981,14 +950,13 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # don't end up hidden underneath the freshly-shown tab (Textual's
         # toast rack can sit below a tab's own layers after a switch).
         self.call_after_refresh(self._refresh_notifications)
-        # Do NOT auto-start/stop proxy on tab switch — that is reserved for the
-        # explicit toolbar button (▶/■ Proxy) and for --url/--smart seed mode
-        # (_seed_pending_urls). The tab-switch path was previously used to
-        # toggle proxy but it auto-started the proxy every time the user just
-        # looked at the Proxy screen, which broke the Burp-like expectation of
-        # explicit Start.
+        # _update_proxy_screen_labels() only refreshes the ProxyScreen label
+        # when it IS the active module — so if the proxy was stopped/started
+        # while the user was on a different tab (e.g. right after creating a
+        # new project, which force-stops the proxy while Dashboard is shown),
+        # the label update was skipped and stayed stale until the next actual
+        # start/stop toggle. Refresh it explicitly on every switch into Proxy.
         if module_id == "proxy":
-            logger.info("APP: _switch_to -> proxy (labels only)")
             self._update_proxy_screen_labels()
 
     def get_proxy(self) -> ProxyServer | None:

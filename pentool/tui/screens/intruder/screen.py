@@ -10,7 +10,6 @@ from pathlib import Path
 from textual import events as _tevents
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widget import Widget
@@ -48,6 +47,7 @@ from pentool.api.payload_serialization import deserialize_payloads, serialize_pa
 from pentool.tui.widgets.intruder_results import matches_grep, matches_result_filters
 from pentool.core.logging import get_logger
 from pentool.tui.messages import SendToRepeater
+from pentool.tui.hotkeys import get_group_bindings_map
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
@@ -106,11 +106,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = [
-        Binding("ctrl+j", "start_attack", "Start Attack", show=False),
-        Binding("ctrl+p", "toggle_pause", "Pause/Resume", show=False),
-        Binding("escape", "hide_detail", "Hide Detail", show=False),
-    ]
+    BINDINGS = []  # Populated via registry in on_mount
 
     # RequestContextMenuMixin config
     _cm_show_copy_url = False
@@ -299,6 +295,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         )
 
     def on_mount(self) -> None:
+        # ── Hotkey registry ─────────────────────────────────────────────
+        self._bindings = get_group_bindings_map("intruder")
         # Reset on mount in case a previous session left this mid-attack
         # (e.g. app crashed/restarted). No longer strictly needed for the
         # MessagePump._running collision this used to guard against (see the
@@ -1826,6 +1824,17 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
                     self.app.notify("Could not extract host from request", severity="warning")
         except Exception as exc:
             logger.debug("_send_selected_to_scanner: %s", exc)
+
+    def action_open_in_browser(self) -> None:
+        """Open the selected result URL in the default browser."""
+        try:
+            table = self.query_one("#results-table", DataTable)
+            result = self._result_at_row(table, table.cursor_row)
+            if result is not None and result.url:
+                import webbrowser
+                webbrowser.open(result.url)
+        except Exception:
+            pass
 
     def _copy_selected_payload(self) -> None:
         try:

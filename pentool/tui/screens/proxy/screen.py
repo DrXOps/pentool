@@ -9,7 +9,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 
@@ -26,6 +25,7 @@ from textual.widgets import (
 )
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.core.logging import get_logger
+from pentool.tui.hotkeys import get_group_bindings_map, registry
 from pentool.tui.widgets.proxy_table import (
     COL_NAMES as _COL_NAMES,
     row_to_record as _row_to_record,
@@ -65,6 +65,7 @@ _FILTER_RELOAD_DEBOUNCE_S = 0.6
 
 from textual import on
 
+from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
@@ -72,20 +73,12 @@ from pentool.tui.screens.proxy.data_table import ProxyDataTable
 
 DataTable = ProxyDataTable
 
-class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
+class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
     """Full Proxy module screen."""
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = [
-        Binding("i",       "toggle_inspector",  "Inspector",    show=False),
-        Binding("h",       "focus_tab_history",  "HTTP History", show=False),
-        Binding("n",       "focus_tab_intercept","Intercept",    show=False),
-        Binding("w",       "focus_tab_ws",       "WS History",   show=False),
-        Binding("ctrl+h",  "focus_tab_history",  "HTTP History", show=False),
-        Binding("ctrl+n",  "focus_tab_intercept","Intercept",    show=False),
-        Binding("ctrl+w",  "focus_tab_ws",       "WS History",   show=False),
-    ]
+    BINDINGS = []  # Populated via registry in on_mount
 
     # For test compatibility (test_stage8_5)
     _COL_LABELS = ["ID", "Mth", "URL", "St", "Size"]
@@ -174,7 +167,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
 
     def _build_toolbar(self) -> ComposeResult:
         with Horizontal(id="toolbar"):
-            yield ToolbarButton("▶ Proxy",     "btn-proxy",     classes="inactive")
+            yield ToolbarButton("○ Proxy",     "btn-proxy",     classes="inactive")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("○ Intercept", "btn-intercept", classes="inactive")
             yield Static(" │ ", classes="toolbar-sep")
@@ -325,6 +318,8 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         )
 
     def on_mount(self) -> None:
+        # ── Hotkey registry ─────────────────────────────────────────────
+        self._bindings = get_group_bindings_map("proxy")
         self._sync_proxy_button()
         self._sync_intercept_button()
         self._sync_enforce_scope_button()
@@ -1137,32 +1132,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             pass
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
-        idx = event.column_index
-        self._sort_reverse = (self._sort_col == idx) and not self._sort_reverse
-        self._sort_col = idx
-        col_name = _COL_NAMES[idx] if idx < len(_COL_NAMES) else ""
-        if col_name:
-            direction = "descending" if self._sort_reverse else "ascending"
-            # Use safe_sort with crash guard
-            if hasattr(event.data_table, "safe_sort"):
-                event.data_table.safe_sort(col_name, direction)
-            else:
-                try:
-                    event.data_table.sort(by=[(col_name, direction)])
-                except Exception:
-                    pass
-            # Update column labels — show sort arrow on active column
-            try:
-                for i, name in enumerate(_COL_NAMES):
-                    col = event.data_table.ordered_columns[i]
-                    if i == idx:
-                        arrow = "▼" if self._sort_reverse else "▲"
-                        col.label = f"{name} {arrow}"
-                    else:
-                        col.label = name
-                event.data_table.refresh()
-            except Exception:
-                pass
+        self._sort_table(event, _COL_NAMES)
 
     def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
         filters = event.filters if event.filters else None
@@ -1246,13 +1216,13 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             self.action_send_to_repeater()
             event.prevent_default()
         elif event.key == "ctrl+u":
-            self._copy_selected_url()
+            self.action_copy_url()
             event.prevent_default()
         elif event.key == "m" and not self._is_text_input_focused():
-            self._show_context_menu_at_cursor()
+            self.action_context_menu()
             event.prevent_default()
         elif event.key == "shift+b":
-            self._open_in_lightpanda()
+            self.action_open_in_browser()
             event.prevent_default()
 
     def _show_context_menu_at_cursor(self) -> None:
@@ -1269,6 +1239,30 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         if self._selected_req_id is None:
             return
         self.run_worker(self._do_send_to("repeater"))
+
+    def action_copy_url(self) -> None:
+        """Copy selected request URL to clipboard."""
+        self._copy_selected_url()
+
+    def action_open_in_browser(self) -> None:
+        """Open selected URL in Lightpanda viewer."""
+        self._open_in_lightpanda()
+
+    def action_context_menu(self) -> None:
+        """Show context menu for selected row."""
+        if not self._is_text_input_focused():
+            self._show_context_menu_at_cursor()
+
+    def action_send_to_scanner(self) -> None:
+        """Send selected request to Scanner."""
+        host = self._get_selected_host_sync()
+        if host:
+            from pentool.tui.messages import SendHostToScanner
+            self.app.post_message(SendHostToScanner(host))
+
+    def action_hide_detail(self) -> None:
+        """Hide/close the request inspector detail panel."""
+        self.action_toggle_inspector()
 
     def _send_to_intruder(self) -> None:
         if self._selected_req_id is None:
@@ -1569,13 +1563,7 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
             except Exception:
                 pass
         self.app.action_toggle_proxy()  # type: ignore[attr-defined]
-        # NOTE: _sync_proxy_button убран отсюда намеренно — есть гонка:
-        # _stop_proxy_async / _start_proxy запускают асинхронный воркер,
-        # а _sync_proxy_button сразу после его запуска будет читать старое
-        # состояние is_running и вернёт кнопку обратно. Вместо этого
-        # каждый из методов _start_* / _stop_* сам вызывает
-        # _update_proxy_screen_labels при фактическом завершении операции,
-        # что корректно синхронизирует кнопку с реальным состоянием.
+        self.call_after_refresh(self._sync_proxy_button)
 
     def action_clear_list(self) -> None:
         proxy = self._get_proxy()
@@ -1723,11 +1711,11 @@ class ProxyScreen(RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
         except Exception:
             return
         if proxy and proxy.is_running:
-            btn.label = f"■ Proxy:{proxy.port}"
+            btn.label = f"● Proxy:{proxy.port}"
             btn.remove_class("inactive")
             btn.add_class("active")
         else:
-            btn.label = "▶ Proxy"
+            btn.label = "○ Proxy"
             btn.remove_class("active")
             btn.add_class("inactive")
 

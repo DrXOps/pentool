@@ -8,7 +8,6 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Input, Static, TabbedContent, TabPane
 from textual.widgets.text_area import Selection
@@ -22,6 +21,7 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 logger = get_logger(__name__)
 
+from pentool.tui.hotkeys import get_group_bindings_map
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
@@ -51,10 +51,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = [
-        Binding("ctrl+f", "toggle_search", "Search", show=False, priority=True),
-        Binding("ctrl+d", "toggle_diff", "Diff vs last sent", show=False, priority=True),
-    ]
+    BINDINGS = []  # Populated via registry in on_mount
 
     _sort_col_idx: int | None = None
     _sort_reverse: bool = False
@@ -166,6 +163,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         )
 
     def on_mount(self) -> None:
+        # ── Hotkey registry ─────────────────────────────────────────────
+        self._bindings = get_group_bindings_map("repeater")
         # Load tabs from database first, then create default tab if empty
         self._load_tabs_from_db()
 
@@ -879,6 +878,15 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         elif event.key in ("ctrl+f", "ctrl+shift+f"):
             self.action_toggle_search()
             event.prevent_default()
+        elif event.key == "ctrl+tab":
+            self.action_next_tab()
+            event.prevent_default()
+        elif event.key == "ctrl+s":
+            self.action_send_to_scanner()
+            event.prevent_default()
+        elif event.key == "ctrl+b":
+            self.action_open_in_browser()
+            event.prevent_default()
 
     def load_request(self, raw: str) -> None:
         """Load a request into the active tab."""
@@ -994,3 +1002,41 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             return self._editor(tab_id).get_text()
         except Exception:
             return ""
+
+    # ── Hotkey action methods ───────────────────────────────────────────
+
+    def action_next_tab(self) -> None:
+        """Switch to the next tab (ctrl+tab)."""
+        from textual.widgets import TabbedContent
+        try:
+            tabs = self.query_one(TabbedContent)
+            ids = list(tabs._tab_count_index)
+            if len(ids) < 2:
+                return
+            current = self._active_tab_id or ids[0]
+            idx = ids.index(current) if current in ids else 0
+            next_idx = (idx + 1) % len(ids)
+            tabs.active = ids[next_idx]
+        except Exception:
+            pass
+
+    def action_send_to_scanner(self) -> None:
+        """Send the active request to Scanner."""
+        text = self._get_active_text()
+        if not text:
+            self.app.notify("No request text to send", severity="warning")
+            return
+        from pentool.tui.messages import SendToScanner
+        self.app.post_message(SendToScanner(text))
+
+    def action_open_in_browser(self) -> None:
+        """Open the request URL in the default browser."""
+        text = self._get_active_text()
+        if not text:
+            self.app.notify("No request to open", severity="warning")
+            return
+        from pentool.utils.parser import ParsedRequest
+        parsed = ParsedRequest.from_raw(text)
+        if parsed and parsed.url:
+            import webbrowser
+            webbrowser.open(parsed.url)

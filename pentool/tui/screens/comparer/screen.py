@@ -8,12 +8,12 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
+from pentool.tui.hotkeys import get_group_bindings_map
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -27,14 +27,15 @@ class ComparerScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = [
-        Binding("ctrl+enter", "compare", "Compare", show=True),
-        Binding("ctrl+l",     "clear",   "Clear",   show=False),
-    ]
+    BINDINGS = []  # Populated via registry in on_mount
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._last_result = None
+
+    def on_mount(self) -> None:
+        # ── Hotkey registry ─────────────────────────────────────────────
+        self._bindings = get_group_bindings_map("comparer")
 
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────

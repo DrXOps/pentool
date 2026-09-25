@@ -13,6 +13,7 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
+from pentool.tui.hotkeys import get_group_bindings_map
 from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.resize_handle import ResizeHandle
@@ -120,6 +121,8 @@ class TargetScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
+    BINDINGS = []  # Populated via registry in on_mount
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._target_api = None
@@ -184,6 +187,8 @@ class TargetScreen(Widget):
         )
 
     def on_mount(self) -> None:
+        # ── Hotkey registry ─────────────────────────────────────────────
+        self._bindings = get_group_bindings_map("target")
         """При старте скрыть AI-секцию если ai_enabled выключен."""
         if getattr(self, "_ai_hidden_on_compose", False):
             try:
