@@ -13,7 +13,7 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys import get_group_bindings_map
+from pentool.tui.hotkeys.defaults import build_comparer_bindings
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -27,15 +27,12 @@ class ComparerScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []  # Populated via registry in on_mount
+    BINDINGS = []
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
+        self._bindings = build_comparer_bindings()
         self._last_result = None
-
-    def on_mount(self) -> None:
-        # ── Hotkey registry ─────────────────────────────────────────────
-        self._bindings = get_group_bindings_map("comparer")
 
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────

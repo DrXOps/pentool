@@ -46,14 +46,11 @@ class ProxyRuntimeMixin:
 
     def action_toggle_proxy(self) -> None:
         if self._proxy is None:  # type: ignore[attr-defined]
-            logger.info("APP: action_toggle_proxy — _proxy is None, return")
             return
-        logger.info("APP: action_toggle_proxy — is_running=%s", self._proxy.is_running)
         if self._proxy.is_running:  # type: ignore[attr-defined]
             # Stop asynchronously so the TUI thread isn't frozen for up to
             # ~10s while proxy.stop() + thread join complete (the Stop button
             # currently felt slow/unresponsive on a busy proxy).
-            logger.info("APP: action_toggle_proxy — stopping proxy")
             self.run_worker(self._stop_proxy_async())  # type: ignore[attr-defined]
         else:
             if not self._project_loaded:  # type: ignore[attr-defined]
@@ -75,9 +72,6 @@ class ProxyRuntimeMixin:
 
     def _start_proxy(self) -> None:
         if self._proxy is None or self._proxy.is_running:  # type: ignore[attr-defined]
-            logger.info("APP: _start_proxy — skipped (proxy=%s is_running=%s)",
-                        self._proxy is not None,
-                        self._proxy.is_running if self._proxy else "N/A")
             return
         if not self._proxy_transition_lock.acquire(blocking=False):
             logger.warning("APP: _start_proxy skipped — another start/stop is in progress")
@@ -165,8 +159,7 @@ class ProxyRuntimeMixin:
         """Synchronous proxy stop (direct socket cmd for daemon, async for memory engine)."""
         logger.info("APP: _stop_proxy called")
         if self._engine() == "daemon":
-            self._stop_proxy_daemon()
-            return
+            return self._stop_proxy_daemon()
         # 'memory' engine — run async stop synchronously
         if self._proxy and self._proxy.is_running and self._proxy_loop:  # type: ignore[attr-defined]
             future = asyncio.run_coroutine_threadsafe(
@@ -203,8 +196,7 @@ class ProxyRuntimeMixin:
         """
         logger.info("APP: _stop_proxy_async called")
         if self._engine() == "daemon":
-            await self._stop_proxy_daemon_async()
-            return
+            return self._stop_proxy_daemon_async()
         if self._proxy and self._proxy.is_running and self._proxy_loop:  # type: ignore[attr-defined]
             future = asyncio.run_coroutine_threadsafe(
                 self._proxy.stop(), self._proxy_loop  # type: ignore[attr-defined]
@@ -238,10 +230,9 @@ class ProxyRuntimeMixin:
                 logger.warning("APP: proxy (daemon) stop error: %s", exc)
         self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
         self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
-        if self._proxy and not self._proxy.is_running:
-            self.call_after_refresh(  # type: ignore[attr-defined]
-                self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
-            )
+        self.call_after_refresh(  # type: ignore[attr-defined]
+            self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
+        )
 
     async def _stop_proxy_daemon_async(self) -> None:
         """Stop the daemon-backed proxy without blocking the TUI thread.
@@ -260,7 +251,6 @@ class ProxyRuntimeMixin:
                 logger.warning("APP: proxy (daemon) stop async error: %s", exc)
         self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
         self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
-        if self._proxy and not self._proxy.is_running:
-            self.call_after_refresh(  # type: ignore[attr-defined]
-                self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
-            )
+        self.call_after_refresh(  # type: ignore[attr-defined]
+            self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
+        )

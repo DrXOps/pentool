@@ -13,7 +13,8 @@ from textual.widget import Widget
 from textual.widgets import Input, Label, RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys import get_group_bindings_map
+from pentool.tui.hotkeys.defaults import build_sequencer_bindings
+
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -34,7 +35,7 @@ class SequencerScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []  # Populated via registry in on_mount
+    BINDINGS = []
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -42,8 +43,6 @@ class SequencerScreen(Widget):
         self._seq = Sequencer()
 
     def on_mount(self) -> None:
-        # ── Hotkey registry ─────────────────────────────────────────────
-        self._bindings = get_group_bindings_map("sequencer")
         self._capturing = False       # live-capture mode from proxy
         self._capture_param: str = "" # parameter/cookie name to capture
         self._proxy_hook = None       # reference for unsubscribe

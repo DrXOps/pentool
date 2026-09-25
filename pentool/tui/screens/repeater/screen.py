@@ -21,7 +21,8 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 logger = get_logger(__name__)
 
-from pentool.tui.hotkeys import get_group_bindings_map
+
+from pentool.tui.hotkeys.defaults import build_repeater_bindings
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
@@ -51,7 +52,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []  # Populated via registry in on_mount
+    BINDINGS = []
 
     _sort_col_idx: int | None = None
     _sort_reverse: bool = False
@@ -69,6 +70,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
+        self._bindings = build_repeater_bindings()
         self._tabs: list[_TabState] = []
         self._tab_counter: int = 0
         self._active_tab_id: str | None = None
@@ -163,8 +165,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         )
 
     def on_mount(self) -> None:
-        # ── Hotkey registry ─────────────────────────────────────────────
-        self._bindings = get_group_bindings_map("repeater")
         # Load tabs from database first, then create default tab if empty
         self._load_tabs_from_db()
 

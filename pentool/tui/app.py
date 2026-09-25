@@ -14,7 +14,6 @@ from pathlib import Path
 from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
-from textual.binding import BindingsMap
 from textual.widgets import Checkbox, ContentSwitcher, Footer
 
 # Nicer checkbox glyph applied project-wide — Checkbox is a subclass of
@@ -92,8 +91,7 @@ from pentool.tui.mixins.notifications import NotificationsMixin  # noqa: E402
 from pentool.tui.mixins.proxy_runtime import ProxyRuntimeMixin  # noqa: E402
 from pentool.tui.mixins.events_handlers import ProxyEventHandlersMixin  # noqa: E402
 from pentool.tui.mixins.project_autosave import ProjectAutoSaveMixin  # noqa: E402
-from pentool.tui.hotkeys import build_bindings_map, registry
-from pentool.tui.hotkeys.defaults import init_hotkeys
+from pentool.tui.hotkeys.defaults import build_global_bindings
 from pentool.tui.screen_registry import SCREEN_MAP  # noqa: E402
 
 
@@ -136,10 +134,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     CSS = (Path(__file__).parent / "app.tcss").read_text(encoding="utf-8")
 
-    BINDINGS = []  # Filled in on_mount from the hotkey registry
+    BINDINGS = []
 
     def __init__(self) -> None:
         super().__init__()
+        self._bindings = build_global_bindings()
         self._cfg = get_config()
         # Proxy backend: 'daemon' (default, isolated subprocess via ProxyClient)
         # or 'memory' (legacy ProxyServer on a daemon thread). Selected from
@@ -338,10 +337,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         _setup_faulthandler(self._cfg.log_file)
         self._guard_forward_event()
 
-        # ── Initialise central hotkey registry ──────────────────────────
-        init_hotkeys()
-        self._bindings = build_bindings_map(registry.get_all_bindings())
-
+        
         # _exit_caller_stack removed — dead code (was always empty, see __init__).
 
         try:

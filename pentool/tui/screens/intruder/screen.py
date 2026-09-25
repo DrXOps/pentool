@@ -46,8 +46,9 @@ from pentool.api.intruder_api import (
 from pentool.api.payload_serialization import deserialize_payloads, serialize_payloads
 from pentool.tui.widgets.intruder_results import matches_grep, matches_result_filters
 from pentool.core.logging import get_logger
+from pentool.tui.hotkeys.defaults import build_intruder_bindings
 from pentool.tui.messages import SendToRepeater
-from pentool.tui.hotkeys import get_group_bindings_map
+
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
@@ -106,7 +107,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []  # Populated via registry in on_mount
+    BINDINGS = []
 
     # RequestContextMenuMixin config
     _cm_show_copy_url = False
@@ -295,8 +296,6 @@ class IntruderScreen(AutoSaveMixin, AppMixin, RequestContextMenuMixin, Widget):
         )
 
     def on_mount(self) -> None:
-        # ── Hotkey registry ─────────────────────────────────────────────
-        self._bindings = get_group_bindings_map("intruder")
         # Reset on mount in case a previous session left this mid-attack
         # (e.g. app crashed/restarted). No longer strictly needed for the
         # MessagePump._running collision this used to guard against (see the

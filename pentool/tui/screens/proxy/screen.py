@@ -25,7 +25,7 @@ from textual.widgets import (
 )
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys import get_group_bindings_map, registry
+from pentool.tui.hotkeys.defaults import build_proxy_bindings
 from pentool.tui.widgets.proxy_table import (
     COL_NAMES as _COL_NAMES,
     row_to_record as _row_to_record,
@@ -78,7 +78,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []  # Populated via registry in on_mount
+    BINDINGS = []
 
     # For test compatibility (test_stage8_5)
     _COL_LABELS = ["ID", "Mth", "URL", "St", "Size"]
@@ -92,6 +92,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     def __init__(self, proxy_service: ProxyService | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
+        self._bindings = build_proxy_bindings()
         self._proxy_service: ProxyService | None = proxy_service
         self._selected_req_id: int | None = None
         # WebSocket-history selection is tracked separately from the HTTP one.
@@ -318,8 +319,6 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         )
 
     def on_mount(self) -> None:
-        # ── Hotkey registry ─────────────────────────────────────────────
-        self._bindings = get_group_bindings_map("proxy")
         self._sync_proxy_button()
         self._sync_intercept_button()
         self._sync_enforce_scope_button()
@@ -1221,9 +1220,6 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         elif event.key == "m" and not self._is_text_input_focused():
             self.action_context_menu()
             event.prevent_default()
-        elif event.key in ("ctrl+b", "shift+b"):
-            self.action_open_in_browser()
-            event.prevent_default()
 
     def _show_context_menu_at_cursor(self) -> None:
         try:
@@ -1246,6 +1242,8 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     def action_open_in_browser(self) -> None:
         """Open selected URL in Lightpanda viewer."""
+        import sys as _sys
+        print(f"[HOTKEY] action_open_in_browser called, req_id={self._selected_req_id}", file=_sys.stderr, flush=True)
         logger.debug("action_open_in_browser called, _selected_req_id=%s", self._selected_req_id)
         self._open_in_lightpanda()
 

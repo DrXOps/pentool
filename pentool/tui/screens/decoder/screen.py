@@ -11,7 +11,7 @@ from textual.widget import Widget
 from textual.widgets import Label, RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys import get_group_bindings_map
+from pentool.tui.hotkeys.defaults import build_decoder_bindings
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -25,7 +25,7 @@ class DecoderScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []  # Populated via registry in on_mount
+    BINDINGS = []
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -34,12 +34,7 @@ class DecoderScreen(Widget):
         self._selected_op: str = OP_LABELS[0]  # currently selected operation
         self._chain: list[str] = []           # list of operations in the chain
 
-    def on_mount(self) -> None:
-        # ── Hotkey registry ─────────────────────────────────────────────
-        self._bindings = get_group_bindings_map("decoder")
-
     def compose(self) -> ComposeResult:
-
         # ── Toolbar ────────────────────────────────────────────────────────────
         with Horizontal(id="dec-toolbar"):
             yield ToolbarButton("▶ Run",        "btn-dec-run")

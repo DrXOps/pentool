@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 import pyarrow as pa
+from rich.text import Text as RichText
 from textual_fastdatatable import ArrowBackend, DataTable
 
 
@@ -23,6 +24,20 @@ def _make_empty_arrow(columns: list[str]) -> pa.Table:
     cols: dict[str, pa.Array] = {}
     for c in columns:
         cols[c] = pa.array([], type=pa.string())
+    return pa.table(cols)
+
+
+def _make_seeded_arrow(columns: list[str]) -> pa.Table:
+    """Build an Arrow table with one empty string row per column.
+
+    textual_fastdatatable skips rendering column headers when the table
+    is truly empty (row_count == 0), because all column widths are 0.
+    A single row gives ArrowBackend enough information to calculate
+    content_width and render headers immediately.
+    """
+    cols: dict[str, pa.Array] = {}
+    for c in columns:
+        cols[c] = pa.array([""], type=pa.string())
     return pa.table(cols)
 
 
@@ -42,7 +57,7 @@ class ArrowBackendDataTable(DataTable):
         super().__init__(*args, **kwargs)
         self._columns = columns or []
         if self._columns:
-            self.backend = ArrowBackend(_make_empty_arrow(self._columns))
+            self.backend = ArrowBackend(_make_seeded_arrow(self._columns))
 
     def set_data(self, arrow: pa.Table) -> None:
         """Replace the entire table content with an Arrow table."""
@@ -51,10 +66,11 @@ class ArrowBackendDataTable(DataTable):
         # StringScalar instead of Rich Text. Fall back to empty table.
         try:
             self.backend = ArrowBackend(arrow)
+            self.refresh()
         except Exception as exc:
             from pentool.core.logging import get_logger as _log
             _log().error("ArrowBackendDataTable.set_data failed: %s", exc)
-            self.backend = ArrowBackend(_make_empty_arrow(self._columns))
+            self.backend = ArrowBackend(_make_seeded_arrow(self._columns))
 
     def add_rows(self, records: list[tuple]) -> None:
         """Add rows via the parent DataTable.add_rows.
@@ -64,7 +80,9 @@ class ArrowBackendDataTable(DataTable):
         StringScalar instead of Rich Text. Fall back to set_data.
         """
         try:
-            super().add_rows(records)
+            result = super().add_rows(records)
+            self.refresh()
+            return result
         except Exception as exc:
             from pentool.core.logging import get_logger as _log
             _log().error("ArrowBackendDataTable.add_rows failed: %s", exc)
@@ -81,9 +99,49 @@ class ArrowBackendDataTable(DataTable):
     def clear_data(self) -> None:
         """Reset to an empty table (columns preserved)."""
         if self._columns:
-            self.backend = ArrowBackend(_make_empty_arrow(self._columns))
+            self.backend = ArrowBackend(_make_seeded_arrow(self._columns))
         else:
             self.clear()
+
+    def _get_cell_renderable(self, row_index, column_index, max_width):  # noqa: ANN201
+        """Crash-guard: оборачивает заголовки колонок в Text().
+
+        В textual_fastdatatable.DataTable._get_cell_renderable (строка 1832)
+        для row_index == -1 вызывается text.plain на column label, который
+        может быть str (после ArrowBackend rebuild). Оборачиваем в RichText
+        чтобы .plain работал.
+        """
+        if row_index == -1:  # header row
+            from textual_fastdatatable.format import truncate_to_first_line
+            label = self.ordered_columns[column_index].label
+            if isinstance(label, str):
+                label = RichText(label)
+            return truncate_to_first_line(label, max_width)
+        return super()._get_cell_renderable(row_index, column_index, max_width)
+
+    def _mouse_ready(self) -> bool:
+        """Проверка: таблица смонтирована и имеет ненулевой размер."""
+        try:
+            region = self.region
+            return region.width > 0 and region.height > 0
+        except Exception:
+            return False
+
+    def safe_sort(self, col_name: str, direction: str = "ascending") -> bool:
+        """Безопасная сортировка через родной DataTable.sort() с crash-guard.
+
+        Проверяет готовность таблицы и вызывает sort(by=[(col, dir)]).
+        Возвращает True при успехе, False при ошибке.
+        """
+        if not self._mouse_ready():
+            return False
+        try:
+            self.sort(by=[(col_name, direction)])
+            return True
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("safe_sort failed: %s", exc)
+            return False
 
     @staticmethod
     def empty_arrow(columns: list[str]) -> pa.Table:
