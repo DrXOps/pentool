@@ -273,16 +273,14 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             with Horizontal(id="progress-row"):
                 yield ProgressBar(total=100, id="attack-progress", show_eta=False)
                 yield Static("0/0 (0%)", id="progress-label")
-                yield DataTable(
-                    id="results-table",
-                    columns=_RESULTS_COL_NAMES,
-                    column_widths=[5, 45, 8, 10, 10, 30],
-                    cursor_type="row",
-                    zebra_stripes=True,
-                    max_column_content_width=120,
-                )
-
-            # Detail panel (hidden initially)
+            yield DataTable(
+                id="results-table",
+                columns=_RESULTS_COL_NAMES,
+                column_widths=[5, 45, 8, 10, 10, 30],
+                cursor_type="row",
+                zebra_stripes=True,
+                max_column_content_width=120,
+            )
             with Horizontal(id="intruder-detail-panel", classes="intruder-detail-panel"):
                 with Vertical(id="detail-request-col", classes="detail-col"):
                     yield Static("Request", classes="detail-label")
@@ -291,16 +289,37 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 with Vertical(id="detail-response-col", classes="detail-col"):
                     yield Static("Response", classes="detail-label")
                     yield HttpView(id="detail-response", classes="detail-view")
-
         yield Static(
             "Ctrl+J: Start Attack  │  Ctrl+P: Pause/Resume  │  M: Context menu  │  Esc: Close detail",
             id="status-bar",
         )
 
     def on_show(self) -> None:
-        """When Intruder becomes visible, force table re-render with actual widget size."""
+        """When Intruder becomes visible, rebuild table via set_data (like Proxy)."""
+        self._rebuild_table_data()
+
+    def _rebuild_table_data(self) -> None:
+        """Replace table backend from _all_results via set_data() — same pattern as Proxy._reload_table."""
         try:
-            self.query_one("#results-table", DataTable).refresh()
+            table = self.query_one("#results-table", DataTable)
+            if not self._all_results:
+                table.clear_data()
+                return
+            rows = []
+            for r in self._all_results:
+                if matches_result_filters(
+                    r, self._filter_status, self._filter_len_gt,
+                    self._filter_len_lt, self._grep_match_patterns,
+                    self._grep_only_match,
+                ):
+                    rows.append(self._row_from_result(r))
+            import pyarrow as pa
+            cols = _RESULTS_COL_NAMES
+            if self._grep_extract_patterns:
+                cols = cols + ["Extract"]
+            data = {c: pa.array([row[i] for row in rows], type=pa.string()) for i, c in enumerate(cols)}
+            arrow = pa.table(data)
+            table.set_data(arrow)
         except Exception:
             pass
 
@@ -312,14 +331,6 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         # reasonable safety net against stale state from a prior session.
         self._attack_running = False
         self._paused = False
-        # FIXME: remove test row — verify table renders visibly
-        try:
-            self.query_one("#results-table", DataTable).add_rows([
-                ("1", "admin", "200", "1024", "150", ""),
-                ("2", "test", "404", "512", "200", "Not Found"),
-            ])
-        except Exception:
-            pass
         self._update_payload_select()
         self._setup_tooltips()
         # Load saved state from DB
@@ -1568,16 +1579,28 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         except Exception:
             pass
 
+    @staticmethod
+    def _row_from_result(result: IntruderResult) -> list[str]:
+        """Build a string row from an IntruderResult for Arrow insertion."""
+        payloads_str = " | ".join(result.payload_values)
+        if len(payloads_str) > 40:
+            payloads_str = payloads_str[:37] + "…"
+        row = [
+            str(result.request_number),
+            payloads_str,
+            str(result.response_status or "-"),
+            str(result.response_length or "-"),
+            str(result.response_time_ms or "-"),
+            result.error or "",
+        ]
+        return row
+
     def _add_result_row(self, result: IntruderResult) -> None:
         try:
-            table = self.query_one("#results-table", DataTable)
-            payloads_str = " | ".join(result.payload_values)
-            if len(payloads_str) > 40:
-                payloads_str = payloads_str[:37] + "…"
-
-            # Grep Extract: extract a value from request_raw using the first pattern
-            extract_val = ""
+            row = self._row_from_result(result)
             if self._grep_extract_patterns:
+                # Grep Extract: extract a value from request_raw
+                extract_val = ""
                 resp_body = getattr(result, "request_raw", "") or ""
                 for pat in self._grep_extract_patterns:
                     try:
@@ -1588,35 +1611,14 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                             break
                     except re.error:
                         pass
-
-            # Grep Match: check if the result row matches the pattern
-            matched = matches_grep(result, self._grep_match_patterns)
-
-            status_str = str(result.response_status or "-")
-            # Highlight matched rows
-            if matched:
-                status_str = f"[bold yellow]{status_str}✓[/bold yellow]"
-
-            row = [
-                str(result.request_number),
-                payloads_str,
-                status_str,
-                str(result.response_length or "-"),
-                str(result.response_time_ms or "-"),
-                result.error or "",
-            ]
-            # Add Extract column if a pattern is set
-            if self._grep_extract_patterns:
                 row.append(extract_val)
-
-            table.add_rows([tuple(row)])
+            self.query_one("#results-table", DataTable).add_rows([tuple(row)])
         except Exception:
             pass
 
     def _clear_results(self) -> None:
         try:
-            table = self.query_one("#results-table", IntruderResDataTableultsTable)
-            table.clear_data()
+            self.query_one("#results-table", DataTable).clear_data()
         except Exception:
             pass
         self._all_results = []
@@ -1796,21 +1798,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
 
 
     def _redraw_results(self) -> None:
-        try:
-            table = self.query_one("#results-table", DataTable)
-            table.clear_data()
-        except Exception:
-            pass
-        for result in self._all_results:
-            if matches_result_filters(
-                result,
-                self._filter_status,
-                self._filter_len_gt,
-                self._filter_len_lt,
-                self._grep_match_patterns,
-                self._grep_only_match,
-            ):
-                self._add_result_row(result)
+        self._rebuild_table_data()
 
     def _export_csv(self) -> None:
         if not self._all_results:
