@@ -1250,8 +1250,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     def action_context_menu(self) -> None:
         """Show context menu for selected row."""
-        if not (hasattr(self.focused, 'text') or hasattr(self.focused, 'value')):
-            self._show_context_menu_at_cursor()
+        self._show_context_menu_at_cursor()
 
     def action_send_to_scanner(self) -> None:
         """Send selected request to Scanner."""
