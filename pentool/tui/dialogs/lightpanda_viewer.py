@@ -10,6 +10,10 @@ from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Static, RichLog
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 _CSS = """
 LightpandaViewer {
     align: center middle;
@@ -58,8 +62,7 @@ class LightpandaViewer(ModalScreen[None]):
     def __init__(self, url: str) -> None:
         super().__init__()
         self._url = url
-        import sys as _sys
-        print(f"[LIGHTPANDA] Opening viewer for: {url}", file=_sys.stderr, flush=True)
+        logger.info("Opening LightpandaViewer for: %s", url)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="lightpanda-dialog"):
