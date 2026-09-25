@@ -1211,6 +1211,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         self._switch_proxy_tab("tab-ws-history")
 
     def on_key(self, event) -> None:
+        logger.debug("on_key: %s (focused=%s)", event.key, type(self.focused).__name__ if self.focused else None)
         if event.key == "ctrl+r":
             self.action_send_to_repeater()
             event.prevent_default()
