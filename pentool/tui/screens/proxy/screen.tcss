@@ -33,8 +33,6 @@ ProxyScreen #table-area {
 }
 ProxyScreen #filter-bar {
     height: 1;
-    border-top: solid $success;
-    border-bottom: solid $success;
 }
 ProxyScreen #request-list {
     height: 1fr;

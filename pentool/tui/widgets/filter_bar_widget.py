@@ -130,7 +130,7 @@ class FilterBarWidget(Widget):
             super().__init__()
             self.spec = spec
 
-    DEFAULT_CSS = ""
+    DEFAULT_CSS = "FilterBarWidget { height: auto; }"
 
     # ── Конфигурация ───────────────────────────────────────────────────────
 

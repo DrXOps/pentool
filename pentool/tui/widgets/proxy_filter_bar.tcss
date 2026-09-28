@@ -58,7 +58,7 @@ ProxyFilterBar Cycler {
 ProxyFilterBar Cycler:hover {
     background: $primary-darken-1;
 }
-ProxyFilterBar ToggleButton {
+ProxyFilterBar ToolbarButton {
     height: 1;
     width: 14;
     padding: 0 1;
@@ -66,14 +66,14 @@ ProxyFilterBar ToggleButton {
     color: $text-muted;
     pointer: pointer;
 }
-ProxyFilterBar ToggleButton:hover {
+ProxyFilterBar ToolbarButton:hover {
     background: $primary-darken-1;
 }
-ProxyFilterBar ToggleButton.-active {
+ProxyFilterBar ToolbarButton.-active {
     color: $success;
     background: $success-darken-3;
 }
-ProxyFilterBar ToggleButton.disabled {
+ProxyFilterBar ToolbarButton.disabled {
     color: $text-disabled;
     background: $panel;
     opacity: 0.5;
