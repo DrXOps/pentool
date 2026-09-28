@@ -150,7 +150,10 @@ class WsFilterBar(FilterBarWidget):
 
     DEFAULT_CSS = (Path(__file__).parent / "proxy_filter_bar.tcss").read_text(
         encoding="utf-8"
-    ).replace("ProxyFilterBar", "WsFilterBar")
+    ).replace("ProxyFilterBar", "WsFilterBar") + """
+WsFilterBar #ws-host { width: 16; }
+WsFilterBar #ws-url { width: 20; }
+"""
 
     def configure(self) -> list[FilterField]:
         return [
@@ -158,11 +161,25 @@ class WsFilterBar(FilterBarWidget):
                         FilterOp.LIKE, placeholder="example.com"),
             FilterField("ws-url", "URL:", FilterFieldType.TEXT, "url",
                         FilterOp.LIKE, placeholder="/ws-endpoint"),
-            FilterField("ws-status", "Status:", FilterFieldType.TEXT, "status_code",
+            FilterField("fb-status", "Status:", FilterFieldType.TEXT, "status_code",
                         FilterOp.BETWEEN, placeholder="200-299"),
-            FilterField("ws-search", "Search:", FilterFieldType.TEXT, "fts",
+            FilterField("fb-search", "Search:", FilterFieldType.TEXT, "fts",
                         FilterOp.FTS, placeholder="FTS5 query..."),
         ]
+
+    def compose(self) -> ComposeResult:
+        for f in self.configure():
+            yield Label(f.label, classes="fb-label")
+            yield from self._render_field(f)
+            yield Label(" ", classes="fb-sep")
+        yield ToolbarButton("★ Scope", "fb-scope")
+        yield Label(" ", classes="fb-sep")
+        yield Button("Filter", id="fb-apply", variant="primary")
+        yield Button("Clear", id="fb-reset")
+
+    def collect(self) -> list[FilterPredicate]:
+        predicates = super().collect()
+        predicates.append(FilterPredicate("is_websocket", FilterOp.EQ, True))
 
     def compose(self) -> ComposeResult:
         for f in self.configure():
