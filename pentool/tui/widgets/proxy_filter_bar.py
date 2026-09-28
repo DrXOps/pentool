@@ -74,7 +74,8 @@ class _ProxyFilterBarBase(FilterBarWidget):
         else:
             super()._emit(spec)
 
-    DEFAULT_CSS = (Path(__file__).parent / "proxy_filter_bar.tcss").read_text(encoding="utf-8")
+    # CSS задаётся каждым наследником (ProxyFilterBar, WsFilterBar)
+    # через свои DEFAULT_CSS, чтобы селекторы совпадали с классами.
 
     def compose(self) -> ComposeResult:
         for f in self.configure():
@@ -156,6 +157,8 @@ class ProxyFilterBar(_ProxyFilterBarBase):
     class FilterChanged(_ProxyFilterBarBase.FilterChanged):
         pass
 
+    DEFAULT_CSS = (Path(__file__).parent / "proxy_filter_bar.tcss").read_text(encoding="utf-8")
+
     def configure(self) -> list[FilterField]:
         return [
             FilterField("fb-host", "Host:", FilterFieldType.TEXT, "host",
@@ -176,6 +179,10 @@ class WsFilterBar(_ProxyFilterBarBase):
 
     class FilterChanged(_ProxyFilterBarBase.FilterChanged):
         pass
+
+    DEFAULT_CSS = (Path(__file__).parent / "proxy_filter_bar.tcss").read_text(
+        encoding="utf-8"
+    ).replace("ProxyFilterBar", "WsFilterBar")
 
     def configure(self) -> list[FilterField]:
         return [
