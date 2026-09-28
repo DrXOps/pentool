@@ -41,7 +41,7 @@ from pentool.api.intruder_api import (
     process_payload,
 )
 from pentool.api.payload_serialization import deserialize_payloads, serialize_payloads
-from pentool.tui.widgets.intruder_results import matches_grep, matches_result_filters
+from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import build_intruder_bindings
 from pentool.tui.messages import SendToRepeater
@@ -128,10 +128,10 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         self._api = None
         self._all_results: list[IntruderResult] = []
         self._current_result: IntruderResult | None = None  # for the detail panel
-        self._filter_status: str | None = None
-        self._filter_len_gt: int | None = None
-        self._filter_len_lt: int | None = None
-        self._grep_only_match: bool = False
+        self._filter_spec: FilterSpec | None = None  # filter predicates (status, length)
+        self._grep_match_patterns: list[str] = []   # grep-match patterns (for highlighting)
+        self._grep_extract_patterns: list[str] = [] # grep-extract patterns (for extractions)
+        self._grep_only_match: bool = False         # "Only matches" toggle
         # _sort_col / _sort_reverse — inherited from SortableTableMixin
         # NOT named `_running` — that name collides with
         # textual.message_pump.MessagePump._running, an internal attribute
@@ -142,9 +142,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         # renaming removes the need for the workaround.
         self._attack_running: bool = False
         self._paused: bool = False
-        # Grep Match/Extract (Block 4.4)
-        self._grep_match_patterns: list[str] = []   # patterns for highlighting rows
-        self._grep_extract_patterns: list[str] = [] # patterns for extracting values
+        # Grep Match/Extract (Block 4.4) — handled via _filter_spec now
+        # Fields kept for grep highlight/extract logic that needs them separately
         # Saved selection in template-editor (for ADD §§ after focus loss)
         self._last_editor_selection: tuple | None = None
         self._last_click_time: float = 0.0
@@ -305,14 +304,49 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             if not self._all_results:
                 table.clear_data()
                 return
+
+            # Build row dicts for FilterSpec.apply()
+            row_dicts = [
+                {
+                    "status": str(r.response_status),
+                    "length": r.response_length or 0,
+                    "payload": " ".join(r.payload_values),
+                }
+                for r in self._all_results
+            ]
+
+            # Apply filter spec
+            if self._filter_spec and not self._filter_spec.is_empty:
+                # Also apply grep-only-match if active
+                if self._grep_only_match and self._grep_match_patterns:
+                    gspec = self._filter_spec
+                    gspec.predicates.append(
+                        FilterPredicate("grep_match", FilterOp.HAS, self._grep_match_patterns[0])
+                    )
+                filtered = self._filter_spec.apply(row_dicts)
+                filtered_indices = {row_dicts.index(d) for d in filtered}
+            else:
+                filtered_indices = set(range(len(self._all_results)))
+
+            # Apply grep-only-match separately for those without filter spec
+            if self._grep_only_match and self._grep_match_patterns and not self._filter_spec:
+                filtered_indices = set()
+                for i, r in enumerate(self._all_results):
+                    text = f"{r.response_status} {r.response_length} {' '.join(r.payload_values)}"
+                    import re
+                    for pat in self._grep_match_patterns:
+                        try:
+                            if re.search(pat, text, re.IGNORECASE):
+                                filtered_indices.add(i)
+                                break
+                        except re.error:
+                            continue
+
+            # Build rows from filtered results
             rows = []
-            for r in self._all_results:
-                if matches_result_filters(
-                    r, self._filter_status, self._filter_len_gt,
-                    self._filter_len_lt, self._grep_match_patterns,
-                    self._grep_only_match,
-                ):
-                    rows.append(self._row_from_result(r))
+            for i in sorted(filtered_indices):
+                rows.append(self._row_from_result(self._all_results[i]))
+
             import pyarrow as pa
             cols = _RESULTS_COL_NAMES
             if self._grep_extract_patterns:
@@ -690,30 +724,35 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         self, event: _IntruderFilterBar.FilterChanged
     ) -> None:
         """React to _IntruderFilterBar posting a FilterChanged message."""
-        f = event.filters
+        spec = event.spec
+
+        # Split spec into regular predicates, grep predicates, and grep-only flag
+        filter_predicates: list[FilterPredicate] = []
+        self._grep_match_patterns = []
+        self._grep_extract_patterns = []
+        self._grep_only_match = False
         had_extract = bool(self._grep_extract_patterns)
-        if not f:
-            self._filter_status  = None
-            self._filter_len_gt  = None
-            self._filter_len_lt  = None
-            self._grep_match_patterns   = []
-            self._grep_extract_patterns = []
-            self._grep_only_match       = False
-        else:
-            if "status" in f or "len_gt" in f or "len_lt" in f:
-                self._filter_status = f.get("status")
-                self._filter_len_gt = f.get("len_gt")
-                self._filter_len_lt = f.get("len_lt")
-            if "grep_match" in f or "grep_extract" in f or "grep_only_match" in f:
-                self._grep_match_patterns   = [f["grep_match"]]   if f.get("grep_match")   else []
-                self._grep_extract_patterns = [f["grep_extract"]] if f.get("grep_extract") else []
-                self._grep_only_match       = bool(f.get("grep_only_match"))
-                n_match   = len(self._grep_match_patterns)
-                n_extract = len(self._grep_extract_patterns)
-                logger.info(
-                    "INTRUDER: grep applied — match=%d extract=%d only_match=%s",
-                    n_match, n_extract, self._grep_only_match,
-                )
+
+        if spec and not spec.is_empty:
+            for p in spec.predicates:
+                match p.field:
+                    case "grep_match":
+                        self._grep_match_patterns = [str(p.value)]
+                    case "grep_extract":
+                        self._grep_extract_patterns = [str(p.value)]
+                    case "grep_only_match":
+                        self._grep_only_match = bool(p.value)
+                    case _:
+                        filter_predicates.append(p)
+
+        self._filter_spec = FilterSpec(predicates=filter_predicates) if filter_predicates else None
+
+        n_match = len(self._grep_match_patterns)
+        n_extract = len(self._grep_extract_patterns)
+        logger.info(
+            "INTRUDER: filter applied — predicates=%d match=%d extract=%d only_match=%s",
+            len(filter_predicates), n_match, n_extract, self._grep_only_match,
+        )
 
         # Sync the Extract column — add when pattern appears, remove when cleared
         has_extract = bool(self._grep_extract_patterns)
@@ -1502,14 +1541,26 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
 
     def _on_result(self, result: IntruderResult) -> None:
         self._all_results.append(result)
-        if matches_result_filters(
-            result,
-            self._filter_status,
-            self._filter_len_gt,
-            self._filter_len_lt,
-            self._grep_match_patterns,
-            self._grep_only_match,
-        ):
+
+        # Check if result matches current filter
+        row = {
+            "status": str(result.response_status),
+            "length": result.response_length or 0,
+        }
+        passes = True
+        if self._filter_spec and not self._filter_spec.is_empty:
+            passes = all(p.apply(row) for p in self._filter_spec.predicates)
+
+        # Check grep-only-match
+        if passes and self._grep_only_match and self._grep_match_patterns:
+            text = f"{result.response_status} {result.response_length} {' '.join(result.payload_values)}"
+            import re
+            passes = any(
+                re.search(pat, text, re.IGNORECASE)
+                for pat in self._grep_match_patterns
+            )
+
+        if passes:
             self._add_result_row(result)
         # Auto-save result to DB
         self._auto_save_result(result)
@@ -1631,23 +1682,27 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
     def _result_at_row(self, table: DataTable, row_index: int) -> IntruderResult | None:
         """Resolve result by index in _all_results.
 
-        Works with sorted tables because we track the sort state and
-        apply it to _all_results as well — the row index directly
-        maps to the position in the sorted list.
+        Iterates _all_results through the same filter to get the Nth visible row.
         """
-        # The filtered-and-sorted order matches what's shown in the table.
-        # We iterate _all_results through the same filter to get the Nth
-        # visible result.
         n = 0
         for r in self._all_results:
-            if matches_result_filters(
-                r,
-                self._filter_status,
-                self._filter_len_gt,
-                self._filter_len_lt,
-                self._grep_match_patterns,
-                self._grep_only_match,
-            ):
+            row = {
+                "status": str(r.response_status),
+                "length": r.response_length or 0,
+            }
+            passes = True
+            if self._filter_spec and not self._filter_spec.is_empty:
+                passes = all(p.apply(row) for p in self._filter_spec.predicates)
+
+            if passes and self._grep_only_match and self._grep_match_patterns:
+                text = f"{r.response_status} {r.response_length} {' '.join(r.payload_values)}"
+                import re
+                passes = any(
+                    re.search(pat, text, re.IGNORECASE)
+                    for pat in self._grep_match_patterns
+                )
+
+            if passes:
                 if n == row_index:
                     return r
                 n += 1

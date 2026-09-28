@@ -1,64 +1,30 @@
-"""Intruder results filter bar (Этап 6, extracted from IntruderScreen).
+"""IntruderFilterBar — фильтр результатов атак Intruder.
 
-A self-contained filter bar for the Intruder results table: status / length
-range / grep inputs, posting a FilterChanged message on Apply/Reset. Lives
-here so the IntruderScreen mega-file is thinner and the bar is reusable /
-unit-testable in isolation (a step toward unifying with the proxy FilterBar).
+Заменяет старый IntruderFilterBar. Отличия:
+- Унаследован от FilterBarWidget
+- Grep-секция (grep-match, grep-extract, only-matches toggle) отдельно
+- Immediate apply
 """
 
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.message import Message
 from textual.containers import Horizontal
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Input, Label
 
-from pentool.tui.widgets.filter_bar_base import FilterBarBase
+from pentool.collections.filter_predicate import (
+    FilterField,
+    FilterFieldType,
+    FilterOp,
+    FilterPredicate,
+    FilterSpec,
+)
+from pentool.tui.widgets.filter_bar_widget import (
+    FilterBarWidget,
+    ToggleButton,
+)
 
-
-class GrepOnlyToggle(Static):
-    """Toggle button for 'Only matches' — a non-filtering grep a row must hit.
-
-    Mirrors the proxy ScopeToggle UX: one click toggles active/inactive. When
-    active, the Intruder results table shows rows that match the Grep-Match
-    pattern and hides the rest (highlighting already colors them).
-    """
-
-    DEFAULT_CSS = """
-    GrepOnlyToggle {
-        width: auto;
-        margin: 0 1;
-    }
-    GrepOnlyToggle.flash {
-        text-style: bold;
-    }
-    """
-
-    class Toggled(Message):
-        def __init__(self, active: bool) -> None:
-            super().__init__()
-            self.active = active
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__("○ Only matches", **kwargs)
-        self._active: bool = False
-
-    @property
-    def active(self) -> bool:
-        return self._active
-
-    def on_click(self) -> None:
-        self._active = not self._active
-        self.update("● Only matches" if self._active else "○ Only matches")
-        self.set_class(self._active, "flash")
-        self.post_message(self.Toggled(self._active))
-
-    def reset(self) -> None:
-        self._active = False
-        self.update("○ Only matches")
-        self.remove_class("flash")
-
-DEFAULT_CSS = """
+_GREP_CSS = """
 IntruderFilterBar {
     height: auto;
     layout: vertical;
@@ -84,104 +50,118 @@ IntruderFilterBar Button {
 """
 
 
-class IntruderFilterBar(FilterBarBase):
-    """Filter bar for the Intruder results table.
+class IntruderFilterBar(FilterBarWidget):
+    """Filter bar for Intruder results: status/length range + grep section."""
 
-    Encapsulates status / length-range / grep inputs that were previously
-    scattered as inline widgets inside IntruderScreen._compose_results.
-    Posts FilterChanged when the user applies or resets filters.
-    """
+    class FilterChanged(FilterBarWidget.FilterChanged):
+        pass
 
-    class FilterChanged(Message):
-        """Emitted when the user clicks Apply or Reset."""
+    DEFAULT_CSS = FilterBarWidget.DEFAULT_CSS + _GREP_CSS
 
-        def __init__(self, filters: dict) -> None:
-            super().__init__()
-            self.filters = filters
-
-    DEFAULT_CSS = DEFAULT_CSS
+    def configure(self) -> list[FilterField]:
+        return [
+            FilterField("filter-status", "Status:", FilterFieldType.TEXT, "status",
+                        FilterOp.EQ, placeholder="200"),
+            FilterField("filter-len-gt", "Length >", FilterFieldType.NUMBER, "length",
+                        FilterOp.GT, placeholder="0"),
+            FilterField("filter-len-lt", "<", FilterFieldType.NUMBER, "length",
+                        FilterOp.LT, placeholder="∞"),
+        ]
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="results-filter-bar"):
             yield Label("Status:")
-            yield Input(id="filter-status", placeholder="e.g. 200", compact=True)
+            yield Input(id="filter-status", placeholder="e.g. 200")
             yield Label("Length >")
-            yield Input(id="filter-len-gt", placeholder="0", compact=True)
+            yield Input(id="filter-len-gt", placeholder="0", type="integer")
             yield Label("<")
-            yield Input(id="filter-len-lt", placeholder="∞", compact=True)
+            yield Input(id="filter-len-lt", placeholder="∞", type="integer")
             yield Button("Apply", id="btn-filter-apply")
-            yield Button("Reset filters", id="btn-filter-reset")
+            yield Button("Reset", id="btn-filter-reset")
         with Horizontal(id="grep-bar"):
             yield Label("Grep:")
-            yield Input(id="grep-match-input", placeholder="regex — highlight matching rows", compact=True)
+            yield Input(id="grep-match-input", placeholder="regex — highlight rows")
             yield Label("Extract:")
-            yield Input(id="grep-extract-input", placeholder="regex — add column with extracted value", compact=True)
-            yield GrepOnlyToggle(id="grep-only-toggle")
+            yield Input(id="grep-extract-input", placeholder="regex — extract value")
+            yield ToggleButton("● Only matches", id="grep-only-toggle")
             yield Button("Apply", id="btn-grep-apply")
-            yield Button("Clear grep", id="btn-grep-clear")
+            yield Button("Clear", id="btn-grep-clear")
+
+    def collect(self) -> list[FilterPredicate]:
+        """Collect filter predicates + grep predicates."""
+        predicates: list[FilterPredicate] = []
+
+        # Status
+        status = self._qs("#filter-status")
+        if status:
+            predicates.append(FilterPredicate("status", FilterOp.EQ, status))
+
+        # Length range
+        gt = self._qn("#filter-len-gt")
+        lt = self._qn("#filter-len-lt")
+        if gt is not None:
+            predicates.append(FilterPredicate("length", FilterOp.GT, gt))
+        if lt is not None:
+            predicates.append(FilterPredicate("length", FilterOp.LT, lt))
+
+        # Grep-match
+        grep = self._qs("#grep-match-input")
+        if grep:
+            predicates.append(FilterPredicate("grep_match", FilterOp.REGEX, grep))
+
+        # Grep-extract
+        extract = self._qs("#grep-extract-input")
+        if extract:
+            predicates.append(FilterPredicate("grep_extract", FilterOp.REGEX, extract))
+
+        # Grep-only-match флаг
+        try:
+            toggle = self.query_one("#grep-only-toggle", ToggleButton)
+            if toggle.is_active():
+                predicates.append(FilterPredicate("grep_only_match", FilterOp.EQ, True))
+        except Exception:
+            pass
+
+        return predicates
+
+    def _qs(self, sel: str) -> str:
+        return self.query_one(sel, Input).value.strip()
+
+    def _qn(self, sel: str) -> int | None:
+        try:
+            val = self.query_one(sel, Input).value.strip()
+            return int(val) if val else None
+        except Exception:
+            return None
+
+    # ── Handlers ───────────────────────────────────────────────────────────
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
         if bid == "btn-filter-apply":
-            self._emit_filters()
+            self._apply()
         elif bid == "btn-filter-reset":
             self._reset()
         elif bid == "btn-grep-apply":
-            self._emit_grep()
+            self._apply()
         elif bid == "btn-grep-clear":
             self._clear_grep()
 
-    def _emit_filters(self) -> None:
-        """Build filter dict from current Input values and emit FilterChanged."""
-        filters: dict = {}
-        status = self._input_value(self, "#filter-status")
-        if status:
-            filters["status"] = status
-        gt = self._input_value(self, "#filter-len-gt")
-        if gt:
-            try:
-                filters["len_gt"] = int(gt)
-            except Exception:
-                pass
-        lt = self._input_value(self, "#filter-len-lt")
-        if lt:
-            try:
-                filters["len_lt"] = int(lt)
-            except Exception:
-                pass
-        self.emit(self.FilterChanged, self, filters)
+    def _clear_grep(self) -> None:
+        self.query_one("#grep-match-input", Input).value = ""
+        self.query_one("#grep-extract-input", Input).value = ""
+        try:
+            self.query_one("#grep-only-toggle", ToggleButton).reset()
+        except Exception:
+            pass
+        self._emit(FilterSpec())
 
     def _reset(self) -> None:
-        self._set_input_value(self, "#filter-status", "")
-        self._set_input_value(self, "#filter-len-gt", "")
-        self._set_input_value(self, "#filter-len-lt", "")
+        self.query_one("#filter-status", Input).value = ""
+        self.query_one("#filter-len-gt", Input).value = ""
+        self.query_one("#filter-len-lt", Input).value = ""
         try:
-            self.query_one("#grep-only-toggle", GrepOnlyToggle).reset()
+            self.query_one("#grep-only-toggle", ToggleButton).reset()
         except Exception:
             pass
-        self.emit(self.FilterChanged, self, {})
-
-    def _emit_grep(self) -> None:
-        filters: dict = {}
-        match = self._input_value(self, "#grep-match-input")
-        if match:
-            filters["grep_match"] = match
-        extract = self._input_value(self, "#grep-extract-input")
-        if extract:
-            filters["grep_extract"] = extract
-        try:
-            toggle = self.query_one("#grep-only-toggle", GrepOnlyToggle)
-            if toggle.active:
-                filters["grep_only_match"] = True
-        except Exception:
-            pass
-        self.emit(self.FilterChanged, self, filters)
-
-    def _clear_grep(self) -> None:
-        self._set_input_value(self, "#grep-match-input", "")
-        self._set_input_value(self, "#grep-extract-input", "")
-        try:
-            self.query_one("#grep-only-toggle", GrepOnlyToggle).reset()
-        except Exception:
-            pass
-        self.emit(self.FilterChanged, self, {})
+        self._emit(FilterSpec())

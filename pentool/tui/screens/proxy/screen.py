@@ -24,6 +24,7 @@ from textual.widgets import (
     TextArea,
 )
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
+from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import build_proxy_bindings
 from pentool.tui.widgets.proxy_helpers import (
@@ -36,8 +37,7 @@ from pentool.tui.messages import SendToIntruder, SendToRepeater, SendToTarget, S
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.context_menu import ContextMenu
-from pentool.tui.widgets.filter_bar import FilterBar
-from pentool.tui.widgets.http_history_filters import build_history_filters
+from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar as FilterBar
 from pentool.tui.widgets.inspector_panel import InspectorPanel
 from pentool.tui.widgets.intercept import InterceptMixin
 from pentool.tui.widgets.request_editor import HttpView
@@ -112,7 +112,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         self._sort_col: int | None = None
         self._sort_reverse: bool = False
         self._inspector_visible: bool = False
-        self._current_filters: dict | None = None
+        self._current_filters: FilterSpec | None = None
         self._pending_req_ids: dict[str, int] = {}
         self._pending_req_ids_ts: dict[str, float] = {}  # БАГ-C: timestamps for periodic cleanup
         self._intercept_req: InterceptedRequest | None = None
@@ -400,7 +400,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         except Exception:
             pass
 
-    async def _reload_table(self, filters: dict | None = None) -> None:
+    async def _reload_table(self, filters: FilterSpec | None = None) -> None:
         """Load/reload data into the DataTable from storage.
 
         Loads the most recent _HISTORY_PAGE_SIZE rows (newest page) and
@@ -414,8 +414,17 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             return
         try:
             # Add has_comment filter if toggle is active
-            filters = build_history_filters(filters, self._filter_show_comments)
-            logger.info("PROXY SCREEN: _reload_table called, filters=%s", filters)
+            if self._filter_show_comments:
+                if filters:
+                    filters.predicates.append(
+                        FilterPredicate("comment", FilterOp.NOT_NULL, None)
+                    )
+                else:
+                    filters = FilterSpec(predicates=[
+                        FilterPredicate("comment", FilterOp.NOT_NULL, None),
+                    ])
+            logger.info("PROXY SCREEN: _reload_table called, filters=%s",
+                        "none" if not filters else f"{len(filters.predicates)} predicates")
             newest_first_rows = await self._proxy_service.get_history(
                 limit=_HISTORY_PAGE_SIZE, filters=filters,
             )
@@ -556,8 +565,11 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             page_limit = self._ws_history_oldest_offset - page_offset
             if page_limit <= 0:
                 return
+            ws_filter = FilterSpec(predicates=[
+                FilterPredicate("is_websocket", FilterOp.EQ, True),
+            ])
             older_newest_first = await self._proxy_service.get_history(
-                offset=page_offset, limit=page_limit, filters={"is_websocket": True},
+                offset=page_offset, limit=page_limit, filters=ws_filter,
             )
             older_rows = list(reversed(older_newest_first))
             if not older_rows:
@@ -591,9 +603,12 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             return
         try:
             logger.info("PROXY SCREEN: _reload_ws_table called")
-            total = await self._proxy_service.count_history(filters={"is_websocket": True})
+            ws_filter = FilterSpec(predicates=[
+                FilterPredicate("is_websocket", FilterOp.EQ, True),
+            ])
+            total = await self._proxy_service.count_history(filters=ws_filter)
             rows = await self._proxy_service.get_history(
-                limit=_HISTORY_PAGE_SIZE, filters={"is_websocket": True},
+                limit=_HISTORY_PAGE_SIZE, filters=ws_filter,
             )
             logger.info("PROXY SCREEN: _reload_ws_table loaded %d/%d WS rows",
                         len(rows), total)
@@ -1135,9 +1150,11 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
         self._sort_table(event, _COL_NAMES)
 
-    def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
-        filters = event.filters if event.filters else None
-        self.run_worker(self._reload_table(filters))
+    def on_proxy_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
+        """Filter changed → reload table with new FilterSpec."""
+        spec = event.spec if event.spec and not event.spec.is_empty else None
+        self._current_filters = spec
+        self.run_worker(self._reload_table(spec))
 
     def action_toggle_inspector(self) -> None:
         self._inspector_visible = not self._inspector_visible
@@ -1529,7 +1546,6 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             # Reset the FilterBar filters too, to bring back the full history.
             try:
                 fb = self.query_one("#filter-bar")
-                from pentool.tui.widgets.filter_bar import FilterBar
                 if hasattr(fb, "_reset"):
                     fb._reset()
             except Exception:
@@ -1949,9 +1965,10 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             logger.warning("_do_scope_action: failed to save scope to config: %s", e)
         # Update ★ Scope button state in FilterBar
         try:
-            from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
-            st = self.query_one("#filter-bar", FilterBar).query_one("#fb-scope", ScopeToggle)
-            st.set_scope_empty(not bool(scope))
+            from pentool.tui.widgets.filter_bar_widget import ToggleButton
+            from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
+            st = self.query_one("#filter-bar", ProxyFilterBar).query_one("#fb-scope", ToggleButton)
+            st.set_enabled(bool(scope))
         except Exception:
             pass
 

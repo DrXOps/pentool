@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from pentool.collections.filter_predicate import FilterSpec
 from pentool.core.logging import get_logger
 from pentool.storage.base_sqlite_storage import BaseSqliteStorage
 
@@ -274,7 +275,7 @@ class HttpStorage(BaseSqliteStorage):
         self,
         offset: int = 0,
         limit: int = 200,
-        filters: dict | None = None,
+        filters: FilterSpec | None = None,
         order_by: str = "id",
         desc: bool = True,
     ) -> list[dict]:
@@ -401,7 +402,7 @@ class HttpStorage(BaseSqliteStorage):
 
         return result
 
-    async def count(self, filters: dict | None = None) -> int:
+    async def count(self, filters: FilterSpec | None = None) -> int:
         assert self._db
         where, params = self._build_where(filters)
         async with self._db.execute(
@@ -514,85 +515,11 @@ class HttpStorage(BaseSqliteStorage):
             row = await cur.fetchone()
         return row[0] if row else ""
 
-    def _build_where(self, filters: dict | None) -> tuple[str, list]:
-        """Build a WHERE clause from a filter dictionary."""
-        if not filters:
+    def _build_where(self, filters: FilterSpec | None) -> tuple[str, list]:
+        """Build a WHERE clause from a FilterSpec.
+
+        Replaces the old dict-based build_where. Accepts FilterSpec or None.
+        """
+        if not filters or filters.is_empty:
             return "", []
-
-        clauses: list[str] = []
-        params: list = []
-
-        host = filters.get("host")
-        if host:
-            clauses.append("host LIKE ?")
-            params.append(f"%{host}%")
-
-        # List of hosts for "in-scope only" filter
-        # Use LIKE to account for variants with port (example.com vs example.com:443)
-        hosts = filters.get("hosts")
-        if hosts and isinstance(hosts, (list, tuple)) and len(hosts) > 0:
-            sub = " OR ".join("(host = ? OR host LIKE ?)" for _ in hosts)
-            clauses.append(f"({sub})")
-            for h in hosts:
-                base = h.split(":")[0]  # strip port if present
-                params.append(base)
-                params.append(f"{base}:%")
-
-        methods = filters.get("method")
-        if methods:
-            if isinstance(methods, str):
-                methods = [methods]
-            placeholders = ",".join("?" * len(methods))
-            clauses.append(f"method IN ({placeholders})")
-            params.extend(methods)
-
-        status = filters.get("status_code")
-        if status:
-            if isinstance(status, (list, tuple)) and len(status) == 2:
-                clauses.append("status_code BETWEEN ? AND ?")
-                params.extend(status)
-            elif isinstance(status, int):
-                clauses.append("status_code = ?")
-                params.append(status)
-
-        mime = filters.get("mime_type")
-        if mime:
-            clauses.append("mime_type LIKE ?")
-            params.append(f"%{mime}%")
-
-        ext = filters.get("extension")
-        if ext:
-            clauses.append("extension = ?")
-            params.append(ext)
-
-        has_params = filters.get("has_params")
-        if has_params is not None:
-            clauses.append("has_params = ?")
-            params.append(1 if has_params else 0)
-
-        is_websocket = filters.get("is_websocket")
-        if is_websocket is not None:
-            clauses.append("is_websocket = ?")
-            params.append(1 if is_websocket else 0)
-
-        tag = filters.get("tag")
-        if tag:
-            # Match comma-separated tags: exact whole tag, not substring
-            # "important" matches "important", "important,urgent" but not "unimportant"
-            clauses.append(
-                "(tags = ? OR tags LIKE ? OR tags LIKE ? OR tags LIKE ?)"
-            )
-            params.extend([tag, f"{tag},%", f"%,{tag},%", f"%,{tag}"])
-
-        color = filters.get("color")
-        if color:
-            clauses.append("color = ?")
-            params.append(color)
-
-        has_comment = filters.get("has_comment")
-        if has_comment:
-            clauses.append("comment IS NOT NULL AND comment != ''")
-
-        if not clauses:
-            return "", []
-        return "WHERE " + " AND ".join(clauses), params
+        return filters.to_sql()

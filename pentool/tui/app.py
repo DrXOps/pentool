@@ -1287,10 +1287,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 logger.debug("on_sync_scope_to_proxy: failed to persist scope per-project: %s", e)
             # Refresh Proxy screen's ScopeToggle state if mounted
             try:
-                from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
+                from pentool.tui.widgets.filter_bar_widget import ToggleButton
+                from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
                 proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
-                st = proxy_screen.query_one("#filter-bar", FilterBar).query_one("#fb-scope", ScopeToggle)
-                st.set_scope_empty(not bool(proxy.scope))
+                st = proxy_screen.query_one("#filter-bar", ProxyFilterBar).query_one("#fb-scope", ToggleButton)
+                st.set_enabled(bool(proxy.scope))
             except Exception:
                 pass
         except Exception as e:
