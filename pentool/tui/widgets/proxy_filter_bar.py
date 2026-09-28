@@ -54,10 +54,25 @@ logger = get_logger(__name__)
 
 
 class _ProxyFilterBarBase(FilterBarWidget):
-    """Base for HTTP and WS filter bars — shared logic."""
+    """Base for HTTP and WS filter bars — shared logic.
+
+    Each subclass declares its own FilterChanged Message (Textual handler naming).
+    """
 
     class FilterChanged(FilterBarWidget.FilterChanged):
         pass
+
+    def _emit(self, spec: FilterSpec) -> None:
+        """Override: post the SUBCLASS's own FilterChanged, not the base one.
+
+        Each subclass (ProxyFilterBar, WsFilterBar) has its own nested Message
+        class. This method discovers the right one at runtime.
+        """
+        cls = type(self)
+        if hasattr(cls, 'FilterChanged'):
+            self.post_message(cls.FilterChanged(spec))
+        else:
+            super()._emit(spec)
 
     DEFAULT_CSS = (Path(__file__).parent / "proxy_filter_bar.tcss").read_text(encoding="utf-8")
 
@@ -138,6 +153,9 @@ class _ProxyFilterBarBase(FilterBarWidget):
 class ProxyFilterBar(_ProxyFilterBarBase):
     """HTTP History filter bar — full set: Host, Method, Status, Mark, Search, Scope."""
 
+    class FilterChanged(_ProxyFilterBarBase.FilterChanged):
+        pass
+
     def configure(self) -> list[FilterField]:
         return [
             FilterField("fb-host", "Host:", FilterFieldType.TEXT, "host",
@@ -154,7 +172,10 @@ class ProxyFilterBar(_ProxyFilterBarBase):
 
 
 class WsFilterBar(_ProxyFilterBarBase):
-    """WS History filter bar — slimmed: Host, Status, Search, Scope."""
+    """WS History filter bar — slimmed: Host, URL, Scope."""
+
+    class FilterChanged(_ProxyFilterBarBase.FilterChanged):
+        pass
 
     def configure(self) -> list[FilterField]:
         return [
@@ -165,18 +186,13 @@ class WsFilterBar(_ProxyFilterBarBase):
         ]
 
     def collect(self) -> list[FilterPredicate]:
+        # Fields from configure() + is_websocket=True always
         predicates = super().collect()
-        # WS history always filters by is_websocket=True
         predicates.append(FilterPredicate("is_websocket", FilterOp.EQ, True))
-        return predicates
-
-    def collect(self) -> list[FilterPredicate]:
-        predicates = super().collect()
-        # Status: парсим "200" или "200-299"
-        predicates = [self._normalize_status(p) for p in predicates]
+        # Scope toggle
         try:
-            scope = self.query_one("#fb-scope", ToggleButton)
-            if scope.is_active():
+            scope = self.query_one("#fb-scope", ToolbarButton)
+            if scope.has_class("active"):
                 predicates.append(FilterPredicate("scope_only", FilterOp.EQ, True))
         except Exception:
             pass
