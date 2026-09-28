@@ -469,10 +469,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             return
         shown = len(self._rows_cache)
         total = self._history_total
-        if total <= shown:
-            label.update("")
-        else:
-            label.update(f"Showing {shown:,} of {total:,} — scroll up to load more")
+        label.update(f"Showing {shown:,} of {total:,} records")
 
     def _update_ws_history_count_label(self) -> None:
         """Same "Showing N of M" treatment for the WS History table.
@@ -487,10 +484,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             return
         shown = len(self._ws_rows_cache)
         total = self._ws_history_total
-        if total <= shown:
-            label.update("")
-        else:
-            label.update(f"Showing {shown:,} of {total:,} — scroll up to load more")
+        label.update(f"Showing {shown:,} of {total:,} records")
 
     async def _load_more_history(self) -> None:
         """Load one older page of history when the user scrolls to the top.
