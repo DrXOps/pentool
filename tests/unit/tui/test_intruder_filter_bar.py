@@ -1,6 +1,4 @@
 """Intruder results filter bar — FilterSpec-based filter tests.
-
-The bar emits FilterChanged with FilterSpec on Apply/Reset.
 """
 
 from __future__ import annotations
@@ -12,16 +10,29 @@ from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar
 
 
 def _make_bar(input_values: dict, grep_only_active: bool = False):
+    """Build a mock IntruderFilterBar with fake query_one."""
     bar = object.__new__(IntruderFilterBar)
     posted = []
+
+    class _FakeToolbarButton:
+        def __init__(self):
+            self._active = grep_only_active
+            self.label = "○ Only matches"
+        def has_class(self, cls):
+            return self._active
+        def set_class(self, val, cls):
+            self._active = val
+
+    class _FakeInput:
+        def __init__(self, value):
+            self.value = value
 
     def _query_one(selector, cls=None):
         sid = selector.lstrip("#")
         if sid == "grep-only-toggle":
-            t = types.SimpleNamespace(is_active=lambda: grep_only_active, reset=lambda: None)
-            return t
+            return _FakeToolbarButton()
         value = input_values.get(sid, "")
-        return types.SimpleNamespace(value=value)
+        return _FakeInput(value)
 
     bar.query_one = _query_one
     bar.post_message = lambda msg: posted.append(msg)
@@ -70,9 +81,9 @@ class TestGrep:
         spec = posted[0].spec
         assert any(p.field == "grep_match" for p in spec.predicates)
 
-    def test_clear_grep_posts_empty(self):
+    def test_clear_resets_grep(self):
         bar, posted = _make_bar({"grep-match-input": "x"})
-        bar._clear_grep()
+        bar._reset()
         assert posted[0].spec.is_empty
 
     def test_emit_grep_only_match_toggle(self):
@@ -92,6 +103,6 @@ class TestGrep:
         assert all(p.field != "grep_only_match" for p in spec.predicates)
 
     def test_reset_clears_toggle(self):
-        bar, posted = _make_bar({}, grep_only_active=True)
+        bar, posted = _make_bar({"grep-match-input": "x"}, grep_only_active=True)
         bar._reset()
         assert posted[0].spec.is_empty
