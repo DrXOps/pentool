@@ -39,17 +39,7 @@ class Cycler(Static):
             super().__init__()
             self.value = value
 
-    DEFAULT_CSS = """
-    Cycler {
-        height: 1;
-        width: auto;
-        background: $panel;
-        color: $text;
-        padding: 0 1;
-        pointer: pointer;
-    }
-    Cycler:hover { background: $primary-darken-1; }
-    """
+    # DEFAULT_CSS отсутствует — стили задаются родителем (ProxyFilterBar и т.д.)
 
     def __init__(self, options: list[tuple[str, str]], **kwargs) -> None:
         super().__init__(**kwargs)
@@ -76,33 +66,17 @@ class Cycler(Static):
 
 
 class ToggleButton(Static):
-    """Кнопка-тумблер."""
+    """Кнопка-тумблер.
+
+    Стили задаются родительским контейнером (ProxyFilterBar и т.д.)
+    через селектор `ParentClass ToggleButton`.
+    DEFAULT_CSS отсутствует — стили полностью от родителя.
+    """
 
     class Toggled(Message):
         def __init__(self, active: bool) -> None:
             super().__init__()
             self.active = active
-
-    DEFAULT_CSS = """
-    ToggleButton {
-        height: 1;
-        width: auto;
-        padding: 0 1;
-        background: $panel;
-        color: $text-muted;
-        pointer: pointer;
-    }
-    ToggleButton:hover { background: $primary-darken-1; }
-    ToggleButton.-active {
-        color: $success;
-        background: $success-darken-3;
-    }
-    ToggleButton.disabled {
-        color: $text-disabled;
-        opacity: 0.5;
-        pointer: not-allowed;
-    }
-    """
 
     def __init__(self, label: str = "", active_label: str | None = None, **kwargs) -> None:
         super().__init__(label, **kwargs)
