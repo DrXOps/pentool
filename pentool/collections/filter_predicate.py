@@ -135,6 +135,13 @@ class FilterPredicate:
     def apply(self, row: dict) -> bool:
         """Check if a row dict satisfies this predicate."""
         actual = row.get(self.field)
+
+        # IS_NULL / NOT_NULL обрабатываются до проверки на None
+        if self.operator == FilterOp.IS_NULL:
+            return actual is None or actual == ""
+        if self.operator == FilterOp.NOT_NULL:
+            return actual is not None and actual != ""
+
         if actual is None:
             return False
 
