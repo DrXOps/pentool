@@ -58,10 +58,10 @@ IntruderFilterBar #btn-grep-clear {
 }
 IntruderFilterBar ToolbarButton {
     height: 1;
-    width: auto;
+    width: 14;
     padding: 0 1;
     background: $panel;
-    color: $text-muted;
+    color: $text;
     pointer: pointer;
 }
 IntruderFilterBar ToolbarButton:hover {
