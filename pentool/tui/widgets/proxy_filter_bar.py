@@ -24,8 +24,8 @@ from pentool.collections.filter_predicate import (
 from pentool.tui.widgets.filter_bar_widget import (
     Cycler,
     FilterBarWidget,
-    ToggleButton,
 )
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _COLORS: list[tuple[str, str]] = [
     ("Any", ""),
@@ -76,7 +76,7 @@ class ProxyFilterBar(FilterBarWidget):
             yield Label(f.label, classes="fb-label")
             yield from self._render_field(f)
             yield Label(" ", classes="fb-sep")
-        yield ToggleButton("★ Scope", active_label="★ In Scope", id="fb-scope")
+        yield ToolbarButton("★ Scope", "fb-scope")
         yield Label(" ", classes="fb-sep")
         yield Button("Filter", id="fb-apply", variant="primary")
         yield Button("Clear", id="fb-reset")
@@ -113,8 +113,8 @@ class ProxyFilterBar(FilterBarWidget):
     def collect(self) -> list[FilterPredicate]:
         predicates = super().collect()
         try:
-            scope = self.query_one("#fb-scope", ToggleButton)
-            if scope.is_active():
+            scope = self.query_one("#fb-scope", ToolbarButton)
+            if scope.has_class("active"):
                 predicates.append(FilterPredicate("scope_only", FilterOp.EQ, True))
         except Exception:
             pass
@@ -123,7 +123,9 @@ class ProxyFilterBar(FilterBarWidget):
     def _reset(self) -> None:
         super()._reset()
         try:
-            self.query_one("#fb-scope", ToggleButton).reset()
+            scope = self.query_one("#fb-scope", ToolbarButton)
+            scope.remove_class("active")
+            scope.label = "★ Scope"
         except Exception:
             pass
         self._emit(FilterSpec())
@@ -131,7 +133,9 @@ class ProxyFilterBar(FilterBarWidget):
     def _clear_fields(self) -> None:
         super()._clear_fields()
         try:
-            self.query_one("#fb-scope", ToggleButton).reset()
+            scope = self.query_one("#fb-scope", ToolbarButton)
+            scope.remove_class("active")
+            scope.label = "★ Scope"
         except Exception:
             pass
 
@@ -142,3 +146,15 @@ class ProxyFilterBar(FilterBarWidget):
 
     def on_toggle_button_toggled(self, event: ToggleButton.Toggled) -> None:
         self._apply()
+
+    def on_toolbar_button_pressed(self, event: ToolbarButton.Pressed) -> None:
+        """Scope toggle via ToolbarButton click."""
+        if event.button.id == "fb-scope":
+            toggle_class = not event.button.has_class("active")
+            if toggle_class:
+                event.button.add_class("active")
+                event.button.label = "★ In Scope"
+            else:
+                event.button.remove_class("active")
+                event.button.label = "★ Scope"
+            self._apply()

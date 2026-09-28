@@ -8,7 +8,7 @@ from __future__ import annotations
 import pyarrow as pa
 from datetime import datetime, timezone
 
-from pentool.tui.widgets.proxy_table import COL_NAMES, rows_to_arrow, row_to_record
+from pentool.tui.widgets.proxy_helpers import COL_NAMES, rows_to_arrow, row_to_record
 
 
 def _row(**overrides):

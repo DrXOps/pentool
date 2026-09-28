@@ -1959,10 +1959,13 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             logger.warning("_do_scope_action: failed to save scope to config: %s", e)
         # Update ★ Scope button state in FilterBar
         try:
-            from pentool.tui.widgets.filter_bar_widget import ToggleButton
+            from pentool.tui.widgets.toolbar_button import ToolbarButton
             from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
-            st = self.query_one("#filter-bar", ProxyFilterBar).query_one("#fb-scope", ToggleButton)
-            st.set_enabled(bool(scope))
+            st = self.query_one("#filter-bar", ProxyFilterBar).query_one("#fb-scope", ToolbarButton)
+            if scope:
+                st.remove_class("disabled")
+            else:
+                st.add_class("disabled")
         except Exception:
             pass
 

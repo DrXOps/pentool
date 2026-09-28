@@ -32,8 +32,7 @@ ProxyScreen #table-area {
     min-height: 5;
 }
 ProxyScreen #filter-bar {
-    height: auto;
-    min-height: 1;
+    height: 1;
 }
 ProxyScreen #request-list {
     height: 1fr;
