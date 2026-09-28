@@ -1,15 +1,18 @@
 """ProxyFilterBar — фильтр HTTP/WS истории прокси.
 
-Заменяет старый FilterBar (filter_bar.py). Отличия:
-- Унаследован от FilterBarWidget
-- Свои Cycler/ToggleButton из filter_bar_widget (не старые MethodCycler/ScopeToggle)
-- Scope toggle добавляется отдельно (не через configure)
-- Immediate apply: изменение любого контрола → сразу фильтрует
+Порядок элементов (слева направо):
+  Host:[____] | Method:[GET ▼] | Status:[200]→[∞] | Mark:[Any ▼] |
+  Search:[________] | ★ Scope | [Filter] [Clear]
+
+Загружает CSS из proxy_filter_bar.tcss (как старый FilterBar загружал filter_bar.tcss).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
+from textual.widgets import Button, Label
 
 from pentool.collections.filter_predicate import (
     FilterField,
@@ -47,31 +50,12 @@ _METHODS: list[tuple[str, str]] = [
 
 
 class ProxyFilterBar(FilterBarWidget):
-    """Filter row: Host, Method, Status, Mark, Search, Scope + Apply/Reset.
-
-    Scope toggle is rendered as a regular ToggleButton (replaces old ScopeToggle).
-    """
+    """Filter row: Host, Method, Status, Mark, Search, Scope + Apply/Reset."""
 
     class FilterChanged(FilterBarWidget.FilterChanged):
         pass
 
-    DEFAULT_CSS = (FilterBarWidget.DEFAULT_CSS + """
-    ProxyFilterBar ToggleButton {
-        height: 1;
-        width: auto;
-        padding: 0 1;
-        background: $panel;
-        color: $text-muted;
-        pointer: pointer;
-    }
-    ProxyFilterBar ToggleButton:hover {
-        background: $primary-darken-1;
-    }
-    ProxyFilterBar ToggleButton.-active {
-        color: $success;
-        background: $success-darken-3;
-    }
-    """)
+    DEFAULT_CSS = (Path(__file__).parent / "proxy_filter_bar.tcss").read_text(encoding="utf-8")
 
     def configure(self) -> list[FilterField]:
         return [
@@ -88,8 +72,14 @@ class ProxyFilterBar(FilterBarWidget):
         ]
 
     def compose(self) -> ComposeResult:
-        yield from super().compose()
-        yield ToggleButton("★ Scope", id="fb-scope")
+        for f in self.configure():
+            yield Label(f.label, classes="fb-label")
+            yield from self._render_field(f)
+            yield Label(" ", classes="fb-sep")
+        yield ToggleButton("★ Scope", active_label="★ In Scope", id="fb-scope")
+        yield Label(" ", classes="fb-sep")
+        yield Button("Filter", id="fb-apply", variant="primary")
+        yield Button("Clear", id="fb-reset")
 
     def collect(self) -> list[FilterPredicate]:
         predicates = super().collect()
@@ -119,9 +109,7 @@ class ProxyFilterBar(FilterBarWidget):
     # ── Immediate apply ────────────────────────────────────────────────────
 
     def on_cycler_changed(self, event: Cycler.Changed) -> None:
-        """Method or color change → immediate filter."""
         self._apply()
 
     def on_toggle_button_toggled(self, event: ToggleButton.Toggled) -> None:
-        """Scope toggle → immediate filter."""
         self._apply()

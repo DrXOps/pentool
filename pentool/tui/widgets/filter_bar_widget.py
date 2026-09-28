@@ -25,51 +25,10 @@ from pentool.collections.filter_predicate import (
     FilterSpec,
 )
 
-_DEFAULT_CSS = """
-FilterBarWidget {
-    height: 1;
-    layout: horizontal;
-    background: $surface;
-    padding: 0 1;
-}
-FilterBarWidget .fb-label {
-    width: auto;
-    height: 1;
-    color: $text-muted;
-    padding: 0 1 0 0;
-}
-FilterBarWidget .fb-sep {
-    width: 1;
-    color: $primary-darken-2;
-}
-FilterBarWidget Input {
-    height: 1;
-    border-left: solid $primary-darken-1;
-    border-right: solid $primary-darken-1;
-    background: $surface-lighten-1;
-    padding: 0 1;
-    color: $text;
-}
-FilterBarWidget Input:focus {
-    border-left: solid $primary;
-    border-right: solid $primary;
-    background: $surface-lighten-2;
-}
-FilterBarWidget #fb-apply {
-    height: 1;
-    min-width: 7;
-    background: $primary-darken-1;
-    border: none;
-    padding: 0 1;
-}
-FilterBarWidget #fb-reset {
-    height: 1;
-    min-width: 7;
-    background: $panel;
-    border: none;
-    padding: 0 1;
-}
-"""
+# FilterBarWidget doesn't ship a DEFAULT_CSS — each concrete subclass
+# (ProxyFilterBar, IntruderFilterBar) defines its own layout, widths,
+# and styling. The base class only provides the widget tree via compose()
+# and the filter-logic via configure()/collect().
 
 
 class Cycler(Static):
@@ -141,13 +100,14 @@ class ToggleButton(Static):
     ToggleButton.disabled {
         color: $text-disabled;
         opacity: 0.5;
-        pointer: none;
+        pointer: not-allowed;
     }
     """
 
-    def __init__(self, label: str = "", **kwargs) -> None:
+    def __init__(self, label: str = "", active_label: str | None = None, **kwargs) -> None:
         super().__init__(label, **kwargs)
         self._label = label
+        self._active_label = active_label or label
         self._active: bool = False
 
     def is_active(self) -> bool:
@@ -160,10 +120,12 @@ class ToggleButton(Static):
     def reset(self) -> None:
         self._active = False
         self.remove_class("-active")
+        self.update(self._label)
 
     def toggle(self) -> None:
         self._active = not self._active
         self.set_class(self._active, "-active")
+        self.update(self._active_label if self._active else self._label)
         self.post_message(self.Toggled(self._active))
 
     def on_click(self) -> None:
@@ -185,7 +147,7 @@ class FilterBarWidget(Widget):
             super().__init__()
             self.spec = spec
 
-    DEFAULT_CSS = _DEFAULT_CSS
+    DEFAULT_CSS = ""
 
     # ── Конфигурация ───────────────────────────────────────────────────────
 
