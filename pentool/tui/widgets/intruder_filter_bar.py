@@ -49,12 +49,14 @@ IntruderFilterBar Button {
     height: 1;
     min-width: 6;
     background: $primary-darken-1;
+    color: $text;
     border: none;
     padding: 0 1;
 }
 IntruderFilterBar #btn-filter-reset,
 IntruderFilterBar #btn-grep-clear {
     background: $panel;
+    color: $text;
 }
 IntruderFilterBar ToolbarButton {
     height: 1;
