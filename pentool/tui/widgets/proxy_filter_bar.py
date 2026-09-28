@@ -26,6 +26,7 @@ from pentool.tui.widgets.filter_bar_widget import (
     FilterBarWidget,
 )
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.core.logging import get_logger
 
 _COLORS: list[tuple[str, str]] = [
     ("Any", ""),
@@ -49,13 +50,93 @@ _METHODS: list[tuple[str, str]] = [
 ]
 
 
-class ProxyFilterBar(FilterBarWidget):
-    """Filter row: Host, Method, Status, Mark, Search, Scope + Apply/Reset."""
+logger = get_logger(__name__)
+
+
+class _ProxyFilterBarBase(FilterBarWidget):
+    """Base for HTTP and WS filter bars — shared logic."""
 
     class FilterChanged(FilterBarWidget.FilterChanged):
         pass
 
     DEFAULT_CSS = (Path(__file__).parent / "proxy_filter_bar.tcss").read_text(encoding="utf-8")
+
+    def compose(self) -> ComposeResult:
+        for f in self.configure():
+            yield Label(f.label, classes="fb-label")
+            yield from self._render_field(f)
+            yield Label(" ", classes="fb-sep")
+        yield ToolbarButton("★ Scope", "fb-scope")
+        yield Label(" ", classes="fb-sep")
+        yield Button("Filter", id="fb-apply", variant="primary")
+        yield Button("Clear", id="fb-reset")
+
+    def collect(self) -> list[FilterPredicate]:
+        predicates = super().collect()
+        predicates = [self._normalize_status(p) for p in predicates]
+        try:
+            scope = self.query_one("#fb-scope", ToolbarButton)
+            if scope.has_class("active"):
+                predicates.append(FilterPredicate("scope_only", FilterOp.EQ, True))
+        except Exception:
+            pass
+        return predicates
+
+    def _reset(self) -> None:
+        super()._reset()
+        try:
+            scope = self.query_one("#fb-scope", ToolbarButton)
+            scope.remove_class("active")
+            scope.label = "★ Scope"
+        except Exception:
+            pass
+        self._emit(FilterSpec())
+
+    def _clear_fields(self) -> None:
+        super()._clear_fields()
+        try:
+            scope = self.query_one("#fb-scope", ToolbarButton)
+            scope.remove_class("active")
+            scope.label = "★ Scope"
+        except Exception:
+            pass
+
+    @staticmethod
+    def _normalize_status(p: FilterPredicate) -> FilterPredicate:
+        if p.field != "status_code" or p.operator != FilterOp.BETWEEN:
+            return p
+        raw = str(p.value)
+        if "-" in raw:
+            parts = raw.split("-", 1)
+            try:
+                return FilterPredicate("status_code", FilterOp.BETWEEN, (int(parts[0]), int(parts[1])))
+            except ValueError:
+                pass
+        try:
+            return FilterPredicate("status_code", FilterOp.EQ, int(raw))
+        except ValueError:
+            pass
+        return p
+
+    # ── Handlers ───────────────────────────────────────────────────────────
+
+    def on_cycler_changed(self, event: Cycler.Changed) -> None:
+        self._apply()
+
+    def on_toolbar_button_pressed(self, event: ToolbarButton.Pressed) -> None:
+        if event.button.id == "fb-scope":
+            toggle_class = not event.button.has_class("active")
+            if toggle_class:
+                event.button.add_class("active")
+                event.button.label = "★ In Scope"
+            else:
+                event.button.remove_class("active")
+                event.button.label = "★ Scope"
+            self._apply()
+
+
+class ProxyFilterBar(_ProxyFilterBarBase):
+    """HTTP History filter bar — full set: Host, Method, Status, Mark, Search, Scope."""
 
     def configure(self) -> list[FilterField]:
         return [
@@ -71,15 +152,23 @@ class ProxyFilterBar(FilterBarWidget):
                         FilterOp.FTS, placeholder="FTS5 query..."),
         ]
 
-    def compose(self) -> ComposeResult:
-        for f in self.configure():
-            yield Label(f.label, classes="fb-label")
-            yield from self._render_field(f)
-            yield Label(" ", classes="fb-sep")
-        yield ToolbarButton("★ Scope", "fb-scope")
-        yield Label(" ", classes="fb-sep")
-        yield Button("Filter", id="fb-apply", variant="primary")
-        yield Button("Clear", id="fb-reset")
+
+class WsFilterBar(_ProxyFilterBarBase):
+    """WS History filter bar — slimmed: Host, Status, Search, Scope."""
+
+    def configure(self) -> list[FilterField]:
+        return [
+            FilterField("ws-host", "Host:", FilterFieldType.TEXT, "host",
+                        FilterOp.LIKE, placeholder="example.com"),
+            FilterField("ws-url", "URL:", FilterFieldType.TEXT, "url",
+                        FilterOp.LIKE, placeholder="/ws-endpoint"),
+        ]
+
+    def collect(self) -> list[FilterPredicate]:
+        predicates = super().collect()
+        # WS history always filters by is_websocket=True
+        predicates.append(FilterPredicate("is_websocket", FilterOp.EQ, True))
+        return predicates
 
     def collect(self) -> list[FilterPredicate]:
         predicates = super().collect()

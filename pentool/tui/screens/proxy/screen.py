@@ -37,7 +37,10 @@ from pentool.tui.messages import SendToIntruder, SendToRepeater, SendToTarget, S
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.context_menu import ContextMenu
-from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar as FilterBar
+from pentool.tui.widgets.proxy_filter_bar import (
+    ProxyFilterBar as FilterBar,
+    WsFilterBar,
+)
 from pentool.tui.widgets.inspector_panel import InspectorPanel
 from pentool.tui.widgets.intercept import InterceptMixin
 from pentool.tui.widgets.request_editor import HttpView
@@ -113,6 +116,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         self._sort_reverse: bool = False
         self._inspector_visible: bool = False
         self._current_filters: FilterSpec | None = None
+        self._ws_current_filters: FilterSpec | None = None
         self._pending_req_ids: dict[str, int] = {}
         self._pending_req_ids_ts: dict[str, float] = {}  # БАГ-C: timestamps for periodic cleanup
         self._intercept_req: InterceptedRequest | None = None
@@ -264,6 +268,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             with Horizontal(id="ws-body"):
                 with Vertical(id="ws-main-panel"):
                     with Vertical(id="ws-table-area"):
+                        yield WsFilterBar(id="ws-filter-bar")
                         yield DataTable(
                             columns=_COL_NAMES,
                             id="ws-request-list",
@@ -559,9 +564,12 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             page_limit = self._ws_history_oldest_offset - page_offset
             if page_limit <= 0:
                 return
-            ws_filter = FilterSpec(predicates=[
-                FilterPredicate("is_websocket", FilterOp.EQ, True),
-            ])
+            if self._ws_current_filters and not self._ws_current_filters.is_empty:
+                ws_filter = self._ws_current_filters
+            else:
+                ws_filter = FilterSpec(predicates=[
+                    FilterPredicate("is_websocket", FilterOp.EQ, True),
+                ])
             older_newest_first = await self._proxy_service.get_history(
                 offset=page_offset, limit=page_limit, filters=ws_filter,
             )
@@ -591,24 +599,29 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         finally:
             self._ws_history_loading_more = False
 
-    async def _reload_ws_table(self) -> None:
+    async def _reload_ws_table(self, filters: FilterSpec | None = None) -> None:
         """Load/reload WebSocket requests into the WS History table."""
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         try:
-            logger.info("PROXY SCREEN: _reload_ws_table called")
-            ws_filter = FilterSpec(predicates=[
-                FilterPredicate("is_websocket", FilterOp.EQ, True),
-            ])
-            total = await self._proxy_service.count_history(filters=ws_filter)
+            if filters and not filters.is_empty:
+                ws_filters = filters
+            else:
+                ws_filters = FilterSpec(predicates=[
+                    FilterPredicate("is_websocket", FilterOp.EQ, True),
+                ])
+            logger.info("PROXY SCREEN: _reload_ws_table called, predicates=%d",
+                        len(ws_filters.predicates))
+            total = await self._proxy_service.count_history(filters=ws_filters)
             rows = await self._proxy_service.get_history(
-                limit=_HISTORY_PAGE_SIZE, filters=ws_filter,
+                limit=_HISTORY_PAGE_SIZE, filters=ws_filters,
             )
             logger.info("PROXY SCREEN: _reload_ws_table loaded %d/%d WS rows",
                         len(rows), total)
             self._ws_rows_cache = rows
             self._ws_history_total = total
             self._ws_history_oldest_offset = max(total - len(rows), 0)
+            self._ws_current_filters = filters
             self._update_ws_history_count_label()
             arrow = _rows_to_arrow(rows)
             try:
@@ -1145,10 +1158,16 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         self._sort_table(event, _COL_NAMES)
 
     def on_proxy_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
-        """Filter changed → reload table with new FilterSpec."""
+        """HTTP History filter changed → reload."""
         spec = event.spec if event.spec and not event.spec.is_empty else None
         self._current_filters = spec
         self.run_worker(self._reload_table(spec))
+
+    def on_ws_filter_bar_filter_changed(self, event: WsFilterBar.FilterChanged) -> None:
+        """WS History filter changed → reload."""
+        spec = event.spec if event.spec and not event.spec.is_empty else None
+        self._ws_current_filters = spec
+        self.run_worker(self._reload_ws_table(spec))
 
     def action_toggle_inspector(self) -> None:
         self._inspector_visible = not self._inspector_visible
