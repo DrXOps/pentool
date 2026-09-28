@@ -298,54 +298,37 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         self._rebuild_table_data()
 
     def _rebuild_table_data(self) -> None:
-        """Replace table backend from _all_results via set_data() — same pattern as Proxy._reload_table."""
+        """Replace table backend from _all_results via set_data().
+
+        Фильтрует in-memory через FilterSpec.apply().
+        Для больших наборов (50k+) можно перейти на SQL-фильтрацию
+        через IntruderStorage.get_results(filters=...).
+        """
         try:
             table = self.query_one("#results-table", DataTable)
             if not self._all_results:
                 table.clear_data()
                 return
 
-            # Build row dicts for FilterSpec.apply()
-            row_dicts = [
-                {
+            rows = []
+            for r in self._all_results:
+                row_dict = {
                     "status": str(r.response_status),
                     "length": r.response_length or 0,
                     "payload": " ".join(r.payload_values),
                 }
-                for r in self._all_results
-            ]
-
-            # Apply filter spec
-            if self._filter_spec and not self._filter_spec.is_empty:
-                # Also apply grep-only-match if active
-                if self._grep_only_match and self._grep_match_patterns:
-                    gspec = self._filter_spec
-                    gspec.predicates.append(
-                        FilterPredicate("grep_match", FilterOp.HAS, self._grep_match_patterns[0])
-                    )
-                filtered = self._filter_spec.apply(row_dicts)
-                filtered_indices = {row_dicts.index(d) for d in filtered}
-            else:
-                filtered_indices = set(range(len(self._all_results)))
-
-            # Apply grep-only-match separately for those without filter spec
-            if self._grep_only_match and self._grep_match_patterns and not self._filter_spec:
-                filtered_indices = set()
-                for i, r in enumerate(self._all_results):
+                passes = True
+                if self._filter_spec and not self._filter_spec.is_empty:
+                    passes = self._filter_spec.apply([row_dict]) == [row_dict]
+                if passes and self._grep_only_match and self._grep_match_patterns:
                     text = f"{r.response_status} {r.response_length} {' '.join(r.payload_values)}"
                     import re
-                    for pat in self._grep_match_patterns:
-                        try:
-                            if re.search(pat, text, re.IGNORECASE):
-                                filtered_indices.add(i)
-                                break
-                        except re.error:
-                            continue
-
-            # Build rows from filtered results
-            rows = []
-            for i in sorted(filtered_indices):
-                rows.append(self._row_from_result(self._all_results[i]))
+                    passes = any(
+                        re.search(pat, text, re.IGNORECASE)
+                        for pat in self._grep_match_patterns
+                    )
+                if passes:
+                    rows.append(self._row_from_result(r))
 
             import pyarrow as pa
             cols = _RESULTS_COL_NAMES
@@ -354,8 +337,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             data = {c: pa.array([row[i] for row in rows], type=pa.string()) for i, c in enumerate(cols)}
             arrow = pa.table(data)
             table.set_data(arrow)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error("_rebuild_table_data failed: %s", exc)
 
     def on_mount(self) -> None:
         # Reset on mount in case a previous session left this mid-attack
@@ -1686,14 +1669,14 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         """
         n = 0
         for r in self._all_results:
-            row = {
+            row_dict = {
                 "status": str(r.response_status),
                 "length": r.response_length or 0,
+                "payload": " ".join(r.payload_values),
             }
             passes = True
             if self._filter_spec and not self._filter_spec.is_empty:
-                passes = all(p.apply(row) for p in self._filter_spec.predicates)
-
+                passes = self._filter_spec.apply([row_dict]) == [row_dict]
             if passes and self._grep_only_match and self._grep_match_patterns:
                 text = f"{r.response_status} {r.response_length} {' '.join(r.payload_values)}"
                 import re
@@ -1701,7 +1684,6 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                     re.search(pat, text, re.IGNORECASE)
                     for pat in self._grep_match_patterns
                 )
-
             if passes:
                 if n == row_index:
                     return r

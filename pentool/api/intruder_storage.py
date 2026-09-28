@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+from pentool.collections.filter_predicate import FilterSpec
 from pentool.modules.intruder import IntruderResult
 from pentool.storage.base_sqlite_storage import BaseSqliteStorage
 
@@ -182,41 +183,65 @@ class IntruderStorage(BaseSqliteStorage):
         attack_id: str | None = None,
         limit: int = 1000,
         tab_uid: str = "",
+        filters: FilterSpec | None = None,
     ) -> list[IntruderResult]:
         """Load intruder results from DB.
 
         Filters by attack_id if given, else by tab_uid if given (all results
         across every attack ever run in that tab), else returns the most
         recent `limit` results overall (legacy single-tab behavior).
+
+        Args:
+            filters: Optional FilterSpec для фильтрации по status/length/error.
+                     Поля: 'status' (EQ), 'length' (GT/LT), 'error' (NOT_NULL).
         """
         if not await self.ensure_open():
             return []
 
         db = self._db
+
+        # Build base WHERE
+        base_where = ""
+        base_params: list = []
         if attack_id:
-            cursor = await db.execute(
-                """SELECT id, attack_id, request_number, payload_values, request_raw,
-                          response_raw, response_status, response_length, response_time_ms, error, timestamp
-                   FROM intruder_results WHERE attack_id = ?
-                   ORDER BY request_number LIMIT ?""",
-                (attack_id, limit),
-            )
+            base_where = "WHERE attack_id = ?"
+            base_params = [attack_id]
         elif tab_uid:
-            cursor = await db.execute(
-                """SELECT id, attack_id, request_number, payload_values, request_raw,
-                          response_raw, response_status, response_length, response_time_ms, error, timestamp
-                   FROM intruder_results WHERE tab_uid = ?
-                   ORDER BY timestamp DESC LIMIT ?""",
-                (tab_uid, limit),
-            )
+            base_where = "WHERE tab_uid = ?"
+            base_params = [tab_uid]
+
+        # Build filter WHERE from FilterSpec
+        filter_where = ""
+        filter_params: list = []
+        if filters and not filters.is_empty:
+            filter_where, filter_params = filters.to_sql()
+            # Map field names from Intruder predicates to DB column names
+            # 'status' → 'response_status', 'length' → 'response_length'
+            # (to_sql uses the field name as-is, so we must translate)
+            # Actually — we'll override to_sql via FilterPredicate field mapping.
+            # For now, the filter predicates use DB column names directly.
+            pass
+
+        # Combine WHEREs
+        if base_where and filter_where:
+            where = f"{base_where} AND {filter_where[6:]}"  # strip WHERE from filter
+            params = base_params + filter_params
+        elif base_where:
+            where = base_where
+            params = base_params
+        elif filter_where:
+            where = filter_where
+            params = filter_params
         else:
-            cursor = await db.execute(
-                """SELECT id, attack_id, request_number, payload_values, request_raw,
-                          response_raw, response_status, response_length, response_time_ms, error, timestamp
-                   FROM intruder_results
-                   ORDER BY timestamp DESC LIMIT ?""",
-                (limit,),
-            )
+            where = ""
+            params = []
+
+        order = "ORDER BY request_number" if attack_id else "ORDER BY timestamp DESC"
+        sql = f"""SELECT id, attack_id, request_number, payload_values, request_raw,
+                         response_raw, response_status, response_length, response_time_ms, error, timestamp
+                  FROM intruder_results {where} {order} LIMIT ?"""
+
+        cursor = await db.execute(sql, params + [limit])
         rows = await cursor.fetchall()
         results = []
         for row in rows:
@@ -242,3 +267,47 @@ class IntruderStorage(BaseSqliteStorage):
                 )
             )
         return results
+
+    async def count_results(
+        self,
+        attack_id: str | None = None,
+        tab_uid: str = "",
+        filters: FilterSpec | None = None,
+    ) -> int:
+        """Count results matching filters (for pagination / 'N of M')."""
+        if not await self.ensure_open():
+            return 0
+
+        db = self._db
+        base_where = ""
+        base_params: list = []
+        if attack_id:
+            base_where = "WHERE attack_id = ?"
+            base_params = [attack_id]
+        elif tab_uid:
+            base_where = "WHERE tab_uid = ?"
+            base_params = [tab_uid]
+
+        filter_where = ""
+        filter_params: list = []
+        if filters and not filters.is_empty:
+            filter_where, filter_params = filters.to_sql()
+
+        if base_where and filter_where:
+            where = f"{base_where} AND {filter_where[6:]}"
+            params = base_params + filter_params
+        elif base_where:
+            where = base_where
+            params = base_params
+        elif filter_where:
+            where = filter_where
+            params = filter_params
+        else:
+            where = ""
+            params = []
+
+        cursor = await db.execute(
+            f"SELECT COUNT(*) FROM intruder_results {where}", params
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else 0

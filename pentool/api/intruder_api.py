@@ -217,9 +217,10 @@ class IntruderAPI(ExportableAPI):
         attack_id: str | None = None,
         limit: int = 1000,
         tab_uid: str = "",
+        filters: FilterSpec | None = None,
     ) -> list[IntruderResult]:
-        """Load intruder results from DB."""
-        return await self._repo.get_results(attack_id, limit, tab_uid=tab_uid)
+        """Load intruder results from DB with optional FilterSpec."""
+        return await self._repo.get_results(attack_id, limit, tab_uid=tab_uid, filters=filters)
 
     # ── Project persistence ────────────────────────────────────────────────────
 
@@ -283,8 +284,7 @@ class IntruderAPI(ExportableAPI):
                     self._restored_results.append(result)
                 loaded += 1
             except Exception as exc:
-                from pentool.core.logging import get_logger
-                get_logger(__name__).warning(
+                logger.warning(
                     "IntruderAPI.import_project_data: skip result: %s", exc
                 )
         return loaded
