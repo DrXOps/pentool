@@ -88,8 +88,7 @@ class ToggleButton(Static):
             self.active = active
 
     def __init__(self, label: str = "", active_label: str | None = None, **kwargs) -> None:
-        from rich.text import Text as RichText
-        super().__init__(RichText(label), **kwargs)
+        super().__init__(label, **kwargs)
         self._label = label
         self._active_label = active_label or label
         self._active: bool = False
@@ -102,16 +101,14 @@ class ToggleButton(Static):
         self.set_class(not enabled, "disabled")
 
     def reset(self) -> None:
-        from rich.text import Text as RichText
         self._active = False
         self.remove_class("-active")
-        self.update(RichText(self._label))
+        self.update(self._label)
 
     def toggle(self) -> None:
-        from rich.text import Text as RichText
         self._active = not self._active
         self.set_class(self._active, "-active")
-        self.update(RichText(self._active_label if self._active else self._label))
+        self.update(self._active_label if self._active else self._label)
         self.post_message(self.Toggled(self._active))
 
     def on_click(self) -> None:
