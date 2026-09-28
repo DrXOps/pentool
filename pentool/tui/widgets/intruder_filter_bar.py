@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
-from textual.widgets import Button, Input, Label
+from textual.widgets import Input, Label
 
 from pentool.collections.filter_predicate import (
     FilterOp,
@@ -44,19 +44,6 @@ IntruderFilterBar Input:focus {
     border-left: solid $primary;
     border-right: solid $primary;
     background: $surface-lighten-2;
-}
-IntruderFilterBar Button {
-    height: 1;
-    min-width: 6;
-    background: $primary-darken-1;
-    color: $text;
-    border: none;
-    padding: 0 1;
-}
-IntruderFilterBar #btn-filter-reset,
-IntruderFilterBar #btn-grep-clear {
-    background: $panel;
-    color: $text;
 }
 IntruderFilterBar ToolbarButton {
     height: 1;
@@ -97,8 +84,8 @@ class IntruderFilterBar(FilterBarWidget):
             yield Label("Extract:", classes="fb-label")
             yield Input(id="grep-extract-input", placeholder="regex", compact=True)
             yield ToolbarButton("○ Only matches", "grep-only-toggle")
-            yield Button("Apply", id="btn-filter-apply")
-            yield Button("Reset", id="btn-filter-reset")
+            yield ToolbarButton("Apply", "btn-filter-apply")
+            yield ToolbarButton("Reset", "btn-filter-reset")
 
     def collect(self) -> list[FilterPredicate]:
         predicates: list[FilterPredicate] = []
@@ -158,15 +145,13 @@ class IntruderFilterBar(FilterBarWidget):
             pass
         self._emit(FilterSpec())
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    def on_toolbar_button_pressed(self, event: ToolbarButton.Pressed) -> None:
         bid = event.button.id
         if bid == "btn-filter-apply":
             self._apply()
         elif bid == "btn-filter-reset":
             self._reset()
-
-    def on_toolbar_button_pressed(self, event: ToolbarButton.Pressed) -> None:
-        if event.button.id == "grep-only-toggle":
+        elif bid == "grep-only-toggle":
             toggle = not event.button.has_class("active")
             event.button.set_class(toggle, "active")
             event.button.label = "● Only matches" if toggle else "○ Only matches"
