@@ -210,9 +210,13 @@ class ActivityIndicator(Widget):
             except Exception:
                 continue
             widget.tooltip = f"{t.label}: {'running' if active else 'idle'}"
-            # AI glyph — show only when AI is enabled in config
+            # AI glyph — show dimmed/strikethrough when AI is disabled in config
             if t.key == "ai":
-                widget.display = ai_cfg_on
+                widget.display = True  # always show
+                if not ai_cfg_on:
+                    widget.add_class("ai-disabled")
+                else:
+                    widget.remove_class("ai-disabled")
 
     def _apply_blink(self) -> None:
         """Toggle blink phase and (re)apply CSS classes (~%.2gHz tick)."""

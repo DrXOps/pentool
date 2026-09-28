@@ -223,5 +223,24 @@ def get_group_bindings_map(group: str) -> BindingsMap:
     return build_bindings_map(registry.get_bindings(group))
 
 
+def build_status_bar_markup(entries: list[HotkeyEntry]) -> str:
+    """Generate status-bar text from hotkey entries.
+
+    Returns a Rich-markup string (e.g. ``"Ctrl+R: Repeater  │  Ctrl+U: Copy URL"``)
+    for entries where ``show=True``, sorted by key length (longer combos first
+    so ``Ctrl+Enter`` sorts before ``C``).
+    """
+    shown = [e for e in entries if e.show and e.description]
+    if not shown:
+        return ""
+
+    def _render(e: HotkeyEntry) -> str:
+        key_label = e.keys.replace("ctrl", "Ctrl").replace("escape", "Esc")
+        return f"[bold]{key_label}[/]: {e.description}"
+
+    shown.sort(key=lambda e: (-len(e.keys), e.keys))
+    return "  │  ".join(_render(e) for e in shown)
+
+
 # Module-level convenience
 registry = HotkeyRegistry.get_instance()

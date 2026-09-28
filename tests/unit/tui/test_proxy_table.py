@@ -34,7 +34,7 @@ class TestRowToRecord:
         assert r[2] == "GET"
         assert r[3] == "http://example.com/api"
         assert r[4] == "200"
-        assert r[5] == "42"
+        assert r[5] == 42
         assert isinstance(r[6], str) and ":" in r[6]  # HH:MM:SS
 
     def test_comment_marker_prefixes_host(self):
@@ -48,7 +48,7 @@ class TestRowToRecord:
     def test_missing_fields_render_dash(self):
         r = row_to_record(_row(status_code=None, length=None, timestamp=None))
         assert r[4] == "-"
-        assert r[5] == "-"
+        assert r[5] is None
         assert r[6] == "-"
 
     def test_none_ts_renders_dash(self):

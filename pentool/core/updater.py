@@ -24,7 +24,7 @@ def _parse_version(v: str) -> tuple[int, ...]:
 
 
 async def check_update_async(
-    owner: str = "sudores",
+    owner: str = "DrXOps",
     repo: str = "pentool",
     timeout: float = 6.0,
 ) -> UpdateInfo:

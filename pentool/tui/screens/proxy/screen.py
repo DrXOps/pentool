@@ -26,7 +26,7 @@ from textual.widgets import (
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys.defaults import build_proxy_bindings
+from pentool.tui.hotkeys.defaults import PROXY_BINDINGS
 from pentool.tui.widgets.proxy_helpers import (
     COL_NAMES as _COL_NAMES,
     row_to_record as _row_to_record,
@@ -81,7 +81,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []
+    BINDINGS = PROXY_BINDINGS
 
     # For test compatibility (test_stage8_5)
     _COL_LABELS = ["ID", "Mth", "URL", "St", "Size"]
@@ -97,7 +97,6 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     def __init__(self, proxy_service: ProxyService | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._bindings = build_proxy_bindings()
         self._proxy_service: ProxyService | None = proxy_service
         self._selected_req_id: int | None = None
         # WebSocket-history selection is tracked separately from the HTTP one.
@@ -317,11 +316,6 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             yield from self._compose_history_tab()
             yield from self._compose_ws_tab()
 
-        yield Static(
-            "Ctrl+R: Repeater  │  Ctrl+U: Copy URL  │  M: Context menu  │  I: Inspector  │  H: HTTP History  │  N: Intercept  │  W: WS History",
-            id="status-bar",
-        )
-
     def on_mount(self) -> None:
         self._sync_proxy_button()
         self._sync_intercept_button()
@@ -402,7 +396,12 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         except Exception:
             pass
 
-    async def _reload_table(self, filters: FilterSpec | None = None) -> None:
+    async def _reload_table(
+        self,
+        filters: FilterSpec | None = None,
+        order_by: str | None = None,
+        order_dir: str = "desc",
+    ) -> None:
         """Load/reload data into the DataTable from storage.
 
         Loads the most recent _HISTORY_PAGE_SIZE rows (newest page) and
@@ -411,16 +410,27 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         bottom on new arrivals, like a log viewer). Older rows beyond the
         page are not loaded here — see _load_more_history() for scroll-up
         pagination.
+
+        Args:
+            filters: необязательный FilterSpec
+            order_by: имя колонки для SQL ORDER BY (None = default = id)
+            order_dir: "asc" или "desc"
         """
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         try:
-            logger.info("PROXY SCREEN: _reload_table called, filters=%s",
-                        "none" if not filters else f"{len(filters.predicates)} predicates")
+            logger.info("PROXY SCREEN: _reload_table called, filters=%s order_by=%s %s",
+                        "none" if not filters else f"{len(filters.predicates)} predicates",
+                        order_by or "id", order_dir)
             newest_first_rows = await self._proxy_service.get_history(
                 limit=_HISTORY_PAGE_SIZE, filters=filters,
+                order_by=order_by, desc=(order_dir == "desc"),
             )
             total = await self._proxy_service.count_history(filters=filters)
+            logger.info(
+                "PROXY SCREEN: _reload_table loaded %d/%d rows",
+                len(newest_first_rows), total,
+            )
             logger.info(
                 "PROXY SCREEN: _reload_table loaded %d/%d rows",
                 len(newest_first_rows), total,
@@ -586,8 +596,19 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         finally:
             self._ws_history_loading_more = False
 
-    async def _reload_ws_table(self, filters: FilterSpec | None = None) -> None:
-        """Load/reload WebSocket requests into the WS History table."""
+    async def _reload_ws_table(
+        self,
+        filters: FilterSpec | None = None,
+        order_by: str | None = None,
+        order_dir: str = "desc",
+    ) -> None:
+        """Load/reload WebSocket requests into the WS History table.
+
+        Args:
+            filters: необязательный FilterSpec
+            order_by: имя колонки для SQL ORDER BY (None = default = id)
+            order_dir: "asc" или "desc"
+        """
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         try:
@@ -597,11 +618,12 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
                 ws_filters = FilterSpec(predicates=[
                     FilterPredicate("is_websocket", FilterOp.EQ, True),
                 ])
-            logger.info("PROXY SCREEN: _reload_ws_table called, predicates=%d",
-                        len(ws_filters.predicates))
+            logger.info("PROXY SCREEN: _reload_ws_table called, predicates=%d order_by=%s %s",
+                        len(ws_filters.predicates), order_by or "id", order_dir)
             total = await self._proxy_service.count_history(filters=ws_filters)
             rows = await self._proxy_service.get_history(
                 limit=_HISTORY_PAGE_SIZE, filters=ws_filters,
+                order_by=order_by, desc=(order_dir == "desc"),
             )
             logger.info("PROXY SCREEN: _reload_ws_table loaded %d/%d WS rows",
                         len(rows), total)
@@ -1142,7 +1164,35 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             pass
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
-        self._sort_table(event, _COL_NAMES)
+        order_by_map = {
+            "ID": "id",
+            "Host": "host",
+            "Method": "method",
+            "URL": "url",
+            "Status": "status_code",
+            "Size": "length",
+            "Time": "timestamp",
+        }
+        if event.data_table.id == "ws-request-list":
+            self._sort_table_sql(
+                event, _COL_NAMES,
+                order_by_map=order_by_map,
+                reload_cb=lambda order_by, order_dir: self._reload_ws_table(
+                    filters=self._ws_current_filters,
+                    order_by=order_by,
+                    order_dir=order_dir,
+                ),
+            )
+        else:
+            self._sort_table_sql(
+                event, _COL_NAMES,
+                order_by_map=order_by_map,
+                reload_cb=lambda order_by, order_dir: self._reload_table(
+                    filters=self._current_filters,
+                    order_by=order_by,
+                    order_dir=order_dir,
+                ),
+            )
 
     def on_proxy_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
         """HTTP History filter changed → reload."""
@@ -1229,17 +1279,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         """Switch to WS History."""
         self._switch_proxy_tab("tab-ws-history")
 
-    def on_key(self, event) -> None:
-        if event.key == "ctrl+r":
-            self.action_send_to_repeater()
-            event.prevent_default()
-        elif event.key == "ctrl+u":
-            self.action_copy_url()
-            event.prevent_default()
-        elif event.key == "m":
-            self.action_context_menu()
-            event.prevent_default()
-
+    
     def _show_context_menu_at_cursor(self) -> None:
         try:
             table = self.query_one("#request-list", DataTable)
@@ -1750,6 +1790,9 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
 
     def on__proxy_data_table_context_menu_request(self, event: ProxyDataTable.ContextMenuRequest) -> None:
         """Handle a context menu request from the DataTable (Ctrl+click or right-click)."""
+        from pentool.core.logging import get_logger as _log
+        _log().info("PDT: _proxy_data_table_context_menu_request received at %d,%d",
+                    event.screen_x, event.screen_y)
         try:
             table = self.query_one("#request-list", DataTable)
             cursor_row = table.cursor_row

@@ -161,6 +161,8 @@ class ProxyService(BaseService):
         offset: int = 0,
         limit: int = 1000,
         filters: FilterSpec | None = None,
+        order_by: str | None = None,
+        desc: bool = True,
     ) -> list[dict]:
         if not self._storage_ready:
             return []
@@ -171,6 +173,8 @@ class ProxyService(BaseService):
                 offset=offset,
                 limit=limit,
                 filters=effective if not effective.is_empty else None,
+                order_by=order_by or "id",
+                desc=desc,
             )
             return rows
         except Exception as exc:

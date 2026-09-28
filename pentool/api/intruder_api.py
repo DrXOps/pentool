@@ -218,9 +218,14 @@ class IntruderAPI(ExportableAPI):
         limit: int = 1000,
         tab_uid: str = "",
         filters: FilterSpec | None = None,
+        order_by: str | None = None,
+        desc: bool = True,
     ) -> list[IntruderResult]:
-        """Load intruder results from DB with optional FilterSpec."""
-        return await self._repo.get_results(attack_id, limit, tab_uid=tab_uid, filters=filters)
+        """Load intruder results from DB with optional FilterSpec and ORDER BY."""
+        return await self._repo.get_results(
+            attack_id, limit, tab_uid=tab_uid, filters=filters,
+            order_by=order_by, desc=desc,
+        )
 
     # ── Project persistence ────────────────────────────────────────────────────
 

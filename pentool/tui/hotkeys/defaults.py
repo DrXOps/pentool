@@ -43,17 +43,17 @@ def _entries_to_bindings(entries: list[HotkeyEntry]) -> list[Binding]:
 
 # ── module switcher letters ──────────────────────────────────────────────
 _MODULE_ENTRIES = [
-    _e("H", "switch_module('dashboard')", "Dashboard"),
-    _e("P", "switch_module('proxy')",     "Proxy"),
-    _e("R", "switch_module('repeater')",  "Repeater"),
-    _e("I", "switch_module('intruder')",  "Intruder"),
-    _e("S", "switch_module('scanner')",   "Scanner"),
-    _e("T", "switch_module('target')",    "Target"),
-    _e("D", "switch_module('decoder')",   "Decoder"),
-    _e("C", "switch_module('comparer')",  "Comparer"),
-    _e("Q", "switch_module('sequencer')", "Sequencer"),
-    _e("E", "switch_module('extensions')","Extensions"),
-    # Shift+digit aliases
+    _e("H", "switch_module('dashboard')", "Dash",    show=True, priority=True),
+    _e("P", "switch_module('proxy')",     "Proxy",   show=True, priority=True),
+    _e("R", "switch_module('repeater')",  "Rpt",     show=True, priority=True),
+    _e("I", "switch_module('intruder')",  "Intrud",  show=True, priority=True),
+    _e("S", "switch_module('scanner')",   "Scan",    show=True, priority=True),
+    _e("T", "switch_module('target')",    "Target",  show=True, priority=True),
+    _e("D", "switch_module('decoder')",   "Decode",  show=True, priority=True),
+    _e("C", "switch_module('comparer')",  "Comp",    show=True, priority=True),
+    _e("Q", "switch_module('sequencer')", "Seq",     show=True, priority=True),
+    _e("E", "switch_module('extensions')","Ext",     show=True, priority=True),
+    # Shift+digit aliases (hidden — for terminals where Shift+letter fails)
     _e("!",  "switch_module('proxy')",     "", show=False),
     _e("@",  "switch_module('repeater')",  "", show=False),
     _e("#",  "switch_module('intruder')",  "", show=False),
@@ -82,20 +82,20 @@ _GLOBAL_ENTRIES = [
 ]
 
 _PROXY_ENTRIES = [
-    _e("i",              "toggle_inspector",     "Inspector",     show=True),
-    _e("h",              "focus_tab_history",    "HTTP History",  show=False),
-    _e("n",              "focus_tab_intercept",  "Intercept",     show=False),
-    _e("w",              "focus_tab_ws",         "WS History",    show=False),
+    _e("i",              "toggle_inspector",     "Inspector",     show=True,  priority=True),
+    _e("h",              "focus_tab_history",    "HTTP History",  show=False, priority=True),
+    _e("n",              "focus_tab_intercept",  "Intercept",     show=False, priority=True),
+    _e("w",              "focus_tab_ws",         "WS History",    show=False, priority=True),
     _e("ctrl+h",         "focus_tab_history",    "HTTP History",  show=False),
     _e("ctrl+n",         "focus_tab_intercept",  "Intercept",     show=False),
     _e("ctrl+w",         "focus_tab_ws",         "WS History",    show=False),
-    _e("ctrl+r",         "send_to_repeater",     "Send to Repeater", show=True),
-    _e("ctrl+u",         "copy_url",             "Copy URL",      show=True),
-    _e("O",   "open_in_browser",      "View Browser",  show=True),
+    _e("ctrl+r",         "send_to_repeater",     "Send to Repeater", show=True,  priority=True),
+    _e("ctrl+u",         "copy_url",             "Copy URL",      show=True,  priority=True),
+    _e("O",   "open_in_browser",      "View Browser",  show=True,  priority=True),
     _e("O",         "open_in_browser",      "",              show=False),
-    _e("ctrl+s",         "send_to_scanner",      "Send to Scanner",  show=True),
-    _e("m",              "context_menu",         "Context Menu",  show=False),
-    _e("escape",         "hide_detail",          "Hide Detail",   show=True),
+    _e("ctrl+s",         "send_to_scanner",      "Send to Scanner",  show=True,  priority=True),
+    _e("m",              "context_menu",         "Context Menu",  show=False, priority=True),
+    _e("escape",         "hide_detail",          "Hide Detail",   show=True,  priority=True),
 ]
 
 _REPEATER_ENTRIES = [
@@ -104,17 +104,19 @@ _REPEATER_ENTRIES = [
     _e("ctrl+space",     "send",                 "Send",          show=False, priority=True),
     _e("ctrl+f",         "toggle_search",        "Search",        show=True,  priority=True),
     _e("ctrl+d",         "toggle_diff",          "Diff",          show=True,  priority=True),
-    _e("O",   "open_in_browser",      "View Browser",  show=True),
+    _e("O",   "open_in_browser",      "View Browser",  show=True,  priority=True),
     _e("O",         "open_in_browser",      "",              show=False),
-    _e("ctrl+s",         "send_to_scanner",      "Send to Scanner",  show=True),
+    _e("ctrl+s",         "send_to_scanner",      "Send to Scanner",  show=True,  priority=True),
     _e("ctrl+tab",       "next_tab",             "Next Tab",      show=False),
+    _e("ctrl+j",         "send",                 "Send",          show=False, priority=True),
+    _e("ctrl+b",         "open_in_browser",      "View Browser",  show=False),
 ]
 
 _INTRUDER_ENTRIES = [
-    _e("ctrl+enter",     "start_attack",         "Start Attack",  show=True),
-    _e("ctrl+p",         "toggle_pause",         "Pause/Resume",  show=True),
-    _e("escape",         "hide_detail",          "Hide Detail",   show=True),
-    _e("O",   "open_in_browser",      "View Browser",  show=True),
+    _e("ctrl+enter",     "start_attack",         "Start Attack",  show=True,  priority=True),
+    _e("ctrl+p",         "toggle_pause",         "Pause/Resume",  show=True,  priority=True),
+    _e("escape",         "hide_detail",          "Hide Detail",   show=True,  priority=True),
+    _e("O",   "open_in_browser",      "View Browser",  show=True,  priority=True),
     _e("O",         "open_in_browser",      "",              show=False),
 ]
 
@@ -126,11 +128,11 @@ _SCANNER_ENTRIES = [
 ]
 
 _TARGET_ENTRIES = [
-    _e("m",              "context_menu",         "Context Menu",  show=False),
+    _e("m",              "context_menu",         "Context Menu",  show=True,  priority=True),
 ]
 
 _DASHBOARD_ENTRIES = [
-    _e("r",              "refresh_dash",         "Refresh",       show=True),
+    _e("r",              "refresh_dash",         "Refresh",       show=True,  priority=True),
 ]
 
 _DECODER_ENTRIES = [
@@ -149,6 +151,20 @@ _SEQUENCER_ENTRIES = [
     _e("ctrl+l",         "clear_tokens",         "Clear",         show=False),
 ]
 
+
+# ── Module-level Binding lists for direct BINDINGS usage ──────────────
+# These are the single source of truth. Each Screen sets:
+#   class MyScreen(Widget):
+#       BINDINGS = PROXY_BINDINGS
+PROXY_BINDINGS: list[Binding] = _entries_to_bindings(_PROXY_ENTRIES)
+REPEATER_BINDINGS: list[Binding] = _entries_to_bindings(_REPEATER_ENTRIES)
+INTRUDER_BINDINGS: list[Binding] = _entries_to_bindings(_INTRUDER_ENTRIES)
+SCANNER_BINDINGS: list[Binding] = _entries_to_bindings(_SCANNER_ENTRIES)
+TARGET_BINDINGS: list[Binding] = _entries_to_bindings(_TARGET_ENTRIES)
+DASHBOARD_BINDINGS: list[Binding] = _entries_to_bindings(_DASHBOARD_ENTRIES)
+DECODER_BINDINGS: list[Binding] = _entries_to_bindings(_DECODER_ENTRIES)
+COMPARER_BINDINGS: list[Binding] = _entries_to_bindings(_COMPARER_ENTRIES)
+SEQUENCER_BINDINGS: list[Binding] = _entries_to_bindings(_SEQUENCER_ENTRIES)
 
 # ── Registry init (runs at import time) ────────────────────────────────
 registry.register("global",    _GLOBAL_ENTRIES)

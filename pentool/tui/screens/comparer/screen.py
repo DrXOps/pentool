@@ -13,7 +13,7 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys.defaults import build_comparer_bindings
+from pentool.tui.hotkeys.defaults import COMPARER_BINDINGS
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -27,11 +27,10 @@ class ComparerScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []
+    BINDINGS = COMPARER_BINDINGS
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._bindings = build_comparer_bindings()
         self._last_result = None
 
     def compose(self) -> ComposeResult:
@@ -71,12 +70,7 @@ class ComparerScreen(Widget):
             yield RichLog(id="cmp-diff-log", highlight=True, markup=True,
                           wrap=False, max_lines=2000)
 
-        yield Static(
-            "Ctrl+Enter: Compare  │  ↑ Load Left / Right: load from file or clipboard"
-            "  │  📋 Copy Diff: copy diff output  │  🗑 Clear: reset",
-            id="status-bar",
-        )
-
+        
     # ── Toolbar ───────────────────────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-cmp-compare")

@@ -11,7 +11,7 @@ from textual.widget import Widget
 from textual.widgets import Label, RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys.defaults import build_decoder_bindings
+from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -25,7 +25,7 @@ class DecoderScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []
+    BINDINGS = DECODER_BINDINGS
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -79,12 +79,7 @@ class DecoderScreen(Widget):
             yield RichLog(id="dec-steps-log", highlight=True, markup=True,
                           wrap=True, max_lines=200)
 
-        yield Static(
-            "Ctrl+Enter: Run  │  + Add Step: add operation to chain  │  ⇅ Swap: swap Input/Output"
-            "  │  📋 Copy: copy result  │  🔍 Smart: auto-detect encoding",
-            id="status-bar",
-        )
-
+        
     # ── Toolbar actions ────────────────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-dec-run")

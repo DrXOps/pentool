@@ -43,7 +43,7 @@ from pentool.api.intruder_api import (
 from pentool.api.payload_serialization import deserialize_payloads, serialize_payloads
 from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys.defaults import build_intruder_bindings
+from pentool.tui.hotkeys.defaults import INTRUDER_BINDINGS
 from pentool.tui.messages import SendToRepeater
 
 from pentool.tui.mixins.app_mixin import AppMixin
@@ -107,7 +107,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []
+    BINDINGS = INTRUDER_BINDINGS
 
     # RequestContextMenuMixin config
     _cm_show_copy_url = False
@@ -289,11 +289,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 with Vertical(id="detail-response-col", classes="detail-col"):
                     yield Static("Response", classes="detail-label")
                     yield HttpView(id="detail-response", classes="detail-view")
-        yield Static(
-            "Ctrl+J: Start Attack  │  Ctrl+P: Pause/Resume  │  M: Context menu  │  Esc: Close detail",
-            id="status-bar",
-        )
-
+        
     def on_show(self) -> None:
         """When Intruder becomes visible, rebuild table via set_data (like Proxy)."""
         self._rebuild_table_data()
@@ -483,8 +479,17 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             return
         self.run_worker(self._do_load_results(api), exclusive=False, exit_on_error=False)
 
-    async def _do_load_results(self, api: "IntruderAPI") -> None:
-        """Загрузить результаты из SQL с учётом FilterSpec."""
+    async def _do_load_results(
+        self, api: "IntruderAPI",
+        order_by: str | None = None,
+        order_dir: str = "desc",
+    ) -> None:
+        """Загрузить результаты из SQL с учётом FilterSpec и ORDER BY.
+
+        Args:
+            order_by: имя колонки для SQL ORDER BY (None = default = timestamp/request_number)
+            order_dir: "asc" или "desc"
+        """
         try:
             # Строим FilterSpec для SQL — status/length (grep in-memory)
             sql_predicates: list[FilterPredicate] = []
@@ -495,7 +500,10 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                         sql_predicates.append(FilterPredicate(db_field, p.operator, p.value))
 
             sql_filter = FilterSpec(predicates=sql_predicates) if sql_predicates else None
-            results = await api.get_results_from_db(limit=100000, filters=sql_filter)
+            results = await api.get_results_from_db(
+                limit=100000, filters=sql_filter,
+                order_by=order_by, desc=(order_dir == "desc"),
+            )
         except Exception as exc:
             logger.debug("_do_load_results: %s", exc)
             return
@@ -506,8 +514,12 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             self._redraw_results()
             return
 
-        # SQL returns newest-first — reverse для oldest-to-newest
-        self._all_results = list(reversed(results))
+        # При SQL-сортировке не реверсим — уже в нужном порядке
+        if order_by:
+            self._all_results = list(results)
+        else:
+            # По умолчанию (timestamp DESC) — reverse для oldest-to-newest
+            self._all_results = list(reversed(results))
         self._filtered_results = list(self._all_results)  # копия (уже отфильтрованы SQL)
         self._redraw_results()
 
@@ -1735,7 +1747,22 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
         if event.data_table.id != "results-table":
             return
-        self._sort_table(event, _RESULTS_COL_NAMES)
+        self._sort_table_sql(
+            event, _RESULTS_COL_NAMES,
+            order_by_map={
+                "#": "request_number",
+                "Payload(s)": "payload_values",
+                "Status": "response_status",
+                "Length": "response_length",
+                "Time(ms)": "response_time_ms",
+                "Error": "error",
+            },
+            reload_cb=lambda order_by, order_dir: self._do_load_results(
+                self._get_api(),
+                order_by=order_by,
+                order_dir=order_dir,
+            ) if self._get_api() else None,
+        )
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """On row selection — show the details."""

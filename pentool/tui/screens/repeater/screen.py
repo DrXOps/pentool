@@ -22,7 +22,7 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 logger = get_logger(__name__)
 
 
-from pentool.tui.hotkeys.defaults import build_repeater_bindings
+from pentool.tui.hotkeys.defaults import REPEATER_BINDINGS
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
@@ -52,7 +52,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []
+    BINDINGS = REPEATER_BINDINGS
 
     _sort_col_idx: int | None = None
     _sort_reverse: bool = False
@@ -70,7 +70,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._bindings = build_repeater_bindings()
         self._tabs: list[_TabState] = []
         self._tab_counter: int = 0
         self._active_tab_id: str | None = None
@@ -159,10 +158,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             yield DiffPanel(id="repeater-diff-panel")
 
         yield SearchBar(id="repeater-search-bar")
-        yield Static(
-            "Ctrl+Space: Send  │  Ctrl+F: Search  │  Ctrl+D: Diff vs last sent  │  Double-click tab to rename",
-            id="status-bar",
-        )
 
     def on_mount(self) -> None:
         # Load tabs from database first, then create default tab if empty
@@ -871,23 +866,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             logger.debug("_send_to_intruder: %s", exc)
             self.app.notify(f"Could not send to Intruder: {exc}", severity="error")
 
-    def on_key(self, event) -> None:
-        if event.key == "ctrl+j":
-            self.action_send()
-            event.prevent_default()
-        elif event.key in ("ctrl+f", "ctrl+shift+f"):
-            self.action_toggle_search()
-            event.prevent_default()
-        elif event.key == "ctrl+tab":
-            self.action_next_tab()
-            event.prevent_default()
-        elif event.key == "ctrl+s":
-            self.action_send_to_scanner()
-            event.prevent_default()
-        elif event.key == "ctrl+b":
-            self.action_open_in_browser()
-            event.prevent_default()
-
+    
     def load_request(self, raw: str) -> None:
         """Load a request into the active tab."""
         if self._active_tab_id is None:

@@ -84,6 +84,7 @@ from pentool.tui.screens import (
 )
 from pentool.tui.widgets.module_tabs import ModuleTabs
 from pentool.tui.widgets.statusbar import StatusBar
+from pentool.tui.widgets.keyhintbar import GlobalHintBar, ModuleHintBar
 
 logger = get_logger(__name__)
 
@@ -329,15 +330,21 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # covered it completely. Wrapping both in one docked container
         # lets them lay out normally (one above the other) inside it.
         with Vertical(id="bottom-dock"):
-            yield Footer()
+            yield ModuleHintBar(id="module-hints")
+            yield GlobalHintBar(id="global-hints")
             yield StatusBar(id="statusbar")
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
         _setup_faulthandler(self._cfg.log_file)
         self._guard_forward_event()
+        # Init ModuleHintBar with the starting module (dashboard)
+        try:
+            self.query_one(ModuleHintBar).set_module("dashboard")
+        except Exception:
+            pass
 
-        
+
         # _exit_caller_stack removed — dead code (was always empty, see __init__).
 
         try:
@@ -935,6 +942,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         screen_id = f"screen-{module_id}"
         self.query_one(ContentSwitcher).current = screen_id
         self._active_module = module_id
+        # Update ModuleHintBar to show the new module's keybindings
+        try:
+            self.query_one(ModuleHintBar).set_module(module_id)
+        except Exception:
+            pass
         # Refresh AI-dependent UI whenever we switch to Target: the "🤖 Use AI"
         # checkbox visibility tracks the global ai_enabled, and this must be
         # re-applied when the Target screen is (re)shown — otherwise a checkbox
@@ -1481,9 +1493,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def _start_ai_if_enabled(self) -> None:
         """On app startup: start the MCP server if the global AI switch is on."""
         try:
-            from pentool.services.ai.factory import start_ai
+            from pentool.services.ai.factory import start_ai, stop_ai
             if getattr(self._cfg, "ai_enabled", False):
                 self.run_worker(start_ai(self._cfg))
+            else:
+                self.run_worker(stop_ai())
         except Exception as e:
             logger.debug("_start_ai_if_enabled: %s", e)
         self._update_ai_ui()

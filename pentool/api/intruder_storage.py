@@ -184,6 +184,8 @@ class IntruderStorage(BaseSqliteStorage):
         limit: int = 1000,
         tab_uid: str = "",
         filters: FilterSpec | None = None,
+        order_by: str | None = None,
+        desc: bool = True,
     ) -> list[IntruderResult]:
         """Load intruder results from DB.
 
@@ -193,7 +195,8 @@ class IntruderStorage(BaseSqliteStorage):
 
         Args:
             filters: Optional FilterSpec для фильтрации по status/length/error.
-                     Поля: 'status' (EQ), 'length' (GT/LT), 'error' (NOT_NULL).
+            order_by: имя колонки для ORDER BY (None = default = request_number/timestamp)
+            desc: True = DESC, False = ASC
         """
         if not await self.ensure_open():
             return []
@@ -237,6 +240,9 @@ class IntruderStorage(BaseSqliteStorage):
             params = []
 
         order = "ORDER BY request_number" if attack_id else "ORDER BY timestamp DESC"
+        if order_by:
+            direction = "DESC" if desc else "ASC"
+            order = f"ORDER BY {order_by} {direction}"
         sql = f"""SELECT id, attack_id, request_number, payload_values, request_raw,
                          response_raw, response_status, response_length, response_time_ms, error, timestamp
                   FROM intruder_results {where} {order} LIMIT ?"""

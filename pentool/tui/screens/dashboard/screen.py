@@ -23,7 +23,7 @@ from textual.widgets import (
 )
 
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys.defaults import build_dashboard_bindings
+from pentool.tui.hotkeys.defaults import DASHBOARD_BINDINGS
 
 from pentool.tui.screens.dashboard.live_dashboard import ResourceMonitor
 from pentool.tui.widgets.toolbar_button import ToolbarButton
@@ -164,7 +164,6 @@ class LiveChart(Vertical):
 
     def __init__(self, title: str, color: str = "green", unit: str = "req/s", chart_id: str = "", **kwargs):
         super().__init__(id=chart_id or None, **kwargs)
-        self._bindings = build_dashboard_bindings()
         self._title = title
         self._color = color
         self._unit = unit
@@ -343,7 +342,7 @@ class DashboardScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []
+    BINDINGS = DASHBOARD_BINDINGS
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)

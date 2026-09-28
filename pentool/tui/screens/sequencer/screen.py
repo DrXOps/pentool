@@ -13,7 +13,7 @@ from textual.widget import Widget
 from textual.widgets import Input, Label, RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys.defaults import build_sequencer_bindings
+from pentool.tui.hotkeys.defaults import SEQUENCER_BINDINGS
 
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
@@ -35,7 +35,7 @@ class SequencerScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []
+    BINDINGS = SEQUENCER_BINDINGS
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -107,12 +107,7 @@ class SequencerScreen(Widget):
             yield Static(" ", id="seq-assessment")
             yield Static(" ", id="seq-bits-label")
 
-        yield Static(
-            "▶ Capture: start live capture  │  ⚡ Analyze: run entropy analysis"
-            "  │  📂 Load File: load tokens from file  │  💾 Export: save results",
-            id="status-bar",
-        )
-
+        
     # ── Toolbar ───────────────────────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-seq-capture")

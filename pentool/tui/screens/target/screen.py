@@ -13,7 +13,7 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys.defaults import build_target_bindings
+from pentool.tui.hotkeys.defaults import TARGET_BINDINGS
 
 from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
@@ -122,11 +122,10 @@ class TargetScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = []
+    BINDINGS = TARGET_BINDINGS
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._bindings = build_target_bindings()
         self._target_api = None
         self._selected_host: str | None = None
         self._selected_node_data = None
@@ -183,11 +182,7 @@ class TargetScreen(Widget):
                 yield Static("Details", classes="detail-label")
                 yield RichLog(id="detail-log", markup=True, highlight=False)
 
-        yield Static(
-            "Scope: Add/Remove Scope  │  M: Context menu",
-            id="status-bar",
-        )
-
+        
     def on_mount(self) -> None:
         """При старте скрыть AI-секцию если ai_enabled выключен."""
         if getattr(self, "_ai_hidden_on_compose", False):
@@ -379,8 +374,12 @@ class TargetScreen(Widget):
             if focused and hasattr(focused, "text"):
                 event.prevent_default()
                 return
-            self._show_context_menu_for_selected()
+            self.action_context_menu()
             event.prevent_default()
+
+    def action_context_menu(self) -> None:
+        """Show context menu for selected host/node (BINDINGS: m)."""
+        self._show_context_menu_for_selected()
 
     def on_mouse_down(self, event) -> None:
         if (event.button == 1 and event.ctrl) or event.button == 3:

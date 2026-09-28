@@ -113,10 +113,10 @@ class FilterPredicate:
                 return (f"{self.field} REGEXP ?", [self.value])
 
             case FilterOp.IS_NULL:
-                return (f"{self.field} IS NULL", [])
+                return (f"COALESCE({self.field}, '') = ''", [])
 
             case FilterOp.NOT_NULL:
-                return (f"{self.field} IS NOT NULL", [])
+                return (f"COALESCE({self.field}, '') != ''", [])
 
             case FilterOp.HAS:
                 # Tags: match a tag inside comma-separated list
