@@ -126,7 +126,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         self._active_set_idx: int = 0
         self._attack_type: AttackType = AttackType.SNIPER
         self._api = None
-        self._all_results: list[IntruderResult] = []
+        self._all_results: list[IntruderResult] = []     # все результаты (без фильтра)
+        self._filtered_results: list[IntruderResult] = []  # отфильтрованные (то что в таблице)
         self._current_result: IntruderResult | None = None  # for the detail panel
         self._filter_spec: FilterSpec | None = None  # filter predicates (status, length)
         self._grep_match_patterns: list[str] = []   # grep-match patterns (for highlighting)
@@ -298,47 +299,90 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         self._rebuild_table_data()
 
     def _rebuild_table_data(self) -> None:
-        """Replace table backend from _all_results via set_data().
-
-        Фильтрует in-memory через FilterSpec.apply().
-        Для больших наборов (50k+) можно перейти на SQL-фильтрацию
-        через IntruderStorage.get_results(filters=...).
-        """
+        """Отобразить _filtered_results (отфильтрованные SQL или in-memory)."""
         try:
             table = self.query_one("#results-table", DataTable)
-            if not self._all_results:
-                table.clear_data()
+            if not self._filtered_results:
+                # Если нет отфильтрованных — пробуем применить фильтр к _all_results
+                if self._all_results:
+                    self._apply_and_display(self._all_results, table)
+                else:
+                    table.clear_data()
                 return
 
-            rows = []
-            for r in self._all_results:
-                row_dict = {
-                    "status": str(r.response_status),
-                    "length": r.response_length or 0,
-                    "payload": " ".join(r.payload_values),
-                }
-                passes = True
-                if self._filter_spec and not self._filter_spec.is_empty:
-                    passes = self._filter_spec.apply([row_dict]) == [row_dict]
-                if passes and self._grep_only_match and self._grep_match_patterns:
-                    text = f"{r.response_status} {r.response_length} {' '.join(r.payload_values)}"
-                    import re
-                    passes = any(
-                        re.search(pat, text, re.IGNORECASE)
-                        for pat in self._grep_match_patterns
-                    )
-                if passes:
-                    rows.append(self._row_from_result(r))
+            display_rows = []
+            for r in self._filtered_results:
+                row = self._row_from_result(r)
+                if self._grep_extract_patterns:
+                    extract_val = self._extract_grep_value(r, self._grep_extract_patterns)
+                    row.append(extract_val)
+                display_rows.append(row)
 
             import pyarrow as pa
             cols = _RESULTS_COL_NAMES
             if self._grep_extract_patterns:
                 cols = cols + ["Extract"]
-            data = {c: pa.array([row[i] for row in rows], type=pa.string()) for i, c in enumerate(cols)}
+            data = {c: pa.array([row[i] for row in display_rows], type=pa.string()) for i, c in enumerate(cols)}
             arrow = pa.table(data)
             table.set_data(arrow)
         except Exception as exc:
             logger.error("_rebuild_table_data failed: %s", exc)
+
+    def _apply_and_display(self, results: list[IntruderResult], table: DataTable) -> None:
+        """Применить FilterSpec.apply() к results и отобразить."""
+        filtered = []
+        for r in results:
+            row_dict = {
+                "status": str(r.response_status),
+                "length": r.response_length or 0,
+                "payload": " ".join(r.payload_values),
+            }
+            passes = True
+            if self._filter_spec and not self._filter_spec.is_empty:
+                passes = self._filter_spec.apply([row_dict]) == [row_dict]
+            if passes and self._grep_only_match and self._grep_match_patterns:
+                text = f"{r.response_status} {r.response_length} {' '.join(r.payload_values)}"
+                import re
+                passes = any(
+                    re.search(pat, text, re.IGNORECASE)
+                    for pat in self._grep_match_patterns
+                )
+            if passes:
+                filtered.append(r)
+
+        self._filtered_results = filtered
+        if not filtered:
+            table.clear_data()
+            return
+
+        display_rows = []
+        for r in filtered:
+            row = self._row_from_result(r)
+            if self._grep_extract_patterns:
+                extract_val = self._extract_grep_value(r, self._grep_extract_patterns)
+                row.append(extract_val)
+            display_rows.append(row)
+
+        import pyarrow as pa
+        cols = _RESULTS_COL_NAMES
+        if self._grep_extract_patterns:
+            cols = cols + ["Extract"]
+        data = {c: pa.array([row[i] for row in display_rows], type=pa.string()) for i, c in enumerate(cols)}
+        arrow = pa.table(data)
+        table.set_data(arrow)
+
+    @staticmethod
+    def _extract_grep_value(result: IntruderResult, patterns: list[str] | None = None) -> str:
+        """Extract value from request_raw via grep-extract pattern."""
+        import re
+        for pat in (patterns or []):
+            try:
+                m = re.search(pat, result.request_raw or "")
+                if m:
+                    return (m.group(1) if m.lastindex else m.group(0))[:30]
+            except re.error:
+                pass
+        return ""
 
     def on_mount(self) -> None:
         # Reset on mount in case a previous session left this mid-attack
@@ -440,26 +484,31 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         self.run_worker(self._do_load_results(api), exclusive=False, exit_on_error=False)
 
     async def _do_load_results(self, api: "IntruderAPI") -> None:
-        # _auto_save_result() (see below) saves with no tab_uid — this
-        # screen only ever has one Intruder "tab" (self._tab_name is a
-        # fixed constant, not a per-tab identity), so results are not
-        # filtered by tab_uid here either; get_results_from_db() with no
-        # attack_id/tab_uid returns the most recent results in whatever DB
-        # file is currently open, which — after reload_from_project()
-        # switched IntruderAPI to the new project's DB — are exactly this
-        # project's own results, not the previous project's.
+        """Загрузить результаты из SQL с учётом FilterSpec."""
         try:
-            results = await api.get_results_from_db()
+            # Строим FilterSpec для SQL — status/length (grep in-memory)
+            sql_predicates: list[FilterPredicate] = []
+            if self._filter_spec and not self._filter_spec.is_empty:
+                for p in self._filter_spec.predicates:
+                    if p.field in ("status", "length"):
+                        db_field = "response_status" if p.field == "status" else "response_length"
+                        sql_predicates.append(FilterPredicate(db_field, p.operator, p.value))
+
+            sql_filter = FilterSpec(predicates=sql_predicates) if sql_predicates else None
+            results = await api.get_results_from_db(limit=100000, filters=sql_filter)
         except Exception as exc:
             logger.debug("_do_load_results: %s", exc)
             return
+
         if not results:
+            self._all_results = []
+            self._filtered_results = []
+            self._redraw_results()
             return
-        # get_results_from_db()'s no-filter branch orders by timestamp DESC
-        # (newest first) — reverse so the table reads oldest-to-newest, same
-        # as results appended live during an attack (_on_result appends in
-        # increasing request_number order).
+
+        # SQL returns newest-first — reverse для oldest-to-newest
         self._all_results = list(reversed(results))
+        self._filtered_results = list(self._all_results)  # копия (уже отфильтрованы SQL)
         self._redraw_results()
 
     def _load_state_from_db(self) -> None:
@@ -749,7 +798,15 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             except Exception:
                 pass
 
-        self._redraw_results()
+        # Если атака не запущена — перезагрузить из SQL с новым фильтром
+        if not self._attack_running:
+            api = self._get_api()
+            if api:
+                self.run_worker(self._do_load_results(api), exclusive=False, exit_on_error=False)
+            else:
+                self._redraw_results()
+        else:
+            self._redraw_results()
 
     def _open_attack_type_menu(self, btn: ToolbarButton) -> None:
         items = [
@@ -1526,13 +1583,14 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         self._all_results.append(result)
 
         # Check if result matches current filter
-        row = {
+        row_dict = {
             "status": str(result.response_status),
             "length": result.response_length or 0,
+            "payload": " ".join(result.payload_values),
         }
         passes = True
         if self._filter_spec and not self._filter_spec.is_empty:
-            passes = all(p.apply(row) for p in self._filter_spec.predicates)
+            passes = self._filter_spec.apply([row_dict]) == [row_dict]
 
         # Check grep-only-match
         if passes and self._grep_only_match and self._grep_match_patterns:
@@ -1544,6 +1602,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             )
 
         if passes:
+            self._filtered_results.append(result)
             self._add_result_row(result)
         # Auto-save result to DB
         self._auto_save_result(result)
@@ -1656,6 +1715,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         except Exception:
             pass
         self._all_results = []
+        self._filtered_results = []
         try:
             self.query_one("#progress-label", Static).update("0/0 (0%)")
             self.query_one("#attack-progress", ProgressBar).update(total=100)
@@ -1663,31 +1723,13 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             pass
 
     def _result_at_row(self, table: DataTable, row_index: int) -> IntruderResult | None:
-        """Resolve result by index in _all_results.
+        """Resolve result by index in _filtered_results.
 
-        Iterates _all_results through the same filter to get the Nth visible row.
+        _filtered_results содержит только те строки, что в таблице
+        (отфильтрованные SQL или in-memory).
         """
-        n = 0
-        for r in self._all_results:
-            row_dict = {
-                "status": str(r.response_status),
-                "length": r.response_length or 0,
-                "payload": " ".join(r.payload_values),
-            }
-            passes = True
-            if self._filter_spec and not self._filter_spec.is_empty:
-                passes = self._filter_spec.apply([row_dict]) == [row_dict]
-            if passes and self._grep_only_match and self._grep_match_patterns:
-                text = f"{r.response_status} {r.response_length} {' '.join(r.payload_values)}"
-                import re
-                passes = any(
-                    re.search(pat, text, re.IGNORECASE)
-                    for pat in self._grep_match_patterns
-                )
-            if passes:
-                if n == row_index:
-                    return r
-                n += 1
+        if 0 <= row_index < len(self._filtered_results):
+            return self._filtered_results[row_index]
         return None
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
