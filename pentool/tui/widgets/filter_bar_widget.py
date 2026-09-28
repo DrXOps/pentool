@@ -68,9 +68,18 @@ class Cycler(Static):
 class ToggleButton(Static):
     """Кнопка-тумблер.
 
-    Стили задаются родительским контейнером (ProxyFilterBar и т.д.)
-    через селектор `ParentClass ToggleButton`.
-    DEFAULT_CSS отсутствует — стили полностью от родителя.
+    Минимальный DEFAULT_CSS для базового отображения.
+    Детали (цвета, hover, active) задаются родительским CSS.
+    """
+
+    DEFAULT_CSS = """
+    ToggleButton {
+        height: 1;
+        width: auto;
+        padding: 0 1;
+        background: $panel;
+        color: $text;
+    }
     """
 
     class Toggled(Message):

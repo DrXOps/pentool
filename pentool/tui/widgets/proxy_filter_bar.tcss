@@ -1,6 +1,5 @@
 ProxyFilterBar {
-    height: auto;
-    min-height: 1;
+    height: 1;
     layout: horizontal;
     background: $surface;
     padding: 0 1;
@@ -45,6 +44,7 @@ ProxyFilterBar #fb-reset {
 }
 ProxyFilterBar .fb-sep {
     width: 1;
+    height: 1;
     color: $primary-darken-2;
 }
 ProxyFilterBar Cycler {
@@ -60,7 +60,7 @@ ProxyFilterBar Cycler:hover {
 }
 ProxyFilterBar ToggleButton {
     height: 1;
-    width: auto;
+    width: 14;
     padding: 0 1;
     background: $panel;
     color: $text-muted;
