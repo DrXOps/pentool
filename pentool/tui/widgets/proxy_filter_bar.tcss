@@ -1,5 +1,6 @@
 ProxyFilterBar {
-    height: 1;
+    height: auto;
+    min-height: 1;
     layout: horizontal;
     background: $surface;
     padding: 0 1;
@@ -24,8 +25,7 @@ ProxyFilterBar Input:focus {
     background: $surface-lighten-2;
 }
 ProxyFilterBar #fb-host   { width: 16; }
-ProxyFilterBar #fb-status-lo { width: 6; }
-ProxyFilterBar #fb-status-hi { width: 6; }
+ProxyFilterBar #fb-status { width: 7; }
 ProxyFilterBar #fb-search { width: 20; }
 ProxyFilterBar #fb-apply {
     height: 1;

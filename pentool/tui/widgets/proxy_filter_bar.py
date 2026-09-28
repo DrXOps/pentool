@@ -63,8 +63,8 @@ class ProxyFilterBar(FilterBarWidget):
                         FilterOp.LIKE, placeholder="example.com"),
             FilterField("fb-method", "Method:", FilterFieldType.CYCLER, "method",
                         FilterOp.IN, options=_METHODS),
-            FilterField("fb-status", "Status:", FilterFieldType.RANGE, "status_code",
-                        FilterOp.BETWEEN, placeholder="200"),
+            FilterField("fb-status", "Status:", FilterFieldType.TEXT, "status_code",
+                        FilterOp.BETWEEN, placeholder="200-299"),
             FilterField("fb-color", "Mark:", FilterFieldType.CYCLER, "color",
                         FilterOp.EQ, options=_COLORS),
             FilterField("fb-search", "Search:", FilterFieldType.TEXT, "fts",
@@ -80,6 +80,35 @@ class ProxyFilterBar(FilterBarWidget):
         yield Label(" ", classes="fb-sep")
         yield Button("Filter", id="fb-apply", variant="primary")
         yield Button("Clear", id="fb-reset")
+
+    def collect(self) -> list[FilterPredicate]:
+        predicates = super().collect()
+        # Status: парсим "200" или "200-299"
+        predicates = [self._normalize_status(p) for p in predicates]
+        try:
+            scope = self.query_one("#fb-scope", ToggleButton)
+            if scope.is_active():
+                predicates.append(FilterPredicate("scope_only", FilterOp.EQ, True))
+        except Exception:
+            pass
+        return predicates
+
+    @staticmethod
+    def _normalize_status(p: FilterPredicate) -> FilterPredicate:
+        if p.field != "status_code" or p.operator != FilterOp.BETWEEN:
+            return p
+        raw = str(p.value)
+        if "-" in raw:
+            parts = raw.split("-", 1)
+            try:
+                return FilterPredicate("status_code", FilterOp.BETWEEN, (int(parts[0]), int(parts[1])))
+            except ValueError:
+                pass
+        try:
+            return FilterPredicate("status_code", FilterOp.EQ, int(raw))
+        except ValueError:
+            pass
+        return p
 
     def collect(self) -> list[FilterPredicate]:
         predicates = super().collect()
