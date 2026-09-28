@@ -168,9 +168,9 @@ class FilterBarWidget(Widget):
     def _render_field(self, field: FilterField) -> ComposeResult:
         match field.field_type:
             case FilterFieldType.TEXT:
-                yield Input(id=field.id, placeholder=field.placeholder)
+                yield Input(id=field.id, placeholder=field.placeholder, compact=True)
             case FilterFieldType.NUMBER:
-                yield Input(id=field.id, placeholder=field.placeholder, type="integer")
+                yield Input(id=field.id, placeholder=field.placeholder, type="integer", compact=True)
             case FilterFieldType.CYCLER:
                 yield Cycler(id=field.id, options=field.options or [])
             case FilterFieldType.TOGGLE:
