@@ -143,7 +143,7 @@ class ProxyFilterBar(FilterBarWidget):
 
 
 class WsFilterBar(FilterBarWidget):
-    """WS History filter bar: Host, URL, Scope."""
+    """WS History filter bar: Host, URL, Status, Search, Scope."""
 
     class FilterChanged(FilterBarWidget.FilterChanged):
         pass
@@ -158,6 +158,10 @@ class WsFilterBar(FilterBarWidget):
                         FilterOp.LIKE, placeholder="example.com"),
             FilterField("ws-url", "URL:", FilterFieldType.TEXT, "url",
                         FilterOp.LIKE, placeholder="/ws-endpoint"),
+            FilterField("ws-status", "Status:", FilterFieldType.TEXT, "status_code",
+                        FilterOp.BETWEEN, placeholder="200-299"),
+            FilterField("ws-search", "Search:", FilterFieldType.TEXT, "fts",
+                        FilterOp.FTS, placeholder="FTS5 query..."),
         ]
 
     def compose(self) -> ComposeResult:
