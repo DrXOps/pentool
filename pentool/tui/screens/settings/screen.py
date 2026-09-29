@@ -674,8 +674,9 @@ class SettingsScreen(Widget):
 
     @on(Switch.Changed, "#set-ai-enabled")
     def _on_ai_switch_changed(self, event: Switch.Changed) -> None:
-        """Live-save at switch toggle — сразу сохраняет AI настройки без кнопки Save."""
-        self._save_ai_settings()
+        """Live-save at switch toggle — сохраняет только ai_enabled."""
+        changes = {"ai_enabled": event.switch.value}
+        self._save_settings(changes, "AI toggled")
 
     def _save_ai_settings(self) -> None:
         """Save the AI settings."""
