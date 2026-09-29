@@ -1789,6 +1789,15 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             return
         self._show_detail(result)
 
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """On row highlight — show details too (works for keyboard nav)."""
+        if event.data_table.id != "results-table":
+            return
+        result = self._result_at_row(event.data_table, event.cursor_row)
+        if result is None:
+            return
+        self._show_detail(result)
+
     def _show_detail(self, result: IntruderResult) -> None:
         """Show the detail panel with request/response."""
         self._current_result = result
@@ -1800,8 +1809,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         try:
             panel = self.query_one("#intruder-detail-panel")
             panel.display = True
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("INTRUDER: _show_detail panel query failed: %s", exc)
 
         # Load the content.
         self.call_after_refresh(self._load_detail_content, req_raw, resp_raw)
