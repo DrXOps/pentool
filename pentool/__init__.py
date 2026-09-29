@@ -86,14 +86,17 @@ def _bootstrap_pro() -> None:
             if _extra not in _api.__path__:
                 _api.__path__.append(_extra)
 
-        # 3. If pentool.tui.widgets is already imported, extend its __path__ too
-        #    (ScannerDataTable lives in pro/pentool/tui/widgets/ — see
-        #    pro/pentool/tui/widgets/scanner_data_table.py).
-        if "pentool.tui.widgets" in sys.modules:
-            _tw = sys.modules["pentool.tui.widgets"]
+        # 3. Extend pentool.tui.widgets.__path__ so ScannerDataTable in
+        #    pro/pentool/tui/widgets/ becomes importable.
+        #    We import it here if not already loaded (bootstrap runs before
+        #    any screen is instantiated, so it's normally not loaded yet).
+        try:
+            import pentool.tui.widgets as _tw_mod
             _extra = str(_pro_pkg / "tui" / "widgets")
-            if _extra not in _tw.__path__:
-                _tw.__path__.append(_extra)
+            if _extra not in _tw_mod.__path__:
+                _tw_mod.__path__.append(_extra)
+        except ImportError:
+            pass
 
         # 4. Make codeenigma_runtime/ (sibling of pentool/, one level up from
         #    _pro_pkg) importable — see docstring above.
