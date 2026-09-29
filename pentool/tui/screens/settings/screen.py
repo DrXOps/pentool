@@ -290,6 +290,18 @@ class SettingsScreen(Widget):
         except Exception:
             pass
 
+    # ── AI settings load ────────────────────────────────────────────────────────────
+        try:
+            from pentool.core.config import get_config
+            cfg = get_config()
+            self.query_one("#set-ai-enabled", Checkbox).value = getattr(cfg, "ai_enabled", False)
+            self.query_one("#set-ai-mcp-port", Input).value = str(getattr(cfg, "ai_mcp_port", 0) or 0)
+            model_path = getattr(cfg, "ai_mcp_model_path", "") or ""
+            if model_path:
+                self.query_one("#set-ai-model-path", Input).value = model_path
+        except Exception:
+            pass
+
     # ── License UI ─────────────────────────────────────────────────────────────
 
     def _refresh_license_ui(self) -> None:
