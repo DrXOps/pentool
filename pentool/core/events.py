@@ -187,6 +187,15 @@ class PassiveScanToggled(AppEvent):
     enabled: bool = False
 
 
+@dataclass
+class AiModeChanged(AppEvent):
+    """Global AI master-switch toggled. emitted when ai_enabled changes.
+
+    Each module subscribes to this and hides/shows its AI-specific UI.
+    """
+    enabled: bool = False
+
+
 # ── WebSocket events ───────────────────────────────────────────────────────────
 
 @dataclass

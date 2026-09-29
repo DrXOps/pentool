@@ -190,6 +190,21 @@ class TargetScreen(Widget):
                 self.query_one("#ai-crawl-box").display = False
             except Exception:
                 pass
+        self._subscribe_ai_mode()
+
+    def _subscribe_ai_mode(self) -> None:
+        """Подписка на AiModeChanged — скрывает/показывает AI-секцию."""
+        from pentool.core.event_bus import get_event_bus
+        from pentool.core.events import AiModeChanged
+
+        def _on_ai_mode(event: AiModeChanged) -> None:
+            try:
+                box = self.query_one("#ai-crawl-box")
+                box.display = event.enabled
+            except Exception:
+                pass
+
+        get_event_bus().subscribe(AiModeChanged, _on_ai_mode)
 
     def _get_api(self):
         if self._target_api is None:

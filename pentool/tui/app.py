@@ -1427,13 +1427,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # server (or stop it) and show/hide AI-dependent UI across modules.
         # start_ai/stop_ai are async and run as workers so the TUI stays live.
         if "ai_enabled" in fields:
-            from pentool.services.ai.factory import start_ai, stop_ai
-            if fields.get("ai_enabled"):
-                self.run_worker(start_ai(self._cfg))
-                self.notify("AI enabled — starting MCP server", severity="information", timeout=3)
-            else:
-                self.run_worker(stop_ai())
-                self.notify("AI disabled", severity="information", timeout=3)
             self._sync_ai_global()
 
     def _update_status(self) -> None:
@@ -1453,19 +1446,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             pass
 
     def _sync_ai_global(self) -> None:
-        """Единый метод синхронизации AI UI во всех модулях.
+        """Управляет MCP сервером и публикует AiModeChanged в EventBus.
 
-        Вызывается при:
-        - старте приложения (_start_ai_if_enabled)
-        - переключении ai_enabled в Settings (on_config_changed)
-        - переключении на любой экран (через EventBus при необходимости)
-
-        ai_on = config.ai_enabled (глобальный мастер-ключ).
-        MCP сервер стартует/останавливается здесь же.
+        Каждый модуль самостоятельно подписывается на AiModeChanged
+        и скрывает/показывает свои AI-элементы.
         """
         ai_on = bool(getattr(self._cfg, "ai_enabled", False))
 
-        # 1. MCP сервер — старт/стоп если нужно
+        # 1. MCP сервер — старт/стоп
         from pentool.services.ai.factory import is_ai_running as _is_ai_running
         if ai_on and not _is_ai_running():
             from pentool.services.ai.factory import start_ai as _start_ai
@@ -1474,48 +1462,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             from pentool.services.ai.factory import stop_ai as _stop_ai
             self.run_worker(_stop_ai())
 
-        # 2. Target — контейнер #ai-crawl-box
-        try:
-            from pentool.tui.screens.target.screen import TargetScreen
-            target = self.query_one(TargetScreen)
-            box = target.query_one("#ai-crawl-box")
-            box.display = ai_on
-        except Exception:
-            pass
-
-        # 3. Dashboard — AI статус
-        try:
-            from pentool.tui.screens.dashboard.screen import DashboardScreen, SCREEN_DASHBOARD
-            dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
-            dashboard._update_ai_status()
-        except Exception:
-            pass
-
-        # 4. Scanner — AI чекбоксы во всех табах
-        try:
-            from pentool.tui.screens.scanner.screen import ScannerScreen, SCREEN_SCANNER
-            scanner = self.query_one(SCREEN_SCANNER, ScannerScreen)
-            for tab in scanner._tabs:
-                tid = tab.tab_id if hasattr(tab, "tab_id") else ""
-                if not tid:
-                    continue
-                try:
-                    box = scanner.query_one(f"#opt-ai-{tid}")
-                    box.display = ai_on
-                    box.disabled = not ai_on
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        # 5. Intruder — 🧠 Smart… кнопка (PRO-only, скрыта когда AI выключен)
-        try:
-            from pentool.tui.screens.intruder.screen import IntruderScreen, SCREEN_INTRUDER
-            intruder = self.query_one(SCREEN_INTRUDER, IntruderScreen)
-            btn = intruder.query_one("#btn-payload-smart", ToolbarButton)
-            btn.display = ai_on
-        except Exception:
-            pass
+        # 2. Публикация события — каждый модуль реагирует сам
+        from pentool.core.event_bus import get_event_bus
+        from pentool.core.events import AiModeChanged
+        get_event_bus().emit(AiModeChanged(enabled=ai_on))
 
     def _start_ai_if_enabled(self) -> None:
         """On app startup: start the MCP server if the global AI switch is on."""

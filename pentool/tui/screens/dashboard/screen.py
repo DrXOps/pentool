@@ -419,7 +419,18 @@ class DashboardScreen(Widget):
         self._load_stats_bg()
         self._populate_projects()
         self._update_ai_status()
+        self._subscribe_ai_mode()
         self._boot_animate()
+
+    def _subscribe_ai_mode(self) -> None:
+        """Подписка на AiModeChanged — обновляет AI статус."""
+        from pentool.core.event_bus import get_event_bus
+        from pentool.core.events import AiModeChanged
+
+        def _on_ai_mode(event: AiModeChanged) -> None:
+            self._update_ai_status()
+
+        get_event_bus().subscribe(AiModeChanged, _on_ai_mode)
 
     @on(ToolbarButton.Pressed, "#btn-new-project")
     def on_btn_new_project(self, _: ToolbarButton.Pressed) -> None:
