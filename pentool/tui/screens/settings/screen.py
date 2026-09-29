@@ -198,7 +198,6 @@ class SettingsScreen(Widget):
                         "~/.pentool/ai/models/ is used.",
                         classes="settings-hint",
                     )
-                    yield ToolbarButton("Save", "settings-save-ai")
 
             with TabPane("License", id="tab-license"):
                 with Vertical(classes="settings-pane"):
@@ -688,11 +687,6 @@ class SettingsScreen(Widget):
                 return
 
             changes: dict[str, object] = {}
-            try:
-                enabled = self.query_one("#set-ai-enabled", Switch).value
-                changes["ai_enabled"] = enabled
-            except Exception:
-                pass
             try:
                 port_v = self.query_one("#set-ai-mcp-port", Input).value.strip()
                 changes["ai_mcp_port"] = int(port_v) if port_v else 0
