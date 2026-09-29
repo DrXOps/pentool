@@ -6,12 +6,12 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Label, RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
+from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -25,11 +25,7 @@ class DecoderScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = [
-        Binding("ctrl+enter", "run_chain", "Run",      show=True),
-        Binding("ctrl+l",     "clear_all", "Clear",    show=False),
-        Binding("ctrl+c",     "copy_result","Copy",    show=False),
-    ]
+    BINDINGS = DECODER_BINDINGS
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -39,7 +35,6 @@ class DecoderScreen(Widget):
         self._chain: list[str] = []           # list of operations in the chain
 
     def compose(self) -> ComposeResult:
-
         # ── Toolbar ────────────────────────────────────────────────────────────
         with Horizontal(id="dec-toolbar"):
             yield ToolbarButton("▶ Run",        "btn-dec-run")
@@ -84,12 +79,7 @@ class DecoderScreen(Widget):
             yield RichLog(id="dec-steps-log", highlight=True, markup=True,
                           wrap=True, max_lines=200)
 
-        yield Static(
-            "Ctrl+Enter: Run  │  + Add Step: add operation to chain  │  ⇅ Swap: swap Input/Output"
-            "  │  📋 Copy: copy result  │  🔍 Smart: auto-detect encoding",
-            id="status-bar",
-        )
-
+        
     # ── Toolbar actions ────────────────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-dec-run")
@@ -208,7 +198,7 @@ class DecoderScreen(Widget):
                 log.write("[yellow]Smart decode: no known encoding detected[/yellow]")
                 log.write(f"[dim]Input ({len(text)} chars): {text[:80]}[/dim]")
         except Exception as exc:
-            self.app.notify(f"Smart decode error: {exc}", severity="error")
+            self.err(exc, "Smart decode error")
 
     def _update_chain_display(self) -> None:
         try:
@@ -238,7 +228,7 @@ class DecoderScreen(Widget):
                     steps = [inp_text, result]
                     chain_used = [op]
                 except Exception as exc:
-                    self.app.notify(f"Error: {exc}", severity="error")
+                    self.err(exc, "Encode error")
                     return
             else:
                 result, steps = run_chain(self._chain, inp_text)
@@ -248,8 +238,7 @@ class DecoderScreen(Widget):
             self._render_steps(chain_used, steps)
 
         except Exception as exc:
-            self.app.notify(f"Run error: {exc}", severity="error")
-            logger.debug("action_run_chain: %s", exc)
+            self.err(exc, "Run error")
 
     def _render_steps(self, chain: list[str], steps: list[str]) -> None:
         try:
@@ -277,7 +266,7 @@ class DecoderScreen(Widget):
             else:
                 self.app.notify("Nothing to copy", severity="warning")
         except Exception as exc:
-            self.app.notify(f"Copy failed: {exc}", severity="error")
+            self.err(exc, "Copy failed")
 
     def action_clear_all(self) -> None:
         try:

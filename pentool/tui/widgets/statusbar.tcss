@@ -4,6 +4,19 @@ StatusBar {
     background: $primary-darken-3;
     layout: horizontal;
 }
+StatusBar > _Left {
+    width: 1fr;
+    height: 1;
+    layout: horizontal;
+}
+StatusBar > _Right {
+    width: 1fr;
+    height: 1;
+    layout: horizontal;
+}
+.right-spacer {
+    width: 1fr;
+}
 StatusBar .status-proxy {
     width: 20;
     padding: 0 1;
@@ -16,13 +29,16 @@ StatusBar .status-proxy.stopped {
     color: $error;
 }
 StatusBar .status-project {
-    width: 1fr;
+    width: 40;
     padding: 0 1;
     color: $text-muted;
     overflow: hidden hidden;
 }
+StatusBar > _Left > ActivityIndicator {
+    width: 16;
+}
 StatusBar .status-saved {
-    width: 12;
+    width: 10;
     padding: 0 1;
     text-align: center;
     color: $text-muted;

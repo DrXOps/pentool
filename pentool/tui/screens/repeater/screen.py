@@ -8,7 +8,6 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Input, Static, TabbedContent, TabPane
 from textual.widgets.text_area import Selection
@@ -22,6 +21,8 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 logger = get_logger(__name__)
 
+
+from pentool.tui.hotkeys.defaults import REPEATER_BINDINGS
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
@@ -51,10 +52,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = [
-        Binding("ctrl+f", "toggle_search", "Search", show=False, priority=True),
-        Binding("ctrl+d", "toggle_diff", "Diff vs last sent", show=False, priority=True),
-    ]
+    BINDINGS = REPEATER_BINDINGS
 
     _sort_col_idx: int | None = None
     _sort_reverse: bool = False
@@ -160,10 +158,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             yield DiffPanel(id="repeater-diff-panel")
 
         yield SearchBar(id="repeater-search-bar")
-        yield Static(
-            "Ctrl+Space: Send  │  Ctrl+F: Search  │  Ctrl+D: Diff vs last sent  │  Double-click tab to rename",
-            id="status-bar",
-        )
 
     def on_mount(self) -> None:
         # Load tabs from database first, then create default tab if empty
@@ -869,17 +863,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 return
             self.app.post_message(SendToIntruder(text))
         except Exception as exc:
-            logger.debug("_send_to_intruder: %s", exc)
-            self.app.notify(f"Could not send to Intruder: {exc}", severity="error")
+            self.err(exc, "Could not send to Intruder")
 
-    def on_key(self, event) -> None:
-        if event.key == "ctrl+j":
-            self.action_send()
-            event.prevent_default()
-        elif event.key in ("ctrl+f", "ctrl+shift+f"):
-            self.action_toggle_search()
-            event.prevent_default()
-
+    
     def load_request(self, raw: str) -> None:
         """Load a request into the active tab."""
         if self._active_tab_id is None:
@@ -994,3 +980,41 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             return self._editor(tab_id).get_text()
         except Exception:
             return ""
+
+    # ── Hotkey action methods ───────────────────────────────────────────
+
+    def action_next_tab(self) -> None:
+        """Switch to the next tab (ctrl+tab)."""
+        from textual.widgets import TabbedContent
+        try:
+            tabs = self.query_one(TabbedContent)
+            ids = list(tabs._tab_count_index)
+            if len(ids) < 2:
+                return
+            current = self._active_tab_id or ids[0]
+            idx = ids.index(current) if current in ids else 0
+            next_idx = (idx + 1) % len(ids)
+            tabs.active = ids[next_idx]
+        except Exception:
+            pass
+
+    def action_send_to_scanner(self) -> None:
+        """Send the active request to Scanner."""
+        text = self._get_active_text()
+        if not text:
+            self.app.notify("No request text to send", severity="warning")
+            return
+        from pentool.tui.messages import SendToScanner
+        self.app.post_message(SendToScanner(text))
+
+    def action_open_in_browser(self) -> None:
+        """Open the request URL in the default browser."""
+        text = self._get_active_text()
+        if not text:
+            self.app.notify("No request to open", severity="warning")
+            return
+        from pentool.utils.parser import ParsedRequest
+        parsed = ParsedRequest.from_raw(text)
+        if parsed and parsed.url:
+            import webbrowser
+            webbrowser.open(parsed.url)

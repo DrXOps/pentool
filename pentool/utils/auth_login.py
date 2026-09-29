@@ -17,6 +17,10 @@ from __future__ import annotations
 
 import re
 import time
+
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
 from urllib.parse import quote_plus
 from typing import Optional
 
@@ -114,7 +118,7 @@ async def build_session_headers(
             try:
                 await http_client.close()
             except Exception:
-                pass
+                logger.debug("auth_login: http_client close failed", exc_info=True)
 
     if use_cache:
         _SESSION_CACHE[_cache_key(url, username)] = (time.monotonic() + _CACHE_TTL, final_headers)

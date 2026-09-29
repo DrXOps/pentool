@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from pentool.api.base_api import ExportableAPI
-from pentool.api.intruder_storage import IntruderStorage
+from pentool.storage.intruder_storage import IntruderStorage
 from pentool.modules.intruder import (
     AttackType,
     ChainedPayloadSource,
@@ -217,9 +217,15 @@ class IntruderAPI(ExportableAPI):
         attack_id: str | None = None,
         limit: int = 1000,
         tab_uid: str = "",
+        filters: FilterSpec | None = None,
+        order_by: str | None = None,
+        desc: bool = True,
     ) -> list[IntruderResult]:
-        """Load intruder results from DB."""
-        return await self._repo.get_results(attack_id, limit, tab_uid=tab_uid)
+        """Load intruder results from DB with optional FilterSpec and ORDER BY."""
+        return await self._repo.get_results(
+            attack_id, limit, tab_uid=tab_uid, filters=filters,
+            order_by=order_by, desc=desc,
+        )
 
     # ── Project persistence ────────────────────────────────────────────────────
 
@@ -283,8 +289,7 @@ class IntruderAPI(ExportableAPI):
                     self._restored_results.append(result)
                 loaded += 1
             except Exception as exc:
-                from pentool.core.logging import get_logger
-                get_logger(__name__).warning(
+                logger.warning(
                     "IntruderAPI.import_project_data: skip result: %s", exc
                 )
         return loaded

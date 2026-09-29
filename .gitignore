@@ -87,9 +87,10 @@ tests/perf/load_*.md
 # В релиз не включается; в app.py вызывается необязательным try/except import.
 tools/dev/
 
-# Промо-видео — генерируются локально, не нужны в репозитории
-docs/promo/*.mp4
-docs/promo/mapping.json
+# Аудиты и промо — не нужны в репозитории (локальные артефакты)
+docs/audit/
+docs/promo/
+pentool/t.py
 
 # Скринкаст-дебаг и случайные файлы
 dbgcoords2.py

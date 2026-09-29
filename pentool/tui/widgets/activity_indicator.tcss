@@ -1,9 +1,4 @@
 ActivityIndicator {
-    /* Match StatusBar's own background ($primary-darken-3) instead of
-       $panel — this sits inside StatusBar, not inside the module tabs
-       row above it, so it must blend with its own row, not the one
-       above. Kept as a distinct block only via the margin gaps on each
-       side, not a contrasting fill. */
     width: auto;
     height: 1;
     layout: horizontal;
@@ -43,6 +38,11 @@ ActivityIndicator .activity-glyph.idle {
     color: $text-muted;
     text-style: dim;
     opacity: 60%;
+}
+ActivityIndicator .activity-glyph.ai-disabled {
+    color: $text-muted;
+    text-style: strike;
+    opacity: 40%;
 }
 /* Active, "on" phase of the blink — highlighted cell background so the
    glyph visibly flashes even though the emoji glyph itself won't take the

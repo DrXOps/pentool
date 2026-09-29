@@ -13,7 +13,6 @@ from pathlib import Path
 
 from textual import on
 from textual.app import App, ComposeResult
-from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import Checkbox, ContentSwitcher, Footer
 
@@ -85,6 +84,7 @@ from pentool.tui.screens import (
 )
 from pentool.tui.widgets.module_tabs import ModuleTabs
 from pentool.tui.widgets.statusbar import StatusBar
+from pentool.tui.widgets.keyhintbar import GlobalHintBar, ModuleHintBar
 
 logger = get_logger(__name__)
 
@@ -92,6 +92,7 @@ from pentool.tui.mixins.notifications import NotificationsMixin  # noqa: E402
 from pentool.tui.mixins.proxy_runtime import ProxyRuntimeMixin  # noqa: E402
 from pentool.tui.mixins.events_handlers import ProxyEventHandlersMixin  # noqa: E402
 from pentool.tui.mixins.project_autosave import ProjectAutoSaveMixin  # noqa: E402
+from pentool.tui.hotkeys.defaults import build_global_bindings
 from pentool.tui.screen_registry import SCREEN_MAP  # noqa: E402
 
 
@@ -134,47 +135,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     CSS = (Path(__file__).parent / "app.tcss").read_text(encoding="utf-8")
 
-    BINDINGS = [
-        Binding("ctrl+q", "quit", "Quit", show=True, priority=True),
-        Binding("ctrl+s", "save_project", "Save .db", show=False, priority=True),
-        Binding("ctrl+o", "open_project", "Open .db", show=False, priority=True),
-        Binding("ctrl+n", "new_project",  "New",  show=False, priority=True),
-        # JSON project (full export of all modules)
-        Binding("ctrl+shift+s", "save_project_json", "Save JSON", show=False, priority=True),
-        Binding("ctrl+shift+o", "open_project_json", "Open JSON", show=False, priority=True),
-        Binding("ctrl+comma", "switch_module('settings')", "Settings", show=False, priority=True),
-        # Navigation: Shift+letter (works in all terminals)
-        Binding("H", "switch_module('dashboard')",  "Dashboard",  show=False, priority=True),
-        Binding("P", "switch_module('proxy')",      "Proxy",      show=False, priority=True),
-        Binding("R", "switch_module('repeater')",   "Repeater",   show=False, priority=True),
-        Binding("I", "switch_module('intruder')",   "Intruder",   show=False, priority=True),
-        Binding("S", "switch_module('scanner')",    "Scanner",    show=False, priority=True),
-        Binding("T", "switch_module('target')",     "Target",     show=False, priority=True),
-        Binding("D", "switch_module('decoder')",    "Decoder",    show=False, priority=True),
-        Binding("C", "switch_module('comparer')",   "Comparer",   show=False, priority=True),
-        Binding("Q", "switch_module('sequencer')",  "Sequencer",  show=False, priority=True),
-        Binding("E", "switch_module('extensions')", "Extensions", show=False, priority=True),
-        # Shift+digit aliases for compatibility
-        Binding("exclamation_mark",   "switch_module('proxy')",      show=False, priority=True),
-        Binding("at",                 "switch_module('repeater')",   show=False, priority=True),
-        Binding("number_sign",        "switch_module('intruder')",   show=False, priority=True),
-        Binding("dollar_sign",        "switch_module('scanner')",    show=False, priority=True),
-        Binding("percent_sign",       "switch_module('decoder')",    show=False, priority=True),
-        Binding("circumflex_accent",  "switch_module('comparer')",   show=False, priority=True),
-        Binding("ampersand",          "switch_module('sequencer')",  show=False, priority=True),
-        Binding("left_parenthesis",   "switch_module('extensions')", show=False, priority=True),
-        # Proxy sub-tabs: use Ctrl+H/I/W for Proxy HTTP/Intercept/WS
-        Binding("ctrl+h", "proxy_tab('http')",      "HTTP History", show=False, priority=True),
-        Binding("ctrl+i", "proxy_tab('intercept')", "Intercept",    show=False, priority=True),
-        Binding("ctrl+w", "proxy_tab('ws')",        "WS History",   show=False, priority=True),
-        # Repeater send — ctrl+space arrives as ctrl-at (NUL/^@) in most terminals
-        # Handled at App level with priority so it fires regardless of focus depth
-        Binding("ctrl-at",    "repeater_send", "Send", show=False, priority=True),
-        Binding("ctrl+space", "repeater_send", "Send", show=False, priority=True),
-    ]
+    BINDINGS = []
 
     def __init__(self) -> None:
         super().__init__()
+        self._bindings = build_global_bindings()
         self._cfg = get_config()
         # Proxy backend: 'daemon' (default, isolated subprocess via ProxyClient)
         # or 'memory' (legacy ProxyServer on a daemon thread). Selected from
@@ -365,13 +330,20 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # covered it completely. Wrapping both in one docked container
         # lets them lay out normally (one above the other) inside it.
         with Vertical(id="bottom-dock"):
-            yield Footer()
+            yield ModuleHintBar(id="module-hints")
+            yield GlobalHintBar(id="global-hints")
             yield StatusBar(id="statusbar")
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
         _setup_faulthandler(self._cfg.log_file)
         self._guard_forward_event()
+        # Init ModuleHintBar with the starting module (dashboard)
+        try:
+            self.query_one(ModuleHintBar).set_module("dashboard")
+        except Exception:
+            pass
+
 
         # _exit_caller_stack removed — dead code (was always empty, see __init__).
 
@@ -970,13 +942,18 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         screen_id = f"screen-{module_id}"
         self.query_one(ContentSwitcher).current = screen_id
         self._active_module = module_id
+        # Update ModuleHintBar to show the new module's keybindings
+        try:
+            self.query_one(ModuleHintBar).set_module(module_id)
+        except Exception:
+            pass
         # Refresh AI-dependent UI whenever we switch to Target: the "🤖 Use AI"
         # checkbox visibility tracks the global ai_enabled, and this must be
         # re-applied when the Target screen is (re)shown — otherwise a checkbox
         # that was hidden while the screen wasn't mounted stays hidden even
         # after the user enables AI globally.
         if module_id == "target":
-            self._update_ai_ui()
+            self._sync_ai_global()
         # Re-paint any visible toasts on top after the content swap, so they
         # don't end up hidden underneath the freshly-shown tab (Textual's
         # toast rack can sit below a tab's own layers after a switch).
@@ -1322,10 +1299,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 logger.debug("on_sync_scope_to_proxy: failed to persist scope per-project: %s", e)
             # Refresh Proxy screen's ScopeToggle state if mounted
             try:
-                from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
+                from pentool.tui.widgets.toolbar_button import ToolbarButton
+                from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
                 proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
-                st = proxy_screen.query_one("#filter-bar", FilterBar).query_one("#fb-scope", ScopeToggle)
-                st.set_scope_empty(not bool(proxy.scope))
+                st = proxy_screen.query_one("#filter-bar", ProxyFilterBar).query_one("#fb-scope", ToolbarButton)
+                if not bool(proxy.scope):
+                    st.add_class("disabled")
+                else:
+                    st.remove_class("disabled")
             except Exception:
                 pass
         except Exception as e:
@@ -1446,14 +1427,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # server (or stop it) and show/hide AI-dependent UI across modules.
         # start_ai/stop_ai are async and run as workers so the TUI stays live.
         if "ai_enabled" in fields:
-            from pentool.services.ai.factory import start_ai, stop_ai
-            if fields.get("ai_enabled"):
-                self.run_worker(start_ai(self._cfg))
-                self.notify("AI enabled — starting MCP server", severity="information", timeout=3)
-            else:
-                self.run_worker(stop_ai())
-                self.notify("AI disabled", severity="information", timeout=3)
-            self._update_ai_ui()
+            self._sync_ai_global()
 
     def _update_status(self) -> None:
         try:
@@ -1471,53 +1445,31 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         except Exception:
             pass
 
-    def _update_ai_ui(self) -> None:
-        """Show/hide AI-dependent UI across modules based on the global ai_enabled.
+    def _sync_ai_global(self) -> None:
+        """Управляет MCP сервером + публикует AiModeChanged EventBus.
 
-        ai_enabled in Settings is the master switch for ALL AI features. When off,
-        AI-specific controls are hidden; when on, they become visible. Target's
-        "Use AI" checkbox additionally decides AI-crawl per target.
+        Каждый модуль сам подписывается на событие и скрывает/показывает
+        свои AI-элементы (Intruder, Scanner, Target, Dashboard).
         """
         ai_on = bool(getattr(self._cfg, "ai_enabled", False))
-        # Target toolbar "🤖 Use AI" checkbox + разделители — visible only when AI is enabled.
-        # Скрываем контейнер #ai-crawl-box целиком (вместе с разделителями).
-        try:
-            from pentool.tui.screens.target.screen import TargetScreen
-            target = self.query_one(TargetScreen)
-            box = target.query_one("#ai-crawl-box")
-            box.display = ai_on
-        except Exception as exc:
-            logger.debug("_update_ai_ui: TargetScreen #ai-crawl-box hide: %s", exc)
-        # Dashboard MCP status LED gets refreshed from is_ai_running/ai_enabled.
-        try:
-            from pentool.tui.screens.dashboard.screen import DashboardScreen, SCREEN_DASHBOARD
-            dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
-            dashboard._update_ai_status()
-        except Exception:
-            pass
-        # Scanner tab "Use AI" checkboxes — visible only when AI is enabled globally
-        try:
-            from pentool.tui.screens.scanner.screen import ScannerScreen, SCREEN_SCANNER
-            scanner = self.query_one(SCREEN_SCANNER, ScannerScreen)
-            for tab in scanner._tabs:
-                tid = tab.tab_id
-                try:
-                    box = scanner.query_one(f"#opt-ai-{tid}")
-                    box.display = ai_on
-                except Exception:
-                    pass
-        except Exception:
-            pass
+
+        # 1. MCP сервер — старт/стоп
+        from pentool.services.ai.factory import is_ai_running as _is_ai_running
+        if ai_on and not _is_ai_running():
+            from pentool.services.ai.factory import start_ai as _start_ai
+            self.run_worker(_start_ai(self._cfg))
+        elif not ai_on and _is_ai_running():
+            from pentool.services.ai.factory import stop_ai as _stop_ai
+            self.run_worker(_stop_ai())
+
+        # 2. Оповестить все модули через EventBus
+        from pentool.core.event_bus import get_event_bus
+        from pentool.core.events import AiModeChanged
+        get_event_bus().emit(AiModeChanged(enabled=ai_on))
 
     def _start_ai_if_enabled(self) -> None:
         """On app startup: start the MCP server if the global AI switch is on."""
-        try:
-            from pentool.services.ai.factory import start_ai
-            if getattr(self._cfg, "ai_enabled", False):
-                self.run_worker(start_ai(self._cfg))
-        except Exception as e:
-            logger.debug("_start_ai_if_enabled: %s", e)
-        self._update_ai_ui()
+        self._sync_ai_global()
 
     def _update_proxy_screen_labels(self) -> None:
         try:

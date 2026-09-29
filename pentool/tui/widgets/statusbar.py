@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
@@ -13,6 +14,14 @@ from textual.widgets import Static
 from pentool.tui.widgets.activity_indicator import ActivityIndicator
 
 _CSS = (Path(__file__).parent / "statusbar.tcss").read_text(encoding="utf-8")
+
+
+class _Left(Horizontal):
+    """Left half: proxy, project, activity."""
+
+
+class _Right(Horizontal):
+    """Right half: saved, time — выровнены вправо."""
 
 
 class StatusBar(Widget):
@@ -28,14 +37,14 @@ class StatusBar(Widget):
     current_time: reactive[str] = reactive("")
 
     def compose(self) -> ComposeResult:
-        yield Static("", id="proxy-status", classes="status-proxy stopped")
-        yield Static("", id="project-name", classes="status-project")
-        yield Static("", id="saved-status", classes="status-saved")
-        # Global "what's running" strip — separate plate to the right of
-        # project/saved status, left of the clock (see ActivityIndicator
-        # docstring for why this polls instead of subscribing to events).
-        yield ActivityIndicator(self.app, id="activity-indicator")
-        yield Static("", id="current-time", classes="status-time")
+        with _Left():
+            yield Static("", id="proxy-status", classes="status-proxy stopped")
+            yield Static("", id="project-name", classes="status-project")
+        with _Right():
+            yield Static("", id="right-spacer", classes="right-spacer")
+            yield ActivityIndicator(self.app, id="activity-indicator")
+            yield Static("", id="saved-status", classes="status-saved")
+            yield Static("", id="current-time", classes="status-time")
 
     def on_mount(self) -> None:
         self._update_proxy()

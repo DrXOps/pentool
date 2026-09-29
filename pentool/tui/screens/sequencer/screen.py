@@ -8,12 +8,13 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Input, Label, RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
+from pentool.tui.hotkeys.defaults import SEQUENCER_BINDINGS
+
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -34,15 +35,14 @@ class SequencerScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = [
-        Binding("ctrl+enter", "analyze",       "Analyze",  show=True),
-        Binding("ctrl+l",     "clear_tokens",  "Clear",    show=False),
-    ]
+    BINDINGS = SEQUENCER_BINDINGS
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         from pentool.api.sequencer_api import Sequencer
         self._seq = Sequencer()
+
+    def on_mount(self) -> None:
         self._capturing = False       # live-capture mode from proxy
         self._capture_param: str = "" # parameter/cookie name to capture
         self._proxy_hook = None       # reference for unsubscribe
@@ -107,12 +107,7 @@ class SequencerScreen(Widget):
             yield Static(" ", id="seq-assessment")
             yield Static(" ", id="seq-bits-label")
 
-        yield Static(
-            "▶ Capture: start live capture  │  ⚡ Analyze: run entropy analysis"
-            "  │  📂 Load File: load tokens from file  │  💾 Export: save results",
-            id="status-bar",
-        )
-
+        
     # ── Toolbar ───────────────────────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-seq-capture")
@@ -305,7 +300,7 @@ class SequencerScreen(Widget):
                 self._update_counter()
                 self.app.notify(f"Loaded {added} tokens from {os.path.basename(path)}", timeout=3)
             except Exception as exc:
-                self.app.notify(f"Load failed: {exc}", severity="error")
+                self.err(exc, "Load failed")
 
         self.app.push_screen(
             FileSelectorDialog(mode=FileSelectorMode.OPEN, title="Load Tokens"),
@@ -320,7 +315,7 @@ class SequencerScreen(Widget):
             if copy_to_clipboard(text):
                 self.app.notify("Report copied", timeout=2)
         except Exception as exc:
-            self.app.notify(f"Copy failed: {exc}", severity="error")
+            self.err(exc, "Copy failed")
 
     def _export_report(self) -> None:
         if self._seq.count == 0:
@@ -373,7 +368,7 @@ class SequencerScreen(Widget):
                     f"Report exported → {os.path.basename(path)}", timeout=3
                 )
             except Exception as exc:
-                self.app.notify(f"Export failed: {exc}", severity="error")
+                self.err(exc, "Export failed")
 
         self.app.push_screen(
             FileSelectorDialog(mode=FileSelectorMode.SAVE, title="Export Report"),
@@ -399,8 +394,7 @@ class SequencerScreen(Widget):
             report = self._seq.analyze()
             self._render_report(report)
         except Exception as exc:
-            self.app.notify(f"Analyze error: {exc}", severity="error")
-            logger.debug("action_analyze: %s", exc)
+            self.err(exc, "Analyze error")
 
     def _render_report(self, report) -> None:
         """Render the report in the UI."""

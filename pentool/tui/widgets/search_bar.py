@@ -9,7 +9,11 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Button, Input, Label, Static
 
+from pentool.core.logging import get_logger
+
 _CSS = (Path(__file__).parent / "search_bar.tcss").read_text(encoding="utf-8")
+
+logger = get_logger(__name__)
 
 
 class SearchBar(Widget):
@@ -69,12 +73,13 @@ class SearchBar(Widget):
         try:
             self.query_one("#search-input", Input).focus()
         except Exception:
-            pass
+            logger.debug("search bar: focus input failed", exc_info=True)
 
     def _fire_search(self, direction: int = 1) -> None:
         try:
             query = self.query_one("#search-input", Input).value
         except Exception:
+            logger.debug("search bar: read query failed", exc_info=True)
             return
         if query:
             self.post_message(self.Search(query, self._regex_enabled, direction))
@@ -103,7 +108,7 @@ class SearchBar(Widget):
                 self.toggle_target()
                 self.post_message(self.TargetToggle())
         except Exception:
-            pass
+            logger.debug("search bar: toggle/click handler failed", exc_info=True)
 
     def on_key(self, event) -> None:
         if event.key == "escape":
@@ -125,7 +130,7 @@ class SearchBar(Widget):
             else:
                 count_label.update(f"{current}/{total}")
         except Exception:
-            pass
+            logger.debug("search bar: count update failed", exc_info=True)
 
     def toggle_target(self) -> None:
         self._search_target = "response" if self._search_target == "request" else "request"
@@ -136,4 +141,4 @@ class SearchBar(Widget):
             tgt.remove_class("search-target-req", "search-target-resp")
             tgt.add_class(f"search-target-{'req' if self._search_target == 'request' else 'resp'}")
         except Exception:
-            pass
+            logger.debug("search bar: toggle target label failed", exc_info=True)

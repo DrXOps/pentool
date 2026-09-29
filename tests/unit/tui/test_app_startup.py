@@ -85,25 +85,89 @@ def test_compose_methods():
 
 
 def test_bindings():
-    """Check BINDINGS don't reference non-existent action_* methods."""
-    from pentool.tui.screens.repeater.screen import RepeaterScreen
-    from pentool.tui.screens.intruder.screen import IntruderScreen
+    """Check BINDINGS validity for all module screens.
+
+    Every binding must reference an existing action_* method.
+    Single-letter bindings (showing in footer) must have priority=True
+    so they work inside TabbedContent/DataTable focus.
+    """
     import sys
     sys.path.insert(0, "pro")
-    classes = [RepeaterScreen]
+
+    # (name, class) pairs for every module screen
+    _screen_classes: list[tuple[str, type]] = []
+
+    from pentool.tui.screens.proxy.screen import ProxyScreen
+    _screen_classes.append(("ProxyScreen", ProxyScreen))
+    from pentool.tui.screens.repeater.screen import RepeaterScreen
+    _screen_classes.append(("RepeaterScreen", RepeaterScreen))
+    from pentool.tui.screens.intruder.screen import IntruderScreen
+    _screen_classes.append(("IntruderScreen", IntruderScreen))
+    from pentool.tui.screens.target.screen import TargetScreen
+    _screen_classes.append(("TargetScreen", TargetScreen))
+    from pentool.tui.screens.dashboard.screen import DashboardScreen
+    _screen_classes.append(("DashboardScreen", DashboardScreen))
+    from pentool.tui.screens.decoder.screen import DecoderScreen
+    _screen_classes.append(("DecoderScreen", DecoderScreen))
+    from pentool.tui.screens.comparer.screen import ComparerScreen
+    _screen_classes.append(("ComparerScreen", ComparerScreen))
+    from pentool.tui.screens.sequencer.screen import SequencerScreen
+    _screen_classes.append(("SequencerScreen", SequencerScreen))
     try:
         from pentool.tui.screens.scanner.screen import ScannerScreen
-        classes.append(ScannerScreen)
+        _screen_classes.append(("ScannerScreen", ScannerScreen))
     except ModuleNotFoundError:
         pass
 
-    for cls in classes:
+    _single_key = lambda k: len(k) == 1 and k.isalpha()
+    _is_letter = lambda k: len(k) == 1 and k.isalpha()
+
+    for name, cls in _screen_classes:
         if not hasattr(cls, "BINDINGS"):
             continue
-        for b in cls.BINDINGS:
+        bindings = cls.BINDINGS
+        seen_actions: set[str] = set()
+
+        for b in bindings:
             action_name = f"action_{b.action}"
+            seen_actions.add(b.action)
+
+            # 1) action_* method must exist
             if not hasattr(cls, action_name):
                 pytest.fail(
-                    f"{cls.__name__} binding '{b.key}' -> '{b.action}' "
+                    f"{name} binding '{b.key}' -> '{b.action}' "
                     f"but no {action_name} method"
+                )
+
+            # 2) Single-letter show=True keys must have priority=True
+            #    (prevents TabbedContent from eating them)
+            if b.show and _single_key(b.key) and not b.priority:
+                pytest.fail(
+                    f"{name} single-letter binding '{b.key}' -> '{b.action}' "
+                    f"has show=True but no priority=True — "
+                    f"won't work inside DataTable focus"
+                )
+
+        # 3) Warn about duplicate actions (same action bound twice)
+        if len(seen_actions) < len(bindings):
+            # Count occurrences
+            from collections import Counter
+            counts = Counter(b.action for b in bindings)
+            dupes = {a: c for a, c in counts.items() if c > 1}
+            # Duplicates with show+hidden variants are intentional (e.g. "O" for
+            # open_in_browser with one visible and one hidden). Only fail when
+            # both are show=True.
+            problem = any(
+                sum(1 for b in bindings if b.action == a and b.show) > 1
+                for a in dupes
+            )
+            if problem:
+                pytest.fail(
+                    f"{name} has duplicate show=True bindings: {dupes}"
+                )
+            else:
+                # hidden duplicates are okay — log via pytest warning
+                import warnings
+                warnings.warn(
+                    f"{name} has duplicate actions (hidden variant): {dupes}"
                 )

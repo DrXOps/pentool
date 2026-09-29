@@ -1,19 +1,29 @@
 """Pentool — professional web security testing toolkit with Textual TUI."""
 
-import tomllib
+import importlib.metadata
 from pathlib import Path
 
 # Single source of truth: version lives ONLY in pyproject.toml.
-# This file reads it at import time so there is one canonical value
-# used by both the installed package metadata (pip setuptools-scm /
-# manual stamping) and the source tree itself. No more fallback
-# literals that drift out of sync.
+# In an installed package (wheel) we read it from the dist-info metadata.
+# In a source checkout (pyproject.toml exists next to the package dir)
+# we fall back to reading it from there so development versions are always
+# current without manual stamping.
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+__version__: str = "0.0.0"  # type-safe init
 try:
-    with open(_PYPROJECT, "rb") as _f:
-        __version__: str = tomllib.load(_f)["project"]["version"]
-except Exception:
-    __version__ = "0.0.0"  # last resort — should never happen in a valid install
+    __version__ = importlib.metadata.version("pentool")
+except importlib.metadata.PackageNotFoundError:
+    try:
+        import tomllib
+        with open(_PYPROJECT, "rb") as _f:
+            __version__ = tomllib.load(_f)["project"]["version"]
+    except Exception:
+        import logging
+        logging.getLogger("pentool").warning(
+            "failed to read version from pyproject.toml, falling back to 0.0.0",
+            exc_info=True,
+        )
+        __version__ = "0.0.0"  # last resort
 
 __author__ = "pentool"
 
@@ -47,10 +57,20 @@ def _bootstrap_pro() -> None:
                 from pentool.core.license import is_pro_package_compatible
                 _compatible, _warning = is_pro_package_compatible()
             except Exception:
-                _compatible, _warning = True, ""  # never block startup over this check itself
+                import logging
+                logging.getLogger("pentool").debug(
+                    "PRO compatibility check in bootstrap failed, assuming compatible",
+                    exc_info=True,
+                )
+                _compatible, _warning = True, ""  # never block startup
             if not _compatible:
                 print(f"[pentool] {_warning}", file=sys.stderr)
                 continue
+            if _warning:
+                # Soft mismatch (e.g. free_version in meta is "0.0.0" from a
+                # previous broken install or version skew) — warn but load PRO
+                # anyway. The PRO package is pure Python, no ABI crash risk.
+                print(f"[pentool] {_warning}", file=sys.stderr)
 
         # 1. Extend top-level pentool.__path__ so that sub-packages
         #    resolved via pkgutil.extend_path below will find pro/pentool/XXX.
@@ -66,7 +86,19 @@ def _bootstrap_pro() -> None:
             if _extra not in _api.__path__:
                 _api.__path__.append(_extra)
 
-        # 3. Make codeenigma_runtime/ (sibling of pentool/, one level up from
+        # 3. Extend pentool.tui.widgets.__path__ so ScannerDataTable in
+        #    pro/pentool/tui/widgets/ becomes importable.
+        #    We import it here if not already loaded (bootstrap runs before
+        #    any screen is instantiated, so it's normally not loaded yet).
+        try:
+            import pentool.tui.widgets as _tw_mod
+            _extra = str(_pro_pkg / "tui" / "widgets")
+            if _extra not in _tw_mod.__path__:
+                _tw_mod.__path__.append(_extra)
+        except ImportError:
+            pass
+
+        # 4. Make codeenigma_runtime/ (sibling of pentool/, one level up from
         #    _pro_pkg) importable — see docstring above.
         _pro_root = _pro_pkg.parent
         if str(_pro_root) not in sys.path:

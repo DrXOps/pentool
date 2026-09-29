@@ -13,6 +13,8 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
+from pentool.tui.hotkeys.defaults import TARGET_BINDINGS
+
 from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.resize_handle import ResizeHandle
@@ -120,6 +122,8 @@ class TargetScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
+    BINDINGS = TARGET_BINDINGS
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._target_api = None
@@ -178,11 +182,7 @@ class TargetScreen(Widget):
                 yield Static("Details", classes="detail-label")
                 yield RichLog(id="detail-log", markup=True, highlight=False)
 
-        yield Static(
-            "Scope: Add/Remove Scope  │  M: Context menu",
-            id="status-bar",
-        )
-
+        
     def on_mount(self) -> None:
         """При старте скрыть AI-секцию если ai_enabled выключен."""
         if getattr(self, "_ai_hidden_on_compose", False):
@@ -190,6 +190,35 @@ class TargetScreen(Widget):
                 self.query_one("#ai-crawl-box").display = False
             except Exception:
                 pass
+        self._init_ai_sync()
+
+    def on_show(self) -> None:
+        """При показе — синхронизировать AI UI."""
+        self._sync_ai_ui()
+
+    def _init_ai_sync(self) -> None:
+        """Подписка на AiModeChanged + on_show страховка."""
+        from pentool.core.event_bus import get_event_bus
+        from pentool.core.events import AiModeChanged
+
+        def _on_ai_mode(event: AiModeChanged) -> None:
+            try:
+                box = self.query_one("#ai-crawl-box")
+                box.display = event.enabled
+            except Exception:
+                pass
+
+        get_event_bus().subscribe(AiModeChanged, _on_ai_mode)
+        self._sync_ai_ui()
+
+    def _sync_ai_ui(self) -> None:
+        """Проверить ai_enabled и скрыть/показать AI-элементы."""
+        try:
+            from pentool.core.config import get_config
+            ai_on = bool(get_config().ai_enabled)
+            self.query_one("#ai-crawl-box").display = ai_on
+        except Exception:
+            pass
 
     def _get_api(self):
         if self._target_api is None:
@@ -374,8 +403,12 @@ class TargetScreen(Widget):
             if focused and hasattr(focused, "text"):
                 event.prevent_default()
                 return
-            self._show_context_menu_for_selected()
+            self.action_context_menu()
             event.prevent_default()
+
+    def action_context_menu(self) -> None:
+        """Show context menu for selected host/node (BINDINGS: m)."""
+        self._show_context_menu_for_selected()
 
     def on_mouse_down(self, event) -> None:
         if (event.button == 1 and event.ctrl) or event.button == 3:
@@ -830,7 +863,7 @@ class TargetScreen(Widget):
             api.export_json(path)
             self.app.notify(f"Exported: {path}", severity="information")
         except Exception as exc:
-            self.app.notify(f"Export failed: {exc}", severity="error")
+            self.err(exc, "Export failed")
 
     def add_request_from_proxy(self, req) -> None:
         """Called from proxy on a new request — updates the map in real time."""

@@ -90,7 +90,7 @@ def close() -> None:
     try:
         _AUDIT_FD.close()
     except Exception:
-        pass
+        _log.debug("audit log: close failed", exc_info=True)
     _AUDIT_FD = None
     _AUDIT_FILE = None
 

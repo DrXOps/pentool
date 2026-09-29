@@ -35,21 +35,21 @@ class SmartPayloadsDialog(BaseDialog):
                     [("String", "string"), ("Numeric", "numeric"), ("JSON", "json"),
                      ("XML", "xml"), ("URL", "url"), ("Cookie", "cookie"),
                      ("Header", "header"), ("Path", "path")],
-                    id="smart-context", value="string",
+                    id="smart-context", value="string", classes="compact",
                 )
             with Horizontal(classes="row"):
                 yield Label("Tech hint:")
                 yield Select(
                     [("Unknown", "unknown"), ("PHP", "php"), ("Java", "java"),
                      ("Node.js", "node"), ("Python", "python"), (".NET", "dotnet")],
-                    id="smart-tech", value="unknown",
+                    id="smart-tech", value="unknown", classes="compact",
                 )
             with Horizontal(classes="row"):
                 yield Label("WAF profile:")
                 yield Select(
                     [("None", "none"), ("Generic", "generic"), ("Cloudflare", "cloudflare"),
                      ("ModSecurity", "modsec"), ("F5", "f5")],
-                    id="smart-waf", value="none",
+                    id="smart-waf", value="none", classes="compact",
                 )
             with Horizontal(classes="row"):
                 yield Label("Count:")
@@ -82,14 +82,7 @@ class SmartPayloadsDialog(BaseDialog):
             )
             self.dismiss(payloads)
         except Exception as exc:
-            logger.error("Smart Payload Generator failed: %s", exc, exc_info=True)
-            try:
-                self.app.notify(
-                    f"Smart Payload Generator failed: {exc}",
-                    severity="error", timeout=6,
-                )
-            except Exception:
-                pass
+            self.err(exc, "Smart Payload Generator failed")
             self.dismiss(None)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

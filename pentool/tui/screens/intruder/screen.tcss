@@ -130,7 +130,7 @@ IntruderScreen #processing-bar Label {
     padding: 0 0 0 1;
 }
 IntruderScreen #results-area {
-    height: 8;
+    height: 1fr;
     min-height: 5;
     layout: vertical;
 }
@@ -253,6 +253,7 @@ IntruderScreen #intruder-detail-panel {
     height: 20;
     layout: horizontal;
     border-top: solid $primary;
+    display: none;
 }
 
 IntruderScreen .detail-col {

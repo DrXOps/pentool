@@ -18,6 +18,7 @@ from textual.widgets import (
     Button,
     Input,
     Static,
+    Switch,
     TabbedContent,
     TabPane,
 )
@@ -177,7 +178,7 @@ class SettingsScreen(Widget):
                     yield Static("AI Assistant", classes="section-title")
                     with Horizontal(classes="row"):
                         yield Static("AI Assistant:", classes="row-label")
-                        yield Checkbox("Enable AI Assistant", id="set-ai-enabled", value=False)
+                        yield Switch(id="set-ai-enabled", value=False)
                     yield Static(
                         "AI can help with scanning: picking checks, bypassing WAF, "
                         "searching for non-obvious endpoints.\n"
@@ -197,7 +198,6 @@ class SettingsScreen(Widget):
                         "~/.pentool/ai/models/ is used.",
                         classes="settings-hint",
                     )
-                    yield ToolbarButton("Save", "settings-save-ai")
 
             with TabPane("License", id="tab-license"):
                 with Vertical(classes="settings-pane"):
@@ -287,6 +287,18 @@ class SettingsScreen(Widget):
                 if val == saved_theme:
                     cycler.set_value(val)
                     break
+        except Exception:
+            pass
+
+    # ── AI settings load ────────────────────────────────────────────────────────────
+        try:
+            from pentool.core.config import get_config
+            cfg = get_config()
+            self.query_one("#set-ai-enabled", Switch).value = getattr(cfg, "ai_enabled", False)
+            self.query_one("#set-ai-mcp-port", Input).value = str(getattr(cfg, "ai_mcp_port", 0) or 0)
+            model_path = getattr(cfg, "ai_mcp_model_path", "") or ""
+            if model_path:
+                self.query_one("#set-ai-model-path", Input).value = model_path
         except Exception:
             pass
 
@@ -499,7 +511,6 @@ class SettingsScreen(Widget):
             self.app.notify(notify_msg, timeout=2)  # type: ignore[attr-defined]
         except Exception as e:
             err(e, "Save failed", self)
-            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
     # ── Generic settings save helper ──────────────────────────────────────────
 
@@ -533,7 +544,6 @@ class SettingsScreen(Widget):
             self._save_settings(self._collect_proxy_changes(), "Proxy settings saved (restart proxy to apply)")
         except Exception as e:
             err(e, "Save failed", self)
-            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
     def _save_project_settings(self) -> None:
         try:
@@ -557,7 +567,6 @@ class SettingsScreen(Widget):
             self._save_settings(changes, "Project settings saved")
         except Exception as e:
             err(e, "Save failed", self)
-            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
     def _open_ca_cert(self) -> None:
         try:
@@ -567,7 +576,6 @@ class SettingsScreen(Widget):
             proxy_screen.action_open_ca_cert()
         except Exception as e:
             err(e, "Install CA cert failed", self)
-            self.app.notify(f"Install CA cert failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
     def _save_network_settings(self) -> None:
         try:
@@ -639,7 +647,6 @@ class SettingsScreen(Widget):
             self._save_settings(changes, "Network settings saved")
         except Exception as e:
             err(e, "Save failed", self)
-            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
 
     def _save_privacy_settings(self) -> None:
         try:
@@ -664,7 +671,12 @@ class SettingsScreen(Widget):
             self._save_settings(changes, "Privacy settings saved")
         except Exception as e:
             err(e, "Save failed", self)
-            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)  # type: ignore[attr-defined]
+
+    @on(Switch.Changed, "#set-ai-enabled")
+    def _on_ai_switch_changed(self, event: Switch.Changed) -> None:
+        """Live-save at switch toggle — сохраняет только ai_enabled."""
+        changes = {"ai_enabled": event.switch.value}
+        self._save_settings(changes, "AI toggled")
 
     def _save_ai_settings(self) -> None:
         """Save the AI settings."""
@@ -672,16 +684,10 @@ class SettingsScreen(Widget):
             from pentool.services.ai.factory import AI_MODELS_DIR
             cfg = getattr(self.app, "_cfg", None)
             if cfg is None:
-                logger.error("Config not loaded")
-                self.app.notify("Config not loaded", severity="error", timeout=4)
+                self.err(Exception("Config not loaded"), "Config not loaded")
                 return
 
             changes: dict[str, object] = {}
-            try:
-                enabled = self.query_one("#set-ai-enabled", Checkbox).value
-                changes["ai_enabled"] = enabled
-            except Exception:
-                pass
             try:
                 port_v = self.query_one("#set-ai-mcp-port", Input).value.strip()
                 changes["ai_mcp_port"] = int(port_v) if port_v else 0
@@ -701,7 +707,6 @@ class SettingsScreen(Widget):
             self._save_settings(changes, "AI settings saved")
         except Exception as e:
             err(e, "Save failed", self)
-            self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
 
     # ── License actions ────────────────────────────────────────────────────────
 
@@ -725,11 +730,9 @@ class SettingsScreen(Widget):
             if info.valid:
                 self.app.notify(f"✓ License activated: {info.plan.upper()}", timeout=4)  # type: ignore[attr-defined]
             else:
-                logger.error("License activation failed: %s", info.error)
-                self.app.notify(f"✗ Activation failed: {info.error}", severity="error", timeout=5)  # type: ignore[attr-defined]
+                self.err(Exception(info.error), "License activation failed")
         except Exception as exc:
-            err(exc, "✗ Error", self)
-            self.app.notify(f"✗ Error: {exc}", severity="error", timeout=5)  # type: ignore[attr-defined]
+            err(exc, "License activation failed", self)
         self.call_after_refresh(self._refresh_license_ui)
 
     def _do_deactivate_license(self) -> None:
@@ -741,6 +744,5 @@ class SettingsScreen(Widget):
             self.app.notify("License deactivated", timeout=3)  # type: ignore[attr-defined]
         except Exception as exc:
             err(exc, "Deactivation error", self)
-            self.app.notify(f"Deactivation error: {exc}", severity="error", timeout=4)  # type: ignore[attr-defined]
         self._refresh_license_ui()
 

@@ -19,6 +19,10 @@ from collections import OrderedDict
 from threading import Lock
 from typing import Any
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 # Cache TTL in seconds (4 hours)
 _CACHE_TTL: float = 14400.0
 # Bounded LRU cache with a lock — prevents unbounded growth under spider/scan
@@ -62,15 +66,11 @@ def get_tech_cache(host: str) -> dict | None:
     except ImportError:
         return None
     except Exception:
+        logger.warning("get_tech_cache(%s) failed", host, exc_info=True)
         return None
 
 
 async def run_fingerprint(url: str, http_client) -> Any | None:
-    """Обёртка над PRO TechFingerprinter.
-
-    Позволяет TUI вызывать fingerprint без прямого импорта PRO-модуля.
-    Возвращает TechProfile или None при ошибке/отсутствии PRO.
-    """
     try:
         from pentool.modules.scanner.fingerprint import TechFingerprinter
         fp = TechFingerprinter()
@@ -78,6 +78,7 @@ async def run_fingerprint(url: str, http_client) -> Any | None:
     except ImportError:
         return None
     except Exception:
+        logger.warning("run_fingerprint(%s) failed", url, exc_info=True)
         return None
 
 
@@ -157,6 +158,7 @@ async def detect_tech(url: str, force: bool = False, js_render: bool = False) ->
                 body = await resp.content.read(1024 * 100)
                 text = body.decode("utf-8", errors="replace")
     except Exception:
+        logger.warning("detect_tech(%s): HTTP request failed", url, exc_info=True)
         empty = _make_profile(signals, {}, "")
         _cache_set(host, empty)
         return empty
@@ -178,7 +180,7 @@ async def detect_tech(url: str, force: bool = False, js_render: bool = False) ->
                 profile["details"]["js_rendered"] = True
                 text = rendered  # use rendered HTML for deeper analysis
         except Exception:
-            pass
+            logger.debug("detect_tech: js_render_probe failed", exc_info=True)
 
     # ── WordPress version probe ──
     if profile.get("cms") == "WordPress":
@@ -469,7 +471,7 @@ async def _probe_wp_version(url: str) -> str | None:
                     if ver:
                         return f"WP API ({list(ver)[:3]})"
     except Exception:
-        pass
+        logger.debug("wp-json probe failed for %s: %s", url, exc_info=True)
 
     # Try /readme.html
     try:
@@ -482,7 +484,7 @@ async def _probe_wp_version(url: str) -> str | None:
                     if m:
                         return m.group(1)
     except Exception:
-        pass
+        logger.debug("readme.html probe failed for %s", url, exc_info=True)
 
     return None
 
@@ -505,6 +507,7 @@ async def _probe_graphql(url: str) -> bool:
                         if data and data.get("data", {}).get("__schema"):
                             return True
         except Exception:
+            logger.debug("GraphQL probe failed for %s (%s)", url, path, exc_info=True)
             continue
     return False
 
@@ -522,7 +525,7 @@ async def _js_render_probe(url: str) -> str | None:
             if html:
                 return html
     except Exception:
-        pass
+        logger.debug("_js_render_probe(%s): Lightpanda failed", url, exc_info=True)
     try:
         from pentool.api.spider_api import SpiderAPI, SpiderConfig
         spider = SpiderAPI(config=SpiderConfig(js_render=True))
@@ -530,5 +533,5 @@ async def _js_render_probe(url: str) -> str | None:
         if result and result.pages:
             return result.pages[0] if isinstance(result.pages[0], str) else None
     except Exception:
-        pass
+        logger.debug("_js_render_probe(%s): SpiderAPI fallback failed", url, exc_info=True)
     return None

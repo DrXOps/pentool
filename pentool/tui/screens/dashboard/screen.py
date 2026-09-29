@@ -10,7 +10,6 @@ from pathlib import Path
 
 from textual import on, work
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.timer import Timer
 from textual.widget import Widget
@@ -24,6 +23,8 @@ from textual.widgets import (
 )
 
 from pentool.core.logging import get_logger
+from pentool.tui.hotkeys.defaults import DASHBOARD_BINDINGS
+
 from pentool.tui.screens.dashboard.live_dashboard import ResourceMonitor
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -341,9 +342,7 @@ class DashboardScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = [
-        Binding("r", "refresh_dash", "Refresh", show=True),
-    ]
+    BINDINGS = DASHBOARD_BINDINGS
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -420,7 +419,22 @@ class DashboardScreen(Widget):
         self._load_stats_bg()
         self._populate_projects()
         self._update_ai_status()
+        self._init_ai_sync()
         self._boot_animate()
+
+    def on_show(self) -> None:
+        """При показе — синхронизировать AI статус."""
+        self._update_ai_status()
+
+    def _init_ai_sync(self) -> None:
+        """Подписка на AiModeChanged + начальная синхронизация."""
+        from pentool.core.event_bus import get_event_bus
+        from pentool.core.events import AiModeChanged
+
+        def _on_ai_mode(event: AiModeChanged) -> None:
+            self._update_ai_status()
+
+        get_event_bus().subscribe(AiModeChanged, _on_ai_mode)
 
     @on(ToolbarButton.Pressed, "#btn-new-project")
     def on_btn_new_project(self, _: ToolbarButton.Pressed) -> None:
@@ -763,7 +777,7 @@ class DashboardScreen(Widget):
             if not path:
                 return
             if not os.path.exists(path):
-                self.app.notify(f"File not found: {path}", severity="error", timeout=4)
+                self.err(FileNotFoundError(path), "File not found")
                 return
             switch_fn = getattr(self.app, "_switch_project_db", None)
             if switch_fn:
@@ -804,7 +818,7 @@ class DashboardScreen(Widget):
                 self._populate_projects()
                 self.log_activity(f"Project saved: {path}", "ok")
             except Exception as e:
-                self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
+                self.err(e, "Save failed")
 
         self.app.push_screen(
             FileSelectorDialog(

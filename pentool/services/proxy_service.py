@@ -6,6 +6,7 @@ import asyncio
 from typing import Callable
 
 from pentool.api.proxy_api import InterceptedRequest, ProxyAPI
+from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.core.event_bus import EventBus
 from pentool.core.logging import get_logger
 from pentool.services.base_service import BaseService
@@ -120,47 +121,73 @@ class ProxyService(BaseService):
                 )
                 return None
 
-    def _effective_filters(self, filters: dict | None) -> dict:
-        """Resolve scope_only/is_websocket/has_comment defaults shared by get_history/count."""
-        effective_filters = dict(filters) if filters else {}
-        if effective_filters.pop("scope_only", False):
+    def _effective_filters(self, spec: FilterSpec | None) -> FilterSpec:
+        """Resolve scope_only/is_websocket defaults.
+
+        - scope_only → expands to concrete host list from proxy scope
+        - adds is_websocket=False if not set (HTTP history default)
+        - adds scope_only predicate consumed here (not passed to storage)
+        """
+        predicates: list[FilterPredicate] = []
+        has_scope = False
+        is_ws: bool | None = None
+
+        if spec:
+            for p in spec.predicates:
+                if p.field == "scope_only" and p.operator == FilterOp.EQ and p.value is True:
+                    has_scope = True
+                elif p.field == "is_websocket":
+                    is_ws = p.value
+                else:
+                    predicates.append(p)
+
+        # Default: HTTP history = non-WS
+        if is_ws is None:
+            predicates.append(FilterPredicate("is_websocket", FilterOp.EQ, False))
+        else:
+            predicates.append(FilterPredicate("is_websocket", FilterOp.EQ, is_ws))
+
+        # Expand scope_only → concrete host list
+        if has_scope:
             proxy = self._proxy_api.get_proxy()
             scope_hosts = proxy.scope if proxy else []
             if scope_hosts:
-                effective_filters["hosts"] = scope_hosts
-        # HTTP History shows only non-WebSocket requests by default
-        if "is_websocket" not in effective_filters:
-            effective_filters["is_websocket"] = False
-        return effective_filters
+                predicates.append(FilterPredicate("hosts", FilterOp.IN, scope_hosts))
+
+        return FilterSpec(predicates=predicates)
 
     async def get_history(
         self,
         offset: int = 0,
         limit: int = 1000,
-        filters: dict | None = None,
+        filters: FilterSpec | None = None,
+        order_by: str | None = None,
+        desc: bool = True,
     ) -> list[dict]:
         if not self._storage_ready:
             return []
 
         try:
-            effective_filters = self._effective_filters(filters)
+            effective = self._effective_filters(filters)
             rows = await self._storage.get_metadata_batch(
                 offset=offset,
                 limit=limit,
-                filters=effective_filters if effective_filters else None,
+                filters=effective if not effective.is_empty else None,
+                order_by=order_by or "id",
+                desc=desc,
             )
             return rows
         except Exception as exc:
             logger.warning("ProxyService: get_history failed: %s", exc)
             return []
 
-    async def count_history(self, filters: dict | None = None) -> int:
-        """Total rows matching filters (for 'showing N of M' UI + scroll-load)."""
+    async def count_history(self, filters: FilterSpec | None = None) -> int:
+        """Total rows matching filters."""
         if not self._storage_ready:
             return 0
         try:
-            effective_filters = self._effective_filters(filters)
-            return await self._storage.count(effective_filters if effective_filters else None)
+            effective = self._effective_filters(filters)
+            return await self._storage.count(effective if not effective.is_empty else None)
         except Exception as exc:
             logger.warning("ProxyService: count_history failed: %s", exc)
             return 0

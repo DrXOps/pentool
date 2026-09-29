@@ -52,15 +52,22 @@ async def open_scope(proxy_screen: ProxyScreen) -> None:
             # Update ScopeToggle state in FilterBar
             scope_toggle_was_active = False
             try:
-                from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
-                filter_bar = proxy_screen.query_one("#filter-bar", FilterBar)
-                st = filter_bar.query_one("#fb-scope", ScopeToggle)
-                scope_toggle_was_active = st.active
-                st.set_scope_empty(not bool(result))
+                from pentool.tui.widgets.toolbar_button import ToolbarButton
+                from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
+                filter_bar = proxy_screen.query_one("#filter-bar", ProxyFilterBar)
+                st = filter_bar.query_one("#fb-scope", ToolbarButton)
+                scope_toggle_was_active = st.has_class("active")
+                if bool(result):
+                    st.remove_class("disabled")
+                else:
+                    st.add_class("disabled")
             except Exception:
                 pass
             if scope_toggle_was_active and result:
-                proxy_screen.run_worker(proxy_screen._reload_table({"scope_only": True}))
+                from pentool.collections.filter_predicate import FilterPredicate, FilterOp, FilterSpec
+                proxy_screen.run_worker(proxy_screen._reload_table(
+                    FilterSpec(predicates=[FilterPredicate("scope_only", FilterOp.EQ, True)])
+                ))
             elif not result:
                 proxy_screen.run_worker(proxy_screen._reload_table(None))
             if result is not None:
@@ -110,9 +117,14 @@ async def load_scope_setting(proxy_screen: ProxyScreen, is_new: bool = False) ->
     logger.info("PROXY: load_scope_setting -> %d host(s)", len(hosts))
     proxy.set_scope(hosts)
     try:
-        from pentool.tui.widgets.filter_bar import FilterBar, ScopeToggle
-        filter_bar = proxy_screen.query_one("#filter-bar", FilterBar)
-        filter_bar.query_one("#fb-scope", ScopeToggle).set_scope_empty(not bool(hosts))
+        from pentool.tui.widgets.toolbar_button import ToolbarButton
+        from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
+        filter_bar = proxy_screen.query_one("#filter-bar", ProxyFilterBar)
+        st = filter_bar.query_one("#fb-scope", ToolbarButton)
+        if hosts:
+            st.remove_class("disabled")
+        else:
+            st.add_class("disabled")
     except Exception:
         pass
 

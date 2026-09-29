@@ -8,12 +8,12 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
+from pentool.tui.hotkeys.defaults import COMPARER_BINDINGS
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -27,10 +27,7 @@ class ComparerScreen(Widget):
 
     DEFAULT_CSS = _CSS
 
-    BINDINGS = [
-        Binding("ctrl+enter", "compare", "Compare", show=True),
-        Binding("ctrl+l",     "clear",   "Clear",   show=False),
-    ]
+    BINDINGS = COMPARER_BINDINGS
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -73,12 +70,7 @@ class ComparerScreen(Widget):
             yield RichLog(id="cmp-diff-log", highlight=True, markup=True,
                           wrap=False, max_lines=2000)
 
-        yield Static(
-            "Ctrl+Enter: Compare  │  ↑ Load Left / Right: load from file or clipboard"
-            "  │  📋 Copy Diff: copy diff output  │  🗑 Clear: reset",
-            id="status-bar",
-        )
-
+        
     # ── Toolbar ───────────────────────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-cmp-compare")
@@ -116,7 +108,7 @@ class ComparerScreen(Widget):
                     f"[cyan]{os.path.basename(path)}[/cyan]"
                 )
             except Exception as exc:
-                self.app.notify(f"Load failed: {exc}", severity="error")
+                self.err(exc, "Load failed")
 
         self.app.push_screen(
             FileSelectorDialog(
@@ -138,7 +130,7 @@ class ComparerScreen(Widget):
             if copy_to_clipboard(plain):
                 self.app.notify("Diff copied", timeout=2)
         except Exception as exc:
-            self.app.notify(f"Copy failed: {exc}", severity="error")
+            self.err(exc, "Copy failed")
 
     # ── Compare ───────────────────────────────────────────────────────────────
 
@@ -152,8 +144,7 @@ class ComparerScreen(Widget):
             self._last_result = result
             self._render_result(result)
         except Exception as exc:
-            self.app.notify(f"Compare error: {exc}", severity="error")
-            logger.debug("action_compare: %s", exc)
+            self.err(exc, "Compare error")
 
     def _render_result(self, result) -> None:
         """Render diff to the log and statistics to the stat-bar."""

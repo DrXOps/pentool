@@ -1,0 +1,80 @@
+ProxyFilterBar {
+    height: 1;
+    layout: horizontal;
+    background: $surface;
+    padding: 0 1;
+}
+ProxyFilterBar .fb-label {
+    width: auto;
+    height: 1;
+    color: $text-muted;
+    padding: 0 1 0 0;
+}
+ProxyFilterBar Input {
+    height: 1;
+    border-left: solid $primary-darken-1;
+    border-right: solid $primary-darken-1;
+    background: $surface-lighten-1;
+    padding: 0 1;
+    color: $text;
+}
+ProxyFilterBar Input:focus {
+    border-left: solid $primary;
+    border-right: solid $primary;
+    background: $surface-lighten-2;
+}
+ProxyFilterBar #fb-host   { width: 16; }
+ProxyFilterBar #fb-status { width: 7; }
+ProxyFilterBar #fb-search { width: 20; }
+ProxyFilterBar #fb-apply {
+    height: 1;
+    width: auto;
+    min-width: 7;
+    background: $primary-darken-1;
+    border: none;
+    padding: 0 1;
+}
+ProxyFilterBar #fb-reset {
+    height: 1;
+    width: auto;
+    min-width: 7;
+    background: $panel;
+    border: none;
+    padding: 0 1;
+}
+ProxyFilterBar .fb-sep {
+    width: 1;
+    height: 1;
+    color: $primary-darken-2;
+}
+ProxyFilterBar Cycler {
+    height: 1;
+    width: 8;
+    background: $panel;
+    color: $text;
+    padding: 0 1;
+    pointer: pointer;
+}
+ProxyFilterBar Cycler:hover {
+    background: $primary-darken-1;
+}
+ProxyFilterBar ToolbarButton {
+    height: 1;
+    width: 14;
+    padding: 0 1;
+    background: $panel;
+    color: $text-muted;
+    pointer: pointer;
+}
+ProxyFilterBar ToolbarButton:hover {
+    background: $primary-darken-1;
+}
+ProxyFilterBar ToolbarButton.-active {
+    color: $success;
+    background: $success-darken-3;
+}
+ProxyFilterBar ToolbarButton.disabled {
+    color: $text-disabled;
+    background: $panel;
+    opacity: 0.5;
+}

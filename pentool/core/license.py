@@ -513,27 +513,20 @@ def _write_pro_meta(build_id: str) -> None:
 
 
 def is_pro_package_compatible() -> tuple[bool, str]:
-    """Check whether the PRO package in PRO_PACKAGE_DIR matches the FREE
-    (pip) version of pentool currently running.
+    """Check whether the PRO package in PRO_PACKAGE_DIR is usable.
 
-    This is the guard against a stale/incompatible PRO package: the FREE
-    package updates via `pip install --upgrade pentool`, but the PRO package
-    (a separately downloaded, platform-specific compiled Cython extension)
-    only updates when check_and_update_pro_package() successfully reaches
-    the server — e.g. `pentool update`'s own version-check step failing
-    (network down, GitHub 404, ...) does NOT stop the FREE upgrade, but DOES
-    leave PRO on its old build. Loading that mismatched PRO build can
-    segfault the whole process instead of raising a catchable exception,
-    so every call site that would otherwise import from the PRO package
-    (plugin_manager, __init__._bootstrap_pro) checks this FIRST and refuses
-    to load it rather than relying on try/except around the import.
+    **Soft check:** PRO is NOT blocked on version mismatch anymore — the PRO
+    package is pure Python (no compiled Cython extensions in the public build),
+    so an ABI crash is not a risk. The mismatch is reported as a warning
+    so the user knows to re-sync, but PRO still loads.
 
     Returns:
-        (True, "") — nothing installed, or the installed PRO package matches
-            the running FREE version.
-        (False, message) — a PRO package is installed but was built for a
-            different (or unknown) FREE version. `message` is a
-            user-facing explanation of what to do.
+        (True, "") — everything is fine, or PRO is not installed.
+        (True, warning) — PRO is installed but version metadata doesn't match
+            (stale build or 0.0.0 artifact from a previous broken install).
+            The caller should show `warning` to the user but still load PRO.
+        (False, message) — a hard blocker still exists: no build_meta at all
+            (legacy state, needs re-download).
     """
     if not PRO_PACKAGE_DIR.exists():
         return True, ""
@@ -556,11 +549,10 @@ def is_pro_package_compatible() -> tuple[bool, str]:
         )
 
     if _base_version(pro_free_version) != _base_version(current_version):
-        return False, (
+        return True, (
             f"Version mismatch: Pentool {current_version} is installed, but "
             f"the PRO package was built for version {pro_free_version}. "
-            f"Running it as-is could crash the app. PRO features are "
-            f"disabled until this is resynced — run "
+            f"PRO features are loaded, but consider re-syncing: run "
             f"'pentool license activate <key>' or wait for the background "
             f"PRO update to complete."
         )

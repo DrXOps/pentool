@@ -132,6 +132,9 @@ ProxyScreen #ws-main-panel {
     height: 100%;
     layout: vertical;
 }
+ProxyScreen #ws-filter-bar {
+    height: 1;
+}
 ProxyScreen #ws-table-area {
     height: 1fr;
     min-height: 5;

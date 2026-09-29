@@ -19,6 +19,8 @@ class RequestContextMenuMixin:
     _cm_show_send_scanner:  bool = False
     _cm_show_send_decoder:  bool = False
     _cm_show_send_comparer: bool = False
+    _cm_show_export_md:     bool = False
+    _cm_show_export_html:   bool = False
 
     # ── Required interface ────────────────────────────────────────────────────
 
@@ -90,6 +92,15 @@ class RequestContextMenuMixin:
         if tool_items:
             items.append(("-", ""))
             items += tool_items
+        # Export group
+        export_items: list[tuple[str, str]] = []
+        if self._cm_show_export_md:
+            export_items.append(("export_md",   "📄 Export Markdown"))
+        if self._cm_show_export_html:
+            export_items.append(("export_html", "🌐 Export HTML"))
+        if export_items:
+            items.append(("-", ""))
+            items += export_items
         return items
 
     # ── Dispatcher ────────────────────────────────────────────────────────────
@@ -123,6 +134,10 @@ class RequestContextMenuMixin:
             self._cm_do_send_decoder(raw)
         elif action == "send_comparer":
             self._cm_do_send_comparer(raw)
+        elif action == "export_md":
+            self._cm_do_export_md(raw)
+        elif action == "export_html":
+            self._cm_do_export_html(raw)
 
     # ── Action implementations ────────────────────────────────────────────────
 
@@ -173,8 +188,7 @@ class RequestContextMenuMixin:
         try:
             req = parse_http_request(raw)
         except Exception as exc:
-            err(exc, "Parse error", self)
-            self.app.notify(f"Parse error: {exc}", severity="error")  # type: ignore[attr-defined]
+            self.err(exc, "Parse error")
             return
         _MAP = {
             "copy_curl":   (copy_as_curl,     "curl"),
@@ -217,8 +231,7 @@ class RequestContextMenuMixin:
             save_request_txt(req, path)
             self.app.notify(f"Saved → {path}", timeout=3)  # type: ignore[attr-defined]
         except Exception as exc:
-            err(exc, "Save failed", self)
-            self.app.notify(f"Save failed: {exc}", severity="error")  # type: ignore[attr-defined]
+            self.err(exc, "Save failed")
 
     def _cm_do_send_repeater(self, raw: str) -> None:
         if not raw.strip():
@@ -250,8 +263,7 @@ class RequestContextMenuMixin:
             req = parse_http_request(raw)
             self.app.post_message(SendRequestToScanner(req))  # type: ignore[attr-defined]
         except Exception as exc:
-            err(exc, "Send to Scanner failed", self)
-            self.app.notify(f"Send to Scanner failed: {exc}", severity="error")  # type: ignore[attr-defined]
+            self.err(exc, "Send to Scanner failed")
 
     def _cm_do_send_decoder(self, raw: str) -> None:
         """Requires AppMixin in the inheritance chain."""
@@ -264,4 +276,21 @@ class RequestContextMenuMixin:
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
         _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         self._send_to_comparer(raw, label="Request")  # type: ignore[attr-defined]
+
+    # ── Export helpers ──────────────────────────────────────────────────────────
+
+    def _cm_do_export_md(self, raw: str) -> None:
+        """Export the current request/view as Markdown report."""
+        self._cm_do_export("md")
+
+    def _cm_do_export_html(self, raw: str) -> None:
+        """Export the current request/view as HTML report."""
+        self._cm_do_export("html")
+
+    def _cm_do_export(self, fmt: str) -> None:
+        """Generic export — override in subclass to provide ReportData."""
+        self.app.notify(  # type: ignore[attr-defined]
+            f"Export {fmt.upper()} not implemented for this module",
+            severity="warning", timeout=3,
+        )
 

@@ -283,6 +283,7 @@ class ProxyClient:
 
     def cleanup(self) -> None:
         """Stop the reader, close sockets, terminate the daemon process."""
+        self._running = False
         self._reader_stop.set()
         reader = self._reader
         if reader is not None and reader.is_alive() and reader is not threading.current_thread():
@@ -327,7 +328,7 @@ class ProxyClient:
         try:
             self.cleanup()
         except Exception:
-            pass
+            logger.debug("client: __del__ cleanup failed", exc_info=True)
 
     # -- public proxy API ----------------------------------------------------
 
@@ -351,7 +352,7 @@ class ProxyClient:
             try:
                 self._command({"cmd": "set_intercept", "enabled": bool(enabled)})
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("client: set_intercept command failed", exc_info=True)
 
     # Property mirror so `self._proxy.intercept_enabled = X` (used across the
     # TUI) propagates to the daemon instead of silently keeping a stale flag.
@@ -369,7 +370,7 @@ class ProxyClient:
             try:
                 self._command({"cmd": "set_scope", "hosts": list(hosts)})
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("client: set_scope command failed", exc_info=True)
 
     @property
     def scope(self) -> list[str]:
@@ -387,7 +388,7 @@ class ProxyClient:
             try:
                 self._command({"cmd": "set_enforce_scope", "enabled": bool(enabled)})
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("client: set_enforce_scope command failed", exc_info=True)
 
     def get_status(self) -> dict:
         resp = self._command({"cmd": "get_status"})
@@ -424,7 +425,7 @@ class ProxyClient:
                 if isinstance(resp.get("in_scope"), bool):
                     return resp["in_scope"]
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("client: is_in_scope command failed", exc_info=True)
         # Offline fallback mirrors ProxyServer.is_in_scope (empty scope = all).
         from pentool.utils.scope import host_in_scope
         return host_in_scope(host, self.scope)
@@ -439,7 +440,7 @@ class ProxyClient:
                 if isinstance(rules, list):
                     return list(rules)
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("client: get_rules command failed", exc_info=True)
         return []
 
     @match_replace_rules.setter

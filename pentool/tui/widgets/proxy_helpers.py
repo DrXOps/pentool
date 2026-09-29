@@ -24,6 +24,25 @@ _COLOR_DOTS: dict[str, str] = {
 }
 
 
+def format_size(size: int | None) -> str:
+    """Форматировать размер в человекочитаемый вид.
+
+    >>> format_size(1024)
+    '1.0 KB'
+    >>> format_size(1536)
+    '1.5 KB'
+    >>> format_size(None)
+    '-'
+    """
+    if size is None:
+        return "-"
+    if size < 1024:
+        return str(size)
+    if size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size / (1024 * 1024):.1f} MB"
+
+
 def make_empty_table():
     """Empty Arrow table with the required columns."""
     import pyarrow as pa
@@ -33,7 +52,7 @@ def make_empty_table():
         "Method": pa.array([], type=pa.string()),
         "URL":    pa.array([], type=pa.string()),
         "Status": pa.array([], type=pa.string()),
-        "Size":   pa.array([], type=pa.string()),
+        "Size":   pa.array([], type=pa.int64()),
         "Time":   pa.array([], type=pa.string()),
     })
 
@@ -74,7 +93,7 @@ def row_to_record(r: dict) -> tuple:
         str(r.get("method", "") or ""),
         url[:80] + "…" if len(url) > 80 else url,
         str(status) if status is not None else "-",
-        str(length) if length is not None else "-",
+        int(length) if length is not None else None,
         time_str,
     )
 
@@ -94,12 +113,14 @@ def rows_to_arrow(rows: list[dict]):
         statuses.append(status)
         sizes.append(size)
         times.append(tstr)
+    # Size: nullable int64 — None/null отображается как "-"
+    size_array = pa.array(sizes, type=pa.int64())
     return pa.table({
         "ID":     pa.array(ids,      type=pa.int64()),
         "Host":   pa.array(hosts,    type=pa.string()),
         "Method": pa.array(methods,  type=pa.string()),
         "URL":    pa.array(urls,     type=pa.string()),
         "Status": pa.array(statuses, type=pa.string()),
-        "Size":   pa.array(sizes,    type=pa.string()),
+        "Size":   size_array,
         "Time":   pa.array(times,    type=pa.string()),
     })

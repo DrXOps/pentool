@@ -20,41 +20,18 @@ ContentSwitcher > * {
     height: 1fr;
 }
 
-/* Global hotkey hint bar */
-#status-bar {
-    height: 1;
-    background: $surface;
-    padding: 0 1;
-    color: $text-muted;
-    dock: bottom;
-}
-
-/* Wrapper around Footer + StatusBar — see compose()'s comment for why
-   this exists: two independently-docked bottom widgets overlap rather
-   than stack, so both are laid out normally inside one docked container
-   instead. Height 2 = Footer's 1 + StatusBar's 1.
-
-   Both Footer (in its own DEFAULT_CSS) and StatusBar (in statusbar.tcss)
-   hard-code `dock: bottom` themselves — just nesting them inside this
-   wrapper is not enough, they'd still each dock to the bottom of the
-   wrapper and overlap each other exactly as before. Both docks must be
-   explicitly cancelled here so they lay out normally (stacked, one
-   above the other) inside #bottom-dock instead. */
+/* Wrapper around GlobalHintBar + ModuleHintBar + StatusBar.
+   Each child's DEFAULT_CSS hard-codes `dock: bottom` — overridden
+   here with `dock: none` so they stack vertically. */
 #bottom-dock {
     dock: bottom;
-    height: 2;
+    height: 3;
     layout: vertical;
 }
 
-#bottom-dock Footer {
-    dock: none;
-    height: 1;
-}
-
-#bottom-dock StatusBar {
-    dock: none;
-    height: 1;
-}
+#bottom-dock GlobalHintBar { dock: none; height: 1; }
+#bottom-dock ModuleHintBar { dock: none; height: 1; }
+#bottom-dock StatusBar { dock: none; height: 1; }
 
 /* Global checkbox style — compact, height 1, no border.
    Glyph itself ("[ ]" / "[✓]") is set once in Checkbox.BUTTON_LEFT/
