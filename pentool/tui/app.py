@@ -1508,6 +1508,15 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         except Exception:
             pass
 
+        # 5. Intruder — 🧠 Smart… кнопка (PRO-only, скрыта когда AI выключен)
+        try:
+            from pentool.tui.screens.intruder.screen import IntruderScreen, SCREEN_INTRUDER
+            intruder = self.query_one(SCREEN_INTRUDER, IntruderScreen)
+            btn = intruder.query_one("#btn-payload-smart", ToolbarButton)
+            btn.display = ai_on
+        except Exception:
+            pass
+
     def _start_ai_if_enabled(self) -> None:
         """On app startup: start the MCP server if the global AI switch is on."""
         self._sync_ai_global()
