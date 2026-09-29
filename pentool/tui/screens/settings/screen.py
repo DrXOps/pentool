@@ -18,6 +18,7 @@ from textual.widgets import (
     Button,
     Input,
     Static,
+    Switch,
     TabbedContent,
     TabPane,
 )
@@ -177,7 +178,8 @@ class SettingsScreen(Widget):
                     yield Static("AI Assistant", classes="section-title")
                     with Horizontal(classes="row"):
                         yield Static("AI Assistant:", classes="row-label")
-                        yield Checkbox("Enable AI Assistant", id="set-ai-enabled", value=False)
+                        yield Switch(id="set-ai-enabled", value=False)
+                        yield Label("⏻", id="set-ai-toggle-label")
                     yield Static(
                         "AI can help with scanning: picking checks, bypassing WAF, "
                         "searching for non-obvious endpoints.\n"
@@ -294,7 +296,7 @@ class SettingsScreen(Widget):
         try:
             from pentool.core.config import get_config
             cfg = get_config()
-            self.query_one("#set-ai-enabled", Checkbox).value = getattr(cfg, "ai_enabled", False)
+            self.query_one("#set-ai-enabled", Switch).value = getattr(cfg, "ai_enabled", False)
             self.query_one("#set-ai-mcp-port", Input).value = str(getattr(cfg, "ai_mcp_port", 0) or 0)
             model_path = getattr(cfg, "ai_mcp_model_path", "") or ""
             if model_path:
@@ -683,7 +685,7 @@ class SettingsScreen(Widget):
 
             changes: dict[str, object] = {}
             try:
-                enabled = self.query_one("#set-ai-enabled", Checkbox).value
+                enabled = self.query_one("#set-ai-enabled", Switch).value
                 changes["ai_enabled"] = enabled
             except Exception:
                 pass

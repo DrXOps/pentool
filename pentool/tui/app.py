@@ -953,7 +953,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # that was hidden while the screen wasn't mounted stays hidden even
         # after the user enables AI globally.
         if module_id == "target":
-            self._update_ai_ui()
+            self._sync_ai_global()
         # Re-paint any visible toasts on top after the content swap, so they
         # don't end up hidden underneath the freshly-shown tab (Textual's
         # toast rack can sit below a tab's own layers after a switch).
@@ -1434,7 +1434,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             else:
                 self.run_worker(stop_ai())
                 self.notify("AI disabled", severity="information", timeout=3)
-            self._update_ai_ui()
+            self._sync_ai_global()
 
     def _update_status(self) -> None:
         try:
@@ -1452,39 +1452,57 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         except Exception:
             pass
 
-    def _update_ai_ui(self) -> None:
-        """Show/hide AI-dependent UI across modules based on the global ai_enabled.
+    def _sync_ai_global(self) -> None:
+        """Единый метод синхронизации AI UI во всех модулях.
 
-        ai_enabled in Settings is the master switch for ALL AI features. When off,
-        AI-specific controls are hidden; when on, they become visible. Target's
-        "Use AI" checkbox additionally decides AI-crawl per target.
+        Вызывается при:
+        - старте приложения (_start_ai_if_enabled)
+        - переключении ai_enabled в Settings (on_config_changed)
+        - переключении на любой экран (через EventBus при необходимости)
+
+        ai_on = config.ai_enabled (глобальный мастер-ключ).
+        MCP сервер стартует/останавливается здесь же.
         """
         ai_on = bool(getattr(self._cfg, "ai_enabled", False))
-        # Target toolbar "🤖 Use AI" checkbox + разделители — visible only when AI is enabled.
-        # Скрываем контейнер #ai-crawl-box целиком (вместе с разделителями).
+
+        # 1. MCP сервер — старт/стоп если нужно
+        from pentool.services.ai.factory import is_ai_running as _is_ai_running
+        if ai_on and not _is_ai_running():
+            from pentool.services.ai.factory import start_ai as _start_ai
+            self.run_worker(_start_ai(self._cfg))
+        elif not ai_on and _is_ai_running():
+            from pentool.services.ai.factory import stop_ai as _stop_ai
+            self.run_worker(_stop_ai())
+
+        # 2. Target — контейнер #ai-crawl-box
         try:
             from pentool.tui.screens.target.screen import TargetScreen
             target = self.query_one(TargetScreen)
             box = target.query_one("#ai-crawl-box")
             box.display = ai_on
-        except Exception as exc:
-            logger.debug("_update_ai_ui: TargetScreen #ai-crawl-box hide: %s", exc)
-        # Dashboard MCP status LED gets refreshed from is_ai_running/ai_enabled.
+        except Exception:
+            pass
+
+        # 3. Dashboard — AI статус
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen, SCREEN_DASHBOARD
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard._update_ai_status()
         except Exception:
             pass
-        # Scanner tab "Use AI" checkboxes — visible only when AI is enabled globally
+
+        # 4. Scanner — AI чекбоксы во всех табах
         try:
             from pentool.tui.screens.scanner.screen import ScannerScreen, SCREEN_SCANNER
             scanner = self.query_one(SCREEN_SCANNER, ScannerScreen)
             for tab in scanner._tabs:
-                tid = tab.tab_id
+                tid = tab.tab_id if hasattr(tab, "tab_id") else ""
+                if not tid:
+                    continue
                 try:
                     box = scanner.query_one(f"#opt-ai-{tid}")
                     box.display = ai_on
+                    box.disabled = not ai_on
                 except Exception:
                     pass
         except Exception:
@@ -1492,15 +1510,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     def _start_ai_if_enabled(self) -> None:
         """On app startup: start the MCP server if the global AI switch is on."""
-        try:
-            from pentool.services.ai.factory import start_ai, stop_ai
-            if getattr(self._cfg, "ai_enabled", False):
-                self.run_worker(start_ai(self._cfg))
-            else:
-                self.run_worker(stop_ai())
-        except Exception as e:
-            logger.debug("_start_ai_if_enabled: %s", e)
-        self._update_ai_ui()
+        self._sync_ai_global()
 
     def _update_proxy_screen_labels(self) -> None:
         try:
