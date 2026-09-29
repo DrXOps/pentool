@@ -293,6 +293,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
     def on_show(self) -> None:
         """When Intruder becomes visible, rebuild table via set_data (like Proxy)."""
         self._rebuild_table_data()
+        self._sync_ai_ui()
 
     def _rebuild_table_data(self) -> None:
         """Отобразить _filtered_results (отфильтрованные SQL или in-memory)."""
@@ -395,21 +396,28 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         # Detail panel is hidden via CSS display:none initially.
         # Apply FREE-license limits.
         self._apply_license_limits()
-        self._subscribe_ai_mode()
+        self._init_ai_sync()
 
-    def _subscribe_ai_mode(self) -> None:
-        """Подписка на AiModeChanged — скрывает/показывает Smart Payloads."""
+    def _init_ai_sync(self) -> None:
+        """Подписка на AiModeChanged + начальная синхронизация."""
         from pentool.core.event_bus import get_event_bus
         from pentool.core.events import AiModeChanged
 
         def _on_ai_mode(event: AiModeChanged) -> None:
-            try:
-                btn = self.query_one("#btn-payload-smart", ToolbarButton)
-                btn.display = event.enabled
-            except Exception:
-                pass
+            self._sync_ai_ui()
 
         get_event_bus().subscribe(AiModeChanged, _on_ai_mode)
+        self._sync_ai_ui()
+
+    def _sync_ai_ui(self) -> None:
+        """Проверить ai_enabled и скрыть/показать AI-элементы."""
+        try:
+            from pentool.core.config import get_config
+            ai_on = bool(get_config().ai_enabled)
+            btn = self.query_one("#btn-payload-smart", ToolbarButton)
+            btn.display = ai_on
+        except Exception:
+            pass
 
     def _get_api(self) -> "IntruderAPI | None":
         """Lazy singleton IntruderAPI (avoids per-call SQLite connection)."""
