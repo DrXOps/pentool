@@ -1744,8 +1744,12 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         первой колонки таблицы.
         """
         try:
-            # Пробуем получить request_number из ячейки таблицы
-            cell = table.get_cell_at((row_index, 0))
+            # Пробуем получить request_number из ячейки таблицы.
+            # get_cell_at принимает Coordinate, но в ArrowBackendDataTable
+            # распаковывает кортеж через __getitem__ (row, column_index).
+            from textual.coordinate import Coordinate
+            coord = Coordinate(row_index, 0)
+            cell = table.get_cell_at(coord)
             row_number = int(str(cell))
         except (ValueError, TypeError, IndexError):
             row_number = -1
