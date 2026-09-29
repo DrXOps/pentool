@@ -790,7 +790,13 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
                 actual_row_id = new_row_id
         if req.is_websocket:
             if actual_row_id and actual_row_id != -1:
-                self._append_ws_row_to_table(req, actual_row_id)
+                if self._current_filters:
+                    # При активных фильтрах (включая "Comments: ON")
+                    # перезагружаем всю WS таблицу из БД, чтобы 💬 маркер
+                    # и фильтрация работали сразу (как HTTP).
+                    self._schedule_filter_reload()
+                else:
+                    self._append_ws_row_to_table(req, actual_row_id)
             else:
                 # Never stored / id unknown — fall back to a full WS reload.
                 await self._reload_ws_table()
@@ -831,6 +837,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             return
         self._filter_reload_pending = False
         await self._reload_table(self._current_filters)
+        await self._reload_ws_table(self._current_filters)
 
     def _append_row_to_table(self, req: InterceptedRequest, row_id: int) -> None:
         """Incrementally add a single row — debounced at 150 ms.
@@ -1134,6 +1141,9 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         if self._selected_ws_req_id is not None and entry_id is not None and entry_id != self._selected_ws_req_id:
             return
         from pentool.utils.parser import ParsedRequest
+
+        # Stash comment for the comment dialog — same pattern as _load_row_details
+        self._current_comment = entry.get("comment", "") or ""
 
         req_headers = entry.get("request_headers") or {}
         parsed_req = ParsedRequest(
@@ -2053,8 +2063,19 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             logger.error("Failed to mark request: %s", exc)
 
     def _comment_dialog(self, initial_comment: str | None = None) -> None:
-        """Show comment edit modal (on-demand, context-menu or click)."""
-        req_id = self._selected_req_id
+        """Show comment edit modal (on-demand, context-menu or click).
+
+        Picks the correct req_id depending on the active tab:
+        - HTTP History tab → self._selected_req_id
+        - WS History tab   → self._selected_ws_req_id
+        """
+        from textual.widgets import TabbedContent
+        tabs = self.query_one(TabbedContent)
+        req_id = (
+            self._selected_ws_req_id
+            if tabs.active == "tab-ws-history"
+            else self._selected_req_id
+        )
         if not req_id:
             return
         from pentool.tui.dialogs.comment_dialog import CommentDialog
@@ -2084,7 +2105,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             # Visual update: rebuild table so the 💬 marker in Host shows up
             # right away instead of only after the next reload/restart.
             await self._reload_table(self._current_filters)
-            self.notify("Comment saved" if comment else "Comment cleared", timeout=2)
+            self.app.notify("Comment saved" if comment else "Comment cleared", timeout=2)
         except Exception as exc:
             logger.error("PROXY: Failed to save comment: %s", exc)
 

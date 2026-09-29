@@ -13,6 +13,10 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
 from cryptography.x509 import Certificate
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
@@ -237,12 +241,12 @@ def _load_ctx_from_disk(
 
         return _build_ssl_ctx(cert_pem, key_pem)
     except Exception:
-        # Corrupted cache — delete and regenerate
-        try:
-            path.unlink(missing_ok=True)
-        except Exception:
-            pass
-        return None
+            # Corrupted cache — delete and regenerate
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                logger.debug("cert: failed to delete corrupted cache file", exc_info=True)
+            return None
 
 
 def _save_ctx_to_disk(
@@ -256,7 +260,7 @@ def _save_ctx_to_disk(
         path.write_bytes(cert_pem + key_pem)
         path.chmod(0o600)
     except Exception:
-        pass  # disk-cache is not critical — continue without it
+        logger.debug("cert: disk cache save failed", exc_info=True)  # non-critical
 
 
 def _build_ssl_ctx(cert_pem: bytes, key_pem: bytes) -> ssl.SSLContext:

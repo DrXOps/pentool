@@ -100,12 +100,7 @@ class ProxyRuntimeMixin:
             logger.info("Proxy started on port %s (daemon engine)", self._proxy.port)  # type: ignore[attr-defined]
         except Exception as exc:  # noqa: BLE001
             msg = str(exc) or type(exc).__name__
-            logger.error("Proxy (daemon) failed to start: %s", exc)
-            self.notify(  # type: ignore[attr-defined]
-                f"Proxy failed to start: {msg}",
-                severity="error",
-                timeout=6,
-            )
+            self.err(exc, "Proxy (daemon) failed to start")
 
     def _start_proxy_memory(self) -> None:
         """Start the legacy in-memory ProxyServer on a daemon thread."""
@@ -139,17 +134,7 @@ class ProxyRuntimeMixin:
                 await self._proxy._server.serve_forever()  # type: ignore[attr-defined]
         except Exception as exc:
             logger.error("Proxy error: %s", exc)
-            # Surface this to the user — previously only logged, so a
-            # "port already in use" / "another process holds this file"
-            # failure looked like the proxy silently did nothing when the
-            # toolbar button was pressed, with no clue why.
-            msg = str(exc) or type(exc).__name__
-            self.call_from_thread(  # type: ignore[attr-defined]
-                self.notify,  # type: ignore[attr-defined]
-                f"Proxy failed to start: {msg}",
-                severity="error",
-                timeout=6,
-            )
+            self.err(exc, "Proxy failed to start")
         finally:
             self.call_from_thread(self._update_status)  # type: ignore[attr-defined]
             self.call_from_thread(self._update_proxy_screen_labels)  # type: ignore[attr-defined]

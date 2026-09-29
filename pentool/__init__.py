@@ -18,7 +18,12 @@ except importlib.metadata.PackageNotFoundError:
         with open(_PYPROJECT, "rb") as _f:
             __version__ = tomllib.load(_f)["project"]["version"]
     except Exception:
-        __version__ = "0.0.0"  # last resort — should never happen in a valid install
+        import logging
+        logging.getLogger("pentool").warning(
+            "failed to read version from pyproject.toml, falling back to 0.0.0",
+            exc_info=True,
+        )
+        __version__ = "0.0.0"  # last resort
 
 __author__ = "pentool"
 
@@ -52,7 +57,12 @@ def _bootstrap_pro() -> None:
                 from pentool.core.license import is_pro_package_compatible
                 _compatible, _warning = is_pro_package_compatible()
             except Exception:
-                _compatible, _warning = True, ""  # never block startup over this check itself
+                import logging
+                logging.getLogger("pentool").debug(
+                    "PRO compatibility check in bootstrap failed, assuming compatible",
+                    exc_info=True,
+                )
+                _compatible, _warning = True, ""  # never block startup
             if not _compatible:
                 print(f"[pentool] {_warning}", file=sys.stderr)
                 continue

@@ -198,7 +198,7 @@ class DecoderScreen(Widget):
                 log.write("[yellow]Smart decode: no known encoding detected[/yellow]")
                 log.write(f"[dim]Input ({len(text)} chars): {text[:80]}[/dim]")
         except Exception as exc:
-            self.app.notify(f"Smart decode error: {exc}", severity="error")
+            self.err(exc, "Smart decode error")
 
     def _update_chain_display(self) -> None:
         try:
@@ -228,7 +228,7 @@ class DecoderScreen(Widget):
                     steps = [inp_text, result]
                     chain_used = [op]
                 except Exception as exc:
-                    self.app.notify(f"Error: {exc}", severity="error")
+                    self.err(exc, "Encode error")
                     return
             else:
                 result, steps = run_chain(self._chain, inp_text)
@@ -238,8 +238,7 @@ class DecoderScreen(Widget):
             self._render_steps(chain_used, steps)
 
         except Exception as exc:
-            self.app.notify(f"Run error: {exc}", severity="error")
-            logger.debug("action_run_chain: %s", exc)
+            self.err(exc, "Run error")
 
     def _render_steps(self, chain: list[str], steps: list[str]) -> None:
         try:
@@ -267,7 +266,7 @@ class DecoderScreen(Widget):
             else:
                 self.app.notify("Nothing to copy", severity="warning")
         except Exception as exc:
-            self.app.notify(f"Copy failed: {exc}", severity="error")
+            self.err(exc, "Copy failed")
 
     def action_clear_all(self) -> None:
         try:

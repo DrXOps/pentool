@@ -4,6 +4,10 @@ import os
 import sys
 import threading
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 # Escape hatch for local development: let the TUI start even when the
 # installed PRO package is stale/version-mismatched (see
 # pentool.core.license.is_pro_package_compatible). Intentionally verbose and
@@ -126,7 +130,7 @@ def _kill_orphaned_pentool() -> None:
         if killed:
             sys.stderr.write(f"[pentool] cleaned up {killed} orphaned pentool process(es)\n")
     except Exception:
-        pass  # never block startup on cleanup
+        logger.warning("orphaned cleanup failed", exc_info=True)  # never block startup
 
 
 def _log_exit_reason(reason: str) -> None:
@@ -138,7 +142,7 @@ def _log_exit_reason(reason: str) -> None:
             f"--- EXIT: {reason} ({__import__('time').strftime('%Y-%m-%d %H:%M:%S')}) ---\n"
         )
     except Exception:
-        pass  # best-effort logging
+        logger.warning("exit dump log write failed", exc_info=True)  # best-effort
 
 
 def _ensure_pro_compatible(
@@ -154,6 +158,7 @@ def _ensure_pro_compatible(
         from pentool.core.license import is_pro_package_compatible
         compatible, warning = is_pro_package_compatible()
     except Exception:
+        logger.debug("PRO compatibility check failed, assuming compatible", exc_info=True)
         compatible, warning = True, ""
 
     if not compatible:
@@ -169,7 +174,7 @@ def _ensure_pro_compatible(
                 elif not result.warning:
                     compatible, warning = is_pro_package_compatible()
             except Exception:
-                pass
+                logger.debug("auto-update PRO attempt (interactive) failed", exc_info=True)
         else:
             # Интерактивный режим: спросить пользователя
             try:
@@ -190,7 +195,7 @@ def _ensure_pro_compatible(
                     print("[pentool] Skipping PRO check. Use --no-check-updates to silence.", file=sys.stderr)
                     return  # вообще пропустить проверку в этой сессии
             except Exception:
-                pass
+                logger.debug("interactive PRO prompt failed", exc_info=True)
 
     if not compatible:
         if not unsafe_skip:
@@ -228,7 +233,7 @@ def _start_tui(open_last: bool = False) -> None:
         from pentool.core.crash_reporter import send_first_run_ping
         threading.Thread(target=send_first_run_ping, daemon=True).start()
     except Exception:
-        pass
+        logger.debug("first-run ping failed", exc_info=True)
 
     # AI first-run dialog: prompt to install LLM if not set up yet
     try:
@@ -257,7 +262,7 @@ def _start_tui(open_last: bool = False) -> None:
             else:
                 print("\nSkipped. Install later: pentool ai setup\n")
     except Exception:
-        pass
+        logger.debug("AI setup dialog failed", exc_info=True)
 
     _kill_orphaned_pentool()
 
@@ -275,7 +280,7 @@ def _start_tui(open_last: bool = False) -> None:
             from pentool.core.crash_reporter import send_crash
             send_crash(exc)
         except Exception:
-            pass
+            logger.error("crash reporter failed", exc_info=True)
         raise
     else:
         _log_exit_reason("run() returned cleanly (not via action_quit)")
@@ -283,7 +288,7 @@ def _start_tui(open_last: bool = False) -> None:
             try:
                 _app._stop_proxy()
             except Exception:
-                pass
+                logger.debug("proxy cleanup on exit failed", exc_info=True)
         _dump_threads_and_exit()
 
 
@@ -305,11 +310,12 @@ def _dump_threads_and_exit() -> None:
                     tg_name = getattr(tg, "__qualname__", None) or getattr(tg, "__name__", None) or repr(tg)
                     summaries.append(f"  ident={getattr(th,'ident',None)} name={nm!r} daemon={getattr(th,'daemon','?')} target={tg_name}")
                 except Exception:
+                    logger.debug("thread desc failed, skipping", exc_info=True)
                     continue
             if summaries:
                 buf.write("\n--- live threads (summary) ---\n" + "\n".join(summaries) + "\n")
         except Exception:
-            pass
+            logger.debug("thread summary dump failed", exc_info=True)
         for tid, frame in sys._current_frames().items():
             buf.write(f"\n--- Thread 0x{tid:x} ---\n")
             _tb.print_stack(frame, file=buf)
@@ -320,11 +326,11 @@ def _dump_threads_and_exit() -> None:
             if (faul := fbuf.getvalue().strip()):
                 buf.write(f"\n--- faulthandler ---\n{faul}\n")
         except Exception:
-            pass
+            logger.debug("faulthandler dump failed", exc_info=True)
         with open(log_path, "a") as f:
             f.write(buf.getvalue())
     except Exception:
-        pass
+        logger.debug("exit dump final write failed", exc_info=True)
     os._exit(0)
 
 

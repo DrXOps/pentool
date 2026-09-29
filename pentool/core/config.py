@@ -72,6 +72,9 @@ class Config:
     # Auto-Scope — автоматически добавлять хост в Scope при отправке в модуль
     auto_scope: bool = False           # если True — хост из контекстного меню → в Scope
 
+    # ── Per-module logging rules (NamedLogger) ──────────────────────────────────
+    logging_rules: dict[str, str] = field(default_factory=dict)
+
     # Observer list — not serialized
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)
 

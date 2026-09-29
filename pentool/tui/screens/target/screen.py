@@ -834,7 +834,7 @@ class TargetScreen(Widget):
             api.export_json(path)
             self.app.notify(f"Exported: {path}", severity="information")
         except Exception as exc:
-            self.app.notify(f"Export failed: {exc}", severity="error")
+            self.err(exc, "Export failed")
 
     def add_request_from_proxy(self, req) -> None:
         """Called from proxy on a new request — updates the map in real time."""

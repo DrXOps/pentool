@@ -73,8 +73,12 @@ def test_proxy_reload_table_has_comment():
 
 def test_http_storage_build_where_has_comment():
     from pentool.storage.http_storage import HttpStorage
-    src = inspect.getsource(HttpStorage._build_where)
-    assert "has_comment" in src, "has_comment not handled in _build_where"
+    from pentool.collections.filter_predicate import FilterSpec, FilterPredicate, FilterOp
+    # Фильтрация по комментариям теперь идёт через FilterPredicate с NOT_NULL
+    spec = FilterSpec(predicates=[FilterPredicate("comment", FilterOp.NOT_NULL, None)])
+    where, params = spec.to_sql()
+    assert "COALESCE(comment, '') != ''" in where
+    assert params == []
 
 
 def test_response_viewer_language():

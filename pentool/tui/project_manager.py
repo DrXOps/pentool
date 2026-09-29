@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pentool.core.db_schema import init_db
+from pentool.core.error_guard import err as _err
 from pentool.core.logging import get_logger
 from pentool.tui.constants import (
     SCREEN_DASHBOARD,
@@ -83,7 +84,7 @@ class ProjectManager:
             if not path:
                 return
             if not os.path.exists(path):
-                self._app.notify(f"File not found: {path}", severity="error", timeout=4)
+                _err(FileNotFoundError(path), f"File not found: {path}")
                 return
             self.switch_project_db(path, is_new=False)
 
@@ -125,7 +126,7 @@ class ProjectManager:
                 except Exception:
                     pass
             except Exception as e:
-                self._app.notify(f"Save failed: {e}", severity="error", timeout=4)
+                _err(e, "Save failed")
 
         self._app.push_screen(
             FileSelectorDialog(
@@ -166,7 +167,7 @@ class ProjectManager:
             if not path:
                 return
             if not os.path.exists(path):
-                self._app.notify(f"File not found: {path}", severity="error", timeout=4)
+                _err(FileNotFoundError(path), f"File not found: {path}")
                 return
             self._do_load_json(path)
 
@@ -239,14 +240,13 @@ class ProjectManager:
             self._app.notify(f"Saved → {os.path.basename(path)}", timeout=3)
             logger.info("APP: project saved to JSON: %s", path)
         except Exception as exc:
-            logger.error("_do_save_json error: %s", exc, exc_info=True)
-            self._app.notify(f"Save failed: {exc}", severity="error", timeout=4)
+            _err(exc, "Save failed")
 
     def _do_load_json(self, path: str) -> None:
         from pentool.core.project import load_project
         data, err = load_project(path)
         if err:
-            self._app.notify(f"Load failed: {err}", severity="error", timeout=5)
+            _err(Exception(err), "Load failed")
             return
         try:
             # Proxy
@@ -300,8 +300,7 @@ class ProjectManager:
                 "APP: project loaded from JSON: %s, total items: %d", path, total
             )
         except Exception as exc:
-            logger.error("_do_load_json error: %s", exc, exc_info=True)
-            self._app.notify(f"Load failed: {exc}", severity="error", timeout=4)
+            _err(exc, "Load failed")
 
     # ── Project switch ────────────────────────────────────────────────────────
 

@@ -300,7 +300,7 @@ class SequencerScreen(Widget):
                 self._update_counter()
                 self.app.notify(f"Loaded {added} tokens from {os.path.basename(path)}", timeout=3)
             except Exception as exc:
-                self.app.notify(f"Load failed: {exc}", severity="error")
+                self.err(exc, "Load failed")
 
         self.app.push_screen(
             FileSelectorDialog(mode=FileSelectorMode.OPEN, title="Load Tokens"),
@@ -315,7 +315,7 @@ class SequencerScreen(Widget):
             if copy_to_clipboard(text):
                 self.app.notify("Report copied", timeout=2)
         except Exception as exc:
-            self.app.notify(f"Copy failed: {exc}", severity="error")
+            self.err(exc, "Copy failed")
 
     def _export_report(self) -> None:
         if self._seq.count == 0:
@@ -368,7 +368,7 @@ class SequencerScreen(Widget):
                     f"Report exported → {os.path.basename(path)}", timeout=3
                 )
             except Exception as exc:
-                self.app.notify(f"Export failed: {exc}", severity="error")
+                self.err(exc, "Export failed")
 
         self.app.push_screen(
             FileSelectorDialog(mode=FileSelectorMode.SAVE, title="Export Report"),
@@ -394,8 +394,7 @@ class SequencerScreen(Widget):
             report = self._seq.analyze()
             self._render_report(report)
         except Exception as exc:
-            self.app.notify(f"Analyze error: {exc}", severity="error")
-            logger.debug("action_analyze: %s", exc)
+            self.err(exc, "Analyze error")
 
     def _render_report(self, report) -> None:
         """Render the report in the UI."""

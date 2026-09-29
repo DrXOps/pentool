@@ -515,6 +515,9 @@ class HttpStorage(BaseSqliteStorage):
             row = await cur.fetchone()
         return row[0] if row else ""
 
+    # ── Unified interface alias ──────────────────────────────────────────────
+    get_batch = get_metadata_batch
+
     def _build_where(self, filters: FilterSpec | None) -> tuple[str, list]:
         """Build a WHERE clause from a FilterSpec.
 

@@ -108,7 +108,7 @@ class ComparerScreen(Widget):
                     f"[cyan]{os.path.basename(path)}[/cyan]"
                 )
             except Exception as exc:
-                self.app.notify(f"Load failed: {exc}", severity="error")
+                self.err(exc, "Load failed")
 
         self.app.push_screen(
             FileSelectorDialog(
@@ -130,7 +130,7 @@ class ComparerScreen(Widget):
             if copy_to_clipboard(plain):
                 self.app.notify("Diff copied", timeout=2)
         except Exception as exc:
-            self.app.notify(f"Copy failed: {exc}", severity="error")
+            self.err(exc, "Copy failed")
 
     # ── Compare ───────────────────────────────────────────────────────────────
 
@@ -144,8 +144,7 @@ class ComparerScreen(Widget):
             self._last_result = result
             self._render_result(result)
         except Exception as exc:
-            self.app.notify(f"Compare error: {exc}", severity="error")
-            logger.debug("action_compare: %s", exc)
+            self.err(exc, "Compare error")
 
     def _render_result(self, result) -> None:
         """Render diff to the log and statistics to the stat-bar."""

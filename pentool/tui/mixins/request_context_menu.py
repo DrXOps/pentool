@@ -188,8 +188,7 @@ class RequestContextMenuMixin:
         try:
             req = parse_http_request(raw)
         except Exception as exc:
-            err(exc, "Parse error", self)
-            self.app.notify(f"Parse error: {exc}", severity="error")  # type: ignore[attr-defined]
+            self.err(exc, "Parse error")
             return
         _MAP = {
             "copy_curl":   (copy_as_curl,     "curl"),
@@ -232,8 +231,7 @@ class RequestContextMenuMixin:
             save_request_txt(req, path)
             self.app.notify(f"Saved → {path}", timeout=3)  # type: ignore[attr-defined]
         except Exception as exc:
-            err(exc, "Save failed", self)
-            self.app.notify(f"Save failed: {exc}", severity="error")  # type: ignore[attr-defined]
+            self.err(exc, "Save failed")
 
     def _cm_do_send_repeater(self, raw: str) -> None:
         if not raw.strip():
@@ -265,8 +263,7 @@ class RequestContextMenuMixin:
             req = parse_http_request(raw)
             self.app.post_message(SendRequestToScanner(req))  # type: ignore[attr-defined]
         except Exception as exc:
-            err(exc, "Send to Scanner failed", self)
-            self.app.notify(f"Send to Scanner failed: {exc}", severity="error")  # type: ignore[attr-defined]
+            self.err(exc, "Send to Scanner failed")
 
     def _cm_do_send_decoder(self, raw: str) -> None:
         """Requires AppMixin in the inheritance chain."""

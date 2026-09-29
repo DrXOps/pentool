@@ -261,3 +261,34 @@ class TestNoDbPathGetTabsAndResults:
         from pentool.api.intruder_storage import IntruderStorage
         repo = IntruderStorage(db_path=None)
         assert await repo.get_results() == []
+
+
+class TestGetBatchAlias:
+    """get_batch is an alias for get_results — must produce identical results."""
+
+    @pytest.mark.asyncio
+    async def test_get_batch_returns_same_as_get_results(self, repo):
+        r1 = _make_result(attack_id="atk-1", request_number=1)
+        r2 = _make_result(attack_id="atk-1", request_number=2)
+        await repo.save_result(r1)
+        await repo.save_result(r2)
+
+        from_batch = await repo.get_batch(limit=100)
+        from_results = await repo.get_results(limit=100)
+        assert len(from_batch) == len(from_results)
+        assert [r.attack_id for r in from_batch] == [r.attack_id for r in from_results]
+
+    @pytest.mark.asyncio
+    async def test_get_batch_with_order_by(self, repo):
+        for i in range(3):
+            await repo.save_result(_make_result(request_number=i + 1))
+        asc = await repo.get_batch(limit=10, order_by="request_number", desc=False)
+        assert [r.request_number for r in asc] == [1, 2, 3]
+        desc = await repo.get_batch(limit=10, order_by="request_number", desc=True)
+        assert [r.request_number for r in desc] == [3, 2, 1]
+
+    @pytest.mark.asyncio
+    async def test_get_batch_aliases_get_results(self, repo):
+        """get_results is an alias for get_batch on the class."""
+        from pentool.storage.intruder_storage import IntruderStorage as IS
+        assert IS.get_results is IS.get_batch

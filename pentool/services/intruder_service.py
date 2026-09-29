@@ -46,14 +46,14 @@ class IntruderService(BaseService):
                 try:
                     on_result(result)
                 except Exception:
-                    pass
+                    logger.debug("intruder on_result callback failed", exc_info=True)
 
         def _on_progress(done: int, total: int) -> None:
             if on_progress:
                 try:
                     on_progress(done, total)
                 except Exception:
-                    pass
+                    logger.debug("intruder on_progress callback failed", exc_info=True)
 
         try:
             await self._api.start_attack(config, _on_result, _on_progress, turbo_mode=turbo_mode)

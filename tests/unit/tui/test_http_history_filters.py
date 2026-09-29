@@ -23,7 +23,7 @@ class TestFilterSpecComposition:
         assert not spec.is_empty
         where, params = spec.to_sql()
         assert "NOT_NULL" not in where
-        assert "comment IS NOT NULL" in where
+        assert "COALESCE(comment, '') != ''" in where
 
     def test_fts_not_in_sql(self):
         spec = FilterSpec(predicates=[

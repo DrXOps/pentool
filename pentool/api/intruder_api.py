@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from pentool.api.base_api import ExportableAPI
-from pentool.api.intruder_storage import IntruderStorage
+from pentool.storage.intruder_storage import IntruderStorage
 from pentool.modules.intruder import (
     AttackType,
     ChainedPayloadSource,

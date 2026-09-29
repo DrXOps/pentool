@@ -207,32 +207,20 @@ WsFilterBar #ws-url { width: 20; }
     def collect(self) -> list[FilterPredicate]:
         predicates = super().collect()
         predicates.append(FilterPredicate("is_websocket", FilterOp.EQ, True))
-
-    def compose(self) -> ComposeResult:
-        for f in self.configure():
-            yield Label(f.label, classes="fb-label")
-            yield from self._render_field(f)
-            yield Label(" ", classes="fb-sep")
-        yield ToolbarButton("★ Scope", "fb-scope")
-        yield ToolbarButton("📝 Comments", "fb-comments")
-        yield Label(" ", classes="fb-sep")
-        yield Button("Filter", id="fb-apply", variant="primary")
-        yield Button("Clear", id="fb-reset")
-
-    def collect(self) -> list[FilterPredicate]:
-        predicates = super().collect()
-        predicates.append(FilterPredicate("is_websocket", FilterOp.EQ, True))
         self._maybe_add_scope(predicates)
+        self._maybe_add_comments(predicates)
         return predicates
 
     def _reset(self) -> None:
         super()._reset()
         self._reset_scope()
+        self._reset_comments()
         self._emit(FilterSpec())
 
     def _clear_fields(self) -> None:
         super()._clear_fields()
         self._reset_scope()
+        self._reset_comments()
 
     def _maybe_add_scope(self, predicates: list[FilterPredicate]) -> None:
         try:
@@ -250,9 +238,31 @@ WsFilterBar #ws-url { width: 20; }
         except Exception:
             pass
 
+    def _maybe_add_comments(self, predicates: list[FilterPredicate]) -> None:
+        try:
+            btn = self.query_one("#fb-comments", ToolbarButton)
+            if btn.has_class("active"):
+                predicates.append(FilterPredicate("comment", FilterOp.NOT_NULL, None))
+        except Exception:
+            pass
+
+    def _reset_comments(self) -> None:
+        try:
+            btn = self.query_one("#fb-comments", ToolbarButton)
+            btn.remove_class("active")
+            btn.label = "📝 Comments"
+        except Exception:
+            pass
+
     def on_toolbar_button_pressed(self, event: ToolbarButton.Pressed) -> None:
-        if event.button.id == "fb-scope":
+        bid = event.button.id
+        if bid == "fb-scope":
             toggle = not event.button.has_class("active")
             event.button.set_class(toggle, "active")
             event.button.label = "★ In Scope" if toggle else "★ Scope"
+            self._apply()
+        elif bid == "fb-comments":
+            toggle = not event.button.has_class("active")
+            event.button.set_class(toggle, "active")
+            event.button.label = "📝 Comments: ON" if toggle else "📝 Comments"
             self._apply()

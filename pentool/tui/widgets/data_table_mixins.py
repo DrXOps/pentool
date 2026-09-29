@@ -44,16 +44,12 @@ class SortableTableMixin:
         self,
         event: DataTable.HeaderSelected,
         col_names: list[str],
-        numeric_sort: bool = False,
-        numeric_sort_key: callable | None = None,  # noqa: ANN201
     ) -> None:
         """Сортировка через safe_sort (in-memory буфер).
 
         Args:
             event: HeaderSelected от DataTable
             col_names: имена колонок для стрелок
-            numeric_sort: не используется
-            numeric_sort_key: не используется
         """
         idx = event.column_index
         self._sort_reverse = (self._sort_col == idx) and not self._sort_reverse

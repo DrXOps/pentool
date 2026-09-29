@@ -1,10 +1,15 @@
 """AppMixin — common helpers for TUI screens that access the app level."""
-
 from __future__ import annotations
+
+from pentool.core.error_guard import err as _err
 
 
 class AppMixin:
     """Mixin with helpers for app-level access and cross-module sends."""
+
+    def err(self, exception: Exception, context: str = "", severity: str = "error") -> None:
+        """Log exception + TUI notify — shorthand for error_guard.err."""
+        _err(exception, context, self, severity=severity)
 
     def _get_proxy(self):
         try:
@@ -36,7 +41,7 @@ class AppMixin:
             self.app.action_switch_module("decoder")  # type: ignore[attr-defined]
             self.app.notify("Sent to Decoder", timeout=2)  # type: ignore[attr-defined]
         except Exception as exc:
-            self.app.notify(f"Could not send to Decoder: {exc}", severity="error")  # type: ignore[attr-defined]
+            self.err(exc, "Could not send to Decoder")
 
     def _send_to_comparer(self, text: str, label: str = "") -> None:
         try:
@@ -56,4 +61,4 @@ class AppMixin:
             self.app.action_switch_module("comparer")  # type: ignore[attr-defined]
             self.app.notify(f"Sent to Comparer ({side})", timeout=2)  # type: ignore[attr-defined]
         except Exception as exc:
-            self.app.notify(f"Could not send to Comparer: {exc}", severity="error")  # type: ignore[attr-defined]
+            self.err(exc, "Could not send to Comparer")

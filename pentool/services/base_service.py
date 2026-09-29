@@ -56,4 +56,4 @@ class BaseService:
             try:
                 self._on_log(msg)
             except Exception:
-                pass
+                logger.debug("base_service: _log callback failed", exc_info=True)

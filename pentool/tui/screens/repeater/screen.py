@@ -863,8 +863,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 return
             self.app.post_message(SendToIntruder(text))
         except Exception as exc:
-            logger.debug("_send_to_intruder: %s", exc)
-            self.app.notify(f"Could not send to Intruder: {exc}", severity="error")
+            self.err(exc, "Could not send to Intruder")
 
     
     def load_request(self, raw: str) -> None:

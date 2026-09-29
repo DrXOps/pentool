@@ -762,7 +762,7 @@ class DashboardScreen(Widget):
             if not path:
                 return
             if not os.path.exists(path):
-                self.app.notify(f"File not found: {path}", severity="error", timeout=4)
+                self.err(FileNotFoundError(path), "File not found")
                 return
             switch_fn = getattr(self.app, "_switch_project_db", None)
             if switch_fn:
@@ -803,7 +803,7 @@ class DashboardScreen(Widget):
                 self._populate_projects()
                 self.log_activity(f"Project saved: {path}", "ok")
             except Exception as e:
-                self.app.notify(f"Save failed: {e}", severity="error", timeout=4)
+                self.err(e, "Save failed")
 
         self.app.push_screen(
             FileSelectorDialog(
