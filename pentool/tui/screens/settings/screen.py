@@ -179,7 +179,6 @@ class SettingsScreen(Widget):
                     with Horizontal(classes="row"):
                         yield Static("AI Assistant:", classes="row-label")
                         yield Switch(id="set-ai-enabled", value=False)
-                        yield Label("⏻", id="set-ai-toggle-label")
                     yield Static(
                         "AI can help with scanning: picking checks, bypassing WAF, "
                         "searching for non-obvious endpoints.\n"
