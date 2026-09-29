@@ -1735,11 +1735,27 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             pass
 
     def _result_at_row(self, table: DataTable, row_index: int) -> IntruderResult | None:
-        """Resolve result by index in _filtered_results.
+        """Resolve result by row_index from the DataTable.
 
-        _filtered_results содержит только те строки, что в таблице
-        (отфильтрованные SQL или in-memory).
+        После унификации таблиц на ArrowBackendDataTable cursor_row
+        не гарантированно совпадает с индексом в _filtered_results
+        (сортировка меняет порядок строк в таблице, но _filtered_results
+        остаётся в исходном порядке). Маппим через request_number из
+        первой колонки таблицы.
         """
+        try:
+            # Пробуем получить request_number из ячейки таблицы
+            cell = table.get_cell_at((row_index, 0))
+            row_number = int(str(cell))
+        except (ValueError, TypeError, IndexError):
+            row_number = -1
+
+        if row_number >= 0:
+            for r in self._filtered_results:
+                if r.request_number == row_number:
+                    return r
+
+        # Fallback — прямой индекс (если нет сортировки, это совпадёт)
         if 0 <= row_index < len(self._filtered_results):
             return self._filtered_results[row_index]
         return None
