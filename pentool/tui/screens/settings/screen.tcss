@@ -117,3 +117,9 @@ SettingsScreen #license-key-input {
 }
 /* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
 .toolbar-sep { width: auto; }
+SettingsScreen Switch.compact {
+    height: 1;
+    min-height: 1;
+    margin: 0;
+    padding: 0 1;
+}
