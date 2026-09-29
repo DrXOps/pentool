@@ -178,7 +178,7 @@ class SettingsScreen(Widget):
                     yield Static("AI Assistant", classes="section-title")
                     with Horizontal(classes="row"):
                         yield Static("AI Assistant:", classes="row-label")
-                        yield Switch(id="set-ai-enabled", classes="compact", value=False)
+                        yield Switch(id="set-ai-enabled", value=False)
                     yield Static(
                         "AI can help with scanning: picking checks, bypassing WAF, "
                         "searching for non-obvious endpoints.\n"
@@ -673,10 +673,10 @@ class SettingsScreen(Widget):
         except Exception as e:
             err(e, "Save failed", self)
 
-    def on__switch_changed(self, event: Switch.Changed) -> None:
+    @on(Switch.Changed, "#set-ai-enabled")
+    def _on_ai_switch_changed(self, event: Switch.Changed) -> None:
         """Live-save at switch toggle — сразу сохраняет AI настройки без кнопки Save."""
-        if event.switch.id == "set-ai-enabled":
-            self._save_ai_settings()
+        self._save_ai_settings()
 
     def _save_ai_settings(self) -> None:
         """Save the AI settings."""
