@@ -86,7 +86,16 @@ def _bootstrap_pro() -> None:
             if _extra not in _api.__path__:
                 _api.__path__.append(_extra)
 
-        # 3. Make codeenigma_runtime/ (sibling of pentool/, one level up from
+        # 3. If pentool.tui.widgets is already imported, extend its __path__ too
+        #    (ScannerDataTable lives in pro/pentool/tui/widgets/ — see
+        #    pro/pentool/tui/widgets/scanner_data_table.py).
+        if "pentool.tui.widgets" in sys.modules:
+            _tw = sys.modules["pentool.tui.widgets"]
+            _extra = str(_pro_pkg / "tui" / "widgets")
+            if _extra not in _tw.__path__:
+                _tw.__path__.append(_extra)
+
+        # 4. Make codeenigma_runtime/ (sibling of pentool/, one level up from
         #    _pro_pkg) importable — see docstring above.
         _pro_root = _pro_pkg.parent
         if str(_pro_root) not in sys.path:
