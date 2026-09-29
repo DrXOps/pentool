@@ -694,6 +694,16 @@ async def check_and_update_pro_package() -> "ProSyncResult":
     # build_id differs. A once-broken install with a matching build_id
     # would never take that path without this check.
     if local_build_id == remote_build_id and _compatible:
+        # Same build, version matched — nothing to do.
+        return ProSyncResult(updated=False, warning="")
+
+    if local_build_id == remote_build_id and not _compatible and ("Version mismatch" in (_warning or "")):
+        # Same build, but FREE version bumped (e.g. 0.3.3→0.4.0).
+        # No need to re-download — just update free_version in build_meta.
+        try:
+            _write_pro_meta(local_build_id)
+        except Exception:
+            pass
         return ProSyncResult(updated=False, warning="")
 
     updated = await download_pro_package(info.license_key, info.machine_id)
