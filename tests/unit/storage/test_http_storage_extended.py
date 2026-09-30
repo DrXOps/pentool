@@ -10,6 +10,7 @@ import pytest
 
 from pentool.storage.http_storage import HttpStorage
 from pentool.utils.parser import ParsedRequest, ParsedResponse
+from pentool.collections.filter_predicate import FilterPredicate, FilterOp, FilterSpec
 
 
 @pytest.fixture
@@ -203,7 +204,6 @@ class TestHttpStorageGetRequestById:
 
 
 class TestHttpStorageExportAllRequests:
-    pytestmark = pytest.mark.xfail(reason="sqlite3.Row has no .get() — storage refactor needed")
     """Test export_all_requests method."""
 
     async def test_export_all_requests_empty(self, storage):
@@ -275,7 +275,7 @@ class TestHttpStorageCountWithFilters:
         await storage.add_request(req2)
         await storage.add_request(req3)
 
-        count = await storage.count(filters={"method": "GET"})
+        count = await storage.count(filters=FilterSpec(predicates=[FilterPredicate("method", FilterOp.EQ, "GET")]))
 
         assert count == 2
 
@@ -287,7 +287,7 @@ class TestHttpStorageCountWithFilters:
         await storage.add_request(req1)
         await storage.add_request(req2)
 
-        count = await storage.count(filters={"host": "example.com"})
+        count = await storage.count(filters=FilterSpec(predicates=[FilterPredicate("host", FilterOp.EQ, "example.com")]))
 
         assert count == 1
 
@@ -301,7 +301,10 @@ class TestHttpStorageCountWithFilters:
         await storage.add_request(req2)
         await storage.add_request(req3)
 
-        count = await storage.count(filters={"method": "GET", "host": "example.com"})
+        count = await storage.count(filters=FilterSpec(predicates=[
+            FilterPredicate("method", FilterOp.EQ, "GET"),
+            FilterPredicate("host", FilterOp.EQ, "example.com"),
+        ]))
 
         assert count == 1
 
@@ -334,7 +337,9 @@ class TestHttpStorageGetMetadataBatch:
         await storage.add_request(req2)
         await storage.add_request(req3)
 
-        batch = await storage.get_metadata_batch(filters={"extension": "json"}, limit=10, offset=0)
+        batch = await storage.get_metadata_batch(filters=FilterSpec(predicates=[
+            FilterPredicate("extension", FilterOp.EQ, "json"),
+        ]), limit=10, offset=0)
 
         assert len(batch) == 1
         assert batch[0]["url"].endswith(".json")

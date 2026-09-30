@@ -90,10 +90,24 @@ class LicenseInfo:
 
 
 def get_machine_id() -> str:
+    # 1. /etc/machine-id — стабильный ID системы (systemd, Linux)
+    try:
+        mid = Path("/etc/machine-id").read_text(encoding="utf-8").strip()
+        if mid and mid != "uninitialized":
+            return hashlib.sha256(mid.encode()).hexdigest()[:32]
+    except Exception:
+        pass
+    # 2. /var/lib/dbus/machine-id — альтернативный путь
+    try:
+        mid = Path("/var/lib/dbus/machine-id").read_text(encoding="utf-8").strip()
+        if mid:
+            return hashlib.sha256(mid.encode()).hexdigest()[:32]
+    except Exception:
+        pass
+    # 3. Fallback: hostname + MAC (как было раньше)
     try:
         import socket
         hostname = socket.gethostname()
-        # Get MAC of first interface via uuid
         mac = hex(uuid.getnode())[2:]
         raw = f"{hostname}:{mac}"
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
@@ -318,10 +332,11 @@ async def activate_license(key: str) -> LicenseInfo:
                 headers={"Accept-Encoding": "gzip, deflate"},
             ) as resp:
                 if resp.status != 200:
+                    data = await resp.json()
                     return LicenseInfo(
                         valid=False, plan="free", machine_id=machine_id,
                         license_key=key,
-                        error=f"License server returned HTTP {resp.status}",
+                        error=data.get("message", f"License server returned HTTP {resp.status}"),
                     )
                 data = await resp.json()
 
@@ -372,13 +387,82 @@ async def activate_license(key: str) -> LicenseInfo:
         )
 
 
-def deactivate_license() -> None:
-    """Deactivate license (delete cache)."""
+async def reassign_license(key: str) -> LicenseInfo:
+    """Force-reassign license to this machine (removes oldest slot on server).
+
+    Sends POST /api/reassign { key, new_machine_id } — server removes the
+    oldest machine_id from the key's slot list and registers this machine.
+
+    Returns:
+        LicenseInfo — valid=True on success, valid=False with error on failure.
+    """
+    key = key.strip().upper()
+    machine_id = get_machine_id()
+
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as session:
+            async with session.post(
+                f"{_LICENSE_API_BASE}/api/reassign",
+                json={"key": key, "new_machine_id": machine_id},
+                ssl=False,
+                headers={"Accept-Encoding": "gzip, deflate"},
+            ) as resp:
+                data = await resp.json()
+                if resp.status != 200:
+                    return LicenseInfo(
+                        valid=False, plan="free", machine_id=machine_id,
+                        license_key=key,
+                        error=data.get("message", f"Reassign failed (HTTP {resp.status})"),
+                    )
+
+                if not data.get("reassigned"):
+                    return LicenseInfo(
+                        valid=False, plan="free", machine_id=machine_id,
+                        license_key=key,
+                        error="Server did not confirm reassignment",
+                    )
+
+                # После reassign — активируем по полной (получаем подписанный ответ)
+                return await activate_license(key)
+    except Exception as exc:
+        return LicenseInfo(
+            valid=False, plan="free", machine_id=machine_id,
+            license_key=key,
+            error=f"Reassign failed: {exc}",
+        )
+
+
+async def deactivate_license() -> None:
+    """Deactivate license online (notify server then delete cache).
+
+    Sends POST /api/deactivate to free the slot for this machine_id,
+    then removes the local cache file. Best-effort: if the server is
+    unreachable the local cache is still removed so the license resets
+    to FREE until the next activation.
+    """
+    info = get_session_license()
+    if info.valid and info.license_key:
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=8)
+            ) as session:
+                await session.post(
+                    f"{_LICENSE_API_BASE}/api/deactivate",
+                    json={"key": info.license_key, "machine_id": info.machine_id},
+                    ssl=False,
+                )
+        except Exception:
+            pass  # сервер недоступен — хотя бы локально сбросим
     try:
         if _LICENSE_FILE.exists():
             _LICENSE_FILE.unlink()
     except Exception:
         pass
+    invalidate_session_license()
 
 
 async def start_trial() -> LicenseInfo:
@@ -694,6 +778,16 @@ async def check_and_update_pro_package() -> "ProSyncResult":
     # build_id differs. A once-broken install with a matching build_id
     # would never take that path without this check.
     if local_build_id == remote_build_id and _compatible:
+        # Same build, version matched — nothing to do.
+        return ProSyncResult(updated=False, warning="")
+
+    if local_build_id == remote_build_id and not _compatible and ("Version mismatch" in (_warning or "")):
+        # Same build, but FREE version bumped (e.g. 0.3.3→0.4.0).
+        # No need to re-download — just update free_version in build_meta.
+        try:
+            _write_pro_meta(local_build_id)
+        except Exception:
+            pass
         return ProSyncResult(updated=False, warning="")
 
     updated = await download_pro_package(info.license_key, info.machine_id)

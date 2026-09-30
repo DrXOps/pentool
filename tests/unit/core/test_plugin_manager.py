@@ -286,7 +286,8 @@ class TestPluginManagerUserPlugins:
     def test_load_user_plugins_nonexistent_dir(self):
         """No ~/.pentool/plugins — no crash."""
         pm = PluginManager()
-        with patch("pentool.core.plugin_manager.USER_PLUGINS_DIR", Path("/nonexistent/path")):
+        with patch("pentool.core.plugin_manager.USER_PLUGINS_DIR", Path("/nonexistent/path")), \
+             patch("pentool.core.license.PRO_PACKAGE_DIR", Path("/nonexistent/pro")):
             pm.load_user_plugins()  # no exception
         assert len(pm.loaded_plugins()) == 0
 
@@ -294,7 +295,8 @@ class TestPluginManagerUserPlugins:
         plugin_file = tmp_path / "my_plugin.py"
         _write_plugin(plugin_file, _free_plugin_code("user_plugin"))
         pm = PluginManager()
-        with patch("pentool.core.plugin_manager.USER_PLUGINS_DIR", tmp_path):
+        with patch("pentool.core.plugin_manager.USER_PLUGINS_DIR", tmp_path), \
+             patch("pentool.core.license.PRO_PACKAGE_DIR", Path("/nonexistent/pro")):
             pm.load_user_plugins()
         assert len(pm.loaded_plugins()) == 1
 

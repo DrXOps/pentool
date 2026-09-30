@@ -1970,9 +1970,23 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             if not path.endswith(".csv"):
                 path += ".csv"
             try:
-                if self._api is not None:
-                    self._api.export_csv(path)
-                    self.app.notify(f"Exported to {path}", timeout=4)
+                import csv
+                with open(path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        "#", "Payloads", "Status", "Length", "Time(ms)", "Error", "Timestamp"
+                    ])
+                    for r in self._all_results:
+                        writer.writerow([
+                            r.request_number,
+                            " | ".join(r.payload_values),
+                            r.response_status or "",
+                            r.response_length or "",
+                            r.response_time_ms or "",
+                            r.error or "",
+                            r.timestamp.isoformat(),
+                        ])
+                self.app.notify(f"Exported to {path}", timeout=4)
             except Exception as exc:
                 from pentool.core.error_guard import err
                 err(exc, "Intruder export failed", self, severity="error")

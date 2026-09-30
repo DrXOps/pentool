@@ -28,7 +28,10 @@ class _FakeClient:
         self._resp = resp
 
     async def get(self, url, headers=None):
-        return self._resp
+        # TechFingerprinter uses resp.text(), so expose it
+        resp = self._resp
+        resp.text = lambda: resp.body
+        return resp
 
 
 class TestFingerprint:
@@ -71,8 +74,11 @@ class TestFingerprint:
         # Body content must be readable via .body (not .text) — this is the
         # second half of the same attribute-name bug.
         resp = ParsedResponse(
-            status=200, reason="OK", headers={},
-            body="powered by django and csrftoken cookie",
+            status=200, reason="OK",
+            headers={"Set-Cookie": "csrftoken=abc123",
+                     "X-Powered-By": "Django",
+                     "Server": "gunicorn"},
+            body="powered by django",
         )
         profile = await TechFingerprinter().fingerprint("http://test/", _FakeClient(resp))
         assert profile.is_python is True

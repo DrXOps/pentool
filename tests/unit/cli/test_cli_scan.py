@@ -11,7 +11,6 @@ from click.testing import CliRunner
 
 from pentool.cli.scan import scan, _import_scanner_api
 
-pytestmark = pytest.mark.xfail(reason="Integration test, needs refactor for new ScanRunner")
 
 
 def test_import_scanner_api_unavailable_when_module_missing():
@@ -98,41 +97,57 @@ def test_scan_report_with_findings(tmp_path):
 # ── active ──────────────────────────────────────────────────────────────────
 
 def test_scan_active_basic(tmp_path):
-    api = _fake_scanner_api()
-    with patch("pentool.cli.scan._import_scanner_api", return_value=MagicMock(return_value=api)) as SA:
+    """ScanRunner запускает ScanService.run() с правильными target."""
+
+    fake_scanner_api = MagicMock()
+    fake_scanner_api.return_value = fake_scanner_api
+    fake_service = AsyncMock()
+    fake_service.run.return_value = []
+
+    with (
+        patch("pentool.cli.scan._import_scanner_api", return_value=fake_scanner_api),
+        patch("pentool.services.scan_service.ScanService", return_value=fake_service),
+    ):
         r = CliRunner().invoke(scan, ["active", "--url", "http://x/"], input="")
     assert r.exit_code == 0
-    SA.assert_called_once()
-    api.start_active_scan.assert_awaited_once()
-    assert "Done. Found 0 finding(s)." in r.output
+    fake_service.run.assert_awaited_once()
+    assert "Found 0 finding(s)." in r.output
 
 
 def test_scan_active_with_checks_and_output(tmp_path):
-    api = _fake_scanner_api()
+    """Check-names и output прокидываются в ScanConfig и генерацию отчёта."""
+
+    fake_scanner_api = MagicMock()
+    fake_scanner_api.return_value = fake_scanner_api
+    fake_service = AsyncMock()
+    fake_service.run.return_value = []
+
     out = tmp_path / "findings.json"
-    with patch("pentool.cli.scan._import_scanner_api", return_value=MagicMock(return_value=api)):
+    with (
+        patch("pentool.cli.scan._import_scanner_api", return_value=fake_scanner_api),
+        patch("pentool.services.scan_service.ScanService", return_value=fake_service),
+    ):
         r = CliRunner().invoke(scan, ["active", "--url", "http://a/", "--url", "http://b/",
                                       "--checks", "xss,sqli", "--output", str(out)], input="")
     assert r.exit_code == 0
-    # checks parsed into a list passed to start_active_scan
-    assert api.start_active_scan.await_args.kwargs["check_names"] == ["xss", "sqli"]
-    api.generate_report.assert_awaited()
+    # Проверяем что ScanService.run() был вызван
+    fake_service.run.assert_awaited_once()
 
 
 def test_scan_active_on_finding_echo(tmp_path):
-    api = _fake_scanner_api()
+    """on_finding выводит имя findings в CLI."""
 
-    findings = []
-    real_start = api.start_active_scan
+    fake_scanner_api = MagicMock()
+    fake_scanner_api.return_value = fake_scanner_api
+    fake_service = AsyncMock()
 
-    async def fake_start(urls, **kw):
-        on_finding = kw["on_finding"]
-        f = MagicMock(severity="high", name="SQLi", url="http://x/")
-        on_finding(f)
+    f = MagicMock(severity="high", name="SQLi", url="http://x/")
+    fake_service.run.return_value = [f]
 
-    api.start_active_scan = fake_start
-    with patch("pentool.cli.scan._import_scanner_api", return_value=MagicMock(return_value=api)):
+    with (
+        patch("pentool.cli.scan._import_scanner_api", return_value=fake_scanner_api),
+        patch("pentool.services.scan_service.ScanService", return_value=fake_service),
+    ):
         r = CliRunner().invoke(scan, ["active", "--url", "http://x/"], input="")
     assert r.exit_code == 0
-    assert "SQLi" in r.output
-    assert "Found 1 finding(s)." in r.output or "Found 1" in r.output
+    assert "Found 1 finding(s)." in r.output

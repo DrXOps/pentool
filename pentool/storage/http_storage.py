@@ -369,6 +369,8 @@ class HttpStorage(BaseSqliteStorage):
 
         result = []
         from pentool.storage.large_body_handler import LargeBodyHandler
+        # Конвертируем sqlite3.Row → dict, чтобы работал .get()
+        rows = [dict(r) for r in rows]
         # Batch-load all large bodies to avoid N+1 disk reads
         req_refs = [r.get("request_body_ref") for r in rows]
         resp_refs = [r.get("response_body_ref") for r in rows]

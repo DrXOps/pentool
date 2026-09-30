@@ -171,6 +171,20 @@ class SettingsScreen(Widget):
                         "Run `pentool update` to install an available update.",
                         classes="settings-hint",
                     )
+                    yield Static("─" * 40, classes="license-sep")
+                    with Horizontal(classes="row"):
+                        yield Static("Auto Scope:", classes="row-label")
+                        yield Checkbox(
+                            "Add hosts to scope automatically",
+                            id="set-auto-scope",
+                            value=False,
+                        )
+                    yield Static(
+                        "When enabled: sending a request to Repeater, starting a crawl\n"
+                        "or a scan will automatically add the target host to scope\n"
+                        "and trigger tech detection. Disabled by default.",
+                        classes="settings-hint",
+                    )
                     yield ToolbarButton("Save", "settings-save-privacy")
 
             with TabPane("AI", id="tab-ai"):
@@ -275,6 +289,7 @@ class SettingsScreen(Widget):
             cfg = get_config()
             self.query_one("#set-send-crash-reports", Checkbox).value = getattr(cfg, "send_crash_reports", True)
             self.query_one("#set-check-updates", Checkbox).value = getattr(cfg, "check_updates", True)
+            self.query_one("#set-auto-scope", Checkbox).value = getattr(cfg, "auto_scope", False)
         except Exception:
             pass
         try:
@@ -668,6 +683,13 @@ class SettingsScreen(Widget):
             except Exception:
                 pass
 
+            try:
+                scope_v = self.query_one("#set-auto-scope", Checkbox).value
+                if scope_v != getattr(cfg, "auto_scope", False):
+                    changes["auto_scope"] = scope_v
+            except Exception:
+                pass
+
             self._save_settings(changes, "Privacy settings saved")
         except Exception as e:
             err(e, "Save failed", self)
@@ -722,10 +744,33 @@ class SettingsScreen(Widget):
 
     async def _async_activate(self, key: str) -> None:
         """Async activation worker."""
-        from pentool.core.license import activate_license, refresh_session_license
+        from pentool.core.license import activate_license, reassign_license, refresh_session_license
         self.app.notify("Activating license…", timeout=2)  # type: ignore[attr-defined]
         try:
             info = await activate_license(key)
+            if not info.valid and ("slots in use" in info.error or "bound to another machine" in info.error):
+                # Предложить сбросить старую привязку
+                from pentool.tui.dialogs.confirm import ConfirmDialog
+                confirmed = await self.app.push_screen_widget(  # type: ignore[attr-defined]
+                    ConfirmDialog(
+                        title="License already in use",
+                        message=(
+                            f"This key is already activated on another machine.\n\n"
+                            f"{info.error}\n\n"
+                            "Do you want to deactivate the old machine and "
+                            "activate this one instead?"
+                        ),
+                        confirm_text="Yes, reassign to this machine",
+                        cancel_text="Cancel",
+                    )
+                )
+                if confirmed:
+                    self.app.notify("Reassigning license…", timeout=2)  # type: ignore[attr-defined]
+                    info = await reassign_license(key)
+                else:
+                    refresh_session_license(info)
+                    self.call_after_refresh(self._refresh_license_ui)
+                    return
             refresh_session_license(info)
             if info.valid:
                 self.app.notify(f"✓ License activated: {info.plan.upper()}", timeout=4)  # type: ignore[attr-defined]
@@ -736,13 +781,18 @@ class SettingsScreen(Widget):
         self.call_after_refresh(self._refresh_license_ui)
 
     def _do_deactivate_license(self) -> None:
-        """Deactivate the license (remove cached data)."""
+        """Deactivate the license online (notify server then remove cached data)."""
+        self.run_worker(self._async_deactivate(), exclusive=True, name="license-deactivate")
+
+    async def _async_deactivate(self) -> None:
+        """Async deactivation worker."""
         from pentool.core.license import deactivate_license, refresh_session_license
+        self.app.notify("Deactivating license…", timeout=2)  # type: ignore[attr-defined]
         try:
-            deactivate_license()
+            await deactivate_license()
             refresh_session_license()
-            self.app.notify("License deactivated", timeout=3)  # type: ignore[attr-defined]
+            self.app.notify("✓ License deactivated", timeout=3)  # type: ignore[attr-defined]
         except Exception as exc:
             err(exc, "Deactivation error", self)
-        self._refresh_license_ui()
+        self.call_after_refresh(self._refresh_license_ui)
 

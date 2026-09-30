@@ -72,7 +72,7 @@ class TestBuildWhereSingle:
             FilterPredicate("comment", FilterOp.NOT_NULL, None),
         ])
         clause, params = _build_where(s)
-        assert "comment IS NOT NULL" in clause
+        assert "COALESCE(comment, '') != ''" in clause
         assert params == []
 
     def test_has_params_true(self):
@@ -129,9 +129,11 @@ class TestBuildWhereCombined:
         ])
         clause, params = _build_where(s)
         assert "(host = ? OR host LIKE ?)" in clause
-        assert "comment IS NOT NULL" in clause
+        assert "COALESCE(comment, '') != ''" in clause
         assert "is_websocket = ?" in clause
-        assert len(params) == 5  # 2 scope hosts × 2 + websocket (NOT_NULL — без params)
+        # NOT_NULL — без params (COALESCE), остальные 4 params: 2 scope host/ LIKE + websocket
+        # + 2 для scope (host = ?, host LIKE ? для каждого из 2 хостов)
+        assert len(params) == 5
 
     def test_color_and_has_params(self):
         s = FilterSpec(predicates=[
