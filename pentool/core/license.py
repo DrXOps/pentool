@@ -387,6 +387,54 @@ async def activate_license(key: str) -> LicenseInfo:
         )
 
 
+async def reassign_license(key: str) -> LicenseInfo:
+    """Force-reassign license to this machine (removes oldest slot on server).
+
+    Sends POST /api/reassign { key, new_machine_id } — server removes the
+    oldest machine_id from the key's slot list and registers this machine.
+
+    Returns:
+        LicenseInfo — valid=True on success, valid=False with error on failure.
+    """
+    key = key.strip().upper()
+    machine_id = get_machine_id()
+
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as session:
+            async with session.post(
+                f"{_LICENSE_API_BASE}/api/reassign",
+                json={"key": key, "new_machine_id": machine_id},
+                ssl=False,
+                headers={"Accept-Encoding": "gzip, deflate"},
+            ) as resp:
+                data = await resp.json()
+                if resp.status != 200:
+                    return LicenseInfo(
+                        valid=False, plan="free", machine_id=machine_id,
+                        license_key=key,
+                        error=data.get("message", f"Reassign failed (HTTP {resp.status})"),
+                    )
+
+                if not data.get("reassigned"):
+                    return LicenseInfo(
+                        valid=False, plan="free", machine_id=machine_id,
+                        license_key=key,
+                        error="Server did not confirm reassignment",
+                    )
+
+                # После reassign — активируем по полной (получаем подписанный ответ)
+                return await activate_license(key)
+    except Exception as exc:
+        return LicenseInfo(
+            valid=False, plan="free", machine_id=machine_id,
+            license_key=key,
+            error=f"Reassign failed: {exc}",
+        )
+
+
 async def deactivate_license() -> None:
     """Deactivate license online (notify server then delete cache).
 

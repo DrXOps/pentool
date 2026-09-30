@@ -722,10 +722,33 @@ class SettingsScreen(Widget):
 
     async def _async_activate(self, key: str) -> None:
         """Async activation worker."""
-        from pentool.core.license import activate_license, refresh_session_license
+        from pentool.core.license import activate_license, reassign_license, refresh_session_license
         self.app.notify("Activating license…", timeout=2)  # type: ignore[attr-defined]
         try:
             info = await activate_license(key)
+            if not info.valid and ("slots in use" in info.error or "bound to another machine" in info.error):
+                # Предложить сбросить старую привязку
+                from pentool.tui.dialogs.confirm import ConfirmDialog
+                confirmed = await self.app.push_screen_widget(  # type: ignore[attr-defined]
+                    ConfirmDialog(
+                        title="License already in use",
+                        message=(
+                            f"This key is already activated on another machine.\n\n"
+                            f"{info.error}\n\n"
+                            "Do you want to deactivate the old machine and "
+                            "activate this one instead?"
+                        ),
+                        confirm_text="Yes, reassign to this machine",
+                        cancel_text="Cancel",
+                    )
+                )
+                if confirmed:
+                    self.app.notify("Reassigning license…", timeout=2)  # type: ignore[attr-defined]
+                    info = await reassign_license(key)
+                else:
+                    refresh_session_license(info)
+                    self.call_after_refresh(self._refresh_license_ui)
+                    return
             refresh_session_license(info)
             if info.valid:
                 self.app.notify(f"✓ License activated: {info.plan.upper()}", timeout=4)  # type: ignore[attr-defined]
