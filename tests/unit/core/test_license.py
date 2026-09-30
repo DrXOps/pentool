@@ -690,17 +690,21 @@ class TestCheckAndUpdateProPackage:
 # ── deactivate_license ─────────────────────────────────────────────────────────
 
 class TestDeactivateLicense:
-    def test_removes_file(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_removes_file(self, tmp_path):
         lic_file = tmp_path / "license.dat"
         lic_file.write_text('{"valid": true}', encoding="utf-8")
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
-            deactivate_license()
+            with patch("pentool.core.license.get_session_license", return_value=LicenseInfo()):
+                await deactivate_license()
         assert not lic_file.exists()
 
-    def test_no_error_when_file_missing(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_no_error_when_file_missing(self, tmp_path):
         lic_file = tmp_path / "missing.dat"
         with patch("pentool.core.license._LICENSE_FILE", lic_file):
-            deactivate_license()  # should not raise
+            with patch("pentool.core.license.get_session_license", return_value=LicenseInfo()):
+                await deactivate_license()  # should not raise
 
 
 # ── Session cache ──────────────────────────────────────────────────────────────

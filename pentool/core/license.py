@@ -90,10 +90,24 @@ class LicenseInfo:
 
 
 def get_machine_id() -> str:
+    # 1. /etc/machine-id — стабильный ID системы (systemd, Linux)
+    try:
+        mid = Path("/etc/machine-id").read_text(encoding="utf-8").strip()
+        if mid and mid != "uninitialized":
+            return hashlib.sha256(mid.encode()).hexdigest()[:32]
+    except Exception:
+        pass
+    # 2. /var/lib/dbus/machine-id — альтернативный путь
+    try:
+        mid = Path("/var/lib/dbus/machine-id").read_text(encoding="utf-8").strip()
+        if mid:
+            return hashlib.sha256(mid.encode()).hexdigest()[:32]
+    except Exception:
+        pass
+    # 3. Fallback: hostname + MAC (как было раньше)
     try:
         import socket
         hostname = socket.gethostname()
-        # Get MAC of first interface via uuid
         mac = hex(uuid.getnode())[2:]
         raw = f"{hostname}:{mac}"
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
@@ -318,10 +332,11 @@ async def activate_license(key: str) -> LicenseInfo:
                 headers={"Accept-Encoding": "gzip, deflate"},
             ) as resp:
                 if resp.status != 200:
+                    data = await resp.json()
                     return LicenseInfo(
                         valid=False, plan="free", machine_id=machine_id,
                         license_key=key,
-                        error=f"License server returned HTTP {resp.status}",
+                        error=data.get("message", f"License server returned HTTP {resp.status}"),
                     )
                 data = await resp.json()
 
@@ -372,13 +387,34 @@ async def activate_license(key: str) -> LicenseInfo:
         )
 
 
-def deactivate_license() -> None:
-    """Deactivate license (delete cache)."""
+async def deactivate_license() -> None:
+    """Deactivate license online (notify server then delete cache).
+
+    Sends POST /api/deactivate to free the slot for this machine_id,
+    then removes the local cache file. Best-effort: if the server is
+    unreachable the local cache is still removed so the license resets
+    to FREE until the next activation.
+    """
+    info = get_session_license()
+    if info.valid and info.license_key:
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=8)
+            ) as session:
+                await session.post(
+                    f"{_LICENSE_API_BASE}/api/deactivate",
+                    json={"key": info.license_key, "machine_id": info.machine_id},
+                    ssl=False,
+                )
+        except Exception:
+            pass  # сервер недоступен — хотя бы локально сбросим
     try:
         if _LICENSE_FILE.exists():
             _LICENSE_FILE.unlink()
     except Exception:
         pass
+    invalidate_session_license()
 
 
 async def start_trial() -> LicenseInfo:

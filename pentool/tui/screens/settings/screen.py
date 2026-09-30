@@ -736,13 +736,18 @@ class SettingsScreen(Widget):
         self.call_after_refresh(self._refresh_license_ui)
 
     def _do_deactivate_license(self) -> None:
-        """Deactivate the license (remove cached data)."""
+        """Deactivate the license online (notify server then remove cached data)."""
+        self.run_worker(self._async_deactivate(), exclusive=True, name="license-deactivate")
+
+    async def _async_deactivate(self) -> None:
+        """Async deactivation worker."""
         from pentool.core.license import deactivate_license, refresh_session_license
+        self.app.notify("Deactivating license…", timeout=2)  # type: ignore[attr-defined]
         try:
-            deactivate_license()
+            await deactivate_license()
             refresh_session_license()
-            self.app.notify("License deactivated", timeout=3)  # type: ignore[attr-defined]
+            self.app.notify("✓ License deactivated", timeout=3)  # type: ignore[attr-defined]
         except Exception as exc:
             err(exc, "Deactivation error", self)
-        self._refresh_license_ui()
+        self.call_after_refresh(self._refresh_license_ui)
 
