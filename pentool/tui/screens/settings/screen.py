@@ -751,7 +751,7 @@ class SettingsScreen(Widget):
             if not info.valid and ("slots in use" in info.error or "bound to another machine" in info.error):
                 # Предложить сбросить старую привязку
                 from pentool.tui.dialogs.confirm import ConfirmDialog
-                confirmed = await self.app.push_screen_widget(  # type: ignore[attr-defined]
+                confirmed = await self.app.push_screen_wait(  # type: ignore[attr-defined]
                     ConfirmDialog(
                         title="License already in use",
                         message=(
