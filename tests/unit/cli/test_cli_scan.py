@@ -11,6 +11,10 @@ from click.testing import CliRunner
 
 from pentool.cli.scan import scan, _import_scanner_api
 
+# Импортируем ScanService принудительно — иначе Python 3.10 на CI
+# не может его найти через patch-путь "pentool.services.scan_service.ScanService"
+from pentool.services.scan_service import ScanService  # noqa: F401
+
 
 
 def test_import_scanner_api_unavailable_when_module_missing():
