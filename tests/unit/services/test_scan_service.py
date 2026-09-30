@@ -412,6 +412,8 @@ class TestHybridJsCrawl:
         ))
 
         spider_api = Mock(spec=__import__("pentool.api.spider_api", fromlist=["SpiderAPI"]).SpiderAPI)
+        spider_api.has_cached_result = Mock(return_value=False)
+        spider_api.get_cached_pages = Mock(return_value=[])
         spider_api.crawl = AsyncMock(return_value=static_result)
         scanner_api = Mock(spec=__import__("pentool.api.scanner_api", fromlist=["ScannerAPI"]).ScannerAPI)
         scanner_api.run_active_on_requests = AsyncMock(return_value=[])
@@ -428,7 +430,9 @@ class TestHybridJsCrawl:
         config = ScanConfig(targets=["http://x.com/"], resume=False, hybrid_js=True)
 
         with patch("pentool.api.spider_api.SpiderAPI", js_spider_cls):
-            await service.run(config)
+            # также мокаем статические методы SpiderAPI
+            with patch("pentool.api.spider_api.SpiderAPI.has_cached_result", return_value=False),                  patch("pentool.api.spider_api.SpiderAPI.get_cached_pages", return_value=[]):
+                await service.run(config)
 
         # hybrid_js fired a JS re-crawl.
         assert js_spider_cls.called, "hybrid_js should create a JS SpiderAPI"
@@ -453,6 +457,8 @@ class TestHybridJsCrawl:
         ))
 
         spider_api = Mock(spec=__import__("pentool.api.spider_api", fromlist=["SpiderAPI"]).SpiderAPI)
+        spider_api.has_cached_result = Mock(return_value=False)
+        spider_api.get_cached_pages = Mock(return_value=[])
         spider_api.crawl = AsyncMock(return_value=static_result)
         scanner_api = Mock(spec=__import__("pentool.api.scanner_api", fromlist=["ScannerAPI"]).ScannerAPI)
         scanner_api.run_active_on_requests = AsyncMock(return_value=[])
@@ -468,5 +474,7 @@ class TestHybridJsCrawl:
         config = ScanConfig(targets=["http://x.com/"], resume=False, hybrid_js=False)
 
         with patch("pentool.api.spider_api.SpiderAPI", js_spider_cls) as mocked:
-            await service.run(config)
+            with patch("pentool.api.spider_api.SpiderAPI.has_cached_result", return_value=False):
+                with patch("pentool.api.spider_api.SpiderAPI.get_cached_pages", return_value=[]):
+                    await service.run(config)
             assert not mocked.called, "hybrid_js=False must NOT trigger JS crawl"

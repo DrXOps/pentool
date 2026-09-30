@@ -233,7 +233,7 @@ class TestIsNull:
 
     def test_sql(self):
         clause, params = FilterPredicate("comment", FilterOp.IS_NULL, None).to_sql()
-        assert "IS NULL" in clause
+        assert "COALESCE(comment, '') = ''" in clause
         assert params == []
 
 
@@ -245,7 +245,7 @@ class TestNotNull:
 
     def test_sql(self):
         clause, params = FilterPredicate("comment", FilterOp.NOT_NULL, None).to_sql()
-        assert "IS NOT NULL" in clause
+        assert "COALESCE(comment, '') != ''" in clause
 
 
 # ─── FilterOp.HAS (tags) ─────────────────────────────────────────────────────
@@ -491,7 +491,7 @@ class TestScopeAndCommentsTogether:
         ])
         clause, params = s.to_sql()
         assert "(host = ? OR host LIKE ?)" in clause
-        assert "comment IS NOT NULL" in clause
+        assert "COALESCE(comment, '') != ''" in clause
         assert "example.com" in str(params)
         assert "test.org" in str(params)
 

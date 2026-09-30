@@ -11,6 +11,7 @@ import pytest
 import pytest_asyncio
 
 from pentool.utils.parser import ParsedRequest, ParsedResponse
+from pentool.collections.filter_predicate import FilterPredicate, FilterOp, FilterSpec
 
 
 class TestLRUCache:
@@ -150,7 +151,9 @@ class TestHttpStorage:
         post_req = ParsedRequest(method="POST", url="http://example.com/login", headers={})
         await http_storage.add_request(get_req)
         await http_storage.add_request(post_req)
-        rows = await http_storage.get_metadata_batch(filters={"method": "POST"})
+        rows = await http_storage.get_metadata_batch(filters=FilterSpec(predicates=[
+            FilterPredicate("method", FilterOp.EQ, "POST"),
+        ]))
         assert all(r["method"] == "POST" for r in rows)
 
     @pytest.mark.asyncio
@@ -159,7 +162,9 @@ class TestHttpStorage:
         req2 = ParsedRequest(method="GET", url="http://beta.com/", headers={"Host": "beta.com"})
         await http_storage.add_request(req1)
         await http_storage.add_request(req2)
-        rows = await http_storage.get_metadata_batch(filters={"host": "alpha.com"})
+        rows = await http_storage.get_metadata_batch(filters=FilterSpec(predicates=[
+            FilterPredicate("host", FilterOp.EQ, "alpha.com"),
+        ]))
         assert all("alpha" in r["host"] for r in rows)
 
     @pytest.mark.asyncio
@@ -169,7 +174,9 @@ class TestHttpStorage:
         resp_404 = ParsedResponse(status=404, reason="Not Found")
         await http_storage.add_request(req, resp_200)
         await http_storage.add_request(req, resp_404)
-        rows = await http_storage.get_metadata_batch(filters={"status_code": 404})
+        rows = await http_storage.get_metadata_batch(filters=FilterSpec(predicates=[
+            FilterPredicate("status_code", FilterOp.EQ, 404),
+        ]))
         assert all(r["status_code"] == 404 for r in rows)
 
     @pytest.mark.asyncio

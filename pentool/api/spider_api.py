@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from pentool.api.base_api import ExportableAPI
 from pentool.core.logging import get_logger
+from pentool.collections.filter_predicate import FilterPredicate, FilterOp, FilterSpec
 from pentool.modules.spider import DEFAULT_CONCURRENCY, DEFAULT_MAX_DEPTH, DEFAULT_MAX_PAGES
 from pentool.modules.spider import (
     AsyncSpider,
@@ -159,7 +160,9 @@ class SpiderAPI(ExportableAPI):
                 await storage.init_db(db_path)
                 rows = await storage.get_metadata_batch(
                     limit=1,
-                    filters={"hosts": [bare_host]},
+                    filters=FilterSpec(predicates=[
+                                FilterPredicate("hosts", FilterOp.IN, [bare_host]),
+                            ]),
                     order_by="id",
                     desc=True,
                 )

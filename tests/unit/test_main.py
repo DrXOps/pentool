@@ -34,7 +34,23 @@ def _run_main_with_argv(argv):
 
 
 class TestMainProSelfHeal:
-    pytestmark = pytest.mark.xfail(reason="PRO self-heal needs PRO package in test env")
+    """PRO self-heal tests — PRO package is mocked, no real PRO install needed."""
+
+    @pytest.fixture(autouse=True)
+    def _fake_pro_package(self, tmp_path):
+        """Create a fake PRO_PACKAGE_DIR with .build_meta.json so
+        is_pro_package_compatible() works without a real PRO install."""
+        pro_dir = tmp_path / ".pentool" / "pro"
+        pro_dir.mkdir(parents=True)
+        meta = {"build_id": "test:123", "free_version": "0.0.0"}
+        (pro_dir / ".build_meta.json").write_text(
+            __import__("json").dumps(meta), encoding="utf-8"
+        )
+        import pentool.core.license as lic_mod
+        with patch.object(lic_mod, "PRO_PACKAGE_DIR", pro_dir), \
+             patch.object(lic_mod, "_PRO_META_FILE", pro_dir / ".build_meta.json"):
+            yield
+
     def test_incompatible_package_healed_by_redownload_does_not_exit(self, capsys):
         """check_and_update_pro_package() successfully re-downloads →
         main() must proceed to start the TUI instead of exiting."""
@@ -47,10 +63,10 @@ class TestMainProSelfHeal:
                    return_value=(False, "stale metadata")), \
              patch("pentool.core.license.check_and_update_pro_package", _fake_check), \
              patch("pentool.core.crash_reporter.send_first_run_ping"):
-            _run_main_with_argv(["pentool"])
+            _run_main_with_argv(["pentool", "--auto-update"])
 
         captured = capsys.readouterr()
-        assert "re-downloaded" in captured.err
+        assert "auto-updated" in captured.err
 
     def test_incompatible_package_healed_with_matching_build_id_does_not_exit(self, capsys):
         """check_and_update_pro_package() returns updated=False, warning=""
@@ -73,7 +89,7 @@ class TestMainProSelfHeal:
         with patch("pentool.core.license.is_pro_package_compatible", side_effect=_fake_compatible), \
              patch("pentool.core.license.check_and_update_pro_package", _fake_check), \
              patch("pentool.core.crash_reporter.send_first_run_ping"):
-            _run_main_with_argv(["pentool"])
+            _run_main_with_argv(["pentool", "--auto-update"])
 
         # Must not have printed the "doesn't record which version" exit warning.
         captured = capsys.readouterr()

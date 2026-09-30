@@ -117,9 +117,17 @@ class TestProxyServiceGetHistory:
         proxy.scope = ["example.com"]
         proxy_api.get_proxy.return_value = proxy
         service._storage.get_metadata_batch = AsyncMock(return_value=[])
-        await service.get_history(filters={"scope_only": True})
+        from pentool.collections.filter_predicate import FilterPredicate, FilterOp, FilterSpec
+        spec = FilterSpec(predicates=[
+            FilterPredicate("scope_only", FilterOp.EQ, True),
+        ])
+        await service.get_history(filters=spec)
         call_kwargs = service._storage.get_metadata_batch.call_args[1]
-        assert call_kwargs["filters"]["hosts"] == ["example.com"]
+        stored_filters = call_kwargs["filters"]
+        # Scope-фильтр должен быть преобразован в hosts predicate
+        host_preds = [p for p in stored_filters.predicates if p.field == "hosts"]
+        assert host_preds, f"No hosts filter found in {stored_filters.predicates}"
+        assert host_preds[0].value == ["example.com"]
 
     @pytest.mark.asyncio
     async def test_handles_exception(self, service):
