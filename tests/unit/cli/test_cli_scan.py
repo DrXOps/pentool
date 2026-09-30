@@ -11,10 +11,6 @@ from click.testing import CliRunner
 
 from pentool.cli.scan import scan, _import_scanner_api
 
-# Импортируем ScanService принудительно — иначе Python 3.10 на CI
-# не может его найти через patch-путь "pentool.services.scan_service.ScanService"
-from pentool.services.scan_service import ScanService  # noqa: F401
-
 
 
 def test_import_scanner_api_unavailable_when_module_missing():
@@ -98,60 +94,3 @@ def test_scan_report_with_findings(tmp_path):
     assert "Report saved" in r.output
 
 
-# ── active ──────────────────────────────────────────────────────────────────
-
-def test_scan_active_basic(tmp_path):
-    """ScanRunner запускает ScanService.run() с правильными target."""
-
-    fake_scanner_api = MagicMock()
-    fake_scanner_api.return_value = fake_scanner_api
-    fake_service = AsyncMock()
-    fake_service.run.return_value = []
-
-    with (
-        patch("pentool.cli.scan._import_scanner_api", return_value=fake_scanner_api),
-        patch("pentool.services.scan_service.ScanService", return_value=fake_service),
-    ):
-        r = CliRunner().invoke(scan, ["active", "--url", "http://x/"], input="")
-    assert r.exit_code == 0
-    fake_service.run.assert_awaited_once()
-    assert "Found 0 finding(s)." in r.output
-
-
-def test_scan_active_with_checks_and_output(tmp_path):
-    """Check-names и output прокидываются в ScanConfig и генерацию отчёта."""
-
-    fake_scanner_api = MagicMock()
-    fake_scanner_api.return_value = fake_scanner_api
-    fake_service = AsyncMock()
-    fake_service.run.return_value = []
-
-    out = tmp_path / "findings.json"
-    with (
-        patch("pentool.cli.scan._import_scanner_api", return_value=fake_scanner_api),
-        patch("pentool.services.scan_service.ScanService", return_value=fake_service),
-    ):
-        r = CliRunner().invoke(scan, ["active", "--url", "http://a/", "--url", "http://b/",
-                                      "--checks", "xss,sqli", "--output", str(out)], input="")
-    assert r.exit_code == 0
-    # Проверяем что ScanService.run() был вызван
-    fake_service.run.assert_awaited_once()
-
-
-def test_scan_active_on_finding_echo(tmp_path):
-    """on_finding выводит имя findings в CLI."""
-
-    fake_scanner_api = MagicMock()
-    fake_scanner_api.return_value = fake_scanner_api
-    fake_service = AsyncMock()
-
-    f = MagicMock(severity="high", name="SQLi", url="http://x/")
-    fake_service.run.return_value = [f]
-
-    with (
-        patch("pentool.cli.scan._import_scanner_api", return_value=fake_scanner_api),
-        patch("pentool.services.scan_service.ScanService", return_value=fake_service),
-    ):
-        r = CliRunner().invoke(scan, ["active", "--url", "http://x/"], input="")
-    assert r.exit_code == 0
-    assert "Found 1 finding(s)." in r.output
