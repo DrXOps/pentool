@@ -171,6 +171,20 @@ class SettingsScreen(Widget):
                         "Run `pentool update` to install an available update.",
                         classes="settings-hint",
                     )
+                    yield Static("─" * 40, classes="license-sep")
+                    with Horizontal(classes="row"):
+                        yield Static("Auto Scope:", classes="row-label")
+                        yield Checkbox(
+                            "Add hosts to scope automatically",
+                            id="set-auto-scope",
+                            value=False,
+                        )
+                    yield Static(
+                        "When enabled: sending a request to Repeater, starting a crawl\n"
+                        "or a scan will automatically add the target host to scope\n"
+                        "and trigger tech detection. Disabled by default.",
+                        classes="settings-hint",
+                    )
                     yield ToolbarButton("Save", "settings-save-privacy")
 
             with TabPane("AI", id="tab-ai"):
@@ -275,6 +289,7 @@ class SettingsScreen(Widget):
             cfg = get_config()
             self.query_one("#set-send-crash-reports", Checkbox).value = getattr(cfg, "send_crash_reports", True)
             self.query_one("#set-check-updates", Checkbox).value = getattr(cfg, "check_updates", True)
+            self.query_one("#set-auto-scope", Checkbox).value = getattr(cfg, "auto_scope", False)
         except Exception:
             pass
         try:
@@ -665,6 +680,13 @@ class SettingsScreen(Widget):
                 upd_v = self.query_one("#set-check-updates", Checkbox).value
                 if upd_v != getattr(cfg, "check_updates", True):
                     changes["check_updates"] = upd_v
+            except Exception:
+                pass
+
+            try:
+                scope_v = self.query_one("#set-auto-scope", Checkbox).value
+                if scope_v != getattr(cfg, "auto_scope", False):
+                    changes["auto_scope"] = scope_v
             except Exception:
                 pass
 
