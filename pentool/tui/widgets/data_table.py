@@ -90,7 +90,7 @@ class ArrowBackendDataTable(DataTable):
             self.clear()
         self.refresh()
 
-    def _get_cell_renderable(self, row_index, column_index, max_width):  # noqa: ANN201
+    def _get_cell_renderable(self, row_index: int, column_index: int, max_width: int | None = None) -> RichText | Text:  # noqa: ANN201
         """Crash-guard: оборачивает заголовки колонок в Text().
 
         В textual_fastdatatable.DataTable._get_cell_renderable (строка 1832)

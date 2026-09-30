@@ -44,7 +44,7 @@ class ProxyDataTable(ArrowBackendDataTable):
 
     # ── Size formatting (int64 data → human-readable display) ────────────────
 
-    def _get_cell_renderable(self, row_index, column_index, max_width):  # noqa: ANN201
+    def _get_cell_renderable(self, row_index: int, column_index: int, max_width: int | None = None) -> RichText | Text:  # noqa: ANN201
         """Форматировать Size (int64) в человекочитаемый вид (KB/MB).
 
         Для всех остальных колонок — стандартное поведение.
