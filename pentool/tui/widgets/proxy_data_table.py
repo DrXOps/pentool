@@ -44,26 +44,27 @@ class ProxyDataTable(ArrowBackendDataTable):
 
     # ── Size formatting (int64 data → human-readable display) ────────────────
 
-    def _get_cell_renderable(self, row_index, column_index, max_width):  # noqa: ANN201
+    def _get_cell_renderable(self, row_index, column_index):  # noqa: ANN201
         """Форматировать Size (int64) в человекочитаемый вид (KB/MB).
 
         Для всех остальных колонок — стандартное поведение.
         """
         if row_index == -1:
             # header — через базовый класс
-            return super()._get_cell_renderable(row_index, column_index, max_width)
+            return super()._get_cell_renderable(row_index, column_index)
         try:
             col = self.ordered_columns[column_index]
             label = str(col.label).strip()
             if label == "Size":
-                raw = self.get_cell_at(row_index, column_index)
+                from textual_fastdatatable.data_table import Coordinate
+                raw = self.get_cell_at(Coordinate(row=row_index, column=column_index))
                 if raw is not None:
                     from pentool.tui.widgets.proxy_helpers import format_size
                     return format_size(int(raw))
                 return "-"
         except Exception:
             pass
-        return super()._get_cell_renderable(row_index, column_index, max_width)
+        return super()._get_cell_renderable(row_index, column_index)
 
     # ── on_event: контекстное меню + comment icon ────────────────────────
 

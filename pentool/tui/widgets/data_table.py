@@ -90,21 +90,19 @@ class ArrowBackendDataTable(DataTable):
             self.clear()
         self.refresh()
 
-    def _get_cell_renderable(self, row_index, column_index, max_width):  # noqa: ANN201
+    def _get_cell_renderable(self, row_index, column_index):  # noqa: ANN201
         """Crash-guard: оборачивает заголовки колонок в Text().
 
-        В textual_fastdatatable.DataTable._get_cell_renderable (строка 1832)
-        для row_index == -1 вызывается text.plain на column label, который
-        может быть str (после ArrowBackend rebuild). Оборачиваем в RichText
-        чтобы .plain работал.
+        В textual_fastdatatable.DataTable._get_cell_renderable (строка 1785)
+        для row_index == -1 возвращает label напрямую. Оборачиваем str в
+        RichText чтобы .plain работал (после ArrowBackend rebuild).
         """
         if row_index == -1:  # header row
-            from textual_fastdatatable.format import truncate_to_first_line
             label = self.ordered_columns[column_index].label
             if isinstance(label, str):
                 label = RichText(label)
-            return truncate_to_first_line(label, max_width)
-        return super()._get_cell_renderable(row_index, column_index, max_width)
+            return label
+        return super()._get_cell_renderable(row_index, column_index)
 
     def _mouse_ready(self) -> bool:
         """Проверка: таблица смонтирована и имеет ненулевой размер."""

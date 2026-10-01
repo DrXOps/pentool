@@ -12,6 +12,9 @@ production, so they were removed as dead code (2026-08-16).
 
 from __future__ import annotations
 
+import subprocess
+import sys
+
 import psutil
 
 from textual.app import ComposeResult
@@ -44,7 +47,7 @@ class ResourceMonitor(Widget):
 
     DEFAULT_CSS = """
     ResourceMonitor {
-        height: 6;
+        height: 7;
         border: solid $primary-darken-3;
         padding: 0 1;
     }
@@ -55,6 +58,7 @@ class ResourceMonitor(Widget):
         yield Static("", id="res-cpu")
         yield Static("", id="res-ram")
         yield Static("", id="res-extra")
+        yield Static("", id="res-version")
 
     def on_mount(self) -> None:
         self.set_interval(2.0, self._update)
@@ -83,6 +87,19 @@ class ResourceMonitor(Widget):
                 threads = proc.num_threads()
                 self.query_one("#res-extra", Static).update(
                     f"[dim]system threads: {threads}[/dim]"
+                )
+            except Exception:
+                pass
+            # Version info: show dev mode when running from source
+            try:
+                from pentool import __version__
+                from pathlib import Path
+                pentool_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+                is_dev = (pentool_root / ".git").exists()
+                self.query_one("#res-version", Static).update(
+                    f"[bold green]DEV[/bold green] [dim]{__version__} ({'edit' if is_dev else 'installed'})[/dim]"
+                    if is_dev
+                    else f"[dim]v{__version__}[/dim]"
                 )
             except Exception:
                 pass
