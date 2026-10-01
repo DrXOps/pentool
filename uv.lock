@@ -1540,7 +1540,7 @@ wheels = [
 
 [[package]]
 name = "pentool"
-version = "0.3.2"
+version = "0.5.2.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -1611,7 +1611,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "textual", specifier = ">=0.40.0" },
-    { name = "textual-fastdatatable", specifier = ">=0.14.0" },
+    { name = "textual-fastdatatable", specifier = ">=0.14.0,<0.19" },
 ]
 provides-extras = ["ai", "dev"]
 

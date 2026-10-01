@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 
@@ -532,8 +533,8 @@ class TargetScreen(Widget):
             if exc:
                 parts.append(f"{exc} exclude pattern{'s' if exc != 1 else ''}")
             summary = ", ".join(parts) if parts else "no filters"
-            # Sync hosts/wildcards with SiteMap
-            self.run_worker(self._sync_scope_rules(result.hosts), exclusive=False)
+            # Sync hosts/wildcards with SiteMap — fire-and-forget
+            self._sync_scope_rules(result.hosts)
             self.app.notify(f"Scope saved: {summary}", timeout=3)
 
         self.app.push_screen(
@@ -579,7 +580,7 @@ class TargetScreen(Widget):
                 self.app.post_message(SyncScopeToProxy(host, in_scope))  # type: ignore[attr-defined]
             # Auto-detect tech stack for new in-scope hosts (fire-and-forget)
             if in_scope and not host.startswith("*"):
-                self.run_worker(self._auto_detect_tech(host), exclusive=False)
+                asyncio.ensure_future(self._auto_detect_tech(host))
         except Exception as exc:
             logger.warning("_set_scope_worker: %s", exc)
 
@@ -918,7 +919,7 @@ class TargetScreen(Widget):
             if self._save_counter % 20 == 0:
                 wname = f"target-save-{time.monotonic_ns()}"
                 self._running_save_tasks.append(wname)
-                self.run_worker(self._do_save_sitemap(wname))
+                asyncio.ensure_future(self._do_save_sitemap(wname))
         except Exception as exc:
             logger.warning("add_request_from_proxy: %s", exc)
 
