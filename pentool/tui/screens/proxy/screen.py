@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from pathlib import Path
@@ -176,8 +177,6 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             yield ToolbarButton("○ Proxy",     "btn-proxy",     classes="inactive")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("○ Intercept", "btn-intercept", classes="inactive")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("Scope",       "btn-scope")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton(
                 "☐ Skip out-of-scope", "btn-enforce-scope",
@@ -661,7 +660,6 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             "btn-forward":   "Forward intercepted request",
             "btn-drop":      "Drop intercepted request",
             "btn-intercept": "Toggle intercept mode",
-            "btn-scope":     "Configure scope settings",
             "btn-mr":        "Match and Replace rules",
             "btn-ca-cert":   "Install CA certificate",
             "btn-clear":     "Clear request history",
@@ -1568,10 +1566,6 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
     def on_btn_intercept(self, _: ToolbarButton.Pressed) -> None:
         self.action_toggle_intercept()
 
-    @on(ToolbarButton.Pressed, "#btn-scope")
-    def on_btn_scope(self, _: ToolbarButton.Pressed) -> None:
-        self.action_open_scope()
-
     @on(ToolbarButton.Pressed, "#btn-enforce-scope")
     def on_btn_enforce_scope(self, _: ToolbarButton.Pressed) -> None:
         self.action_toggle_enforce_scope()
@@ -1647,10 +1641,6 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             pass
         self._update_history_count_label()
 
-    def action_open_scope(self) -> None:
-        from pentool.tui.screens.proxy.scope_handler import open_scope as _scope_open
-        self.run_worker(_scope_open(self))
-
     def action_toggle_enforce_scope(self) -> None:
         """Toggle the 'Skip out-of-scope' capture filter (per-project, persisted to DB)."""
         proxy = self._get_proxy()
@@ -1689,31 +1679,80 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             )
 
     async def _save_enforce_scope_setting(self, enabled: bool) -> None:
-        from pentool.tui.screens.proxy.scope_handler import save_enforce_scope_setting
-        await save_enforce_scope_setting(self, enabled)
-
-    async def _save_scope_setting(self, hosts: list[str]) -> None:
-        from pentool.tui.screens.proxy.scope_handler import save_scope_setting
-        await save_scope_setting(self, hosts)
-
-    async def _load_scope_setting(self, is_new: bool = False) -> None:
-        from pentool.tui.screens.proxy.scope_handler import load_scope_setting
-        await load_scope_setting(self, is_new)
-
-    async def _load_enforce_scope_setting(self) -> None:
-        from pentool.tui.screens.proxy.scope_handler import load_enforce_scope_setting
-        await load_enforce_scope_setting(self)
-
-    async def _save_scope_setting(self, hosts: list[str]) -> None:
-        """Save scope host list per-project (was global Config only, broke project switching)."""
+        """Save enforce-scope flag per-project (DB)."""
         try:
-            import json
+            from pentool.core.db_schema import set_project_setting
+            db_path = self._get_db_path()
+            if db_path:
+                await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
+        except Exception as exc:
+            logger.debug("_save_enforce_scope_setting: %s", exc)
+
+    async def _save_scope_setting(self, hosts: list[str]) -> None:
+        """Save scope host list per-project."""
+        try:
             from pentool.core.db_schema import set_project_setting
             db_path = self._get_db_path()
             if db_path:
                 await set_project_setting(db_path, "proxy.scope", json.dumps(hosts))
         except Exception as exc:
             logger.debug("_save_scope_setting: %s", exc)
+
+    async def _load_scope_setting(self, is_new: bool = False) -> None:
+        """Load persisted scope for the current project."""
+        proxy = self._get_proxy()
+        if proxy is None:
+            return
+        hosts: list[str] | None = None
+        try:
+            from pentool.core.db_schema import get_project_setting
+            db_path = self._get_db_path()
+            raw = await get_project_setting(db_path, "proxy.scope", None) if db_path else None
+            if raw is not None:
+                hosts = json.loads(raw)
+        except Exception as exc:
+            logger.debug("_load_scope_setting: %s", exc)
+            hosts = None
+        if hosts is None and not is_new:
+            try:
+                from pentool.core.config import get_config
+                hosts = list(get_config().scope)
+            except Exception:
+                hosts = []
+        if hosts is None:
+            hosts = []
+        logger.info("PROXY: load_scope_setting -> %d host(s)", len(hosts))
+        proxy.set_scope(hosts)
+        try:
+            from pentool.tui.widgets.toolbar_button import ToolbarButton
+            from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
+            filter_bar = self.query_one("#filter-bar", ProxyFilterBar)
+            st = filter_bar.query_one("#fb-scope", ToolbarButton)
+            if hosts:
+                st.remove_class("disabled")
+            else:
+                st.add_class("disabled")
+        except Exception:
+            pass
+
+    async def _load_enforce_scope_setting(self) -> None:
+        """Load persisted 'skip out-of-scope' flag for the current project."""
+        proxy = self._get_proxy()
+        if proxy is None:
+            return
+        enabled: bool = False
+        try:
+            from pentool.core.db_schema import get_project_setting
+            db_path = self._get_db_path()
+            raw = await get_project_setting(db_path, "proxy.enforce_scope", None) if db_path else None
+            if raw is not None:
+                enabled = json.loads(raw)
+        except Exception:
+            pass
+        logger.info("PROXY: load_enforce_scope_setting -> enforce=%s", enabled)
+        proxy.set_enforce_scope(enabled)
+        if enabled:
+            self._sync_enforce_scope_button(True)
 
     def _sync_enforce_scope_button(self, enabled: bool | None = None) -> None:
         """Sync Skip-out-of-scope button (enabled param avoids reading stale proxy attribute)."""
