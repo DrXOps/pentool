@@ -75,6 +75,9 @@ class SiteMap(BaseSqliteStorage):
         # before any matching traffic arrived (or under a different
         # host:port key) silently never got flagged, with no error raised.
         self._scope_hosts: set[str] = set()
+        # Wildcard scope: list of suffixes like ".example.com" — any host
+        # ending with one of these is considered in scope.
+        self._scope_wildcards: list[str] = []
 
     async def init_db(self, path: str) -> None:
         """Open/create the connection and ensure the `site_map` table exists."""
@@ -188,11 +191,28 @@ class SiteMap(BaseSqliteStorage):
         explicit_hosts = {h for h in self._nodes if self._norm_host(h) in self._scope_hosts}
         return sorted(node_hosts | explicit_hosts)
 
+    def get_scope_rules(self) -> list[str]:
+        """Return all scope rules (exact hosts + wildcards) for display / editing."""
+        return sorted(self._scope_hosts) + sorted(f"*{s}" for s in self._scope_wildcards)
+
     def get_request_count(self, host: str) -> int:
         return sum(n.request_count for n in self._nodes.get(host, {}).values())
 
     def set_in_scope(self, host: str, in_scope: bool) -> None:
-        """Set scope status for host (tracked in _scope_hosts independently of _nodes)."""
+        """Set scope status for host (tracked in _scope_hosts independently of _nodes).
+
+        If host starts with ``*`` (e.g. ``*.example.com``), it's treated as a
+        wildcard suffix — all matching hosts are in scope.
+        """
+        if host.startswith("*"):
+            # Wildcard rule: store the suffix (without the leading *).
+            suffix = host[1:]  # e.g. ".example.com"
+            if in_scope:
+                if suffix not in self._scope_wildcards:
+                    self._scope_wildcards.append(suffix)
+            else:
+                self._scope_wildcards = [s for s in self._scope_wildcards if s != suffix]
+            return
         norm = self._norm_host(host)
         if in_scope:
             self._scope_hosts.add(norm)
@@ -204,8 +224,13 @@ class SiteMap(BaseSqliteStorage):
                     node.in_scope = in_scope
 
     def is_in_scope(self, host: str) -> bool:
-        if self._norm_host(host) in self._scope_hosts:
+        norm = self._norm_host(host)
+        if norm in self._scope_hosts:
             return True
+        # Check wildcards: host ends with one of the wildcard suffixes.
+        for suffix in self._scope_wildcards:
+            if norm.endswith(suffix):
+                return True
         paths = self._nodes.get(host, {})
         return any(n.in_scope for n in paths.values())
 
@@ -236,6 +261,11 @@ class SiteMap(BaseSqliteStorage):
                             1 if node.in_scope else 0,
                         ),
                     )
+            # Save wildcard scope rules
+            from pentool.core.db_schema import set_project_setting
+            if self._db_path:
+                wildcards_json = ",".join(self._scope_wildcards)
+                await set_project_setting(self._db_path, "scope_wildcards", wildcards_json)
             await db.commit()
         except Exception as exc:
             logger.error("SiteMap.save error: %s", exc)
@@ -261,15 +291,28 @@ class SiteMap(BaseSqliteStorage):
                 self._nodes.setdefault(node.host, {})[node.path] = node
                 if node.in_scope:
                     self._scope_hosts.add(self._norm_host(node.host))
+            # Load wildcard scope rules
+            from pentool.core.db_schema import get_project_setting
+            if self._db_path:
+                raw = await get_project_setting(self._db_path, "scope_wildcards", "")
+                if raw:
+                    self._scope_wildcards = [s for s in raw.split(",") if s.strip()]
         except Exception as exc:
             logger.error("SiteMap.load error: %s", exc)
 
     def clear(self) -> None:
         self._nodes.clear()
         self._scope_hosts.clear()
+        self._scope_wildcards.clear()
 
     def export_json(self) -> dict:
         return {
             host: [n.to_dict() for n in nodes]
             for host, nodes in self.get_tree().items()
         }
+
+    def export_json_v2(self) -> dict:
+        """Full export including wildcard scope rules."""
+        data = self.export_json()
+        data["_scope_wildcards"] = self._scope_wildcards
+        return data

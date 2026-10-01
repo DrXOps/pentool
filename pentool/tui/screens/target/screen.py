@@ -145,6 +145,9 @@ class TargetScreen(Widget):
         with Horizontal(id="toolbar"):
             yield ToolbarButton("★ Add to Scope",      "btn-add-scope")
             yield Static(" │ ", classes="toolbar-sep")
+            yield ToolbarButton("★ Add Wildcard",      "btn-add-wildcard",
+                                tooltip="Add wildcard scope rule: *.domain.com")
+            yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("✖ Remove from Scope", "btn-remove-scope")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("⚙ Scope Rules",       "btn-scope-rules")
@@ -479,6 +482,10 @@ class TargetScreen(Widget):
     def on_btn_add_scope(self, _: ToolbarButton.Pressed) -> None:
         self.action_add_to_scope()
 
+    @on(ToolbarButton.Pressed, "#btn-add-wildcard")
+    def on_btn_add_wildcard(self, _: ToolbarButton.Pressed) -> None:
+        self.action_add_wildcard()
+
     @on(ToolbarButton.Pressed, "#btn-remove-scope")
     def on_btn_remove_scope(self, _: ToolbarButton.Pressed) -> None:
         self.action_remove_from_scope()
@@ -506,6 +513,27 @@ class TargetScreen(Widget):
     def action_add_to_scope(self) -> None:
         if self._selected_host:
             self._set_scope_worker(self._selected_host, True)
+
+    def action_add_wildcard(self) -> None:
+        """Show dialog to enter a wildcard scope rule (e.g. *.example.com)."""
+        from pentool.tui.dialogs.text_input_dialog import TextInputDialog
+
+        def _on_result(result: str | None) -> None:
+            if result is None or not result.strip():
+                return
+            rule = result.strip()
+            if not rule.startswith("*."):
+                rule = f"*.{rule.lstrip('.')}"
+            self._set_scope_worker(rule, True)
+
+        self.app.push_screen(
+            TextInputDialog(
+                title="Add Wildcard Scope Rule",
+                hint="Enter domain pattern: *.example.com",
+                initial="*.",
+            ),
+            _on_result,
+        )
 
     def action_remove_from_scope(self) -> None:
         if self._selected_host:
@@ -546,12 +574,15 @@ class TargetScreen(Widget):
             await api.save()
             tree_data = api.get_tree()
             self._build_tree(tree_data)
-            msg = f"{'Added' if in_scope else 'Removed'} {host} {'to' if in_scope else 'from'} scope"
+            display = host if not host.startswith("*") else f"*{host}"
+            msg = f"{'Added' if in_scope else 'Removed'} {display} {'to' if in_scope else 'from'} scope"
             self.app.notify(msg, severity="information")
             # Mirror the change into ProxyServer.scope — keep both modules in sync
-            self.app.post_message(SyncScopeToProxy(host, in_scope))  # type: ignore[attr-defined]
+            # Skip for wildcards (Proxy handles its own scope rules)
+            if not host.startswith("*"):
+                self.app.post_message(SyncScopeToProxy(host, in_scope))  # type: ignore[attr-defined]
             # Auto-detect tech stack for new in-scope hosts (fire-and-forget)
-            if in_scope:
+            if in_scope and not host.startswith("*"):
                 self.run_worker(self._auto_detect_tech(host), exclusive=False)
         except Exception as exc:
             logger.warning("_set_scope_worker: %s", exc)

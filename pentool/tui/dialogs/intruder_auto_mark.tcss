@@ -1,0 +1,34 @@
+# IntruderAutoMarkDialog
+
+Vertical#dialog {
+    align: center center;
+    height: auto;
+    margin: 1 2;
+    min-width: 40;
+    max-width: 50;
+}
+
+Label#title {
+    text-style: bold;
+    padding: 1 2;
+}
+
+Horizontal.row {
+    height: auto;
+    padding: 0 2;
+}
+
+Horizontal.row > Checkbox {
+    padding: 0 1;
+}
+
+Horizontal#buttons {
+    height: auto;
+    align: center center;
+    padding: 1 1;
+}
+
+Horizontal#buttons > ToolbarButton {
+    margin: 0 1;
+    min-width: 15;
+}

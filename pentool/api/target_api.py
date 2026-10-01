@@ -64,6 +64,13 @@ class TargetAPI(ExportableAPI):
     def get_scope(self) -> list[str]:
         return self._sitemap.get_scope()
 
+    def get_scope_rules(self) -> list[str]:
+        """Return all scope rules (exact hosts + wildcards) for display / editing."""
+        return self._sitemap.get_scope_rules()
+
+    def set_scope_wildcards(self, wildcards: list[str]) -> None:
+        self._sitemap._scope_wildcards = list(wildcards)
+
     def clear(self) -> None:
         self._sitemap.clear()
 
@@ -75,14 +82,23 @@ class TargetAPI(ExportableAPI):
     # ── Project persistence ────────────────────────────────────────────────────
 
     def export_project_data(self) -> dict:
-        return {"sitemap": self._sitemap.export_json()}
+        return {"sitemap": self._sitemap.export_json_v2()}
 
     def import_project_data(self, data: dict) -> int:
         from pentool.modules.target import SiteNode
         sitemap_data = data.get("sitemap", {})
         self._sitemap.clear()
         loaded = 0
-        for host, nodes in sitemap_data.items():
+        # Restore wildcards if present
+        wildcards = sitemap_data.get("_scope_wildcards", []) if isinstance(sitemap_data, dict) else []
+        if wildcards:
+            self._sitemap._scope_wildcards = list(wildcards)
+        # Strip metadata keys for node iteration
+        if isinstance(sitemap_data, dict):
+            node_data = {k: v for k, v in sitemap_data.items() if not k.startswith("_")}
+        else:
+            node_data = sitemap_data
+        for host, nodes in node_data.items():
             for node_dict in nodes:
                 try:
                     node = SiteNode.from_dict(node_dict)

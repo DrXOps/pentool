@@ -779,7 +779,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
 
     @on(ToolbarButton.Pressed, "#btn-mark-params")
     def on_btn_mark_params(self, _: ToolbarButton.Pressed) -> None:
-        self._mark_all_params()
+        self._prompt_auto_mark()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
@@ -951,8 +951,55 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         except Exception:
             pass
 
-    def _mark_all_params(self) -> None:
-        """Automatically mark all URL and body parameters with §§ markers."""
+    def _prompt_auto_mark(self) -> None:
+        """Show dialog to choose which parts to auto-mark, then mark."""
+        try:
+            editor = self.query_one("#template-editor", TextArea)
+            text = editor.text
+        except Exception:
+            return
+        if not text:
+            return
+        # Detect content type
+        lines = text.split("\n")
+        content_type = ""
+        has_json = False
+        has_xml = False
+        has_urlencoded = False
+        for line in lines[1:]:
+            if line.strip() == "":
+                break
+            if line.lower().startswith("content-type:"):
+                raw = line.split(":", 1)[1].strip().lower()
+                content_type = raw
+                has_json = "json" in raw
+                has_xml = "xml" in raw
+                has_urlencoded = "urlencoded" in raw
+                break
+        has_query = "?" in lines[0] if lines else False
+        has_cookie = any(line.lower().startswith("cookie:") for line in lines[1:])
+
+        from pentool.tui.dialogs.intruder_auto_mark import IntruderAutoMarkDialog
+        self.app.push_screen(
+            IntruderAutoMarkDialog(
+                has_json=has_json,
+                has_xml=has_xml,
+                has_urlencoded=has_urlencoded or (not content_type),
+                has_query=has_query,
+                has_cookie=has_cookie,
+                has_header=True,
+            ),
+            lambda result: self._mark_all_params(result) if result else None,
+        )
+
+    def _mark_all_params(self, options: dict | None = None) -> None:
+        """Automatically mark selected parts with §§ markers.
+
+        Args:
+            options: dict with keys (query, body_form, cookie, json_keys, json_vals,
+                    xml_tags, xml_content) — each True/False. If None, mark
+                    everything detectable (legacy behavior).
+        """
         try:
             editor = self.query_one("#template-editor", TextArea)
             text = editor.text
@@ -966,46 +1013,41 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         if not lines:
             return
 
-        def _mark_query_params(line: str) -> str:
-            """Mark query parameter values: key=value → key=§value§"""
-            def mark_val(m: re.Match) -> str:
-                key = m.group(1)
-                val = m.group(2)
-                # Skip already-marked values
-                if "§" in val:
-                    return m.group(0)
-                return f"{key}=§{val}§"
-            # Mark in query string (after ? or between &)
-            # Split the line into the part before ? and after
-            if "?" in line:
-                pre, qs = line.split("?", 1)
-                # Parse query string manually via re
-                qs_marked = re.sub(r"([^&=\s]+)=([^&\s§]+)", mark_val, qs)
-                return f"{pre}?{qs_marked}"
-            return line
-
-        # Mark the first line (request line: GET /path?params HTTP/1.1)
-        if lines:
-            lines[0] = _mark_query_params(lines[0])
-
-        # Find the request body (after the blank line)
-        body_start_idx = None
+        # Detect content type
+        content_type = ""
+        body_lines_start = None
         for i, line in enumerate(lines):
             if line.strip() == "" and i > 0:
-                body_start_idx = i + 1
+                body_lines_start = i + 1
                 break
-
-        # Mark the body (application/x-www-form-urlencoded)
-        # Check Content-Type header
-        content_type = ""
         for line in lines[1:]:
             if line.strip() == "":
                 break
             if line.lower().startswith("content-type:"):
                 content_type = line.split(":", 1)[1].strip().lower()
+                break
 
-        if body_start_idx is not None and "urlencoded" in content_type:
-            for i in range(body_start_idx, len(lines)):
+        def _mark_query_params(line: str) -> str:
+            def mark_val(m: re.Match) -> str:
+                key = m.group(1)
+                val = m.group(2)
+                if "§" in val:
+                    return m.group(0)
+                return f"{key}=§{val}§"
+            if "?" in line:
+                pre, qs = line.split("?", 1)
+                qs_marked = re.sub(r"([^&=\s]+)=([^&\s§]+)", mark_val, qs)
+                return f"{pre}?{qs_marked}"
+            return line
+
+        # ── 1. URL query params ──────────────────────────────────────────
+        if options is None or options.get("query", True):
+            if lines:
+                lines[0] = _mark_query_params(lines[0])
+
+        # ── 2. Body form-urlencoded ──────────────────────────────────────
+        if (options is None or options.get("body_form", True)) and "urlencoded" in content_type and body_lines_start is not None:
+            for i in range(body_lines_start, len(lines)):
                 if lines[i].strip():
                     def mark_val_body(m: re.Match) -> str:
                         key = m.group(1)
@@ -1015,18 +1057,106 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                         return f"{key}=§{val}§"
                     lines[i] = re.sub(r"([^&=\s]+)=([^&\s§]+)", mark_val_body, lines[i])
 
-        # Cookie header — mark values
-        for i, line in enumerate(lines):
-            if line.lower().startswith("cookie:"):
-                prefix = line[:7]  # "Cookie:"
-                rest = line[7:]
-                def mark_cookie_val(m: re.Match) -> str:
-                    key = m.group(1)
-                    val = m.group(2)
-                    if "§" in val:
-                        return m.group(0)
-                    return f"{key}=§{val}§"
-                lines[i] = prefix + re.sub(r"([^;=\s]+)=([^;§\s]+)", mark_cookie_val, rest)
+        # ── 3. JSON body — mark keys and/or values ───────────────────────
+        if "json" in content_type and body_lines_start is not None:
+            body_text = "\n".join(lines[body_lines_start:])
+            import json as _json
+            try:
+                parsed = _json.loads(body_text)
+                mark_keys = options is None or options.get("json_keys", True)
+                mark_vals = options is None or options.get("json_vals", True)
+
+                def _mark_json(obj):
+                    """Recursively wrap keys and/or values with §§."""
+                    if isinstance(obj, dict):
+                        marked = {}
+                        for k, v in obj.items():
+                            k_str = str(k)
+                            if mark_keys and "§" not in k_str and k_str.strip():
+                                k_str = f"§{k_str}§"
+                            marked[k_str] = _mark_json(v)
+                        return marked
+                    elif isinstance(obj, list):
+                        return [_mark_json(item) for item in obj]
+                    elif isinstance(obj, str):
+                        if mark_vals and obj.strip() and "§" not in obj:
+                            return f"§{obj}§"
+                        return obj
+                    elif obj is True:
+                        return "§true§" if mark_vals else True
+                    elif obj is False:
+                        return "§false§" if mark_vals else False
+                    elif obj is None:
+                        return "§null§" if mark_vals else None
+                    elif isinstance(obj, (int, float)):
+                        return f"§{obj}§" if mark_vals else obj
+                    return obj
+
+                marked_body = _json.dumps(_mark_json(parsed), indent=2, ensure_ascii=False)
+                # Replace body lines with marked JSON
+                new_lines = lines[:body_lines_start] + marked_body.split("\n")
+                lines = new_lines
+            except (_json.JSONDecodeError, Exception):
+                pass  # Not valid JSON — skip
+
+        # ── 4. Cookie header ─────────────────────────────────────────────
+        if options is None or options.get("cookie", True):
+            for i, line in enumerate(lines):
+                if line.lower().startswith("cookie:"):
+                    prefix = line[:7]
+                    rest = line[7:]
+                    def mark_cookie_val(m: re.Match) -> str:
+                        key = m.group(1)
+                        val = m.group(2)
+                        if "§" in val:
+                            return m.group(0)
+                        return f"{key}=§{val}§"
+                    lines[i] = prefix + re.sub(r"([^;=\s]+)=([^;§\s]+)", mark_cookie_val, rest)
+
+        # ── 5. Header params ─────────────────────────────────────────────
+        if options is None or options.get("header", True):
+            for i, line in enumerate(lines):
+                if i == 0:
+                    continue  # Request line, not a header
+                if line.strip() == "":
+                    break  # End of headers
+                if ":" in line and not line.lower().startswith("cookie:"):
+                    name, _, val = line.partition(":")
+                    val_stripped = val.strip()
+                    if val_stripped and "§" not in val_stripped:
+                        lines[i] = f"{name}: §{val_stripped}§"
+
+        # ── 6. XML body ──────────────────────────────────────────────────
+        _xml_selected = options is None or options.get("xml_tags", False) or options.get("xml_content", False)
+        if _xml_selected and "xml" in content_type and body_lines_start is not None:
+            body_text = "\n".join(lines[body_lines_start:])
+            if "<" in body_text and ">" in body_text:
+                import xml.etree.ElementTree as ET
+                try:
+                    root = ET.fromstring(body_text)
+                    mark_tags = options is None or options.get("xml_tags", True)
+                    mark_content = options is None or options.get("xml_content", True)
+
+                    def _mark_xml(elem):
+                        if mark_tags and "§" not in elem.tag:
+                            elem.tag = f"§{elem.tag}§"
+                        if mark_content and elem.text and elem.text.strip() and "§" not in elem.text:
+                            elem.text = f"§{elem.text.strip()}§"
+                        for child in elem:
+                            _mark_xml(child)
+
+                    _mark_xml(root)
+                    marked_xml = ET.tostring(root, encoding="unicode", short_empty_elements=False)
+                    # Pretty-print with indent
+                    try:
+                        import xml.dom.minidom
+                        marked_xml = xml.dom.minidom.parseString(marked_xml).toprettyxml(indent="  ")
+                    except Exception:
+                        pass
+                    new_lines = lines[:body_lines_start] + [l for l in marked_xml.split("\n") if l.strip()]
+                    lines = new_lines
+                except (ET.ParseError, Exception):
+                    pass  # Not valid XML — skip
 
         new_text = "\n".join(lines)
         try:
@@ -1034,22 +1164,6 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             self._update_payload_select()
             n = new_text.count("§") // 2
             self.app.notify(f"Marked {n} parameter(s)", timeout=2)
-            # Auto §§ commonly marks several parameters at once (query
-            # string + form body + Cookie header). Sniper only substitutes
-            # ONE marked position per request — every other marked position
-            # in that same request keeps its ORIGINAL template value (see
-            # IntruderAttack._iter_sniper in modules/intruder.py; this is the
-            # standard Burp-compatible Sniper semantics: N positions × M
-            # payloads = N×M requests, not a full combinatorial sweep). With
-            # 2+ positions marked this reads as "Intruder is sending the same
-            # payload/hash to every point" in the Results table, because all-
-            # but-one column shows the untouched original value (e.g. a
-            # cookie/token) — confusing when the user didn't deliberately
-            # pick Sniper for that. Battering Ram sends the SAME payload into
-            # ALL marked positions simultaneously, which is what "mark
-            # several points, attack them all" actually implies, so switch to
-            # it automatically (with a heads-up notification) instead of
-            # silently leaving Sniper selected for a multi-position template.
             if n > 1 and self._attack_type == AttackType.SNIPER:
                 self._attack_type = AttackType.BATTERING_RAM
                 try:

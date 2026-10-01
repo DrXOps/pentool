@@ -1,0 +1,42 @@
+# TextInputDialog
+
+# dialog (vertical fill) — the dialog container scales to fit
+# the inner dialog (vertical auto), which:
+#   1. centers itself inside the screen (BaseDialog centres ModalScreen)
+#   2. the inner #dialog is a Vertical with max-width 60
+#   3. title / hint / input / buttons stack vertically
+
+# The overall screen is ModalScreen → BaseDialog → Vertical#dialog
+
+Vertical#dialog {
+    align: center center;
+    height: auto;
+    margin: 1 2;
+    min-width: 40;
+    max-width: 60;
+}
+
+Label#title {
+    text-style: bold;
+    padding: 1 2;
+}
+
+Label.hint {
+    padding: 0 2;
+}
+
+Input#text-input {
+    margin: 1 2;
+    min-width: 30;
+}
+
+Horizontal#buttons {
+    height: auto;
+    align: center center;
+    padding: 0 1;
+}
+
+Horizontal#buttons > ToolbarButton {
+    margin: 0 1;
+    min-width: 12;
+}
