@@ -61,8 +61,9 @@ class ProxyDataTable(ArrowBackendDataTable):
                     from pentool.tui.widgets.proxy_helpers import format_size
                     return format_size(int(raw))
                 return "-"
-        except Exception:
-            pass
+        except Exception as exc:
+            from pentool.core.logging import get_logger as _log
+            _log().error("ProxyDataTable._get_cell_renderable failed: %s", exc, exc_info=True)
         return super()._get_cell_renderable(row_index, column_index, max_width)
 
     # ── on_event: контекстное меню + comment icon ────────────────────────
