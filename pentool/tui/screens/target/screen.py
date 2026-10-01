@@ -145,12 +145,10 @@ class TargetScreen(Widget):
         with Horizontal(id="toolbar"):
             yield ToolbarButton("★ Add to Scope",      "btn-add-scope")
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("★ Add Wildcard",      "btn-add-wildcard",
-                                tooltip="Add wildcard scope rule: *.domain.com")
-            yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("✖ Remove from Scope", "btn-remove-scope")
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("⚙ Scope Rules",       "btn-scope-rules")
+            yield ToolbarButton("⚙ Scope",             "btn-scope-rules",
+                                tooltip="Edit scope rules (hosts, wildcards, regex)")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton(
                 "🕷 Crawl Scope", "btn-crawl-scope",
@@ -482,10 +480,6 @@ class TargetScreen(Widget):
     def on_btn_add_scope(self, _: ToolbarButton.Pressed) -> None:
         self.action_add_to_scope()
 
-    @on(ToolbarButton.Pressed, "#btn-add-wildcard")
-    def on_btn_add_wildcard(self, _: ToolbarButton.Pressed) -> None:
-        self.action_add_wildcard()
-
     @on(ToolbarButton.Pressed, "#btn-remove-scope")
     def on_btn_remove_scope(self, _: ToolbarButton.Pressed) -> None:
         self.action_remove_from_scope()
@@ -514,27 +508,6 @@ class TargetScreen(Widget):
         if self._selected_host:
             self._set_scope_worker(self._selected_host, True)
 
-    def action_add_wildcard(self) -> None:
-        """Show dialog to enter a wildcard scope rule (e.g. *.example.com)."""
-        from pentool.tui.dialogs.text_input_dialog import TextInputDialog
-
-        def _on_result(result: str | None) -> None:
-            if result is None or not result.strip():
-                return
-            rule = result.strip()
-            if not rule.startswith("*."):
-                rule = f"*.{rule.lstrip('.')}"
-            self._set_scope_worker(rule, True)
-
-        self.app.push_screen(
-            TextInputDialog(
-                title="Add Wildcard Scope Rule",
-                hint="Enter domain pattern: *.example.com",
-                initial="*.",
-            ),
-            _on_result,
-        )
-
     def action_remove_from_scope(self) -> None:
         if self._selected_host:
             self._set_scope_worker(self._selected_host, False)
@@ -559,12 +532,35 @@ class TargetScreen(Widget):
             if exc:
                 parts.append(f"{exc} exclude pattern{'s' if exc != 1 else ''}")
             summary = ", ".join(parts) if parts else "no filters"
-            self.app.notify(f"Scope rules saved: {summary}", timeout=3)
+            # Sync hosts/wildcards with SiteMap
+            self.run_worker(self._sync_scope_rules(result.hosts), exclusive=False)
+            self.app.notify(f"Scope saved: {summary}", timeout=3)
 
         self.app.push_screen(
             ScopeDialog(current_scope=current, extended=True),
             _on_result,
         )
+
+    @work
+    async def _sync_scope_rules(self, hosts: list[str]) -> None:
+        """Sync ScopeDialog hosts into SiteMap scope (exact + wildcard)."""
+        try:
+            api = self._get_api()
+            # Reset all scope first
+            old_hosts = list(api.sitemap._scope_hosts)
+            old_wildcards = list(api.sitemap._scope_wildcards)
+            for h in old_hosts:
+                api.set_in_scope(h, False)
+            for w in old_wildcards:
+                api.set_in_scope(f"*{w}", False)
+            # Set new rules
+            for h in hosts:
+                api.set_in_scope(h, True)
+            await api.save()
+            tree_data = api.get_tree()
+            self._build_tree(tree_data)
+        except Exception as exc:
+            logger.warning("_sync_scope_rules: %s", exc)
 
     @work
     async def _set_scope_worker(self, host: str, in_scope: bool) -> None:
