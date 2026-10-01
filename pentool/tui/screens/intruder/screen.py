@@ -962,13 +962,18 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             return
         # Detect content type
         lines = text.split("\n")
+        has_header_body_sep = False
         content_type = ""
         has_json = False
         has_xml = False
         has_urlencoded = False
-        for line in lines[1:]:
-            if line.strip() == "":
+        body_start = 0
+        for i, line in enumerate(lines):
+            if line.strip() == "" and i > 0:
+                has_header_body_sep = True
+                body_start = i + 1
                 break
+        for line in lines[1:body_start]:
             if line.lower().startswith("content-type:"):
                 raw = line.split(":", 1)[1].strip().lower()
                 content_type = raw
@@ -976,8 +981,20 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 has_xml = "xml" in raw
                 has_urlencoded = "urlencoded" in raw
                 break
+
+        # Если Content-Type не JSON, но тело выглядит как JSON — всё равно покажем чекбоксы
+        if not has_json and has_header_body_sep and body_start < len(lines):
+            body_text = "\n".join(lines[body_start:]).strip()
+            if body_text and (body_text.startswith("{") or body_text.startswith("[")):
+                try:
+                    import json as _json
+                    _json.loads(body_text)
+                    has_json = True
+                except Exception:
+                    pass
+
         has_query = "?" in lines[0] if lines else False
-        has_cookie = any(line.lower().startswith("cookie:") for line in lines[1:])
+        has_cookie = any(line.lower().startswith("cookie:") for line in lines[1:body_start])
 
         from pentool.tui.dialogs.intruder_auto_mark import IntruderAutoMarkDialog
         self.app.push_screen(

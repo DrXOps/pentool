@@ -33,24 +33,3 @@ jobs:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: uvx twine upload dist/*
-
-    - name: Bump version to next-dev on develop
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        set -e
-        TAG="${{ github.ref_name }}"          # v0.6.0
-        BASE="${TAG#v}"                       # 0.6.0
-        # bump patch
-        IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
-        NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))-dev"
-        echo "Bump: $BASE → $NEXT"
-        # clone develop branch
-        git fetch origin develop
-        git checkout develop
-        sed -i "s/^version = \".*\"/version = \"${NEXT}\"/" pyproject.toml
-        git add pyproject.toml
-        git -c user.name="pentool-bot" \
-            -c user.email="bot@pentool.pro" \
-            commit -m "chore: bump version to ${NEXT} [skip ci]"
-        git push origin develop

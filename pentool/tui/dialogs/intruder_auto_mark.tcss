@@ -1,34 +1,41 @@
-# IntruderAutoMarkDialog
-
-Vertical#dialog {
-    align: center center;
-    height: auto;
-    margin: 1 2;
-    min-width: 40;
-    max-width: 50;
+IntruderAutoMarkDialog {
+    align: center middle;
 }
-
-Label#title {
-    text-style: bold;
+IntruderAutoMarkDialog #dialog {
+    width: 56;
+    height: auto;
+    border: double $primary;
+    background: $surface;
     padding: 1 2;
 }
-
-Horizontal.row {
+IntruderAutoMarkDialog #title {
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+IntruderAutoMarkDialog #hint {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+IntruderAutoMarkDialog #checks-grid {
+    grid-size: 2;
+    grid-gutter: 0 1;
     height: auto;
-    padding: 0 2;
+    margin-bottom: 1;
 }
-
-Horizontal.row > Checkbox {
-    padding: 0 1;
+IntruderAutoMarkDialog .chk {
+    height: 1;
+    margin: 0;
+    padding: 0;
 }
-
-Horizontal#buttons {
+IntruderAutoMarkDialog #buttons-row {
+    layout: horizontal;
     height: auto;
-    align: center center;
-    padding: 1 1;
+    align: center middle;
+    margin-top: 1;
 }
-
-Horizontal#buttons > ToolbarButton {
+IntruderAutoMarkDialog #buttons-row ToolbarButton {
     margin: 0 1;
-    min-width: 15;
+    padding: 0 2;
 }

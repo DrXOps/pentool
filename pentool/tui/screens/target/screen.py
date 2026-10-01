@@ -560,6 +560,19 @@ class TargetScreen(Widget):
             await api.save()
             tree_data = api.get_tree()
             self._build_tree(tree_data)
+
+            # Sync with ProxyServer.scope so its toggle reflects real state
+            effective_hosts = [h for h in hosts if not h.startswith("*")]
+            try:
+                proxy = getattr(self.app, "_proxy", None)
+                if proxy is not None:
+                    proxy.set_scope(list(effective_hosts))
+                from pentool.core.config import get_config
+                cfg = get_config()
+                cfg.scope = list(effective_hosts)
+                cfg.save()
+            except Exception as exc:
+                logger.warning("_sync_scope_rules: proxy sync: %s", exc)
         except Exception as exc:
             logger.warning("_sync_scope_rules: %s", exc)
 
