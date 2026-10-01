@@ -52,6 +52,41 @@ def _bootstrap_pro() -> None:
         if not _pro_pkg.exists():
             continue
 
+        # --- Phase 1: extend __path__ entries BEFORE any PRO import ---
+        # This ensures pro/ modules are discoverable even if compatibility
+        # check or other early imports trigger sub-package imports (e.g.
+        # pentool.plugins.builtin.scanner_pro).
+        _all_subpaths: dict[str, list[str]] = {
+            "": [str(_pro_pkg)],
+            "api": [str(_pro_pkg / "api")],
+            "plugins": [str(_pro_pkg / "plugins")],
+            "plugins.builtin": [str(_pro_pkg / "plugins" / "builtin")],
+            "tui.widgets": [str(_pro_pkg / "tui" / "widgets")],
+            "tui.dialogs": [str(_pro_pkg / "tui" / "dialogs")],
+            "tui.screens": [str(_pro_pkg / "tui" / "screens")],
+            "tui.screens.scanner": [str(_pro_pkg / "tui" / "screens" / "scanner")],
+        }
+
+        # 1a. Top-level pentool.__path__
+        for _extra in _all_subpaths[""]:
+            if _extra not in _self.__path__:
+                _self.__path__.append(_extra)
+
+        # 1b. Sub-packages (import on demand to extend __path__ so
+        #     subsequent imports find pro/ modules)
+        for _subkey, _extras in _all_subpaths.items():
+            if not _subkey:
+                continue
+            _modname = f"pentool.{_subkey}"
+            try:
+                _mod = __import__(_modname, fromlist=[""])
+                for _extra in _extras:
+                    if _extra not in _mod.__path__:
+                        _mod.__path__.append(_extra)
+            except ImportError:
+                pass  # sub-package not yet importable — skip silently
+
+        # --- Phase 2: version compatibility check ---
         if _pro_pkg == _installed_pro_pkg:
             try:
                 from pentool.core.license import is_pro_package_compatible
@@ -67,39 +102,9 @@ def _bootstrap_pro() -> None:
                 print(f"[pentool] {_warning}", file=sys.stderr)
                 continue
             if _warning:
-                # Soft mismatch (e.g. free_version in meta is "0.0.0" from a
-                # previous broken install or version skew) — warn but load PRO
-                # anyway. The PRO package is pure Python, no ABI crash risk.
                 print(f"[pentool] {_warning}", file=sys.stderr)
 
-        # 1. Extend top-level pentool.__path__ so that sub-packages
-        #    resolved via pkgutil.extend_path below will find pro/pentool/XXX.
-        if str(_pro_pkg) not in _self.__path__:
-            _self.__path__.append(str(_pro_pkg))
-
-        # 2. If pentool.api is already imported, extend its __path__ too
-        #    (it has no pkgutil.extend_path because its scanner_api.py lives
-        #    only in pro/ — there is nothing to forward to from the public pkg).
-        if "pentool.api" in sys.modules:
-            _api = sys.modules["pentool.api"]
-            _extra = str(_pro_pkg / "api")
-            if _extra not in _api.__path__:
-                _api.__path__.append(_extra)
-
-        # 3. Extend pentool.tui.widgets.__path__ so ScannerDataTable in
-        #    pro/pentool/tui/widgets/ becomes importable.
-        #    We import it here if not already loaded (bootstrap runs before
-        #    any screen is instantiated, so it's normally not loaded yet).
-        try:
-            import pentool.tui.widgets as _tw_mod
-            _extra = str(_pro_pkg / "tui" / "widgets")
-            if _extra not in _tw_mod.__path__:
-                _tw_mod.__path__.append(_extra)
-        except ImportError:
-            pass
-
-        # 4. Make codeenigma_runtime/ (sibling of pentool/, one level up from
-        #    _pro_pkg) importable — see docstring above.
+        # --- Phase 3: codeenigma_runtime in sys.path ---
         _pro_root = _pro_pkg.parent
         if str(_pro_root) not in sys.path:
             sys.path.append(str(_pro_root))
