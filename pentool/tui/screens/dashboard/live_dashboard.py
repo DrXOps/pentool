@@ -12,8 +12,7 @@ production, so they were removed as dead code (2026-08-16).
 
 from __future__ import annotations
 
-import subprocess
-import sys
+from pathlib import Path
 
 import psutil
 
@@ -52,6 +51,21 @@ class ResourceMonitor(Widget):
         padding: 0 1;
     }
     """
+
+    @staticmethod
+    def _get_git_branch(root: Path) -> str:
+        """Get current git branch name from .git/HEAD."""
+        try:
+            head = root / ".git" / "HEAD"
+            if head.exists():
+                ref = head.read_text(encoding="utf-8").strip()
+                if ref.startswith("ref: refs/heads/"):
+                    return ref[16:]
+                # detached HEAD — show short hash
+                return ref[:8]
+        except Exception:
+            pass
+        return "?"
 
     def compose(self) -> ComposeResult:
         yield Static("[bold]┌─ RESOURCES ─[/bold]")
@@ -93,14 +107,17 @@ class ResourceMonitor(Widget):
             # Version info: show dev mode when running from source
             try:
                 from pentool import __version__
-                from pathlib import Path
                 pentool_root = Path(__file__).resolve().parent.parent.parent.parent.parent
                 is_dev = (pentool_root / ".git").exists()
-                self.query_one("#res-version", Static).update(
-                    f"[bold green]DEV[/bold green] [dim]{__version__} ({'edit' if is_dev else 'installed'})[/dim]"
-                    if is_dev
-                    else f"[dim]v{__version__}[/dim]"
-                )
+                if is_dev:
+                    branch = self._get_git_branch(pentool_root)
+                    self.query_one("#res-version", Static).update(
+                        f"[bold green]DEV[/bold green] [bold]{__version__}[/bold] [dim]({branch})[/dim]"
+                    )
+                else:
+                    self.query_one("#res-version", Static).update(
+                        f"[dim]v{__version__}[/dim]"
+                    )
             except Exception:
                 pass
         except ImportError:
