@@ -111,6 +111,14 @@ DashboardScreen #top-row ResourceMonitor {
     background: $panel;
     padding: 0 1;
 }
+DashboardScreen #top-row #recon-indicator {
+    width: 1fr;
+    height: 1fr;
+    border: solid $warning-darken-2;
+    background: $panel;
+    padding: 0 1;
+    color: $text-muted;
+}
 DashboardScreen #dash-resources {
     height: 1fr;
 }

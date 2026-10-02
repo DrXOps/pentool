@@ -7,6 +7,7 @@ import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -373,6 +374,7 @@ class DashboardScreen(Widget):
             )
             yield ThreatMeter(id="threat-meter")
             yield ResourceMonitor(id="dash-resources")
+            yield Static("┌─ RECON ─\nNo data", id="recon-indicator")
 
         with Horizontal(id="main-area"):
             with Vertical(id="left-pane"):
@@ -386,7 +388,7 @@ class DashboardScreen(Widget):
                     "[dim]"
                     "Shift+P Proxy  Shift+R Repeater  Shift+I Intruder\n"
                     "Shift+S Scanner  Shift+T Target  Shift+L Spider\n"
-                    "Shift+D Decoder  Shift+C Comparer  Shift+E Settings\n"
+                    "Shift+N Recon   Shift+D Decoder  Shift+C Comparer\n"
                     "Ctrl+N New  Ctrl+O Open  Ctrl+S Save  Ctrl+Q Quit"
                     "[/dim]",
                     id="hk-panel",
@@ -632,6 +634,41 @@ class DashboardScreen(Widget):
             )
         except Exception as exc:
             logger.debug("_apply_stats chart_summary: %s", exc)
+
+        # Recon indicator — read from TargetScreen scope
+        try:
+            sm = self._get_sitemap()
+            if sm is not None:
+                scoped_hosts = len(sm._scope_hosts) if hasattr(sm, '_scope_hosts') else 0
+                nodes = sum(len(v) for v in sm._nodes.values()) if hasattr(sm, '_nodes') else 0
+                # Nodes without basic request count are "discovered" (spider/recon)
+                discovered = sum(
+                    1 for host_paths in sm._nodes.values()
+                    for n in host_paths.values()
+                    if hasattr(n, 'request_count') and n.request_count == 0
+                )
+            else:
+                scoped_hosts = 0
+                discovered = 0
+            self.query_one("#recon-indicator", Static).update(
+                f"┌─ RECON ─\n"
+                f"Scoped: {scoped_hosts} hosts\n"
+                f"Discovered: {discovered} paths"
+            )
+        except Exception as exc:
+            logger.debug("_apply_stats recon-indicator: %s", exc)
+
+    def _get_sitemap(self) -> Any:
+        """Get SiteMap from TargetScreen."""
+        try:
+            from pentool.tui.screens.target.screen import TargetScreen
+            target = self.query_one(TargetScreen)
+            api = target._get_api()
+            if api is not None:
+                return api.sitemap
+        except Exception:
+            pass
+        return None
 
     def action_refresh_dash(self) -> None:
         self._load_stats_bg()
