@@ -53,6 +53,7 @@ _MODULE_ENTRIES = [
     _e("C", "switch_module('comparer')",  "Comp",    show=True, priority=True),
     _e("Q", "switch_module('sequencer')", "Seq",     show=True, priority=True),
     _e("E", "switch_module('extensions')","Ext",     show=True, priority=True),
+    _e("N", "switch_module('recon')",     "Recon",   show=True, priority=True),
     # Shift+digit aliases (hidden — for terminals where Shift+letter fails)
     _e("!",  "switch_module('proxy')",     "", show=False),
     _e("@",  "switch_module('repeater')",  "", show=False),

@@ -36,6 +36,13 @@ SCREEN_MAP: dict[str, type] = {
     "settings":   SettingsScreen,
 }
 
+# Recon screen — PRO-only, conditional import
+try:
+    from pro.pentool.tui.screens.recon.screen import ReconScreen  # type: ignore[import-untyped]
+    SCREEN_MAP["recon"] = ReconScreen
+except (ImportError, ModuleNotFoundError):
+    pass
+
 
 def get_screen_class(module_id: str) -> type | None:
     """Return the screen class for a module_id, or None if unknown."""
