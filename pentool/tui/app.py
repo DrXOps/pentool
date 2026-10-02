@@ -321,6 +321,13 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             yield SequencerScreen(id="screen-sequencer")
             yield ExtensionsScreen(id="screen-extensions")
             yield SettingsScreen(id="screen-settings")
+        # ReconScreen — PRO-only, conditional (при наличии PRO подмодуля)
+        try:
+            if "recon" in SCREEN_MAP:
+                ReconScreenCls = SCREEN_MAP["recon"]
+                yield ReconScreenCls(id="screen-recon")  # type: ignore[operator]
+        except Exception:
+            pass
         # Footer and StatusBar both used to `dock: bottom` independently —
         # in Textual, multiple independently-docked widgets at the same
         # edge don't stack, they all pin to the same row and overlap each
