@@ -524,7 +524,7 @@ class TargetScreen(Widget):
         except Exception:
             pass
         if not domain:
-            domain = self._current_domain
+            domain = self._selected_host
 
         self.app.action_switch_module("recon")
         if domain:
@@ -534,6 +534,12 @@ class TargetScreen(Widget):
 
     def _prefill_recon_domain(self, domain: str) -> None:
         """Pre-fill ReconScreen domain input."""
+        from urllib.parse import urlparse
+        # Normalise: strip protocol, path, port
+        domain = domain.strip().lower()
+        if "://" in domain:
+            domain = urlparse(domain).hostname or domain
+        domain = domain.split(":")[0].split("/")[0]
         try:
             from pentool.tui.screens.recon.screen import ReconScreen
             recon = self.app.query_one(ReconScreen)
