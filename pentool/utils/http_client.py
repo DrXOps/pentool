@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import socket
 import time
 from typing import Any, Callable
 
@@ -14,6 +15,79 @@ logger = logging.getLogger(__name__)
 
 # Callback type: called after each request
 RequestCallback = Callable[[ParsedRequest, ParsedResponse], None]
+
+# ── DNS override ───────────────────────────────────────────────────
+# Module-level mapping: host -> (real_ip, ttl_expires_at).
+# Populated by DiscoveryRunner._discover_real_ip() via set_dns_override().
+# Used by HTTPClient._get_session() to bypass CDN when requested.
+# Cleared on app restart.
+_DNS_OVERRIDE: dict[str, tuple[str, float]] = {}  # host -> (ip, expires_at)
+
+
+def set_dns_override(host: str, ip: str, ttl: float = 300.0) -> None:
+    """Set a DNS override: *host* will resolve to *ip* for all HTTPClient instances.
+
+    Args:
+        host: hostname to override (e.g. "example.com").
+        ip: IP address to resolve to (e.g. "203.0.113.1").
+        ttl: time-to-live in seconds (default 5 minutes).
+    """
+    import time
+    _DNS_OVERRIDE[host.lower().strip()] = (ip, time.monotonic() + ttl)
+
+
+def clear_dns_override(host: str | None = None) -> None:
+    """Clear DNS override(s). Pass ``host`` to clear one, or None to clear all."""
+    if host:
+        _DNS_OVERRIDE.pop(host.lower().strip(), None)
+    else:
+        _DNS_OVERRIDE.clear()
+
+
+def get_dns_overrides() -> dict[str, str]:
+    """Return current active DNS overrides (host -> ip), cleaning expired ones."""
+    import time
+    now = time.monotonic()
+    expired = [h for h, (_, exp) in _DNS_OVERRIDE.items() if now > exp]
+    for h in expired:
+        del _DNS_OVERRIDE[h]
+    return {h: ip for h, (ip, _) in _DNS_OVERRIDE.items()}
+
+
+class _OverrideResolver:
+    """aiohttp resolver that checks _DNS_OVERRIDE before default resolution.
+
+    When a host is in the override table, returns its IP directly.
+    Otherwise falls through to the default aiohttp resolver (which uses the OS DNS).
+    """
+
+    def __init__(self) -> None:
+        self._default = aiohttp.AsyncResolver()
+
+    async def resolve(self, host: str, port: int = 0, family: int = 0) -> list[dict]:
+        import time as _time_mod
+        now = _time_mod.monotonic()
+        host_lower = host.lower().strip()
+        if host_lower in _DNS_OVERRIDE:
+            ip, expires = _DNS_OVERRIDE[host_lower]
+            if now < expires:
+                logger.debug("_OverrideResolver: %s -> %s (override)", host, ip)
+                return [
+                    {
+                        "hostname": host,
+                        "host": ip,
+                        "port": port,
+                        "family": socket.AF_INET,
+                        "proto": 6,
+                        "flags": socket.AI_NUMERICHOST,
+                    }
+                ]
+            # Expired — remove
+            del _DNS_OVERRIDE[host_lower]
+        return await self._default.resolve(host, port, family)
+
+    async def close(self) -> None:
+        await self._default.close()
 
 
 class HTTPClient:
@@ -46,10 +120,15 @@ class HTTPClient:
                          scan_marker_name, scan_marker_value)
         self._extra_headers = extra_headers or {}
         self._session: aiohttp.ClientSession | None = None
+        self._dns_override_enabled: bool = False  # set True to use _OverrideResolver
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            connector = aiohttp.TCPConnector(ssl=self._verify_ssl)
+            if self._dns_override_enabled:
+                resolver = _OverrideResolver()
+                connector = aiohttp.TCPConnector(ssl=self._verify_ssl, resolver=resolver)
+            else:
+                connector = aiohttp.TCPConnector(ssl=self._verify_ssl)
             self._session = aiohttp.ClientSession(
                 connector=connector,
                 timeout=self._timeout,
@@ -116,6 +195,21 @@ class HTTPClient:
         from pentool.utils.parser import parse_http_request
         req = parse_http_request(raw_request)
         return await self.send(req)
+
+    def enable_dns_override(self, enabled: bool = True) -> None:
+        """Enable/disable DNS override (CDN bypass) for this client.
+
+        When enabled, hosts in the override table (set via set_dns_override())
+        will be resolved to the override IP instead of the real DNS.
+        The session is recreated on next request.
+        """
+        if enabled != self._dns_override_enabled:
+            self._dns_override_enabled = enabled
+            # Force session recreation
+            if self._session and not self._session.closed:
+                self._session._connector._resolver = None  # type: ignore[attr-defined]
+            self._session = None
+            logger.debug("HTTPClient: DNS override %s", "enabled" if enabled else "disabled")
 
     async def close(self) -> None:
         if self._session and not self._session.closed:
