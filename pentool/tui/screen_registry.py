@@ -36,22 +36,11 @@ SCREEN_MAP: dict[str, type] = {
     "settings":   SettingsScreen,
 }
 
-# Recon screen — PRO-only, conditional import + license gate
+# Recon screen — PRO-only, conditional import (no license gate here —
+# license check happens in _switch_to, same as ScannerScreen).
 try:
     from pro.pentool.tui.screens.recon.screen import ReconScreen  # type: ignore[import-untyped]
-    # License gate: same pattern as ScannerScreen — only register when
-    # the user has a valid PRO license with ai_discovery feature.
-    try:
-        from pentool.core.license import get_session_license
-        lic = get_session_license()
-        if lic and lic.valid and lic.has_feature("ai_discovery"):
-            SCREEN_MAP["recon"] = ReconScreen
-    except Exception:
-        # If license check fails (no PRO license), fall through silently
-        # so the module stays hidden. Without this check, every dev
-        # checkout (which has the pro/ submodule) would see ReconScreen
-        # even without an active PRO license.
-        pass
+    SCREEN_MAP["recon"] = ReconScreen
 except (ImportError, ModuleNotFoundError):
     pass
 

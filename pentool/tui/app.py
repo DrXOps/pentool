@@ -939,6 +939,21 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                     return
             except Exception:
                 pass
+
+        # Block Recon if no valid license (ai_discovery feature)
+        if module_id == "recon":
+            try:
+                from pentool.core.license import get_session_license
+                lic = get_session_license()
+                if not (lic.valid and lic.has_feature("ai_discovery")):
+                    self.notify(
+                        "🔒 Recon — paid feature. Activate: pentool license trial",
+                        severity="warning",
+                        timeout=5,
+                    )
+                    return
+            except Exception:
+                pass
         screen_id = f"screen-{module_id}"
         self.query_one(ContentSwitcher).current = screen_id
         self._active_module = module_id
