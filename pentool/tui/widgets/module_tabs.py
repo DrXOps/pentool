@@ -23,6 +23,7 @@ MODULES: list[tuple[str, str, str]] = [
     ("comparer",   "Comparer",   "^C"),
     ("sequencer",  "Sequencer",  "^Q"),
     ("extensions", "Extensions", "^E"),
+    ("recon",      "Recon",      "^N"),
     ("settings",   "Settings",   "^,"),
 ]
 
