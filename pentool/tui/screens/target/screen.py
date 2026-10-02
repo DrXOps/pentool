@@ -171,6 +171,9 @@ class TargetScreen(Widget):
             yield ToolbarButton("🗑 Clear",             "btn-clear")
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("📄 Export JSON",       "btn-export")
+            yield Static(" │ ", classes="toolbar-sep")
+            yield ToolbarButton("🧭 Recon",             "btn-recon",
+                                tooltip="Open Recon screen for the selected domain")
 
         # При старте скрываем AI-секцию если ai_enabled выключен
         from pentool.core.config import get_config
@@ -504,6 +507,41 @@ class TargetScreen(Widget):
     @on(ToolbarButton.Pressed, "#btn-export")
     def on_btn_export(self, _: ToolbarButton.Pressed) -> None:
         self.action_export_json()
+
+    @on(ToolbarButton.Pressed, "#btn-recon")
+    def on_btn_recon(self, _: ToolbarButton.Pressed) -> None:
+        """Open Recon screen and pre-fill domain from selected host."""
+        from urllib.parse import urlparse
+        domain = ""
+        try:
+            node = self.query_one("#host-tree", Tree).cursor_node
+            if node and hasattr(node, "label"):
+                node_label = str(node.label)
+                if "://" in node_label:
+                    domain = urlparse(node_label).hostname or ""
+                elif "." in node_label:
+                    domain = node_label.split(":")[0].strip()
+        except Exception:
+            pass
+        if not domain:
+            domain = self._current_domain
+
+        self.app.action_switch_module("recon")
+        if domain:
+            self.app.call_after_refresh(
+                lambda d=domain: self._prefill_recon_domain(d)
+            )
+
+    def _prefill_recon_domain(self, domain: str) -> None:
+        """Pre-fill ReconScreen domain input."""
+        try:
+            from pentool.tui.screens.recon.screen import ReconScreen
+            recon = self.app.query_one(ReconScreen)
+            domain_input = recon.query_one("#recon-domain")
+            if hasattr(domain_input, "value"):
+                domain_input.value = domain
+        except Exception:
+            pass
 
     def action_add_to_scope(self) -> None:
         if self._selected_host:
