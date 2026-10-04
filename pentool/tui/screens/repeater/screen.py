@@ -737,6 +737,11 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             self._sending = False
             return
 
+        if resp is None:
+            self._set_status("[red]Error: empty response[/red]")
+            self._sending = False
+            return
+
         try:
             viewer = self._viewer(tab_id)
             viewer.load_response(resp)

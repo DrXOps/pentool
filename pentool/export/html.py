@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import html as _html
 
-from pentool.export import (
+from pentool.export._base import (
     BaseExporter,
     FindingData,
     ReportData,

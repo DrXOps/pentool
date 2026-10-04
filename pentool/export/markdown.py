@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pentool.export import (
+from pentool.export._base import (
     BaseExporter,
     FindingData,
     ReportData,
