@@ -159,12 +159,24 @@ class ActivityIndicator(Widget):
             except Exception:
                 return None
 
+        def _recon_active() -> bool | None:
+            try:
+                from pentool.tui.screens.recon.screen import ReconScreen
+                screen = app_ref.query_one("#screen-recon", ReconScreen)
+                # _running коллизирует с MessagePump._running (всегда True),
+                # используем _runner — он None когда простаивает и объект
+                # DiscoveryRunner когда запущен.
+                return screen._runner is not None
+            except Exception:
+                return None
+
         return [
-            _Tracked("proxy",    "🌐", "Proxy",    _proxy_active),
-            _Tracked("spider",   "🕷️", "Spider",   _spider_active),
-            _Tracked("scanner",  "🔍", "Scanner",  _scanner_active),
-            _Tracked("intruder", "💥", "Intruder", _intruder_active),
-            _Tracked("ai",       "🤖", "AI MCP",   _ai_active),
+            _Tracked("proxy",    "🌐", "Proxy",     _proxy_active),
+            _Tracked("spider",   "🕷️", "Spider",    _spider_active),
+            _Tracked("scanner",  "🔍", "Scanner",   _scanner_active),
+            _Tracked("intruder", "💥", "Intruder",  _intruder_active),
+            _Tracked("recon",    "🔎", "Recon",     _recon_active),
+            _Tracked("ai",       "🤖", "AI MCP",    _ai_active),
         ]
 
     # ── compose / refresh ────────────────────────────────────────────────────

@@ -51,6 +51,7 @@ from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
+from pentool.tui.widgets.start_stop_mixin import StartStopMixin
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
@@ -102,12 +103,24 @@ _PAYLOAD_LIST_PREVIEW_LIMIT = 500
 _LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
 DataTable = IntruderResultsTable
 
-class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContextMenuMixin, Widget):
+class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin, RequestContextMenuMixin, Widget):
     """Intruder module screen."""
 
     DEFAULT_CSS = _CSS
 
     BINDINGS = INTRUDER_BINDINGS
+
+    # @on хендлеры НЕ наследуются от StartStopMixin через MRO — Textual
+    # собирает _textual_on только из cls.__dict__ класса-виджета
+    # (MessagePump.__init_subclass__). Миксин — не Widget, поэтому его
+    # @on-декорированные методы не регистрируются. Объявляем явно.
+    @on(ToolbarButton.Pressed, "#btn-start")
+    def _on_btn_start(self, event: ToolbarButton.Pressed) -> None:
+        self.on_btn_start(event)
+
+    @on(ToolbarButton.Pressed, "#btn-stop")
+    def _on_btn_stop(self, event: ToolbarButton.Pressed) -> None:
+        self.on_btn_stop(event)
 
     # RequestContextMenuMixin config
     _cm_show_copy_url = False
@@ -121,7 +134,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         # sets) or a FilePayloadSource (large file-backed set, streamed —
         # see _load_payloads_from_file). Both support len()/bool()/iteration,
         # so the rest of the screen (and the attack engine) treats them
-        # uniformly — see _update_payload_select, action_start_attack.
+        # uniformly — see _update_payload_select, action_start.
         self._payloads: list = [[]]
         self._active_set_idx: int = 0
         self._attack_type: AttackType = AttackType.SNIPER
@@ -141,7 +154,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         # whether an attack is in progress). This module used to reset it
         # to False in on_mount() as a workaround for exactly that collision;
         # renaming removes the need for the workaround.
-        self._attack_running: bool = False
+        self._running: bool = False
         self._paused: bool = False
         # Grep Match/Extract (Block 4.4) — handled via _filter_spec now
         # Fields kept for grep highlight/extract logic that needs them separately
@@ -184,8 +197,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                         if start < end:
                             area.selection = Selection((row, start), (row, end))
                     self.call_after_refresh(_sel)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("op: %s", exc)
                 return
             self._last_click_time = now
         await super().on_event(event)
@@ -377,8 +390,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 m = re.search(pat, result.request_raw or "")
                 if m:
                     return (m.group(1) if m.lastindex else m.group(0))[:30]
-            except re.error:
-                pass
+            except re.error as exc:
+                logger.debug("extract grep: %s", exc)
         return ""
 
     def on_mount(self) -> None:
@@ -387,7 +400,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         # MessagePump._running collision this used to guard against (see the
         # rename note on _attack_running's declaration above), but still a
         # reasonable safety net against stale state from a prior session.
-        self._attack_running = False
+        self._running = False
         self._paused = False
         self._update_payload_select()
         self._setup_tooltips()
@@ -416,8 +429,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             ai_on = bool(get_config().ai_enabled)
             btn = self.query_one("#btn-payload-smart", ToolbarButton)
             btn.display = ai_on
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _get_api(self) -> "IntruderAPI | None":
         """Lazy singleton IntruderAPI (avoids per-call SQLite connection)."""
@@ -445,8 +458,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         # worker instead, which Textual handles silently.
         try:
             self.workers.cancel_node(self)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
         # Clear in-memory results from the previous project FIRST — before
         # touching the DB connection. Without this, self._all_results (and
         # the #results-table it feeds) kept showing whatever attack results
@@ -472,18 +485,18 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             self.query_one("#template-editor", TextArea).text = (
                 "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
         try:
             btn = self.query_one("#btn-attack-type", ToolbarButton)
             btn.label = "Sniper ▼"
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
         try:
             desc = self.query_one("#attack-type-desc", Static)
             desc.update(_ATTACK_DESCRIPTIONS[AttackType.SNIPER])
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
         self._update_payload_select()
         if self._api is None:
             self._api = IntruderAPI(db_path=db_path)
@@ -604,8 +617,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 self._attack_type = AttackType(attack_type_str)
                 btn = self.query_one("#btn-attack-type", ToolbarButton)
                 btn.label = f"⚡ {self._attack_type.value.replace('_', ' ').title()}"
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("op: %s", exc)
             # Restore payloads — each entry is either a plain list[str] (old
             # format, still supported) or {"__file__": path, "count": N}
             # (see _serialize_payloads) for a file-backed set. The file
@@ -647,8 +660,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 exclusive=False,
                 exit_on_error=False,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _auto_save_result(self, result: IntruderResult) -> None:
         """Auto-save a single intruder result to DB (fire-and-forget)."""
@@ -668,8 +681,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 exclusive=False,
                 exit_on_error=False,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _setup_tooltips(self) -> None:
         tips = {
@@ -684,22 +697,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         for btn_id, tip in tips.items():
             try:
                 self.query_one(f"#{btn_id}", ToolbarButton).tooltip = tip
-            except Exception:
-                pass
-
-    @on(ToolbarButton.Pressed, "#btn-start")
-    def on_btn_start(self, _: ToolbarButton.Pressed) -> None:
-        logger.info("INTRUDER: btn-start pressed, running=%s paused=%s",
-                     self._attack_running, self._paused)
-        if self._attack_running:
-            self.action_toggle_pause()
-        else:
-            self.app.notify("▶ Starting attack…", timeout=2)
-            self.action_start_attack()
-
-    @on(ToolbarButton.Pressed, "#btn-stop")
-    def on_btn_stop(self, _: ToolbarButton.Pressed) -> None:
-        self.action_stop_attack()
+            except Exception as exc:
+                logger.debug("op: %s", exc)
 
     @on(ToolbarButton.Pressed, "#btn-clear-results")
     def on_btn_clear_results(self, _: ToolbarButton.Pressed) -> None:
@@ -830,11 +829,11 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                     table.add_column("Extract")
                 else:
                     table.remove_column("Extract")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("op: %s", exc)
 
         # Если атака не запущена — перезагрузить из SQL с новым фильтром
-        if not self._attack_running:
+        if not self._running:
             api = self._get_api()
             if api:
                 self.run_worker(self._do_load_results(api), exclusive=False, exit_on_error=False)
@@ -867,8 +866,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 desc = _ATTACK_DESCRIPTIONS.get(at, "")
                 try:
                     screen.query_one("#attack-type-desc", Static).update(desc)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("op: %s", exc)
                 screen._update_payload_select()
                 # Auto-save state when attack type changes
                 screen._auto_save_state()
@@ -895,8 +894,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 self.query_one("#btn-payload-set", ToolbarButton).label = label
                 self._refresh_payload_list()
                 self._highlight_nth_marker(idx)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("op: %s", exc)
 
         self.app.show_context_menu(items, x, y, callback=_on_select)
 
@@ -948,8 +947,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             cleaned = cleaned.replace("§", "")
             editor.load_text(cleaned)
             self._update_payload_select()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _prompt_auto_mark(self) -> None:
         """Show dialog to choose which parts to auto-mark, then mark."""
@@ -990,8 +989,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                     import json as _json
                     _json.loads(body_text)
                     has_json = True
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("op: %s", exc)
 
         has_query = "?" in lines[0] if lines else False
         has_cookie = any(line.lower().startswith("cookie:") for line in lines[1:body_start])
@@ -1168,8 +1167,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                     try:
                         import xml.dom.minidom
                         marked_xml = xml.dom.minidom.parseString(marked_xml).toprettyxml(indent="  ")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("op: %s", exc)
                     new_lines = lines[:body_lines_start] + [l for l in marked_xml.split("\n") if l.strip()]
                     lines = new_lines
                 except (ET.ParseError, Exception):
@@ -1189,8 +1188,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                     self.query_one("#attack-type-desc", Static).update(
                         _ATTACK_DESCRIPTIONS[AttackType.BATTERING_RAM]
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("op: %s", exc)
                 self.app.notify(
                     f"Marked {n} positions — switched to Battering Ram "
                     "(Sniper only fills one position per request; change "
@@ -1200,8 +1199,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 self._auto_save_state()
             # Highlight the first position (Set 1) right after auto-marking
             self._highlight_nth_marker(self._active_set_idx)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _update_payload_select(self) -> None:
         """Sync Set-N selector: number of sets depends on attack type (not just marker count)."""
@@ -1228,8 +1227,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         try:
             label = f"Set {idx+1} ▼" if n <= 1 else f"Set {idx+1}/{n} ▼"
             self.query_one("#btn-payload-set", ToolbarButton).label = label
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
         # 4) Refresh the payload list
         self._refresh_payload_list()
@@ -1278,8 +1277,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 for p in active:
                     lv.append(ListItem(Label(p)))
             self._update_payload_count_label()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _update_payload_count_label(self) -> None:
         """Refresh payload count — cached for FilePayloadSource, O(1) for arithmetic sources."""
@@ -1341,8 +1340,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 start_rc = to_rowcol(s_off)
                 end_rc = to_rowcol(e_off)
                 editor.selection = Selection(start_rc, end_rc)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _add_payload_manual(self) -> None:
         if self._active_set_idx < len(self._payloads) and isinstance(
@@ -1385,8 +1384,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                     self._refresh_payload_list()
                     # Auto-save state when payload removed
                     self._auto_save_state()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _clear_payloads(self) -> None:
         if self._active_set_idx < len(self._payloads):
@@ -1534,8 +1533,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             pct = f" ({bytes_read / total_bytes * 100:.0f}%)" if total_bytes else ""
             if target_idx == self._active_set_idx:
                 label.update(f"[dim]{count:,} line(s) counted so far{pct}…[/dim]")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     @staticmethod
     def _read_file_sync(path: str) -> str:
@@ -1587,9 +1586,9 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             self.app.notify(f"🧠 Smart: added {added:,} payloads", timeout=3)  # type: ignore[attr-defined]
 
 
-    def action_start_attack(self) -> None:
-        logger.info("INTRUDER: action_start_attack called, _attack_running=%s", self._attack_running)
-        if self._attack_running:
+    def action_start(self) -> None:
+        logger.info("INTRUDER: action_start called, _attack_running=%s", self._running)
+        if self._running:
             logger.info("INTRUDER: already running, skip")
             return
         if self._payload_load_in_progress:
@@ -1613,7 +1612,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 severity="warning", timeout=5,
             )
             return
-        logger.info("INTRUDER: action_start_attack: attack_type=%s", self._attack_type)
+        logger.info("INTRUDER: action_start: attack_type=%s", self._attack_type)
 
         processing_ops = self._get_processing_ops()
         payload_sets = []
@@ -1697,10 +1696,10 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             else:
                 # FREE: force Turbo off.
                 self.query_one("#chk-turbo", Checkbox).value = False
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
-        self._attack_running = True
+        self._running = True
         self._all_results = []
         self._clear_results()
         self._set_running_state(True)
@@ -1737,7 +1736,7 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             from pentool.core.error_guard import err
             err(exc, "Intruder attack error", self, severity="error")
         finally:
-            self._attack_running = False
+            self._running = False
             logger.info("INTRUDER: _run_attack finished, results=%d", len(self._all_results))
             self._set_running_state(False)
             self.app.notify(
@@ -1781,36 +1780,34 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 pb.update(total=max(1, total), progress=0)
             else:
                 pb.advance(done - pb.progress)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
         try:
             pct = f"{done / total * 100:.1f}%" if total > 0 else "0%"
             self.query_one("#progress-label", Static).update(f"{done}/{total} ({pct})")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def action_toggle_pause(self) -> None:
-        if not self._attack_running:
-            return
-        if self._api is None:
+        """Pause/Resume — диспатчим API, затем общая логика миксина."""
+        if not self._running or self._api is None:
             return
         if self._paused:
             self.run_worker(self._api.resume(), exit_on_error=False)
-            self._paused = False
-            self.query_one("#btn-start", ToolbarButton).label = "⏸ Pause"
-            self.app.notify("Resumed", timeout=2)
         else:
             self.run_worker(self._api.pause(), exit_on_error=False)
-            self._paused = True
-            self.query_one("#btn-start", ToolbarButton).label = "▶ Resume"
-            self.app.notify("Paused", timeout=2)
+        # Миксин меняет _paused, label, variant, вызывает action_resume
+        super().action_toggle_pause()
+        self.app.notify("Resumed" if not self._paused else "Paused", timeout=2)
 
-    def action_stop_attack(self) -> None:
+    def action_resume(self) -> None:
+        """Resume — перезапустить воркер (action_start безопасно возвращается при _running)."""
+        self.action_start()
+
+    def action_stop(self) -> None:
         if self._api is not None:
             self.run_worker(self._api.stop(), exit_on_error=False)
-        self._attack_running = False
-        self._paused = False
-        self._set_running_state(False)
+        super().action_stop()
         self.app.notify("Attack stopped", severity="warning")
 
     def on_worker_state_changed(self, event) -> None:
@@ -1819,24 +1816,10 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         if getattr(event.worker, "name", None) != "intruder-attack":
             return
         if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
-            if self._attack_running:
+            if self._running:
                 logger.info("INTRUDER: on_worker_state_changed — resetting _attack_running=False")
-                self._attack_running = False
+                self._running = False
                 self._set_running_state(False)
-
-    def _set_running_state(self, running: bool) -> None:
-        try:
-            btn_start = self.query_one("#btn-start", ToolbarButton)
-            if running:
-                btn_start.label = "⏸ Pause"
-                btn_start.disabled = False
-            else:
-                btn_start.label = "▶ Start"
-                btn_start.disabled = False
-                self._paused = False
-            self.query_one("#btn-stop",  ToolbarButton).disabled = not running
-        except Exception:
-            pass
 
     @staticmethod
     def _row_from_result(result: IntruderResult) -> list[str]:
@@ -1868,25 +1851,25 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                             extract_val = m.group(1) if m.lastindex else m.group(0)
                             extract_val = extract_val[:30]
                             break
-                    except re.error:
-                        pass
+                    except re.error as exc:
+                        logger.debug("extract val: %s", exc)
                 row.append(extract_val)
             self.query_one("#results-table", DataTable).add_rows([tuple(row)])
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _clear_results(self) -> None:
         try:
             self.query_one("#results-table", DataTable).clear_data()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("_clear_results: %s", exc)
         self._all_results = []
         self._filtered_results = []
         try:
             self.query_one("#progress-label", Static).update("0/0 (0%)")
             self.query_one("#attack-progress", ProgressBar).update(total=100)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _result_at_row(self, table: DataTable, row_index: int) -> IntruderResult | None:
         """Resolve result by row_index from the DataTable.
@@ -1995,8 +1978,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             panel = self.query_one("#intruder-detail-panel")
             panel.display = False
             self._current_result = None
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def on__base_http_widget_context_menu_request(self, event) -> None:
         """Right-click on HttpView → context menu."""
@@ -2038,8 +2021,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             result = self._result_at_row(table, table.cursor_row)
             if result is not None:
                 self.app.post_message(SendToRepeater(result.request_raw))  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _send_selected_to_scanner(self) -> None:
         try:
@@ -2070,8 +2053,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
             if result is not None and result.url:
                 import webbrowser
                 webbrowser.open(result.url)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def _copy_selected_payload(self) -> None:
         try:
@@ -2082,8 +2065,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 from pentool.utils.copy_as import copy_to_clipboard
                 copy_to_clipboard(payload_str)
                 self.app.notify("Payload copied", timeout=2)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
 
     def _redraw_results(self) -> None:
@@ -2138,8 +2121,8 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
                 ops.append("html_encode")
             if self.query_one("#proc-md5", Checkbox).value:
                 ops.append("md5")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
         return ops
 
     def _apply_processing(self, payload: str, ops: list[str]) -> str:
@@ -2152,15 +2135,15 @@ class IntruderScreen(AutoSaveMixin, AppMixin, SortableTableMixin, RequestContext
         # leftover-artifact fix as _reload_project_screens does across projects.
         try:
             self._clear_results()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
         try:
             editor = self.query_one("#template-editor", TextArea)
             _load_into_textarea(editor, raw, ["§"])
             self._update_payload_select()
             self._highlight_nth_marker(self._active_set_idx)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("op: %s", exc)
 
     def get_intruder_export(self) -> dict:
         """Export Intruder data for project saving."""
