@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from pentool.api.proxy_api import InterceptedRequest
+from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
@@ -61,7 +62,7 @@ class InterceptMixin:
             return
         req = self._intercept_req
         try:
-            editor = self.query_one("#intercept-editor", TextArea)
+            editor = self.query_one("#intercept-panel", ContentPanel).content_widget
             modified = editor.text
         except Exception:
             modified = None
@@ -111,7 +112,7 @@ class InterceptMixin:
         self._disable_intercept_buttons(hint="✖ Dropped")
         # On Drop: clear the top editor and both bottom panels
         try:
-            self.query_one("#intercept-editor", TextArea).load_text(
+            self.query_one("#intercept-panel", ContentPanel).content_widget.load_text(
                 "(No requests waiting for intercept)"
             )
         except Exception:
@@ -134,7 +135,7 @@ class InterceptMixin:
             )
             from textual.widgets import TextArea
 
-            editor = self.query_one("#intercept-editor", TextArea)
+            editor = self.query_one("#intercept-panel", ContentPanel).content_widget
         except Exception:
             return
         # Commit the current text before switching mode representation
@@ -165,7 +166,7 @@ class InterceptMixin:
             from pentool.tui.widgets.request_editor import _build_http_highlights
             from textual.widgets import TextArea
 
-            editor = self.query_one("#intercept-editor", TextArea)
+            editor = self.query_one("#intercept-panel", ContentPanel).content_widget
             normalized = raw.replace("\r\n", "\n")
             editor._highlights = defaultdict(list, _build_http_highlights(normalized))
             editor._line_cache.clear()
@@ -226,7 +227,7 @@ class InterceptMixin:
         try:
             from textual.widgets import TextArea
 
-            editor = self.query_one("#intercept-editor", TextArea)
+            editor = self.query_one("#intercept-panel", ContentPanel).content_widget
             if self._intercept_show_special_chars:
                 editor.load_text(visualize_special_chars(raw))
             else:

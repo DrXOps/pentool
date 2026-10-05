@@ -203,10 +203,12 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
                 yield Static(" │ ", classes="toolbar-sep")
                 yield Label("(enable Intercept to capture requests)", id="intercept-hint")
             with Vertical(id="intercept-req-area"):
-                yield TextArea(
-                    "(No requests waiting for intercept)",
-                    id="intercept-editor",
-                    read_only=False,
+                yield ContentPanel(
+                    "Intercept",
+                    widget_type="textarea",
+                    initial_text="(No requests waiting for intercept)",
+                    buttons=["copy", "paste", "format", "clear"],
+                    id="intercept-panel",
                 )
             yield ResizeHandle(
                 "intercept-req-area", "intercept-bottom-area",

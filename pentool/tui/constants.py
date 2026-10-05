@@ -28,7 +28,7 @@ TAB_INTERCEPT      = "tab-intercept"
 TAB_HTTP_HISTORY   = "tab-http-history"
 TAB_WS_HISTORY     = "tab-ws-history"
 
-INTERCEPT_EDITOR   = "#intercept-editor"
+INTERCEPT_PANEL    = "#intercept-panel"
 INTERCEPT_HINT     = "#intercept-hint"
 INTERCEPT_RESP_VIEWER = "#intercept-resp-viewer"
 

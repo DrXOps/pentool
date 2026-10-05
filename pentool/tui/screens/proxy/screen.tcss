@@ -76,9 +76,6 @@ ProxyScreen InspectorPanel {
 ProxyScreen InspectorPanel.-visible {
     display: block;
 }
-ProxyScreen #intercept-editor {
-    height: 1fr;
-}
 ProxyScreen #intercept-req-area {
     height: 2fr;
     min-height: 5;
