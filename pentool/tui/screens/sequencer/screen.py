@@ -95,9 +95,7 @@ class SequencerScreen(Widget):
 
             # Right column: analysis results
             with Vertical(id="seq-analysis-col"):
-                yield Static("Analysis", id="seq-analysis-label",
-                             classes="seq-col-label")
-                yield ContentPanel("", widget_type="richlog", wrap=True, max_lines=500, buttons=["copy"])
+                yield ContentPanel("Analysis", widget_type="richlog", wrap=True, max_lines=500, buttons=["copy"], id="seq-analysis-log")
 
         yield ResizeHandle("seq-main-area", "seq-gauge-area", vertical=True, id="seq-resize-v")
 
@@ -400,7 +398,7 @@ class SequencerScreen(Widget):
     def _render_report(self, report) -> None:
         """Render the report in the UI."""
         try:
-            log = self.query_one("#seq-analysis-col", ContentPanel).content_widget
+            log = self.query_one("#seq-analysis-log", ContentPanel).content_widget
             log.clear()
 
             # Summary statistics

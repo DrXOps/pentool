@@ -70,6 +70,7 @@ _FILTER_RELOAD_DEBOUNCE_S = 0.6
 from textual import on
 
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
+from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
@@ -217,15 +218,13 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
             )
             with Horizontal(id="intercept-bottom-area"):
                 with Vertical(id="intercept-sent-panel"):
-                    yield Static("Sent Request", classes="panel-title")
-                    yield HttpView(id="intercept-sent-req")
+                    yield HttpView("Sent Request", id="intercept-sent-req")
                 yield ResizeHandle(
                     "intercept-sent-panel", "intercept-resp-panel",
                     id="resize-intercept-sent-resp",
                 )
                 with Vertical(id="intercept-resp-panel"):
-                    yield Static("Response", classes="panel-title")
-                    yield HttpView(id="intercept-resp-viewer")
+                    yield HttpView("Response", id="intercept-resp-viewer")
 
     def _compose_history_tab(self) -> ComposeResult:
         with TabPane("HTTP History", id="tab-http-history"):
@@ -249,15 +248,13 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
                     )
                     with Horizontal(id="detail-area"):
                         with Vertical(id="req-panel"):
-                            yield Static("Request", classes="panel-title")
-                            yield HttpView(id="req-editor")
+                            yield HttpView("Request", id="req-editor")
                         yield ResizeHandle(
                             "req-panel", "resp-panel",
                             id="resize-req-resp",
                         )
                         with Vertical(id="resp-panel"):
-                            yield Static("Response", classes="panel-title")
-                            yield HttpView(id="resp-viewer")
+                            yield HttpView("Response", id="resp-viewer")
                 yield InspectorPanel(id="inspector-panel")
 
     def _compose_ws_tab(self) -> ComposeResult:
@@ -281,27 +278,19 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
                     )
                     with Horizontal(id="ws-detail-area"):
                         with Vertical(id="ws-req-panel"):
-                            yield Static("Request", classes="panel-title")
-                            yield HttpView(id="ws-req-editor")
+                            yield HttpView("Request", id="ws-req-editor")
                         yield ResizeHandle(
                             "ws-req-panel", "ws-resp-panel",
                             id="resize-ws-req-resp",
                         )
                         with Vertical(id="ws-resp-panel"):
-                            yield Static("Response", classes="panel-title")
-                            yield HttpView(id="ws-resp-viewer")
+                            yield HttpView("Response", id="ws-resp-viewer")
                     yield ResizeHandle(
                         "ws-detail-area", "ws-messages-area",
                         vertical=True,
                         id="resize-ws-detail-msg",
                     )
                     with Vertical(id="ws-messages-area"):
-                        yield Static(
-                            "WebSocket Messages",
-                            id="ws-msg-label",
-                            classes="panel-title",
-                        )
-                        from pentool.tui.widgets.content_panel import ContentPanel
                         yield ContentPanel(
                             "WebSocket Messages",
                             widget_type="richlog",

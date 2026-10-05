@@ -60,23 +60,23 @@ class DecoderScreen(Widget):
         with Horizontal(id="dec-work-area"):
             # Input
             with Vertical(id="dec-input-col"):
-                yield Static("Input", id="dec-input-label", classes="dec-col-label")
                 yield ContentPanel(
-                    "",  # без заголовка — есть Static выше
+                    "Input",
                     widget_type="textarea",
                     buttons=["copy", "paste", "clear"],
+                    id="dec-input",
                 )
 
             yield ResizeHandle("dec-input-col", "dec-output-col", id="dec-resize-h")
 
             # Output
             with Vertical(id="dec-output-col"):
-                yield Static("Output", id="dec-output-label", classes="dec-col-label")
                 yield ContentPanel(
-                    "",
+                    "Output",
                     widget_type="textarea",
                     textarea_read_only=True,
                     buttons=["copy"],
+                    id="dec-output",
                 )
 
         yield ResizeHandle("dec-work-area", "dec-steps-area", vertical=True,
@@ -84,13 +84,13 @@ class DecoderScreen(Widget):
 
         # ── Chain steps log ────────────────────────────────────────────────────
         with Vertical(id="dec-steps-area"):
-            yield Static("Chain steps", id="dec-steps-label", classes="dec-col-label")
             yield ContentPanel(
-                "",
+                "Chain steps",
                 widget_type="richlog",
                 wrap=True,
                 max_lines=200,
                 buttons=["copy", "clear"],
+                id="dec-steps-log",
             )
 
     # ── Toolbar actions ────────────────────────────────────────────────────────

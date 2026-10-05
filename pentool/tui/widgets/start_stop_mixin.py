@@ -36,12 +36,10 @@ class StartStopMixin:
     def _set_running_state(self, running: bool) -> None:
         """Обновить btn-start/btn-stop при старте/остановке."""
         try:
-            self.query_one("#btn-start", ToolbarButton).label = (
-                "⏸ Pause" if running else "▶ Start"
-            )
-            self.query_one("#btn-start", ToolbarButton).variant = (
-                "warning" if running else "success"
-            )
+            btn = self.query_one("#btn-start", ToolbarButton)
+            btn.label = "⏸ Pause" if running else "▶ Start"
+            btn.remove_class("active", "warn")
+            btn.add_class("warn" if running else "active")
             self.query_one("#btn-stop", ToolbarButton).disabled = not running
             if not running:
                 self._paused = False

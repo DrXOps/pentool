@@ -9,8 +9,8 @@ CSS: наследует стили через DEFAULT_CSS — не нужно д
 Использование:
 
     yield Toolbar(
-        ToolbarButton("▶ Start", "btn-start", variant="success"),
-        ToolbarButton("■ Stop",  "btn-stop",  classes="disabled"),
+        ToolbarButton("▶ Start", "btn-start", classes="active"),
+        ToolbarButton("■ Stop",  "btn-stop",  classes="inactive disabled"),
         Toolbar.sep(),
         ToolbarButton("Export", "btn-export"),
         Toolbar.sep(),
@@ -71,6 +71,6 @@ class Toolbar(Horizontal):
         stop_label: str = "■ Stop",
     ):
         """Стандартная пара Start + Stop с сепаратором между."""
-        yield ToolbarButton(start_label, start_id, variant="success")
+        yield ToolbarButton(start_label, start_id, classes="active")
         yield Static(" │ ", classes="toolbar-sep")
-        yield ToolbarButton(stop_label,  stop_id,  variant="error", classes="disabled")
+        yield ToolbarButton(stop_label,  stop_id,  classes="inactive disabled")

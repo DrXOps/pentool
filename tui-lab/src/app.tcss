@@ -1,0 +1,138 @@
+/* TUI Lab — styles */
+
+Screen {
+    layout: vertical;
+}
+
+/* Секционные заголовки */
+.section-title {
+    height: 1;
+    color: $primary;
+    background: $panel;
+    text-style: bold;
+    margin: 1 0;
+}
+
+/* Подпись над элементом */
+.item-label {
+    height: 1;
+    color: $text-muted;
+}
+
+/* Элемент внутри тулбара: подпись сверху + сам элемент */
+.toolbar-item {
+    height: auto;
+    width: auto;
+    padding: 0 1;
+    border: none;
+}
+
+/* ── TOOLBAR ── */
+.toolbar {
+    height: auto;
+    min-height: 2;
+    background: $panel;
+    layout: horizontal;
+    padding: 0 1;
+    align: center middle;
+    border-bottom: solid $primary-darken-2;
+    margin-bottom: 1;
+}
+
+/* INPUT в тулбаре */
+.toolbar Input {
+    width: 18;
+}
+.toolbar Input.toolbar-input {
+    width: 18;
+    height: 1;
+    border: none;
+    background: transparent;
+}
+
+/* BUTTON в тулбаре */
+.toolbar Button {
+    width: 14;
+    min-width: 8;
+}
+.toolbar Button.toolbar-button {
+    width: 14;
+    min-width: 8;
+    height: 1;
+    border: none;
+    background: transparent;
+}
+
+/* SELECT в тулбаре */
+.toolbar Select {
+    width: 18;
+}
+.toolbar Select.toolbar-select {
+    width: 18;
+    height: 1;
+}
+.toolbar Select.compact {
+    width: 18;
+    height: 1;
+}
+
+/* ToolbarButton внутри тулбара — стандартная высота */
+.toolbar ToolbarButton {
+    /* наследует */
+}
+
+/* ── FORM ROW ── */
+.row {
+    height: auto;
+    layout: horizontal;
+    align: left middle;
+    margin-bottom: 1;
+    padding: 0 1;
+}
+.row Label.row-label {
+    width: 14;
+    color: $text-muted;
+    height: 1;
+}
+.row Input {
+    width: 24;
+}
+.row Input:focus {
+    border: none;
+}
+.row Select {
+    width: 24;
+}
+.row TextArea {
+    width: 24;
+    height: 5;
+    border: solid $primary-darken-2;
+}
+
+/* ── DataTable ── */
+DataTable {
+    height: 5;
+}
+
+/* ── ContentPanel (RichLog / TextArea) ── */
+.row-multilog {
+    height: auto;
+    layout: horizontal;
+    align: left top;
+    margin-bottom: 1;
+    padding: 0 1;
+}
+.row-multilog > ContentPanel {
+    width: 1fr;
+    height: 12;
+    min-height: 8;
+    margin: 0;
+}
+
+/* ── TextArea: убираем бордер при фокусе ── */
+TextArea {
+    border: none;
+}
+TextArea:focus {
+    border: none;
+}

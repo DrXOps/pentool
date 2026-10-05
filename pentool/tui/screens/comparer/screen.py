@@ -68,8 +68,7 @@ class ComparerScreen(Widget):
 
         # ── Diff output ────────────────────────────────────────────────────────
         with Vertical(id="cmp-diff-area"):
-            yield Static("Diff", id="cmp-diff-label", classes="cmp-col-label")
-            yield ContentPanel("", widget_type="richlog", wrap=False, max_lines=2000, buttons=["copy"])
+            yield ContentPanel("Diff", widget_type="richlog", wrap=False, max_lines=2000, buttons=["copy"], id="cmp-diff-area")
 
         
     # ── ContentPanel handlers ─────────────────────────────────────────────────

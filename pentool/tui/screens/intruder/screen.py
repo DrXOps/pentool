@@ -350,16 +350,10 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
             )
             with Horizontal(id="intruder-detail-panel", classes="intruder-detail-panel"):
                 with Vertical(id="detail-request-col", classes="detail-col"):
-                    with Horizontal(classes="detail-label-row"):
-                        yield Static("Request", classes="detail-label")
-                        yield ToolbarButton("⎙ Copy", "btn-detail-copy-req", compact=True)
-                    yield HttpView(id="detail-request", classes="detail-view")
+                    yield HttpView("Request", id="detail-request", classes="detail-view")
                 yield ResizeHandle("detail-request-col", "detail-response-col")
                 with Vertical(id="detail-response-col", classes="detail-col"):
-                    with Horizontal(classes="detail-label-row"):
-                        yield Static("Response", classes="detail-label")
-                        yield ToolbarButton("⎙ Copy", "btn-detail-copy-resp", compact=True)
-                    yield HttpView(id="detail-response", classes="detail-view")
+                    yield HttpView("Response", id="detail-response", classes="detail-view")
         
     def on_show(self) -> None:
         """When Intruder becomes visible, rebuild table via set_data (like Proxy)."""

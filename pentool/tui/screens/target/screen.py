@@ -186,8 +186,7 @@ class TargetScreen(Widget):
             yield Tree("Site Map", id="site-tree")
             yield ResizeHandle("site-tree", "detail-panel", id="target-resize-h")
             with Vertical(id="detail-panel"):
-                yield Static("Details", classes="detail-label")
-                yield ContentPanel("", widget_type="richlog", wrap=True, buttons=["copy"])
+                yield ContentPanel("Details", widget_type="richlog", wrap=True, buttons=["copy"])
 
         
     def on_mount(self) -> None:

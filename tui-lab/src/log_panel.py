@@ -1,16 +1,31 @@
 """ContentPanel — универсальный блок для RichLog/TextArea с панелью инструментов.
 
-Заменяет ручные RichLog и TextArea с кнопками во всех экранах:
-- RichLog: scan-log, recon-log, feed-log, ws-msg-log, detail-log,
-  dec-steps-log, cmp-diff-log, seq-analysis-log, diff-panel-log, lightpanda-body
-- TextArea: editor-area, viewer-area, http-body, dec-input/dec-output,
-  cmp-left/cmp-right, scope-area, seq-token-area
+Используется в проекте для:
+- scan-log (Scanner PRO)
+- recon-log (Recon PRO)
+- feed-log (Dashboard)
+- editor-area (Repeater/Intruder)
+- viewer-area (Repeater)
+- http-body (Proxy)
+- viewer-area (Proxy)
+- dec-steps-log (Decoder)
+- diff-panel-log (DiffPanel)
+- cmp-diff-log (Comparer)
+- seq-analysis-log (Sequencer)
+- lightpanda-body (LightpandaViewer)
+
+Где:
+- RichLog: многострочный скроллер/лог
+- TextArea: редактор/просмотр содержимого
 """
 
 from __future__ import annotations
 
+import random
+import string
 import time
-from typing import ClassVar, Literal
+from pathlib import Path
+from typing import ClassVar, Literal, Optional
 
 from textual import on
 from textual.containers import Horizontal, Vertical
@@ -19,52 +34,108 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import RichLog, Static, TextArea
 
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 
+# =============================================================================
+#  ToolbarButton — компактная кастомная кнопка
+# =============================================================================
+
+class ToolbarButton(Widget):
+    """Кастомная кнопка: variant, disabled, compact."""
+
+    class Pressed(Message):
+        def __init__(self, button: "ToolbarButton") -> None:
+            self.button = button
+            super().__init__()
+
+    def __init__(
+        self,
+        label: str = "",
+        button_id: str = "",
+        *,
+        variant: str = "default",
+        classes: str = "",
+        disabled: bool = False,
+    ):
+        super().__init__()
+        self._label = label
+        self._variant = variant
+        self._disabled = disabled
+        if button_id:
+            self.id = button_id
+        if classes:
+            self.classes = classes
+
+    @property
+    def label(self) -> str:
+        return self._label
+
+    @label.setter
+    def label(self, val: str) -> None:
+        self._label = val
+        self.refresh()
+
+    @property
+    def variant(self) -> str:
+        return self._variant
+
+    @variant.setter
+    def variant(self, val: str) -> None:
+        self._variant = val
+        self._update_css_classes()
+
+    @property
+    def disabled(self) -> bool:
+        return self._disabled
+
+    @disabled.setter
+    def disabled(self, val: bool) -> None:
+        self._disabled = val
+        self._update_css_classes()
+
+    def _update_css_classes(self) -> None:
+        classes = set()
+        if self._disabled:
+            classes.add("disabled")
+        if self._variant and self._variant != "default":
+            classes.add(f"variant-{self._variant}")
+        self.classes = " ".join(sorted(classes))
+        self.refresh()
+
+    def render(self) -> str:
+        return self._label
+
+    def on_click(self) -> None:
+        if not self._disabled:
+            self.post_message(self.Pressed(self))
+
+
+# =============================================================================
+#  ContentPanel — универсальный блок с RichLog/TextArea + панелью кнопок
+# =============================================================================
 
 class ContentPanel(Widget):
-    """Блок-контейнер: RichLog или TextArea + панель кнопок в заголовке."""
+    """Блок-контейнер: RichLog или TextArea + панель кнопок."""
 
     class CopyRequested(Message):
         """Запрос на копирование содержимого в буфер."""
-        ALLOW_SELECTOR_MATCH = True
-        def __init__(self, panel: "ContentPanel", text: str, selection: str | None = None) -> None:
+        def __init__(self, panel: "ContentPanel", text: str) -> None:
             self.panel = panel
             self.text = text
-            self.selection = selection  # выделенный текст, None = копировать всё
             super().__init__()
-
-        @property
-        def control(self) -> "ContentPanel":
-            return self.panel
 
     class PasteRequested(Message):
         """Запрос на вставку из буфера."""
-        ALLOW_SELECTOR_MATCH = True
         def __init__(self, panel: "ContentPanel") -> None:
             self.panel = panel
             super().__init__()
-
-        @property
-        def control(self) -> "ContentPanel":
-            return self.panel
-
-    class FormatToggleRequested(Message):
-        """Запрос на переключение raw/formatted."""
-        ALLOW_SELECTOR_MATCH = True
-        def __init__(self, panel: "ContentPanel") -> None:
-            self.panel = panel
-            super().__init__()
-
-        @property
-        def control(self) -> "ContentPanel":
-            return self.panel
 
     DEFAULT_CSS = """
     ContentPanel {
         height: auto;
         width: 1fr;
+        border: solid $primary-darken-2;
         layout: vertical;
+        margin: 0 0 1 0;
     }
     ContentPanel > .cp-title {
         height: 1;
@@ -79,7 +150,7 @@ class ContentPanel(Widget):
         color: $text-muted;
         text-style: bold;
     }
-    /* Кнопки в заголовке */
+    /* Кнопки в заголовке: рука-курсор, компактно, справа */
     ContentPanel > .cp-title > ToolbarButton {
         width: auto;
         min-width: 4;
@@ -96,43 +167,33 @@ class ContentPanel(Widget):
         height: 1fr;
         min-height: 6;
     }
+    /* RichLog внутри ContentPanel — без собственной рамки, рамка у панели */
     ContentPanel RichLog {
         border: none;
         padding: 0 1;
         height: 1fr;
         min-height: 6;
     }
-    ContentPanel RichLog:focus {
-        border: none;
-        outline: none;
-    }
+    /* TextArea внутри ContentPanel */
     ContentPanel TextArea {
         border: none;
         height: 1fr;
         min-height: 6;
     }
-    ContentPanel TextArea:focus {
-        border: none;
-        outline: none;
-    }
     """
 
-    # ── Иконки (минималистичные unicode) ──────────────────────────────
-    BUTTONS_COPY: ClassVar[str] = "⎙"
-    BUTTONS_PASTE: ClassVar[str] = "⎘"
+    BUTTONS_COPY: ClassVar[str] = "📋"
+    BUTTONS_PASTE: ClassVar[str] = "📥"
     BUTTONS_CLEAR: ClassVar[str] = "✕"
-    BUTTONS_FORMAT: ClassVar[str] = "⇄"
     BUTTONS_WRAP: ClassVar[str] = "↩"
-    BUTTONS_AUTOSCROLL: ClassVar[str] = "⬇"
-
-    BUTTON_SCOPE: ClassVar[list[str]] = ["copy"]
+    BUTTONS_WRITE: ClassVar[str] = "✚"
+    BUTTON_SCOPE: ClassVar[list[str]] = ["copy", "paste", "clear", "wrap", "write"]
     BUTTON_LABELS: ClassVar[dict[str, str]] = {
         "copy": BUTTONS_COPY,
         "paste": BUTTONS_PASTE,
         "clear": BUTTONS_CLEAR,
-        "format": BUTTONS_FORMAT,
         "wrap": BUTTONS_WRAP,
-        "autoscroll": BUTTONS_AUTOSCROLL,
+        "write": BUTTONS_WRITE,
     }
 
     _wrap_state: reactive[bool] = reactive(True)
@@ -143,15 +204,14 @@ class ContentPanel(Widget):
         *,
         widget_type: Literal["richlog", "textarea"] = "richlog",
         textarea_read_only: bool = False,
-        textarea_language: str | None = None,
+        textarea_language: Optional[str] = None,
         textarea_soft_wrap: bool = True,
         wrap: bool = True,
         max_lines: int = 2000,
         initial_text: str = "",
-        buttons: list[str] | None = None,
-        **kwargs: object,
+        buttons: Optional[list[str]] = None,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__()
         self._panel_title = title
         self._widget_type = widget_type
         self._textarea_read_only = textarea_read_only
@@ -160,19 +220,22 @@ class ContentPanel(Widget):
         self._wrap = wrap
         self._max_lines = max_lines
         self._initial_text = initial_text
-        self._buttons = list(buttons) if buttons is not None else list(self.BUTTON_SCOPE)
+        self._buttons = buttons or list(self.BUTTON_SCOPE)
         self._wrap_state = wrap
+        self._write_counter = 0
 
     def compose(self) -> ComposeResult:
+        # Заголовок + кнопки в одной Horizontal
         with Horizontal(classes="cp-title"):
             yield Static(self._panel_title)
+            # Кнопки справа
             for bk in self._buttons:
                 lbl = self.BUTTON_LABELS.get(bk, bk)
                 if bk == "wrap":
                     yield ToolbarButton(
                         lbl if self._wrap_state else "╌",
                         f"cp-btn-{bk}",
-                        classes="variant-success" if self._wrap_state else "variant-warning",
+                        variant="default" if self._wrap_state else "warning",
                     )
                 else:
                     yield ToolbarButton(lbl, f"cp-btn-{bk}")
@@ -194,14 +257,17 @@ class ContentPanel(Widget):
                     max_lines=self._max_lines,
                 )
 
+    # -- доступ к виджету --
     @property
     def content_widget(self) -> RichLog | TextArea:
         return self.query_one("#cp-body-widget")
 
+    # -- чтение текста --
     def get_text(self) -> str:
         w = self.content_widget
         if isinstance(w, TextArea):
             return w.text
+        # RichLog — публичного get_text нет, пробуем lines/_lines
         try:
             lines: list[str] = []
             for item in getattr(w, "lines", None) or []:
@@ -211,28 +277,6 @@ class ContentPanel(Widget):
         except Exception:
             return ""
 
-    def get_selected_text(self) -> str | None:
-        """Вернуть выделенный текст из TextArea, или None если нет выделения."""
-        w = self.content_widget
-        if not isinstance(w, TextArea):
-            return None
-        sel = w.selection
-        if sel is None:
-            return None
-        # selection.start/end — кортежи (row, col)
-        if sel.start == sel.end:
-            return None
-        try:
-            text = w.text
-            lines = text.splitlines(keepends=True)
-            def _flat(pos: tuple[int, int]) -> int:
-                row, col = pos
-                idx = sum(len(lines[r]) for r in range(row))
-                return idx + col
-            return text[_flat(sel.start):_flat(sel.end)]
-        except Exception:
-            return None
-
     def clear_content(self) -> None:
         w = self.content_widget
         if isinstance(w, TextArea):
@@ -240,17 +284,12 @@ class ContentPanel(Widget):
         else:
             w.clear()
 
-    def set_title(self, title: str) -> None:
-        """Обновить заголовок панели (Static в .cp-title)."""
-        self._panel_title = title
-        try:
-            self.query_one(".cp-title > Static", Static).update(title)
-        except Exception:
-            pass
-
     def write_to_log(self, text: str) -> None:
+        """Записать строку в RichLog (только для richlog)."""
         if self._widget_type == "richlog":
             self.content_widget.write(text)
+
+    # -- хендлеры --
 
     @on(ToolbarButton.Pressed)
     def on_cp_toolbar_button(self, event: ToolbarButton.Pressed) -> None:
@@ -258,23 +297,31 @@ class ContentPanel(Widget):
         btn_id = btn.id or ""
 
         if btn_id == "cp-btn-copy":
-            # Умное копирование: выделенное или всё
-            sel_text = self.get_selected_text()
-            if sel_text is not None:
-                self.post_message(self.CopyRequested(self, sel_text, selection=sel_text))
-            else:
-                self.post_message(self.CopyRequested(self, self.get_text()))
+            self.post_message(self.CopyRequested(self, self.get_text()))
+
         elif btn_id == "cp-btn-paste":
             self.post_message(self.PasteRequested(self))
+
         elif btn_id == "cp-btn-clear":
             self.clear_content()
-        elif btn_id == "cp-btn-format":
-            self.post_message(self.FormatToggleRequested(self))
+
         elif btn_id == "cp-btn-wrap":
             w = self.content_widget
             if isinstance(w, RichLog):
                 self._wrap_state = not self._wrap_state
                 w.wrap = self._wrap_state
-                btn.label = self.BUTTONS_WRAP if self._wrap_state else "╌"
-                btn.add_class(f"variant-{'success' if self._wrap_state else 'warning'}")
-                btn.remove_class(f"variant-{'warning' if self._wrap_state else 'success'}")
+                if self._wrap_state:
+                    btn.label = self.BUTTONS_WRAP
+                    btn.variant = "default"
+                else:
+                    btn.label = "╌"
+                    btn.variant = "warning"
+
+        elif btn_id == "cp-btn-write":
+            if self._widget_type == "richlog":
+                self.write_to_log(
+                    f"[dim]{time.strftime('%H:%M:%S')}[/dim]  "
+                    f"[bold]line {self._write_counter + 1}[/bold]  "
+                    f"Lorem ipsum"
+                )
+                self._write_counter += 1

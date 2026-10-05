@@ -1,6 +1,7 @@
 HttpView {
     height: 1fr;
     layout: vertical;
+    border: none;
 }
 HttpView TextArea {
     height: 1fr;

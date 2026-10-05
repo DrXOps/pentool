@@ -96,7 +96,6 @@ IntruderScreen #payload-set-btn:hover {
 }
 IntruderScreen #payload-list {
     height: 1fr;
-    border: solid $primary-darken-2;
 }
 IntruderScreen #payload-buttons {
     height: 1;
