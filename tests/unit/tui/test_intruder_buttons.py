@@ -182,6 +182,7 @@ class TestIntruderButtons:
         screen._api = mock_api
         ssw = MagicMock()
         ssw.running = True
+        ssw.paused = False
         ssw.paused = False  # заставляем _ssw.paused возвращать False, а не MagicMock
         with patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock, return_value=ssw):
             _setup_screen(screen)
@@ -224,6 +225,7 @@ class TestIntruderButtons:
         screen = IntruderScreen()
         ssw = MagicMock()
         ssw.running = True
+        ssw.paused = False
         with patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock, return_value=ssw):
             _setup_screen(screen)
             try:

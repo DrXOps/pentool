@@ -39,6 +39,8 @@ class _TabState:
     def __init__(self, tab_id: str, name: str) -> None:
         self.tab_id = tab_id
         self.name = name
+        import uuid as _uuid
+        self.tab_uid: str = _uuid.uuid4().hex
         self.request_text: str = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
         self.response_text: str = ""
         self.sending: bool = False

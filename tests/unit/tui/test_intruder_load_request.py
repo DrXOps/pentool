@@ -29,6 +29,9 @@ class _FakeApp:
 
 def _make_screen():
     screen = object.__new__(IntruderScreen)
+    # Manually init the tab state (avoiding heavy __init__ deps)
+    screen._tabs = []
+    screen._active_tab_id = None
     # query_one returns our fake editor for the template editor selector
     editor = _FakeEditor()
     screen.query_one = lambda *a, **k: editor
@@ -39,8 +42,12 @@ def _make_screen():
 
 def test_load_request_clears_previous_results():
     screen, editor = _make_screen()
+    from pentool.tui.screens.intruder.screen import _IntruderTabState
+    state = _IntruderTabState(tab_id="intruder-tab-1", name="Test")
+    screen._tabs = [state]
+    screen._active_tab_id = "intruder-tab-1"
     # simulate leftover results from a previous host
-    screen._all_results = ["old-result-1"]
+    state.all_results = ["old-result-1"]
     cleared = []
 
     original_clear = screen._clear_results

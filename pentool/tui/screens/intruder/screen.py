@@ -532,6 +532,35 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
             pass
         self._auto_save_tab(tab)
 
+    # ── DB persistence ────────────────────────────────────────────────────────
+
+    def _get_db_path(self) -> str | None:
+        """Get the current project database path."""
+        return getattr(self.app, "db_path", None) or getattr(self.app, "_db_path", "")
+
+    def _auto_save_tab(self, state: _IntruderTabState) -> None:
+        """Save tab state to database (fire-and-forget)."""
+        if self._api is None:
+            return
+        try:
+            self.run_worker(
+                self._api.save_tab(
+                    tab_uid=state.tab_uid,
+                    name=state.name,
+                    target_url=state.target_url,
+                    template=state.template_text,
+                    attack_type=state.attack_type.value,
+                    payloads_packed=None,
+                ),
+                exclusive=False,
+            )
+        except Exception as exc:
+            logger.debug("_auto_save_tab: %s", exc)
+
+    def _load_tabs_from_db(self) -> None:
+        """Load saved tabs from database on mount."""
+        raise NotImplementedError  # TODO: step 7 — full multi-tab restore
+
     # ── Rename (BaseModuleScreen interface) ───────────────────────────────────
 
     def _start_rename(self, tab_id: str) -> None:
@@ -2262,7 +2291,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
         return None
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
-        if event.data_table.id != "results-table":
+        if not event.data_table.id or not event.data_table.id.startswith("results-table-"):
             return
         self._sort_table_sql(
             event, _RESULTS_COL_NAMES,
@@ -2283,7 +2312,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """On row selection — show the details."""
-        if event.data_table.id != "results-table":
+        if not event.data_table.id or not event.data_table.id.startswith("results-table-"):
             return
         result = self._result_at_row(event.data_table, event.cursor_row)
         if result is None:
@@ -2292,7 +2321,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """On row highlight — show details too (works for keyboard nav)."""
-        if event.data_table.id != "results-table":
+        if not event.data_table.id or not event.data_table.id.startswith("results-table-"):
             return
         result = self._result_at_row(event.data_table, event.cursor_row)
         if result is None:
