@@ -15,6 +15,7 @@ from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from textual.widgets import TextArea
 
 logger = get_logger(__name__)
 
@@ -132,7 +133,33 @@ class DecoderScreen(Widget):
     @on(ContentPanel.PasteRequested)
     def on_dec_paste(self, event: ContentPanel.PasteRequested) -> None:
         """Вставка в ContentPanel (dec-input) из буфера обмена."""
-        self.app.notify("Paste functionality not implemented", severity="warning")
+        from pentool.utils.copy_as import paste_from_clipboard
+        clipboard = paste_from_clipboard()
+        if clipboard:
+            panel = event.panel
+            w = panel.content_widget
+            if isinstance(w, TextArea):
+                sel = w.selection
+                if sel and w.selected_text:
+                    # Замена выделенного текста через манипуляцию строками
+                    start_row, start_col = sel.start
+                    end_row, end_col = sel.end
+                    lines = w.text.splitlines(keepends=True)
+                    if start_row == end_row:
+                        line = lines[start_row]
+                        lines[start_row] = line[:start_col] + clipboard + line[end_col:]
+                    else:
+                        lines[start_row] = lines[start_row][:start_col] + clipboard
+                        lines = lines[:start_row + 1] + lines[end_row:]
+                        if end_row < len(lines):
+                            lines[end_row] = lines[end_row][end_col:]
+                        else:
+                            lines.append('')
+                    w.load_text(''.join(lines))
+                else:
+                    w.load_text(clipboard)
+        else:
+            self.app.notify("Nothing in clipboard", severity="warning")
 
     @on(ContentPanel.FormatToggleRequested)
     def on_dec_toggle_format(self, event: ContentPanel.FormatToggleRequested) -> None:
