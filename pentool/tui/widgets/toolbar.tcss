@@ -9,8 +9,9 @@ Toolbar {
     border-bottom: solid $primary-darken-2;
 }
 
-/* Разделитель между кнопками */
+/* Разделитель между кнопками — компактный */
 Toolbar .toolbar-sep {
+    min-width: 1;
     width: auto;
     color: $primary-darken-2;
 }
@@ -20,9 +21,9 @@ Toolbar Input {
     height: 1;
 }
 
-/* Все ToolbarButton внутри — без рамок (уже задано в toolbar_button.tcss) */
+/* Все ToolbarButton внутри — без рамок, вплотную к сепу */
 Toolbar ToolbarButton {
-    margin: 0 1;
+    margin: 0 0 0 1;
 }
 
 /* Все Label внутри — строчные */

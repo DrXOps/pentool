@@ -5,17 +5,13 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from textual import events as _tevents
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
-from textual.widget import Widget
-
-_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
-
 from textual.widgets import (
     Button,
     Input,
@@ -25,8 +21,13 @@ from textual.widgets import (
     ProgressBar,
     Select,
     Static,
+    TabbedContent,
+    TabPane,
     TextArea,
 )
+
+_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
+
 from pentool.api.intruder_api import (
     AttackType,
     ChainedPayloadSource,
@@ -51,6 +52,7 @@ from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
+from pentool.tui.screens.base import BaseModuleScreen
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.start_stop_widget import StartStopWidget
@@ -106,12 +108,178 @@ _PAYLOAD_LIST_PREVIEW_LIMIT = 500
 _LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
 DataTable = IntruderResultsTable
 
-class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTableMixin, RequestContextMenuMixin, Widget):
+
+@dataclass
+class _IntruderTabState:
+    """State of a single Intruder tab."""
+
+    tab_id: str = ""
+    tab_uid: str = ""        # UUID for DB persistence
+    name: str = "New Tab"
+    # Target
+    target_url: str = ""
+    # Template
+    template_text: str = ""
+    # Attack config
+    attack_type: AttackType = AttackType.SNIPER
+    thread_count: int = 1
+    delay_ms: int = 0
+    # Payloads
+    payload_sources: list = field(default_factory=list)
+    active_set_idx: int = 0
+    # Results
+    all_results: list = field(default_factory=list)
+    filtered_results: list = field(default_factory=list)
+    result_count: int = 0
+    current_result: "IntruderResult | None" = None
+    filter_spec: "FilterSpec | None" = None
+    grep_match_patterns: list = field(default_factory=list)
+    grep_extract_patterns: list = field(default_factory=list)
+    grep_only_match: bool = False
+    # Runtime state
+    running: bool = False
+    paused: bool = False
+    stop_requested: bool = False
+    payload_load_in_progress: bool = False
+    # Resume
+    last_payload_sets: list | None = None
+
+
+class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTableMixin, RequestContextMenuMixin, BaseModuleScreen):
     """Intruder module screen."""
 
     DEFAULT_CSS = _CSS
 
     BINDINGS = INTRUDER_BINDINGS
+
+    # TabRenameMixin config
+    _rename_input_id: str = "intruder-rename-input"
+    _rename_tab_prefix: str = "intruder-tab-"
+    _rename_tabs_widget_id: str = "intruder-tabs"
+
+    # RequestContextMenuMixin config
+    _cm_show_copy_url = False
+    _cm_show_send_repeater = True
+    _cm_show_send_intruder = False  # do not send back into itself
+    _cm_show_send_scanner = False
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        # ── Tabs ─────────────────────────────────────────────────────────────────
+        self._tabs: list[_IntruderTabState] = []
+        self._tab_counter: int = 0
+        self._active_tab_id: str | None = None
+        # ── API ───────────────────────────────────────────────────────────────────
+        self._api = None
+        # Grep Match/Extract — global across all tabs (filter bar is global)
+        self._grep_match_patterns: list[str] = []
+        self._grep_extract_patterns: list[str] = []
+        self._grep_only_match: bool = False
+        # Saved selection in template-editor (for ADD §§ after focus loss)
+        self._last_editor_selection: tuple | None = None
+        self._last_click_time: float = 0.0
+        # Auto-save state
+        self._state_loaded: bool = False
+        # Tracked auto-save workers — cancelled before closing API on exit
+        self._running_save_tasks: list[str] = []
+
+    # ── Active tab property + proxy properties ─────────────────────────────────
+
+    @property
+    def _active_tab(self) -> _IntruderTabState | None:
+        """Return the currently active tab state, or None."""
+        for t in self._tabs:
+            if t.tab_id == self._active_tab_id:
+                return t
+        return None
+
+    @property
+    def _attack_type(self) -> AttackType:
+        t = self._active_tab
+        return t.attack_type if t else AttackType.SNIPER
+
+    @_attack_type.setter
+    def _attack_type(self, v: AttackType) -> None:
+        t = self._active_tab
+        if t:
+            t.attack_type = v
+
+    @property
+    def _payloads(self) -> list:
+        t = self._active_tab
+        return t.payload_sources if t else [[]]
+
+    @_payloads.setter
+    def _payloads(self, v: list) -> None:
+        t = self._active_tab
+        if t:
+            t.payload_sources = v
+
+    @property
+    def _active_set_idx(self) -> int:
+        t = self._active_tab
+        return t.active_set_idx if t else 0
+
+    @_active_set_idx.setter
+    def _active_set_idx(self, v: int) -> None:
+        t = self._active_tab
+        if t:
+            t.active_set_idx = v
+
+    @property
+    def _all_results(self) -> list:
+        t = self._active_tab
+        return t.all_results if t else []
+
+    @_all_results.setter
+    def _all_results(self, v: list) -> None:
+        t = self._active_tab
+        if t:
+            t.all_results = v
+
+    @property
+    def _filtered_results(self) -> list:
+        t = self._active_tab
+        return t.filtered_results if t else []
+
+    @_filtered_results.setter
+    def _filtered_results(self, v: list) -> None:
+        t = self._active_tab
+        if t:
+            t.filtered_results = v
+
+    @property
+    def _current_result(self) -> "IntruderResult | None":
+        t = self._active_tab
+        return t.current_result if t else None
+
+    @_current_result.setter
+    def _current_result(self, v: "IntruderResult | None") -> None:
+        t = self._active_tab
+        if t:
+            t.current_result = v
+
+    @property
+    def _filter_spec(self) -> "FilterSpec | None":
+        t = self._active_tab
+        return t.filter_spec if t else None
+
+    @_filter_spec.setter
+    def _filter_spec(self, v: "FilterSpec | None") -> None:
+        t = self._active_tab
+        if t:
+            t.filter_spec = v
+
+    @property
+    def _payload_load_in_progress(self) -> bool:
+        t = self._active_tab
+        return t.payload_load_in_progress if t else False
+
+    @_payload_load_in_progress.setter
+    def _payload_load_in_progress(self, v: bool) -> None:
+        t = self._active_tab
+        if t:
+            t.payload_load_in_progress = v
 
     @property
     def _ssw(self) -> StartStopWidget:
@@ -176,57 +344,38 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
         else:
             self.app.notify("Nothing in clipboard", severity="warning")
 
-    # RequestContextMenuMixin config
-    _cm_show_copy_url = False
-    _cm_show_send_repeater = True
-    _cm_show_send_intruder = False  # do not send back into itself
-    _cm_show_send_scanner = False
-
     @staticmethod
     def _template_editor(screen: "IntruderScreen") -> TextArea:
-        """Helper: получить TextArea внутри template-editor ContentPanel."""
-        panel = screen.query_one("#template-panel", ContentPanel)
+        """Helper: получить TextArea внутри template-editor ContentPanel for the active tab."""
+        tab = screen._active_tab
+        tab_id = tab.tab_id if tab else None
+        if not tab_id:
+            panel = screen.query_one("#template-panel", ContentPanel)
+            return panel.content_widget  # type: ignore[return-value]
+        try:
+            panel = screen.query_one(f"#template-panel-{tab_id}", ContentPanel)
+        except Exception:
+            panel = screen.query_one("#template-panel", ContentPanel)
         return panel.content_widget  # type: ignore[return-value]
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        # Each entry is either a plain list[str] (small/manual/generated
-        # sets) or a FilePayloadSource (large file-backed set, streamed —
-        # see _load_payloads_from_file). Both support len()/bool()/iteration,
-        # so the rest of the screen (and the attack engine) treats them
-        # uniformly — see _update_payload_select, action_start.
-        self._payloads: list = [[]]
-        self._active_set_idx: int = 0
-        self._attack_type: AttackType = AttackType.SNIPER
+        # ── Tabs ─────────────────────────────────────────────────────────────────
+        self._tabs: list[_IntruderTabState] = []
+        self._tab_counter: int = 0
+        self._active_tab_id: str | None = None
+        # ── API ───────────────────────────────────────────────────────────────────
         self._api = None
-        self._all_results: list[IntruderResult] = []     # все результаты (без фильтра)
-        self._filtered_results: list[IntruderResult] = []  # отфильтрованные (то что в таблице)
-        self._current_result: IntruderResult | None = None  # for the detail panel
-        self._filter_spec: FilterSpec | None = None  # filter predicates (status, length)
-        self._grep_match_patterns: list[str] = []   # grep-match patterns (for highlighting)
-        self._grep_extract_patterns: list[str] = [] # grep-extract patterns (for extractions)
-        self._grep_only_match: bool = False         # "Only matches" toggle
+        # Grep Match/Extract — global across all tabs (filter bar is global)
+        self._grep_match_patterns: list[str] = []
+        self._grep_extract_patterns: list[str] = []
+        self._grep_only_match: bool = False
         # _sort_col / _sort_reverse — inherited from SortableTableMixin
-        # NOT named `_running` — that name collides with
-        # textual.message_pump.MessagePump._running, an internal attribute
-        # every Widget already has (True while its own message loop is
-        # active — essentially always once mounted, nothing to do with
-        # whether an attack is in progress). This module used to reset it
-        # to False in on_mount() as a workaround for exactly that collision;
-        # renaming removes the need for the workaround.
-        # _running / _paused живут в StartStopWidget (self._ssw)
-        # Grep Match/Extract (Block 4.4) — handled via _filter_spec now
-        # Fields kept for grep highlight/extract logic that needs them separately
         # Saved selection in template-editor (for ADD §§ after focus loss)
         self._last_editor_selection: tuple | None = None
         self._last_click_time: float = 0.0
         # Auto-save state
         self._state_loaded: bool = False
-        self._tab_name: str = "Intruder"
-        # True while a file-based payload set is being counted/loaded —
-        # blocks starting a new load and disables edits on that set until
-        # the streaming count finishes (see _load_payloads_from_file).
-        self._payload_load_in_progress: bool = False
         # Tracked auto-save workers — cancelled before closing API on exit
         self._running_save_tasks: list[str] = []
 
@@ -263,12 +412,30 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
         await super().on_event(event)
 
     def compose(self) -> ComposeResult:
+        # ── Toolbar (global) ───────────────────────────────────────────────
         yield Toolbar(
+            ToolbarButton("➕ Tab", "btn-new-tab"),
+            Toolbar.sep(),
+            ToolbarButton("➖ Tab", "btn-close-tab"),
+            Toolbar.sep(),
             StartStopWidget(),
             Toolbar.sep(),
             ToolbarButton("Clear results", "btn-clear-results"),
             Toolbar.sep(),
             ToolbarButton("Export CSV", "btn-export-csv"),
+            Toolbar.sep(),
+            Label("Attack:", classes="toolbar-label"),
+            ToolbarButton("Sniper ▼", "btn-attack-type"),
+            Toolbar.sep(),
+            ToolbarButton("Add §§",    "btn-add-marker"),
+            ToolbarButton("Clear §§",  "btn-clear-markers"),
+            Toolbar.sep(),
+            ToolbarButton("Auto §§",   "btn-mark-params"),
+            Toolbar.sep(),
+            Static(
+                _ATTACK_DESCRIPTIONS[AttackType.SNIPER],
+                id="attack-type-desc",
+            ),
             Toolbar.sep(),
             Label("Threads:", classes="toolbar-label"),
             Input("10", id="input-threads", placeholder="10", compact=True, type="integer"),
@@ -278,102 +445,242 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
             Checkbox("⚡ Turbo", id="chk-turbo", value=False),
         )
 
-        with Horizontal(id="top-area"):
-            yield from self._compose_positions()
-            yield ResizeHandle("positions-panel", "payloads-panel", id="resize-pos-pay")
-            yield from self._compose_payloads()
+        # ── TabbedContent — each tab has its own positions + payloads ─────
+        with Horizontal(id="intruder-main"):
+            with Vertical(id="tabs-area"):
+                yield TabbedContent(id="intruder-tabs")
 
-        yield ResizeHandle("top-area", "results-area", vertical=True, id="resize-top-results")
+        # ── Global progress + filter + detail panel ───────────────────────
+        with Horizontal(id="intruder-progress-row"):
+            yield ProgressBar(total=100, id="attack-progress", show_eta=False)
+            yield Static("0/0 (0%)", id="progress-label")
 
-        yield from self._compose_results()
+        yield _IntruderFilterBar(id="intruder-filter-bar")
 
-    def _compose_positions(self) -> ComposeResult:
-        with Vertical(id="positions-panel"):
-            yield Static("Positions", classes="section-title")
-            yield Toolbar(
-                Label("Attack:", classes="pos-label"),
-                ToolbarButton("Sniper ▼", "btn-attack-type"),
-                Toolbar.sep(),
-                ToolbarButton("Add §§",    "btn-add-marker"),
-                ToolbarButton("Clear §§",  "btn-clear-markers"),
-                Toolbar.sep(),
-                ToolbarButton("Auto §§",   "btn-mark-params"),
-                Toolbar.sep(),
-                Static(
-                    _ATTACK_DESCRIPTIONS[AttackType.SNIPER],
-                    id="attack-type-desc",
-                ),
-            )
-            yield ContentPanel(
+        with Horizontal(id="intruder-detail-panel", classes="intruder-detail-panel"):
+            with Vertical(id="detail-request-col", classes="detail-col"):
+                yield HttpView("Request", id="detail-request", classes="detail-view")
+            yield ResizeHandle("detail-request-col", "detail-response-col")
+            with Vertical(id="detail-response-col", classes="detail-col"):
+                yield HttpView("Response", id="detail-response", classes="detail-view")
+        
+    # ── Tab management ───────────────────────────────────────────────────────
+
+    def action_new_tab(self) -> None:
+        """Create a new Intruder tab."""
+        self._tab_counter += 1
+        tab_id = f"intruder-tab-{self._tab_counter}"
+        name = f"Tab {self._tab_counter}"
+        import uuid as _uuid
+        state = _IntruderTabState(
+            tab_id=tab_id,
+            tab_uid=_uuid.uuid4().hex,
+            name=name,
+        )
+        self._tabs.append(state)
+
+        tabs = self.query_one("#intruder-tabs", TabbedContent)
+        pane = TabPane(name, id=tab_id)
+        tabs.add_pane(pane)
+        tabs.active = tab_id
+        self._active_tab_id = tab_id
+
+        # Mount tab content asynchronously
+        self.call_after_refresh(self._mount_tab_widgets, tab_id, state)
+
+    def action_close_tab(self) -> None:
+        """Close the active tab."""
+        if len(self._tabs) <= 1:
+            return
+        tab_id = self._active_tab_id
+        if tab_id is None:
+            return
+        # Stop attack if running
+        tab = self._active_tab
+        if tab and tab.running and self._api is not None:
+            self.run_worker(self._api.stop(), exit_on_error=False)
+        tabs = self.query_one("#intruder-tabs", TabbedContent)
+        tabs.remove_pane(tab_id)
+        self._tabs = [t for t in self._tabs if t.tab_id != tab_id]
+        if self._tabs:
+            self._active_tab_id = self._tabs[-1].tab_id
+            tabs.active = self._active_tab_id
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        if event.tabbed_content.id != "intruder-tabs":
+            return
+        pane = event.pane
+        if pane is None:
+            return
+        # Save current tab state
+        self._save_current_tab_state()
+        self._active_tab_id = pane.id
+        # Rebuild table for the new active tab
+        self._rebuild_table_data()
+        self._sync_ai_ui()
+
+    def _save_current_tab_state(self) -> None:
+        """Save current tab state to memory."""
+        tab = self._active_tab
+        if tab is None:
+            return
+        try:
+            # Save template text
+            editor = self._template_editor(self)
+            tab.template_text = editor.text
+        except Exception:
+            pass
+        self._auto_save_tab(tab)
+
+    # ── Rename (BaseModuleScreen interface) ───────────────────────────────────
+
+    def _start_rename(self, tab_id: str) -> None:
+        state = None
+        for t in self._tabs:
+            if t.tab_id == tab_id:
+                state = t
+                break
+        if state is None:
+            return
+        try:
+            inp = Input(id=self._rename_input_id, placeholder="Tab name...", compact=True)
+            inp.value = state.name
+            inp.display = True
+            self.query_one("#intruder-tabs", TabbedContent).parent.mount(inp)
+            inp.focus()
+            inp.action_select_all()
+            inp._rename_tab_id = tab_id  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    def _rename_tab(self, tab_id: str, new_name: str) -> None:
+        state = None
+        for t in self._tabs:
+            if t.tab_id == tab_id:
+                state = t
+                break
+        if state is None:
+            return
+        state.name = new_name
+        try:
+            tabs = self.query_one("#intruder-tabs", TabbedContent)
+            tab_widget = tabs.get_tab(tab_id)
+            if tab_widget is not None:
+                tab_widget.label = new_name
+        except Exception:
+            pass
+        self._auto_save_tab(state)
+
+    def _mount_tab_widgets(self, tab_id: str, state: _IntruderTabState) -> None:
+        """Mount the positions/payloads/results widgets inside a tab."""
+        try:
+            pane = self.query_one(f"#{tab_id}", TabPane)
+            from textual.containers import Horizontal as _H, Vertical as _V
+            # Tab body: positions (left) + payloads (right)
+            body = _V(classes="intruder-tab-body")
+            pane.mount(body)
+            self.call_after_refresh(self._fill_tab_body, tab_id, state, body)
+        except Exception:
+            pass
+
+    def _fill_tab_body(self, tab_id: str, state: _IntruderTabState, body) -> None:
+        from textual.containers import Horizontal as _H, Vertical as _V
+        from pentool.tui.widgets.request_editor import RequestEditor
+        try:
+            top_row = _H(classes="intruder-tab-top", id=f"top-row-{tab_id}")
+            # Positions panel
+            pos_panel = _V(classes="positions-panel-tab", id=f"pos-panel-{tab_id}")
+            pos_panel.mount(ContentPanel(
                 title="Request Template",
                 widget_type="textarea",
-                initial_text="GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
+                initial_text=state.template_text or "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
                 buttons=["copy", "paste", "clear"],
-                id="template-panel",
-            )
+                id=f"template-panel-{tab_id}",
+            ))
+            top_row.mount(pos_panel)
+            top_row.mount(ResizeHandle(
+                f"pos-panel-{tab_id}", f"pay-panel-{tab_id}",
+                id=f"resize-{tab_id}",
+            ))
 
-    def _compose_payloads(self) -> ComposeResult:
-        with Vertical(id="payloads-panel"):
-            yield Static("Payloads", classes="section-title")
-            yield Toolbar(
-                Label("Payload set:"),
-                ToolbarButton("Set 1 ▼", "btn-payload-set"),
-            )
-            yield Toolbar(
+            # Payloads panel
+            pay_panel = _V(classes="payloads-panel-tab", id=f"pay-panel-{tab_id}")
+            pay_panel.mount(Static("Payloads", classes="section-title"))
+            pay_panel.mount(Toolbar(
                 ToolbarButton("Add",           "btn-payload-add"),
                 ToolbarButton("Remove",        "btn-payload-remove"),
                 ToolbarButton("Clear",         "btn-payload-clear"),
                 ToolbarButton("Load from file…", "btn-payload-load"),
                 ToolbarButton("Generate…",     "btn-payload-generate"),
                 ToolbarButton("🧠 Smart…",     "btn-payload-smart", classes="pro-locked"),
-                id="payload-buttons-toolbar",
-            )
-            # Line-count readout for the active set — shows a live counter
-            # while a large file is being streamed/counted (see
-            # _load_payloads_from_file), then the final "N lines" total.
-            # Kept separate from the "Set N ▼" button label so it can update
-            # every ~200ms during a big load without touching that button.
-            yield Static("", id="payload-count-label", classes="payload-count-label")
-            yield ListView(id="payload-list")
-            with Horizontal(id="processing-bar"):
-                yield Label("Processing:")
-                yield Checkbox("URL encode",  id="proc-url-encode",  value=False)
-                yield Checkbox("Base64",      id="proc-base64",      value=False)
-                yield Checkbox("HTML encode", id="proc-html-encode", value=False)
-                yield Checkbox("MD5",         id="proc-md5",         value=False)
+                id=f"payload-buttons-{tab_id}",
+            ))
+            pay_panel.mount(Static("", id="payload-count-label", classes="payload-count-label"))
+            pay_panel.mount(ListView(id="payload-list"))
+            from textual.containers import Horizontal as _PH
+            pay_panel.mount(_PH(
+                Label("Processing:"),
+                Checkbox("URL encode",  id="proc-url-encode",  value=False),
+                Checkbox("Base64",      id="proc-base64",      value=False),
+                Checkbox("HTML encode", id="proc-html-encode", value=False),
+                Checkbox("MD5",         id="proc-md5",         value=False),
+                classes="processing-bar",
+            ))
+            top_row.mount(pay_panel)
+            body.mount(top_row)
 
-    def _compose_results(self) -> ComposeResult:
-        with Vertical(id="results-area"):
-            yield _IntruderFilterBar(id="intruder-filter-bar")
-            with Horizontal(id="results-toolbar"):
-                pass
-            with Horizontal(id="progress-row"):
-                yield ProgressBar(total=100, id="attack-progress", show_eta=False)
-                yield Static("0/0 (0%)", id="progress-label")
-            yield DataTable(
-                id="results-table",
+            # Results area inside tab
+            body.mount(ResizeHandle(
+                f"top-row-{tab_id}", f"results-area-{tab_id}",
+                vertical=True, id=f"resize-v-{tab_id}",
+            ))
+            results_area = _V(id=f"results-area-{tab_id}", classes="intruder-tab-results")
+            dt = DataTable(
+                id=f"results-table-{tab_id}",
                 columns=_RESULTS_COL_NAMES,
                 column_widths=[5, 45, 8, 10, 10, 30],
                 cursor_type="row",
                 zebra_stripes=True,
                 max_column_content_width=120,
             )
-            with Horizontal(id="intruder-detail-panel", classes="intruder-detail-panel"):
-                with Vertical(id="detail-request-col", classes="detail-col"):
-                    yield HttpView("Request", id="detail-request", classes="detail-view")
-                yield ResizeHandle("detail-request-col", "detail-response-col")
-                with Vertical(id="detail-response-col", classes="detail-col"):
-                    yield HttpView("Response", id="detail-response", classes="detail-view")
-        
+            results_area.mount(dt)
+            body.mount(results_area)
+
+            self.call_after_refresh(self._init_tab_content, tab_id, state)
+        except Exception as exc:
+            logger.debug("_fill_tab_body: %s", exc)
+
+    def _init_tab_content(self, tab_id: str, state: _IntruderTabState) -> None:
+        """Initialize tab content after widgets are mounted."""
+        try:
+            panel = self.query_one(f"#template-panel-{tab_id}", ContentPanel)
+            area = panel.content_widget
+            if state.template_text:
+                _load_into_textarea(area, state.template_text, ["§"])
+        except Exception:
+            pass
+
     def on_show(self) -> None:
         """When Intruder becomes visible, rebuild table via set_data (like Proxy)."""
         self._rebuild_table_data()
         self._sync_ai_ui()
 
+    def _results_table(self) -> DataTable | None:
+        """Return the DataTable for the active tab, or None."""
+        tab = self._active_tab
+        if tab is None or not tab.tab_id:
+            return None
+        try:
+            return self.query_one(f"#results-table-{tab.tab_id}", DataTable)
+        except Exception:
+            return None
+
     def _rebuild_table_data(self) -> None:
         """Отобразить _filtered_results (отфильтрованные SQL или in-memory)."""
+        table = self._results_table()
+        if table is None:
+            return
         try:
-            table = self.query_one("#results-table", DataTable)
             if not self._filtered_results:
                 # Если нет отфильтрованных — пробуем применить фильтр к _all_results
                 if self._all_results:
@@ -457,16 +764,16 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
         return ""
 
     def on_mount(self) -> None:
+        # Create the first tab
+        self.action_new_tab()
         # Reset StartStopWidget on mount (safety net for stale state)
         try:
             self._ssw.set_running(False)
         except Exception:
             pass
-        self._update_payload_select()
         self._setup_tooltips()
         # Load saved state from DB
         self._load_state_from_db()
-        # Detail panel is hidden via CSS display:none initially.
         # Apply FREE-license limits.
         self._apply_license_limits()
         self._init_ai_sync()
@@ -509,63 +816,35 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
         self._cancel_save_workers()
         # Cancel any in-flight _do_load_state / _do_load_results workers
         # from a previous on_mount or project-switch BEFORE calling
-        # switch_db(). switch_db() closes the old connection (close() →
-        # self._db = None), and any worker still running against the old
-        # connection would hit ProgrammingError('Cannot operate on a closed
-        # database.') — which, with exit_on_error=True (the default),
-        # propagated as a FATAL EXCEPTION that crashed the whole TUI.
-        # Cancelling them first lets CancelledError propagate through the
-        # worker instead, which Textual handles silently.
+        # switch_db().
         try:
             self.workers.cancel_node(self)
         except Exception as exc:
             logger.debug("op: %s", exc)
-        # Clear in-memory results from the previous project FIRST — before
-        # touching the DB connection. Without this, self._all_results (and
-        # the #results-table it feeds) kept showing whatever attack results
-        # were left over from the project that was open before, since
-        # nothing here ever reset them: switching to a brand-new project and
-        # sending a host to Intruder would show old results mixed in with
-        # (or entirely obscuring, if no new attack was run yet) the new
-        # project's data.
-        self._all_results = []
-        self._clear_results()
-        # Reset template/payloads/attack-type to their defaults BEFORE
-        # loading the new project's state — _do_load_state() only
-        # overwrites these if the NEW project's DB has its own saved
-        # intruder_state row. If it doesn't (a brand-new/empty project),
-        # _do_load_state() returns early and, without this reset, the
-        # screen kept showing the PREVIOUS project's template/payloads/
-        # attack type — the same class of leftover-artifact bug already
-        # fixed above for _all_results.
-        self._payloads = [[]]
-        self._active_set_idx = 0
-        self._attack_type = AttackType.SNIPER
+
+        # ── Tab management for project switch ──────────────────────────────
+        # Close all existing tabs and create one clean default tab
         try:
-            self._template_editor(self).text = (
-                "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
-            )
-        except Exception as exc:
-            logger.debug("op: %s", exc)
-        try:
-            btn = self.query_one("#btn-attack-type", ToolbarButton)
-            btn.label = "Sniper ▼"
-        except Exception as exc:
-            logger.debug("op: %s", exc)
-        try:
-            desc = self.query_one("#attack-type-desc", Static)
-            desc.update(_ATTACK_DESCRIPTIONS[AttackType.SNIPER])
-        except Exception as exc:
-            logger.debug("op: %s", exc)
-        self._update_payload_select()
+            tabs = self.query_one("#intruder-tabs", TabbedContent)
+            for state in list(self._tabs):
+                try:
+                    await tabs.remove_pane(state.tab_id)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        self._tabs = []
+        self._active_tab_id = None
+        self._tab_counter = 0
+        self.action_new_tab()
+        # ── End tab management ─────────────────────────────────────────────
+
         if self._api is None:
             self._api = IntruderAPI(db_path=db_path)
         else:
             await self._api.switch_db(db_path)
         self._state_loaded = False
         self._load_state_from_db()
-        # Restore this project's own saved results for the current tab (if
-        # any were auto-saved from a previous session against this same DB).
         self._load_results_from_db()
 
     def _load_results_from_db(self) -> None:
@@ -663,7 +942,8 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
     async def _do_load_state(self, api: "IntruderAPI") -> None:
         """Async worker to load state from DB."""
         try:
-            state = await api.load_state(self._tab_name)
+            _tab_name = self._active_tab.name if self._active_tab else "Intruder"
+            state = await api.load_state(_tab_name)
             if not state:
                 return
             # Restore template
@@ -705,12 +985,13 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
         try:
             editor = self._template_editor(self)
             template = editor.text
+            _tab_name = self._active_tab.name if self._active_tab else "Intruder"
             worker_name = f"intruder-save-state-{time.monotonic_ns()}"
             self._running_save_tasks.append(worker_name)
             self.run_worker(
                 self._do_auto_save(
                     api.save_state(
-                        tab_name=self._tab_name,
+                        tab_name=_tab_name,
                         template=template,
                         attack_type=self._attack_type.value,
                         payloads=serialize_payloads(self._payloads),
@@ -894,7 +1175,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
         has_extract = bool(self._grep_extract_patterns)
         if has_extract != had_extract:
             try:
-                table = self.query_one("#results-table", DataTable)
+                table = self._results_table()
                 if has_extract:
                     table.add_column("Extract")
                 else:
@@ -1927,13 +2208,19 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
                     except re.error as exc:
                         logger.debug("extract val: %s", exc)
                 row.append(extract_val)
-            self.query_one("#results-table", DataTable).add_rows([tuple(row)])
+            table = self._results_table()
+            if table is None:
+                return
+            table.add_rows([tuple(row)])
         except Exception as exc:
-            logger.debug("op: %s", exc)
+            logger.debug("_add_result_row: %s", exc)
 
     def _clear_results(self) -> None:
         try:
-            self.query_one("#results-table", DataTable).clear_data()
+            table = self._results_table()
+            if table is None:
+                return
+            table.clear_data()
         except Exception as exc:
             logger.debug("_clear_results: %s", exc)
         self._all_results = []
@@ -2113,7 +2400,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
 
     def _send_selected_to_repeater(self) -> None:
         try:
-            table = self.query_one("#results-table", DataTable)
+            table = self._results_table()
             result = self._result_at_row(table, table.cursor_row)
             if result is not None:
                 self.app.post_message(SendToRepeater(result.request_raw))  # type: ignore[attr-defined]
@@ -2123,7 +2410,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
     def _send_selected_to_scanner(self) -> None:
         try:
             from pentool.tui.messages import SendHostToScanner
-            table = self.query_one("#results-table", DataTable)
+            table = self._results_table()
             result = self._result_at_row(table, table.cursor_row)
             if result is not None:
                 # Parse URL from raw request
@@ -2144,7 +2431,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
     def action_open_in_browser(self) -> None:
         """Open the selected result URL in the default browser."""
         try:
-            table = self.query_one("#results-table", DataTable)
+            table = self._results_table()
             result = self._result_at_row(table, table.cursor_row)
             if result is not None and result.url:
                 import webbrowser
@@ -2154,7 +2441,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
 
     def _copy_selected_payload(self) -> None:
         try:
-            table = self.query_one("#results-table", DataTable)
+            table = self._results_table()
             result = self._result_at_row(table, table.cursor_row)
             if result is not None:
                 payload_str = " | ".join(result.payload_values)
