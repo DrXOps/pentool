@@ -346,16 +346,8 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
 
     @staticmethod
     def _template_editor(screen: "IntruderScreen") -> TextArea:
-        """Helper: получить TextArea внутри template-editor ContentPanel for the active tab."""
-        tab = screen._active_tab
-        tab_id = tab.tab_id if tab else None
-        if not tab_id:
-            panel = screen.query_one("#template-panel", ContentPanel)
-            return panel.content_widget  # type: ignore[return-value]
-        try:
-            panel = screen.query_one(f"#template-panel-{tab_id}", ContentPanel)
-        except Exception:
-            panel = screen.query_one("#template-panel", ContentPanel)
+        """Helper: получить TextArea внутри template-editor ContentPanel."""
+        panel = screen.query_one("#template-panel", ContentPanel)
         return panel.content_widget  # type: ignore[return-value]
 
     def __init__(self, **kwargs) -> None:
@@ -445,15 +437,55 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
             Checkbox("⚡ Turbo", id="chk-turbo", value=False),
         )
 
-        # ── TabbedContent — each tab has its own positions + payloads ─────
-        with Horizontal(id="intruder-main"):
-            with Vertical(id="tabs-area"):
-                yield TabbedContent(id="intruder-tabs")
+        # ── Content inside tab (template editor) ──────────────────────────
+        with Horizontal(id="top-area"):
+            with Vertical(id="positions-panel"):
+                yield ContentPanel(
+                    title="Request Template",
+                    widget_type="textarea",
+                    initial_text="GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
+                    buttons=["copy", "paste", "clear"],
+                    id="template-panel",
+                )
+            yield ResizeHandle("positions-panel", "results-area", id="resize-pos")
+            # ── Payloads panel (global) ──────────────────────────────────
+            with Vertical(id="payloads-panel"):
+                yield Static("Payloads", classes="section-title")
+                yield Toolbar(
+                    Label("Payload set:"),
+                    ToolbarButton("Set 1 ▼", "btn-payload-set"),
+                )
+                yield Toolbar(
+                    ToolbarButton("Add",           "btn-payload-add"),
+                    ToolbarButton("Remove",        "btn-payload-remove"),
+                    ToolbarButton("Clear",         "btn-payload-clear"),
+                    ToolbarButton("Load from file…", "btn-payload-load"),
+                    ToolbarButton("Generate…",     "btn-payload-generate"),
+                    ToolbarButton("🧠 Smart…",     "btn-payload-smart", classes="pro-locked"),
+                    id="payload-buttons-toolbar",
+                )
+                yield Static("", id="payload-count-label", classes="payload-count-label")
+                yield ListView(id="payload-list")
+                with Horizontal(id="processing-bar"):
+                    yield Label("Processing:")
+                    yield Checkbox("URL encode",  id="proc-url-encode",  value=False)
+                    yield Checkbox("Base64",      id="proc-base64",      value=False)
+                    yield Checkbox("HTML encode", id="proc-html-encode", value=False)
+                    yield Checkbox("MD5",         id="proc-md5",         value=False)
 
-        # ── Global progress + filter + detail panel ───────────────────────
-        with Horizontal(id="intruder-progress-row"):
-            yield ProgressBar(total=100, id="attack-progress", show_eta=False)
-            yield Static("0/0 (0%)", id="progress-label")
+        # ── Results + progress (global) ─────────────────────────────────
+        with Vertical(id="results-area"):
+            with Horizontal(id="progress-row"):
+                yield ProgressBar(total=100, id="attack-progress", show_eta=False)
+                yield Static("0/0 (0%)", id="progress-label")
+            yield DataTable(
+                id="results-table",
+                columns=_RESULTS_COL_NAMES,
+                column_widths=[5, 45, 8, 10, 10, 30],
+                cursor_type="row",
+                zebra_stripes=True,
+                max_column_content_width=120,
+            )
 
         yield _IntruderFilterBar(id="intruder-filter-bar")
 
@@ -479,14 +511,14 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
         )
         self._tabs.append(state)
 
-        tabs = self.query_one("#intruder-tabs", TabbedContent)
-        pane = TabPane(name, id=tab_id)
-        tabs.add_pane(pane)
-        tabs.active = tab_id
+        try:
+            tabs = self.query_one("#intruder-tabs", TabbedContent)
+            pane = TabPane(name, id=tab_id)
+            tabs.add_pane(pane)
+            tabs.active = tab_id
+        except Exception:
+            pass
         self._active_tab_id = tab_id
-
-        # Mount tab content asynchronously
-        self.call_after_refresh(self._mount_tab_widgets, tab_id, state)
 
     def action_close_tab(self) -> None:
         """Close the active tab."""
@@ -600,107 +632,15 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
             pass
         self._auto_save_tab(state)
 
-    def _mount_tab_widgets(self, tab_id: str, state: _IntruderTabState) -> None:
-        """Mount the positions/payloads/results widgets inside a tab."""
-        try:
-            pane = self.query_one(f"#{tab_id}", TabPane)
-            from textual.containers import Horizontal as _H, Vertical as _V
-            # Tab body: positions (left) + payloads (right)
-            body = _V(classes="intruder-tab-body")
-            pane.mount(body)
-            self.call_after_refresh(self._fill_tab_body, tab_id, state, body)
-        except Exception:
-            pass
-
-    def _fill_tab_body(self, tab_id: str, state: _IntruderTabState, body) -> None:
-        from textual.containers import Horizontal as _H, Vertical as _V
-        from pentool.tui.widgets.request_editor import RequestEditor
-        try:
-            top_row = _H(classes="intruder-tab-top", id=f"top-row-{tab_id}")
-            # Positions panel
-            pos_panel = _V(classes="positions-panel-tab", id=f"pos-panel-{tab_id}")
-            pos_panel.mount(ContentPanel(
-                title="Request Template",
-                widget_type="textarea",
-                initial_text=state.template_text or "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
-                buttons=["copy", "paste", "clear"],
-                id=f"template-panel-{tab_id}",
-            ))
-            top_row.mount(pos_panel)
-            top_row.mount(ResizeHandle(
-                f"pos-panel-{tab_id}", f"pay-panel-{tab_id}",
-                id=f"resize-{tab_id}",
-            ))
-
-            # Payloads panel
-            pay_panel = _V(classes="payloads-panel-tab", id=f"pay-panel-{tab_id}")
-            pay_panel.mount(Static("Payloads", classes="section-title"))
-            pay_panel.mount(Toolbar(
-                ToolbarButton("Add",           "btn-payload-add"),
-                ToolbarButton("Remove",        "btn-payload-remove"),
-                ToolbarButton("Clear",         "btn-payload-clear"),
-                ToolbarButton("Load from file…", "btn-payload-load"),
-                ToolbarButton("Generate…",     "btn-payload-generate"),
-                ToolbarButton("🧠 Smart…",     "btn-payload-smart", classes="pro-locked"),
-                id=f"payload-buttons-{tab_id}",
-            ))
-            pay_panel.mount(Static("", id="payload-count-label", classes="payload-count-label"))
-            pay_panel.mount(ListView(id="payload-list"))
-            from textual.containers import Horizontal as _PH
-            pay_panel.mount(_PH(
-                Label("Processing:"),
-                Checkbox("URL encode",  id="proc-url-encode",  value=False),
-                Checkbox("Base64",      id="proc-base64",      value=False),
-                Checkbox("HTML encode", id="proc-html-encode", value=False),
-                Checkbox("MD5",         id="proc-md5",         value=False),
-                classes="processing-bar",
-            ))
-            top_row.mount(pay_panel)
-            body.mount(top_row)
-
-            # Results area inside tab
-            body.mount(ResizeHandle(
-                f"top-row-{tab_id}", f"results-area-{tab_id}",
-                vertical=True, id=f"resize-v-{tab_id}",
-            ))
-            results_area = _V(id=f"results-area-{tab_id}", classes="intruder-tab-results")
-            dt = DataTable(
-                id=f"results-table-{tab_id}",
-                columns=_RESULTS_COL_NAMES,
-                column_widths=[5, 45, 8, 10, 10, 30],
-                cursor_type="row",
-                zebra_stripes=True,
-                max_column_content_width=120,
-            )
-            results_area.mount(dt)
-            body.mount(results_area)
-
-            self.call_after_refresh(self._init_tab_content, tab_id, state)
-        except Exception as exc:
-            logger.debug("_fill_tab_body: %s", exc)
-
-    def _init_tab_content(self, tab_id: str, state: _IntruderTabState) -> None:
-        """Initialize tab content after widgets are mounted."""
-        try:
-            panel = self.query_one(f"#template-panel-{tab_id}", ContentPanel)
-            area = panel.content_widget
-            if state.template_text:
-                _load_into_textarea(area, state.template_text, ["§"])
-        except Exception:
-            pass
-
     def on_show(self) -> None:
         """When Intruder becomes visible, rebuild table via set_data (like Proxy)."""
         self._rebuild_table_data()
         self._sync_ai_ui()
 
     def _results_table(self) -> DataTable | None:
-        """Return the DataTable for the active tab, or None."""
-        tab = self._active_tab
-        if tab is None or not tab.tab_id:
-            return None
+        """Return the global DataTable."""
         try:
-            return self.query_one(f"#results-table-{tab.tab_id}", DataTable)
+            return self.query_one("#results-table", DataTable)
         except Exception:
             return None
 
@@ -2291,7 +2231,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
         return None
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
-        if not event.data_table.id or not event.data_table.id.startswith("results-table-"):
+        if event.data_table.id != "results-table":
             return
         self._sort_table_sql(
             event, _RESULTS_COL_NAMES,
@@ -2312,7 +2252,7 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """On row selection — show the details."""
-        if not event.data_table.id or not event.data_table.id.startswith("results-table-"):
+        if event.data_table.id != "results-table":
             return
         result = self._result_at_row(event.data_table, event.cursor_row)
         if result is None:
