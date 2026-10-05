@@ -1870,6 +1870,8 @@ class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTab
 
     def action_resume(self) -> None:
         """Resume — перезапустить воркер (action_start безопасно возвращается при _running)."""
+        logger.info("INTRUDER: action_resume called, running=%s paused=%s", self._ssw.running, self._ssw.paused)
+        self._ssw.set_paused(False)
         self.action_start()
 
     def action_stop(self) -> None:
