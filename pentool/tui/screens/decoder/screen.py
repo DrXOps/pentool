@@ -131,20 +131,10 @@ class DecoderScreen(Widget):
 
     @on(ContentPanel.PasteRequested)
     def on_dec_paste(self, event: ContentPanel.PasteRequested) -> None:
-        """Вставка в ContentPanel (dec-input)."""
-        clipboard = self.app.get_clipboard_text()
-        if clipboard:
-            panel = event.panel
-            w = panel.content_widget
-            from textual.widgets import TextArea
-            if isinstance(w, TextArea):
-                # Если в панели есть выделение — заменяем выделенное, иначе весь текст
-                sel = w.selection
-                if sel is not None:
-                    old = w.text
-                    w.load_text(old[:sel.start] + clipboard + old[sel.end:])
-                else:
-                    w.load_text(clipboard)
+        """Вставка в ContentPanel (dec-input) из буфера обмена."""
+        from pentool.utils.copy_as import copy_to_clipboard
+        # В текущей реализации нет чтения клипборда. Заглушка:
+        self.app.notify("Paste: clipboard read not implemented", severity="warning")
 
     @on(ContentPanel.FormatToggleRequested)
     def on_dec_toggle_format(self, event: ContentPanel.FormatToggleRequested) -> None:
