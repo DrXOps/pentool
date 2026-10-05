@@ -8,10 +8,11 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import Label, RichLog, Static, TextArea
+from textual.widgets import Label, Static
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
+from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -45,8 +46,6 @@ class DecoderScreen(Widget):
             yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("⇅ Swap I/O",   "btn-dec-swap")
             yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("📋 Copy",       "btn-dec-copy")
-            yield Static(" │ ", classes="toolbar-sep")
             yield ToolbarButton("🔍 Smart",      "btn-dec-smart")
 
         # ── Operation selector (adding steps) ──────────────────────────────────
@@ -61,14 +60,23 @@ class DecoderScreen(Widget):
             # Input
             with Vertical(id="dec-input-col"):
                 yield Static("Input", id="dec-input-label", classes="dec-col-label")
-                yield TextArea(id="dec-input", language=None)
+                yield ContentPanel(
+                    "",  # без заголовка — есть Static выше
+                    widget_type="textarea",
+                    buttons=["copy", "paste", "clear"],
+                )
 
             yield ResizeHandle("dec-input-col", "dec-output-col", id="dec-resize-h")
 
             # Output
             with Vertical(id="dec-output-col"):
                 yield Static("Output", id="dec-output-label", classes="dec-col-label")
-                yield TextArea(id="dec-output", language=None)
+                yield ContentPanel(
+                    "",
+                    widget_type="textarea",
+                    textarea_read_only=True,
+                    buttons=["copy"],
+                )
 
         yield ResizeHandle("dec-work-area", "dec-steps-area", vertical=True,
                            id="dec-resize-v")
@@ -76,10 +84,14 @@ class DecoderScreen(Widget):
         # ── Chain steps log ────────────────────────────────────────────────────
         with Vertical(id="dec-steps-area"):
             yield Static("Chain steps", id="dec-steps-label", classes="dec-col-label")
-            yield RichLog(id="dec-steps-log", highlight=True, markup=True,
-                          wrap=True, max_lines=200)
+            yield ContentPanel(
+                "",
+                widget_type="richlog",
+                wrap=True,
+                max_lines=200,
+                buttons=["copy", "clear"],
+            )
 
-        
     # ── Toolbar actions ────────────────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-dec-run")
@@ -102,13 +114,42 @@ class DecoderScreen(Widget):
     def on_btn_dec_swap(self, _: ToolbarButton.Pressed) -> None:
         self._swap_io()
 
-    @on(ToolbarButton.Pressed, "#btn-dec-copy")
-    def on_btn_dec_copy(self, _: ToolbarButton.Pressed) -> None:
-        self.action_copy_result()
-
     @on(ToolbarButton.Pressed, "#btn-dec-smart")
     def on_btn_dec_smart(self, _: ToolbarButton.Pressed) -> None:
         self._smart_decode()
+
+    # ── ContentPanel handlers ──────────────────────────────────────────────────
+
+    @on(ContentPanel.CopyRequested)
+    def on_dec_copy(self, event: ContentPanel.CopyRequested) -> None:
+        """Копирование из любой ContentPanel в Decoder."""
+        text = event.selection or event.text
+        if text:
+            from pentool.utils.copy_as import copy_to_clipboard
+            if copy_to_clipboard(text):
+                self.app.notify("Copied", timeout=2)
+
+    @on(ContentPanel.PasteRequested)
+    def on_dec_paste(self, event: ContentPanel.PasteRequested) -> None:
+        """Вставка в ContentPanel (dec-input)."""
+        clipboard = self.app.get_clipboard_text()
+        if clipboard:
+            panel = event.panel
+            w = panel.content_widget
+            from textual.widgets import TextArea
+            if isinstance(w, TextArea):
+                # Если в панели есть выделение — заменяем выделенное, иначе весь текст
+                sel = w.selection
+                if sel is not None:
+                    old = w.text
+                    w.load_text(old[:sel.start] + clipboard + old[sel.end:])
+                else:
+                    w.load_text(clipboard)
+
+    @on(ContentPanel.FormatToggleRequested)
+    def on_dec_toggle_format(self, event: ContentPanel.FormatToggleRequested) -> None:
+        """Переключение raw/formatted — не применимо к Decoder."""
+        pass
 
     def _open_op_menu(self, btn: ToolbarButton) -> None:
         items = [
@@ -139,14 +180,14 @@ class DecoderScreen(Widget):
         self._chain.clear()
         self._update_chain_display()
         try:
-            self.query_one("#dec-steps-log", RichLog).clear()
+            self.query_one("#dec-steps-log", ContentPanel).clear_content()
         except Exception:
             pass
 
     def _swap_io(self) -> None:
         try:
-            inp = self.query_one("#dec-input", TextArea)
-            out = self.query_one("#dec-output", TextArea)
+            inp = self.query_one("#dec-input", ContentPanel).content_widget
+            out = self.query_one("#dec-output", ContentPanel).content_widget
             inp_text = inp.text
             inp.load_text(out.text)
             out.load_text(inp_text)
@@ -157,7 +198,7 @@ class DecoderScreen(Widget):
         """Auto-detect and chain-decode the input."""
         try:
             from pentool.api.decoder_api import detect_encoding, encode_op
-            inp = self.query_one("#dec-input", TextArea)
+            inp = self.query_one("#dec-input", ContentPanel).content_widget
             text = inp.text.strip()
             if not text:
                 self.app.notify("Input is empty", severity="warning")
@@ -182,8 +223,8 @@ class DecoderScreen(Widget):
                     break
 
             result = current
-            self.query_one("#dec-output", TextArea).load_text(result)
-            log = self.query_one("#dec-steps-log", RichLog)
+            self.query_one("#dec-output", ContentPanel).content_widget.load_text(result)
+            log = self.query_one("#dec-steps-log", ContentPanel).content_widget
             log.clear()
             if chain:
                 log.write(f"[bold cyan]Smart decode chain: {' → '.join(chain)}[/bold cyan]")
@@ -215,7 +256,7 @@ class DecoderScreen(Widget):
     def action_run_chain(self) -> None:
         try:
             from pentool.api.decoder_api import encode_op, run_chain
-            inp_text = self.query_one("#dec-input", TextArea).text
+            inp_text = self.query_one("#dec-input", ContentPanel).content_widget.text
             if not inp_text:
                 self.app.notify("Input is empty", severity="warning")
                 return
@@ -234,7 +275,7 @@ class DecoderScreen(Widget):
                 result, steps = run_chain(self._chain, inp_text)
                 chain_used = self._chain
 
-            self.query_one("#dec-output", TextArea).load_text(result)
+            self.query_one("#dec-output", ContentPanel).content_widget.load_text(result)
             self._render_steps(chain_used, steps)
 
         except Exception as exc:
@@ -242,7 +283,7 @@ class DecoderScreen(Widget):
 
     def _render_steps(self, chain: list[str], steps: list[str]) -> None:
         try:
-            log = self.query_one("#dec-steps-log", RichLog)
+            log = self.query_one("#dec-steps-log", ContentPanel).content_widget
             log.clear()
             log.write(f"[bold cyan]Chain: {' → '.join(chain)}[/bold cyan]")
             log.write("")
@@ -258,9 +299,10 @@ class DecoderScreen(Widget):
     # ── Copy / Clear ──────────────────────────────────────────────────────────
 
     def action_copy_result(self) -> None:
+        """Copy output to clipboard (called from hotkey)."""
         try:
             from pentool.utils.copy_as import copy_to_clipboard
-            text = self.query_one("#dec-output", TextArea).text
+            text = self.query_one("#dec-output", ContentPanel).content_widget.text
             if text and copy_to_clipboard(text):
                 self.app.notify("Result copied", timeout=2)
             else:
@@ -270,9 +312,9 @@ class DecoderScreen(Widget):
 
     def action_clear_all(self) -> None:
         try:
-            self.query_one("#dec-input", TextArea).load_text("")
-            self.query_one("#dec-output", TextArea).load_text("")
-            self.query_one("#dec-steps-log", RichLog).clear()
+            self.query_one("#dec-input", ContentPanel).clear_content()
+            self.query_one("#dec-output", ContentPanel).clear_content()
+            self.query_one("#dec-steps-log", ContentPanel).clear_content()
             self._chain.clear()
             self._update_chain_display()
         except Exception as exc:
@@ -282,8 +324,8 @@ class DecoderScreen(Widget):
 
     def load_text(self, text: str) -> None:
         try:
-            self.query_one("#dec-input", TextArea).load_text(text)
-            self.query_one("#dec-output", TextArea).load_text("")
-            self.query_one("#dec-steps-log", RichLog).clear()
+            self.query_one("#dec-input", ContentPanel).content_widget.load_text(text)
+            self.query_one("#dec-output", ContentPanel).clear_content()
+            self.query_one("#dec-steps-log", ContentPanel).clear_content()
         except Exception as exc:
             logger.debug("load_text: %s", exc)
