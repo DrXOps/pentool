@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -206,8 +208,26 @@ def extract_url_from_raw(raw: str) -> str:
     return f"{scheme}://{host}{path}"
 
 
+def _find_executable(name: str) -> str | None:
+    """Find executable by name, checking PATH and common paths."""
+    path = shutil.which(name)
+    if path:
+        return path
+    # fallback: common non-PATH locations
+    common = ["/usr/bin", "/usr/local/bin", "/tmp/xclip/usr/bin"]
+    for d in common:
+        p = os.path.join(d, name)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
+
 def copy_to_clipboard(text: str) -> bool:
     """Copy to clipboard via xclip/xsel/wl-copy/GTK/pyperclip. Returns success."""
+
+    if not text:
+        return False
+
     for cmd in [
         ["xclip", "-selection", "clipboard"],
         ["xsel", "--clipboard", "--input"],
@@ -246,3 +266,50 @@ def copy_to_clipboard(text: str) -> bool:
         pass
 
     return False
+
+
+def paste_from_clipboard() -> str | None:
+    """Read from clipboard via xclip/xsel/wl-paste/GTK/pyperclip. Returns text or None."""
+    for exe, args in [
+        ("xclip",  ["-selection", "clipboard", "-o"]),
+        ("xsel",   ["--clipboard", "--output"]),
+        ("wl-paste", []),
+    ]:
+        path = _find_executable(exe)
+        if not path:
+            continue
+        try:
+            result = subprocess.run([path, *args], timeout=2, capture_output=True)
+            if result.returncode == 0:
+                return result.stdout.decode("utf-8", errors="replace")
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+
+    # GTK clipboard read
+    try:
+        gtk_script = (
+            "import gi; gi.require_version('Gtk','3.0'); "
+            "from gi.repository import Gtk,Gdk; "
+            "cb=Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD); "
+            "txt=cb.wait_for_text(); "
+            "print(txt or '')"
+        )
+        result = subprocess.run(
+            ["python3", "-c", gtk_script],
+            timeout=3, capture_output=True,
+        )
+        if result.returncode == 0:
+            text = result.stdout.decode("utf-8", errors="replace").strip()
+            return text if text else None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # pyperclip as fallback
+    try:
+        import pyperclip  # type: ignore[import]
+        text = pyperclip.paste()
+        return text if text.strip() else None
+    except Exception:
+        pass
+
+    return None
