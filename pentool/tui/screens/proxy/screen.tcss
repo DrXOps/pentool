@@ -1,14 +1,6 @@
 ProxyScreen {
     layout: vertical;
 }
-ProxyScreen #toolbar {
-    height: 2;
-    background: $panel;
-    padding: 0 1;
-    align: left middle;
-    layout: horizontal;
-    border-bottom: solid $primary-darken-2;
-}
 ProxyScreen #proxy-subtabs {
     height: 1fr;
 }
@@ -154,5 +146,3 @@ ProxyScreen #ws-resp-panel {
     height: 100%;
     layout: vertical;
 }
-/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
-.toolbar-sep { width: auto; }

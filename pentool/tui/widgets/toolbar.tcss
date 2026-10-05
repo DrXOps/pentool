@@ -9,6 +9,12 @@ Toolbar {
     border-bottom: solid $primary-darken-2;
 }
 
+/* Разделитель между кнопками */
+Toolbar .toolbar-sep {
+    width: auto;
+    color: $primary-darken-2;
+}
+
 /* Все Input внутри тулбара — compact (height: 1) */
 Toolbar Input {
     height: 1;
@@ -22,4 +28,16 @@ Toolbar ToolbarButton {
 /* Все Label внутри — строчные */
 Toolbar Label {
     height: 1;
+}
+
+/* Checkbox внутри тулбара */
+Toolbar Checkbox {
+    height: 1;
+}
+
+/* Horizontal внутри тулбара (для вложенных групп) */
+Toolbar Horizontal {
+    height: 1;
+    layout: horizontal;
+    align: left middle;
 }

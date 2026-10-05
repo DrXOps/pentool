@@ -48,6 +48,7 @@ from pentool.tui.messages import SendToRepeater
 
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
@@ -58,6 +59,7 @@ from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.tui.widgets.toolbar import Toolbar
 from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar as _IntruderFilterBar
 from pentool.tui.widgets.intruder_results_table import IntruderResultsTable
 from pentool.tui.dialogs.intruder_input import InputDialog
@@ -104,7 +106,7 @@ _PAYLOAD_LIST_PREVIEW_LIMIT = 500
 _LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
 DataTable = IntruderResultsTable
 
-class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin, RequestContextMenuMixin, Widget):
+class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin, RequestContextMenuMixin, Widget):
     """Intruder module screen."""
 
     DEFAULT_CSS = _CSS
@@ -125,17 +127,8 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
 
     # ── ContentPanel handlers ─────────────────────────────────────────────────
 
-    @on(ContentPanel.CopyRequested)
-    def on_intruder_copy(self, event: ContentPanel.CopyRequested) -> None:
-        """Копирование из ContentPanel в буфер."""
-        text = event.selection or event.text
-        if text:
-            from pentool.utils.copy_as import copy_to_clipboard
-            if copy_to_clipboard(text):
-                self.app.notify("Copied", timeout=2)
-
     @on(ContentPanel.PasteRequested)
-    def on_intruder_paste(self, event: ContentPanel.PasteRequested) -> None:
+    def _on_cp_paste(self, event: ContentPanel.PasteRequested) -> None:
         """Вставка в ContentPanel из буфера обмена."""
         from pentool.utils.copy_as import paste_from_clipboard
         clipboard = paste_from_clipboard()
@@ -256,21 +249,22 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
         await super().on_event(event)
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="toolbar"):
-            yield ToolbarButton("▶ Start", "btn-start")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("■ Stop",  "btn-stop",  classes="disabled")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("Clear results", "btn-clear-results")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("Export CSV", "btn-export-csv")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield Label("Threads:", classes="toolbar-label")
-            yield Input("10", id="input-threads", placeholder="10", compact=True, type="integer")
-            yield Label("Delay(ms):", classes="toolbar-label")
-            yield Input("0",  id="input-delay",   placeholder="0",  compact=True, type="integer")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield Checkbox("⚡ Turbo", id="chk-turbo", value=False)
+        yield Toolbar(
+            ToolbarButton("▶ Start", "btn-start"),
+            Toolbar.sep(),
+            ToolbarButton("■ Stop",  "btn-stop",  classes="disabled"),
+            Toolbar.sep(),
+            ToolbarButton("Clear results", "btn-clear-results"),
+            Toolbar.sep(),
+            ToolbarButton("Export CSV", "btn-export-csv"),
+            Toolbar.sep(),
+            Label("Threads:", classes="toolbar-label"),
+            Input("10", id="input-threads", placeholder="10", compact=True, type="integer"),
+            Label("Delay(ms):", classes="toolbar-label"),
+            Input("0",  id="input-delay",   placeholder="0",  compact=True, type="integer"),
+            Toolbar.sep(),
+            Checkbox("⚡ Turbo", id="chk-turbo", value=False),
+        )
 
         with Horizontal(id="top-area"):
             yield from self._compose_positions()

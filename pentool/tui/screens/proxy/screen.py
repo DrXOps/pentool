@@ -69,16 +69,17 @@ _FILTER_RELOAD_DEBOUNCE_S = 0.6
 
 from textual import on
 
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
-
+from pentool.tui.widgets.toolbar import Toolbar
 
 from pentool.tui.widgets.proxy_data_table import ProxyDataTable
 
 DataTable = ProxyDataTable
 
-class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
+class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
     """Full Proxy module screen."""
 
     DEFAULT_CSS = _CSS
@@ -174,12 +175,12 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
         self._highlight_debounce_handle = None
 
     def _build_toolbar(self) -> ComposeResult:
-        with Horizontal(id="toolbar"):
-            yield ToolbarButton("○ Proxy",     "btn-proxy",     classes="inactive")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("○ Intercept", "btn-intercept", classes="inactive")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton(
+        yield Toolbar(
+            ToolbarButton("○ Proxy",     "btn-proxy",     classes="inactive"),
+            Toolbar.sep(),
+            ToolbarButton("○ Intercept", "btn-intercept", classes="inactive"),
+            Toolbar.sep(),
+            ToolbarButton(
                 "☐ Skip out-of-scope", "btn-enforce-scope",
                 tooltip=(
                     "When ON: requests to hosts NOT listed in Scope are "
@@ -188,11 +189,12 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
                     "only — ALL traffic is captured regardless of Scope. "
                     "Saved per-project."
                 ),
-            )
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("M/R",    "btn-mr")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("Clear", "btn-clear")
+            ),
+            Toolbar.sep(),
+            ToolbarButton("M/R",    "btn-mr"),
+            Toolbar.sep(),
+            ToolbarButton("Clear", "btn-clear"),
+        )
 
     def _compose_intercept_tab(self) -> ComposeResult:
         with TabPane("Intercept", id="tab-intercept"):

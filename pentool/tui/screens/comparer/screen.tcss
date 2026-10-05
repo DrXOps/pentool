@@ -4,22 +4,6 @@ ComparerScreen {
     height: 1fr;
 }
 
-/* ── Toolbar ─────────────────────────────────────────────────────────────── */
-ComparerScreen #cmp-toolbar {
-    height: 2;
-    width: 100%;
-    background: $panel;
-    layout: horizontal;
-    padding: 0 1;
-    align: left middle;
-    border-bottom: solid $primary-darken-2;
-    overflow: hidden hidden;
-}
-ComparerScreen .cmp-sep {
-    width: auto;
-    color: $primary-darken-2;
-}
-
 /* ── Stat bar ────────────────────────────────────────────────────────────── */
 ComparerScreen #cmp-stat-bar {
     height: 1;
@@ -74,5 +58,3 @@ ComparerScreen #cmp-diff-log {
     height: 1fr;
     padding: 0 1;
 }
-/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
-.toolbar-sep { width: auto; }

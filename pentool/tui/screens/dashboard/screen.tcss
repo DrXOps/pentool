@@ -214,5 +214,3 @@ DashboardScreen #matrix-col SeverityMatrix {
     width: 1fr;
     border: none;
 }
-/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
-.toolbar-sep { width: auto; }

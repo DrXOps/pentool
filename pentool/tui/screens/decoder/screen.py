@@ -10,11 +10,13 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.tui.widgets.toolbar import Toolbar
 from textual.widgets import TextArea
 
 logger = get_logger(__name__)
@@ -22,7 +24,7 @@ logger = get_logger(__name__)
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 
-class DecoderScreen(Widget):
+class DecoderScreen(ContentClipboardMixin, Widget):
     """Encoder / Decoder with operation chains."""
 
     DEFAULT_CSS = _CSS
@@ -38,16 +40,17 @@ class DecoderScreen(Widget):
 
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────
-        with Horizontal(id="dec-toolbar"):
-            yield ToolbarButton("▶ Run",        "btn-dec-run")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("+ Add Step",   "btn-dec-add")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("✗ Clear Chain","btn-dec-clrchain")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("⇅ Swap I/O",   "btn-dec-swap")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("🔍 Smart",      "btn-dec-smart")
+        yield Toolbar(
+            ToolbarButton("▶ Run",        "btn-dec-run"),
+            Toolbar.sep(),
+            ToolbarButton("+ Add Step",   "btn-dec-add"),
+            Toolbar.sep(),
+            ToolbarButton("✗ Clear Chain","btn-dec-clrchain"),
+            Toolbar.sep(),
+            ToolbarButton("⇅ Swap I/O",   "btn-dec-swap"),
+            Toolbar.sep(),
+            ToolbarButton("🔍 Smart",      "btn-dec-smart"),
+        )
 
         # ── Operation selector (adding steps) ──────────────────────────────────
         with Horizontal(id="dec-op-row"):
@@ -121,17 +124,8 @@ class DecoderScreen(Widget):
 
     # ── ContentPanel handlers ──────────────────────────────────────────────────
 
-    @on(ContentPanel.CopyRequested)
-    def on_dec_copy(self, event: ContentPanel.CopyRequested) -> None:
-        """Копирование из любой ContentPanel в Decoder."""
-        text = event.selection or event.text
-        if text:
-            from pentool.utils.copy_as import copy_to_clipboard
-            if copy_to_clipboard(text):
-                self.app.notify("Copied", timeout=2)
-
     @on(ContentPanel.PasteRequested)
-    def on_dec_paste(self, event: ContentPanel.PasteRequested) -> None:
+    def _on_cp_paste(self, event: ContentPanel.PasteRequested) -> None:
         """Вставка в ContentPanel (dec-input) из буфера обмена."""
         from pentool.utils.copy_as import paste_from_clipboard
         clipboard = paste_from_clipboard()

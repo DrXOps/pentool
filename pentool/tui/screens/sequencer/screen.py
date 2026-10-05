@@ -12,6 +12,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Input, Label, Static, TextArea
 
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.widgets.content_panel import ContentPanel
 
 from pentool.core.logging import get_logger
@@ -19,6 +20,7 @@ from pentool.tui.hotkeys.defaults import SEQUENCER_BINDINGS
 
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.tui.widgets.toolbar import Toolbar
 
 logger = get_logger(__name__)
 
@@ -32,7 +34,7 @@ _SOURCE_OPTIONS = [
 ]
 
 
-class SequencerScreen(Widget):
+class SequencerScreen(ContentClipboardMixin, Widget):
     """Capture and entropy analysis of tokens (session IDs, CSRF, JWT…)."""
 
     DEFAULT_CSS = _CSS
@@ -52,16 +54,20 @@ class SequencerScreen(Widget):
 
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────
-        from pentool.tui.widgets.toolbar_helper import build_toolbar
-        yield from build_toolbar(
-            ("▶ Capture",  "btn-seq-capture"),
-            ("■ Stop",     "btn-seq-stop",   {"classes": "disabled"}),
-            ("⚡ Analyze",  "btn-seq-analyze"),
-            ("📂 Load File","btn-seq-load"),
-            ("🗑 Clear",    "btn-seq-clear"),
-            ("📋 Copy",     "btn-seq-copy"),
-            ("💾 Export",   "btn-seq-export"),
-            id="seq-toolbar",
+        yield Toolbar(
+            ToolbarButton("▶ Capture",  "btn-seq-capture"),
+            Toolbar.sep(),
+            ToolbarButton("■ Stop",     "btn-seq-stop",   classes="disabled"),
+            Toolbar.sep(),
+            ToolbarButton("⚡ Analyze",  "btn-seq-analyze"),
+            Toolbar.sep(),
+            ToolbarButton("📂 Load File","btn-seq-load"),
+            Toolbar.sep(),
+            ToolbarButton("🗑 Clear",    "btn-seq-clear"),
+            Toolbar.sep(),
+            ToolbarButton("📋 Copy",     "btn-seq-copy"),
+            Toolbar.sep(),
+            ToolbarButton("💾 Export",   "btn-seq-export"),
         )
 
         # ── Config row ─────────────────────────────────────────────────────────

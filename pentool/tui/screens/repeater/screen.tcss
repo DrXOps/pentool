@@ -1,14 +1,6 @@
 RepeaterScreen {
     layout: vertical;
 }
-RepeaterScreen #top-bar {
-    height: 2;
-    background: $panel;
-    padding: 0 1;
-    align: left middle;
-    layout: horizontal;
-    border-bottom: solid $primary-darken-2;
-}
 RepeaterScreen #tabs-area {
     height: 1fr;
     layout: vertical;
@@ -71,5 +63,3 @@ RepeaterScreen #rename-input {
     background: $panel;
     layer: overlay;
 }
-/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
-.toolbar-sep { width: auto; }

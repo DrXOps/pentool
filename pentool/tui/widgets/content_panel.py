@@ -122,6 +122,7 @@ class ContentPanel(Widget):
     BUTTONS_PASTE: ClassVar[str] = "⎘"
     BUTTONS_CLEAR: ClassVar[str] = "✕"
     BUTTONS_FORMAT: ClassVar[str] = "⇄"
+    BUTTONS_SPECIAL: ClassVar[str] = "⏎"
     BUTTONS_WRAP: ClassVar[str] = "↩"
     BUTTONS_AUTOSCROLL: ClassVar[str] = "⬇"
 
@@ -131,6 +132,7 @@ class ContentPanel(Widget):
         "paste": BUTTONS_PASTE,
         "clear": BUTTONS_CLEAR,
         "format": BUTTONS_FORMAT,
+        "special": BUTTONS_SPECIAL,
         "wrap": BUTTONS_WRAP,
         "autoscroll": BUTTONS_AUTOSCROLL,
     }
@@ -258,7 +260,6 @@ class ContentPanel(Widget):
         btn_id = btn.id or ""
 
         if btn_id == "cp-btn-copy":
-            # Умное копирование: выделенное или всё
             sel_text = self.get_selected_text()
             if sel_text is not None:
                 self.post_message(self.CopyRequested(self, sel_text, selection=sel_text))

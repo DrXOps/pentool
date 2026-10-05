@@ -4,22 +4,6 @@ SequencerScreen {
     height: 1fr;
 }
 
-/* ── Toolbar ─────────────────────────────────────────────────────────────── */
-SequencerScreen #seq-toolbar {
-    height: 2;
-    width: 100%;
-    background: $panel;
-    layout: horizontal;
-    padding: 0 1;
-    align: left middle;
-    border-bottom: solid $primary-darken-2;
-    overflow: hidden hidden;
-}
-SequencerScreen .seq-sep {
-    width: auto;
-    color: $primary-darken-2;
-}
-
 /* ── Config row ──────────────────────────────────────────────────────────── */
 SequencerScreen #seq-config-row {
     height: 2;
@@ -126,5 +110,3 @@ SequencerScreen #seq-bits-label {
     height: 1;
     color: $text-muted;
 }
-/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
-.toolbar-sep { width: auto; }

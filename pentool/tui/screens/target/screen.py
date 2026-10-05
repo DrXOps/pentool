@@ -18,10 +18,12 @@ from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import TARGET_BINDINGS
 
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.tui.widgets.toolbar import Toolbar
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
@@ -120,7 +122,7 @@ def _format_tech_profile(profile: dict) -> str:
     return " | ".join(parts) if parts else ""
 
 
-class TargetScreen(Widget):
+class TargetScreen(ContentClipboardMixin, Widget):
     """Tree view of discovered hosts and URLs."""
 
     DEFAULT_CSS = _CSS
@@ -145,37 +147,33 @@ class TargetScreen(Widget):
         self._running_save_tasks.clear()
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="toolbar"):
-            yield ToolbarButton("★ Add to Scope",      "btn-add-scope")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("✖ Remove from Scope", "btn-remove-scope")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("⚙ Scope",             "btn-scope-rules",
-                                tooltip="Edit scope rules (hosts, wildcards, regex)")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton(
-                "🕷 Crawl Scope", "btn-crawl-scope",
-                tooltip="Crawl every in-scope host with the Spider"
-            )
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton(
-                "🕷 Crawl Host", "btn-crawl-host",
-                tooltip="Crawl the selected host in the tree with the Spider"
-            )
-            # "🤖 Use AI" чекбокс + разделители — в one Horizontal для скрытия целиком
-            with Horizontal(id="ai-crawl-box"):
-                yield Static(" │ ", classes="toolbar-sep")
-                yield Checkbox(
-                    "🤖 Use AI", id="cfg-ai-use", value=False,
-                    tooltip="When set, Spider adds AI-suggested endpoints after crawling"
-                )
-                yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("🗑 Clear",             "btn-clear")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("📄 Export JSON",       "btn-export")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("🧭 Recon",             "btn-recon",
-                                tooltip="Open Recon screen for the selected domain")
+        yield Toolbar(
+            ToolbarButton("★ Add to Scope",      "btn-add-scope"),
+            Toolbar.sep(),
+            ToolbarButton("✖ Remove from Scope", "btn-remove-scope"),
+            Toolbar.sep(),
+            ToolbarButton("⚙ Scope",             "btn-scope-rules",
+                          tooltip="Edit scope rules (hosts, wildcards, regex)"),
+            Toolbar.sep(),
+            ToolbarButton("🕷 Crawl Scope", "btn-crawl-scope",
+                          tooltip="Crawl every in-scope host with the Spider"),
+            Toolbar.sep(),
+            ToolbarButton("🕷 Crawl Host", "btn-crawl-host",
+                          tooltip="Crawl the selected host in the tree with the Spider"),
+            # "🤖 Use AI" чекбокс в отдельном Horizontal для show/hide
+            Horizontal(
+                Checkbox("🤖 Use AI", id="cfg-ai-use", value=False,
+                         tooltip="When set, Spider adds AI-suggested endpoints after crawling"),
+                id="ai-crawl-box",
+            ),
+            Toolbar.sep(),
+            ToolbarButton("🗑 Clear",             "btn-clear"),
+            Toolbar.sep(),
+            ToolbarButton("📄 Export JSON",       "btn-export"),
+            Toolbar.sep(),
+            ToolbarButton("🧭 Recon",             "btn-recon",
+                          tooltip="Open Recon screen for the selected domain"),
+        )
 
         # При старте скрываем AI-секцию если ai_enabled выключен
         from pentool.core.config import get_config

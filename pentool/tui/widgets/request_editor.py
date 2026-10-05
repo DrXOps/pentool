@@ -6,7 +6,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from textual import events as _tevents
+from textual import events as _tevents, on
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.message import Message
@@ -14,7 +14,11 @@ from textual.widget import Widget
 from textual.widgets import Static, TextArea
 from textual.widgets.text_area import Selection
 
+from textual.widgets.text_area import Selection
+
+import pentool.utils.copy_as as clipboard_utils
 from pentool.tui.widgets.content_panel import ContentPanel
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 from pentool.utils.parser import ParsedRequest, ParsedResponse, build_http_request
 
@@ -554,6 +558,42 @@ class RequestEditor(ContentPanel):
         self._headers_part = ""
         self._special_chars_mode = False
         self._set_text("")
+
+    @on(ToolbarButton.Pressed, "#cp-btn-special")
+    def _on_special_chars(self, event: ToolbarButton.Pressed) -> None:
+        """Toggle display of \\r\\n special characters."""
+        btn = event.button
+        self._special_chars_mode = not self._special_chars_mode
+        if self._special_chars_mode:
+            btn.label = "¶"
+            btn.add_class("warn")
+        else:
+            btn.label = "⏎"
+            btn.remove_class("warn")
+        self._apply_special_chars()
+
+    def _apply_special_chars(self) -> None:
+        """Apply/remove special char visualization in the editor."""
+        try:
+            area = self.query_one("#cp-body-widget", TextArea)
+        except Exception:
+            return
+        raw = self._raw_full or area.text
+        if self._special_chars_mode:
+            from pentool.tui.widgets.request_editor import visualize_special_chars
+            displayed = visualize_special_chars(raw)
+            area.load_text(displayed)
+        else:
+            decoded = decode_special_chars(area.text)
+            area.load_text(decoded)
+        # Восстановить подсветку синтаксиса после load_text (она сбрасывается)
+        try:
+            from collections import defaultdict
+            area._highlights = defaultdict(list, _build_http_highlights(raw))
+            area._line_cache.clear()
+            area.refresh()
+        except Exception:
+            pass
 
     def beautify_body(self) -> bool:
         """Pretty-print the body (JSON or XML) in place, preserving headers.

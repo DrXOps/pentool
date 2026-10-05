@@ -4,19 +4,6 @@ DecoderScreen {
     height: 1fr;
 }
 
-/* ── Toolbar ─────────────────────────────────────────────────────────────── */
-DecoderScreen #dec-toolbar {
-    height: 2;
-    width: 100%;
-    background: $panel;
-    layout: horizontal;
-    padding: 0 1;
-    align: left middle;
-    border-bottom: solid $primary-darken-2;
-    overflow: hidden hidden;
-}
-
-
 /* ── Op row ──────────────────────────────────────────────────────────────── */
 DecoderScreen #dec-op-row {
     height: 2;
@@ -90,5 +77,3 @@ DecoderScreen #dec-steps-log {
     height: 1fr;
     padding: 0 1;
 }
-/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
-.toolbar-sep { width: auto; }

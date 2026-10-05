@@ -16,6 +16,7 @@ from pentool.core.logging import get_logger
 from pentool.services.repeater_service import RepeaterService
 from pentool.tui.widgets.diff_panel import DiffPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.tui.widgets.toolbar import Toolbar
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
@@ -75,7 +76,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self._active_tab_id: str | None = None
         self._sending: bool = False
         self._follow_redirects: bool = True
-        self._show_special_chars: bool = False
         self._search_matches: list[int] = []
         self._search_current: int = 0
         self._search_query: str = ""
@@ -119,6 +119,15 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
     def _diff_panel(self) -> DiffPanel:
         return self.query_one("#repeater-diff-panel", DiffPanel)
 
+    def _notify(self, msg: str, severity: str = "information", timeout: float = 2) -> None:
+        """Безопасная нотификация через app-level NotificationsMixin."""
+        try:
+            app = self.app
+            if hasattr(app, "notify"):
+                app.notify(msg, severity=severity, timeout=timeout)
+        except Exception:
+            pass
+
     def _editor(self, tab_id: str | None = None) -> RequestEditor:
         tid = tab_id or self._active_tab_id
         return self.query_one(f"#req-editor-{tid}", RequestEditor)
@@ -128,29 +137,28 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         return self.query_one(f"#resp-viewer-{tid}", ResponseViewer)
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="top-bar"):
-            yield ToolbarButton("⚡ Send",      "btn-send")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("✖ Cancel",    "btn-cancel", classes="disabled")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("↪ Follow: ON", "btn-follow", classes="active")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("➕ Tab",   "btn-new-tab")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("➖ Tab", "btn-close-tab")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("⏎ Special: OFF", "btn-special-chars")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton(
+        yield Toolbar(
+            ToolbarButton("⚡ Send",      "btn-send"),
+            Toolbar.sep(),
+            ToolbarButton("✖ Cancel",    "btn-cancel", classes="disabled"),
+            Toolbar.sep(),
+            ToolbarButton("↪ Follow: ON", "btn-follow", classes="active"),
+            Toolbar.sep(),
+            ToolbarButton("➕ Tab",   "btn-new-tab"),
+            Toolbar.sep(),
+            ToolbarButton("➖ Tab", "btn-close-tab"),
+            Toolbar.sep(),
+            ToolbarButton(
                 "✨ Beautify", "btn-beautify",
                 tooltip="Format request and response body (JSON/XML)"
-            )
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("→ Decoder",  "btn-send-decoder")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("→ Comparer", "btn-send-comparer")
-            yield Static(" │ ", classes="toolbar-sep")
-            yield ToolbarButton("→ Intruder", "btn-send-intruder")
+            ),
+            Toolbar.sep(),
+            ToolbarButton("→ Decoder",  "btn-send-decoder"),
+            Toolbar.sep(),
+            ToolbarButton("→ Comparer", "btn-send-comparer"),
+            Toolbar.sep(),
+            ToolbarButton("→ Intruder", "btn-send-intruder"),
+        )
 
         with Horizontal(id="content-row"):
             with Vertical(id="tabs-area"):
@@ -317,7 +325,11 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         resp_panel: Vertical,
     ) -> None:
         try:
-            editor = RequestEditor(label="Request Editor", id=f"req-editor-{tab_id}")
+            editor = RequestEditor(
+                    label="Request Editor",
+                    buttons=["copy", "paste", "clear", "special", "format"],
+                    id=f"req-editor-{tab_id}",
+                )
             req_panel.mount(editor)
 
             viewer = ResponseViewer(id=f"resp-viewer-{tab_id}")
@@ -812,10 +824,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
     def on_btn_close_tab(self, _: ToolbarButton.Pressed) -> None:
         self.action_close_tab()
 
-    @on(ToolbarButton.Pressed, "#btn-special-chars")
-    def on_btn_special_chars(self, event: ToolbarButton.Pressed) -> None:
-        self._toggle_special_chars(event.button)
-
     @on(ToolbarButton.Pressed, "#btn-beautify")
     def on_btn_beautify(self, _: ToolbarButton.Pressed) -> None:
         self._beautify_active_request()
@@ -839,13 +847,13 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             pass
 
         if req_ok and resp_ok:
-            self.notify("Request and response beautified", timeout=2)
+            self._notify("Request and response beautified", timeout=2)
         elif req_ok:
-            self.notify("Request beautified (response body not valid JSON/XML)", timeout=2)
+            self._notify("Request beautified (response body not valid JSON/XML)", timeout=2)
         elif resp_ok:
-            self.notify("Response beautified (request body not valid JSON/XML)", timeout=2)
+            self._notify("Response beautified (request body not valid JSON/XML)", timeout=2)
         else:
-            self.notify("Nothing to beautify — no valid JSON/XML body found", severity="warning", timeout=3)
+            self._notify("Nothing to beautify — no valid JSON/XML body found", severity="warning", timeout=3)
 
     @on(ToolbarButton.Pressed, "#btn-send-decoder")
     def on_btn_send_decoder(self, _: ToolbarButton.Pressed) -> None:
@@ -914,53 +922,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             editor.load_raw(raw)
         except Exception:
             pass
-
-    def _toggle_special_chars(self, btn: ToolbarButton) -> None:
-        """Toggle display of special characters \r\n in the editor."""
-        # Sync _raw_body from the current TextArea state before switching
-        self._sync_raw_body_from_editor()
-        self._show_special_chars = not self._show_special_chars
-        if self._show_special_chars:
-            btn.update("⏎ Special: ON")
-            btn.add_class("active")
-        else:
-            btn.update("⏎ Special: OFF")
-            btn.remove_class("active")
-        self._apply_special_chars_to_active_tab()
-
-    def _sync_raw_body_from_editor(self) -> None:
-        """Commit the current text as _raw_full before switching mode."""
-        tab_id = self._active_tab_id
-        if tab_id is None:
-            return
-        try:
-            editor = self._editor(tab_id)
-            editor._raw_full = editor.get_text()
-        except Exception:
-            pass
-
-    def _apply_special_chars_to_active_tab(self) -> None:
-        tab_id = self._active_tab_id
-        if tab_id is None:
-            return
-        try:
-            from textual.widgets import TextArea
-            from pentool.tui.widgets.request_editor import visualize_special_chars
-            editor = self._editor(tab_id)
-            area = editor.query_one("#editor-area", TextArea)
-            if self._show_special_chars:
-                raw = editor._raw_full or editor.get_text()
-                displayed = visualize_special_chars(raw)
-                editor._special_chars_mode = True
-                area.load_text(displayed)
-            else:
-                decoded = RequestEditor._decode_special_chars(area.text)
-                editor._raw_full = decoded
-                editor._special_chars_mode = False
-                editor.load_raw(decoded)
-        except Exception:
-            pass
-
 
     def _set_status(self, msg: str) -> None:
         try:

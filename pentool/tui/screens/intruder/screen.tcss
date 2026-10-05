@@ -1,14 +1,6 @@
 IntruderScreen {
     layout: vertical;
 }
-IntruderScreen #toolbar {
-    height: 2;
-    background: $panel;
-    padding: 0 1;
-    align: left middle;
-    layout: horizontal;
-    border-bottom: solid $primary-darken-2;
-}
 IntruderScreen #top-area {
     height: 1fr;
     layout: horizontal;
@@ -229,9 +221,6 @@ _InputDialog #buttons {
 _InputDialog #buttons ToolbarButton {
     margin: 0 0 0 1;
 }
-
-/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
-.toolbar-sep { width: auto; }
 
 /* Threads / Delay inputs in toolbar */
 IntruderScreen #toolbar Label.toolbar-label {

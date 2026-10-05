@@ -3,16 +3,6 @@ TargetScreen {
     width: 1fr;
     height: 1fr;
 }
-TargetScreen #toolbar {
-    height: 2;
-    width: 100%;
-    background: $panel;
-    layout: horizontal;
-    padding: 0 1;
-    align: left middle;
-    overflow: hidden hidden;
-    border-bottom: solid $primary-darken-2;
-}
 TargetScreen #main-split {
     layout: horizontal;
     height: 1fr;
@@ -39,5 +29,3 @@ TargetScreen #detail-log {
 TargetScreen .in-scope {
     color: $success;
 }
-/* toolbar-sep fix — Static does not inherit DEFAULT_CSS of ToolbarButton */
-.toolbar-sep { width: auto; }
