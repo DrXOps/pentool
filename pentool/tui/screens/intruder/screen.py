@@ -52,8 +52,8 @@ from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
-from pentool.tui.widgets.start_stop_mixin import StartStopMixin
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
+from pentool.tui.widgets.start_stop_widget import StartStopWidget
 from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
@@ -106,24 +106,39 @@ _PAYLOAD_LIST_PREVIEW_LIMIT = 500
 _LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
 DataTable = IntruderResultsTable
 
-class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin, RequestContextMenuMixin, Widget):
+class IntruderScreen(ContentClipboardMixin, AutoSaveMixin, AppMixin, SortableTableMixin, RequestContextMenuMixin, Widget):
     """Intruder module screen."""
 
     DEFAULT_CSS = _CSS
 
     BINDINGS = INTRUDER_BINDINGS
 
-    # @on хендлеры НЕ наследуются от StartStopMixin через MRO — Textual
-    # собирает _textual_on только из cls.__dict__ класса-виджета
-    # (MessagePump.__init_subclass__). Миксин — не Widget, поэтому его
-    # @on-декорированные методы не регистрируются. Объявляем явно.
-    @on(ToolbarButton.Pressed, "#btn-start")
-    def _on_btn_start(self, event: ToolbarButton.Pressed) -> None:
-        self.on_btn_start(event)
+    @property
+    def _ssw(self) -> StartStopWidget:
+        """Shortcut to the StartStopWidget."""
+        return self.query_one(StartStopWidget)
 
-    @on(ToolbarButton.Pressed, "#btn-stop")
-    def _on_btn_stop(self, event: ToolbarButton.Pressed) -> None:
-        self.on_btn_stop(event)
+    # ── StartStopWidget handlers ───────────────────────────────────────────
+
+    @on(StartStopWidget.StartRequested)
+    def _on_start_requested(self, _: StartStopWidget.StartRequested) -> None:
+        """Start attack."""
+        self.action_start()
+
+    @on(StartStopWidget.StopRequested)
+    def _on_stop_requested(self, _: StartStopWidget.StopRequested) -> None:
+        """Stop attack."""
+        self.action_stop()
+
+    @on(StartStopWidget.PauseRequested)
+    def _on_pause_requested(self, _: StartStopWidget.PauseRequested) -> None:
+        """Pause attack."""
+        self.action_toggle_pause()
+
+    @on(StartStopWidget.ResumeRequested)
+    def _on_resume_requested(self, _: StartStopWidget.ResumeRequested) -> None:
+        """Resume attack."""
+        self.action_resume()
 
     # ── ContentPanel handlers ─────────────────────────────────────────────────
 
@@ -199,8 +214,7 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
         # whether an attack is in progress). This module used to reset it
         # to False in on_mount() as a workaround for exactly that collision;
         # renaming removes the need for the workaround.
-        self._running: bool = False
-        self._paused: bool = False
+        # _running / _paused живут в StartStopWidget (self._ssw)
         # Grep Match/Extract (Block 4.4) — handled via _filter_spec now
         # Fields kept for grep highlight/extract logic that needs them separately
         # Saved selection in template-editor (for ADD §§ after focus loss)
@@ -250,9 +264,7 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
 
     def compose(self) -> ComposeResult:
         yield Toolbar(
-            ToolbarButton("▶ Start", "btn-start"),
-            Toolbar.sep(),
-            ToolbarButton("■ Stop",  "btn-stop",  classes="disabled"),
+            StartStopWidget(),
             Toolbar.sep(),
             ToolbarButton("Clear results", "btn-clear-results"),
             Toolbar.sep(),
@@ -445,13 +457,11 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
         return ""
 
     def on_mount(self) -> None:
-        # Reset on mount in case a previous session left this mid-attack
-        # (e.g. app crashed/restarted). No longer strictly needed for the
-        # MessagePump._running collision this used to guard against (see the
-        # rename note on _attack_running's declaration above), but still a
-        # reasonable safety net against stale state from a prior session.
-        self._running = False
-        self._paused = False
+        # Reset StartStopWidget on mount (safety net for stale state)
+        try:
+            self._ssw.set_running(False)
+        except Exception:
+            pass
         self._update_payload_select()
         self._setup_tooltips()
         # Load saved state from DB
@@ -893,7 +903,7 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
                 logger.debug("op: %s", exc)
 
         # Если атака не запущена — перезагрузить из SQL с новым фильтром
-        if not self._running:
+        if not self._ssw.running:
             api = self._get_api()
             if api:
                 self.run_worker(self._do_load_results(api), exclusive=False, exit_on_error=False)
@@ -1647,8 +1657,8 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
 
 
     def action_start(self) -> None:
-        logger.info("INTRUDER: action_start called, _attack_running=%s", self._running)
-        if self._running:
+        logger.info("INTRUDER: action_start called, running=%s", self._ssw.running)
+        if self._ssw.running:
             logger.info("INTRUDER: already running, skip")
             return
         if self._payload_load_in_progress:
@@ -1759,10 +1769,9 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
         except Exception as exc:
             logger.debug("op: %s", exc)
 
-        self._running = True
+        self._ssw.set_running(True)
         self._all_results = []
         self._clear_results()
-        self._set_running_state(True)
 
         total_payloads = sum(len(ps) for ps in payload_sets)
         mode_label = " [⚡ Turbo]" if turbo_mode else ""
@@ -1796,9 +1805,8 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
             from pentool.core.error_guard import err
             err(exc, "Intruder attack error", self, severity="error")
         finally:
-            self._running = False
             logger.info("INTRUDER: _run_attack finished, results=%d", len(self._all_results))
-            self._set_running_state(False)
+            self._ssw.set_running(False)
             self.app.notify(
                 f"Attack finished: {len(self._all_results)} requests",
                 severity="information", timeout=4,
@@ -1849,16 +1857,16 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
             logger.debug("op: %s", exc)
 
     def action_toggle_pause(self) -> None:
-        """Pause/Resume — диспатчим API, затем общая логика миксина."""
-        if not self._running or self._api is None:
+        """Pause/Resume — диспатчим API, обновляем StartStopWidget."""
+        if not self._ssw.running or self._api is None:
             return
-        if self._paused:
-            self.run_worker(self._api.resume(), exit_on_error=False)
-        else:
+        should_pause = not self._ssw.paused
+        if should_pause:
             self.run_worker(self._api.pause(), exit_on_error=False)
-        # Миксин меняет _paused, label, variant, вызывает action_resume
-        super().action_toggle_pause()
-        self.app.notify("Resumed" if not self._paused else "Paused", timeout=2)
+        else:
+            self.run_worker(self._api.resume(), exit_on_error=False)
+        self._ssw.set_paused(should_pause)
+        self.app.notify("Paused" if should_pause else "Resumed", timeout=2)
 
     def action_resume(self) -> None:
         """Resume — перезапустить воркер (action_start безопасно возвращается при _running)."""
@@ -1867,7 +1875,7 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
     def action_stop(self) -> None:
         if self._api is not None:
             self.run_worker(self._api.stop(), exit_on_error=False)
-        super().action_stop()
+        self._ssw.set_running(False)
         self.app.notify("Attack stopped", severity="warning")
 
     def on_worker_state_changed(self, event) -> None:
@@ -1876,10 +1884,13 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
         if getattr(event.worker, "name", None) != "intruder-attack":
             return
         if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
-            if self._running:
-                logger.info("INTRUDER: on_worker_state_changed — resetting _attack_running=False")
-                self._running = False
-                self._set_running_state(False)
+            if self._ssw.running:
+                # Не сбрасываем если на паузе — set_paused сохранит состояние
+                if self._ssw.paused:
+                    logger.info("INTRUDER: worker finished while paused — keeping paused state")
+                else:
+                    logger.info("INTRUDER: on_worker_state_changed — resetting running=False")
+                    self._ssw.set_running(False)
 
     @staticmethod
     def _row_from_result(result: IntruderResult) -> list[str]:

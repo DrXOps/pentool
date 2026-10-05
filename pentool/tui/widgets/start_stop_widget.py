@@ -107,9 +107,11 @@ class StartStopWidget(Widget):
     # ── Синхронизация UI (вызывается экраном) ────────────────────────
 
     def set_running(self, running: bool) -> None:
-        """Переключить UI между Start<->Pause и Stop active<->disabled."""
+        """Переключить UI между Start<->Pause и Stop active<->disabled.
+
+        Не сбрасывает _paused — экран сам управляет паузой.
+        """
         self._running = running
-        self._paused = False
         try:
             btn_start = self.query_one(f"#{self.ID_START}", ToolbarButton)
             btn_stop  = self.query_one(f"#{self.ID_STOP}",  ToolbarButton)
