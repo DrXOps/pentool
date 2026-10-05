@@ -10,7 +10,9 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import Input, Label, RichLog, Static, TextArea
+from textual.widgets import Input, Label, Static, TextArea
+
+from pentool.tui.widgets.content_panel import ContentPanel
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import SEQUENCER_BINDINGS
@@ -95,8 +97,7 @@ class SequencerScreen(Widget):
             with Vertical(id="seq-analysis-col"):
                 yield Static("Analysis", id="seq-analysis-label",
                              classes="seq-col-label")
-                yield RichLog(id="seq-analysis-log", highlight=True, markup=True,
-                              wrap=True, max_lines=500)
+                yield ContentPanel("", widget_type="richlog", wrap=True, max_lines=500, buttons=["copy"])
 
         yield ResizeHandle("seq-main-area", "seq-gauge-area", vertical=True, id="seq-resize-v")
 
@@ -399,7 +400,7 @@ class SequencerScreen(Widget):
     def _render_report(self, report) -> None:
         """Render the report in the UI."""
         try:
-            log = self.query_one("#seq-analysis-log", RichLog)
+            log = self.query_one("#seq-analysis-col", ContentPanel).content_widget
             log.clear()
 
             # Summary statistics
@@ -486,7 +487,7 @@ class SequencerScreen(Widget):
         self._seq.clear()
         try:
             self.query_one("#seq-token-area", TextArea).load_text("")
-            self.query_one("#seq-analysis-log", RichLog).clear()
+            self.query_one("#seq-analysis-col", ContentPanel).clear_content()
             self.query_one("#seq-counter", Static).update("Captured: 0")
             self.query_one("#seq-summary", Static).update(
                 "[dim]— Add tokens manually or capture from Proxy, then press Analyze —[/dim]"

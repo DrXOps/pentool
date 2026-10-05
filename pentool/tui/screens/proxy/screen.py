@@ -299,13 +299,14 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
                             id="ws-msg-label",
                             classes="panel-title",
                         )
-                        from textual.widgets import RichLog
-                        yield RichLog(
-                            id="ws-msg-log",
-                            highlight=True,
-                            markup=True,
+                        from pentool.tui.widgets.content_panel import ContentPanel
+                        yield ContentPanel(
+                            "WebSocket Messages",
+                            widget_type="richlog",
                             wrap=True,
                             max_lines=1000,
+                            buttons=["copy", "clear"],
+                            id="ws-msg-panel",
                         )
 
     def compose(self) -> ComposeResult:
@@ -349,7 +350,7 @@ class ProxyScreen(SortableTableMixin, RequestContextMenuMixin, AppMixin, Interce
     def _append_ws_frame(self, event) -> None:
         try:
             from textual.widgets import RichLog
-            log = self.query_one("#ws-msg-log", RichLog)
+            log = self.query_one("#ws-msg-panel", ContentPanel).content_widget
             opcode = getattr(event, "opcode", 0x1)
             direction = getattr(event, "direction", "")
             payload_text = getattr(event, "payload_text", "")

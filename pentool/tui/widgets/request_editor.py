@@ -14,6 +14,8 @@ from textual.widget import Widget
 from textual.widgets import Static, TextArea
 from textual.widgets.text_area import Selection
 
+from pentool.tui.widgets.content_panel import ContentPanel
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse, build_http_request
 
 _CSS = (Path(__file__).parent / "request_editor.tcss").read_text(encoding="utf-8")
@@ -413,17 +415,36 @@ def _load_into_textarea(area: TextArea, text: str,
     area.refresh()
 
 
-class HttpView(_BaseHttpWidget):
+class HttpView(ContentPanel):
     """Read-only viewer of HTTP request or response.
 
-    The full raw (headers + body) is loaded into a single TextArea.
-    Header highlighting — via _highlights; body — without syntax highlighter.
+    Наследует ContentPanel: заголовок + кнопки в панели, TextArea внутри.
+    Header highlighting — через _highlights; body — через встроенный хайлайтер.
     """
 
-    _textarea_id = "http-body"
+    _textarea_id = "cp-body-widget"
+
+    def __init__(
+        self,
+        title: str = "",
+        *,
+        buttons: list[str] | None = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            title=title,
+            widget_type="textarea",
+            textarea_read_only=True,
+            buttons=buttons or ["copy"],
+            **kwargs,
+        )
 
     def compose(self) -> ComposeResult:
-        yield TextArea("", read_only=True, id="http-body", soft_wrap=False)
+        """HttpView не переопределяет compose — использует ContentPanel.compose.
+        Единственный нюанс: нам нужен отдельный обработчик двойного клика
+        (_BaseHttpWidget.on_event), который мы устанавливаем через watch.
+        """
+        yield from ContentPanel.compose(self)
 
     def load_raw_http(self, text: str,
                       highlight_terms: list[str] | None = None) -> None:
@@ -431,22 +452,45 @@ class HttpView(_BaseHttpWidget):
             self.clear()
             return
         try:
-            area = self.query_one("#http-body", TextArea)
+            area = self.query_one("#cp-body-widget", TextArea)
             _load_into_textarea(area, text, highlight_terms)
         except Exception:
             pass
 
     def clear(self) -> None:
-        self._set_text("")
+        """Очистить содержимое."""
+        try:
+            area = self.query_one("#cp-body-widget", TextArea)
+            area.load_text("")
+        except Exception:
+            pass
 
 
-class RequestEditor(_BaseHttpWidget):
-    """Editable HTTP request field with header and body highlighting."""
+class RequestEditor(ContentPanel):
+    """Editable HTTP request field with header and body highlighting.
 
-    _textarea_id = "editor-area"
+    Наследует ContentPanel: заголовок + кнопки + TextArea.
+    Поддерживает beautify, special chars, show_line_numbers.
+    """
 
-    def __init__(self, label: str = "Request", read_only: bool = False, **kwargs) -> None:
-        super().__init__(**kwargs)
+    _textarea_id = "cp-body-widget"
+
+    def __init__(
+        self,
+        label: str = "Request",
+        *,
+        read_only: bool = False,
+        buttons: list[str] | None = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            title=label,
+            widget_type="textarea",
+            textarea_read_only=read_only,
+            textarea_soft_wrap=False,
+            buttons=buttons or ["copy"],
+            **kwargs,
+        )
         self._label = label
         self._read_only = read_only
         self._raw_full: str = ""
@@ -454,15 +498,7 @@ class RequestEditor(_BaseHttpWidget):
         self._special_chars_mode: bool = False
 
     def compose(self) -> ComposeResult:
-        yield Static(f" {self._label}", classes="editor-label")
-        yield TextArea(
-            "",
-            language=None,
-            read_only=self._read_only,
-            id="editor-area",
-            show_line_numbers=True,
-            soft_wrap=False,
-        )
+        yield from ContentPanel.compose(self)
 
     def load_request(self, req: ParsedRequest) -> None:
         raw = build_http_request(req)
@@ -489,7 +525,7 @@ class RequestEditor(_BaseHttpWidget):
         _detect_language(_get_content_type(headers), body)
 
         try:
-            area = self.query_one("#editor-area", TextArea)
+            area = self.query_one("#cp-body-widget", TextArea)
             area.language = None
             area.load_text(normalized)
             # Apply HTTP header highlighting on top of text
@@ -501,7 +537,7 @@ class RequestEditor(_BaseHttpWidget):
 
     def get_text(self) -> str:
         try:
-            raw_area = self.query_one("#editor-area", TextArea).text
+            raw_area = self.query_one("#cp-body-widget", TextArea).text
         except Exception:
             raw_area = ""
 
@@ -526,7 +562,7 @@ class RequestEditor(_BaseHttpWidget):
         unchanged (unknown/invalid format, or no body present).
         """
         try:
-            area = self.query_one("#editor-area", TextArea)
+            area = self.query_one("#cp-body-widget", TextArea)
         except Exception:
             return False
 
@@ -578,23 +614,35 @@ def _beautify_text(body: str) -> str | None:
     return None
 
 
-class ResponseViewer(_BaseHttpWidget):
+class ResponseViewer(ContentPanel):
     """HTTP response viewer panel with header and body highlighting.
 
-    One TextArea: HTTP-заголовки подсвечиваются через _build_http_highlights,
-    тело — через встроенный area.language (html/json/xml) когда Content-Type
-    позволяет. В отличие от RequestEditor, заголовки read-only.
+    Наследует ContentPanel: заголовок + кнопки + TextArea.
+    Load_response() обновляет заголовок (статус + Content-Type + размер).
+    Body highlighting через _build_http_highlights.
     """
 
-    _textarea_id = "viewer-area"
+    _textarea_id = "cp-body-widget"
 
-    def __init__(self, label: str = "Response", **kwargs) -> None:
-        super().__init__(**kwargs)
+    def __init__(
+        self,
+        label: str = "Response",
+        *,
+        buttons: list[str] | None = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            title=label,
+            widget_type="textarea",
+            textarea_read_only=True,
+            textarea_soft_wrap=False,
+            buttons=buttons or ["copy"],
+            **kwargs,
+        )
         self._label = label
 
     def compose(self) -> ComposeResult:
-        yield Static(f" {self._label}", classes="viewer-label", id="viewer-label")
-        yield TextArea("", read_only=True, id="viewer-area", soft_wrap=False)
+        yield from ContentPanel.compose(self)
 
     def load_response(self, resp: ParsedResponse) -> None:
         """Display ParsedResponse: raw HTTP with headers+body highlighting."""
@@ -611,13 +659,13 @@ class ResponseViewer(_BaseHttpWidget):
             ct = _get_content_type(resp.headers)
             lang = _detect_language(ct, body)
             lang_str = f"  [{lang}]" if lang else ""
-            label_text = f" {self._label}  ·  {resp.status} {resp.reason}  ·  {size_str}{lang_str}"
-            self.query_one("#viewer-label", Static).update(label_text)
+            label_text = f"{self._label}  ·  {resp.status} {resp.reason}  ·  {size_str}{lang_str}"
+            self.set_title(label_text)
         except Exception:
             pass
 
         try:
-            area = self.query_one("#viewer-area", TextArea)
+            area = self.query_one("#cp-body-widget", TextArea)
             normalized = raw.replace("\r\n", "\n")
 
             # Always load with language=None — highlighting is via _highlights only.
@@ -645,14 +693,18 @@ class ResponseViewer(_BaseHttpWidget):
     def load_raw(self, text: str) -> None:
         self._reset_label()
         try:
-            area = self.query_one("#viewer-area", TextArea)
+            area = self.query_one("#cp-body-widget", TextArea)
             _load_into_textarea(area, text)
         except Exception:
             pass
 
     def clear(self) -> None:
         self._reset_label()
-        self._set_text("")
+        try:
+            area = self.query_one("#cp-body-widget", TextArea)
+            area.load_text("")
+        except Exception:
+            pass
 
     def beautify_body(self) -> bool:
         """Pretty-print the displayed response body (JSON or XML) in place,
@@ -663,7 +715,7 @@ class ResponseViewer(_BaseHttpWidget):
         (unknown/invalid format, or no body present).
         """
         try:
-            area = self.query_one("#viewer-area", TextArea)
+            area = self.query_one("#cp-body-widget", TextArea)
         except Exception:
             return False
 
@@ -687,6 +739,6 @@ class ResponseViewer(_BaseHttpWidget):
 
     def _reset_label(self) -> None:
         try:
-            self.query_one("#viewer-label", Static).update(f" {self._label}")
+            self.set_title(self._label)
         except Exception:
             pass

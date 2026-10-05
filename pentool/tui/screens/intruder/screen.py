@@ -56,6 +56,7 @@ from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
+from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar as _IntruderFilterBar
 from pentool.tui.widgets.intruder_results_table import IntruderResultsTable
@@ -122,11 +123,62 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
     def _on_btn_stop(self, event: ToolbarButton.Pressed) -> None:
         self.on_btn_stop(event)
 
+    # ── ContentPanel handlers ─────────────────────────────────────────────────
+
+    @on(ContentPanel.CopyRequested)
+    def on_intruder_copy(self, event: ContentPanel.CopyRequested) -> None:
+        """Копирование из ContentPanel в буфер."""
+        text = event.selection or event.text
+        if text:
+            from pentool.utils.copy_as import copy_to_clipboard
+            if copy_to_clipboard(text):
+                self.app.notify("Copied", timeout=2)
+
+    @on(ContentPanel.PasteRequested)
+    def on_intruder_paste(self, event: ContentPanel.PasteRequested) -> None:
+        """Вставка в ContentPanel из буфера обмена."""
+        from pentool.utils.copy_as import paste_from_clipboard
+        clipboard = paste_from_clipboard()
+        if clipboard:
+            panel = event.panel
+            w = panel.content_widget
+            if isinstance(w, TextArea):
+                sel = w.selection
+                is_selected = (
+                    sel is not None
+                    and sel.start != sel.end
+                )
+                if is_selected:
+                    start_row, start_col = sel.start
+                    end_row, end_col = sel.end
+                    lines = w.text.splitlines(keepends=True)
+                    if start_row == end_row:
+                        line = lines[start_row]
+                        lines[start_row] = line[:start_col] + clipboard + line[end_col:]
+                    else:
+                        lines[start_row] = lines[start_row][:start_col] + clipboard
+                        lines = lines[:start_row + 1] + lines[end_row:]
+                        if end_row < len(lines):
+                            lines[end_row] = lines[end_row][end_col:]
+                        else:
+                            lines.append('')
+                    w.load_text(''.join(lines))
+                else:
+                    w.load_text(clipboard)
+        else:
+            self.app.notify("Nothing in clipboard", severity="warning")
+
     # RequestContextMenuMixin config
     _cm_show_copy_url = False
     _cm_show_send_repeater = True
     _cm_show_send_intruder = False  # do not send back into itself
     _cm_show_send_scanner = False
+
+    @staticmethod
+    def _template_editor(screen: "IntruderScreen") -> TextArea:
+        """Helper: получить TextArea внутри template-editor ContentPanel."""
+        panel = screen.query_one("#template-panel", ContentPanel)
+        return panel.content_widget  # type: ignore[return-value]
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -180,7 +232,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
                 await super().on_event(event)
                 try:
                     from textual.widgets.text_area import Selection
-                    area = self.query_one("#template-editor", TextArea)
+                    area = self._template_editor(self)
                     def _sel():
                         cursor = area.cursor_location
                         row, col = cursor
@@ -245,10 +297,12 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
                     _ATTACK_DESCRIPTIONS[AttackType.SNIPER],
                     id="attack-type-desc",
                 )
-            yield TextArea(
-                "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
-                id="template-editor",
-                language=None,
+            yield ContentPanel(
+                title="Request Template",
+                widget_type="textarea",
+                initial_text="GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
+                buttons=["copy", "paste", "clear"],
+                id="template-panel",
             )
 
     def _compose_payloads(self) -> ComposeResult:
@@ -296,11 +350,15 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
             )
             with Horizontal(id="intruder-detail-panel", classes="intruder-detail-panel"):
                 with Vertical(id="detail-request-col", classes="detail-col"):
-                    yield Static("Request", classes="detail-label")
+                    with Horizontal(classes="detail-label-row"):
+                        yield Static("Request", classes="detail-label")
+                        yield ToolbarButton("⎙ Copy", "btn-detail-copy-req", compact=True)
                     yield HttpView(id="detail-request", classes="detail-view")
                 yield ResizeHandle("detail-request-col", "detail-response-col")
                 with Vertical(id="detail-response-col", classes="detail-col"):
-                    yield Static("Response", classes="detail-label")
+                    with Horizontal(classes="detail-label-row"):
+                        yield Static("Response", classes="detail-label")
+                        yield ToolbarButton("⎙ Copy", "btn-detail-copy-resp", compact=True)
                     yield HttpView(id="detail-response", classes="detail-view")
         
     def on_show(self) -> None:
@@ -482,7 +540,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
         self._active_set_idx = 0
         self._attack_type = AttackType.SNIPER
         try:
-            self.query_one("#template-editor", TextArea).text = (
+            self._template_editor(self).text = (
                 "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
             )
         except Exception as exc:
@@ -609,7 +667,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
             # Restore template
             template = state.get("template", "")
             if template:
-                editor = self.query_one("#template-editor", TextArea)
+                editor = self._template_editor(self)
                 editor.text = template
             # Restore attack type
             attack_type_str = state.get("attack_type", "sniper")
@@ -643,7 +701,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
         if api is None:
             return
         try:
-            editor = self.query_one("#template-editor", TextArea)
+            editor = self._template_editor(self)
             template = editor.text
             worker_name = f"intruder-save-state-{time.monotonic_ns()}"
             self._running_save_tasks.append(worker_name)
@@ -708,15 +766,19 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
     def on_btn_export_csv(self, _: ToolbarButton.Pressed) -> None:
         self._export_csv()
 
-    @on(TextArea.SelectionChanged, "#template-editor")
+    @on(TextArea.SelectionChanged)
     def on_template_selection_changed(self, event: TextArea.SelectionChanged) -> None:
         """Remember the selection in template-editor.
 
-        When start==end (cursor without selection) we do NOT immediately clear the
-        saved selection — the first such event may be a reset on clicking the ADD
-        button. We clear only when two consecutive start==end events arrive (the
-        user clicked in the editor to deselect).
+        Когда пользователь меняет выделение в любом TextArea — проверяем,
+        наш ли это редактор, через сравнение с _template_editor().
         """
+        try:
+            our_editor = self._template_editor(self)
+            if event.widget is not our_editor:
+                return
+        except Exception:
+            return
         sel = event.selection
         if sel.start != sel.end:
             # Real selection — save it, reset counter
@@ -728,9 +790,15 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
                 # Two cursor-only events in a row — user deselected
                 self._last_editor_selection = None
 
-    @on(TextArea.Changed, "#template-editor")
+    @on(TextArea.Changed)
     def on_template_text_changed(self, event: TextArea.Changed) -> None:
         """Recompute payload sets on template text change (covers paste/typing)."""
+        try:
+            our_editor = self._template_editor(self)
+            if event.widget is not our_editor:
+                return
+        except Exception:
+            return
         self._update_payload_select()
         # Auto-save state when template changes
         if self._state_loaded:
@@ -902,7 +970,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
     def _add_marker_around_selection(self) -> None:
         """Wrap the selected text in §...§ markers."""
         try:
-            editor = self.query_one("#template-editor", TextArea)
+            editor = self._template_editor(self)
             text = editor.text
 
             # Use the saved selection (focus may have moved on button click)
@@ -941,7 +1009,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
 
     def _clear_markers(self) -> None:
         try:
-            editor = self.query_one("#template-editor", TextArea)
+            editor = self._template_editor(self)
             text = editor.text
             cleaned = re.sub(r"§([^§]*)§", r"\1", text)
             cleaned = cleaned.replace("§", "")
@@ -953,7 +1021,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
     def _prompt_auto_mark(self) -> None:
         """Show dialog to choose which parts to auto-mark, then mark."""
         try:
-            editor = self.query_one("#template-editor", TextArea)
+            editor = self._template_editor(self)
             text = editor.text
         except Exception:
             return
@@ -1017,7 +1085,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
                     everything detectable (legacy behavior).
         """
         try:
-            editor = self.query_one("#template-editor", TextArea)
+            editor = self._template_editor(self)
             text = editor.text
         except Exception:
             return
@@ -1205,7 +1273,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
     def _update_payload_select(self) -> None:
         """Sync Set-N selector: number of sets depends on attack type (not just marker count)."""
         try:
-            template = self.query_one("#template-editor", TextArea).text
+            template = self._template_editor(self).text
         except Exception:
             template = ""
         if self._attack_type in (AttackType.SNIPER, AttackType.BATTERING_RAM):
@@ -1307,7 +1375,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
         """Highlight the N-th §...§ pair in the positions TextArea editor."""
         try:
             from textual.widgets.text_area import Selection
-            editor = self.query_one("#template-editor", TextArea)
+            editor = self._template_editor(self)
             text = editor.text
             lines = text.split("\n")
 
@@ -1598,7 +1666,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
             )
             return
         try:
-            template = self.query_one("#template-editor", TextArea).text
+            template = self._template_editor(self).text
             logger.info("INTRUDER: template len=%d", len(template))
         except Exception as e:
             logger.error("INTRUDER: cannot get template: %s", e)
@@ -1981,6 +2049,29 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
         except Exception as exc:
             logger.debug("op: %s", exc)
 
+    @on(ToolbarButton.Pressed, "#btn-detail-copy-req")
+    def on_detail_copy_req(self, _: ToolbarButton.Pressed) -> None:
+        """Скопировать Request из detail-панели."""
+        try:
+            from pentool.utils.copy_as import copy_to_clipboard
+            req_raw = self._cm_get_raw_request()
+            if req_raw and copy_to_clipboard(req_raw):
+                self.app.notify("Request copied", timeout=2)
+        except Exception as exc:
+            logger.debug("op: %s", exc)
+
+    @on(ToolbarButton.Pressed, "#btn-detail-copy-resp")
+    def on_detail_copy_resp(self, _: ToolbarButton.Pressed) -> None:
+        """Скопировать Response из detail-панели."""
+        try:
+            from pentool.utils.copy_as import copy_to_clipboard
+            if self._current_result:
+                resp_raw = self._current_result.response_raw or ""
+                if resp_raw and copy_to_clipboard(resp_raw):
+                    self.app.notify("Response copied", timeout=2)
+        except Exception as exc:
+            logger.debug("op: %s", exc)
+
     def on__base_http_widget_context_menu_request(self, event) -> None:
         """Right-click on HttpView → context menu."""
         self.cm_open_text_menu(event.screen_x, event.screen_y)
@@ -2138,7 +2229,7 @@ class IntruderScreen(StartStopMixin, AutoSaveMixin, AppMixin, SortableTableMixin
         except Exception as exc:
             logger.debug("op: %s", exc)
         try:
-            editor = self.query_one("#template-editor", TextArea)
+            editor = self._template_editor(self)
             _load_into_textarea(editor, raw, ["§"])
             self._update_payload_select()
             self._highlight_nth_marker(self._active_set_idx)

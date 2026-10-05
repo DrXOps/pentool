@@ -1,0 +1,25 @@
+/* Toolbar — единый стиль для всех тулбаров. */
+Toolbar {
+    height: auto;
+    min-height: 2;
+    background: $panel;
+    layout: horizontal;
+    padding: 0 1;
+    align: left middle;
+    border-bottom: solid $primary-darken-2;
+}
+
+/* Все Input внутри тулбара — compact (height: 1) */
+Toolbar Input {
+    height: 1;
+}
+
+/* Все ToolbarButton внутри — без рамок (уже задано в toolbar_button.tcss) */
+Toolbar ToolbarButton {
+    margin: 0 1;
+}
+
+/* Все Label внутри — строчные */
+Toolbar Label {
+    height: 1;
+}

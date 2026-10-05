@@ -11,7 +11,9 @@ from textual.widgets import Checkbox
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import RichLog, Static, Tree
+from textual.widgets import Static, Tree
+
+from pentool.tui.widgets.content_panel import ContentPanel
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import TARGET_BINDINGS
@@ -185,7 +187,7 @@ class TargetScreen(Widget):
             yield ResizeHandle("site-tree", "detail-panel", id="target-resize-h")
             with Vertical(id="detail-panel"):
                 yield Static("Details", classes="detail-label")
-                yield RichLog(id="detail-log", markup=True, highlight=False)
+                yield ContentPanel("", widget_type="richlog", wrap=True, buttons=["copy"])
 
         
     def on_mount(self) -> None:
@@ -240,7 +242,7 @@ class TargetScreen(Widget):
         self._selected_host = None
         self._selected_node_data = None
         try:
-            self.query_one("#detail-log", RichLog).clear()
+            self.query_one("#detail-panel", ContentPanel).clear_content()
         except Exception:
             pass
 
@@ -356,7 +358,7 @@ class TargetScreen(Widget):
         data = event.node.data
         if data is None:
             return
-        log = self.query_one("#detail-log", RichLog)
+        log = self.query_one("#detail-panel", ContentPanel).content_widget
         log.clear()
 
         if data.get("type") == "host":
@@ -682,7 +684,7 @@ class TargetScreen(Widget):
             self._selected_host = None
             self._selected_node_data = None
             try:
-                self.query_one("#detail-log", RichLog).clear()
+                self.query_one("#detail-panel", ContentPanel).clear_content()
             except Exception:
                 pass
             self.app.notify("Site map cleared", severity="information")

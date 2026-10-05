@@ -17,7 +17,6 @@ from textual.widget import Widget
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 from textual.widgets import (
-    RichLog,
     Static,
     Tree,
 )
@@ -27,6 +26,7 @@ from pentool.tui.hotkeys.defaults import DASHBOARD_BINDINGS
 
 from pentool.tui.screens.dashboard.live_dashboard import ResourceMonitor
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.tui.widgets.content_panel import ContentPanel
 
 logger = get_logger(__name__)
 
@@ -396,7 +396,7 @@ class DashboardScreen(Widget):
                 with Horizontal(id="mid-row"):
                     with Vertical(id="feed-panel"):
                         yield Static("┌─ LIVE FEED ─", id="feed-panel-title")
-                        yield RichLog(id="feed-log", highlight=True, markup=True, wrap=False, max_lines=300)
+                        yield ContentPanel("", widget_type="richlog", wrap=False, max_lines=300, buttons=[])
                     with Vertical(id="status-panel"):
                         yield Static("┌─ STATUS ─", id="status-panel-title")
                         yield Static("[dim]●[/dim] Proxy: [dim]STOPPED[/dim]",  id="led-proxy-bar",   classes="led-item")
@@ -412,7 +412,7 @@ class DashboardScreen(Widget):
     def on_mount(self) -> None:
         self._ticker = self.set_interval(1.0, self._tick)
         try:
-            feed = self.query_one("#feed-log", RichLog)
+            feed = self.query_one("#feed-panel", ContentPanel).content_widget
             feed.write("[dim cyan]ℹ Live feed ready. Waiting for events...[/dim cyan]")
         except Exception:
             pass
@@ -553,7 +553,7 @@ class DashboardScreen(Widget):
     def _boot_write(self, color: str, line: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
         try:
-            log = self.query_one("#feed-log", RichLog)
+            log = self.query_one("#feed-panel", ContentPanel).content_widget
             log.write(f"[dim green]{ts}[/dim green] {color}{line}[/]")
         except Exception:
             pass
@@ -640,7 +640,7 @@ class DashboardScreen(Widget):
     def _feed_write(self, text: str) -> None:
         """Write to the live-feed RichLog."""
         try:
-            self.query_one("#feed-log", RichLog).write(text)
+            self.query_one("#feed-panel", ContentPanel).write_to_log(text)
         except Exception:
             pass
 

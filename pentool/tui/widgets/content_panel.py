@@ -104,10 +104,18 @@ class ContentPanel(Widget):
         height: 1fr;
         min-height: 6;
     }
+    ContentPanel RichLog:focus {
+        border: none;
+        outline: none;
+    }
     ContentPanel TextArea {
         border: none;
         height: 1fr;
         min-height: 6;
+    }
+    ContentPanel TextArea:focus {
+        border: none;
+        outline: none;
     }
     """
 
@@ -143,8 +151,9 @@ class ContentPanel(Widget):
         max_lines: int = 2000,
         initial_text: str = "",
         buttons: list[str] | None = None,
+        **kwargs: object,
     ) -> None:
-        super().__init__()
+        super().__init__(**kwargs)
         self._panel_title = title
         self._widget_type = widget_type
         self._textarea_read_only = textarea_read_only
@@ -153,7 +162,7 @@ class ContentPanel(Widget):
         self._wrap = wrap
         self._max_lines = max_lines
         self._initial_text = initial_text
-        self._buttons = buttons or list(self.BUTTON_SCOPE)
+        self._buttons = list(buttons) if buttons is not None else list(self.BUTTON_SCOPE)
         self._wrap_state = wrap
 
     def compose(self) -> ComposeResult:
@@ -212,8 +221,17 @@ class ContentPanel(Widget):
         sel = w.selection
         if sel is None:
             return None
+        # selection.start/end — кортежи (row, col)
+        if sel.start == sel.end:
+            return None
         try:
-            return w.text[sel.start:sel.end]
+            text = w.text
+            lines = text.splitlines(keepends=True)
+            def _flat(pos: tuple[int, int]) -> int:
+                row, col = pos
+                idx = sum(len(lines[r]) for r in range(row))
+                return idx + col
+            return text[_flat(sel.start):_flat(sel.end)]
         except Exception:
             return None
 
@@ -223,6 +241,14 @@ class ContentPanel(Widget):
             w.load_text("")
         else:
             w.clear()
+
+    def set_title(self, title: str) -> None:
+        """Обновить заголовок панели (Static в .cp-title)."""
+        self._panel_title = title
+        try:
+            self.query_one(".cp-title > Static", Static).update(title)
+        except Exception:
+            pass
 
     def write_to_log(self, text: str) -> None:
         if self._widget_type == "richlog":

@@ -140,7 +140,13 @@ class DecoderScreen(Widget):
             w = panel.content_widget
             if isinstance(w, TextArea):
                 sel = w.selection
-                if sel and w.selected_text:
+                # selection может вернуть Selection(start=(0,0), end=(0,0)) даже
+                # когда ничего не выделено — значит проверяем что start != end
+                is_selected = (
+                    sel is not None
+                    and sel.start != sel.end
+                )
+                if is_selected:
                     # Замена выделенного текста через манипуляцию строками
                     start_row, start_col = sel.start
                     end_row, end_col = sel.end

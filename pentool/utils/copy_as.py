@@ -7,6 +7,10 @@ import re
 import shlex
 import shutil
 import subprocess
+
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
 from pathlib import Path
 
 from pentool.utils.parser import ParsedRequest
@@ -222,94 +226,218 @@ def _find_executable(name: str) -> str | None:
     return None
 
 
+def _x11_display_ok() -> bool:
+    """Проверить, что X11 DISPLAY доступен (xclip/xsel/GTK без него не работают)."""
+    return bool(os.environ.get("DISPLAY"))
+
+
 def copy_to_clipboard(text: str) -> bool:
-    """Copy to clipboard via xclip/xsel/wl-copy/GTK/pyperclip. Returns success."""
+    """Copy to clipboard via (tkinter → xclip/xsel → GTK → wl-copy → pyperclip)."""
 
     if not text:
+        logger.debug("copy_to_clipboard: empty text, skipping")
         return False
 
-    for cmd in [
-        ["xclip", "-selection", "clipboard"],
-        ["xsel", "--clipboard", "--input"],
-        ["wl-copy"],
-    ]:
-        try:
-            result = subprocess.run(cmd, input=text.encode(), timeout=2, capture_output=True)
-            if result.returncode == 0:
-                return True
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-
-    # GTK clipboard (works on X11 without xclip/xsel)
+    # tkinter — работает везде где есть Tk (без внешних бинарников)
     try:
-        gtk_script = (
-            "import gi; gi.require_version('Gtk','3.0'); "
-            "from gi.repository import Gtk,Gdk; "
-            "cb=Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD); "
-            f"cb.set_text({text!r},-1); cb.store()"
-        )
-        result = subprocess.run(
-            ["python3", "-c", gtk_script],
-            timeout=3, capture_output=True,
-        )
-        if result.returncode == 0:
-            return True
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+        import tkinter as _tk
+        r = _tk.Tk()
+        r.withdraw()
+        r.clipboard_clear()
+        r.clipboard_append(text)
+        r.destroy()
+        logger.debug("copy_to_clipboard: tkinter OK")
+        return True
+    except Exception as exc:
+        logger.debug("copy_to_clipboard: tkinter error: %s", exc)
 
-    # pyperclip as fallback
+    have_display = _x11_display_ok()
+    logger.debug("copy_to_clipboard: DISPLAY=%s", have_display)
+
+    if have_display:
+        # xclip (оптимально — самый быстрый)
+        path = _find_executable("xclip")
+        if path:
+            try:
+                result = subprocess.run(
+                    [path, "-selection", "clipboard"],
+                    input=text.encode(), timeout=2, capture_output=True,
+                )
+                if result.returncode == 0:
+                    logger.debug("copy_to_clipboard: xclip OK")
+                    return True
+                logger.debug("copy_to_clipboard: xclip rc=%s stderr=%s",
+                             result.returncode, result.stderr.decode(errors="replace").strip())
+            except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+                logger.debug("copy_to_clipboard: xclip error: %s", exc)
+
+        # xsel (fallback на X11)
+        path = _find_executable("xsel")
+        if path:
+            try:
+                result = subprocess.run(
+                    [path, "--clipboard", "--input"],
+                    input=text.encode(), timeout=2, capture_output=True,
+                )
+                if result.returncode == 0:
+                    logger.debug("copy_to_clipboard: xsel OK")
+                    return True
+                logger.debug("copy_to_clipboard: xsel rc=%s stderr=%s",
+                             result.returncode, result.stderr.decode(errors="replace").strip())
+            except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+                logger.debug("copy_to_clipboard: xsel error: %s", exc)
+
+        # GTK clipboard (работает на X11 без xclip/xsel)
+        try:
+            gtk_script = (
+                "import gi; gi.require_version('Gtk','3.0'); "
+                "from gi.repository import Gtk,Gdk; "
+                "cb=Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD); "
+                f"cb.set_text({text!r},-1); cb.store()"
+            )
+            result = subprocess.run(
+                ["python3", "-c", gtk_script],
+                timeout=3, capture_output=True,
+            )
+            if result.returncode == 0:
+                logger.debug("copy_to_clipboard: GTK OK")
+                return True
+            logger.debug("copy_to_clipboard: GTK rc=%s stderr=%s",
+                         result.returncode, result.stderr.decode(errors="replace").strip())
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            logger.debug("copy_to_clipboard: GTK error: %s", exc)
+
+    # wl-copy (Wayland — не требует DISPLAY)
+    path = _find_executable("wl-copy")
+    if path:
+        try:
+            result = subprocess.run(
+                [path], input=text.encode(), timeout=2, capture_output=True,
+            )
+            if result.returncode == 0:
+                logger.debug("copy_to_clipboard: wl-copy OK")
+                return True
+            logger.debug("copy_to_clipboard: wl-copy rc=%s stderr=%s",
+                         result.returncode, result.stderr.decode(errors="replace").strip())
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            logger.debug("copy_to_clipboard: wl-copy error: %s", exc)
+
+    # pyperclip — универсальный fallback
+
+    # pyperclip — универсальный fallback, покрывает macOS, Windows, и headless
+    # через собственные механизмы (xclip/xsel/wl-copy сам выбирает).
+    # Пробуем его в самом конце, потому что он может тянуть тяжелые импорты.
     try:
         import pyperclip  # type: ignore[import]
         pyperclip.copy(text)
+        logger.debug("copy_to_clipboard: pyperclip OK")
         return True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("copy_to_clipboard: pyperclip error: %s", exc)
 
+    logger.debug("copy_to_clipboard: ALL backends failed")
     return False
 
 
 def paste_from_clipboard() -> str | None:
-    """Read from clipboard via xclip/xsel/wl-paste/GTK/pyperclip. Returns text or None."""
-    for exe, args in [
-        ("xclip",  ["-selection", "clipboard", "-o"]),
-        ("xsel",   ["--clipboard", "--output"]),
-        ("wl-paste", []),
-    ]:
-        path = _find_executable(exe)
-        if not path:
-            continue
-        try:
-            result = subprocess.run([path, *args], timeout=2, capture_output=True)
-            if result.returncode == 0:
-                return result.stdout.decode("utf-8", errors="replace")
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
+    """Read from clipboard via (tkinter → xclip/xsel → GTK → wl-paste → pyperclip)."""
 
-    # GTK clipboard read
+    # tkinter — работает без внешних бинарников
     try:
-        gtk_script = (
-            "import gi; gi.require_version('Gtk','3.0'); "
-            "from gi.repository import Gtk,Gdk; "
-            "cb=Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD); "
-            "txt=cb.wait_for_text(); "
-            "print(txt or '')"
-        )
-        result = subprocess.run(
-            ["python3", "-c", gtk_script],
-            timeout=3, capture_output=True,
-        )
-        if result.returncode == 0:
-            text = result.stdout.decode("utf-8", errors="replace").strip()
-            return text if text else None
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+        import tkinter as _tk
+        r = _tk.Tk()
+        r.withdraw()
+        text = r.clipboard_get()
+        r.destroy()
+        if text and text.strip():
+            logger.debug("paste_from_clipboard: tkinter OK")
+            return text
+    except Exception as exc:
+        logger.debug("paste_from_clipboard: tkinter error: %s", exc)
 
-    # pyperclip as fallback
+    have_display = _x11_display_ok()
+    logger.debug("paste_from_clipboard: DISPLAY=%s", have_display)
+
+    if have_display:
+        # xclip
+        path = _find_executable("xclip")
+        if path:
+            try:
+                result = subprocess.run(
+                    [path, "-selection", "clipboard", "-o"],
+                    timeout=2, capture_output=True,
+                )
+                if result.returncode == 0:
+                    logger.debug("paste_from_clipboard: xclip OK")
+                    return result.stdout.decode("utf-8", errors="replace")
+                logger.debug("paste_from_clipboard: xclip rc=%s stderr=%s",
+                             result.returncode, result.stderr.decode(errors="replace").strip())
+            except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+                logger.debug("paste_from_clipboard: xclip error: %s", exc)
+
+        # xsel
+        path = _find_executable("xsel")
+        if path:
+            try:
+                result = subprocess.run(
+                    [path, "--clipboard", "--output"],
+                    timeout=2, capture_output=True,
+                )
+                if result.returncode == 0:
+                    logger.debug("paste_from_clipboard: xsel OK")
+                    return result.stdout.decode("utf-8", errors="replace")
+                logger.debug("paste_from_clipboard: xsel rc=%s stderr=%s",
+                             result.returncode, result.stderr.decode(errors="replace").strip())
+            except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+                logger.debug("paste_from_clipboard: xsel error: %s", exc)
+
+        # GTK clipboard read
+        try:
+            gtk_script = (
+                "import gi; gi.require_version('Gtk','3.0'); "
+                "from gi.repository import Gtk,Gdk; "
+                "cb=Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD); "
+                "txt=cb.wait_for_text(); "
+                "print(txt or '')"
+            )
+            result = subprocess.run(
+                ["python3", "-c", gtk_script],
+                timeout=3, capture_output=True,
+            )
+            if result.returncode == 0:
+                text = result.stdout.decode("utf-8", errors="replace").strip()
+                if text:
+                    logger.debug("paste_from_clipboard: GTK OK")
+                    return text
+                logger.debug("paste_from_clipboard: GTK returned empty")
+            else:
+                logger.debug("paste_from_clipboard: GTK rc=%s", result.returncode)
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            logger.debug("paste_from_clipboard: GTK error: %s", exc)
+
+    # wl-paste (Wayland)
+    path = _find_executable("wl-paste")
+    if path:
+        try:
+            result = subprocess.run([path], timeout=2, capture_output=True)
+            if result.returncode == 0:
+                logger.debug("paste_from_clipboard: wl-paste OK")
+                return result.stdout.decode("utf-8", errors="replace")
+            logger.debug("paste_from_clipboard: wl-paste rc=%s stderr=%s",
+                         result.returncode, result.stderr.decode(errors="replace").strip())
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            logger.debug("paste_from_clipboard: wl-paste error: %s", exc)
+
+    # pyperclip fallback
     try:
         import pyperclip  # type: ignore[import]
         text = pyperclip.paste()
-        return text if text.strip() else None
-    except Exception:
-        pass
+        if text and text.strip():
+            logger.debug("paste_from_clipboard: pyperclip OK")
+            return text
+        logger.debug("paste_from_clipboard: pyperclip returned empty")
+    except Exception as exc:
+        logger.debug("paste_from_clipboard: pyperclip error: %s", exc)
 
+    logger.debug("paste_from_clipboard: ALL backends failed")
     return None

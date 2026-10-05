@@ -2,7 +2,7 @@ HttpView {
     height: 1fr;
     layout: vertical;
 }
-HttpView #http-body {
+HttpView TextArea {
     height: 1fr;
     border: none;
     pointer: text;
@@ -13,14 +13,6 @@ RequestEditor {
     border: solid $primary-darken-2;
     layout: vertical;
 }
-RequestEditor .editor-label {
-    height: 1;
-    background: $primary-darken-3;
-    color: $text-muted;
-    padding: 0 1;
-    text-style: bold;
-}
-
 RequestEditor TextArea {
     height: 1fr;
     border: none;
@@ -31,13 +23,6 @@ ResponseViewer {
     height: 1fr;
     border: solid $primary-darken-2;
     layout: vertical;
-}
-ResponseViewer .viewer-label {
-    height: 1;
-    background: $primary-darken-3;
-    color: $text-muted;
-    padding: 0 1;
-    text-style: bold;
 }
 ResponseViewer TextArea {
     height: 1fr;

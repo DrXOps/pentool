@@ -10,7 +10,9 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import RichLog, Static, TextArea
+from textual.widgets import Static, TextArea
+
+from pentool.tui.widgets.content_panel import ContentPanel
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import COMPARER_BINDINGS
@@ -51,15 +53,15 @@ class ComparerScreen(Widget):
             yield Static("[dim]— Press Compare or Ctrl+Enter to diff —[/dim]",
                          id="cmp-stats", markup=True)
 
-        # ── Two TextAreas ──────────────────────────────────────────────────────
+        # ── Two TextAreas via ContentPanel ──────────────────────────────────────
         with Horizontal(id="cmp-edit-area"):
             with Vertical(id="cmp-left-col"):
-                yield Static("Left", id="cmp-left-label", classes="cmp-col-label")
-                yield TextArea(id="cmp-left",  language=None)
+                yield ContentPanel("Left", widget_type="textarea", buttons=["copy", "paste"],
+                                   id="cmp-left-panel")
             yield ResizeHandle("cmp-left-col", "cmp-right-col", id="cmp-resize-h")
             with Vertical(id="cmp-right-col"):
-                yield Static("Right", id="cmp-right-label", classes="cmp-col-label")
-                yield TextArea(id="cmp-right", language=None)
+                yield ContentPanel("Right", widget_type="textarea", buttons=["copy", "paste"],
+                                   id="cmp-right-panel")
 
         yield ResizeHandle("cmp-edit-area", "cmp-diff-area", vertical=True,
                            id="cmp-resize-v")
@@ -67,10 +69,54 @@ class ComparerScreen(Widget):
         # ── Diff output ────────────────────────────────────────────────────────
         with Vertical(id="cmp-diff-area"):
             yield Static("Diff", id="cmp-diff-label", classes="cmp-col-label")
-            yield RichLog(id="cmp-diff-log", highlight=True, markup=True,
-                          wrap=False, max_lines=2000)
+            yield ContentPanel("", widget_type="richlog", wrap=False, max_lines=2000, buttons=["copy"])
 
         
+    # ── ContentPanel handlers ─────────────────────────────────────────────────
+
+    @on(ContentPanel.CopyRequested)
+    def on_cmp_copy(self, event: ContentPanel.CopyRequested) -> None:
+        """Копирование из ContentPanel в буфер."""
+        text = event.selection or event.text
+        if text:
+            from pentool.utils.copy_as import copy_to_clipboard
+            if copy_to_clipboard(text):
+                self.app.notify("Copied", timeout=2)
+
+    @on(ContentPanel.PasteRequested)
+    def on_cmp_paste(self, event: ContentPanel.PasteRequested) -> None:
+        """Вставка в ContentPanel из буфера обмена."""
+        from pentool.utils.copy_as import paste_from_clipboard
+        clipboard = paste_from_clipboard()
+        if clipboard:
+            panel = event.panel
+            w = panel.content_widget
+            if isinstance(w, TextArea):
+                sel = w.selection
+                is_selected = (
+                    sel is not None
+                    and sel.start != sel.end
+                )
+                if is_selected:
+                    start_row, start_col = sel.start
+                    end_row, end_col = sel.end
+                    lines = w.text.splitlines(keepends=True)
+                    if start_row == end_row:
+                        line = lines[start_row]
+                        lines[start_row] = line[:start_col] + clipboard + line[end_col:]
+                    else:
+                        lines[start_row] = lines[start_row][:start_col] + clipboard
+                        lines = lines[:start_row + 1] + lines[end_row:]
+                        if end_row < len(lines):
+                            lines[end_row] = lines[end_row][end_col:]
+                        else:
+                            lines.append('')
+                    w.load_text(''.join(lines))
+                else:
+                    w.load_text(clipboard)
+        else:
+            self.app.notify("Nothing in clipboard", severity="warning")
+
     # ── Toolbar ───────────────────────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-cmp-compare")
@@ -101,12 +147,12 @@ class ComparerScreen(Widget):
                 return
             try:
                 text = Path(path).read_text(encoding="utf-8", errors="replace")
-                widget_id = f"cmp-{side}"
-                self.query_one(f"#{widget_id}", TextArea).load_text(text)
-                label_id = f"cmp-{side}-label"
-                self.query_one(f"#{label_id}", Static).update(
-                    f"[cyan]{os.path.basename(path)}[/cyan]"
-                )
+                panel_id = f"cmp-{side}-panel"
+                panel = self.query_one(f"#{panel_id}", ContentPanel)
+                w = panel.content_widget
+                if isinstance(w, TextArea):
+                    w.load_text(text)
+                panel.set_title(os.path.basename(path))
             except Exception as exc:
                 self.err(exc, "Load failed")
 
@@ -138,8 +184,8 @@ class ComparerScreen(Widget):
         """Run the comparison and display the result."""
         try:
             from pentool.api.comparer_api import compare
-            left  = self.query_one("#cmp-left",  TextArea).text
-            right = self.query_one("#cmp-right", TextArea).text
+            left  = self.query_one("#cmp-left-panel", ContentPanel).content_widget.text
+            right = self.query_one("#cmp-right-panel", ContentPanel).content_widget.text
             result = compare(left, right)
             self._last_result = result
             self._render_result(result)
@@ -162,7 +208,7 @@ class ComparerScreen(Widget):
             self.query_one("#cmp-stats", Static).update(stat_text)
 
             # Diff log
-            log = self.query_one("#cmp-diff-log", RichLog)
+            log = self.query_one("#cmp-diff-area", ContentPanel).content_widget
             log.clear()
             for dl in result.lines:
                 if dl.tag == "equal":
@@ -182,14 +228,16 @@ class ComparerScreen(Widget):
 
     def action_clear(self) -> None:
         try:
-            self.query_one("#cmp-left",     TextArea).load_text("")
-            self.query_one("#cmp-right",    TextArea).load_text("")
-            self.query_one("#cmp-diff-log", RichLog).clear()
+            for panel_id in ("cmp-left-panel", "cmp-right-panel"):
+                panel = self.query_one(f"#{panel_id}", ContentPanel)
+                w = panel.content_widget
+                if isinstance(w, TextArea):
+                    w.load_text("")
+                panel.set_title({"cmp-left-panel": "Left", "cmp-right-panel": "Right"}[panel_id])
+            self.query_one("#cmp-diff-area", ContentPanel).clear_content()
             self.query_one("#cmp-stats",    Static).update(
                 "[dim]— Press Compare or Ctrl+Enter to diff —[/dim]"
             )
-            self.query_one("#cmp-left-label",  Static).update("Left")
-            self.query_one("#cmp-right-label", Static).update("Right")
             self._last_result = None
         except Exception as exc:
             logger.debug("action_clear: %s", exc)
@@ -198,21 +246,28 @@ class ComparerScreen(Widget):
 
     def load_left(self, text: str, label: str = "Left") -> None:
         try:
-            self.query_one("#cmp-left", TextArea).load_text(text)
-            self.query_one("#cmp-left-label", Static).update(f"[cyan]{label}[/cyan]")
+            panel = self.query_one("#cmp-left-panel", ContentPanel)
+            w = panel.content_widget
+            if isinstance(w, TextArea):
+                w.load_text(text)
+            panel.set_title(label)
         except Exception as exc:
             logger.debug("load_left: %s", exc)
 
     def load_right(self, text: str, label: str = "Right") -> None:
         try:
-            self.query_one("#cmp-right", TextArea).load_text(text)
-            self.query_one("#cmp-right-label", Static).update(f"[cyan]{label}[/cyan]")
+            panel = self.query_one("#cmp-right-panel", ContentPanel)
+            w = panel.content_widget
+            if isinstance(w, TextArea):
+                w.load_text(text)
+            panel.set_title(label)
         except Exception as exc:
             logger.debug("load_right: %s", exc)
 
     def load_smart(self, text: str, label: str = "") -> None:
         try:
-            left_text = self.query_one("#cmp-left", TextArea).text
+            left_panel = self.query_one("#cmp-left-panel", ContentPanel)
+            left_text = left_panel.content_widget.text
             if not left_text.strip():
                 self.load_left(text, label or "Left")
             else:
