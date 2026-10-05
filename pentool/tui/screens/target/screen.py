@@ -355,7 +355,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
         data = event.node.data
         if data is None:
             return
-        log = self.query_one("#detail-panel", ContentPanel).content_widget
+        log = self.query_one("#detail-panel", Vertical)
         log.clear()
 
         if data.get("type") == "host":
