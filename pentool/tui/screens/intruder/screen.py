@@ -314,6 +314,7 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
                 ToolbarButton("Load from file…", "btn-payload-load"),
                 ToolbarButton("Generate…",     "btn-payload-generate"),
                 ToolbarButton("🧠 Smart…",     "btn-payload-smart", classes="pro-locked"),
+                id="payload-buttons-toolbar",
             )
             # Line-count readout for the active set — shows a live counter
             # while a large file is being streamed/counted (see
