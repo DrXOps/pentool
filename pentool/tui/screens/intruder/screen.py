@@ -278,19 +278,20 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
     def _compose_positions(self) -> ComposeResult:
         with Vertical(id="positions-panel"):
             yield Static("Positions", classes="section-title")
-            with Horizontal(id="positions-toolbar"):
-                yield Label("Attack:", classes="pos-label")
-                yield ToolbarButton("Sniper ▼", "btn-attack-type")
-                yield Static(" │ ", classes="toolbar-sep")
-                yield ToolbarButton("Add §§",    "btn-add-marker")
-                yield ToolbarButton("Clear §§",  "btn-clear-markers")
-                yield Static(" │ ", classes="toolbar-sep")
-                yield ToolbarButton("Auto §§",   "btn-mark-params")
-                yield Static(" │ ", classes="toolbar-sep")
-                yield Static(
+            yield Toolbar(
+                Label("Attack:", classes="pos-label"),
+                ToolbarButton("Sniper ▼", "btn-attack-type"),
+                Toolbar.sep(),
+                ToolbarButton("Add §§",    "btn-add-marker"),
+                ToolbarButton("Clear §§",  "btn-clear-markers"),
+                Toolbar.sep(),
+                ToolbarButton("Auto §§",   "btn-mark-params"),
+                Toolbar.sep(),
+                Static(
                     _ATTACK_DESCRIPTIONS[AttackType.SNIPER],
                     id="attack-type-desc",
-                )
+                ),
+            )
             yield ContentPanel(
                 title="Request Template",
                 widget_type="textarea",
@@ -302,16 +303,18 @@ class IntruderScreen(ContentClipboardMixin, StartStopMixin, AutoSaveMixin, AppMi
     def _compose_payloads(self) -> ComposeResult:
         with Vertical(id="payloads-panel"):
             yield Static("Payloads", classes="section-title")
-            with Horizontal(id="payloads-toolbar"):
-                yield Label("Payload set:")
-                yield ToolbarButton("Set 1 ▼", "btn-payload-set")
-            with Horizontal(id="payload-buttons"):
-                yield ToolbarButton("Add",           "btn-payload-add")
-                yield ToolbarButton("Remove",        "btn-payload-remove")
-                yield ToolbarButton("Clear",         "btn-payload-clear")
-                yield ToolbarButton("Load from file…", "btn-payload-load")
-                yield ToolbarButton("Generate…",     "btn-payload-generate")
-                yield ToolbarButton("🧠 Smart…",     "btn-payload-smart", classes="pro-locked")
+            yield Toolbar(
+                Label("Payload set:"),
+                ToolbarButton("Set 1 ▼", "btn-payload-set"),
+            )
+            yield Toolbar(
+                ToolbarButton("Add",           "btn-payload-add"),
+                ToolbarButton("Remove",        "btn-payload-remove"),
+                ToolbarButton("Clear",         "btn-payload-clear"),
+                ToolbarButton("Load from file…", "btn-payload-load"),
+                ToolbarButton("Generate…",     "btn-payload-generate"),
+                ToolbarButton("🧠 Smart…",     "btn-payload-smart", classes="pro-locked"),
+            )
             # Line-count readout for the active set — shows a live counter
             # while a large file is being streamed/counted (see
             # _load_payloads_from_file), then the final "N lines" total.

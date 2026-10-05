@@ -22,36 +22,6 @@ IntruderScreen .section-title {
     color: $text-muted;
     padding: 0 1;
 }
-IntruderScreen #positions-toolbar {
-    height: 1;
-    background: $panel;
-    padding: 0 1;
-    align: left middle;
-    layout: horizontal;
-    overflow: hidden hidden;
-}
-IntruderScreen #positions-toolbar Label {
-    width: auto;
-    height: 1;
-    padding: 0 1;
-    color: $text-muted;
-}
-IntruderScreen .pos-label {
-    width: auto;
-    height: 1;
-    padding: 0 1 0 0;
-    color: $text-muted;
-}
-IntruderScreen #attack-type-btn {
-    width: 20;
-    height: 1;
-    padding: 0 1;
-    color: $text;
-    background: $surface;
-}
-IntruderScreen #attack-type-btn:hover {
-    background: $primary-darken-1;
-}
 IntruderScreen #attack-type-desc {
     width: 1fr;
     height: 1;
@@ -64,40 +34,8 @@ IntruderScreen #template-editor {
 IntruderScreen #template-editor .text-area--selection {
     background: $primary 70%;
 }
-IntruderScreen #payloads-toolbar {
-    height: 1;
-    background: $panel;
-    padding: 0 1;
-    layout: horizontal;
-    align: left middle;
-}
-IntruderScreen #payloads-toolbar Label {
-    width: auto;
-    padding: 0 1;
-    color: $text-muted;
-}
-IntruderScreen #payload-set-btn {
-    width: 8;
-    height: 1;
-    padding: 0 1;
-    color: $text;
-    background: $surface;
-}
-IntruderScreen #payload-set-btn:hover {
-    background: $primary-darken-1;
-}
 IntruderScreen #payload-list {
     height: 1fr;
-}
-IntruderScreen #payload-buttons {
-    height: 1;
-    layout: horizontal;
-    background: $panel;
-    padding: 0 1;
-    align: left middle;
-}
-IntruderScreen #payload-buttons ToolbarButton {
-    margin: 0 1 0 0;
 }
 IntruderScreen #payload-buttons .pro-locked {
     color: $text-muted;
