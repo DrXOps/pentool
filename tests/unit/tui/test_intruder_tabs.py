@@ -240,3 +240,71 @@ class TestIntruderTabManagement:
             screen._on_tab_activated(event)
         assert screen._grep_match_patterns == ["error", "warning"]
         assert screen._grep_only_match is True
+
+class TestIntruderPanelBinding:
+    """Регрессия: _tc_panel должен быть property, _on_tab_closed не должен
+    падать с 'TabbedContentPanel object is not callable'.
+
+    Причина бага: _tc_panel был объявлен как метод, но вызывался как property
+    (self._tc_panel.action_new_tab()). А в _on_tab_closed ручное инстанцирование
+    TabActivated(self._tc_panel(), ...) пыталось вызвать объект-панель.
+    """
+
+    def test_tc_panel_is_property_returns_panel(self):
+        """_tc_panel — property, возвращает TabbedContentPanel, не bound-method."""
+        from textual.app import App, ComposeResult
+        from textual.widgets import ContentSwitcher
+        from pentool.tui.screens.intruder.screen import IntruderScreen
+        from pentool.tui.widgets.tab_panel import TabbedContentPanel
+
+        class _App(App):
+            def compose(self) -> ComposeResult:
+                with ContentSwitcher():
+                    yield IntruderScreen()
+
+        async def _run():
+            app = _App()
+            async with app.run_test(size=(200, 50)) as pilot:
+                await pilot.pause()
+                screen = app.query_one(IntruderScreen)
+                panel = screen._tc_panel
+                assert isinstance(panel, TabbedContentPanel), \
+                    f"_tc_panel должен быть панелью, получил {type(panel).__name__}"
+                # не bound-method (не callable прямо)
+                assert not isinstance(panel, str)
+                # action_new_tab через экран не падает
+                screen.action_new_tab()
+                await pilot.pause()
+                assert panel.tab_count >= 1
+
+        import asyncio
+        asyncio.run(_run())
+
+    def test_on_tab_closed_no_manual_message(self):
+        """Закрытие таба через панель не падает в _on_tab_closed."""
+        from textual.app import App, ComposeResult
+        from textual.widgets import ContentSwitcher
+        from pentool.tui.screens.intruder.screen import IntruderScreen
+        from pentool.tui.widgets.tab_panel import TabbedContentPanel
+
+        class _App(App):
+            def compose(self) -> ComposeResult:
+                with ContentSwitcher():
+                    yield IntruderScreen()
+
+        async def _run():
+            app = _App()
+            async with app.run_test(size=(200, 50)) as pilot:
+                await pilot.pause()
+                screen = app.query_one(IntruderScreen)
+                screen.action_new_tab()
+                await pilot.pause()
+                panel = screen._tc_panel
+                assert panel.tab_count == 2
+                panel.action_close_tab()
+                await pilot.pause()
+                assert panel.tab_count == 1
+                assert panel.active_tab_id is not None
+
+        import asyncio
+        asyncio.run(_run())

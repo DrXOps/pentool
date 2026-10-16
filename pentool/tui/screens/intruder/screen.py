@@ -404,7 +404,14 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     @on(TabbedContentPanel.TabActivated, "#intruder-tabs")
     def _on_tab_activated(self, event: TabbedContentPanel.TabActivated) -> None:
         """Загрузить состояние нового таба в глобальные виджеты."""
-        state = event.tab_state
+        self._load_tab_into_ui(event.tab_state)
+
+    def _load_tab_into_ui(self, state) -> None:
+        """Загрузить состояние таба в глобальные виджеты.
+
+        Вызывается из @on(TabActivated) и вручную из _on_tab_closed (после
+        закрытия таба, чтобы синхронизировать UI с новым активным табом).
+        """
         if not isinstance(state, _IntruderTabState):
             return
         # Restore grep state
@@ -426,9 +433,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         """Таб закрыт — загрузить оставшийся."""
         state = self._active_tab
         if state:
-            self._on_tab_activated(
-                TabbedContentPanel.TabActivated(self._tc_panel(), state.tab_id, state)
-            )
+            self._load_tab_into_ui(state)
 
     # ── ContentPanel handlers ─────────────────────────────────────────────────
 
