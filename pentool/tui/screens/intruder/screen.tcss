@@ -31,6 +31,36 @@ IntruderScreen .intruder-tab-body {
     height: 1fr;
 }
 
+/* ── Global toolbar (табы + атака) ───────────────────────────────────── */
+IntruderScreen #intruder-global-toolbar {
+    height: 1;
+}
+IntruderScreen #intruder-global-toolbar Label.toolbar-label {
+    width: auto;
+    padding: 0 1;
+    color: $text-muted;
+}
+IntruderScreen #intruder-global-toolbar Input {
+    width: 6;
+    height: 1;
+    border: solid $primary-darken-2;
+    padding: 0 1;
+    background: $surface;
+}
+IntruderScreen #intruder-global-toolbar #intruder-turbo {
+    width: auto;
+}
+/* StartStopWidget не должен растягиваться на всю строку toolbar */
+IntruderScreen #intruder-start-stop {
+    width: auto;
+}
+IntruderScreen #intruder-start-stop Toolbar {
+    width: auto;
+}
+IntruderScreen #intruder-start-stop ToolbarButton {
+    width: auto;
+}
+
 /* ── Per-tab toolbar ────────────────────────────────────────────────── */
 IntruderScreen .intruder-tab-toolbar {
     height: 1;
@@ -68,19 +98,26 @@ IntruderScreen .intruder-tab-toolbar .pro-locked {
 IntruderScreen .intruder-top-area {
     layout: horizontal;
     height: 1fr;
+    min-height: 8;
 }
 
-IntruderScreen .intruder-template-panel {
+IntruderScreen .intruder-positions-panel {
     width: 1fr;
-    height: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+IntruderScreen .intruder-template-panel {
+    width: 100%;
+    height: 100%;
+    min-height: 3;
 }
 IntruderScreen .intruder-template-panel .text-area--selection {
     background: $primary 70%;
 }
 
 IntruderScreen .intruder-body-right {
-    width: 40%;
-    height: 1fr;
+    width: 1fr;
+    height: 100%;
     layout: vertical;
 }
 

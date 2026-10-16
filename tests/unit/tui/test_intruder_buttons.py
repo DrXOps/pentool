@@ -151,7 +151,7 @@ class TestIntruderButtons:
         assert '"intruder-delay"' in src
         # В per-tab toolbar остались кнопки содержимого, но не StartStop
         mount_src = inspect.getsource(IntruderScreen._mount_tab_body)
-        assert "btn-clear-results" in mount_src
+        assert "btn-add-marker" in mount_src
         assert "StartStopWidget(" not in mount_src
 
     def test_intruder_has_ssw_methods(self, mock_intruder_deps):

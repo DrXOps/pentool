@@ -343,12 +343,9 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         """
         t = lambda s: f"{s}-{tab_id}"
 
-        # ── Toolbar (per-tab): атака и формы вынесены в глобальную строку ────
-        toolbar = Toolbar(
-            ToolbarButton("Clear results", t("btn-clear-results")),
-            Toolbar.sep(),
-            ToolbarButton("Export CSV", t("btn-export-csv")),
-            Toolbar.sep(),
+        # ── Attack toolbar (per-tab): Sniper/Add§§/Clear§§/Auto§§ ─────────────
+        # (как в _compose_positions до мультитаба a315ada)
+        attack_toolbar = Toolbar(
             Label("Attack:", classes="toolbar-label"),
             ToolbarButton("Sniper ▼", t("btn-attack-type")),
             Toolbar.sep(),
@@ -361,14 +358,20 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             id=t("toolbar"),
         )
 
-        # ── Template editor ─────────────────────────────────────────────
-        template = ContentPanel(
-            title=f"Request Template — {state.name}",
-            widget_type="textarea",
-            initial_text=state.template_text or "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
-            buttons=["copy", "paste", "clear"],
-            id=t("template-panel"),
-            classes="intruder-template-panel",
+        # ── Template editor (в левой positions-колонке) ────────────────
+        template = Vertical(
+            Static("Positions", classes="section-title"),
+            attack_toolbar,
+            ContentPanel(
+                title="Request Template",
+                widget_type="textarea",
+                initial_text=state.template_text or "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
+                buttons=["copy", "paste", "clear"],
+                id=t("template-panel"),
+                classes="intruder-template-panel",
+            ),
+            id=t("positions-panel"),
+            classes="intruder-positions-panel",
         )
 
         # ── Payloads panel ──────────────────────────────────────────────
@@ -415,7 +418,11 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         )
 
         # ── Results + progress ──────────────────────────────────────────
+        # Фильтр — СВЕРХУ, над таблицей (как в оригинальной компоновке a315ada:
+        # filter bar → progress → results-table → detail).
+        filter_bar = _IntruderFilterBar(id=t("intruder-filter-bar"))
         results_col = Vertical(
+            filter_bar,
             Horizontal(
                 ProgressBar(total=100, id=t("attack-progress"), show_eta=False),
                 Static("0/0 (0%)", id=t("progress-label")),
@@ -433,9 +440,6 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             id=t("results-area"),
             classes="intruder-results-area",
         )
-
-        # ── Filter bar (per-tab) ───────────────────────────────────────
-        filter_bar = _IntruderFilterBar(id=t("intruder-filter-bar"))
 
         # ── Detail panel (per-tab) ─────────────────────────────────────
         detail_panel = Horizontal(
@@ -455,11 +459,9 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         )
 
         inner = Vertical(
-            toolbar,
             top_area,
-            ResizeHandle(t("top-area"), t("results-area")),
+            ResizeHandle(t("top-area"), t("results-area"), vertical=True),
             results_col,
-            filter_bar,
             detail_panel,
             id=t("tab-body"),
             classes="intruder-tab-body",
@@ -642,6 +644,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             Input("0", id="intruder-delay", placeholder="0", compact=True, type="integer"),
             Toolbar.sep(),
             Checkbox("⚡ Turbo", id="intruder-turbo", value=False),
+            id="intruder-global-toolbar",
         )
 
         # ── TabbedContentPanel (полный UI per-tab внутри) ─────────────────
