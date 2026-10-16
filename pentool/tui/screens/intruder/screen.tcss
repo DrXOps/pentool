@@ -1,72 +1,75 @@
 IntruderScreen {
     layout: vertical;
 }
-IntruderScreen #top-area {
+
+/* ── Per-tab widget styles (по классам, не id) ────────────────────── */
+
+IntruderScreen .intruder-template-panel {
     height: 1fr;
-    layout: horizontal;
-    min-height: 8;
 }
-IntruderScreen #positions-panel {
-    width: 1fr;
+IntruderScreen .intruder-template-panel .text-area--selection {
+    background: $primary 70%;
+}
+
+IntruderScreen .intruder-payloads-panel {
+    width: 40%;
     height: 100%;
     layout: vertical;
 }
-IntruderScreen #payloads-panel {
-    width: 1fr;
-    height: 100%;
-    layout: vertical;
+
+IntruderScreen .intruder-payload-list {
+    height: 1fr;
 }
-IntruderScreen .section-title {
-    height: 1;
-    background: $primary-darken-3;
-    color: $text-muted;
-    padding: 0 1;
-}
+
+/* ── Global sections (остаются по id) ────────────────────────────── */
+
 IntruderScreen #attack-type-desc {
     width: 1fr;
     height: 1;
     padding: 0 1;
     color: $text-muted;
 }
-IntruderScreen #template-editor {
-    height: 1fr;
+
+IntruderScreen .section-title {
+    height: 1;
+    background: $primary-darken-3;
+    color: $text-muted;
+    padding: 0 1;
 }
-IntruderScreen #template-editor .text-area--selection {
-    background: $primary 70%;
-}
-IntruderScreen #payload-list {
-    height: 1fr;
-}
-IntruderScreen #payload-buttons .pro-locked {
+
+IntruderScreen #payload-buttons-toolbar .pro-locked {
     color: $text-muted;
     text-style: dim;
 }
-IntruderScreen #payload-count-label {
+
+IntruderScreen .payload-count-label {
     height: 1;
     padding: 0 1;
     background: $panel;
 }
-IntruderScreen #processing-bar {
+
+IntruderScreen .proc-bar {
     height: 1;
     layout: horizontal;
     background: $panel;
     padding: 0 1;
     align: left middle;
 }
-IntruderScreen #processing-bar Label {
+
+IntruderScreen .proc-bar Label {
     width: auto;
     color: $text-muted;
     padding: 0 0 0 1;
 }
+
+/* ── Results area (global) ────────────────────────────────────────── */
+
 IntruderScreen #results-area {
     height: 1fr;
     min-height: 5;
     layout: vertical;
 }
-IntruderScreen #results-toolbar {
-    height: 0;
-    display: none;
-}
+
 IntruderScreen #progress-row {
     height: 1;
     background: $panel;
@@ -74,14 +77,19 @@ IntruderScreen #progress-row {
     layout: horizontal;
     align: left middle;
 }
+
 IntruderScreen #progress-label {
     width: auto;
     color: $text-muted;
     padding: 0 1;
 }
+
 IntruderScreen #results-table {
     height: 1fr;
 }
+
+/* ── Filter bar ──────────────────────────────────────────────────── */
+
 IntruderScreen #results-filter-bar {
     height: 2;
     layout: horizontal;
@@ -131,6 +139,8 @@ IntruderScreen #grep-bar Button {
     border: none;
 }
 
+/* ── Dialogs ──────────────────────────────────────────────────────── */
+
 _InputDialog {
     align: center middle;
 }
@@ -160,7 +170,8 @@ _InputDialog #buttons ToolbarButton {
     margin: 0 0 0 1;
 }
 
-/* Threads / Delay inputs in toolbar */
+/* ── Toolbar inputs ────────────────────────────────────────────────── */
+
 IntruderScreen #toolbar Label.toolbar-label {
     width: auto;
     padding: 0 1;
@@ -174,7 +185,8 @@ IntruderScreen #toolbar Input {
     background: $surface;
 }
 
-/* Detail panel for request/response */
+/* ── Detail panel ────────────────────────────────────────────────── */
+
 IntruderScreen #intruder-detail-panel {
     height: 20;
     layout: horizontal;

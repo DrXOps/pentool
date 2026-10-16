@@ -91,15 +91,20 @@ class BaseSqliteStorage:
         return True
 
     async def close(self) -> None:
-        if self._db:
-            try:
-                # WAL checkpoint so .db-wal/-shm don't linger on disk.
-                await self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                await self._db.commit()
-            except Exception:
-                pass
-            await self._db.close()
-            self._db = None
+        if self._db is None:
+            return
+        db = self._db
+        self._db = None  # ← защита: ensure_open() вернёт False для всех
+                         #   последующих обращений, даже если реальное
+                         #   закрытие ещё не завершилось (гонка между
+                         #   async воркером и switch_db / action_quit).
+        try:
+            # WAL checkpoint so .db-wal/-shm don't linger on disk.
+            await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            await db.commit()
+        except Exception:
+            pass
+        await db.close()
 
     async def switch_db(self, path: str) -> None:
         logger.info("%s: switch_db called for %s", type(self).__name__, path)

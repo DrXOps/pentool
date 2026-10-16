@@ -147,7 +147,7 @@ class TestIntruderButtons:
 
     def test_intruder_has_ssw_methods(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
-        for name in ("action_start", "action_stop", "action_toggle_pause",
+        for name in ("action_start_attack", "action_stop", "action_toggle_pause",
                      "action_resume", "_on_start_requested",
                      "_on_stop_requested"):
             assert hasattr(IntruderScreen, name)
@@ -210,7 +210,7 @@ class TestIntruderButtons:
         called = [False]
         def track():
             called[0] = True
-        screen.action_start = track
+        screen.action_start_attack = track
         _setup_screen(screen)
 
         try:

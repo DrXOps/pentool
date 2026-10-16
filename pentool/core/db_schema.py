@@ -220,6 +220,12 @@ async def init_db(db_path: str) -> None:
             pass  # Column already exists — expected
         try:
             await db.execute(
+                "ALTER TABLE intruder_state ADD COLUMN target_url TEXT DEFAULT ''"
+            )
+        except Exception:
+            pass  # Column already exists — expected
+        try:
+            await db.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_intruder_state_uid "
                 "ON intruder_state (tab_uid)"
             )
