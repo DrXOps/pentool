@@ -142,8 +142,17 @@ class TestIntruderButtons:
         from pentool.tui.screens.intruder.screen import IntruderScreen
         import inspect
         src = inspect.getsource(IntruderScreen.compose)
-        assert "StartStopWidget()" in src
-        assert '"btn-clear-results"' in src
+        # Глобальная строка: табы + управление атакой активной вкладки
+        assert '"btn-new-tab"' in src
+        assert '"btn-close-tab"' in src
+        # StartStopWidget и формы атаки — в глобальном compose (не в табе)
+        assert 'StartStopWidget(id="intruder-start-stop")' in src
+        assert '"intruder-threads"' in src
+        assert '"intruder-delay"' in src
+        # В per-tab toolbar остались кнопки содержимого, но не StartStop
+        mount_src = inspect.getsource(IntruderScreen._mount_tab_body)
+        assert "btn-clear-results" in mount_src
+        assert "StartStopWidget(" not in mount_src
 
     def test_intruder_has_ssw_methods(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
@@ -161,46 +170,52 @@ class TestIntruderButtons:
     def test_intruder_action_stop_resets_running(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
         screen = IntruderScreen()
-        mock_api = MagicMock()
-        screen._api = mock_api
-        ssw = MagicMock()
-        ssw._running = True
-        ssw._paused = True
-        with patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock, return_value=ssw):
+        attack = MagicMock()
+        tab = MagicMock()
+        tab.attack = attack
+        tab.running = True
+        tab.paused = True
+        screen._active_tab_id = "t1"
+        screen._tabs = []  # не используется, active_tab пойдёт через фолбэк
+        # Подменяем property _active_tab на наш таб
+        with patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab), \
+             patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock) as ssw_prop:
+            ssw = MagicMock()
+            ssw_prop.return_value = ssw
             _setup_screen(screen)
             try:
                 screen.action_stop()
+                attack.stop.assert_called_once()
                 ssw.set_running.assert_called_with(False)
-                mock_api.stop.assert_called_once()
             finally:
                 _teardown_screen(screen)
 
     def test_intruder_action_toggle_pause_toggles_api(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
         screen = IntruderScreen()
-        mock_api = MagicMock()
-        screen._api = mock_api
-        ssw = MagicMock()
-        ssw.running = True
-        ssw.paused = False
-        ssw.paused = False  # заставляем _ssw.paused возвращать False, а не MagicMock
-        with patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock, return_value=ssw):
+        attack = MagicMock()
+        tab = MagicMock()
+        tab.attack = attack
+        tab.running = True
+        tab.paused = False
+        with patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab), \
+             patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock) as ssw_prop:
+            ssw = MagicMock()
+            ssw_prop.return_value = ssw
             _setup_screen(screen)
             try:
                 # Pause
                 screen.action_toggle_pause()
+                attack.pause.assert_called_once()
                 ssw.set_paused.assert_called_with(True)
-                mock_api.pause.assert_called_once()
-
-                # Сброс для Resume
-                ssw.paused = True
-                mock_api.reset_mock()
-                ssw.set_paused.reset_mock()
 
                 # Resume
+                tab.paused = True
+                attack.reset_mock()
+                ssw.set_paused.reset_mock()
                 screen.action_toggle_pause()
+                attack.resume.assert_called_once()
                 ssw.set_paused.assert_called_with(False)
-                mock_api.resume.assert_called_once()
             finally:
                 _teardown_screen(screen)
 
@@ -223,14 +238,20 @@ class TestIntruderButtons:
         from pentool.tui.screens.intruder.screen import IntruderScreen
         from textual.worker import WorkerState
         screen = IntruderScreen()
+        tab = MagicMock()
+        tab.tab_id = "intruder-tab-1"
+        tab.running = True
+        tab.paused = False
         ssw = MagicMock()
-        ssw.running = True
-        ssw.paused = False
-        with patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock, return_value=ssw):
+        panel = MagicMock()
+        panel.get_state.return_value = tab
+        with patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab), \
+             patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock, return_value=ssw), \
+             patch.object(IntruderScreen, "_tc_panel", new_callable=PropertyMock, return_value=panel):
             _setup_screen(screen)
             try:
                 ev = MagicMock()
-                ev.worker.name = "intruder-attack"
+                ev.worker.name = "intruder-attack-intruder-tab-1"
                 ev.state = WorkerState.SUCCESS
                 screen.on_worker_state_changed(ev)
                 ssw.set_running.assert_called_with(False)

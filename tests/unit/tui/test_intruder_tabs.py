@@ -161,7 +161,7 @@ class TestIntruderTabManagement:
         assert screen._results_table() is None
 
     def test_load_active_tab_content_restores_grep(self):
-        """_load_active_tab_content should restore grep state from tab."""
+        """_load_active_tab_content should rebuild table (grep lives in tab state now)."""
         from pentool.tui.screens.intruder.screen import IntruderScreen, _IntruderTabState
         from pentool.collections.filter_predicate import FilterSpec
         screen = IntruderScreen()
@@ -172,10 +172,9 @@ class TestIntruderTabManagement:
         )
         screen._tabs = [state]
         screen._active_tab_id = "intruder-tab-1"
-        with patch.object(screen, "_rebuild_table_data"):
-            screen._load_active_tab_content()
-        assert screen._grep_match_patterns == ["error"]
-        assert screen._grep_only_match is True
+        # grep данные живут в state (per-tab)
+        assert state.grep_match_patterns == ["error"]
+        assert state.grep_only_match is True
 
     def test_load_active_tab_content_empty(self):
         """_load_active_tab_content should not crash on empty tab."""
@@ -226,7 +225,7 @@ class TestIntruderTabManagement:
         mock_save.assert_called_once_with(state)
 
     def test_on_tab_activated_syncs_grep(self):
-        """_on_tab_activated should sync grep patterns from tab state."""
+        """_on_tab_activated should rebuild results table (grep lives in tab state)."""
         from pentool.tui.screens.intruder.screen import IntruderScreen, _IntruderTabState
         from pentool.tui.widgets.tab_panel import TabbedContentPanel
         screen = IntruderScreen()
@@ -236,10 +235,12 @@ class TestIntruderTabManagement:
             grep_only_match=True,
         )
         event = TabbedContentPanel.TabActivated(None, "intruder-tab-1", state)
-        with patch.object(screen, "_rebuild_table_data"):
+        with patch.object(screen, "_rebuild_table_data") as mock_rebuild:
             screen._on_tab_activated(event)
-        assert screen._grep_match_patterns == ["error", "warning"]
-        assert screen._grep_only_match is True
+        mock_rebuild.assert_called_once()
+        # grep данные в state (per-tab), не в глобальных полях экрана
+        assert state.grep_match_patterns == ["error", "warning"]
+        assert state.grep_only_match is True
 
 class TestIntruderPanelBinding:
     """Регрессия: _tc_panel должен быть property, _on_tab_closed не должен
@@ -305,6 +306,97 @@ class TestIntruderPanelBinding:
                 await pilot.pause()
                 assert panel.tab_count == 1
                 assert panel.active_tab_id is not None
+
+        import asyncio
+        asyncio.run(_run())
+
+
+class TestIntruderTabContent:
+    """Регрессия: содержимое таба должно строиться (не пустые табы).
+
+    Причина бага: TabbedContentPanel вызывал заглушечный _mount_tab_ui,
+    игнорируя _build_tab_ui → TabPane был пустым, template-panel отсутствовал.
+    """
+
+    def test_tab_is_not_empty_and_has_template(self):
+        from textual.app import App, ComposeResult
+        from textual.widgets import ContentSwitcher
+        from pentool.tui.screens.intruder.screen import IntruderScreen
+        from pentool.tui.widgets.content_panel import ContentPanel
+
+        class _App(App):
+            def compose(self) -> ComposeResult:
+                with ContentSwitcher():
+                    yield IntruderScreen()
+
+        async def _run():
+            app = _App()
+            async with app.run_test(size=(200, 50)) as pilot:
+                await pilot.pause()
+                screen = app.query_one(IntruderScreen)
+                panel = screen._tc_panel
+                tid = panel.active_tab_id
+                pane = panel.tabs_content.get_pane(tid)
+                # Таб должен содержать template-panel — самый критичный момент
+                template = pane.query_one(f"#template-panel-{tid}", ContentPanel)
+                assert template is not None
+                # Правая панель с payloads существует
+                right = pane.query_one(f"#body-right-{tid}")
+                assert right is not None
+                lv = pane.query_one(f"#payload-list-{tid}")
+                assert lv is not None
+                # Проверки выше упали бы пустым NoMatches, если таб пустой
+
+        import asyncio
+        asyncio.run(_run())
+
+    def test_tab_has_full_ui_sections(self):
+        """Весь экран per-tab: results, detail, filter, toolbar — внутри таба."""
+        from textual.app import App, ComposeResult
+        from textual.widgets import ContentSwitcher
+        from pentool.tui.screens.intruder.screen import IntruderScreen
+        from pentool.tui.widgets.intruder_results_table import IntruderResultsTable
+        from pentool.tui.widgets.request_editor import HttpView
+
+        class _App(App):
+            def compose(self) -> ComposeResult:
+                with ContentSwitcher():
+                    yield IntruderScreen()
+
+        async def _run():
+            app = _App()
+            async with app.run_test(size=(200, 80)) as pilot:
+                await pilot.pause()
+                screen = app.query_one(IntruderScreen)
+                panel = screen._tc_panel
+                tid = panel.active_tab_id
+                pane = panel.tabs_content.get_pane(tid)
+
+                # Results table + progress в табе
+                table = pane.query_one(f"#results-table-{tid}", IntruderResultsTable)
+                assert table is not None
+                pb = pane.query_one(f"#attack-progress-{tid}")
+                assert pb is not None
+                label = pane.query_one(f"#progress-label-{tid}")
+                assert label is not None
+
+                # Detail panel + HttpView в табе
+                req = pane.query_one(f"#detail-request-{tid}", HttpView)
+                assert req is not None
+                resp = pane.query_one(f"#detail-response-{tid}", HttpView)
+                assert resp is not None
+
+                # Toolbar (StartStop + clear) в табе
+                btn_ssw = pane.query(f"#start-stop-{tid}")
+                assert btn_ssw is not None
+                btn_clear = pane.query(f"#btn-clear-results-{tid}")
+                assert btn_clear is not None
+
+                # Payload toolbar в табе
+                btn_pset = pane.query(f"#btn-payload-set-{tid}")
+                assert btn_pset is not None
+                btn_padd = pane.query(f"#btn-payload-add-{tid}")
+                assert btn_padd is not None
 
         import asyncio
         asyncio.run(_run())

@@ -15,6 +15,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Generic, TypeVar
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal
@@ -189,11 +193,11 @@ class TabbedContentPanel(Widget, Generic[TState]):
     # ── Lifecycle: создание / закрытие / переключение ────────────────────
 
     def action_new_tab(self, *, state: TState | None = None, name: str | None = None) -> str:
-        """Создать новый таб.
+        """Create a new tab.
 
         Args:
-            state: готовый TabState (из load_tabs или default).
-            name: имя таба (если state не передан).
+            state: prebuilt TabState (from load_tabs or default).
+            name: tab name (ignored when state is passed).
 
         Returns:
             tab_id.
@@ -210,36 +214,53 @@ class TabbedContentPanel(Widget, Generic[TState]):
             if hasattr(state, "name"):
                 state.name = name
 
-        # ШАГ 1: Создаём empty TabPane и добавляем в TabbedContent (чтобы был в DOM)
-        pane = TabPane(getattr(state, "name", f"Tab {self._counter}"), id=tab_id)
+        # Step 1: build the TabPane (children via *args get mounted when added).
+        pane_id = getattr(state, "name", f"Tab {self._counter}")
+        if self._build_tab_ui is not None:
+            pane = self._build_tab_ui(state, tab_id)
+            if pane is None:
+                pane = TabPane(pane_id, id=tab_id)
+        else:
+            pane = TabPane(pane_id, id=tab_id)
         self._states[tab_id] = state
-        meta = _TabMeta(tab_id=tab_id, pane=pane, name=getattr(state, "name", f"Tab {self._counter}"))
+        meta = _TabMeta(tab_id=tab_id, pane=pane, name=pane_id)
         self._meta[tab_id] = meta
 
         try:
             tc = self.tabs_content
+            # Ровно как Repeater: add_pane() синхронно (discard AwaitComplete),
+            # затем активный таб сразу. Textual mount() вставляет заголовок в DOM
+            # синхронно, поэтому tc.active уже находит его, и ContentTabs
+            # корректно скроллит активный таб во вьюпорт своим штатным
+            # _scroll_active_tab. Никаких отложенных call_after_refresh активаций.
             tc.add_pane(pane)
             tc.active = tab_id
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("action_new_tab setup failed: %s", exc)
 
         self._active_tab_id = tab_id
 
-        # Запланировать построение UI и сообщения (после того как виджет в DOM)
+        # Build per-tab UI and notify the owner once the widget is in the DOM.
         self.call_after_refresh(self._post_tab_messages, tab_id, state)
         return tab_id
 
     def _post_tab_messages(self, tab_id: str, state: TState) -> None:
         """Post messages after widget is ready."""
-        # 1. Mount per-tab виджеты в TabPane (TabPane уже в DOM после add_pane)
+        # Если pane построен через build_tab_ui (с детьми) — mount не нужен.
+        # Иначе достраиваем через _mount_tab_ui.
         self._do_build_ui(tab_id, state)
-        # 2. Постим сообщения для экрана
+        # Постим сообщения для экрана
         self.post_message(self.TabCreated(self, tab_id, state))
         self.post_message(self.TabActivated(self, tab_id, state))
 
     def _do_build_ui(self, tab_id: str, state: TState) -> None:
         """Mount per-tab виджеты в TabPane (TabPane уже в DOM)."""
         if tab_id not in self._states:
+            return
+        # Если pane уже построен с детьми через build_tab_ui — ничего не делаем.
+        pane = self._states.get(tab_id)
+        existing = self._meta[tab_id].pane if tab_id in self._meta else None
+        if existing is not None and list(existing.children):
             return
         if self._mount_tab_ui:
             self._mount_tab_ui(state, tab_id)
@@ -315,14 +336,22 @@ class TabbedContentPanel(Widget, Generic[TState]):
         return None
 
     async def close_all(self) -> None:
-        """Закрыть все табы (при смене проекта)."""
+        """Закрыть все табы (при смене проекта).
+
+        ВАЖНО: каждый remove_pane() awaited. Ранее discard-у meant: reload_from_project
+        делает close_all() сразу → action_new_tab(), и если pane с тем же id ещё
+        удаляется из DOM, новый add_pane со старым id падал (id занят) → заголовок
+        не добавлялся, а последующие «+» разъезжались. Как в Repeater:
+        await remove_pane() — чтобы не было гонки с action_new_tab().
+        """
         for tab_id, state in list(self._states.items()):
             try:
                 tc = self.tabs_content
-                tc.remove_pane(tab_id)
+                await tc.remove_pane(tab_id)
             except Exception:
                 pass
-            self.post_message(self.TabClosed(self, tab_id, state))
+            if state is not None:
+                self.post_message(self.TabClosed(self, tab_id, state))
         self._states.clear()
         self._meta.clear()
         self._counter = 0

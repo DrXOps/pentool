@@ -246,3 +246,50 @@ def test_dispatch_via_on_selector_no_attribute_error():
     assert received["created"] >= 2
     assert received["activated"] >= 2
     assert received["deactivated"] >= 1
+
+
+# ── Регрессия: add_pane после close_all не падает с дублирующимся id ──
+# reload_from_project() делает close_all() → action_new_tab(). Если close_all
+# не дождался remove_pane(), add_pane() с тем же tab_id падал (id занят) и
+# заголовок не добавлялся, а последующие «+» разъезжались (симптом «при +
+# ничего не происходит, при - выезжают заголовки»).
+
+
+def test_action_new_tab_after_close_all_ok():
+    """close_all (await remove_pane) → action_new_tab: новый заголовок создаётся."""
+    import asyncio
+    from textual.app import App, ComposeResult
+    from textual.widgets._tabbed_content import ContentTabs
+    from pentool.tui.widgets.tab_panel import TabbedContentPanel
+
+    class _S:
+        tab_id: str = ""
+        name: str = ""
+        tab_uid: str = ""
+
+    class _App(App):
+        def compose(self) -> ComposeResult:
+            yield TabbedContentPanel(id="vis-tabs", tab_id_prefix="vt-", min_tabs=1)
+
+        def on_mount(self) -> None:
+            self._p = self.query_one("#vis-tabs", TabbedContentPanel)
+            self._p.set_default_state_factory(lambda tid, n: _S())
+            self._p.action_new_tab(name="A")
+            self._p.action_new_tab(name="B")
+
+    async def _run() -> None:
+        async with _App().run_test(size=(40, 30)) as pilot:
+            for _ in range(8):
+                await pilot.pause()
+            app = pilot.app
+            p = app._p
+            await p.close_all()
+            # После close_all добавление нового таба не должно падать
+            tab_id = p.action_new_tab(name="Fresh")
+            await pilot.pause()
+            tabs = p.tabs_content.get_child_by_type(ContentTabs)
+            ids = [t.id for t in tabs.query("#tabs-list > Tab")]
+            assert ids == ["--content-tab-vt-1"], f"после close_all+new должен быть 1 заголовок, got {ids}"
+            assert p.active_state is p.get_state(tab_id)
+
+    asyncio.run(_run())

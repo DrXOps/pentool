@@ -86,6 +86,19 @@ class IntruderAPI(ExportableAPI):
         # same way it always did.
         self._repo = storage or IntruderStorage(db_path=db_path)
 
+    def make_attack(self, config: IntruderConfig, turbo_mode: bool = False):
+        """Создать IntruderAttack (или TurboIntruderAttack) без привязки к общему `_attack`.
+
+        Нужен для параллельных per-tab атак: каждый таб создаёт СВОЙ инстанс атаки
+        через эту фабрику и хранит его в своём состоянии, чтобы пауза/стоп/остановка
+        действовали независимо от других вкладок. `_attack` при этом не трогается.
+        (Наследует http_client для reuse одного пула соединений по умолчанию.)
+        """
+        if turbo_mode:
+            from pentool.modules.intruder_turbo import TurboIntruderAttack
+            return TurboIntruderAttack(config)
+        return IntruderAttack(config, db_path=self._db_path, http_client=self._http_client)
+
     async def start_attack(
         self,
         config: IntruderConfig,
