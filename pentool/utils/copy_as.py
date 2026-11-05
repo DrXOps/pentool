@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 
-from pentool.core.logging import get_logger
+from pentool.utils.logging import get_logger
 
 logger = get_logger(__name__)
 from pathlib import Path

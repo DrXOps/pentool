@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
-from pentool.core.logging import get_logger
+from pentool.utils.logging import get_logger
 
 logger = get_logger(__name__)
 from cryptography.x509 import Certificate

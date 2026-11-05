@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 import time
 
-from pentool.core.logging import get_logger
+from pentool.utils.logging import get_logger
 
 logger = get_logger(__name__)
 from urllib.parse import quote_plus

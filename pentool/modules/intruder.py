@@ -13,44 +13,32 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 from pentool.core.logging import get_logger
+from pentool.storage.intruder_models import IntruderResult
+
+__all__ = ["IntruderResult"]
 
 logger = get_logger(__name__)
 
 
 class AttackType(str, Enum):
-    SNIPER        = "sniper"
+    SNIPER = "sniper"
     BATTERING_RAM = "battering_ram"
-    PITCHFORK     = "pitchfork"
-    CLUSTER_BOMB  = "cluster_bomb"
-
-
-@dataclass
-class IntruderResult:
-    id: str
-    attack_id: str
-    request_number: int
-    payload_values: list[str]          # values per position
-    request_raw: str
-    response_raw: str | None = None    # full HTTP response
-    response_status: int | None = None
-    response_length: int | None = None
-    response_time_ms: int | None = None
-    error: str | None = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    PITCHFORK = "pitchfork"
+    CLUSTER_BOMB = "cluster_bomb"
 
 
 @dataclass
 class IntruderConfig:
-    template: str                      # raw HTTP with §payload§ markers
+    template: str  # raw HTTP with §payload§ markers
     attack_type: AttackType
-    payload_sets: list[list[str]]      # one list per position
+    payload_sets: list[list[str]]  # one list per position
     threads: int = 10
     delay_ms: int = 0
     follow_redirects: bool = False
     timeout: int = 30
     # Turbo mode settings (PRO)
-    turbo_pipeline: bool = False       # HTTP pipelining
-    turbo_keep_alive: bool = True      # connection reuse
+    turbo_pipeline: bool = False  # HTTP pipelining
+    turbo_keep_alive: bool = True  # connection reuse
     turbo_rate_limit: int | None = None  # requests per second limit
 
 
@@ -120,7 +108,7 @@ def substitute_payload(template: str, payload_values: list[str]) -> str:
         if end == -1:
             break
         value = payload_values[idx] if idx < len(payload_values) else ""
-        result = result[:start] + value + result[end + 1:]
+        result = result[:start] + value + result[end + 1 :]
         idx += 1
     return result
 
@@ -155,7 +143,7 @@ def extract_marker_defaults(template: str) -> list[str]:
         end = template.find("§", start + 1)
         if end == -1:
             break
-        defaults.append(template[start + 1:end])
+        defaults.append(template[start + 1 : end])
         i = end + 1
     return defaults
 
@@ -325,7 +313,7 @@ class CharPayloadSource:
         if not self.charset or self.min_len > self.max_len:
             return 0
         base = len(self.charset)
-        return sum(base ** length for length in range(self.min_len, self.max_len + 1))
+        return sum(base**length for length in range(self.min_len, self.max_len + 1))
 
     def __bool__(self) -> bool:
         return len(self) > 0
@@ -340,10 +328,7 @@ class CharPayloadSource:
         return result
 
     def __repr__(self) -> str:
-        return (
-            f"CharPayloadSource(charset={self.charset!r}, "
-            f"min_len={self.min_len}, max_len={self.max_len})"
-        )
+        return f"CharPayloadSource(charset={self.charset!r}, " f"min_len={self.min_len}, max_len={self.max_len})"
 
 
 class ChainedPayloadSource:
@@ -487,6 +472,7 @@ def process_payload(payload: str, operations: list[str]) -> str:
     Unknown operations are ignored.
     """
     from pentool.utils.coder import OPERATIONS
+
     result = payload
     for op in operations:
         func = OPERATIONS.get(op)
@@ -690,7 +676,12 @@ class IntruderAttack:
         # from the input sets' sizes directly (O(1) or one cached streaming
         # pass) instead of counting by materializing the iterator.
         self._total = self._count_total()
-        logger.info("INTRUDER: run() started, total=%d, type=%s, threads=%d", self._total, self._config.attack_type, self._config.threads)
+        logger.info(
+            "INTRUDER: run() started, total=%d, type=%s, threads=%d",
+            self._total,
+            self._config.attack_type,
+            self._config.threads,
+        )
         on_progress(0, self._total)
 
         # БАГ-D: reuse a single HTTPClient (and its aiohttp connection pool)
@@ -700,6 +691,7 @@ class IntruderAttack:
         # it ourselves — an injected client (self._http_client) is owned
         # by the caller.
         from pentool.utils import http_client as _http_client_mod
+
         owns_client = self._http_client is None
         client = self._http_client or _http_client_mod.HTTPClient(timeout=self._config.timeout)
 
@@ -777,6 +769,7 @@ class IntruderAttack:
         client=None,
     ) -> IntruderResult:
         import time
+
         t0 = time.monotonic()
         status = None
         length = None
@@ -806,13 +799,21 @@ class IntruderAttack:
             # Intruder attack request. response_raw_from_parsed([...]) is a
             # local, aiohttp-free equivalent.
             from pentool.utils.parser import response_raw_from_parsed
+
             response_raw = response_raw_from_parsed(resp)
         except Exception as exc:
             error_msg = str(exc)
             logger.warning("INTRUDER: _send_request #%d error: %s", req_num, exc)
 
         elapsed_ms = int((time.monotonic() - t0) * 1000)
-        logger.debug("INTRUDER: #%d payload=%s status=%s length=%s time=%dms", req_num, payload_values, status, length, elapsed_ms)
+        logger.debug(
+            "INTRUDER: #%d payload=%s status=%s length=%s time=%dms",
+            req_num,
+            payload_values,
+            status,
+            length,
+            elapsed_ms,
+        )
 
         return IntruderResult(
             id=str(uuid.uuid4()),
@@ -843,16 +844,16 @@ class IntruderAttack:
     def export_csv(self, path: str) -> None:
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow([
-                "#", "Payloads", "Status", "Length", "Time(ms)", "Error", "Timestamp"
-            ])
+            writer.writerow(["#", "Payloads", "Status", "Length", "Time(ms)", "Error", "Timestamp"])
             for r in self._results:
-                writer.writerow([
-                    r.request_number,
-                    " | ".join(r.payload_values),
-                    r.response_status or "",
-                    r.response_length or "",
-                    r.response_time_ms or "",
-                    r.error or "",
-                    r.timestamp.isoformat(),
-                ])
+                writer.writerow(
+                    [
+                        r.request_number,
+                        " | ".join(r.payload_values),
+                        r.response_status or "",
+                        r.response_length or "",
+                        r.response_time_ms or "",
+                        r.error or "",
+                        r.timestamp.isoformat(),
+                    ]
+                )

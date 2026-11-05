@@ -38,12 +38,42 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from aiosqlite import OperationalError, ProgrammingError
 
 from pentool.collections.filter_predicate import FilterSpec
-from pentool.modules.intruder import IntruderResult
 from pentool.storage.base_sqlite_storage import BaseSqliteStorage
+from pentool.storage.intruder_models import IntruderResult
+
+
+def row_to_result_fields(
+    row: Sequence[Any],
+    *,
+    timestamp: datetime,
+    payload_values: list[str],
+) -> dict[str, Any]:
+    """Разложить строку `intruder_results` в kwargs доменного объекта.
+
+    Хелпер на уровне модуля, а не прямое создание `IntruderResult` в методе:
+    так storage не импортирует `pentool.modules.intruder` во время выполнения
+    (правило слоёв), а вызывающий слой просто делает
+    `IntruderResult(**row_to_result_fields(...))`.
+    """
+    return {
+        "id": str(row[0]),
+        "attack_id": row[1],
+        "request_number": row[2],
+        "payload_values": payload_values,
+        "request_raw": row[4],
+        "response_raw": row[5],
+        "response_status": row[6],
+        "response_length": row[7],
+        "response_time_ms": row[8],
+        "error": row[9],
+        "timestamp": timestamp,
+    }
 
 
 class IntruderStorage(BaseSqliteStorage):
@@ -99,6 +129,7 @@ class IntruderStorage(BaseSqliteStorage):
             # Или commit() пытается выполниться на уже закрытом соединении
             # Игнорируем, чтобы не падать при завершении приложения/переключении проекта
             from pentool.core.logging import get_logger
+
             get_logger(__name__).debug("save_state failed (likely race): %s", exc)
 
     async def load_state(self, tab_name: str, tab_uid: str = "") -> dict | None:
@@ -141,8 +172,10 @@ class IntruderStorage(BaseSqliteStorage):
         rows = await cursor.fetchall()
         return [
             {
-                "tab_uid": row[0], "tab_name": row[1],
-                "template": row[2], "attack_type": row[3],
+                "tab_uid": row[0],
+                "tab_name": row[1],
+                "template": row[2],
+                "attack_type": row[3],
                 "payloads": json.loads(row[4]) if row[4] else [[]],
                 "target_url": row[5] or "",
             }
@@ -183,16 +216,17 @@ class IntruderStorage(BaseSqliteStorage):
                     result.request_raw,
                     result.response_raw,
                     result.response_status,
-                result.response_length,
-                result.response_time_ms,
-                result.error,
-                result.timestamp.isoformat(),
-                tab_uid,
-            ),
-        )
+                    result.response_length,
+                    result.response_time_ms,
+                    result.error,
+                    result.timestamp.isoformat(),
+                    tab_uid,
+                ),
+            )
             await self._db.commit()
         except (OperationalError, ProgrammingError) as exc:
             from pentool.core.logging import get_logger
+
             get_logger(__name__).debug("save_result failed (likely race): %s", exc)
 
     async def get_batch(
@@ -270,17 +304,11 @@ class IntruderStorage(BaseSqliteStorage):
                 ts = datetime.now(timezone.utc)
             results.append(
                 IntruderResult(
-                    id=str(row[0]),
-                    attack_id=row[1],
-                    request_number=row[2],
-                    payload_values=json.loads(row[3]) if row[3] else [],
-                    request_raw=row[4],
-                    response_raw=row[5],
-                    response_status=row[6],
-                    response_length=row[7],
-                    response_time_ms=row[8],
-                    error=row[9],
-                    timestamp=ts,
+                    **row_to_result_fields(
+                        row,
+                        timestamp=ts,
+                        payload_values=json.loads(row[3]) if row[3] else [],
+                    )
                 )
             )
         return results
@@ -326,8 +354,6 @@ class IntruderStorage(BaseSqliteStorage):
             where = ""
             params = []
 
-        cursor = await db.execute(
-            f"SELECT COUNT(*) FROM intruder_results {where}", params
-        )
+        cursor = await db.execute(f"SELECT COUNT(*) FROM intruder_results {where}", params)
         row = await cursor.fetchone()
         return row[0] if row else 0
