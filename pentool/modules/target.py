@@ -23,7 +23,7 @@ class SiteNode:
     """Tree node: host + path."""
 
     host: str
-    path: str                       # "/" for root, "/api/users" for endpoint
+    path: str  # "/" for root, "/api/users" for endpoint
     methods: set[str] = field(default_factory=set)
     request_count: int = 0
     last_seen: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -64,7 +64,7 @@ class SiteMap(BaseSqliteStorage):
 
     def __init__(self, db_path: str) -> None:
         super().__init__(db_path=db_path)
-    # host -> path -> SiteNode
+        # host -> path -> SiteNode
         self._nodes: dict[str, dict[str, SiteNode]] = {}
         # Scope is tracked independently of _nodes (normalized, port-stripped
         # host names) so that adding a host to scope from Proxy works even
@@ -90,6 +90,7 @@ class SiteMap(BaseSqliteStorage):
         # run against an already-initialized project DB.
         await self._connect(path)
         from pentool.core.db_schema import _SCHEMA
+
         await self._db.executescript(_SCHEMA)
         await self._db.commit()
 
@@ -161,10 +162,7 @@ class SiteMap(BaseSqliteStorage):
 
     def get_tree(self) -> dict[str, list[SiteNode]]:
         # Start with hosts that have real traffic (nodes registered via add_request).
-        tree = {
-            host: sorted(paths.values(), key=lambda n: n.path)
-            for host, paths in self._nodes.items()
-        }
+        tree = {host: sorted(paths.values(), key=lambda n: n.path) for host, paths in self._nodes.items()}
         # Include scope-only hosts that have NO traffic node yet. set_in_scope()
         # tracks these in _scope_hosts independently of _nodes, but get_tree()
         # previously omitted them — so a host added to scope from the Proxy
@@ -261,11 +259,19 @@ class SiteMap(BaseSqliteStorage):
                             1 if node.in_scope else 0,
                         ),
                     )
-            # Save wildcard scope rules
-            from pentool.core.db_schema import set_project_setting
+            # Save wildcard scope rules on the SAME persistent connection.
+            # `db_schema.set_project_setting()` opens its own aiosqlite
+            # connection to this file — that second connection competes for
+            # the write lock with the transaction opened above and raised
+            # "database is locked" (silently swallowed by the except below,
+            # so nothing was saved at all). One connection, one commit.
             if self._db_path:
                 wildcards_json = ",".join(self._scope_wildcards)
-                await set_project_setting(self._db_path, "scope_wildcards", wildcards_json)
+                await db.execute(
+                    "INSERT INTO project_settings (key, value) VALUES (?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    ("scope_wildcards", wildcards_json),
+                )
             await db.commit()
         except Exception as exc:
             logger.error("SiteMap.save error: %s", exc)
@@ -291,10 +297,16 @@ class SiteMap(BaseSqliteStorage):
                 self._nodes.setdefault(node.host, {})[node.path] = node
                 if node.in_scope:
                     self._scope_hosts.add(self._norm_host(node.host))
-            # Load wildcard scope rules
-            from pentool.core.db_schema import get_project_setting
+            # Load wildcard scope rules on the same persistent connection
+            # (same reason as in save(): a second connection to the file is
+            # an unnecessary writer-lock contender).
             if self._db_path:
-                raw = await get_project_setting(self._db_path, "scope_wildcards", "")
+                async with db.execute(
+                    "SELECT value FROM project_settings WHERE key = ?",
+                    ("scope_wildcards",),
+                ) as cur:
+                    row = await cur.fetchone()
+                raw = row[0] if row else ""
                 if raw:
                     self._scope_wildcards = [s for s in raw.split(",") if s.strip()]
         except Exception as exc:
@@ -306,10 +318,7 @@ class SiteMap(BaseSqliteStorage):
         self._scope_wildcards.clear()
 
     def export_json(self) -> dict:
-        return {
-            host: [n.to_dict() for n in nodes]
-            for host, nodes in self.get_tree().items()
-        }
+        return {host: [n.to_dict() for n in nodes] for host, nodes in self.get_tree().items()}
 
     def export_json_v2(self) -> dict:
         """Full export including wildcard scope rules."""
