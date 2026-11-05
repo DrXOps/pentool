@@ -15,7 +15,10 @@ repos:
     rev: 7.0.0
     hooks:
       - id: flake8
-        args: [--max-line-length=120, --extend-ignore=E203,W503]
+        # Значение с запятой ОБЯЗАТЕЛЬНО в кавычках: в flow-списке YAML
+        # `E203,W503` без кавычек — два элемента, и flake8 получает
+        # аргумент 'W503' как путь (E902 FileNotFoundError).
+        args: [--max-line-length=120, "--extend-ignore=E203,W503"]
 
   - repo: local
     hooks:
@@ -25,3 +28,38 @@ repos:
         language: python
         pass_filenames: false
         always_run: true
+
+      # guard-git-staging: в коммит попадают только файлы проекта.
+      # Проверяет ИНДЕКС, а не команду — работает и для `git commit` из IDE,
+      # и в CI (через --files-from). Логика и списки продублированы из
+      # .claude/hooks/guard-git-staging.sh намеренно: pre-commit должен
+      # работать в свежем клоне, где .claude/ может отсутствовать.
+      - id: guard-git-staging
+        name: guard git staging (только файлы проекта)
+        entry: scripts/pre-commit-guard.sh
+        language: script
+        stages: [pre-commit]
+        pass_filenames: false
+        always_run: true
+
+      # detect-secrets: блокирует коммит с секретом. Baseline (.secrets.baseline)
+      # фиксирует 23 уже существующие находки — все в тестах и license-коде
+      # (фиктивные ключи, тестовые JWT, сгенерированные сертификаты), не секреты.
+      # Обновление baseline: detect-secrets scan --baseline .secrets.baseline
+      # Ложное срабатывание в новой строке помечается `pragma: allowlist secret`.
+      - id: detect-secrets
+        name: detect-secrets (секреты не попадают в историю)
+        entry: detect-secrets-hook --baseline .secrets.baseline
+        language: python
+        additional_dependencies: ["detect-secrets>=1.5,<2"]
+        exclude: ^\.secrets\.baseline$
+        pass_filenames: true
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: check-merge-conflict
+      # trailing-whitespace / end-of-file-fixer намеренно не включены: они
+      # перепишут сотни существующих файлов при первом прогоне. Включать
+      # отдельным коммитом, когда весь код пройдёт форматтеры.
