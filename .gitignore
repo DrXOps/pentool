@@ -101,3 +101,9 @@ tools/pentool_promocoords.py
 docs/ARCHITECTURE.md
 promo_assets/
 promo_assets/
+
+# Изолированные рабочие копии для параллельных агентов (scripts/ai/worktree)
+.worktrees/
+
+# Журналы AI-автоматизации: события вызовов и логи агента (ai/run report)
+ai/logs/
