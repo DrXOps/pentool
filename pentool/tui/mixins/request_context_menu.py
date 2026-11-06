@@ -1,26 +1,25 @@
 """RequestContextMenuMixin — standardised context menu for HTTP requests."""
 
 from __future__ import annotations
-from pentool.core.error_guard import err
 
 
 class RequestContextMenuMixin:
     """Unified HTTP request context menu for all modules."""
 
     # ── Item flags (override in subclass) ────────────────────────────────────
-    _cm_show_copy_url:      bool = False
-    _cm_show_ffuf:          bool = True
-    _cm_show_sqlmap:        bool = True
-    _cm_show_nmap:          bool = False
-    _cm_show_jwt:           bool = True
-    _cm_show_save_txt:      bool = True
+    _cm_show_copy_url: bool = False
+    _cm_show_ffuf: bool = True
+    _cm_show_sqlmap: bool = True
+    _cm_show_nmap: bool = False
+    _cm_show_jwt: bool = True
+    _cm_show_save_txt: bool = True
     _cm_show_send_repeater: bool = True
     _cm_show_send_intruder: bool = False
-    _cm_show_send_scanner:  bool = False
-    _cm_show_send_decoder:  bool = False
+    _cm_show_send_scanner: bool = False
+    _cm_show_send_decoder: bool = False
     _cm_show_send_comparer: bool = False
-    _cm_show_export_md:     bool = False
-    _cm_show_export_html:   bool = False
+    _cm_show_export_md: bool = False
+    _cm_show_export_html: bool = False
 
     # ── Required interface ────────────────────────────────────────────────────
 
@@ -37,32 +36,30 @@ class RequestContextMenuMixin:
 
     def cm_open_text_menu(self, x: int, y: int) -> None:
         items = self._cm_build_items()
-        self.app.show_context_menu(  # type: ignore[attr-defined]
-            items, x, y, callback=self._cm_handle
-        )
+        self.app.show_context_menu(items, x, y, callback=self._cm_handle)  # type: ignore[attr-defined]
 
     # ── Building items ────────────────────────────────────────────────────────
 
     def _cm_build_items(self) -> list[tuple[str, str]]:
         items: list[tuple[str, str]] = [
-            ("text_copy",       "Copy"),
+            ("text_copy", "Copy"),
             ("text_select_all", "Select All"),
             ("-", ""),
         ]
         if self._cm_show_copy_url:
             items.append(("copy_url", "Copy URL"))
         items += [
-            ("copy_curl",  "Copy as curl"),
+            ("copy_curl", "Copy as curl"),
             ("copy_fetch", "Copy as fetch()"),
         ]
         if self._cm_show_ffuf:
-            items.append(("copy_ffuf",   "Copy as ffuf"))
+            items.append(("copy_ffuf", "Copy as ffuf"))
         if self._cm_show_sqlmap:
             items.append(("copy_sqlmap", "Copy as sqlmap"))
         if self._cm_show_nmap:
-            items.append(("copy_nmap",   "Copy as nmap"))
+            items.append(("copy_nmap", "Copy as nmap"))
         if self._cm_show_jwt:
-            items.append(("copy_jwt",    "Copy as jwt_tool"))
+            items.append(("copy_jwt", "Copy as jwt_tool"))
         items += [
             ("-", ""),
             ("open_browser", "Open in Browser"),
@@ -79,14 +76,14 @@ class RequestContextMenuMixin:
         if self._cm_show_send_intruder:
             send_items.append(("send_intruder", "Send to Intruder"))
         if self._cm_show_send_scanner:
-            send_items.append(("send_scanner",  "Send to Scanner"))
+            send_items.append(("send_scanner", "Send to Scanner"))
         if send_items:
             items.append(("-", ""))
             items += send_items
         # Decoder/Comparer group
         tool_items: list[tuple[str, str]] = []
         if self._cm_show_send_decoder:
-            tool_items.append(("send_decoder",  "Send to Decoder"))
+            tool_items.append(("send_decoder", "Send to Decoder"))
         if self._cm_show_send_comparer:
             tool_items.append(("send_comparer", "Send to Comparer"))
         if tool_items:
@@ -95,7 +92,7 @@ class RequestContextMenuMixin:
         # Export group
         export_items: list[tuple[str, str]] = []
         if self._cm_show_export_md:
-            export_items.append(("export_md",   "📄 Export Markdown"))
+            export_items.append(("export_md", "📄 Export Markdown"))
         if self._cm_show_export_html:
             export_items.append(("export_html", "🌐 Export HTML"))
         if export_items:
@@ -117,8 +114,7 @@ class RequestContextMenuMixin:
         raw = self._cm_get_raw_request()
         if action == "copy_url":
             self._cm_do_copy_url(raw)
-        elif action in ("copy_curl", "copy_fetch", "copy_ffuf",
-                        "copy_sqlmap", "copy_nmap", "copy_jwt"):
+        elif action in ("copy_curl", "copy_fetch", "copy_ffuf", "copy_sqlmap", "copy_nmap", "copy_jwt"):
             self._cm_do_copy_as(action, raw)
         elif action == "open_browser":
             self._cm_do_open_browser(raw)
@@ -144,6 +140,7 @@ class RequestContextMenuMixin:
     def _cm_do_copy_selection(self) -> None:
         try:
             from pentool.utils.copy_as import copy_to_clipboard
+
             focused = self.app.focused  # type: ignore[attr-defined]
             text = ""
             if hasattr(focused, "selected_text"):
@@ -165,6 +162,7 @@ class RequestContextMenuMixin:
 
     def _cm_do_copy_url(self, raw: str) -> None:
         from pentool.utils.copy_as import copy_to_clipboard, extract_url_from_raw
+
         url = extract_url_from_raw(raw)
         if url and copy_to_clipboard(url):
             self.app.notify("URL copied", timeout=2)  # type: ignore[attr-defined]
@@ -185,18 +183,19 @@ class RequestContextMenuMixin:
             copy_to_clipboard,
         )
         from pentool.utils.parser import parse_http_request
+
         try:
             req = parse_http_request(raw)
         except Exception as exc:
             self.err(exc, "Parse error")
             return
         _MAP = {
-            "copy_curl":   (copy_as_curl,     "curl"),
-            "copy_fetch":  (copy_as_fetch,    "fetch()"),
-            "copy_ffuf":   (copy_as_ffuf,     "ffuf"),
-            "copy_sqlmap": (copy_as_sqlmap,   "sqlmap"),
-            "copy_nmap":   (copy_as_nmap,     "nmap"),
-            "copy_jwt":    (copy_as_jwt_tool, "jwt_tool"),
+            "copy_curl": (copy_as_curl, "curl"),
+            "copy_fetch": (copy_as_fetch, "fetch()"),
+            "copy_ffuf": (copy_as_ffuf, "ffuf"),
+            "copy_sqlmap": (copy_as_sqlmap, "sqlmap"),
+            "copy_nmap": (copy_as_nmap, "nmap"),
+            "copy_jwt": (copy_as_jwt_tool, "jwt_tool"),
         }
         fn, label = _MAP[action]
         text = fn(req)
@@ -205,11 +204,13 @@ class RequestContextMenuMixin:
         else:
             self.app.notify(  # type: ignore[attr-defined]
                 f"Clipboard unavailable.\n{text[:80]}",
-                severity="warning", timeout=5,
+                severity="warning",
+                timeout=5,
             )
 
     def _cm_do_open_browser(self, raw: str) -> None:
         from pentool.utils.copy_as import extract_url_from_raw, open_in_browser
+
         url = extract_url_from_raw(raw)
         if url:
             open_in_browser(url)
@@ -225,6 +226,7 @@ class RequestContextMenuMixin:
 
         from pentool.utils.copy_as import save_request_txt
         from pentool.utils.parser import parse_http_request
+
         try:
             req = parse_http_request(raw)
             path = os.path.expanduser("~/request.txt")
@@ -238,8 +240,10 @@ class RequestContextMenuMixin:
             self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+
         _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         from pentool.tui.messages import SendToRepeater
+
         self.app.post_message(SendToRepeater(raw))  # type: ignore[attr-defined]
 
     def _cm_do_send_intruder(self, raw: str) -> None:
@@ -247,8 +251,10 @@ class RequestContextMenuMixin:
             self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+
         _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         from pentool.tui.messages import SendToIntruder
+
         self.app.post_message(SendToIntruder(raw))  # type: ignore[attr-defined]
 
     def _cm_do_send_scanner(self, raw: str) -> None:
@@ -257,9 +263,11 @@ class RequestContextMenuMixin:
             return
         try:
             from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+
             _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
             from pentool.tui.messages import SendRequestToScanner
             from pentool.utils.parser import parse_http_request
+
             req = parse_http_request(raw)
             self.app.post_message(SendRequestToScanner(req))  # type: ignore[attr-defined]
         except Exception as exc:
@@ -268,12 +276,14 @@ class RequestContextMenuMixin:
     def _cm_do_send_decoder(self, raw: str) -> None:
         """Requires AppMixin in the inheritance chain."""
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+
         _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         self._send_to_decoder(raw)  # type: ignore[attr-defined]
 
     def _cm_do_send_comparer(self, raw: str) -> None:
         """Requires AppMixin in the inheritance chain."""
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
+
         _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
         self._send_to_comparer(raw, label="Request")  # type: ignore[attr-defined]
 
@@ -291,6 +301,6 @@ class RequestContextMenuMixin:
         """Generic export — override in subclass to provide ReportData."""
         self.app.notify(  # type: ignore[attr-defined]
             f"Export {fmt.upper()} not implemented for this module",
-            severity="warning", timeout=3,
+            severity="warning",
+            timeout=3,
         )
-

@@ -17,13 +17,7 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Button, Input, Label, Static
 
-from pentool.collections.filter_predicate import (
-    FilterField,
-    FilterFieldType,
-    FilterOp,
-    FilterPredicate,
-    FilterSpec,
-)
+from pentool.collections.filter_predicate import FilterField, FilterFieldType, FilterPredicate, FilterSpec
 
 # FilterBarWidget doesn't ship a DEFAULT_CSS — each concrete subclass
 # (ProxyFilterBar, IntruderFilterBar) defines its own layout, widths,
@@ -176,11 +170,13 @@ class FilterBarWidget(Widget):
         for f in self.configure():
             raw = self._read_field(f)
             if raw is not None and raw != "":
-                predicates.append(FilterPredicate(
-                    field=f.field,
-                    operator=f.operator,
-                    value=self._normalize_value(f, raw),
-                ))
+                predicates.append(
+                    FilterPredicate(
+                        field=f.field,
+                        operator=f.operator,
+                        value=self._normalize_value(f, raw),
+                    )
+                )
         return predicates
 
     def _read_field(self, field: FilterField) -> Any | None:
@@ -210,11 +206,15 @@ class FilterBarWidget(Widget):
     @staticmethod
     def _normalize_value(field: FilterField, raw: Any) -> Any:
         if field.field_type == FilterFieldType.NUMBER:
-            try: return int(raw)
-            except ValueError: return raw
+            try:
+                return int(raw)
+            except ValueError:
+                return raw
         if field.field_type == FilterFieldType.RANGE and isinstance(raw, tuple):
-            try: return (int(raw[0]), int(raw[1]))
-            except ValueError: return raw
+            try:
+                return (int(raw[0]), int(raw[1]))
+            except ValueError:
+                return raw
         return raw
 
     # ── Apply / Reset ──────────────────────────────────────────────────────

@@ -7,21 +7,21 @@
 
 from __future__ import annotations
 
-from pentool.tui.hotkeys import registry, build_status_bar_markup
+from pentool.tui.hotkeys import build_status_bar_markup, registry
 from pentool.tui.widgets.hintbar_base import HintBarBase
 
 # ── Цвета клавиш для [Global] секции ──────────────────────────────────
 _GLOBAL_KEY_COLORS: dict[str, str] = {
-    "H":  "#88ccff",  # Dash   — голубой
-    "P":  "#66dd88",  # Proxy  — зелёный
-    "R":  "#ff9944",  # Rpt    — оранжевый
-    "I":  "#ff6666",  # Intrud — красный
-    "S":  "#aa66ff",  # Scan   — фиолетовый
-    "T":  "#66ccff",  # Target — синий
-    "D":  "#ddbb44",  # Decode — жёлтый
-    "C":  "#ff88cc",  # Comp   — розовый
-    "Q":  "#77dddd",  # Seq    — бирюзовый
-    "E":  "#aaaaaa",  # Ext    — серый
+    "H": "#88ccff",  # Dash   — голубой
+    "P": "#66dd88",  # Proxy  — зелёный
+    "R": "#ff9944",  # Rpt    — оранжевый
+    "I": "#ff6666",  # Intrud — красный
+    "S": "#aa66ff",  # Scan   — фиолетовый
+    "T": "#66ccff",  # Target — синий
+    "D": "#ddbb44",  # Decode — жёлтый
+    "C": "#ff88cc",  # Comp   — розовый
+    "Q": "#77dddd",  # Seq    — бирюзовый
+    "E": "#aaaaaa",  # Ext    — серый
 }
 
 
@@ -72,4 +72,4 @@ class ModuleHintBar(HintBarBase):
         if hints:
             self.set_text(f"\\[InModule]  {hints}")
         else:
-            self.set_text(f"\\[InModule] —")
+            self.set_text("\\[InModule] —")

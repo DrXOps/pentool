@@ -77,8 +77,7 @@ class ProxyRuntimeMixin:
             logger.warning("APP: _start_proxy skipped — another start/stop is in progress")
             return
         try:
-            logger.info("APP: _start_proxy: starting proxy on %s:%d",
-                        self._proxy.host, self._proxy.port)
+            logger.info("APP: _start_proxy: starting proxy on %s:%d", self._proxy.host, self._proxy.port)
 
             if self._engine() == "daemon":
                 self._start_proxy_daemon()
@@ -95,15 +94,16 @@ class ProxyRuntimeMixin:
             self._update_proxy_screen_labels()  # type: ignore[attr-defined]
             self._update_dashboard_proxy_status(True)  # type: ignore[attr-defined]
             self.notify(  # type: ignore[attr-defined]
-                f"● Proxy :{self._proxy.port}", severity="success"  # type: ignore[attr-defined]
+                f"● Proxy :{self._proxy.port}",
+                severity="success",  # type: ignore[attr-defined]
             )
             logger.info("Proxy started on port %s (daemon engine)", self._proxy.port)  # type: ignore[attr-defined]
         except Exception as exc:  # noqa: BLE001
-            msg = str(exc) or type(exc).__name__
             self.err(exc, "Proxy (daemon) failed to start")
 
     def _start_proxy_memory(self) -> None:
         """Start the legacy in-memory ProxyServer on a daemon thread."""
+
         def _run_proxy_loop() -> None:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -127,7 +127,9 @@ class ProxyRuntimeMixin:
             self.call_from_thread(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
             self.call_from_thread(self._update_dashboard_proxy_status, True)  # type: ignore[attr-defined]
             self.call_from_thread(  # type: ignore[attr-defined]
-                self.notify, f"● Proxy :{self._proxy.port}", severity="success"  # type: ignore[attr-defined]
+                self.notify,
+                f"● Proxy :{self._proxy.port}",
+                severity="success",  # type: ignore[attr-defined]
             )
             logger.info("Proxy started on port %s", self._proxy.port)
             async with self._proxy._server:  # type: ignore[attr-defined]
@@ -148,7 +150,8 @@ class ProxyRuntimeMixin:
         # 'memory' engine — run async stop synchronously
         if self._proxy and self._proxy.is_running and self._proxy_loop:  # type: ignore[attr-defined]
             future = asyncio.run_coroutine_threadsafe(
-                self._proxy.stop(), self._proxy_loop  # type: ignore[attr-defined]
+                self._proxy.stop(),
+                self._proxy_loop,  # type: ignore[attr-defined]
             )
             try:
                 future.result(timeout=1.5)
@@ -156,9 +159,11 @@ class ProxyRuntimeMixin:
                 logger.warning("APP: proxy.stop() error or timeout: %s", e)
                 if self._proxy_loop and not self._proxy_loop.is_closed():  # type: ignore[attr-defined]
                     try:
+
                         def _cancel_all():
                             for t in asyncio.all_tasks(self._proxy_loop):  # type: ignore[attr-defined]
                                 t.cancel()
+
                         self._proxy_loop.call_soon_threadsafe(_cancel_all)  # type: ignore[attr-defined]
                     except Exception:
                         pass
@@ -169,7 +174,9 @@ class ProxyRuntimeMixin:
         self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
         self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
         self.call_after_refresh(
-            self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
+            self.notify,
+            "○ Proxy stopped",
+            severity="warning",  # type: ignore[attr-defined]
         )
 
     async def _stop_proxy_async(self) -> None:
@@ -184,7 +191,8 @@ class ProxyRuntimeMixin:
             return self._stop_proxy_daemon_async()
         if self._proxy and self._proxy.is_running and self._proxy_loop:  # type: ignore[attr-defined]
             future = asyncio.run_coroutine_threadsafe(
-                self._proxy.stop(), self._proxy_loop  # type: ignore[attr-defined]
+                self._proxy.stop(),
+                self._proxy_loop,  # type: ignore[attr-defined]
             )
             try:
                 await asyncio.wait_for(asyncio.wrap_future(future), timeout=1.5)
@@ -201,7 +209,9 @@ class ProxyRuntimeMixin:
         self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
         self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
         self.call_after_refresh(
-            self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
+            self.notify,
+            "○ Proxy stopped",
+            severity="warning",  # type: ignore[attr-defined]
         )
 
     def _stop_proxy_daemon(self) -> None:
@@ -216,7 +226,9 @@ class ProxyRuntimeMixin:
         self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
         self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
         self.call_after_refresh(  # type: ignore[attr-defined]
-            self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
+            self.notify,
+            "○ Proxy stopped",
+            severity="warning",  # type: ignore[attr-defined]
         )
 
     async def _stop_proxy_daemon_async(self) -> None:
@@ -237,5 +249,7 @@ class ProxyRuntimeMixin:
         self.call_after_refresh(self._update_status)  # type: ignore[attr-defined]
         self.call_after_refresh(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
         self.call_after_refresh(  # type: ignore[attr-defined]
-            self.notify, "○ Proxy stopped", severity="warning"  # type: ignore[attr-defined]
+            self.notify,
+            "○ Proxy stopped",
+            severity="warning",  # type: ignore[attr-defined]
         )

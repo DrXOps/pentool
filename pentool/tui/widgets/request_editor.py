@@ -6,38 +6,50 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from textual import events as _tevents, on
+from textual import events as _tevents
+from textual import on
 from textual.app import ComposeResult
-from textual.containers import Vertical
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Static, TextArea
+from textual.widgets import TextArea
 from textual.widgets.text_area import Selection
 
-from textual.widgets.text_area import Selection
-
-import pentool.utils.copy_as as clipboard_utils
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
-
 from pentool.utils.parser import ParsedRequest, ParsedResponse, build_http_request
 
 _CSS = (Path(__file__).parent / "request_editor.tcss").read_text(encoding="utf-8")
 
 
 _METHOD_COLORS = {
-    "GET": "keyword", "POST": "string", "PUT": "string",
-    "DELETE": "tag", "PATCH": "string", "HEAD": "keyword",
-    "OPTIONS": "comment", "TRACE": "comment",
+    "GET": "keyword",
+    "POST": "string",
+    "PUT": "string",
+    "DELETE": "tag",
+    "PATCH": "string",
+    "HEAD": "keyword",
+    "OPTIONS": "comment",
+    "TRACE": "comment",
 }
 
 _HEADER_TOKEN = {
-    "host": "function", "content-type": "function", "authorization": "tag",
-    "cookie": "tag", "set-cookie": "tag", "location": "function",
-    "user-agent": "comment", "accept": "comment", "accept-encoding": "comment",
-    "accept-language": "comment", "connection": "comment", "referer": "comment",
-    "origin": "comment", "content-length": "comment", "transfer-encoding": "comment",
-    "x-frame-options": "tag", "x-content-type-options": "tag",
+    "host": "function",
+    "content-type": "function",
+    "authorization": "tag",
+    "cookie": "tag",
+    "set-cookie": "tag",
+    "location": "function",
+    "user-agent": "comment",
+    "accept": "comment",
+    "accept-encoding": "comment",
+    "accept-language": "comment",
+    "connection": "comment",
+    "referer": "comment",
+    "origin": "comment",
+    "content-length": "comment",
+    "transfer-encoding": "comment",
+    "x-frame-options": "tag",
+    "x-content-type-options": "tag",
     "strict-transport-security": "tag",
 }
 
@@ -73,7 +85,7 @@ def _build_http_highlights(text: str) -> dict:
                             highlights[row].append((path_start, path_start + q + 1, "comment"))
                             # key=value in query string
                             offset = path_start + q + 1
-                            for pair in path[q + 1:].split("&"):
+                            for pair in path[q + 1 :].split("&"):
                                 if "=" in pair:
                                     k, _, v = pair.partition("=")
                                     highlights[row].append((offset, offset + len(k), "function"))
@@ -122,24 +134,47 @@ def _select_word_at_cursor(area: TextArea) -> None:
     except Exception:
         pass
 
+
 # Languages supported by the built-in TextArea highlighter
 _SUPPORTED_LANGS = {
-    "json", "html", "xml", "javascript", "css",
-    "python", "sql", "bash", "yaml", "toml", "markdown",
+    "json",
+    "html",
+    "xml",
+    "javascript",
+    "css",
+    "python",
+    "sql",
+    "bash",
+    "yaml",
+    "toml",
+    "markdown",
 }
 
 _HEADER_COLORS: dict[str, str] = {
-    "host": "cyan", "content-type": "green", "content-length": "dim green",
-    "authorization": "bold yellow", "cookie": "yellow", "set-cookie": "bold yellow",
-    "location": "bold cyan", "server": "dim magenta", "date": "dim",
-    "x-frame-options": "dim red", "x-content-type-options": "dim red",
-    "strict-transport-security": "dim red", "access-control-allow-origin": "magenta",
+    "host": "cyan",
+    "content-type": "green",
+    "content-length": "dim green",
+    "authorization": "bold yellow",
+    "cookie": "yellow",
+    "set-cookie": "bold yellow",
+    "location": "bold cyan",
+    "server": "dim magenta",
+    "date": "dim",
+    "x-frame-options": "dim red",
+    "x-content-type-options": "dim red",
+    "strict-transport-security": "dim red",
+    "access-control-allow-origin": "magenta",
     "www-authenticate": "bold red",
 }
 _METHOD_RICH = {
-    "GET": "bold green", "POST": "bold yellow", "PUT": "bold cyan",
-    "DELETE": "bold red", "PATCH": "bold magenta", "HEAD": "green",
-    "OPTIONS": "dim cyan", "TRACE": "dim",
+    "GET": "bold green",
+    "POST": "bold yellow",
+    "PUT": "bold cyan",
+    "DELETE": "bold red",
+    "PATCH": "bold magenta",
+    "HEAD": "green",
+    "OPTIONS": "dim cyan",
+    "TRACE": "dim",
 }
 
 
@@ -239,11 +274,12 @@ class _BaseHttpWidget(Widget):
 
     DEFAULT_CSS = _CSS
 
-    _textarea_id: str = ""       # override in subclass
+    _textarea_id: str = ""  # override in subclass
     _last_click_time: float = 0.0
 
     class ContextMenuRequest(Message):
         """Ctrl+click — context menu request."""
+
         def __init__(self, screen_x: int, screen_y: int) -> None:
             super().__init__()
             self.screen_x = screen_x
@@ -303,13 +339,13 @@ def visualize_special_chars(text: str) -> str:
     i = 0
     while i < len(text):
         ch = text[i]
-        if ch == '\r' and i + 1 < len(text) and text[i + 1] == '\n':
+        if ch == "\r" and i + 1 < len(text) and text[i + 1] == "\n":
             result.append("\\r\\n\n")
             i += 2
-        elif ch == '\r':
+        elif ch == "\r":
             result.append("\\r\n")
             i += 1
-        elif ch == '\n':
+        elif ch == "\n":
             result.append("\\n\n")
             i += 1
         else:
@@ -346,39 +382,37 @@ def _build_body_highlights(body_lines: list[str], lang: str, start_row: int) -> 
     hl: dict = defaultdict(list)
     if lang == "html":
         import re as _re
+
         for bi, bline in enumerate(body_lines):
             row = start_row + bi
             # Highlight tags: <tagname ...>
-            for m in _re.finditer(r'(</?)([\w-]+)([^>]*)(/?>)', bline):
-                hl[row].append((m.start(1), m.end(1), "operator"))          # <
-                hl[row].append((m.start(2), m.end(2), "tag"))               # tagname
+            for m in _re.finditer(r"(</?)([\w-]+)([^>]*)(/?>)", bline):
+                hl[row].append((m.start(1), m.end(1), "operator"))  # <
+                hl[row].append((m.start(2), m.end(2), "tag"))  # tagname
                 # attributes inside the tag
                 attr_re = _re.finditer(r'([\w-]+)(=)(["\'])(.*?)(\3)', m.group(3))
                 attr_offset = m.start(3)
                 for am in attr_re:
                     hl[row].append((attr_offset + am.start(1), attr_offset + am.end(1), "function"))  # attr name
                     hl[row].append((attr_offset + am.start(2), attr_offset + am.end(2), "operator"))  # =
-                    hl[row].append((attr_offset + am.start(3), attr_offset + am.end(3), "string"))    # quote
-                    hl[row].append((attr_offset + am.start(4), attr_offset + am.end(4), "string"))    # value
-                    hl[row].append((attr_offset + am.start(5), attr_offset + am.end(5), "string"))    # quote
-                hl[row].append((m.start(4), m.end(4), "operator"))          # >
+                    hl[row].append((attr_offset + am.start(3), attr_offset + am.end(3), "string"))  # quote
+                    hl[row].append((attr_offset + am.start(4), attr_offset + am.end(4), "string"))  # value
+                    hl[row].append((attr_offset + am.start(5), attr_offset + am.end(5), "string"))  # quote
+                hl[row].append((m.start(4), m.end(4), "operator"))  # >
     elif lang == "json":
-        import json as _json
-        try:
-            _parsed = _json.loads("\n".join(body_lines))
-        except Exception:
-            _parsed = None
         # Highlight JSON keys via regex
         import re as _re
+
         for bi, bline in enumerate(body_lines):
             row = start_row + bi
             for m in _re.finditer(r'("(?:[^"\\]|\\.)*")\s*:', bline):
-                hl[row].append((m.start(1), m.end(1), "function"))          # key
+                hl[row].append((m.start(1), m.end(1), "function"))  # key
     elif lang == "xml":
         import re as _re
+
         for bi, bline in enumerate(body_lines):
             row = start_row + bi
-            for m in _re.finditer(r'(</?)([\w:-]+)([^>]*)(/?>)', bline):
+            for m in _re.finditer(r"(</?)([\w:-]+)([^>]*)(/?>)", bline):
                 hl[row].append((m.start(1), m.end(1), "operator"))
                 hl[row].append((m.start(2), m.end(2), "tag"))
                 attr_re = _re.finditer(r'([\w:-]+)(=)(["\'])(.*?)(\3)', m.group(3))
@@ -393,8 +427,7 @@ def _build_body_highlights(body_lines: list[str], lang: str, start_row: int) -> 
     return hl
 
 
-def _load_into_textarea(area: TextArea, text: str,
-                        highlight_terms: list[str] | None = None) -> None:
+def _load_into_textarea(area: TextArea, text: str, highlight_terms: list[str] | None = None) -> None:
     normalized = text.replace("\r\n", "\n")
     area.language = None
     area.load_text(normalized)
@@ -450,8 +483,7 @@ class HttpView(ContentPanel):
         """
         yield from ContentPanel.compose(self)
 
-    def load_raw_http(self, text: str,
-                      highlight_terms: list[str] | None = None) -> None:
+    def load_raw_http(self, text: str, highlight_terms: list[str] | None = None) -> None:
         if not text or not text.strip():
             self.clear()
             return
@@ -581,6 +613,7 @@ class RequestEditor(ContentPanel):
         raw = self._raw_full or area.text
         if self._special_chars_mode:
             from pentool.tui.widgets.request_editor import visualize_special_chars
+
             displayed = visualize_special_chars(raw)
             area.load_text(displayed)
         else:
@@ -589,6 +622,7 @@ class RequestEditor(ContentPanel):
         # Восстановить подсветку синтаксиса после load_text (она сбрасывается)
         try:
             from collections import defaultdict
+
             area._highlights = defaultdict(list, _build_http_highlights(raw))
             area._line_cache.clear()
             area.refresh()
@@ -634,6 +668,7 @@ def _beautify_text(body: str) -> str | None:
     # Try JSON first
     try:
         import json
+
         parsed = json.loads(stripped)
         return json.dumps(parsed, indent=2, ensure_ascii=False)
     except Exception:
@@ -643,6 +678,7 @@ def _beautify_text(body: str) -> str | None:
     if stripped.startswith("<"):
         try:
             import xml.dom.minidom as minidom
+
             dom = minidom.parseString(stripped)
             pretty = dom.toprettyxml(indent="  ")
             # minidom adds an extra XML declaration + blank lines — clean up

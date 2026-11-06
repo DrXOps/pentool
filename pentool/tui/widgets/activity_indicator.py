@@ -103,11 +103,7 @@ class ActivityIndicator(Widget):
     # ── checker construction ────────────────────────────────────────────────
 
     def _build_checkers(self, app_ref) -> list[_Tracked]:
-        from pentool.tui.constants import (
-            SCREEN_INTRUDER,
-            SCREEN_PROXY,
-            SCREEN_SCANNER,
-        )
+        from pentool.tui.constants import SCREEN_INTRUDER, SCREEN_SCANNER
 
         def _proxy_active() -> bool | None:
             try:
@@ -133,9 +129,11 @@ class ActivityIndicator(Widget):
         def _scanner_active() -> bool | None:
             try:
                 from pentool.tui.screens import SCANNER_SCREEN_AVAILABLE
+
                 if not SCANNER_SCREEN_AVAILABLE:
                     return False
                 from pentool.tui.screens.scanner.screen import ScannerScreen
+
                 screen = app_ref.query_one(SCREEN_SCANNER, ScannerScreen)
                 tabs = getattr(screen, "_tabs", None)
                 if not tabs:
@@ -147,6 +145,7 @@ class ActivityIndicator(Widget):
         def _intruder_active() -> bool | None:
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
+
                 screen = app_ref.query_one(SCREEN_INTRUDER, IntruderScreen)
                 return bool(getattr(screen, "_attack_running", False))
             except Exception:
@@ -155,6 +154,7 @@ class ActivityIndicator(Widget):
         def _ai_active() -> bool | None:
             try:
                 from pentool.services.ai.provider import is_mcp_busy
+
                 return is_mcp_busy()
             except Exception:
                 return None
@@ -162,6 +162,7 @@ class ActivityIndicator(Widget):
         def _recon_active() -> bool | None:
             try:
                 from pentool.tui.screens.recon.screen import ReconScreen
+
                 screen = app_ref.query_one("#screen-recon", ReconScreen)
                 # _running коллизирует с MessagePump._running (всегда True),
                 # используем _runner — он None когда простаивает и объект
@@ -171,12 +172,12 @@ class ActivityIndicator(Widget):
                 return None
 
         return [
-            _Tracked("proxy",    "🌐", "Proxy",     _proxy_active),
-            _Tracked("spider",   "🕷️", "Spider",    _spider_active),
-            _Tracked("scanner",  "🔍", "Scanner",   _scanner_active),
-            _Tracked("intruder", "💥", "Intruder",  _intruder_active),
-            _Tracked("recon",    "🔎", "Recon",     _recon_active),
-            _Tracked("ai",       "🤖", "AI MCP",    _ai_active),
+            _Tracked("proxy", "🌐", "Proxy", _proxy_active),
+            _Tracked("spider", "🕷️", "Spider", _spider_active),
+            _Tracked("scanner", "🔍", "Scanner", _scanner_active),
+            _Tracked("intruder", "💥", "Intruder", _intruder_active),
+            _Tracked("recon", "🔎", "Recon", _recon_active),
+            _Tracked("ai", "🤖", "AI MCP", _ai_active),
         ]
 
     # ── compose / refresh ────────────────────────────────────────────────────
@@ -207,6 +208,7 @@ class ActivityIndicator(Widget):
         ai_cfg_on = False
         try:
             from pentool.core.config import get_config
+
             ai_cfg_on = bool(getattr(get_config(), "ai_enabled", False))
         except Exception:
             pass

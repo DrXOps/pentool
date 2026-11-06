@@ -43,7 +43,12 @@ class Toolbar(Horizontal):
 
     DEFAULT_CSS = _CSS
 
-    def __init__(self, *children: ComposeResult, id: str = "toolbar") -> None:
+    def __init__(self, *children: ComposeResult, id: str | None = None) -> None:
+        # No default id: every module screen is mounted at once inside the
+        # app's ContentSwitcher, so a shared id="toolbar" made
+        # ``query_one("#toolbar")`` resolve to whichever screen came first in
+        # composition order (REPORT F-006). Textual generates a unique id
+        # when ``id`` is None.
         super().__init__(*children, id=id)
 
     # ── Статические хелперы ──────────────────────────────────────────
@@ -73,4 +78,4 @@ class Toolbar(Horizontal):
         """Стандартная пара Start + Stop с сепаратором между."""
         yield ToolbarButton(start_label, start_id, classes="active")
         yield Static(" │ ", classes="toolbar-sep")
-        yield ToolbarButton(stop_label,  stop_id,  classes="inactive disabled")
+        yield ToolbarButton(stop_label, stop_id, classes="inactive disabled")

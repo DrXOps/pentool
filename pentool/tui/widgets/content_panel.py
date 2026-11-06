@@ -9,8 +9,7 @@
 
 from __future__ import annotations
 
-import time
-from typing import ClassVar, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from textual import on
 from textual.containers import Horizontal, Vertical
@@ -21,13 +20,18 @@ from textual.widgets import RichLog, Static, TextArea
 
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+
 
 class ContentPanel(Widget):
     """Блок-контейнер: RichLog или TextArea + панель кнопок в заголовке."""
 
     class CopyRequested(Message):
         """Запрос на копирование содержимого в буфер."""
+
         ALLOW_SELECTOR_MATCH = True
+
         def __init__(self, panel: "ContentPanel", text: str, selection: str | None = None) -> None:
             self.panel = panel
             self.text = text
@@ -40,7 +44,9 @@ class ContentPanel(Widget):
 
     class PasteRequested(Message):
         """Запрос на вставку из буфера."""
+
         ALLOW_SELECTOR_MATCH = True
+
         def __init__(self, panel: "ContentPanel") -> None:
             self.panel = panel
             super().__init__()
@@ -51,7 +57,9 @@ class ContentPanel(Widget):
 
     class FormatToggleRequested(Message):
         """Запрос на переключение raw/formatted."""
+
         ALLOW_SELECTOR_MATCH = True
+
         def __init__(self, panel: "ContentPanel") -> None:
             self.panel = panel
             super().__init__()
@@ -227,11 +235,13 @@ class ContentPanel(Widget):
         try:
             text = w.text
             lines = text.splitlines(keepends=True)
+
             def _flat(pos: tuple[int, int]) -> int:
                 row, col = pos
                 idx = sum(len(lines[r]) for r in range(row))
                 return idx + col
-            return text[_flat(sel.start):_flat(sel.end)]
+
+            return text[_flat(sel.start) : _flat(sel.end)]
         except Exception:
             return None
 

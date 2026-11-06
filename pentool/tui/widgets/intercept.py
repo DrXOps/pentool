@@ -31,17 +31,31 @@ class _InterceptHost(Protocol):
     type-check the methods here without a circular import of ProxyScreen.
     """
 
-    def _get_proxy(self): ...
-    def query_one(self, selector: str | type, expect_type: type | tuple[type, ...] | None = None, /, **kwargs: Any) -> Any: ...
+    def _get_proxy(self):
+        ...
+
+    def query_one(
+        self, selector: str | type, expect_type: type | tuple[type, ...] | None = None, /, **kwargs: Any
+    ) -> Any:
+        ...
+
     @property
-    def app(self) -> Any: ...
+    def app(self) -> Any:
+        ...
 
     # Mixin's own methods are present on the host (ProxyScreen inherits the
     # mixin), so cross-calls between them satisfy this protocol too.
-    def _display_intercept_req(self, req: InterceptedRequest) -> None: ...
-    def _disable_intercept_buttons(self, hint: str = "") -> None: ...
-    def _apply_intercept_highlight(self, raw: str) -> None: ...
-    def _sync_intercept_button(self) -> None: ...
+    def _display_intercept_req(self, req: InterceptedRequest) -> None:
+        ...
+
+    def _disable_intercept_buttons(self, hint: str = "") -> None:
+        ...
+
+    def _apply_intercept_highlight(self, raw: str) -> None:
+        ...
+
+    def _sync_intercept_button(self) -> None:
+        ...
 
     _intercept_req: InterceptedRequest | None
     _intercept_pending: list[InterceptedRequest]
@@ -53,8 +67,6 @@ class InterceptMixin:
     """Intercept-tab controller mixed into ProxyScreen."""
 
     def action_forward(self: _InterceptHost) -> None:
-        from textual.widgets import TextArea
-
         from pentool.tui.widgets.request_editor import HttpView
 
         proxy = self._get_proxy()
@@ -95,8 +107,6 @@ class InterceptMixin:
             self._disable_intercept_buttons(hint="⏳ Forwarded — waiting for response…")
 
     def action_drop(self: _InterceptHost) -> None:
-        from textual.widgets import TextArea
-
         from pentool.tui.widgets.request_editor import HttpView
 
         proxy = self._get_proxy()
@@ -129,11 +139,7 @@ class InterceptMixin:
     def _toggle_intercept_special_chars(self: _InterceptHost, btn: ToolbarButton) -> None:
         """Toggle display of literal \\r\\n / \\n special chars in the Intercept editor."""
         try:
-            from pentool.tui.widgets.request_editor import (
-                decode_special_chars,
-                visualize_special_chars,
-            )
-            from textual.widgets import TextArea
+            from pentool.tui.widgets.request_editor import decode_special_chars, visualize_special_chars
 
             editor = self.query_one("#intercept-panel", ContentPanel).content_widget
         except Exception:
@@ -164,7 +170,6 @@ class InterceptMixin:
             from collections import defaultdict
 
             from pentool.tui.widgets.request_editor import _build_http_highlights
-            from textual.widgets import TextArea
 
             editor = self.query_one("#intercept-panel", ContentPanel).content_widget
             normalized = raw.replace("\r\n", "\n")
@@ -225,8 +230,6 @@ class InterceptMixin:
             raw = f"{req.method} {req.url}\n\n(could not render request)"
         self._intercept_raw_full = raw
         try:
-            from textual.widgets import TextArea
-
             editor = self.query_one("#intercept-panel", ContentPanel).content_widget
             if self._intercept_show_special_chars:
                 editor.load_text(visualize_special_chars(raw))

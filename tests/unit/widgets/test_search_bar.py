@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock, patch
 
-from textual.widgets import Button
-
 from pentool.tui.widgets.search_bar import SearchBar
 
 
@@ -131,7 +129,7 @@ class TestRegexToggle:
         widget.id = "search-regex-toggle"
         event = MagicMock()
         event.widget = widget
-        b.on_static_click(event)
+        b.on_click(event)
         assert b._regex_enabled is True
         widget.add_class.assert_called_once_with("-active")
 
@@ -143,7 +141,7 @@ class TestRegexToggle:
         widget.classes = {"-active"}
         event = MagicMock()
         event.widget = widget
-        b.on_static_click(event)
+        b.on_click(event)
         assert b._regex_enabled is False
         widget.remove_class.assert_called_once_with("-active")
 
@@ -252,7 +250,6 @@ class TestKey:
         b.on_key(ev)
         b.toggle_target.assert_called_once()
         b.post_message.assert_called_once()
-
 
 
 def _fake_key(key: str) -> MagicMock:

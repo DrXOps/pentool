@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
@@ -34,6 +32,7 @@ class HintBarBase(Widget):
     def set_text(self, markup: str) -> None:
         """Update the displayed text (Rich‑markup)."""
         from pentool.core.logging import get_logger
+
         _log = get_logger(__name__)
         _log.info("HintBar set_text: %s", markup[:80])
         try:
