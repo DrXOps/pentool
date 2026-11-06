@@ -13,22 +13,17 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.timer import Timer
 from textual.widget import Widget
-
-_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
-
-from textual.widgets import (
-    RichLog,
-    Static,
-    Tree,
-)
+from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import DASHBOARD_BINDINGS
-
+from pentool.tui.mixins.ai_sync import AiModeSyncMixin
 from pentool.tui.screens.dashboard.live_dashboard import ResourceMonitor
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
+
+_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 
 def _build_logo() -> str:
@@ -48,13 +43,21 @@ def _build_logo() -> str:
     right = dashes_total - left
     version_line = "─" * left + label + "─" * right
 
+    green = "[bold green]"
+    cyan = "[bold cyan]"
     return (
-        "[bold green] ██████╗ [/][bold cyan]███████╗[/][bold green]███╗   ██╗[/][bold cyan]████████╗[/][bold green] ██████╗  ██████╗ ██╗[/]\n"
-        "[bold green] ██╔══██╗[/][bold cyan]██╔════╝[/][bold green]████╗  ██║[/][bold cyan]╚══██╔══╝[/][bold green]██╔═══██╗██╔═══██╗██║[/]\n"
-        "[bold green] ██████╔╝[/][bold cyan]█████╗  [/][bold green]██╔██╗ ██║[/][bold cyan]   ██║   [/][bold green]██║   ██║██║   ██║██║[/]\n"
-        "[bold green] ██╔═══╝ [/][bold cyan]██╔══╝  [/][bold green]██║╚██╗██║[/][bold cyan]   ██║   [/][bold green]██║   ██║██║   ██║██║[/]\n"
-        "[bold green] ██║     [/][bold cyan]███████╗[/][bold green]██║ ╚████║[/][bold cyan]   ██║   [/][bold green]╚██████╔╝╚██████╔╝███████╗[/]\n"
-        "[bold green] ╚═╝     [/][bold cyan]╚══════╝[/][bold green]╚═╝  ╚═══╝[/][bold cyan]   ╚═╝   [/][bold green] ╚═════╝  ╚═════╝ ╚══════╝[/]\n"
+        f"{green} ██████╗ [/]{cyan}███████╗[/]{green}███╗   ██╗[/]{cyan}████████╗[/]"
+        f"{green} ██████╗  ██████╗ ██╗[/]\n"
+        f"{green} ██╔══██╗[/]{cyan}██╔════╝[/]{green}████╗  ██║[/]{cyan}╚══██╔══╝[/]"
+        f"{green}██╔═══██╗██╔═══██╗██║[/]\n"
+        f"{green} ██████╔╝[/]{cyan}█████╗  [/]{green}██╔██╗ ██║[/]{cyan}   ██║   [/]"
+        f"{green}██║   ██║██║   ██║██║[/]\n"
+        f"{green} ██╔═══╝ [/]{cyan}██╔══╝  [/]{green}██║╚██╗██║[/]{cyan}   ██║   [/]"
+        f"{green}██║   ██║██║   ██║██║[/]\n"
+        f"{green} ██║     [/]{cyan}███████╗[/]{green}██║ ╚████║[/]{cyan}   ██║   [/]"
+        f"{green}╚██████╔╝╚██████╔╝███████╗[/]\n"
+        f"{green} ╚═╝     [/]{cyan}╚══════╝[/]{green}╚═╝  ╚═══╝[/]{cyan}   ╚═╝   [/]"
+        f"{green} ╚═════╝  ╚═════╝ ╚══════╝[/]\n"
         f"[dim green]{version_line}[/]\n"
         "[dim]                           by @sudores (aka DoctorX)                           [/]"
     )
@@ -94,7 +97,19 @@ _SEV_ICONS = {
 }
 
 _THREAT_CHARS = "█"
-_THREAT_COLORS = ["green", "green", "yellow", "yellow", "red", "red", "bold red", "bold red", "bold red", "bold red"]
+_THREAT_COLORS = [
+    "green",
+    "green",
+    "yellow",
+    "yellow",
+    "red",
+    "red",
+    "bold red",
+    "bold red",
+    "bold red",
+    "bold red",
+]
+
 
 def _sparkline(values: list[int], width: int = 30, max_val: int | None = None) -> str:
     """Build a sparkline from the given values."""
@@ -110,6 +125,7 @@ def _sparkline(values: list[int], width: int = 30, max_val: int | None = None) -
         result += _SPARK_CHARS[min(idx, len(_SPARK_CHARS) - 1)]
     return result
 
+
 def _bar(value: int, max_val: int, width: int = 20, color: str = "green") -> str:
     """Horizontal bar with color."""
     if max_val == 0:
@@ -119,6 +135,7 @@ def _bar(value: int, max_val: int, width: int = 20, color: str = "green") -> str
     filled = max(0, min(width, filled))
     bar = "█" * filled + "░" * (width - filled)
     return f"[{color}]{bar}[/{color}]"
+
 
 def _threat_gauge(level: int, width: int = 40) -> str:
     """Threat level gauge (0–100)."""
@@ -144,6 +161,7 @@ def _threat_gauge(level: int, width: int = 40) -> str:
         threat_word = "CRITICAL"
     return f"[{color}]{bar}[/{color}][{label_color}]{label} [{threat_word}][/{label_color}]"
 
+
 def _matrix_cell(count: int) -> str:
     """Severity matrix cell for heatmap."""
     if count == 0:
@@ -156,6 +174,7 @@ def _matrix_cell(count: int) -> str:
         return "[red]▪[/red]"
     else:
         return "[bold red]▪[/bold red]"
+
 
 class LiveChart(Vertical):
     """ASCII sparkline chart with live updates."""
@@ -215,11 +234,10 @@ class LiveChart(Vertical):
             self.query_one("#chart-spark", Static).update(f"[{self._color}]{spark}[/{self._color}]")
             self.query_one("#chart-axis", Static).update(axis)
             self.query_one("#chart-stats", Static).update(stats)
-            self.query_one("#chart-meta", Static).update(
-                f"[dim]scale: 0–{mv} {self._unit}  │  window: 60s[/dim]"
-            )
+            self.query_one("#chart-meta", Static).update(f"[dim]scale: 0–{mv} {self._unit}  │  window: 60s[/dim]")
         except Exception:
             pass
+
 
 class ThreatMeter(Vertical):
     """Threat Level visual gauge."""
@@ -246,10 +264,10 @@ class ThreatMeter(Vertical):
         self._counts = counts
         self._top_finding = top_finding or "—"
         level = (
-            counts.get("critical", 0) * 25 +
-            counts.get("high", 0) * 10 +
-            counts.get("medium", 0) * 3 +
-            counts.get("low", 0) * 1
+            counts.get("critical", 0) * 25
+            + counts.get("high", 0) * 10
+            + counts.get("medium", 0) * 3
+            + counts.get("low", 0) * 1
         )
         self._level = min(100, level)
         self._refresh_display()
@@ -259,11 +277,11 @@ class ThreatMeter(Vertical):
             gauge = _threat_gauge(self._level, width=42)
             c = self._counts
             breakdown = (
-                f"[bold red]CRIT:{c.get('critical',0):3d}[/bold red]  "
-                f"[red]HIGH:{c.get('high',0):3d}[/red]  "
-                f"[yellow]MED:{c.get('medium',0):4d}[/yellow]  "
-                f"[green]LOW:{c.get('low',0):4d}[/green]  "
-                f"[blue]INFO:{c.get('info',0):3d}[/blue]"
+                f"[bold red]CRIT:{c.get('critical', 0):3d}[/bold red]  "
+                f"[red]HIGH:{c.get('high', 0):3d}[/red]  "
+                f"[yellow]MED:{c.get('medium', 0):4d}[/yellow]  "
+                f"[green]LOW:{c.get('low', 0):4d}[/green]  "
+                f"[blue]INFO:{c.get('info', 0):3d}[/blue]"
             )
             top = f"[dim]Top finding: [/dim][yellow]{self._top_finding[:55]}[/yellow]"
             self.query_one("#tm-gauge", Static).update(gauge)
@@ -272,20 +290,18 @@ class ThreatMeter(Vertical):
         except Exception:
             pass
 
+
 class SeverityMatrix(Vertical):
     """Heatmap matrix of findings by type × severity."""
 
     DEFAULT_CSS = _CSS
 
     _VULN_TYPES = ["SQLi", "XSS", "SSTI", "LFI", "RCE", "Redir", "SSRF", "XXE", "Hdrs", "Info"]
-    _SEV_KEYS   = ["critical", "high", "medium", "low", "info"]
+    _SEV_KEYS = ["critical", "high", "medium", "low", "info"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._matrix: dict[str, dict[str, int]] = {
-            vt: {s: 0 for s in self._SEV_KEYS}
-            for vt in self._VULN_TYPES
-        }
+        self._matrix: dict[str, dict[str, int]] = {vt: {s: 0 for s in self._SEV_KEYS} for vt in self._VULN_TYPES}
 
     def compose(self) -> ComposeResult:
         yield Static(" ", id="mx-body", markup=True)
@@ -295,10 +311,16 @@ class SeverityMatrix(Vertical):
 
     def add_finding(self, vuln_type: str, severity: str) -> None:
         type_map = {
-            "sqli": "SQLi", "xss": "XSS", "ssti": "SSTI",
-            "lfi": "LFI", "rce": "RCE", "open_redirect": "Redir", "ssrf": "SSRF",
+            "sqli": "SQLi",
+            "xss": "XSS",
+            "ssti": "SSTI",
+            "lfi": "LFI",
+            "rce": "RCE",
+            "open_redirect": "Redir",
+            "ssrf": "SSRF",
             "xxe": "XXE",
-            "missing_security_header": "Hdrs", "missing_security_headers": "Hdrs",
+            "missing_security_header": "Hdrs",
+            "missing_security_headers": "Hdrs",
             "info_leak": "Info",
         }
         vt_key = type_map.get(vuln_type.lower(), "Info")
@@ -324,11 +346,16 @@ class SeverityMatrix(Vertical):
             for sev in self._SEV_KEYS:
                 cnt = counts.get(sev, 0)
                 cells += f"  {_matrix_cell(cnt)}[dim]{cnt:3d}[/dim]  "
-            tc = "bold red" if counts.get("critical", 0) > 0 else (
-                "red" if counts.get("high", 0) > 0 else (
-                    "yellow" if counts.get("medium", 0) > 0 else "dim"))
+            tc = (
+                "bold red"
+                if counts.get("critical", 0) > 0
+                else ("red" if counts.get("high", 0) > 0 else ("yellow" if counts.get("medium", 0) > 0 else "dim"))
+            )
             lines.append(f"[cyan]{vt:<6}[/cyan]{cells}[{tc}]{total:3d}[/{tc}]")
-        lines.append("[dim]· none  [/dim][green]▪ 1–2  [/green][yellow]▪ 3–9  [/yellow][red]▪ 10–29  [/red][bold red]▪ 30+[/bold red]")
+        lines.append(
+            "[dim]· none  [/dim][green]▪ 1–2  [/green][yellow]▪ 3–9  [/yellow]"
+            "[red]▪ 10–29  [/red][bold red]▪ 30+[/bold red]"
+        )
         return "\n".join(lines)
 
     def _refresh_display(self) -> None:
@@ -337,7 +364,8 @@ class SeverityMatrix(Vertical):
         except Exception:
             pass
 
-class DashboardScreen(Widget):
+
+class DashboardScreen(AiModeSyncMixin, Widget):
     """Dashboard — application start screen."""
 
     DEFAULT_CSS = _CSS
@@ -348,13 +376,17 @@ class DashboardScreen(Widget):
         super().__init__(**kwargs)
         self._stats = {"requests": 0, "findings": 0, "hosts": 0, "req_rate": 0}
         self._finding_counts: dict[str, int] = {
-            "critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "info": 0,
         }
         self._top_finding = "—"
         self._req_history: list[int] = []
         self._find_history: list[int] = []
         self._ticker: Timer | None = None
-        self._req_bucket = 0   # requests in the current second
+        self._req_bucket = 0  # requests in the current second
         self._find_bucket = 0  # findings in the current second
 
     def compose(self) -> ComposeResult:
@@ -379,9 +411,9 @@ class DashboardScreen(Widget):
                 yield Static("┌─ PROJECTS ─", id="pp-title")
                 yield Tree("Recent projects:", id="project-tree")
                 with Horizontal(id="pp-actions"):
-                    yield ToolbarButton("+ New",    "btn-new-project")
-                    yield ToolbarButton("📂 Open",  "btn-open-project")
-                    yield ToolbarButton("💾 Save",  "btn-save-project")
+                    yield ToolbarButton("+ New", "btn-new-project")
+                    yield ToolbarButton("📂 Open", "btn-open-project")
+                    yield ToolbarButton("💾 Save", "btn-save-project")
                 yield Static(
                     "[dim]"
                     "Shift+P Proxy  Shift+R Repeater  Shift+I Intruder\n"
@@ -399,13 +431,37 @@ class DashboardScreen(Widget):
                         yield RichLog(wrap=False, max_lines=300, id="feed-log")
                     with Vertical(id="status-panel"):
                         yield Static("┌─ STATUS ─", id="status-panel-title")
-                        yield Static("[dim]●[/dim] Proxy: [dim]STOPPED[/dim]",  id="led-proxy-bar",   classes="led-item")
-                        yield Static("[dim]●[/dim] Passive: [dim]OFF[/dim]",    id="led-passive-bar", classes="led-item")
-                        yield Static("[dim]●[/dim] Active: [dim]IDLE[/dim]",    id="led-scan-bar",    classes="led-item")
-                        yield Static("[dim]●[/dim] Spider: [dim]IDLE[/dim]",    id="led-spider-bar",  classes="led-item")
-                        yield Static("[dim]●[/dim] MCP: [dim]OFF[/dim]",        id="led-mcp-bar",     classes="led-item")
-                        yield Static("[dim]●[/dim] AI: [dim]DISABLED[/dim]",    id="led-ai-bar",      classes="led-item")
-                        yield Static("[dim]●[/dim] Scan workers: [dim]—[/dim]", id="led-threads-bar", classes="led-item")
+                        yield Static(
+                            "[dim]●[/dim] Proxy: [dim]STOPPED[/dim]",
+                            id="led-proxy-bar",
+                            classes="led-item",
+                        )
+                        yield Static(
+                            "[dim]●[/dim] Passive: [dim]OFF[/dim]",
+                            id="led-passive-bar",
+                            classes="led-item",
+                        )
+                        yield Static(
+                            "[dim]●[/dim] Active: [dim]IDLE[/dim]",
+                            id="led-scan-bar",
+                            classes="led-item",
+                        )
+                        yield Static(
+                            "[dim]●[/dim] Spider: [dim]IDLE[/dim]",
+                            id="led-spider-bar",
+                            classes="led-item",
+                        )
+                        yield Static("[dim]●[/dim] MCP: [dim]OFF[/dim]", id="led-mcp-bar", classes="led-item")
+                        yield Static(
+                            "[dim]●[/dim] AI: [dim]DISABLED[/dim]",
+                            id="led-ai-bar",
+                            classes="led-item",
+                        )
+                        yield Static(
+                            "[dim]●[/dim] Scan workers: [dim]—[/dim]",
+                            id="led-threads-bar",
+                            classes="led-item",
+                        )
                 with Vertical(id="matrix-col"):
                     yield SeverityMatrix(id="vuln-matrix")
 
@@ -426,15 +482,9 @@ class DashboardScreen(Widget):
         """При показе — синхронизировать AI статус."""
         self._update_ai_status()
 
-    def _init_ai_sync(self) -> None:
-        """Подписка на AiModeChanged + начальная синхронизация."""
-        from pentool.core.event_bus import get_event_bus
-        from pentool.core.events import AiModeChanged
-
-        def _on_ai_mode(event: AiModeChanged) -> None:
-            self._update_ai_status()
-
-        get_event_bus().subscribe(AiModeChanged, _on_ai_mode)
+    def _sync_ai_ui(self) -> None:
+        """Re-render the AI status row (called by AiModeSyncMixin)."""
+        self._update_ai_status()
 
     @on(ToolbarButton.Pressed, "#btn-new-project")
     def on_btn_new_project(self, _: ToolbarButton.Pressed) -> None:
@@ -467,10 +517,12 @@ class DashboardScreen(Widget):
                 except Exception:
                     pass
                 exists = os.path.exists(path)
-                is_active = (path == current)
+                is_active = path == current
 
                 if is_active:
-                    node_label = f"[bold cyan]{proj_name}[/bold cyan] [bold green]●[/bold green]" + (f" [dim]{ts}[/dim]" if ts else "")
+                    node_label = f"[bold cyan]{proj_name}[/bold cyan] [bold green]●[/bold green]" + (
+                        f" [dim]{ts}[/dim]" if ts else ""
+                    )
                 elif exists:
                     node_label = f"[cyan]{proj_name}[/cyan]" + (f" [dim]{ts}[/dim]" if ts else "")
                 else:
@@ -506,6 +558,7 @@ class DashboardScreen(Widget):
         """Refresh the AI and MCP status rows in the STATUS block (under MCP)."""
         try:
             from pentool.services.ai.factory import ai_setup_required
+
             cfg = getattr(self.app, "_cfg", None)
             ai_enabled = getattr(cfg, "ai_enabled", False) if cfg else False
             needs_setup = ai_setup_required()
@@ -514,6 +567,7 @@ class DashboardScreen(Widget):
             mcp_running = False
             try:
                 from pentool.services.ai.provider import is_mcp_running
+
                 mcp_running = is_mcp_running()
             except Exception:
                 pass
@@ -525,11 +579,9 @@ class DashboardScreen(Widget):
             # AI row directly under MCP: "AI: disabled" / "AI: enabled".
             try:
                 if ai_enabled:
-                    self._set_led_bar("led-ai-bar", "bold green",
-                                      "AI: [bold green]ENABLED[/bold green]")
+                    self._set_led_bar("led-ai-bar", "bold green", "AI: [bold green]ENABLED[/bold green]")
                 else:
-                    self._set_led_bar("led-ai-bar", "dim",
-                                      "AI: [dim]disabled[/dim]")
+                    self._set_led_bar("led-ai-bar", "dim", "AI: [dim]disabled[/dim]")
             except Exception:
                 pass
         except Exception:
@@ -568,11 +620,19 @@ class DashboardScreen(Widget):
             pass
         self._update_ai_status()
 
+    def _get_db_path(self) -> str:
+        """Database path from the app (``db_path`` property), or "" when absent."""
+        try:
+            return str(getattr(self.app, "db_path", "") or "")
+        except Exception:
+            return ""
+
     @work
     async def _load_stats_bg(self) -> None:
         try:
-            db_path = getattr(self.app, "_db_path", "") or ""
+            db_path = self._get_db_path()
             if not db_path:
+                logger.debug("_load_stats_bg: no db_path on app — stats skipped")
                 return
             data = await self._fetch_stats(db_path)
             self._apply_stats(data)
@@ -581,8 +641,10 @@ class DashboardScreen(Widget):
 
     async def _fetch_stats(self, db_path: str) -> dict:
         from pentool.api.scanner_api import ScannerAPI
+
         result: dict = {
-            "requests": 0, "hosts": 0,
+            "requests": 0,
+            "hosts": 0,
             "findings": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
             "top_finding": "—",
         }
@@ -591,7 +653,7 @@ class DashboardScreen(Widget):
             result["requests"] = await api.get_request_count()
             result["hosts"] = await api.get_host_count()
             scanner_stats = await api.get_stats()
-            result["findings"]    = scanner_stats["findings"]
+            result["findings"] = scanner_stats["findings"]
             result["top_finding"] = scanner_stats["top_finding"]
         except Exception as exc:
             logger.debug("_fetch_stats scanner_stats: %s", exc)
@@ -602,18 +664,13 @@ class DashboardScreen(Widget):
         self._top_finding = data.get("top_finding", "—")
 
         try:
-            self.query_one("#threat-meter", ThreatMeter).update_findings(
-                self._finding_counts, self._top_finding
-            )
+            self.query_one("#threat-meter", ThreatMeter).update_findings(self._finding_counts, self._top_finding)
         except Exception as exc:
             logger.debug("_apply_stats ThreatMeter: %s", exc)
 
         try:
             matrix = self.query_one("#vuln-matrix", SeverityMatrix)
-            matrix._matrix = {
-                vt: {s: 0 for s in SeverityMatrix._SEV_KEYS}
-                for vt in SeverityMatrix._VULN_TYPES
-            }
+            matrix._matrix = {vt: {s: 0 for s in SeverityMatrix._SEV_KEYS} for vt in SeverityMatrix._VULN_TYPES}
             matrix._refresh_display()
         except Exception as exc:
             logger.debug("_apply_stats SeverityMatrix: %s", exc)
@@ -621,10 +678,7 @@ class DashboardScreen(Widget):
         total = data.get("requests", 0)
         hosts = data.get("hosts", 0)
         total_findings = sum(self._finding_counts.values())
-        self.log_activity(
-            f"Session: {total:,} requests · {hosts} hosts · {total_findings} findings",
-            "ok"
-        )
+        self.log_activity(f"Session: {total:,} requests · {hosts} hosts · {total_findings} findings", "ok")
 
         try:
             self.query_one("#chart-requests", LiveChart).set_summary(
@@ -646,9 +700,7 @@ class DashboardScreen(Widget):
 
     def _set_led_bar(self, widget_id: str, color: str, label: str) -> None:
         try:
-            self.query_one(f"#{widget_id}", Static).update(
-                f"[{color}]●[/{color}] {label}"
-            )
+            self.query_one(f"#{widget_id}", Static).update(f"[{color}]●[/{color}] {label}")
         except Exception:
             pass
 
@@ -656,13 +708,22 @@ class DashboardScreen(Widget):
         self._req_bucket += 1
         self._stats["requests"] += 1
         ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        method_color = {"GET": "green", "POST": "yellow", "PUT": "cyan", "DELETE": "red", "PATCH": "magenta"}.get(method.upper(), "white")
-        status_color = "green" if 200 <= status < 300 else ("yellow" if 300 <= status < 400 else ("red" if status >= 400 else "dim"))
+        method_color = {
+            "GET": "green",
+            "POST": "yellow",
+            "PUT": "cyan",
+            "DELETE": "red",
+            "PATCH": "magenta",
+        }.get(method.upper(), "white")
+        status_color = (
+            "green"
+            if 200 <= status < 300
+            else ("yellow" if 300 <= status < 400 else ("red" if status >= 400 else "dim"))
+        )
         status_str = f"[{status_color}]{status}[/{status_color}]" if status else "[dim]···[/dim]"
         short_url = url[:60] + "…" if len(url) > 60 else url
         self._feed_write(
-            f"[dim]{ts}[/dim] [{method_color}]{method:<7}[/{method_color}] "
-            f"{status_str} [dim]{short_url}[/dim]"
+            f"[dim]{ts}[/dim] [{method_color}]{method:<7}[/{method_color}] " f"{status_str} [dim]{short_url}[/dim]"
         )
 
     def add_finding(self, finding) -> None:
@@ -676,9 +737,7 @@ class DashboardScreen(Widget):
         self._top_finding = name
 
         try:
-            self.query_one("#threat-meter", ThreatMeter).update_findings(
-                self._finding_counts, self._top_finding
-            )
+            self.query_one("#threat-meter", ThreatMeter).update_findings(self._finding_counts, self._top_finding)
         except Exception:
             pass
         try:
@@ -720,7 +779,11 @@ class DashboardScreen(Widget):
 
     def update_scan_status(self, scanning: bool, progress: int = 0, threads: int = 0) -> None:
         if scanning:
-            self._set_led_bar("led-scan-bar", "bold yellow", f"Active: [bold yellow]SCANNING {progress}%[/bold yellow]")
+            self._set_led_bar(
+                "led-scan-bar",
+                "bold yellow",
+                f"Active: [bold yellow]SCANNING {progress}%[/bold yellow]",
+            )
             if threads > 0:
                 self._set_led_bar("led-threads-bar", "cyan", f"Scan workers: [cyan]{threads} active[/cyan]")
         else:
@@ -729,7 +792,11 @@ class DashboardScreen(Widget):
 
     def update_spider_status(self, running: bool, pages: int = 0) -> None:
         if running:
-            self._set_led_bar("led-spider-bar", "bold magenta", f"Spider: [bold magenta]CRAWLING {pages}p[/bold magenta]")
+            self._set_led_bar(
+                "led-spider-bar",
+                "bold magenta",
+                f"Spider: [bold magenta]CRAWLING {pages}p[/bold magenta]",
+            )
         else:
             self._set_led_bar("led-spider-bar", "dim", "Spider: [dim]IDLE[/dim]")
 
@@ -770,6 +837,7 @@ class DashboardScreen(Widget):
 
     def _open_project_dialog(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
+
         current = getattr(self.app, "_project_path", None)
         start_dir = os.path.dirname(current) if current else os.path.expanduser("~")
 
@@ -796,9 +864,10 @@ class DashboardScreen(Widget):
 
     def _save_project_dialog(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
+
         current = getattr(self.app, "_project_path", None)
         cfg = getattr(self.app, "_cfg", None)
-        src_db = (current or (cfg.db_path if cfg else None) or os.path.expanduser("~"))
+        src_db = current or (cfg.db_path if cfg else None) or os.path.expanduser("~")
         start_dir = os.path.dirname(src_db) if src_db else os.path.expanduser("~")
 
         def _on_path(path: str | None) -> None:
@@ -807,6 +876,7 @@ class DashboardScreen(Widget):
             if not path.endswith(".db"):
                 path = path + ".db"
             import shutil
+
             src = (cfg.db_path if cfg else None) or src_db
             try:
                 shutil.copy2(src, path)
