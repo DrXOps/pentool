@@ -8,11 +8,10 @@
 
 from __future__ import annotations
 
-import pytest
+import re
 from unittest.mock import MagicMock, PropertyMock, patch
 
-from textual.css.query import NoMatches
-
+import pytest
 
 # ─── Хелперы ────────────────────────────────────────────────────────────────
 
@@ -46,6 +45,7 @@ def _setup_screen(screen):
     - Добавляет .disabled = False на мок (для btn-stop)
     """
     from textual.app import active_app
+
     # Устанавливаем active_app ContextVar
     screen._active_app_token = active_app.set(_MOCK_APP)
     screen.run_worker = MagicMock()
@@ -59,7 +59,8 @@ def _setup_screen(screen):
 def _teardown_screen(screen):
     """Чистит ContextVar."""
     from textual.app import active_app
-    token = getattr(screen, '_active_app_token', None)
+
+    token = getattr(screen, "_active_app_token", None)
     if token is not None:
         try:
             active_app.reset(token)
@@ -67,69 +68,60 @@ def _teardown_screen(screen):
             pass
 
 
-# ─── Тесты StartStopMixin в изоляции ─────────────────────────────────────────
+# ─── Тесты StartStopWidget (замена удалённого StartStopMixin) ────────────────
 
 
-class TestStartStopMixin:
-    """Проверка StartStopMixin как standalone-класса."""
+class TestStartStopWidget:
+    """StartStopMixin удалён: состояние Start/Stop/Pause живёт в StartStopWidget.
 
-    def test_mixin_has_required_attrs(self):
-        from pentool.tui.widgets.start_stop_mixin import StartStopMixin
-        mixin = StartStopMixin()
-        assert mixin._running is False
-        assert mixin._paused is False
+    Экран больше не наследует абстрактный миксин — виджет сам держит
+    ``_running``/``_paused`` и объявляет четыре сообщения, на которые экран
+    подписывается обычными ``on_start_stop_widget_*`` обработчиками.
+    """
 
-    def test_mixin_raises_not_implemented(self):
-        from pentool.tui.widgets.start_stop_mixin import StartStopMixin
-        mixin = StartStopMixin()
-        with pytest.raises(NotImplementedError):
-            mixin.action_start()
+    def test_initial_state_is_idle(self):
+        from pentool.tui.widgets.start_stop_widget import StartStopWidget
 
-    def test_mixin_action_stop_resets_flags(self):
-        from pentool.tui.widgets.start_stop_mixin import StartStopMixin
-        mixin = StartStopMixin()
-        mixin._running = True
-        mixin._paused = True
-        mixin.action_stop()
-        assert mixin._running is False
-        assert mixin._paused is False
+        widget = StartStopWidget()
+        assert widget.running is False
+        assert widget.paused is False
 
-    def test_mixin_action_resume_calls_action_start(self):
-        from pentool.tui.widgets.start_stop_mixin import StartStopMixin
-        mixin = StartStopMixin()
-        called = [False]
-        def fake_start():
-            called[0] = True
-            raise NotImplementedError
-        mixin.action_start = fake_start
-        with pytest.raises(NotImplementedError):
-            mixin.action_resume()
-        assert called[0]
+    def test_set_running_updates_flag(self):
+        from pentool.tui.widgets.start_stop_widget import StartStopWidget
 
-    def test_mixin_toggle_pause_when_not_running(self):
-        from pentool.tui.widgets.start_stop_mixin import StartStopMixin
-        mixin = StartStopMixin()
-        mixin.action_toggle_pause()  # no-op потому что _running=False
-        assert mixin._paused is False
+        widget = StartStopWidget()
+        widget.set_running(True)
+        assert widget.running is True
+        widget.set_running(False)
+        assert widget.running is False
 
-    def test_mixin_on_btn_start_dispatches_by_state(self):
-        from pentool.tui.widgets.start_stop_mixin import StartStopMixin
-        mixin = StartStopMixin()
-        calls = []
-        mixin.action_start = lambda: calls.append("start")
-        mixin.action_resume = lambda: calls.append("resume")
-        mixin.action_toggle_pause = lambda: calls.append("toggle")
+    def test_set_paused_updates_flag(self):
+        from pentool.tui.widgets.start_stop_widget import StartStopWidget
 
-        mixin.on_btn_start(None)
-        assert calls == ["start"]
+        widget = StartStopWidget()
+        widget.set_paused(True)
+        assert widget.paused is True
+        widget.set_paused(False)
+        assert widget.paused is False
 
-        mixin._running = True
-        mixin.on_btn_start(None)
-        assert calls == ["start", "toggle"]
+    def test_declares_four_request_messages(self):
+        from textual.message import Message
 
-        mixin._paused = True
-        mixin.on_btn_start(None)
-        assert calls == ["start", "toggle", "resume"]
+        from pentool.tui.widgets.start_stop_widget import StartStopWidget
+
+        for name in ("StartRequested", "PauseRequested", "ResumeRequested", "StopRequested"):
+            message_cls = getattr(StartStopWidget, name)
+            assert issubclass(message_cls, Message)
+            # Имя выводится из __qualname__ сообщения в snake_case; экран ловит
+            # их через @on, поэтому имя здесь только документируется.
+            expected = re.sub(r"(?<!^)(?=[A-Z])", "_", message_cls.__name__).lower()
+            assert message_cls.handler_name == "on_start_stop_widget_" + expected
+
+    def test_id_constants_used_by_compose(self):
+        from pentool.tui.widgets.start_stop_widget import StartStopWidget
+
+        assert StartStopWidget.ID_START == "btn-start"
+        assert StartStopWidget.ID_STOP == "btn-stop"
 
 
 # ─── Тесты IntruderScreen — кнопки и их нажатия ──────────────────────────────
@@ -139,8 +131,10 @@ class TestIntruderButtons:
     """Проверка btn-start/btn-stop в compose и методов."""
 
     def test_intruder_has_start_stop_in_compose(self, mock_intruder_deps):
-        from pentool.tui.screens.intruder.screen import IntruderScreen
         import inspect
+
+        from pentool.tui.screens.intruder.screen import IntruderScreen
+
         src = inspect.getsource(IntruderScreen.compose)
         # Глобальная строка: табы + управление атакой активной вкладки
         assert '"btn-new-tab"' in src
@@ -156,19 +150,26 @@ class TestIntruderButtons:
 
     def test_intruder_has_ssw_methods(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
-        for name in ("action_start_attack", "action_stop", "action_toggle_pause",
-                     "action_resume", "_on_start_requested",
-                     "_on_stop_requested"):
+
+        for name in (
+            "action_start_attack",
+            "action_stop",
+            "action_toggle_pause",
+            "action_resume",
+            "_on_start_requested",
+            "_on_stop_requested",
+        ):
             assert hasattr(IntruderScreen, name)
 
     def test_intruder_has_ssw_property(self, mock_intruder_deps):
         """SSW property returns a StartStopWidget instance."""
         from pentool.tui.screens.intruder.screen import IntruderScreen
-        from pentool.tui.widgets.start_stop_widget import StartStopWidget
+
         assert isinstance(IntruderScreen._ssw, property)
 
     def test_intruder_action_stop_resets_running(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
+
         screen = IntruderScreen()
         attack = MagicMock()
         tab = MagicMock()
@@ -178,8 +179,10 @@ class TestIntruderButtons:
         screen._active_tab_id = "t1"
         screen._tabs = []  # не используется, active_tab пойдёт через фолбэк
         # Подменяем property _active_tab на наш таб
-        with patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab), \
-             patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock) as ssw_prop:
+        with (
+            patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab),
+            patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock) as ssw_prop,
+        ):
             ssw = MagicMock()
             ssw_prop.return_value = ssw
             _setup_screen(screen)
@@ -192,14 +195,17 @@ class TestIntruderButtons:
 
     def test_intruder_action_toggle_pause_toggles_api(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
+
         screen = IntruderScreen()
         attack = MagicMock()
         tab = MagicMock()
         tab.attack = attack
         tab.running = True
         tab.paused = False
-        with patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab), \
-             patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock) as ssw_prop:
+        with (
+            patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab),
+            patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock) as ssw_prop,
+        ):
             ssw = MagicMock()
             ssw_prop.return_value = ssw
             _setup_screen(screen)
@@ -221,10 +227,13 @@ class TestIntruderButtons:
 
     def test_intruder_action_resume_calls_action_start(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
+
         screen = IntruderScreen()
         called = [False]
+
         def track():
             called[0] = True
+
         screen.action_start_attack = track
         _setup_screen(screen)
 
@@ -235,8 +244,10 @@ class TestIntruderButtons:
             _teardown_screen(screen)
 
     def test_intruder_worker_state_changed_resets_running(self, mock_intruder_deps):
-        from pentool.tui.screens.intruder.screen import IntruderScreen
         from textual.worker import WorkerState
+
+        from pentool.tui.screens.intruder.screen import IntruderScreen
+
         screen = IntruderScreen()
         tab = MagicMock()
         tab.tab_id = "intruder-tab-1"
@@ -245,9 +256,11 @@ class TestIntruderButtons:
         ssw = MagicMock()
         panel = MagicMock()
         panel.get_state.return_value = tab
-        with patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab), \
-             patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock, return_value=ssw), \
-             patch.object(IntruderScreen, "_tc_panel", new_callable=PropertyMock, return_value=panel):
+        with (
+            patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab),
+            patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock, return_value=ssw),
+            patch.object(IntruderScreen, "_tc_panel", new_callable=PropertyMock, return_value=panel),
+        ):
             _setup_screen(screen)
             try:
                 ev = MagicMock()
@@ -259,8 +272,10 @@ class TestIntruderButtons:
                 _teardown_screen(screen)
 
     def test_intruder_worker_state_changed_ignores_other(self, mock_intruder_deps):
-        from pentool.tui.screens.intruder.screen import IntruderScreen
         from textual.worker import WorkerState
+
+        from pentool.tui.screens.intruder.screen import IntruderScreen
+
         screen = IntruderScreen()
         screen._running = True
         _setup_screen(screen)
@@ -282,11 +297,14 @@ class TestActivityIndicatorRecon:
     """Проверка ActivityIndicator — Recon не должен мигать без запуска."""
 
     def test_recon_active_uses_runner(self):
-        from pentool.tui.widgets.activity_indicator import ActivityIndicator
         import inspect
+
+        from pentool.tui.widgets.activity_indicator import ActivityIndicator
+
         src = inspect.getsource(ActivityIndicator._build_checkers)
         assert "_runner is not None" in src
 
     def test_activity_indicator_imports_ok(self):
         from pentool.tui.widgets.activity_indicator import ActivityIndicator
+
         assert hasattr(ActivityIndicator, "_build_checkers")
