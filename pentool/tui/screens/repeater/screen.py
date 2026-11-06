@@ -3,34 +3,31 @@
 from __future__ import annotations
 
 import re
-import time
 from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Input, Static, TabbedContent, TabPane
+from textual.widgets import Input, Static, TabbedContent, TabPane, TextArea
 from textual.widgets.text_area import Selection
 
 from pentool.core.logging import get_logger
 from pentool.services.repeater_service import RepeaterService
-from pentool.tui.widgets.diff_panel import DiffPanel
-from pentool.tui.widgets.toolbar_button import ToolbarButton
-from pentool.tui.widgets.toolbar import Toolbar
-
-_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
-
-logger = get_logger(__name__)
-
-
 from pentool.tui.hotkeys.defaults import REPEATER_BINDINGS
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
+from pentool.tui.widgets.diff_panel import DiffPanel
 from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.search_bar import SearchBar
+from pentool.tui.widgets.toolbar import Toolbar
+from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
+
+logger = get_logger(__name__)
 
 
 class _TabState:
@@ -40,6 +37,7 @@ class _TabState:
         self.tab_id = tab_id
         self.name = name
         import uuid as _uuid
+
         self.tab_uid: str = _uuid.uuid4().hex
         self.request_text: str = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
         self.response_text: str = ""
@@ -49,6 +47,7 @@ class _TabState:
         # marker on the tab label and for the Ctrl+D diff panel.
         self.last_sent_text: str | None = None
         self.is_dirty: bool = False
+
 
 class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, AppMixin):
     """Repeater module screen."""
@@ -67,9 +66,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
     _rename_tabs_widget_id: str = "repeater-tabs"
 
     # RequestContextMenuMixin config — Repeater: Send to Intruder + Scanner, no nmap
-    _cm_show_nmap          = False
+    _cm_show_nmap = False
     _cm_show_send_intruder = True
-    _cm_show_send_scanner  = True
+    _cm_show_send_scanner = True
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -140,22 +139,19 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     def compose(self) -> ComposeResult:
         yield Toolbar(
-            ToolbarButton("⚡ Send",      "btn-send"),
+            ToolbarButton("⚡ Send", "btn-send"),
             Toolbar.sep(),
-            ToolbarButton("✖ Cancel",    "btn-cancel", classes="disabled"),
+            ToolbarButton("✖ Cancel", "btn-cancel", classes="disabled"),
             Toolbar.sep(),
             ToolbarButton("↪ Follow: ON", "btn-follow", classes="active"),
             Toolbar.sep(),
-            ToolbarButton("➕ Tab",   "btn-new-tab"),
+            ToolbarButton("➕ Tab", "btn-new-tab"),
             Toolbar.sep(),
             ToolbarButton("➖ Tab", "btn-close-tab"),
             Toolbar.sep(),
-            ToolbarButton(
-                "✨ Beautify", "btn-beautify",
-                tooltip="Format request and response body (JSON/XML)"
-            ),
+            ToolbarButton("✨ Beautify", "btn-beautify", tooltip="Format request and response body (JSON/XML)"),
             Toolbar.sep(),
-            ToolbarButton("→ Decoder",  "btn-send-decoder"),
+            ToolbarButton("→ Decoder", "btn-send-decoder"),
             Toolbar.sep(),
             ToolbarButton("→ Comparer", "btn-send-comparer"),
             Toolbar.sep(),
@@ -184,6 +180,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         if self._repeater_api is None:
             from pentool.api.repeater_api import RepeaterAPI
             from pentool.core.config import get_config
+
             db_path = self._get_db_path()
             if not db_path:
                 return None
@@ -231,6 +228,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 self._tab_counter += 1
                 tab_id = f"tab-{self._tab_counter}"
                 from pentool.utils.parser import build_http_request
+
                 raw = build_http_request(entry.request)
                 state = _TabState(tab_id, tab_name)
                 state.request_text = raw
@@ -295,11 +293,14 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             row = Horizontal(classes="req-resp-row", id=f"req-resp-row-{tab_id}")
             log_area = Static("", classes="log-area", id=f"log-area-{tab_id}")
             body.mount(row)
-            body.mount(ResizeHandle(
-                f"req-resp-row-{tab_id}", f"log-area-{tab_id}",
-                vertical=True,
-                id=f"resize-bottom-{tab_id}",
-            ))
+            body.mount(
+                ResizeHandle(
+                    f"req-resp-row-{tab_id}",
+                    f"log-area-{tab_id}",
+                    vertical=True,
+                    id=f"resize-bottom-{tab_id}",
+                )
+            )
             body.mount(log_area)
             self.call_after_refresh(self._fill_req_resp, tab_id, state, row)
         except Exception:
@@ -310,10 +311,13 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             req_panel = Vertical(classes="req-panel", id=f"req-panel-{tab_id}")
             resp_panel = Vertical(classes="resp-panel", id=f"resp-panel-{tab_id}")
             row.mount(req_panel)
-            row.mount(ResizeHandle(
-                f"req-panel-{tab_id}", f"resp-panel-{tab_id}",
-                id=f"resize-{tab_id}",
-            ))
+            row.mount(
+                ResizeHandle(
+                    f"req-panel-{tab_id}",
+                    f"resp-panel-{tab_id}",
+                    id=f"resize-{tab_id}",
+                )
+            )
             row.mount(resp_panel)
             self.call_after_refresh(self._fill_panels, tab_id, state, req_panel, resp_panel)
         except Exception:
@@ -328,10 +332,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
     ) -> None:
         try:
             editor = RequestEditor(
-                    label="Request Editor",
-                    buttons=["copy", "paste", "clear", "special", "format"],
-                    id=f"req-editor-{tab_id}",
-                )
+                label="Request Editor",
+                buttons=["copy", "paste", "clear", "special", "format"],
+                id=f"req-editor-{tab_id}",
+            )
             req_panel.mount(editor)
 
             viewer = ResponseViewer(id=f"resp-viewer-{tab_id}")
@@ -409,13 +413,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     async def _close_all_tabs(self) -> None:
         """Remove all tabs and reset state (await remove_pane to avoid race with action_new_tab)."""
-        # Cancel all in-flight save workers
-        for worker_name in list(self._running_save_tasks):
-            try:
-                self.remove_worker(worker_name, interrupt=True)
-            except Exception:
-                pass
-        self._running_save_tasks.clear()
+        self._cancel_save_workers()
 
         self._tabs_generation += 1  # invalidate any in-flight _do_load_tabs from on_mount
         try:
@@ -498,6 +496,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             return
         try:
             from textual.widgets import TextArea
+
             area = editor.query_one("#editor-area", TextArea)
         except Exception:
             return
@@ -614,26 +613,23 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
         self._jump_to_match(text, matches[self._search_current])
         try:
-            self._search_bar.set_count(
-                self._search_current + 1, len(matches)
-            )
+            self._search_bar.set_count(self._search_current + 1, len(matches))
         except Exception:
             pass
 
     def _get_active_text(self) -> str:
+        """Text of the panel the search is pointed at (request or response)."""
         if self._active_tab_id is None:
             return ""
-        if self._search_target == "response":
-            try:
-                viewer = self._viewer(self._active_tab_id)
-                area = viewer.query_one("#viewer-area", TextArea)
-                return area.text
-            except Exception:
-                return ""
         try:
-            editor = self._editor(self._active_tab_id)
-            return editor.get_text()
-        except Exception:
+            panel = (
+                self._viewer(self._active_tab_id)
+                if self._search_target == "response"
+                else self._editor(self._active_tab_id)
+            )
+            return panel.get_text()
+        except Exception as exc:
+            logger.debug("_get_active_text failed: %s", exc)
             return ""
 
     def _jump_to_match(self, text: str, offset: int) -> None:
@@ -641,18 +637,19 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         if self._active_tab_id is None:
             return
         try:
-            from textual.widgets import TextArea
-            if self._search_target == "response":
-                viewer = self._viewer(self._active_tab_id)
-                area = viewer.query_one("#viewer-area", TextArea)
-            else:
-                editor = self._editor(self._active_tab_id)
-                area = editor.query_one("#editor-area", TextArea)
+            panel = (
+                self._viewer(self._active_tab_id)
+                if self._search_target == "response"
+                else self._editor(self._active_tab_id)
+            )
+            area = panel.content_widget
+            if not isinstance(area, TextArea):
+                return
             lines = text[:offset].split("\n")
             row = len(lines) - 1
             col = len(lines[-1])
             q_len = len(self._search_query)
-            end_lines = text[:offset + q_len].split("\n")
+            end_lines = text[: offset + q_len].split("\n")
             end_row = len(end_lines) - 1
             end_col = len(end_lines[-1])
             area.move_cursor((row, col), center=True)
@@ -685,6 +682,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         """
         try:
             from pentool.utils.parser import ParsedResponse, parse_http_request
+
             parsed = parse_http_request(state.request_text)
             # Don't save empty or placeholder requests
             if not parsed or not parsed.url or not parsed.method:
@@ -696,14 +694,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             if repeater_api is None:
                 return
 
-            worker_name = self._save_worker_name(f"save-{state.tab_id}")
-            self._track_save_worker(worker_name)
-            self.run_worker(
-                self._do_auto_save(
-                    repeater_api.save_to_history(parsed, response, tab_name=state.name),
-                    worker_name,
-                ),
-                exclusive=False, name=worker_name,
+            self._start_save_worker(
+                repeater_api.save_to_history(parsed, response, tab_name=state.name),
+                self._save_worker_name(f"save-{state.tab_id}"),
             )
         except Exception as exc:
             logger.debug("_auto_save_tab_to_db: %s", exc)
@@ -768,9 +761,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             state.is_dirty = False
             self._update_tab_label(state)
 
-        self._set_status(
-            f"[green]HTTP {resp.status}[/green] — {len(resp.body)} bytes — {elapsed_ms}ms"
-        )
+        self._set_status(f"[green]HTTP {resp.status}[/green] — {len(resp.body)} bytes — {elapsed_ms}ms")
         self._sending = False
         try:
             self._cancel_btn.disabled = True
@@ -781,6 +772,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     def on_worker_state_changed(self, event) -> None:
         from textual.worker import WorkerState
+
         if getattr(event.worker, "name", None) != "repeater-send":
             return
         if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
@@ -872,6 +864,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
     def _send_to_intruder(self) -> None:
         try:
             from pentool.tui.messages import SendToIntruder
+
             text = self._get_active_text()
             if not text:
                 self.app.notify("No request text to send", severity="warning")
@@ -880,7 +873,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         except Exception as exc:
             self.err(exc, "Could not send to Intruder")
 
-    
     def load_request(self, raw: str) -> None:
         """Load a request into the active tab."""
         if self._active_tab_id is None:
@@ -944,7 +936,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         if not tab_id:
             return ""
         try:
-            from pentool.tui.widgets.request_editor import RequestEditor
             return self._editor(tab_id).get_text()
         except Exception:
             return ""
@@ -954,6 +945,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
     def action_next_tab(self) -> None:
         """Switch to the next tab (ctrl+tab)."""
         from textual.widgets import TabbedContent
+
         try:
             tabs = self.query_one(TabbedContent)
             ids = list(tabs._tab_count_index)
@@ -973,6 +965,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             self.app.notify("No request text to send", severity="warning")
             return
         from pentool.tui.messages import SendToScanner
+
         self.app.post_message(SendToScanner(text))
 
     def action_open_in_browser(self) -> None:
@@ -982,7 +975,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             self.app.notify("No request to open", severity="warning")
             return
         from pentool.utils.parser import ParsedRequest
+
         parsed = ParsedRequest.from_raw(text)
         if parsed and parsed.url:
             import webbrowser
+
             webbrowser.open(parsed.url)

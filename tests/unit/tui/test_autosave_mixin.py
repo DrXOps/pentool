@@ -8,12 +8,23 @@ from pentool.tui.mixins.autosave import AutoSaveMixin
 
 
 class _FakeWorkers:
+    """Emulates Textual's WorkerManager: workers live in named groups.
+
+    The real manager has no ``cancel(name)`` — only ``cancel_group``,
+    ``cancel_all``, ``cancel_node``, ``add_worker``, ``start_all`` and
+    ``wait_for_complete``. The fake mirrors that surface so a regression to
+    the removed ``cancel`` call fails loudly instead of being swallowed.
+    """
+
     def __init__(self, host):
         self._host = host
-        self._names = set()
 
-    def cancel(self, name: str) -> None:
-        self._host.workers_names.discard(name)
+    def cancel_group(self, node, group: str) -> None:
+        for name in [n for n, g in self._host.worker_groups.items() if g == group]:
+            del self._host.worker_groups[name]
+
+    def cancel_all(self, node=None) -> None:
+        self._host.worker_groups.clear()
 
 
 class _FakeHost(AutoSaveMixin):
@@ -21,7 +32,12 @@ class _FakeHost(AutoSaveMixin):
 
     def __init__(self):
         self._running_save_tasks: list[str] = []
-        self.workers_names = set()
+        self.worker_groups: dict[str, str] = {}
+
+    def run_worker(self, awaitable, *, name, group, exclusive, exit_on_error):
+        self.worker_groups[name] = group
+        awaitable.close()
+        return name
 
     @property
     def workers(self):
@@ -61,11 +77,25 @@ class TestAutoSaveMixin:
     def test_cancel_save_workers(self):
         host = _FakeHost()
         host._init_save_tasks()
+        host.worker_groups = {"a": "autosave", "b": "autosave", "other": "attack"}
         host._running_save_tasks = ["a", "b"]
-        host.workers_names = {"a", "b"}
         host._cancel_save_workers()
         assert host._running_save_tasks == []
-        assert host.workers_names == set()
+        # Only the autosave group is cancelled — an attack worker survives.
+        assert host.worker_groups == {"other": "attack"}
+
+    def test_start_save_worker_puts_it_in_group(self):
+        class _Noop:
+            """Awaitable that never needs awaiting — keeps the test warning-free."""
+
+            def __await__(self):
+                return iter(())
+
+        host = _FakeHost()
+        host._init_save_tasks()
+        host._start_save_worker(_Noop(), "save-x")
+        assert host._running_save_tasks == ["save-x"]
+        assert host.worker_groups == {"save-x": AutoSaveMixin.SAVE_WORKER_GROUP}
 
     def test_save_worker_name_unique(self):
         host = _FakeHost()

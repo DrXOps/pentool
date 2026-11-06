@@ -12,24 +12,13 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from textual import events as _tevents
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import (
-    Input,
-    Label,
-    ListItem,
-    ListView,
-    ProgressBar,
-    Static,
-    TabPane,
-    TabbedContent,
-    TextArea,
-)
-
-_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
+from textual.widgets import Input, Label, ListItem, ListView, ProgressBar, Static, TabPane, TextArea
 
 from pentool.api.intruder_api import (
     AttackType,
@@ -46,54 +35,62 @@ from pentool.api.intruder_api import (
     process_payload,
 )
 from pentool.api.payload_serialization import deserialize_payloads, serialize_payloads
-from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
+from pentool.collections.filter_predicate import FilterPredicate, FilterSpec
 from pentool.core.logging import get_logger
+from pentool.tui.dialogs.intruder_generate import GenerateDialog
+from pentool.tui.dialogs.intruder_input import InputDialog
+from pentool.tui.dialogs.intruder_smart_payloads import SmartPayloadsDialog
 from pentool.tui.hotkeys.defaults import INTRUDER_BINDINGS
 from pentool.tui.messages import SendToRepeater
-
+from pentool.tui.mixins.ai_sync import AiModeSyncMixin
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
-from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
-from pentool.tui.widgets.data_table_mixins import SortableTableMixin
-from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
-from pentool.tui.widgets.start_stop_widget import StartStopWidget
-from pentool.tui.widgets.option_cycler import OptionCycler
-from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
-from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.content_panel import ContentPanel
-from pentool.tui.widgets.toolbar_button import ToolbarButton
-from pentool.tui.widgets.toolbar import Toolbar
+from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar as _IntruderFilterBar
 from pentool.tui.widgets.intruder_results_table import IntruderResultsTable
+from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
+from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
+from pentool.tui.widgets.resize_handle import ResizeHandle
+from pentool.tui.widgets.start_stop_widget import StartStopWidget
 from pentool.tui.widgets.tab_panel import TabbedContentPanel
-from pentool.tui.dialogs.intruder_input import InputDialog
-from pentool.tui.dialogs.intruder_generate import GenerateDialog
-from pentool.tui.dialogs.intruder_smart_payloads import SmartPayloadsDialog
+from pentool.tui.widgets.toolbar import Toolbar
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
+
+_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
+
+if TYPE_CHECKING:
+    from pentool.api.intruder_api import IntruderAPI
 
 
 # Module constants
 _ATTACK_LABELS = {
-    AttackType.SNIPER:        "Sniper",
+    AttackType.SNIPER: "Sniper",
     AttackType.BATTERING_RAM: "Battering Ram",
-    AttackType.PITCHFORK:     "Pitchfork",
-    AttackType.CLUSTER_BOMB:  "Cluster Bomb",
+    AttackType.PITCHFORK: "Pitchfork",
+    AttackType.CLUSTER_BOMB: "Cluster Bomb",
 }
 _ATTACK_DESCRIPTIONS = {
-    AttackType.SNIPER:        "One payload set, one position at a time",
+    AttackType.SNIPER: "One payload set, one position at a time",
     AttackType.BATTERING_RAM: "One payload set, all positions simultaneously",
-    AttackType.PITCHFORK:     "Multiple sets, parallel (zip)",
-    AttackType.CLUSTER_BOMB:  "Cartesian product of all sets",
+    AttackType.PITCHFORK: "Multiple sets, parallel (zip)",
+    AttackType.CLUSTER_BOMB: "Cartesian product of all sets",
 }
 
 _RESULTS_COL_NAMES = ["#", "Payload(s)", "Status", "Length", "Time(ms)", "Error"]
 
 _PAYLOAD_LIST_PREVIEW_LIMIT = 500
-_LAZY_SOURCE_TYPES = (FilePayloadSource, NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)
+_LAZY_SOURCE_TYPES = (
+    FilePayloadSource,
+    NumericPayloadSource,
+    CharPayloadSource,
+    ChainedPayloadSource,
+)
 DataTable = IntruderResultsTable
 
 
@@ -131,8 +128,15 @@ class _IntruderTabState:
     attack: "IntruderAttack | None" = None
 
 
-class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSaveMixin,
-                     SortableTableMixin, RequestContextMenuMixin):
+class IntruderScreen(
+    BaseModuleScreen,
+    AppMixin,
+    ContentClipboardMixin,
+    AutoSaveMixin,
+    SortableTableMixin,
+    RequestContextMenuMixin,
+    AiModeSyncMixin,
+):
     """Intruder module screen — per-tab isolated full UI."""
 
     DEFAULT_CSS = _CSS
@@ -157,6 +161,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         self._tab_counter: int = 0
         # ── Фабрика табов для TabbedContentPanel ──
         import uuid as _uuid
+
         def _factory(tab_id: str, name: str) -> _IntruderTabState:
             return _IntruderTabState(
                 tab_id=tab_id,
@@ -165,6 +170,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 thread_count=10,
                 delay_ms=0,
             )
+
         self._tab_factory = _factory
         # ── API ──
         self._api = None
@@ -204,6 +210,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _attack_type(self) -> AttackType:
         t = self._active_tab
         return t.attack_type if t else AttackType.SNIPER
+
     @_attack_type.setter
     def _attack_type(self, v: AttackType) -> None:
         t = self._active_tab
@@ -214,6 +221,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _payloads(self) -> list:
         t = self._active_tab
         return t.payload_sources if t else [[]]
+
     @_payloads.setter
     def _payloads(self, v: list) -> None:
         t = self._active_tab
@@ -224,6 +232,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _active_set_idx(self) -> int:
         t = self._active_tab
         return t.active_set_idx if t else 0
+
     @_active_set_idx.setter
     def _active_set_idx(self, v: int) -> None:
         t = self._active_tab
@@ -234,6 +243,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _all_results(self) -> list:
         t = self._active_tab
         return t.all_results if t else []
+
     @_all_results.setter
     def _all_results(self, v: list) -> None:
         t = self._active_tab
@@ -244,6 +254,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _filtered_results(self) -> list:
         t = self._active_tab
         return t.filtered_results if t else []
+
     @_filtered_results.setter
     def _filtered_results(self, v: list) -> None:
         t = self._active_tab
@@ -254,6 +265,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _current_result(self) -> "IntruderResult | None":
         t = self._active_tab
         return t.current_result if t else None
+
     @_current_result.setter
     def _current_result(self, v: "IntruderResult | None") -> None:
         t = self._active_tab
@@ -264,6 +276,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _filter_spec(self) -> "FilterSpec | None":
         t = self._active_tab
         return t.filter_spec if t else None
+
     @_filter_spec.setter
     def _filter_spec(self, v: "FilterSpec | None") -> None:
         t = self._active_tab
@@ -274,6 +287,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _payload_load_in_progress(self) -> bool:
         t = self._active_tab
         return t.payload_load_in_progress if t else False
+
     @_payload_load_in_progress.setter
     def _payload_load_in_progress(self, v: bool) -> None:
         t = self._active_tab
@@ -341,7 +355,10 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         и стал активным). tab-body — вертикальный стек:
         toolbar → top (template+payloads) → results → filter → detail.
         """
-        t = lambda s: f"{s}-{tab_id}"
+
+        def t(suffix: str) -> str:
+            """Per-tab widget id: ``<name>-<tab_id>``."""
+            return f"{suffix}-{tab_id}"
 
         # ── Attack toolbar (per-tab): Sniper/Add§§/Clear§§/Auto§§ ─────────────
         # (как в _compose_positions до мультитаба a315ada)
@@ -349,10 +366,10 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             Label("Attack:", classes="toolbar-label"),
             ToolbarButton("Sniper ▼", t("btn-attack-type")),
             Toolbar.sep(),
-            ToolbarButton("Add §§",    t("btn-add-marker")),
-            ToolbarButton("Clear §§",  t("btn-clear-markers")),
+            ToolbarButton("Add §§", t("btn-add-marker")),
+            ToolbarButton("Clear §§", t("btn-clear-markers")),
             Toolbar.sep(),
-            ToolbarButton("Auto §§",   t("btn-mark-params")),
+            ToolbarButton("Auto §§", t("btn-mark-params")),
             Toolbar.sep(),
             Static(_ATTACK_DESCRIPTIONS[AttackType.SNIPER], id=t("attack-type-desc")),
             id=t("toolbar"),
@@ -380,12 +397,12 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             Label("Payload set:"),
             ToolbarButton("Set 1 ▼", t("btn-payload-set")),
             Toolbar.sep(),
-            ToolbarButton("Add",           t("btn-payload-add")),
-            ToolbarButton("Remove",        t("btn-payload-remove")),
-            ToolbarButton("Clear",         t("btn-payload-clear")),
+            ToolbarButton("Add", t("btn-payload-add")),
+            ToolbarButton("Remove", t("btn-payload-remove")),
+            ToolbarButton("Clear", t("btn-payload-clear")),
             ToolbarButton("Load from file…", t("btn-payload-load")),
-            ToolbarButton("Generate…",     t("btn-payload-generate")),
-            ToolbarButton("🧠 Smart…",     t("btn-payload-smart"), classes="pro-locked"),
+            ToolbarButton("Generate…", t("btn-payload-generate")),
+            ToolbarButton("🧠 Smart…", t("btn-payload-smart"), classes="pro-locked"),
             id=t("payload-buttons-toolbar"),
         )
 
@@ -401,10 +418,10 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         # ── Processing bar ──────────────────────────────────────────────
         proc = Horizontal(
             Label("Processing:", classes="proc-label"),
-            Checkbox("URL encode",  id=t("proc-url-encode"),  value=False),
-            Checkbox("Base64",      id=t("proc-base64"),      value=False),
+            Checkbox("URL encode", id=t("proc-url-encode"), value=False),
+            Checkbox("Base64", id=t("proc-base64"), value=False),
             Checkbox("HTML encode", id=t("proc-html-encode"), value=False),
-            Checkbox("MD5",         id=t("proc-md5"),         value=False),
+            Checkbox("MD5", id=t("proc-md5"), value=False),
             classes="proc-bar",
             id=t("processing-bar"),
         )
@@ -524,6 +541,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             cb = self.query_one("#intruder-turbo", Checkbox)
             # Turbo нельзя включать в FREE-режиме
             from pentool.core.license import get_session_license
+
             is_pro = get_session_license().is_pro() if get_session_license() else False
             if is_pro:
                 cb.value = tab.turbo_mode
@@ -556,42 +574,6 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         if state:
             self._rebuild_table_data()
 
-    # ── ContentPanel handlers ─────────────────────────────────────────────────
-
-    @on(ContentPanel.PasteRequested)
-    def _on_cp_paste(self, event: ContentPanel.PasteRequested) -> None:
-        """Вставка в ContentPanel из буфера обмена."""
-        from pentool.utils.copy_as import paste_from_clipboard
-        clipboard = paste_from_clipboard()
-        if clipboard:
-            panel = event.panel
-            w = panel.content_widget
-            if isinstance(w, TextArea):
-                sel = w.selection
-                is_selected = (
-                    sel is not None
-                    and sel.start != sel.end
-                )
-                if is_selected:
-                    start_row, start_col = sel.start
-                    end_row, end_col = sel.end
-                    lines = w.text.splitlines(keepends=True)
-                    if start_row == end_row:
-                        line = lines[start_row]
-                        lines[start_row] = line[:start_col] + clipboard + line[end_col:]
-                    else:
-                        lines[start_row] = lines[start_row][:start_col] + clipboard
-                        lines = lines[:start_row + 1] + lines[end_row:]
-                        if end_row < len(lines):
-                            lines[end_row] = lines[end_row][end_col:]
-                        else:
-                            lines.append('')
-                    w.load_text(''.join(lines))
-                else:
-                    w.load_text(clipboard)
-        else:
-            self.app.notify("Nothing in clipboard", severity="warning")
-
     async def on_event(self, event: _tevents.Event) -> None:
         """Double-click in template-editor — select the word under the cursor."""
         if isinstance(event, _tevents.MouseDown) and event.button == 1 and not event.ctrl:
@@ -601,9 +583,11 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 await super().on_event(event)
                 try:
                     from textual.widgets.text_area import Selection
+
                     editor = self._template_editor()
                     area = editor.content_widget
                     if isinstance(area, TextArea):
+
                         def _sel():
                             cursor = area.cursor_location
                             row, col = cursor
@@ -619,6 +603,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                                 end += 1
                             if start < end:
                                 area.selection = Selection((row, start), (row, end))
+
                         self.call_after_refresh(_sel)
                 except Exception as exc:
                     logger.debug("op: %s", exc)
@@ -662,7 +647,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def action_new_tab(self) -> None:
         """Создать новый таб с дефолтным состоянием."""
         self._tab_counter_adjust()
-        tab_id = self._tc_panel.action_new_tab()
+        self._tc_panel.action_new_tab()
         self.call_after_refresh(self._load_active_tab_content)
 
     def _tab_counter_adjust(self) -> None:
@@ -696,8 +681,9 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
 
     # ── DB persistence ────────────────────────────────────────────────────────
 
-    def _get_db_path(self) -> str | None:
-        return getattr(self.app, "db_path", None) or getattr(self.app, "_db_path", "")
+    def _get_db_path(self) -> str:
+        """Database path from the app's public ``db_path`` property."""
+        return str(getattr(self.app, "db_path", "") or "")
 
     def _auto_save_tab(self, state: _IntruderTabState) -> None:
         """Save tab state to database (fire-and-forget)."""
@@ -723,7 +709,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             return
         self.run_worker(
             self._do_load_tabs_from_db(self._api),
-            exclusive=False, exit_on_error=False,
+            exclusive=False,
+            exit_on_error=False,
         )
 
     async def _do_load_tabs_from_db(self, api: "IntruderAPI") -> None:
@@ -826,29 +813,16 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
 
     # ── AI sync ──────────────────────────────────────────────────────────
 
-    def _init_ai_sync(self) -> None:
-        from pentool.core.event_bus import get_event_bus
-        from pentool.core.events import AiModeChanged
-        def _on_ai_mode(event: AiModeChanged) -> None:
-            self._sync_ai_ui()
-        get_event_bus().subscribe(AiModeChanged, _on_ai_mode)
-        self._sync_ai_ui()
-
     def _sync_ai_ui(self) -> None:
+        """Show/hide the PRO-locked (AI) controls according to ``Config.ai_enabled``."""
         try:
             from pentool.core.config import get_config
+
             ai_on = bool(get_config().ai_enabled)
-            btn = self.query_one(ToolbarButton)  # fallback — per-tab кнопки будут позже
-            # Ищем "btn-payload-smart" в любом табе (просто для скрытия/показа)
-            try:
-                from textual.widgets import Toolbar as _Toolbar
-                # Найдём все кнопки "smart" в любом табе — через query
-                for b in self.query(".pro-locked"):
-                    b.display = ai_on
-            except Exception:
-                pass
+            for button in self.query(".pro-locked"):
+                button.display = ai_on
         except Exception as exc:
-            logger.debug("op: %s", exc)
+            logger.debug("_sync_ai_ui: %s", exc)
 
     def _update_attack_description(self) -> None:
         try:
@@ -862,13 +836,13 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
 
     def _setup_tooltips(self) -> None:
         tips = {
-            "btn-start":         "Start attack (Ctrl+Enter)",
-            "btn-pause":         "Pause / Resume attack (Ctrl+P)",
-            "btn-stop":          "Stop attack",
-            "btn-add-marker":    "Wrap selected text in §markers§",
+            "btn-start": "Start attack (Ctrl+Enter)",
+            "btn-pause": "Pause / Resume attack (Ctrl+P)",
+            "btn-stop": "Stop attack",
+            "btn-add-marker": "Wrap selected text in §markers§",
             "btn-clear-markers": "Remove all §markers§ from template",
-            "btn-payload-add":   "Add new payload manually",
-            "btn-payload-load":  "Load payloads from file",
+            "btn-payload-add": "Add new payload manually",
+            "btn-payload-load": "Load payloads from file",
         }
         # Tooltips ставятся на кнопки активного таба через общий суффикс
         tab = self._active_tab
@@ -884,6 +858,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
 
     def _get_api(self) -> "IntruderAPI | None":
         from pentool.api.intruder_api import IntruderAPI
+
         if self._api is None:
             db_path = self._get_db_path()
             if not db_path:
@@ -894,6 +869,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     async def reload_from_project(self, db_path: str) -> None:
         """Point persistent IntruderAPI at a different project DB (project switch)."""
         from pentool.api.intruder_api import IntruderAPI
+
         # Cancel any in-flight auto-save workers
         self._cancel_save_workers()
         try:
@@ -937,8 +913,10 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                         sql_predicates.append(FilterPredicate(db_field, p.operator, p.value))
             sql_filter = FilterSpec(predicates=sql_predicates) if sql_predicates else None
             results = await api.get_results_from_db(
-                limit=100000, filters=sql_filter,
-                order_by=order_by, desc=(order_dir == "desc"),
+                limit=100000,
+                filters=sql_filter,
+                order_by=order_by,
+                desc=(order_dir == "desc"),
             )
         except Exception as exc:
             logger.debug("_do_load_results: %s", exc)
@@ -963,6 +941,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
 
     def _apply_license_limits(self) -> None:
         from pentool.core.license import get_session_license
+
         license_info = get_session_license()
         is_pro = license_info.is_pro() if license_info else False
         try:
@@ -1033,20 +1012,15 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                     template = w.text
             except Exception:
                 template = tab.template_text
-            worker_name = f"intruder-save-state-{time.monotonic_ns()}"
-            self._running_save_tasks.append(worker_name)
-            self.run_worker(
-                self._do_auto_save(
-                    api.save_state(
-                        tab_name=tab.name,
-                        template=template,
-                        attack_type=tab.attack_type.value,
-                        payloads=serialize_payloads(tab.payload_sources),
-                        tab_uid=tab.tab_uid,
-                    ),
-                    worker_name,
+            self._start_save_worker(
+                api.save_state(
+                    tab_name=tab.name,
+                    template=template,
+                    attack_type=tab.attack_type.value,
+                    payloads=serialize_payloads(tab.payload_sources),
+                    tab_uid=tab.tab_uid,
                 ),
-                exclusive=False, exit_on_error=False,
+                f"intruder-save-state-{time.monotonic_ns()}",
             )
         except Exception as exc:
             logger.debug("op: %s", exc)
@@ -1057,14 +1031,9 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             return
         try:
             project_id = getattr(self.app, "project_id", None)
-            worker_name = f"intruder-save-result-{time.monotonic_ns()}"
-            self._running_save_tasks.append(worker_name)
-            self.run_worker(
-                self._do_auto_save(
-                    api.save_result(result, project_id=project_id),
-                    worker_name,
-                ),
-                exclusive=False, exit_on_error=False,
+            self._start_save_worker(
+                api.save_result(result, project_id=project_id),
+                f"intruder-save-result-{time.monotonic_ns()}",
             )
         except Exception as exc:
             logger.debug("op: %s", exc)
@@ -1103,20 +1072,20 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         if tab_id is None:
             return
         suffix = f"-{tab_id}"
-        base = btn_id[:-len(suffix)] if btn_id.endswith(suffix) else btn_id
+        base = btn_id[: -len(suffix)] if btn_id.endswith(suffix) else btn_id
 
         dispatch = {
             "btn-clear-results": lambda: self._clear_results(),
-            "btn-export-csv":    lambda: self._export_csv(),
-            "btn-add-marker":    lambda: self._add_marker_around_selection(),
+            "btn-export-csv": lambda: self._export_csv(),
+            "btn-add-marker": lambda: self._add_marker_around_selection(),
             "btn-clear-markers": lambda: self._clear_markers(),
-            "btn-mark-params":   lambda: self._prompt_auto_mark(),
-            "btn-attack-type":   lambda: self._open_attack_type_menu(btn),
-            "btn-payload-set":   lambda: self._open_payload_set_menu(btn),
-            "btn-payload-add":   lambda: self._add_payload_manual(),
-            "btn-payload-remove":lambda: self._remove_selected_payload(),
+            "btn-mark-params": lambda: self._prompt_auto_mark(),
+            "btn-attack-type": lambda: self._open_attack_type_menu(btn),
+            "btn-payload-set": lambda: self._open_payload_set_menu(btn),
+            "btn-payload-add": lambda: self._add_payload_manual(),
+            "btn-payload-remove": lambda: self._remove_selected_payload(),
             "btn-payload-clear": lambda: self._clear_payloads(),
-            "btn-payload-load":  lambda: self._load_payloads_from_file(),
+            "btn-payload-load": lambda: self._load_payloads_from_file(),
             "btn-payload-generate": lambda: self._open_generate_dialog(),
             "btn-payload-smart": lambda: self._open_smart_payloads_dialog(),
         }
@@ -1184,8 +1153,10 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         tab.filter_spec = FilterSpec(predicates=filter_predicates) if filter_predicates else None
         logger.info(
             "INTRUDER: filter applied — predicates=%d match=%d extract=%d only_match=%s",
-            len(filter_predicates), len(tab.grep_match_patterns),
-            len(tab.grep_extract_patterns), tab.grep_only_match,
+            len(filter_predicates),
+            len(tab.grep_match_patterns),
+            len(tab.grep_extract_patterns),
+            tab.grep_only_match,
         )
         has_extract = bool(tab.grep_extract_patterns)
         if has_extract != had_extract:
@@ -1212,10 +1183,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         tab = self._active_tab
         if tab is None:
             return
-        items = [
-            (at.value, ("✓ " if at == tab.attack_type else "  ") + label)
-            for at, label in _ATTACK_LABELS.items()
-        ]
+        items = [(at.value, ("✓ " if at == tab.attack_type else "  ") + label) for at, label in _ATTACK_LABELS.items()]
         r = btn.region
         x = r.x
         y = r.y + 1
@@ -1252,10 +1220,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         if tab is None:
             return
         n = len(tab.payload_sources) or 1
-        items = [
-            (str(i), ("✓ " if i == tab.active_set_idx else "  ") + f"Set {i+1}")
-            for i in range(n)
-        ]
+        items = [(str(i), ("✓ " if i == tab.active_set_idx else "  ") + f"Set {i + 1}") for i in range(n)]
         r = btn.region
         x = r.x
         y = r.y + 1
@@ -1268,7 +1233,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 if tab is None:
                     return
                 tab.active_set_idx = idx
-                label = f"Set {idx+1} ▼" if n <= 1 else f"Set {idx+1}/{n} ▼"
+                label = f"Set {idx + 1} ▼" if n <= 1 else f"Set {idx + 1}/{n} ▼"
                 self.query_one(f"#{self._wid(t_id, 'btn-payload-set')}", ToolbarButton).label = label
                 self._refresh_payload_list()
                 self._highlight_nth_marker(idx)
@@ -1296,6 +1261,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
 
             def to_offset(row: int, col: int) -> int:
                 return sum(len(lines[i]) + 1 for i in range(row)) + col
+
             s = to_offset(*start)
             e = to_offset(*end)
             if s == e:
@@ -1308,6 +1274,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             self._update_payload_select()
         except Exception as exc:
             from pentool.core.error_guard import err
+
             err(exc, "Intruder ADD error", self, severity="error")
 
     def _clear_markers(self) -> None:
@@ -1360,6 +1327,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             if body_text and (body_text.startswith("{") or body_text.startswith("[")):
                 try:
                     import json as _json
+
                     _json.loads(body_text)
                     has_json = True
                 except Exception as exc:
@@ -1367,6 +1335,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         has_query = "?" in lines[0] if lines else False
         has_cookie = any(line.lower().startswith("cookie:") for line in lines[1:body_start])
         from pentool.tui.dialogs.intruder_auto_mark import IntruderAutoMarkDialog
+
         self.app.push_screen(
             IntruderAutoMarkDialog(
                 has_json=has_json,
@@ -1414,6 +1383,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 if "§" in val:
                     return m.group(0)
                 return f"{key}=§{val}§"
+
             if "?" in line:
                 pre, qs = line.split("?", 1)
                 qs_marked = re.sub(r"([^&=\s]+)=([^&\s§]+)", mark_val, qs)
@@ -1423,23 +1393,31 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         if options is None or options.get("query", True):
             if lines:
                 lines[0] = _mark_query_params(lines[0])
-        if (options is None or options.get("body_form", True)) and "urlencoded" in content_type and body_lines_start is not None:
+        if (
+            (options is None or options.get("body_form", True))
+            and "urlencoded" in content_type
+            and body_lines_start is not None
+        ):
             for i in range(body_lines_start, len(lines)):
                 if lines[i].strip():
+
                     def mark_val_body(m: re.Match) -> str:
                         key = m.group(1)
                         val = m.group(2)
                         if "§" in val:
                             return m.group(0)
                         return f"{key}=§{val}§"
+
                     lines[i] = re.sub(r"([^&=\s]+)=([^&\s§]+)", mark_val_body, lines[i])
         if "json" in content_type and body_lines_start is not None:
             body_text = "\n".join(lines[body_lines_start:])
             import json as _json
+
             try:
                 parsed = _json.loads(body_text)
                 mark_keys = options is None or options.get("json_keys", True)
                 mark_vals = options is None or options.get("json_vals", True)
+
                 def _mark_json(obj):
                     if isinstance(obj, dict):
                         marked = {}
@@ -1464,6 +1442,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                     elif isinstance(obj, (int, float)):
                         return f"§{obj}§" if mark_vals else obj
                     return obj
+
                 marked_body = _json.dumps(_mark_json(parsed), indent=2, ensure_ascii=False)
                 new_lines = lines[:body_lines_start] + marked_body.split("\n")
                 lines = new_lines
@@ -1474,12 +1453,14 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 if line.lower().startswith("cookie:"):
                     prefix = line[:7]
                     rest = line[7:]
+
                     def mark_cookie_val(m: re.Match) -> str:
                         key = m.group(1)
                         val = m.group(2)
                         if "§" in val:
                             return m.group(0)
                         return f"{key}=§{val}§"
+
                     lines[i] = prefix + re.sub(r"([^;=\s]+)=([^;§\s]+)", mark_cookie_val, rest)
         if options is None or options.get("header", True):
             for i, line in enumerate(lines):
@@ -1497,10 +1478,12 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             body_text = "\n".join(lines[body_lines_start:])
             if "<" in body_text and ">" in body_text:
                 import xml.etree.ElementTree as ET
+
                 try:
                     root = ET.fromstring(body_text)
                     mark_tags = options is None or options.get("xml_tags", True)
                     mark_content = options is None or options.get("xml_content", True)
+
                     def _mark_xml(elem):
                         if mark_tags and "§" not in elem.tag:
                             elem.tag = f"§{elem.tag}§"
@@ -1508,14 +1491,16 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                             elem.text = f"§{elem.text.strip()}§"
                         for child in elem:
                             _mark_xml(child)
+
                     _mark_xml(root)
                     marked_xml = ET.tostring(root, encoding="unicode", short_empty_elements=False)
                     try:
                         import xml.dom.minidom
+
                         marked_xml = xml.dom.minidom.parseString(marked_xml).toprettyxml(indent="  ")
                     except Exception as exc:
                         logger.debug("op: %s", exc)
-                    new_lines = lines[:body_lines_start] + [l for l in marked_xml.split("\n") if l.strip()]
+                    new_lines = lines[:body_lines_start] + [ln for ln in marked_xml.split("\n") if ln.strip()]
                     lines = new_lines
                 except (ET.ParseError, Exception):
                     pass
@@ -1541,7 +1526,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                     f"Marked {n} positions — switched to Battering Ram "
                     "(Sniper only fills one position per request; change "
                     "back via the attack-type menu if you really want Sniper)",
-                    severity="warning", timeout=6,
+                    severity="warning",
+                    timeout=6,
                 )
                 self._auto_save_state()
             self._highlight_nth_marker(self._active_set_idx)
@@ -1569,7 +1555,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         idx = min(tab.active_set_idx, n - 1)
         tab.active_set_idx = idx
         try:
-            label = f"Set {idx+1} ▼" if n <= 1 else f"Set {idx+1}/{n} ▼"
+            label = f"Set {idx + 1} ▼" if n <= 1 else f"Set {idx + 1}/{n} ▼"
             self.query_one(f"#{self._wid(tab.tab_id, 'btn-payload-set')}", ToolbarButton).label = label
         except Exception as exc:
             logger.debug("op: %s", exc)
@@ -1587,20 +1573,20 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         try:
             lv = self.query_one(f"#{self._wid(tab_id, 'payload-list')}", ListView)
             lv.clear()
-            active = (
-                tab.payload_sources[tab.active_set_idx]
-                if tab.active_set_idx < len(tab.payload_sources)
-                else []
-            )
+            active = tab.payload_sources[tab.active_set_idx] if tab.active_set_idx < len(tab.payload_sources) else []
             if isinstance(active, FilePayloadSource):
                 preview = active.head(_PAYLOAD_LIST_PREVIEW_LIMIT)
                 for p in preview:
                     lv.append(ListItem(Label(p)))
                 if active.is_count_known and active.cached_count > len(preview):
-                    lv.append(ListItem(Label(
-                        f"… {active.cached_count - len(preview)} more line(s) "
-                        f"not shown (file: {Path(active.path).name})"
-                    )))
+                    lv.append(
+                        ListItem(
+                            Label(
+                                f"… {active.cached_count - len(preview)} more line(s) "
+                                f"not shown (file: {Path(active.path).name})"
+                            )
+                        )
+                    )
                 elif not active.is_count_known:
                     lv.append(ListItem(Label("(counting lines…)")))
             elif isinstance(active, (NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)):
@@ -1609,9 +1595,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 for p in preview:
                     lv.append(ListItem(Label(p)))
                 if total > len(preview):
-                    lv.append(ListItem(Label(
-                        f"… {total - len(preview):,} more value(s) not shown"
-                    )))
+                    lv.append(ListItem(Label(f"… {total - len(preview):,} more value(s) not shown")))
             else:
                 for p in active:
                     lv.append(ListItem(Label(p)))
@@ -1628,11 +1612,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             label = self.query_one(f"#{self._wid(tab_id, 'payload-count-label')}", Static)
         except Exception:
             return
-        active = (
-            tab.payload_sources[tab.active_set_idx]
-            if tab.active_set_idx < len(tab.payload_sources)
-            else []
-        )
+        active = tab.payload_sources[tab.active_set_idx] if tab.active_set_idx < len(tab.payload_sources) else []
         if isinstance(active, FilePayloadSource):
             if active.is_count_known:
                 label.update(f"[dim]{active.cached_count:,} line(s) — {Path(active.path).name}[/dim]")
@@ -1648,6 +1628,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _highlight_nth_marker(self, n: int) -> None:
         try:
             from textual.widgets.text_area import Selection
+
             editor = self._template_editor()
             w = editor.content_widget
             if not isinstance(w, TextArea):
@@ -1695,7 +1676,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             self.app.notify(
                 "This set is generated/loaded from a file — click Clear first "
                 "to switch it to a manually-edited list.",
-                severity="warning", timeout=4,
+                severity="warning",
+                timeout=4,
             )
             return
 
@@ -1721,7 +1703,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             self.app.notify(
                 "This set is generated/loaded from a file — individual lines "
                 "can't be removed. Click Clear to remove the whole set.",
-                severity="warning", timeout=4,
+                severity="warning",
+                timeout=4,
             )
             return
         try:
@@ -1755,29 +1738,34 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             self.app.notify("A payload file is already loading — please wait", severity="warning", timeout=3)
             return
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
+
         captured_idx = tab.active_set_idx
 
         def _on_file(path: str | None) -> None:
             if path:
                 self.run_worker(
                     self._load_file_async(path, captured_idx),
-                    exclusive=False, name="payload-load", exit_on_error=False,
+                    exclusive=False,
+                    name="payload-load",
+                    exit_on_error=False,
                 )
 
         self.app.push_screen(
-            FileSelectorDialog(mode=FileSelectorMode.OPEN, filter_ext=["*.txt", "*.yaml", "*.yml"], title="Select payload file"),
+            FileSelectorDialog(
+                mode=FileSelectorMode.OPEN,
+                filter_ext=["*.txt", "*.yaml", "*.yml"],
+                title="Select payload file",
+            ),
             _on_file,
         )
 
     async def _load_file_async(self, path: str, target_idx: int) -> None:
         tab = self._active_tab
-        tab_id = tab.tab_id if tab else None
         try:
-            size = await asyncio.get_running_loop().run_in_executor(
-                None, lambda: Path(path).stat().st_size
-            )
+            size = await asyncio.get_running_loop().run_in_executor(None, lambda: Path(path).stat().st_size)
         except Exception as exc:
             from pentool.core.error_guard import err
+
             err(exc, "Failed to load payload file", self, severity="error")
             return
         if tab:
@@ -1802,6 +1790,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                     payloads.append(line)
         except Exception as exc:
             from pentool.core.error_guard import err
+
             err(exc, "Failed to load payload (eager)", self, severity="error")
             return
         existing = tab.payload_sources[target_idx]
@@ -1836,12 +1825,11 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
 
         try:
             loop = asyncio.get_running_loop()
-            final_count = await loop.run_in_executor(
-                None, count_lines_with_progress, path, "utf-8", _on_progress
-            )
+            final_count = await loop.run_in_executor(None, count_lines_with_progress, path, "utf-8", _on_progress)
             source.set_count(final_count)
         except Exception as exc:
             from pentool.core.error_guard import err
+
             err(exc, "Payload line count failed (still usable)", self, severity="warning")
         finally:
             tab.payload_load_in_progress = False
@@ -1853,11 +1841,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         tab = self._active_tab
         if tab is None:
             return
-        active = (
-            tab.payload_sources[target_idx]
-            if target_idx < len(tab.payload_sources)
-            else None
-        )
+        active = tab.payload_sources[target_idx] if target_idx < len(tab.payload_sources) else None
         if not isinstance(active, FilePayloadSource):
             return
         tab_id = tab.tab_id
@@ -1900,11 +1884,13 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
 
     def _open_smart_payloads_dialog(self) -> None:
         from pentool.core.license import get_session_license
+
         info = get_session_license()
         if not info.has_feature("payloads_pro"):
             self.app.notify(
                 "🔒 Smart Payloads requires PRO license — go to Settings → License",
-                severity="warning", timeout=4,
+                severity="warning",
+                timeout=4,
             )
             return
         self.app.push_screen(SmartPayloadsDialog(), self._on_smart_payloads_generated)
@@ -1927,7 +1913,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         if tab.payload_load_in_progress:
             self.app.notify(
                 "A payload file is still being counted — wait for it to finish before starting",
-                severity="warning", timeout=4,
+                severity="warning",
+                timeout=4,
             )
             return
         try:
@@ -1944,7 +1931,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         if count_markers(template) == 0:
             self.app.notify(
                 "No §§ markers in template — use Auto §§ or Add §§ to mark positions first",
-                severity="warning", timeout=5,
+                severity="warning",
+                timeout=5,
             )
             return
         logger.info("INTRUDER: action_start: attack_type=%s", tab.attack_type)
@@ -1964,6 +1952,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             return
 
         from pentool.core.license import get_session_license
+
         license_info = get_session_license()
         is_pro = license_info.is_pro() if license_info else False
 
@@ -2027,11 +2016,10 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         limit_label = "" if is_pro else " [FREE: limited]"
         self.app.notify(
             f"Attack started: {total_payloads} payload(s){mode_label}{limit_label}",
-            severity="success", title="Intruder",
+            severity="success",
+            title="Intruder",
         )
-        self.run_worker(
-            self._run_attack(tab, attack), exclusive=False, name=f"intruder-attack-{tab.tab_id}"
-        )
+        self.run_worker(self._run_attack(tab, attack), exclusive=False, name=f"intruder-attack-{tab.tab_id}")
 
     async def _run_attack(self, tab: _IntruderTabState, attack: "IntruderAttack") -> None:
         """Запустить изолированную атаку вкладки.
@@ -2055,12 +2043,17 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             await attack.run(on_result, on_progress)
         except Exception as exc:
             from pentool.core.error_guard import err
+
             err(exc, "Intruder attack error", self, severity="error")
         finally:
             _tab.running = False
             _tab.paused = False
             _tab.attack = None
-            logger.info("INTRUDER: _run_attack tab=%s finished, results=%d", _tab.tab_id, len(_tab.all_results))
+            logger.info(
+                "INTRUDER: _run_attack tab=%s finished, results=%d",
+                _tab.tab_id,
+                len(_tab.all_results),
+            )
             # Статус toolbar обновляем, только если это активная вкладка.
             # Для фоновых вкладок статус подтянется при переключении (_sync_toolbar).
             if _tab is self._active_tab:
@@ -2068,7 +2061,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 self._ssw.set_paused(False)
                 self.app.notify(
                     f"Attack finished: {len(_tab.all_results)} requests",
-                    severity="information", timeout=4,
+                    severity="information",
+                    timeout=4,
                 )
 
     def _on_result(self, result: IntruderResult, tab: _IntruderTabState | None = None) -> None:
@@ -2093,6 +2087,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         if passes and tab.grep_only_match and tab.grep_match_patterns:
             text = f"{result.response_status} {result.response_length} {' '.join(result.payload_values)}"
             import re
+
             passes = any(re.search(pat, text, re.IGNORECASE) for pat in tab.grep_match_patterns)
         if passes:
             tab.filtered_results.append(result)
@@ -2148,11 +2143,12 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
 
     def on_worker_state_changed(self, event) -> None:
         from textual.worker import WorkerState
+
         name = getattr(event.worker, "name", "") or ""
         if not name.startswith("intruder-attack-"):
             return
         # Определяем таб из имени воркера: intruder-attack-<tab_id>
-        tid = name[len("intruder-attack-"):]
+        tid = name[len("intruder-attack-") :]
         tab = self._tc_panel.get_state(tid)
         if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
             if tab is not None and tab.running:
@@ -2253,6 +2249,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                     row.append(extract_val)
                 display_rows.append(row)
             import pyarrow as pa
+
             cols = _RESULTS_COL_NAMES
             if tab.grep_extract_patterns:
                 cols = cols + ["Extract"]
@@ -2279,6 +2276,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             if passes and tab.grep_only_match and tab.grep_match_patterns:
                 text = f"{r.response_status} {r.response_length} {' '.join(r.payload_values)}"
                 import re
+
                 passes = any(re.search(pat, text, re.IGNORECASE) for pat in tab.grep_match_patterns)
             if passes:
                 filtered.append(r)
@@ -2294,6 +2292,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 row.append(extract_val)
             display_rows.append(row)
         import pyarrow as pa
+
         cols = _RESULTS_COL_NAMES
         if tab.grep_extract_patterns:
             cols = cols + ["Extract"]
@@ -2304,7 +2303,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     @staticmethod
     def _extract_grep_value(result: IntruderResult, patterns: list[str] | None = None) -> str:
         import re
-        for pat in (patterns or []):
+
+        for pat in patterns or []:
             try:
                 m = re.search(pat, result.request_raw or "")
                 if m:
@@ -2322,6 +2322,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             return None
         try:
             from textual.coordinate import Coordinate
+
             coord = Coordinate(row_index, 0)
             cell = table.get_cell_at(coord)
             row_number = int(str(cell))
@@ -2343,7 +2344,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
         if event.data_table.id != table_id:
             return
         self._sort_table_sql(
-            event, _RESULTS_COL_NAMES,
+            event,
+            _RESULTS_COL_NAMES,
             order_by_map={
                 "#": "request_number",
                 "Payload(s)": "payload_values",
@@ -2352,9 +2354,11 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 "Time(ms)": "response_time_ms",
                 "Error": "error",
             },
-            reload_cb=lambda order_by, order_dir: self._do_load_results(
-                self._get_api(), order_by=order_by, order_dir=order_dir
-            ) if self._get_api() else None,
+            reload_cb=lambda order_by, order_dir: (
+                self._do_load_results(self._get_api(), order_by=order_by, order_dir=order_dir)
+                if self._get_api()
+                else None
+            ),
         )
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -2445,8 +2449,8 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _open_context_menu(self, x: int, y: int) -> None:
         items = [
             ("send_repeater", "Send to Repeater"),
-            ("send_scanner",  "Send to Scanner"),
-            ("copy_payload",  "Copy Payload"),
+            ("send_scanner", "Send to Scanner"),
+            ("copy_payload", "Copy Payload"),
         ]
         self.app.show_context_menu(items, x, y, callback=self._on_ctx_action)
 
@@ -2473,6 +2477,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
     def _send_selected_to_scanner(self) -> None:
         try:
             from pentool.tui.messages import SendHostToScanner
+
             table = self._results_table()
             result = self._result_at_row(table, table.cursor_row)
             if result is not None:
@@ -2496,6 +2501,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             result = self._result_at_row(table, table.cursor_row)
             if result is not None and result.url:
                 import webbrowser
+
                 webbrowser.open(result.url)
         except Exception as exc:
             logger.debug("op: %s", exc)
@@ -2507,6 +2513,7 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             if result is not None:
                 payload_str = " | ".join(result.payload_values)
                 from pentool.utils.copy_as import copy_to_clipboard
+
                 copy_to_clipboard(payload_str)
                 self.app.notify("Payload copied", timeout=2)
         except Exception as exc:
@@ -2526,24 +2533,28 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
                 path += ".csv"
             try:
                 import csv
+
                 with open(path, "w", newline="", encoding="utf-8") as f:
                     writer = csv.writer(f)
                     writer.writerow(["#", "Payloads", "Status", "Length", "Time(ms)", "Error", "Timestamp"])
                     tab = self._active_tab
                     if tab:
                         for r in tab.all_results:
-                            writer.writerow([
-                                r.request_number,
-                                " | ".join(r.payload_values),
-                                r.response_status or "",
-                                r.response_length or "",
-                                r.response_time_ms or "",
-                                r.error or "",
-                                r.timestamp.isoformat(),
-                            ])
+                            writer.writerow(
+                                [
+                                    r.request_number,
+                                    " | ".join(r.payload_values),
+                                    r.response_status or "",
+                                    r.response_length or "",
+                                    r.response_time_ms or "",
+                                    r.error or "",
+                                    r.timestamp.isoformat(),
+                                ]
+                            )
                 self.app.notify(f"Exported to {path}", timeout=4)
             except Exception as exc:
                 from pentool.core.error_guard import err
+
                 err(exc, "Intruder export failed", self, severity="error")
 
         self.app.push_screen(
@@ -2598,24 +2609,3 @@ class IntruderScreen(BaseModuleScreen, AppMixin, ContentClipboardMixin, AutoSave
             return api.export_project_data()
         except Exception:
             return {"results": []}
-
-    # ── Task cancel helper ─────────────────────────────────────────────
-
-    def _cancel_save_workers(self) -> None:
-        """Cancel pending auto-save workers (for project switch)."""
-        for name in list(self._running_save_tasks):
-            try:
-                self.workers.cancel(self.workers.get_worker(name))
-            except Exception:
-                pass
-        self._running_save_tasks.clear()
-
-    async def _do_auto_save(self, coro, worker_name: str) -> None:
-        """Run auto-save and cleanup the worker name on completion."""
-        try:
-            await coro
-        except Exception as exc:
-            logger.debug("_do_auto_save(%s): %s", worker_name, exc)
-        finally:
-            if worker_name in self._running_save_tasks:
-                self._running_save_tasks.remove(worker_name)

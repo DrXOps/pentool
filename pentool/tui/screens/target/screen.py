@@ -7,23 +7,22 @@ import time
 from pathlib import Path
 
 from textual import on, work
-from textual.widgets import Checkbox
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import Static, Tree
-
-from pentool.tui.widgets.content_panel import ContentPanel
+from textual.widgets import Tree
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import TARGET_BINDINGS
-
-from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
+from pentool.tui.mixins.ai_sync import AiModeSyncMixin
+from pentool.tui.mixins.autosave import AutoSaveMixin
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
+from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.tui.widgets.toolbar import Toolbar
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
@@ -51,8 +50,12 @@ def _format_tech_profile(profile: dict) -> str:
 
     # Legacy language flags
     for key, label in [
-        ("is_php", "PHP"), ("is_java", "Java"), ("is_dotnet", ".NET"),
-        ("is_nodejs", "Node.js"), ("is_python", "Python"), ("is_golang", "Go"),
+        ("is_php", "PHP"),
+        ("is_java", "Java"),
+        ("is_dotnet", ".NET"),
+        ("is_nodejs", "Node.js"),
+        ("is_python", "Python"),
+        ("is_golang", "Go"),
         ("is_ruby", "Ruby"),
     ]:
         if profile.get(key):
@@ -66,8 +69,12 @@ def _format_tech_profile(profile: dict) -> str:
 
     # Legacy framework flags
     for key, label in [
-        ("is_django", "Django"), ("is_flask", "Flask"), ("is_laravel", "Laravel"),
-        ("is_rails", "Rails"), ("is_spring", "Spring"), ("is_express", "Express"),
+        ("is_django", "Django"),
+        ("is_flask", "Flask"),
+        ("is_laravel", "Laravel"),
+        ("is_rails", "Rails"),
+        ("is_spring", "Spring"),
+        ("is_express", "Express"),
     ]:
         if profile.get(key):
             if label not in parts:
@@ -122,7 +129,7 @@ def _format_tech_profile(profile: dict) -> str:
     return " | ".join(parts) if parts else ""
 
 
-class TargetScreen(ContentClipboardMixin, Widget):
+class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Widget):
     """Tree view of discovered hosts and URLs."""
 
     DEFAULT_CSS = _CSS
@@ -137,46 +144,46 @@ class TargetScreen(ContentClipboardMixin, Widget):
         self._scope_config = None  # ScopeConfig for regex include/exclude rules
         self._running_save_tasks: list[str] = []  # tracked auto-save workers
 
-    def _cancel_save_workers(self) -> None:
-        """Cancel all tracked auto-save workers before closing the DB."""
-        for wname in list(self._running_save_tasks):
-            try:
-                self.workers.cancel(wname)
-            except Exception:
-                pass
-        self._running_save_tasks.clear()
-
     def compose(self) -> ComposeResult:
         yield Toolbar(
-            ToolbarButton("★ Add to Scope",      "btn-add-scope"),
+            ToolbarButton("★ Add to Scope", "btn-add-scope"),
             Toolbar.sep(),
             ToolbarButton("✖ Remove from Scope", "btn-remove-scope"),
             Toolbar.sep(),
-            ToolbarButton("⚙ Scope",             "btn-scope-rules",
-                          tooltip="Edit scope rules (hosts, wildcards, regex)"),
+            ToolbarButton("⚙ Scope", "btn-scope-rules", tooltip="Edit scope rules (hosts, wildcards, regex)"),
             Toolbar.sep(),
-            ToolbarButton("🕷 Crawl Scope", "btn-crawl-scope",
-                          tooltip="Crawl every in-scope host with the Spider"),
+            ToolbarButton(
+                "🕷 Crawl Scope",
+                "btn-crawl-scope",
+                tooltip="Crawl every in-scope host with the Spider",
+            ),
             Toolbar.sep(),
-            ToolbarButton("🕷 Crawl Host", "btn-crawl-host",
-                          tooltip="Crawl the selected host in the tree with the Spider"),
+            ToolbarButton(
+                "🕷 Crawl Host",
+                "btn-crawl-host",
+                tooltip="Crawl the selected host in the tree with the Spider",
+            ),
             # "🤖 Use AI" чекбокс в отдельном Horizontal для show/hide
             Horizontal(
-                Checkbox("🤖 Use AI", id="cfg-ai-use", value=False,
-                         tooltip="When set, Spider adds AI-suggested endpoints after crawling"),
+                Checkbox(
+                    "🤖 Use AI",
+                    id="cfg-ai-use",
+                    value=False,
+                    tooltip="When set, Spider adds AI-suggested endpoints after crawling",
+                ),
                 id="ai-crawl-box",
             ),
             Toolbar.sep(),
-            ToolbarButton("🗑 Clear",             "btn-clear"),
+            ToolbarButton("🗑 Clear", "btn-clear"),
             Toolbar.sep(),
-            ToolbarButton("📄 Export JSON",       "btn-export"),
+            ToolbarButton("📄 Export JSON", "btn-export"),
             Toolbar.sep(),
-            ToolbarButton("🧭 Recon",             "btn-recon",
-                          tooltip="Open Recon screen for the selected domain"),
+            ToolbarButton("🧭 Recon", "btn-recon", tooltip="Open Recon screen for the selected domain"),
         )
 
         # При старте скрываем AI-секцию если ai_enabled выключен
         from pentool.core.config import get_config
+
         if not getattr(get_config(), "ai_enabled", False):
             self._ai_hidden_on_compose = True
 
@@ -186,7 +193,6 @@ class TargetScreen(ContentClipboardMixin, Widget):
             with Vertical(id="detail-panel"):
                 yield ContentPanel("Details", widget_type="richlog", wrap=True, buttons=["copy"])
 
-        
     def on_mount(self) -> None:
         """При старте скрыть AI-секцию если ai_enabled выключен."""
         if getattr(self, "_ai_hidden_on_compose", False):
@@ -200,25 +206,11 @@ class TargetScreen(ContentClipboardMixin, Widget):
         """При показе — синхронизировать AI UI."""
         self._sync_ai_ui()
 
-    def _init_ai_sync(self) -> None:
-        """Подписка на AiModeChanged + on_show страховка."""
-        from pentool.core.event_bus import get_event_bus
-        from pentool.core.events import AiModeChanged
-
-        def _on_ai_mode(event: AiModeChanged) -> None:
-            try:
-                box = self.query_one("#ai-crawl-box")
-                box.display = event.enabled
-            except Exception:
-                pass
-
-        get_event_bus().subscribe(AiModeChanged, _on_ai_mode)
-        self._sync_ai_ui()
-
     def _sync_ai_ui(self) -> None:
         """Проверить ai_enabled и скрыть/показать AI-элементы."""
         try:
             from pentool.core.config import get_config
+
             ai_on = bool(get_config().ai_enabled)
             self.query_one("#ai-crawl-box").display = ai_on
         except Exception:
@@ -227,7 +219,8 @@ class TargetScreen(ContentClipboardMixin, Widget):
     def _get_api(self):
         if self._target_api is None:
             from pentool.api.target_api import TargetAPI
-            db_path = getattr(self.app, "db_path", "") or getattr(self.app, "_db_path", "")
+
+            db_path = str(getattr(self.app, "db_path", "") or "")
             self._target_api = TargetAPI(db_path=db_path)
         return self._target_api
 
@@ -301,6 +294,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
             if in_scope:
                 try:
                     from pentool.services.tech_detector import get_tech_cache
+
                     cached = get_tech_cache(host)
                     if cached:
                         tech_str = _format_tech_profile(cached)
@@ -332,7 +326,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
         for i, seg in enumerate(segments):
             if not seg:  # skip empty segments between slashes
                 continue
-            is_last = (i == len(segments) - 1)
+            is_last = i == len(segments) - 1
             if is_last:
                 methods_str = " ".join(sorted(node.methods)) if node.methods else "GET"
                 parent.add_leaf(
@@ -372,6 +366,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
             # TechDetect — читаем из кэша
             try:
                 from pentool.services.tech_detector import get_tech_cache
+
                 cached = get_tech_cache(host)
                 if cached:
                     tech_str = _format_tech_profile(cached)
@@ -398,7 +393,6 @@ class TargetScreen(ContentClipboardMixin, Widget):
             log.write(f"Requests: {node.request_count}")
             log.write(f"Last seen: {node.last_seen.strftime('%Y-%m-%d %H:%M')}")
             log.write(f"In scope: {'[green]YES[/green]' if node.in_scope else '[red]NO[/red]'}")
-
 
     def on_key(self, event) -> None:
         if event.key == "m":
@@ -430,8 +424,8 @@ class TargetScreen(ContentClipboardMixin, Widget):
             node = self._selected_node_data
             items.append(("send_repeater", f"↗️ Send to Repeater: {node.path}"))
         items += [
-            ("add_scope",      "★ Add to Scope"),
-            ("remove_scope",   "✖ Remove from Scope"),
+            ("add_scope", "★ Add to Scope"),
+            ("remove_scope", "✖ Remove from Scope"),
         ]
         self.app.show_context_menu(items, x, y, callback=self._on_context_action)
 
@@ -465,6 +459,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
             return
         try:
             from pentool.utils.parser import ParsedRequest, build_http_request
+
             method = sorted(node.methods)[0] if node.methods else "GET"
             url = f"https://{node.host}{node.path}"
             raw = build_http_request(ParsedRequest(method=method, url=url, headers={}, body=""))
@@ -477,7 +472,6 @@ class TargetScreen(ContentClipboardMixin, Widget):
         if not host:
             return
         self.app.post_message(SendHostToScanner(host))  # type: ignore[attr-defined]
-
 
     @on(ToolbarButton.Pressed, "#btn-add-scope")
     def on_btn_add_scope(self, _: ToolbarButton.Pressed) -> None:
@@ -511,6 +505,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
     def on_btn_recon(self, _: ToolbarButton.Pressed) -> None:
         """Open Recon screen and pre-fill domain from selected host."""
         from urllib.parse import urlparse
+
         domain = ""
         try:
             node = self.query_one("#host-tree", Tree).cursor_node
@@ -527,13 +522,12 @@ class TargetScreen(ContentClipboardMixin, Widget):
 
         self.app.action_switch_module("recon")
         if domain:
-            self.app.call_after_refresh(
-                lambda d=domain: self._prefill_recon_domain(d)
-            )
+            self.app.call_after_refresh(lambda d=domain: self._prefill_recon_domain(d))
 
     def _prefill_recon_domain(self, domain: str) -> None:
         """Pre-fill ReconScreen domain input."""
         from urllib.parse import urlparse
+
         # Normalise: strip protocol, path, port
         domain = domain.strip().lower()
         if "://" in domain:
@@ -541,6 +535,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
         domain = domain.split(":")[0].split("/")[0]
         try:
             from pentool.tui.screens.recon.screen import ReconScreen
+
             recon = self.app.query_one(ReconScreen)
             domain_input = recon.query_one("#recon-domain")
             if hasattr(domain_input, "value"):
@@ -611,6 +606,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
                 if proxy is not None:
                     proxy.set_scope(list(effective_hosts))
                 from pentool.core.config import get_config
+
                 cfg = get_config()
                 cfg.scope = list(effective_hosts)
                 cfg.save()
@@ -645,6 +641,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
         logger.info("TECHDETECT: starting for host=%s", host)
         try:
             from pentool.services.tech_detector import detect_tech
+
             url = host if "://" in host else f"https://{host}"
             logger.info("TECHDETECT: fetching %s", url)
             profile = await detect_tech(url)
@@ -658,8 +655,10 @@ class TargetScreen(ContentClipboardMixin, Widget):
             if not has_data:
                 self.app.notify(f"⚠️ TechDetect for {host}: empty profile (no headers matched)", timeout=5)
                 return
-            tech_str = _format_tech_profile(profile) or f"{profile.get('language') or '?'} / {profile.get('framework') or '?'}"
-            if profile.get('cms'):
+            tech_str = (
+                _format_tech_profile(profile) or f"{profile.get('language') or '?'} / {profile.get('framework') or '?'}"
+            )
+            if profile.get("cms"):
                 tech_str += f" / {profile['cms']}"
             self.app.notify(f"🔍 {host}: {tech_str}", timeout=6)
             logger.info("TECHDETECT: updating tree node for %s with tech=%s", host, tech_str)
@@ -720,6 +719,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
     def _maybe_crawl_hosts(self, hosts: list[str]) -> None:
         """Показать диалог подтверждения, если краул уже был."""
         from pentool.api.spider_api import SpiderAPI
+
         # Проверяем — был ли уже краул этих хостов
         # Нормализуем URL: добавляем схему если нет
         normalized = [h if "://" in h else f"https://{h}" for h in hosts]
@@ -732,6 +732,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
     def _ask_recrawl(self, hosts: list[str]) -> None:
         """Показать диалог: рекраул или skip."""
         from pentool.tui.dialogs.recrawl_dialog import RecrawlDialog
+
         host = hosts[0] if hosts else "unknown"
 
         def on_dialog(result: str | None) -> None:
@@ -768,7 +769,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
         total_js = 0
         total_errors = 0
         api = self._get_api()
-        db_path = getattr(self.app, "db_path", "") or getattr(self.app, "_db_path", "")
+        db_path = str(getattr(self.app, "db_path", "") or "")
 
         def _on_page_async(url: str) -> None:
             """Lazy feed: each discovered URL lands in the Site Map tree
@@ -776,6 +777,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
             worker's loop alongside the crawl."""
             try:
                 from pentool.utils.parser import ParsedRequest
+
                 # count=False: this is a discovery event, not a real HTTP request.
                 # Re-crawling the same page must not inflate the node counter.
                 api.add_request(ParsedRequest(method="GET", url=url), count=False)
@@ -866,13 +868,17 @@ class TargetScreen(ContentClipboardMixin, Widget):
                 except Exception:
                     continue
 
-            from pentool.services.tech_detector import detect_tech
             # Use js_render for SPA to get full rendered HTML
-            from pentool.services.tech_detector import get_cached_tech
+            from pentool.services.tech_detector import detect_tech, get_cached_tech
+
             cached = get_cached_tech(url)
             use_js = bool(cached and cached.get("spa"))
             tech_profile_raw = await detect_tech(url, js_render=use_js)
-            tech_profile = tech_profile_raw if tech_profile_raw is None else getattr(tech_profile_raw, "to_context_dict", lambda: str(tech_profile_raw))()
+            tech_profile = (
+                tech_profile_raw
+                if tech_profile_raw is None
+                else getattr(tech_profile_raw, "to_context_dict", lambda: str(tech_profile_raw))()
+            )
             prompt_data = {
                 "url": url,
                 "tech_stack": tech_profile,
@@ -881,8 +887,12 @@ class TargetScreen(ContentClipboardMixin, Widget):
             result = await backend.generate("crawl_endpoints", prompt_data)
             if isinstance(result, dict):
                 _nitems = len(result.get("items") or [])
-                logger.info("_ai_suggest_endpoints: %s gen result items=%d %s",
-                            url, _nitems, "RAW:" + str(result.get("raw", ""))[:120] if _nitems == 0 else "")
+                logger.info(
+                    "_ai_suggest_endpoints: %s gen result items=%d %s",
+                    url,
+                    _nitems,
+                    "RAW:" + str(result.get("raw", ""))[:120] if _nitems == 0 else "",
+                )
             if not result:
                 return 0
             items = result if isinstance(result, list) else result.get("items", [])
@@ -891,6 +901,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
 
             added = 0
             import aiohttp as _aiohttp
+
             _timeout = _aiohttp.ClientTimeout(total=5)
             async with _aiohttp.ClientSession(timeout=_timeout) as session:
                 for item in items:
@@ -953,6 +964,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
         """Called from proxy on a new request — updates the map in real time."""
         try:
             from pentool.utils.parser import ParsedRequest
+
             if isinstance(req, ParsedRequest):
                 parsed_req = req
             else:
@@ -967,27 +979,24 @@ class TargetScreen(ContentClipboardMixin, Widget):
             api.add_request(parsed_req)
             logger.debug(
                 "add_request_from_proxy: added %s %s (hosts now: %d)",
-                parsed_req.method, parsed_req.url, len(api.get_hosts()),
+                parsed_req.method,
+                parsed_req.url,
+                len(api.get_hosts()),
             )
             self.call_after_refresh(self._refresh_tree)
             # Persist to DB (batches of ~20 requests)
             self._save_counter = getattr(self, "_save_counter", 0) + 1
             if self._save_counter % 20 == 0:
-                wname = f"target-save-{time.monotonic_ns()}"
-                self._running_save_tasks.append(wname)
-                asyncio.ensure_future(self._do_save_sitemap(wname))
+                self._start_save_worker(self._do_save_sitemap(), f"target-save-{time.monotonic_ns()}")
         except Exception as exc:
             logger.warning("add_request_from_proxy: %s", exc)
 
-    async def _do_save_sitemap(self, worker_name: str = "") -> None:
+    async def _do_save_sitemap(self) -> None:
         try:
             api = self._get_api()
             await api.save()
         except Exception as exc:
             logger.debug("_do_save_sitemap: %s", exc)
-        finally:
-            if worker_name:
-                self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
     def _update_tech_node(self, host: str, profile: dict) -> None:
         """Update or add a tech-info leaf under the host node in the tree.
@@ -1001,10 +1010,7 @@ class TargetScreen(ContentClipboardMixin, Widget):
                 data = child.data
                 if isinstance(data, dict) and data.get("host") == host:
                     # Remove old tech node if exists
-                    to_remove = [
-                        c for c in child.children
-                        if isinstance(c.data, dict) and c.data.get("type") == "tech"
-                    ]
+                    to_remove = [c for c in child.children if isinstance(c.data, dict) and c.data.get("type") == "tech"]
                     for c in to_remove:
                         child.remove(c)
                     # Add new tech node
