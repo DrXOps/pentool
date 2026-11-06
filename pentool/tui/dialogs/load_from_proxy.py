@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -50,7 +51,7 @@ class LoadFromProxyDialog(ModalScreen[str | None]):
                 zebra_stripes=True,
             )
             with Horizontal(id="buttons"):
-                yield Button("Load",   variant="primary", id="btn-load")
+                yield Button("Load", variant="primary", id="btn-load")
                 yield Button("Cancel", variant="default", id="btn-cancel")
 
     def on_mount(self) -> None:
@@ -72,8 +73,18 @@ class LoadFromProxyDialog(ModalScreen[str | None]):
         if req is not None:
             self._selected_raw = self._build_raw(req)
 
-    def on_data_table_row_activated(self, event: DataTable.RowActivated) -> None:
-        """Double-click — load immediately."""
+    def on_click(self, event: events.Click) -> None:
+        """Double-click on a row loads it immediately.
+
+        ``DataTable`` has no ``RowActivated`` message in Textual 8 — the old
+        handler here never fired. ``Click`` bubbles from the table, so the
+        double-click is detected on the event chain instead.
+        """
+        if event.chain != 2:
+            return
+        if not isinstance(event.widget, DataTable) or event.widget.id != "req-table":
+            return
+        event.stop()
         self.action_select()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -120,6 +131,7 @@ class LoadFromProxyDialog(ModalScreen[str | None]):
         try:
             parsed = req.to_parsed_request()  # type: ignore[attr-defined]
             from pentool.utils.parser import build_http_request
+
             return build_http_request(parsed)
         except Exception:
             return ""

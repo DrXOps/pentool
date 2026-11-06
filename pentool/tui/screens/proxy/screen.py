@@ -9,45 +9,40 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 
+from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
+from textual.widgets import Label, Static, TabbedContent, TabPane
 
-_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
-from textual.widgets import (
-    Button,
-    Input,
-    Label,
-    Select,
-    Static,
-    TabbedContent,
-    TabPane,
-    TextArea,
-)
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.core.logging import get_logger
-from pentool.tui.hotkeys.defaults import PROXY_BINDINGS
-from pentool.tui.widgets.proxy_helpers import (
-    COL_NAMES as _COL_NAMES,
-    row_to_record as _row_to_record,
-    rows_to_arrow as _rows_to_arrow,
-)
 from pentool.services.proxy_service import ProxyService
-from pentool.tui.messages import SendToIntruder, SendToRepeater, SendToTarget, SyncScopeToTarget
+from pentool.tui.hotkeys.defaults import PROXY_BINDINGS
+from pentool.tui.messages import SendToIntruder, SendToRepeater, SyncScopeToTarget
 from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
+from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.context_menu import ContextMenu
-from pentool.tui.widgets.proxy_filter_bar import (
-    ProxyFilterBar as FilterBar,
-    WsFilterBar,
-)
+from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 from pentool.tui.widgets.inspector_panel import InspectorPanel
 from pentool.tui.widgets.intercept import InterceptMixin
+from pentool.tui.widgets.proxy_data_table import ProxyDataTable
+from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar as FilterBar
+from pentool.tui.widgets.proxy_filter_bar import WsFilterBar
+from pentool.tui.widgets.proxy_helpers import COL_NAMES as _COL_NAMES
+from pentool.tui.widgets.proxy_helpers import row_to_record as _row_to_record
+from pentool.tui.widgets.proxy_helpers import rows_to_arrow as _rows_to_arrow
 from pentool.tui.widgets.request_editor import HttpView
 from pentool.tui.widgets.resize_handle import ResizeHandle
+from pentool.tui.widgets.toolbar import Toolbar
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
+
+_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 # Page size for HTTP History: initial load + each "scroll up to load more" page.
 # Matches ProxyService.get_history()'s default limit — the full history lives
@@ -67,19 +62,17 @@ _FILTER_RELOAD_DEBOUNCE_S = 0.6
 # _row_to_record, _COL_NAMES) moved to tui/widgets/proxy_helpers.py (Этап 6) —
 # imported at the top of this module under the same names.
 
-from textual import on
-
-from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
-from pentool.tui.widgets.data_table_mixins import SortableTableMixin
-from pentool.tui.widgets.content_panel import ContentPanel
-from pentool.tui.widgets.toolbar_button import ToolbarButton
-from pentool.tui.widgets.toolbar import Toolbar
-
-from pentool.tui.widgets.proxy_data_table import ProxyDataTable
-
 DataTable = ProxyDataTable
 
-class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuMixin, AppMixin, InterceptMixin, Widget):
+
+class ProxyScreen(
+    ContentClipboardMixin,
+    SortableTableMixin,
+    RequestContextMenuMixin,
+    AppMixin,
+    InterceptMixin,
+    Widget,
+):
     """Full Proxy module screen."""
 
     DEFAULT_CSS = _CSS
@@ -90,13 +83,13 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
     _COL_LABELS = ["ID", "Mth", "URL", "St", "Size"]
 
     # ── RequestContextMenuMixin config (text panel) ───────────────────────────
-    _cm_show_nmap          = True
+    _cm_show_nmap = True
     _cm_show_send_intruder = True
-    _cm_show_send_scanner  = True
-    _cm_show_send_decoder  = True
+    _cm_show_send_scanner = True
+    _cm_show_send_decoder = True
     _cm_show_send_comparer = True
-    _cm_show_export_md     = True
-    _cm_show_export_html   = True
+    _cm_show_export_md = True
+    _cm_show_export_html = True
 
     def __init__(self, proxy_service: ProxyService | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -149,10 +142,10 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         # keeping the whole session's history resident in memory forever.
         self._ROWS_CACHE_MAX = 1200
         # "Showing N of M" + scroll-up-to-load-more state (HTTP History only)
-        self._history_total: int = 0       # total rows matching current filters (from COUNT(*))
+        self._history_total: int = 0  # total rows matching current filters (from COUNT(*))
         self._history_oldest_offset: int = 0  # how many older rows are NOT yet loaded (above what's in _rows_cache)
         self._history_loading_more: bool = False
-        self._ws_history_total: int = 0   # total WS rows (from COUNT(*)), for the WS "Showing N of M" label
+        self._ws_history_total: int = 0  # total WS rows (from COUNT(*)), for the WS "Showing N of M" label
         # WS History pagination (scroll-up-to-load-more), mirroring HTTP's
         # _history_* state. Same rationale: bounded 300-row page so the renderer
         # isn't starved, older rows re-fetched from storage on demand.
@@ -176,12 +169,13 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
 
     def _build_toolbar(self) -> ComposeResult:
         yield Toolbar(
-            ToolbarButton("○ Proxy",     "btn-proxy",     classes="inactive"),
+            ToolbarButton("○ Proxy", "btn-proxy", classes="inactive"),
             Toolbar.sep(),
             ToolbarButton("○ Intercept", "btn-intercept", classes="inactive"),
             Toolbar.sep(),
             ToolbarButton(
-                "☐ Skip out-of-scope", "btn-enforce-scope",
+                "☐ Skip out-of-scope",
+                "btn-enforce-scope",
                 tooltip=(
                     "When ON: requests to hosts NOT listed in Scope are "
                     "tunneled straight through and never captured/shown in "
@@ -191,7 +185,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                 ),
             ),
             Toolbar.sep(),
-            ToolbarButton("M/R",    "btn-mr"),
+            ToolbarButton("M/R", "btn-mr"),
             Toolbar.sep(),
             ToolbarButton("Clear", "btn-clear"),
         )
@@ -200,7 +194,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         with TabPane("Intercept", id="tab-intercept"):
             with Horizontal(id="intercept-toolbar"):
                 yield ToolbarButton("⏩ Forward", "btn-forward", classes="disabled")
-                yield ToolbarButton("✖ Drop",    "btn-drop",    classes="disabled")
+                yield ToolbarButton("✖ Drop", "btn-drop", classes="disabled")
                 yield Static(" │ ", classes="toolbar-sep")
                 yield ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars")
                 yield Static(" │ ", classes="toolbar-sep")
@@ -214,7 +208,8 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                     id="intercept-panel",
                 )
             yield ResizeHandle(
-                "intercept-req-area", "intercept-bottom-area",
+                "intercept-req-area",
+                "intercept-bottom-area",
                 vertical=True,
                 id="resize-intercept",
             )
@@ -222,7 +217,8 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                 with Vertical(id="intercept-sent-panel"):
                     yield HttpView("Sent Request", id="intercept-sent-req")
                 yield ResizeHandle(
-                    "intercept-sent-panel", "intercept-resp-panel",
+                    "intercept-sent-panel",
+                    "intercept-resp-panel",
                     id="resize-intercept-sent-resp",
                 )
                 with Vertical(id="intercept-resp-panel"):
@@ -244,7 +240,8 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                         )
                         yield Static("", id="history-count", classes="history-count")
                     yield ResizeHandle(
-                        "table-area", "detail-area",
+                        "table-area",
+                        "detail-area",
                         vertical=True,
                         id="resize-table-detail",
                     )
@@ -252,7 +249,8 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                         with Vertical(id="req-panel"):
                             yield HttpView("Request", id="req-editor")
                         yield ResizeHandle(
-                            "req-panel", "resp-panel",
+                            "req-panel",
+                            "resp-panel",
                             id="resize-req-resp",
                         )
                         with Vertical(id="resp-panel"):
@@ -274,7 +272,8 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                         )
                         yield Static("", id="ws-history-count", classes="history-count")
                     yield ResizeHandle(
-                        "ws-table-area", "ws-detail-area",
+                        "ws-table-area",
+                        "ws-detail-area",
                         vertical=True,
                         id="resize-ws-table-detail",
                     )
@@ -282,13 +281,15 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                         with Vertical(id="ws-req-panel"):
                             yield HttpView("Request", id="ws-req-editor")
                         yield ResizeHandle(
-                            "ws-req-panel", "ws-resp-panel",
+                            "ws-req-panel",
+                            "ws-resp-panel",
                             id="resize-ws-req-resp",
                         )
                         with Vertical(id="ws-resp-panel"):
                             yield HttpView("Response", id="ws-resp-viewer")
                     yield ResizeHandle(
-                        "ws-detail-area", "ws-messages-area",
+                        "ws-detail-area",
+                        "ws-messages-area",
                         vertical=True,
                         id="resize-ws-detail-msg",
                     )
@@ -332,6 +333,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import WebSocketFrameEvent
+
             get_event_bus().subscribe(WebSocketFrameEvent, self._on_ws_frame_event)
         except Exception:
             pass
@@ -342,7 +344,6 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
 
     def _append_ws_frame(self, event) -> None:
         try:
-            from textual.widgets import RichLog
             log = self.query_one("#ws-msg-panel", ContentPanel).content_widget
             opcode = getattr(event, "opcode", 0x1)
             direction = getattr(event, "direction", "")
@@ -385,6 +386,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import WebSocketFrameEvent
+
             get_event_bus().unsubscribe(WebSocketFrameEvent, self._on_ws_frame_event)
         except Exception:
             pass
@@ -412,21 +414,28 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
         try:
-            logger.info("PROXY SCREEN: _reload_table called, filters=%s order_by=%s %s",
-                        "none" if not filters else f"{len(filters.predicates)} predicates",
-                        order_by or "id", order_dir)
+            logger.info(
+                "PROXY SCREEN: _reload_table called, filters=%s order_by=%s %s",
+                "none" if not filters else f"{len(filters.predicates)} predicates",
+                order_by or "id",
+                order_dir,
+            )
             newest_first_rows = await self._proxy_service.get_history(
-                limit=_HISTORY_PAGE_SIZE, filters=filters,
-                order_by=order_by, desc=(order_dir == "desc"),
+                limit=_HISTORY_PAGE_SIZE,
+                filters=filters,
+                order_by=order_by,
+                desc=(order_dir == "desc"),
             )
             total = await self._proxy_service.count_history(filters=filters)
             logger.info(
                 "PROXY SCREEN: _reload_table loaded %d/%d rows",
-                len(newest_first_rows), total,
+                len(newest_first_rows),
+                total,
             )
             logger.info(
                 "PROXY SCREEN: _reload_table loaded %d/%d rows",
-                len(newest_first_rows), total,
+                len(newest_first_rows),
+                total,
             )
             # Storage returns newest-first (DESC); display wants oldest-first
             # (top) / newest-last (bottom), like a log tail.
@@ -499,7 +508,9 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             if page_limit <= 0:
                 return
             older_newest_first = await self._proxy_service.get_history(
-                offset=page_offset, limit=page_limit, filters=self._current_filters,
+                offset=page_offset,
+                limit=page_limit,
+                filters=self._current_filters,
             )
             older_rows = list(reversed(older_newest_first))
             if not older_rows:
@@ -524,18 +535,20 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             self._update_history_count_label()
             logger.info(
                 "PROXY SCREEN: _load_more_history loaded %d older rows, oldest_offset now %d",
-                len(older_rows), self._history_oldest_offset,
+                len(older_rows),
+                self._history_oldest_offset,
             )
         except Exception as exc:
             logger.error("_load_more_history failed: %s", exc)
         finally:
             self._history_loading_more = False
 
-    def on__proxy_data_table_scrolled_to_top(self, event: ProxyDataTable.ScrolledToTop) -> None:
+    def on_proxy_data_table_scrolled_to_top(self, event: ProxyDataTable.ScrolledToTop) -> None:
+        """Load one older page when the history table hits the top (infinite scroll)."""
         if event.table_id == "ws-request-list":
-            self.run_worker(self._load_more_ws_history())
+            self.run_worker(self._load_more_ws_history(), group="proxy-history")
         else:
-            self.run_worker(self._load_more_history())
+            self.run_worker(self._load_more_history(), group="proxy-history")
 
     async def _load_more_ws_history(self) -> None:
         """Load one older page of WS history when the user scrolls to the top.
@@ -557,11 +570,15 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             if self._ws_current_filters and not self._ws_current_filters.is_empty:
                 ws_filter = self._ws_current_filters
             else:
-                ws_filter = FilterSpec(predicates=[
-                    FilterPredicate("is_websocket", FilterOp.EQ, True),
-                ])
+                ws_filter = FilterSpec(
+                    predicates=[
+                        FilterPredicate("is_websocket", FilterOp.EQ, True),
+                    ]
+                )
             older_newest_first = await self._proxy_service.get_history(
-                offset=page_offset, limit=page_limit, filters=ws_filter,
+                offset=page_offset,
+                limit=page_limit,
+                filters=ws_filter,
             )
             older_rows = list(reversed(older_newest_first))
             if not older_rows:
@@ -582,7 +599,8 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             self._update_ws_history_count_label()
             logger.info(
                 "PROXY SCREEN: _load_more_ws_history loaded %d older rows, oldest_offset now %d",
-                len(older_rows), self._ws_history_oldest_offset,
+                len(older_rows),
+                self._ws_history_oldest_offset,
             )
         except Exception as exc:
             logger.error("_load_more_ws_history failed: %s", exc)
@@ -608,18 +626,25 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             if filters and not filters.is_empty:
                 ws_filters = filters
             else:
-                ws_filters = FilterSpec(predicates=[
-                    FilterPredicate("is_websocket", FilterOp.EQ, True),
-                ])
-            logger.info("PROXY SCREEN: _reload_ws_table called, predicates=%d order_by=%s %s",
-                        len(ws_filters.predicates), order_by or "id", order_dir)
+                ws_filters = FilterSpec(
+                    predicates=[
+                        FilterPredicate("is_websocket", FilterOp.EQ, True),
+                    ]
+                )
+            logger.info(
+                "PROXY SCREEN: _reload_ws_table called, predicates=%d order_by=%s %s",
+                len(ws_filters.predicates),
+                order_by or "id",
+                order_dir,
+            )
             total = await self._proxy_service.count_history(filters=ws_filters)
             rows = await self._proxy_service.get_history(
-                limit=_HISTORY_PAGE_SIZE, filters=ws_filters,
-                order_by=order_by, desc=(order_dir == "desc"),
+                limit=_HISTORY_PAGE_SIZE,
+                filters=ws_filters,
+                order_by=order_by,
+                desc=(order_dir == "desc"),
             )
-            logger.info("PROXY SCREEN: _reload_ws_table loaded %d/%d WS rows",
-                        len(rows), total)
+            logger.info("PROXY SCREEN: _reload_ws_table loaded %d/%d WS rows", len(rows), total)
             self._ws_rows_cache = rows
             self._ws_history_total = total
             self._ws_history_oldest_offset = max(total - len(rows), 0)
@@ -650,13 +675,13 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
 
     def _setup_tooltips(self) -> None:
         tooltips = {
-            "btn-proxy":     "Toggle proxy server",
-            "btn-forward":   "Forward intercepted request",
-            "btn-drop":      "Drop intercepted request",
+            "btn-proxy": "Toggle proxy server",
+            "btn-forward": "Forward intercepted request",
+            "btn-drop": "Drop intercepted request",
             "btn-intercept": "Toggle intercept mode",
-            "btn-mr":        "Match and Replace rules",
-            "btn-ca-cert":   "Install CA certificate",
-            "btn-clear":     "Clear request history",
+            "btn-mr": "Match and Replace rules",
+            "btn-ca-cert": "Install CA certificate",
+            "btn-clear": "Clear request history",
         }
         for btn_id, tip in tooltips.items():
             try:
@@ -713,7 +738,13 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         if req.id in self._pending_req_ids:
             logger.debug("PROXY SCREEN: add_request_row: duplicate req.id=%s, skipping", req.id)
             return
-        logger.info("PROXY SCREEN: add_request_row: %s %s (id=%s, ws=%s)", req.method, req.url, req.id, req.is_websocket)
+        logger.info(
+            "PROXY SCREEN: add_request_row: %s %s (id=%s, ws=%s)",
+            req.method,
+            req.url,
+            req.id,
+            req.is_websocket,
+        )
         self._pending_req_ids[req.id] = -1
         self._pending_req_ids_ts[req.id] = time.time()
         self.run_worker(self._store_request(req))
@@ -721,25 +752,25 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
     def _cleanup_pending_req_ids(self) -> None:
         """Periodic cleanup of stale _pending_req_ids (requests never completed)."""
         cutoff = time.time() - 600  # 10 minutes
-        stale_ids = [
-            req_id for req_id, ts in self._pending_req_ids_ts.items()
-            if ts < cutoff
-        ]
+        stale_ids = [req_id for req_id, ts in self._pending_req_ids_ts.items() if ts < cutoff]
         for req_id in stale_ids:
             self._pending_req_ids.pop(req_id, None)
             self._pending_req_ids_ts.pop(req_id, None)
         if stale_ids:
-            logger.debug(
-                "PROXY SCREEN: _cleanup_pending_req_ids: removed %d stale entries",
-                len(stale_ids)
-            )
+            logger.debug("PROXY SCREEN: _cleanup_pending_req_ids: removed %d stale entries", len(stale_ids))
 
     def update_request_row(self, req: object) -> None:
         """Called from app when a request is fully complete (with response)."""
         if not isinstance(req, InterceptedRequest):
             return
         status = req.get_response().status if req.get_response() else None
-        logger.info("PROXY SCREEN: update_request_row: %s %s → %s (id=%s)", req.method, req.url, status, req.id)
+        logger.info(
+            "PROXY SCREEN: update_request_row: %s %s → %s (id=%s)",
+            req.method,
+            req.url,
+            status,
+            req.id,
+        )
         self.run_worker(self._update_and_reload(req))
 
     async def _store_request(self, req: InterceptedRequest) -> None:
@@ -797,8 +828,11 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             logger.warning(
                 "PROXY SCREEN: _update_and_reload slow: wait_row_id=%.1fms "
                 "update_resp=%.1fms total=%.1fms req=%s %s",
-                (_t1 - _t0) * 1000, (_t2 - _t1) * 1000, (_t2 - _t0) * 1000,
-                req.method, req.url[:60],
+                (_t1 - _t0) * 1000,
+                (_t2 - _t1) * 1000,
+                (_t2 - _t0) * 1000,
+                req.method,
+                req.url[:60],
             )
         elif self._current_filters:
             self._schedule_filter_reload()
@@ -861,9 +895,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             else:
                 self._append_burst_count = 0
             self._last_append_burst_ts = now
-            delay = (self._append_debounce_slow
-                     if self._append_burst_count > 10
-                     else self._append_debounce_fast)
+            delay = self._append_debounce_slow if self._append_burst_count > 10 else self._append_debounce_fast
             self._debounce_timer = self.set_timer(delay, self._flush_pending_rows)
 
     def _flush_pending_rows(self) -> None:
@@ -902,8 +934,10 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                     "PROXY SCREEN: _flush_pending_rows: %d rows, "
                     "query_one=%.1fms _row_to_record=%.1fms add_rows=%.1fms scroll_end=%.1fms total=%.1fms",
                     len(new_rows),
-                    (_t1 - _t0) * 1000, (_t2 - _t1) * 1000,
-                    (_t3 - _t2) * 1000, (_t4 - _t3) * 1000,
+                    (_t1 - _t0) * 1000,
+                    (_t2 - _t1) * 1000,
+                    (_t3 - _t2) * 1000,
+                    (_t4 - _t3) * 1000,
                     (_t4 - _t0) * 1000,
                 )
             # add_rows() appends at the BOTTOM and never shifts existing row
@@ -1031,9 +1065,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                         self._highlight_debounce_handle.stop()
                     except Exception:
                         pass
-                self._highlight_debounce_handle = self.set_timer(
-                    0.25, lambda: self._debounced_load(new_id)
-                )
+                self._highlight_debounce_handle = self.set_timer(0.25, lambda: self._debounced_load(new_id))
         except Exception as exc:
             logger.error("PROXY SCREEN: _select_row crashed: %s", exc, exc_info=True)
 
@@ -1057,9 +1089,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         else:
             self._select_row(event.cursor_row)
 
-    def on__proxy_data_table_comment_icon_clicked(
-        self, event: "ProxyDataTable.CommentIconClicked"
-    ) -> None:
+    def on_proxy_data_table_comment_icon_clicked(self, event: "ProxyDataTable.CommentIconClicked") -> None:
         """Single left-click landing in the Host column opens the comment
         dialog directly when that row has a comment (💬 marker) — this is
         the explicit "click the icon" behavior requested, distinct from
@@ -1146,6 +1176,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         )
         try:
             from pentool.utils.parser import build_http_request
+
             raw_req = build_http_request(parsed_req)
             self.query_one("#ws-req-editor", HttpView).load_raw_http(raw_req)
         except Exception:
@@ -1157,7 +1188,9 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         try:
             view = self.query_one("#ws-resp-viewer", HttpView)
             if status is not None:
-                headers_text = "\r\n".join(f"{k}: {v}" for k, v in (resp_headers if isinstance(resp_headers, dict) else {}).items())
+                headers_text = "\r\n".join(
+                    f"{k}: {v}" for k, v in (resp_headers if isinstance(resp_headers, dict) else {}).items()
+                )
                 raw = f"HTTP/1.1 {status}\r\n{headers_text}\r\n\r\n{resp_body}"
                 view.load_raw_http(raw)
             else:
@@ -1177,7 +1210,8 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         }
         if event.data_table.id == "ws-request-list":
             self._sort_table_sql(
-                event, _COL_NAMES,
+                event,
+                _COL_NAMES,
                 order_by_map=order_by_map,
                 reload_cb=lambda order_by, order_dir: self._reload_ws_table(
                     filters=self._ws_current_filters,
@@ -1187,7 +1221,8 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             )
         else:
             self._sort_table_sql(
-                event, _COL_NAMES,
+                event,
+                _COL_NAMES,
                 order_by_map=order_by_map,
                 reload_cb=lambda order_by, order_dir: self._reload_table(
                     filters=self._current_filters,
@@ -1223,6 +1258,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         """Switch to a Proxy tab and focus the table."""
         try:
             from textual.widgets import TabbedContent
+
             tabs = self.query_one(TabbedContent)
             tabs.active = tab_id
             # Focus the DataTable in the target tab
@@ -1243,6 +1279,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             if not self._rows_cache:
                 return
             import pentool.tui.screens.proxy.screen as _ps
+
             arrow = _ps._rows_to_arrow(self._rows_cache)
             table.set_data(arrow)
             table._ordered_columns = None
@@ -1258,6 +1295,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         try:
             from textual.widgets import DataTable
             from textual_fastdatatable import DataTable as FastDT
+
             pane = self.query_one(f"#{tab_id}")
             for cls in (FastDT, DataTable):
                 try:
@@ -1281,7 +1319,6 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         """Switch to WS History."""
         self._switch_proxy_tab("tab-ws-history")
 
-    
     def _show_context_menu_at_cursor(self) -> None:
         try:
             table = self.query_one("#request-list", DataTable)
@@ -1318,6 +1355,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         host = self._get_selected_host_sync()
         if host:
             from pentool.tui.messages import SendHostToScanner
+
             self.app.post_message(SendHostToScanner(host))
 
     def action_hide_detail(self) -> None:
@@ -1336,6 +1374,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         if entry is None:
             return
         from pentool.utils.parser import ParsedRequest, build_http_request
+
         parsed = ParsedRequest(
             method=entry.get("method", "GET"),
             url=entry.get("url", ""),
@@ -1353,8 +1392,10 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         """Automatically add the host from a URL to the Target sitemap."""
         try:
             from pentool.utils.parser import ParsedRequest
+
             parsed = ParsedRequest(method="GET", url=url, headers={}, body="")
             from pentool.tui.messages import SendToTarget
+
             self.app.post_message(SendToTarget(parsed))  # type: ignore[attr-defined]
         except Exception:
             pass
@@ -1370,6 +1411,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         if parsed is None or not parsed.url:
             return
         from pentool.tui.dialogs.lightpanda_viewer import LightpandaViewer
+
         self.app.push_screen(LightpandaViewer(parsed.url))
 
     def _copy_selected_url(self) -> None:
@@ -1382,6 +1424,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         if parsed is None:
             return
         from pentool.utils.copy_as import copy_to_clipboard
+
         ok = copy_to_clipboard(parsed.url)
         if ok:
             self.app.notify("URL copied", timeout=2)
@@ -1395,6 +1438,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         if entry is None:
             return None
         from pentool.utils.parser import ParsedRequest
+
         return ParsedRequest(
             method=entry.get("method", "GET"),
             url=entry.get("url", ""),
@@ -1418,6 +1462,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             copy_as_sqlmap,
             copy_to_clipboard,
         )
+
         if action == "copy_curl":
             text, label = copy_as_curl(parsed), "curl"
         elif action == "copy_fetch":
@@ -1436,10 +1481,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         if ok:
             self.app.notify(f"Copied as {label}", timeout=2)
         else:
-            self.app.notify(
-                f"Clipboard unavailable. {label}:\n{text[:80]}",
-                severity="warning", timeout=5
-            )
+            self.app.notify(f"Clipboard unavailable. {label}:\n{text[:80]}", severity="warning", timeout=5)
 
     def _open_in_browser(self) -> None:
         self.run_worker(self._do_open_in_browser())
@@ -1449,6 +1491,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         if parsed is None:
             return
         from pentool.utils.copy_as import open_in_browser
+
         url = parsed.url
         if url:
             open_in_browser(url)
@@ -1463,6 +1506,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             self.app.notify("No request selected", severity="warning", timeout=3)
             return
         from pentool.utils.copy_as import save_request_txt
+
         path = os.path.expanduser("~/request.txt")
         try:
             save_request_txt(parsed, path)
@@ -1502,6 +1546,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
 
         try:
             from pentool.utils.parser import build_http_request
+
             raw_req = build_http_request(parsed_req)
             self.query_one("#req-editor", HttpView).load_raw_http(raw_req)
         except Exception:
@@ -1518,7 +1563,9 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         try:
             view = self.query_one("#resp-viewer", HttpView)
             if status is not None:
-                headers_text = "\r\n".join(f"{k}: {v}" for k, v in (resp_headers if isinstance(resp_headers, dict) else {}).items())
+                headers_text = "\r\n".join(
+                    f"{k}: {v}" for k, v in (resp_headers if isinstance(resp_headers, dict) else {}).items()
+                )
                 raw = f"HTTP/1.1 {status}\r\n{headers_text}\r\n\r\n{resp_body}"
                 view.load_raw_http(raw)
             else:
@@ -1530,7 +1577,6 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             panel = self.query_one("#inspector-panel", InspectorPanel)
             parsed_resp_for_inspector = None
             if status is not None:
-                from pentool.utils.parser import ParsedResponse
                 parsed_resp_for_inspector = ParsedResponse(
                     status=status,
                     headers=resp_headers if isinstance(resp_headers, dict) else {},
@@ -1620,6 +1666,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import ProxyRequestCaptured, ProxyRequestCompleted
+
             get_event_bus().clear_history((ProxyRequestCaptured, ProxyRequestCompleted))
         except Exception as exc:
             logger.debug("PROXY SCREEN: _do_clear_table: EventBus history purge failed: %s", exc)
@@ -1666,9 +1713,11 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             )
         else:
             self.app.notify(
-                "Skip out-of-scope: ON — non-scope traffic will be tunneled, not captured"
-                if enabled else
-                "Skip out-of-scope: OFF — all traffic is captured regardless of Scope",
+                (
+                    "Skip out-of-scope: ON — non-scope traffic will be tunneled, not captured"
+                    if enabled
+                    else "Skip out-of-scope: OFF — all traffic is captured regardless of Scope"
+                ),
                 timeout=3,
             )
 
@@ -1676,6 +1725,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         """Save enforce-scope flag per-project (DB)."""
         try:
             from pentool.core.db_schema import set_project_setting
+
             db_path = self._get_db_path()
             if db_path:
                 await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
@@ -1686,6 +1736,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         """Save scope host list per-project."""
         try:
             from pentool.core.db_schema import set_project_setting
+
             db_path = self._get_db_path()
             if db_path:
                 await set_project_setting(db_path, "proxy.scope", json.dumps(hosts))
@@ -1700,6 +1751,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         hosts: list[str] | None = None
         try:
             from pentool.core.db_schema import get_project_setting
+
             db_path = self._get_db_path()
             raw = await get_project_setting(db_path, "proxy.scope", None) if db_path else None
             if raw is not None:
@@ -1710,6 +1762,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         if hosts is None and not is_new:
             try:
                 from pentool.core.config import get_config
+
                 hosts = list(get_config().scope)
             except Exception:
                 hosts = []
@@ -1718,8 +1771,9 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         logger.info("PROXY: load_scope_setting -> %d host(s)", len(hosts))
         proxy.set_scope(hosts)
         try:
-            from pentool.tui.widgets.toolbar_button import ToolbarButton
             from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
+            from pentool.tui.widgets.toolbar_button import ToolbarButton
+
             filter_bar = self.query_one("#filter-bar", ProxyFilterBar)
             st = filter_bar.query_one("#fb-scope", ToolbarButton)
             if hosts:
@@ -1737,6 +1791,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         enabled: bool = False
         try:
             from pentool.core.db_schema import get_project_setting
+
             db_path = self._get_db_path()
             raw = await get_project_setting(db_path, "proxy.enforce_scope", None) if db_path else None
             if raw is not None:
@@ -1778,6 +1833,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
     def action_open_ca_cert(self) -> None:
         from pentool.core.config import get_config
         from pentool.tui.dialogs.cert_dialog import CertInstallDialog
+
         ca_path = str(get_config().cert_dir) + "/ca.crt"
         self.app.push_screen(CertInstallDialog(ca_path))
 
@@ -1803,21 +1859,33 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         self._sync_intercept_button()
 
     # IDs of containers belonging to text panels (Request/Response)
-    _TEXT_PANEL_IDS = frozenset({
-        "req-panel", "resp-panel",
-        "ws-req-panel", "ws-resp-panel",
-        "req-editor", "resp-viewer",
-        "ws-req-editor", "ws-resp-viewer",
-        "intercept-editor", "intercept-sent-req", "intercept-resp-viewer",
-        "intercept-req-area", "intercept-sent-panel", "intercept-resp-panel",
-        # internal HttpView widgets
-        "http-headers", "http-body",
-    })
+    _TEXT_PANEL_IDS = frozenset(
+        {
+            "req-panel",
+            "resp-panel",
+            "ws-req-panel",
+            "ws-resp-panel",
+            "req-editor",
+            "resp-viewer",
+            "ws-req-editor",
+            "ws-resp-viewer",
+            "intercept-editor",
+            "intercept-sent-req",
+            "intercept-resp-viewer",
+            "intercept-req-area",
+            "intercept-sent-panel",
+            "intercept-resp-panel",
+            # internal HttpView widgets
+            "http-headers",
+            "http-body",
+        }
+    )
 
     def _is_in_text_panel(self, widget) -> bool:
         """Check whether the widget or one of its ancestors is a text panel."""
         try:
             from pentool.tui.widgets.request_editor import HttpView
+
             node = widget
             while node is not None and node is not self:
                 nid = getattr(node, "id", None) or ""
@@ -1831,11 +1899,8 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             pass
         return False
 
-    def on__proxy_data_table_context_menu_request(self, event: ProxyDataTable.ContextMenuRequest) -> None:
-        """Handle a context menu request from the DataTable (Ctrl+click or right-click)."""
-        from pentool.core.logging import get_logger as _log
-        _log().info("PDT: _proxy_data_table_context_menu_request received at %d,%d",
-                    event.screen_x, event.screen_y)
+    def on_proxy_data_table_context_menu_request(self, event: ProxyDataTable.ContextMenuRequest) -> None:
+        """Context menu for the HTTP History row under the pointer (Ctrl+click / right-click)."""
         try:
             table = self.query_one("#request-list", DataTable)
             cursor_row = table.cursor_row
@@ -1863,7 +1928,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             return
 
         # Click in DataTable (#request-list) — handled via
-        # on__proxy_data_table_context_menu_request, so here
+        # on_proxy_data_table_context_menu_request, so here
         # we only open the menu if the event did NOT come from the table
         try:
             table = self.query_one("#request-list", DataTable)
@@ -1896,9 +1961,9 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         scope_is_empty = not bool(proxy.scope) if proxy else True
 
         items = [
-            ("send_repeater",  "Send to Repeater"),
-            ("send_intruder",  "Send to Intruder"),
-            ("send_scanner",   "Send to Scanner"),
+            ("send_repeater", "Send to Repeater"),
+            ("send_intruder", "Send to Intruder"),
+            ("send_scanner", "Send to Scanner"),
             ("-", ""),
             ("mark_req", "Mark color"),
             ("edit_comment", "View/Edit Comment"),
@@ -1923,6 +1988,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         """Raw HTTP from the Request panel (HttpView#req-editor → TextArea#http-body)."""
         try:
             from textual.widgets import TextArea
+
             view = self.query_one("#req-editor", HttpView)
             area = view.query_one("#http-body", TextArea)
             return area.text or ""
@@ -1960,6 +2026,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             host = self._get_selected_host_sync()
             if host:
                 from pentool.tui.messages import SendHostToScanner
+
                 self.app.post_message(SendHostToScanner(host))
         elif action == "mark_req":
             self._mark_dialog()
@@ -2021,6 +2088,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         await self._save_scope_setting(list(proxy.scope))
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             cfg.scope = list(proxy.scope)
             cfg.save()
@@ -2028,8 +2096,9 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
             logger.warning("_do_scope_action: failed to save scope to config: %s", e)
         # Update ★ Scope button state in FilterBar
         try:
-            from pentool.tui.widgets.toolbar_button import ToolbarButton
             from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
+            from pentool.tui.widgets.toolbar_button import ToolbarButton
+
             st = self.query_one("#filter-bar", ProxyFilterBar).query_one("#fb-scope", ToolbarButton)
             if scope:
                 st.remove_class("disabled")
@@ -2044,13 +2113,13 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
     # ── Colors available for marking requests ─────────────────────────────────
 
     _COLOR_OPTIONS: list[tuple[str, str]] = [
-        ("🔴 Red",    "red"),
+        ("🔴 Red", "red"),
         ("🟠 Orange", "orange"),
         ("🟡 Yellow", "yellow"),
-        ("🟢 Green",  "green"),
-        ("🔵 Blue",   "blue"),
+        ("🟢 Green", "green"),
+        ("🔵 Blue", "blue"),
         ("🟣 Purple", "purple"),
-        ("⬜ Clear",  ""),
+        ("⬜ Clear", ""),
     ]
 
     def _mark_dialog(self) -> None:
@@ -2081,7 +2150,7 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
                 # Color IS the tag: replace any previous color-tag with the
                 # new one, keeping the color name as the sole tag value.
                 await self._proxy_service.update_tags(request_id, color)
-                label = next((l for l, v in self._COLOR_OPTIONS if v == color), color)
+                label = next((name for name, value in self._COLOR_OPTIONS if value == color), color)
                 msg = f"Marked: {label}" if color else "Mark cleared"
                 self.notify(msg, timeout=2)
                 # Update cache
@@ -2103,12 +2172,9 @@ class ProxyScreen(ContentClipboardMixin, SortableTableMixin, RequestContextMenuM
         - WS History tab   → self._selected_ws_req_id
         """
         from textual.widgets import TabbedContent
+
         tabs = self.query_one(TabbedContent)
-        req_id = (
-            self._selected_ws_req_id
-            if tabs.active == "tab-ws-history"
-            else self._selected_req_id
-        )
+        req_id = self._selected_ws_req_id if tabs.active == "tab-ws-history" else self._selected_req_id
         if not req_id:
             return
         from pentool.tui.dialogs.comment_dialog import CommentDialog

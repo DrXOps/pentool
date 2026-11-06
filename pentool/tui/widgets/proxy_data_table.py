@@ -19,6 +19,7 @@ class ProxyDataTable(ArrowBackendDataTable):
 
     class ContextMenuRequest(Message):
         """Request to open the context menu from a DataTable."""
+
         def __init__(self, screen_x: int, screen_y: int) -> None:
             super().__init__()
             self.screen_x = screen_x
@@ -30,6 +31,7 @@ class ProxyDataTable(ArrowBackendDataTable):
         Used by ProxyScreen (request-list HTTP, ws-request-list WS) as the
         trigger to load an older page of history from SQLite.
         """
+
         def __init__(self, table_id: str) -> None:
             super().__init__()
             self.table_id = table_id
@@ -37,6 +39,7 @@ class ProxyDataTable(ArrowBackendDataTable):
     class CommentIconClicked(Message):
         """Posted on a single left-click landing in the Host column — used
         to open the comment dialog directly when the row has a 💬 marker."""
+
         def __init__(self, row_index: int, column_index: int) -> None:
             super().__init__()
             self.row_index = row_index
@@ -57,9 +60,11 @@ class ProxyDataTable(ArrowBackendDataTable):
             label = str(col.label).strip()
             if label == "Size":
                 from textual_fastdatatable.data_table import Coordinate
+
                 raw = self.get_cell_at(Coordinate(row=row_index, column=column_index))
                 if raw is not None:
                     from pentool.tui.widgets.proxy_helpers import format_size
+
                     return format_size(int(raw))
                 return "-"
         except Exception:
@@ -69,32 +74,19 @@ class ProxyDataTable(ArrowBackendDataTable):
     # ── on_event: контекстное меню + comment icon ────────────────────────
 
     async def on_event(self, event: _events.Event) -> None:
-        from pentool.core.logging import get_logger as _log
         if isinstance(event, _events.MouseEvent) and not self._mouse_ready():
             event.stop()
             return
-        if isinstance(event, _events.MouseDown) and (
-            event.button == 3 or (event.button == 1 and event.ctrl)
-        ):
-            _log().info("PDT: right-click on DataTable, button=%d", event.button)
+        if isinstance(event, _events.MouseDown) and (event.button == 3 or (event.button == 1 and event.ctrl)):
             await super().on_event(event)
-            # Walk up the DOM to find ProxyScreen._open_context_menu
-            try:
-                node = self.parent
-                while node is not None:
-                    if hasattr(node, '_open_context_menu'):
-                        node._open_context_menu(event.screen_x, event.screen_y)
-                        break
-                    node = getattr(node, 'parent', None) if hasattr(node, 'parent') else None
-            except Exception as exc:
-                _log().error("PDT: context menu failed: %s", exc)
+            # The screen owns the menu; ask it via a message instead of
+            # reaching up the DOM for a private method.
+            self.post_message(self.ContextMenuRequest(event.screen_x, event.screen_y))
         elif isinstance(event, _events.MouseUp) and event.button == 1 and not event.ctrl:
             meta = getattr(event.style, "meta", None) if event.style else None
             await super().on_event(event)
             if meta and "row" in meta and "column" in meta:
-                self.post_message(
-                    self.CommentIconClicked(meta["row"], meta["column"])
-                )
+                self.post_message(self.CommentIconClicked(meta["row"], meta["column"]))
         else:
             await super().on_event(event)
 
@@ -102,7 +94,5 @@ class ProxyDataTable(ArrowBackendDataTable):
 
     def watch_scroll_y(self, old_value: float, new_value: float) -> None:
         super().watch_scroll_y(old_value, new_value)
-        if new_value <= 0 and old_value > 0 and self.id in (
-            "request-list", "ws-request-list"
-        ):
+        if new_value <= 0 and old_value > 0 and self.id in ("request-list", "ws-request-list"):
             self.post_message(self.ScrolledToTop(self.id or ""))

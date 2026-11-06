@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from textual import events
 from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
@@ -33,6 +34,7 @@ class SearchBar(Widget):
 
     class Search(Message):
         """User entered a search query."""
+
         def __init__(self, query: str, regex: bool = False, direction: int = 1) -> None:
             super().__init__()
             self.query = query
@@ -41,6 +43,7 @@ class SearchBar(Widget):
 
     class TargetToggle(Message):
         """User toggled search target (Req/Resp)."""
+
         def __init__(self) -> None:
             super().__init__()
 
@@ -94,7 +97,8 @@ class SearchBar(Widget):
         elif event.button.id == "btn-prev":
             self._fire_search(-1)
 
-    def on_static_click(self, event) -> None:
+    def on_click(self, event: events.Click) -> None:
+        """Toggle Regex / target labels — Static has no Click message of its own."""
         try:
             widget = event.widget
             wid = getattr(widget, "id", None)

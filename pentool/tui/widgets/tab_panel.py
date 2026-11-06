@@ -12,21 +12,18 @@ NB: Внутренние ID виджетов НЕ ИМЕЮТ ЗНАЧЕНИЯ д
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Awaitable, Callable, Generic, TypeVar
+
+from textual.app import ComposeResult
+from textual.events import Click
+from textual.message import Message
+from textual.widget import Widget
+from textual.widgets import Input, Tab, TabbedContent, TabPane
 
 from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-from textual import on
-from textual.app import ComposeResult
-from textual.containers import Horizontal
-from textual.events import Click
-from textual.message import Message
-from textual.reactive import reactive
-from textual.widget import Widget
-from textual.widgets import Input, Tab, TabbedContent, TabPane
 
 # ── Hooks (опциональные) ──────────────────────────────────────────────
 # Модуль может передать callable, который будет вызван при определённых
@@ -37,6 +34,7 @@ from textual.widgets import Input, Tab, TabbedContent, TabPane
 @dataclass
 class _TabMeta:
     """Внутреннее состояние таба в контейнере."""
+
     tab_id: str
     pane: TabPane
     name: str
@@ -66,48 +64,60 @@ class TabbedContentPanel(Widget, Generic[TState]):
 
     class TabCreated(Message):
         """Постится ПОСЛЕ создания таба."""
+
         ALLOW_SELECTOR_MATCH = True
+
         def __init__(self, owner: "TabbedContentPanel", tab_id: str, tab_state: object) -> None:
             self.tab_id = tab_id
             self.tab_state = tab_state
             super().__init__()
             self._owner = owner
+
         @property
         def control(self) -> "TabbedContentPanel":
             return self._owner
 
     class TabActivated(Message):
         """Постится ПОСЛЕ переключения на новый таб."""
+
         ALLOW_SELECTOR_MATCH = True
+
         def __init__(self, owner: "TabbedContentPanel", tab_id: str, tab_state: object) -> None:
             self.tab_id = tab_id
             self.tab_state = tab_state
             super().__init__()
             self._owner = owner
+
         @property
         def control(self) -> "TabbedContentPanel":
             return self._owner
 
     class TabDeactivated(Message):
         """Постится ДО переключения на другой таб (старый ещё активен)."""
+
         ALLOW_SELECTOR_MATCH = True
+
         def __init__(self, owner: "TabbedContentPanel", tab_id: str, tab_state: object) -> None:
             self.tab_id = tab_id
             self.tab_state = tab_state
             super().__init__()
             self._owner = owner
+
         @property
         def control(self) -> "TabbedContentPanel":
             return self._owner
 
     class TabClosed(Message):
         """Постится ПОСЛЕ закрытия таба."""
+
         ALLOW_SELECTOR_MATCH = True
+
         def __init__(self, owner: "TabbedContentPanel", tab_id: str, tab_state: object) -> None:
             self.tab_id = tab_id
             self.tab_state = tab_state
             super().__init__()
             self._owner = owner
+
         @property
         def control(self) -> "TabbedContentPanel":
             return self._owner
@@ -137,8 +147,8 @@ class TabbedContentPanel(Widget, Generic[TState]):
         self._min_tabs = min_tabs
 
         # ── Состояние ──────────────────────────────────────────────────
-        self._states: dict[str, TState] = {}   # tab_id → state
-        self._meta: dict[str, _TabMeta] = {}   # tab_id → meta
+        self._states: dict[str, TState] = {}  # tab_id → state
+        self._meta: dict[str, _TabMeta] = {}  # tab_id → meta
         self._counter: int = 0
         self._active_tab_id: str | None = None
         self._generation: int = 0
@@ -207,6 +217,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
         if state is None:
             name = name or f"Tab {self._counter}"
             import uuid
+
             state = self._make_default_state(tab_id, name)
             state.tab_id = tab_id
             if hasattr(state, "tab_uid"):
@@ -258,7 +269,6 @@ class TabbedContentPanel(Widget, Generic[TState]):
         if tab_id not in self._states:
             return
         # Если pane уже построен с детьми через build_tab_ui — ничего не делаем.
-        pane = self._states.get(tab_id)
         existing = self._meta[tab_id].pane if tab_id in self._meta else None
         if existing is not None and list(existing.children):
             return
@@ -269,11 +279,13 @@ class TabbedContentPanel(Widget, Generic[TState]):
         """Создать пустой TabState (если модуль не передал)."""
         if hasattr(self, "_default_state_factory") and self._default_state_factory is not None:
             return self._default_state_factory(tab_id, name)
+
         @dataclass
         class _DummyState:
             tab_id: str = ""
             name: str = ""
             template_text: str = ""
+
         return _DummyState(tab_id=tab_id, name=name)  # type: ignore[return-value]
 
     def set_default_state_factory(self, factory):
@@ -432,7 +444,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
                 state.name = new_name
             self._update_tab_label(tab_id, new_name)
 
-    def on_input_blur(self, event: Input.Blurred) -> None:
+    def on_input_blurred(self, event: Input.Blurred) -> None:
         try:
             inp = self.query_one(f"#{self._rename_input_id}", Input)
             if inp.display:

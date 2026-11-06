@@ -37,7 +37,9 @@ class BaseModuleScreen(Widget):
         widget = event.widget
         _log.debug(
             "BaseModuleScreen.on_click: chain=%d widget=%r type=%s",
-            event.chain, widget, type(widget).__name__,
+            event.chain,
+            widget,
+            type(widget).__name__,
         )
 
         if not isinstance(widget, Tab):
@@ -49,23 +51,23 @@ class BaseModuleScreen(Widget):
 
         _log.debug(
             "BaseModuleScreen: pane_id=%r prefix=%r",
-            pane_id, self._rename_tab_prefix,
+            pane_id,
+            self._rename_tab_prefix,
         )
 
         # Filter by prefix
         if self._rename_tab_prefix and not pane_id.startswith(self._rename_tab_prefix):
             _log.debug(
                 "BaseModuleScreen: pane_id %r does not match prefix %r",
-                pane_id, self._rename_tab_prefix,
+                pane_id,
+                self._rename_tab_prefix,
             )
             return
 
         # Filter: Tab must be inside our TabbedContent
         if self._rename_tabs_widget_id:
             try:
-                tc = self.query_one(
-                    f"#{self._rename_tabs_widget_id}", TabbedContent
-                )
+                tc = self.query_one(f"#{self._rename_tabs_widget_id}", TabbedContent)
                 ancestor = widget.parent
                 found = False
                 while ancestor is not None:
@@ -98,7 +100,7 @@ class BaseModuleScreen(Widget):
         if tab_id and new_name:
             self._rename_tab(tab_id, new_name)
 
-    def on_input_blur(self, event: Input.Blurred) -> None:
+    def on_input_blurred(self, event: Input.Blurred) -> None:
         try:
             inp = self.query_one(f"#{self._rename_input_id}", Input)
             if inp.display:
