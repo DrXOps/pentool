@@ -122,9 +122,9 @@ graph LR
 
 ### 1.2 Виджеты (41 файл)
 
-Базовые/переиспользуемые: `Toolbar`, `ToolbarButton`, `StartStopWidget`, `StartStopMixin`, `ContentPanel`, `ArrowBackendDataTable`, `ProxyDataTable`, `IntruderResultsTable`, `SortableTableMixin`, `FilterBarWidget`, `ProxyFilterBar`, `WsFilterBar`, `IntruderFilterBar`, `Cycler`, `ToggleButton`, `OptionCycler`, `NiceCheckbox`, `ResizeHandle`, `ContextMenu`, `SearchBar`, `TabbedContentPanel`, `StatusBar`, `ActivityIndicator`, `ModuleTabs`, `GlobalHintBar`, `ModuleHintBar`, `DiffPanel`, `InspectorPanel`, `PayloadDropZone`, `CustomNotify`, `InterceptMixin`.
+Базовые/переиспользуемые: `Toolbar`, `ToolbarButton`, `StartStopWidget`, `ContentPanel`, `ArrowBackendDataTable`, `ProxyDataTable`, `IntruderResultsTable`, `SortableTableMixin`, `FilterBarWidget`, `ProxyFilterBar`, `WsFilterBar`, `IntruderFilterBar`, `Cycler`, `ToggleButton`, `OptionCycler`, `NiceCheckbox`, `ResizeHandle`, `ContextMenu`, `SearchBar`, `TabbedContentPanel`, `StatusBar`, `ActivityIndicator`, `ModuleTabs`, `GlobalHintBar`, `ModuleHintBar`, `DiffPanel`, `InspectorPanel`, `PayloadDropZone`, `CustomNotify`, `InterceptMixin`.
 
-Мёртвые/неиспользуемые: `filter_connector.py` (`FilterableScreenMixin`, `SqlFilterAdapter` — ноль импортов), `menu.tcss`, `menu_bar.tcss`, `filter_bar.tcss` (не загружаются ни одним `.py`).
+Мёртвые/неиспользуемые: `menu.tcss`, `menu_bar.tcss`, `filter_bar.tcss` (не загружаются ни одним `.py`). Удалены в D-итерации: `filter_connector.py` (F-039) и `start_stop_mixin.py` (F-019).
 
 ### 1.3 Диалоги (17 файлов + 14 `.tcss`)
 
@@ -150,20 +150,55 @@ graph LR
 
 Приоритеты: **P0** — неверное поведение или краш в проде; **P1** — архитектурный риск, утечки, недостижимая функциональность; **P2** — долг, читаемость, дубли.
 
+Всего 46 находок: F-001…F-040 из первичного проходa и F-041…F-046, добавленные и исправленные в D-итерации (проверка исполнением показала, что класс «хендлер написан, но не диспатчится» встречается чаще, чем казалось).
+
 ### Топ-10 критичных
 
 | # | Находка | Почему в топе |
 |---|---|---|
 | 1 | **F-001** Copy/Paste в 6 из 7 экранов не работают | функциональность, заявленная в UI, молча мертва |
-| 2 | **F-002** `Kbd`-подписки EventBus в Dashboard/Intruder/Target не отписываются | утечка + повторный вызов при пересоздании экрана |
+| 2 | **F-041** три хендлера `ProxyDataTable` с двойным подчёркиванием | бесконечная история и клик по 💬 не работают вовсе |
 | 3 | **F-003** TECH-DETECT падает с `NameError`, проглоченным `except Exception` | мёртвая ветка обогащения Target-дерева |
 | 4 | **F-004** `_load_stats_bg` всегда выходит по `if not db_path` | дашбордная статистика не загружается никогда |
 | 5 | **F-005** `_get_active_text` → `NameError: TextArea` в Repeater | поиск по ответу всегда пуст (исключение съедено) |
-| 6 | **F-006** дубли `id="toolbar"` на 6+ экранах + `id="dialog"` на 13 диалогах | `query_one` возвращает «чужой» виджет при совпадении |
-| 7 | **F-007** `pentool.constants` на 87 % не используется | единственный «источник истины» по id — фикция |
-| 8 | **F-008** 8 селекторов CSS не совпадают ни с одним id/классом в коде | стили молча не применяются |
-| 9 | **F-009** 615 `except Exception`, 286 из них → `pass` | именно они скрывают F-001…F-005 |
-| 10 | **F-010** `IntruderAPI` используется в аннотациях без импорта (`F821 ×4`) | `from __future__ import annotations` маскирует, но `get_type_hints()` упадёт |
+| 6 | **F-045** `workers.cancel(...)` не существует — отмена автосейва не работала | сохранение могло писать в уже закрытую БД |
+| 7 | **F-002** подписки EventBus в Dashboard/Intruder/Target не отписываются | утечка + повторный вызов при пересоздании экрана |
+| 8 | **F-042/F-043** `on_input_blur`, `on_static_click` — имена без сообщений | переименование вкладки и переключатели поиска не работают |
+| 9 | **F-006** дубли `id="toolbar"` на 6+ экранах + `id="dialog"` на 13 диалогах | `query_one` возвращает «чужой» виджет при совпадении |
+| 10 | **F-009** 615 `except Exception`, 286 из них → `pass` | именно они скрывали F-001…F-005, F-041…F-045 |
+
+### Статус находок на ветке `audit/tui-refactor-2026-11-06`
+
+| Находка | Статус | Что сделано |
+|---|---|---|
+| F-001 | ✅ исправлено | `ContentClipboardMixin` переведён на соглашение об именах (ADR-3); 3 копии `_on_cp_paste` удалены; тесты проверяют эффект в буфере, а не «не упало» |
+| F-002 | ✅ исправлено | новый `mixins/ai_sync.py::AiModeSyncMixin` — хендлер хранится в `_ai_handler`, снимается в `on_unmount` |
+| F-003 | ✅ исправлено | `services/tech_detector.fingerprint_from_html()` + `cache_tech_profile()`; TUI больше не тянет `TechFingerprinter` из `modules` |
+| F-004 | ✅ исправлено | `DashboardScreen._get_db_path()` читает публичный `app.db_path` |
+| F-005 | ✅ исправлено | `_get_active_text`/`_jump_to_match` работают через `ContentPanel.content_widget`; `TextArea` импортирован |
+| F-006 | ✅ исправлено (частично) | `Toolbar(id=None)` по умолчанию — дублей `#toolbar` больше нет; дубли `#dialog` в диалогах остаются (F-024) |
+| F-007 | ⏳ отложено | требует решения «удалить или подключить» — в `DECISIONS.md` ADR-9 |
+| F-008 | ⏳ отложено | нужен `tools/check_tui_css.py`, чтобы фикс не откатился |
+| F-009 | ⏳ отложено | введение `BLE001` блокирующим правилом — отдельная итерация (615 правок) |
+| F-010 | ✅ исправлено | `F821` в `pentool/tui` — 0 (`TYPE_CHECKING`-импорты) |
+| F-011 | ✅ исправлено | удалён мёртвый `query_one(ToolbarButton)` и несуществующий `from textual.widgets import Toolbar` — лог-спам `NoMatches` на каждом `AiModeChanged` прекратился |
+| F-036 | ✅ исправлено | то же место: импорт, падавший `ImportError` под `except Exception: pass`, удалён; видимость AI-кнопок теперь обновляется |
+| F-013 | ✅ исправлено (частично) | подписки `AiModeChanged` снимаются через `AiModeSyncMixin.on_unmount`; `Config.add_observer` — в `_on_exit_app` (F-046, ADR-12) |
+| F-017 | ✅ исправлено | четыре копии посимвольной вставки удалены; остался один `_paste_text_to_panel` |
+| F-019 | ✅ исправлено | `start_stop_mixin.py` + `TestStartStopMixin` удалены |
+| F-039 | ✅ исправлено | `filter_connector.py` удалён |
+| F-034 | ✅ исправлено | `TestComparerCopyPaste` переписан: подмена буфера + проверка `TextArea`/`copy_to_clipboard` |
+| F-018 | ✅ исправлено | `Toolbar(id=None)` по умолчанию (`toolbar.py:46`); `StartStopWidget` дубля не создаёт |
+| F-041 | ✅ исправлено | три хендлера переименованы; `ContextMenuRequest` теперь действительно постится |
+| F-042 | ✅ исправлено | `on_input_blur` → `on_input_blurred` в `base.py` и `tab_panel.py` |
+| F-043 | ✅ исправлено | `on_static_click` → `on_click`; переключатели поиска реагируют на мышь |
+| F-044 | ✅ исправлено | `RowActivated` заменён на детект `Click.chain == 2` |
+| F-045 | ✅ исправлено | `AutoSaveMixin._start_save_worker` + `cancel_group`; отмена автосейва реально работает |
+| F-046 | ✅ исправлено | `remove_observer` в `_on_exit_app`; мёртвый `on_screen_unmounted` удалён |
+| F-037 | ❌ опровергнуто | `Binding("escape", "dismiss(None)")` работает: проверено на `CommentDialog` и `SaveProjectDialog` — Esc закрывает, `None` возвращается |
+| прочие | ⏳ | перечислены в SUMMARY.md с причинами отсрочки |
+
+Новые тесты-гварды против этого класса ошибок: `tests/unit/tui/test_handler_name_dispatch.py` (AST-обход всех `on_*` в `pentool/tui`).
 
 ---
 
@@ -600,6 +635,8 @@ def _paste_text_to_panel(self, panel: ContentPanel, text: str) -> None:
 
 **Связи:** F-020, S-01 (wiki).
 
+**[сделано]** `start_stop_mixin.py` и `TestStartStopMixin` удалены; `StartStopWidget` — единственный механизм Start/Pause/Resume/Stop.
+
 ---
 
 ### F-020 [P2] Два класса «клик-переключатель» — `Cycler` и `OptionCycler`
@@ -839,14 +876,21 @@ for b in self.query(".pro-locked"):
 
 ---
 
-### F-037 [P2] `Esc` на `ConfirmDialog`/`cert_dialog` не работает — `dismiss(None)` вызывается `action_cancel`, но `Binding("escape", "dismiss(None)")` не работает в Textual 8
+### F-037 [P2] ~~`Esc` на `ConfirmDialog`/`cert_dialog` не работает~~ — опровергнуто исполнением
 
-**Где:** `dialogs/confirm.py:53` (`BaseDialog` наследует `Binding("escape","cancel")` — ок), `project_dialog.py:21,55`, `comment_dialog.py:30` — `BINDINGS = [Binding("escape", "dismiss(None)", "Cancel")]`.
+**Где:** `dialogs/comment_dialog.py:30`, `dialogs/project_dialog.py:21,55`, `dialogs/lightpanda_viewer.py:58` — `BINDINGS = [Binding("escape", "dismiss(None)", "Cancel")]`.
 
-**Что:** `Binding("escape", "dismiss(None)")` — строка action с аргументом; Textual вызывает `action_dismiss(None)`, которого нет. В Textual 8 сигнатура `action_dispatch` → строка парсится как `dismiss(None)`; метод `action_dismiss` не определён, поэтому нажатие Esc ничего не делает (или `AttributeError` в лог). Это **[проверено]** в `test_navigation` (выход по `escape` не проверяется, поэтому никто не заметил). Статус: требует уточнения — не воспроизведено отдельным тестом; но это общеизвестная ловушка Textual.
+**Первоначальное утверждение:** строка `"dismiss(None)"` парсится Textual как вызов `action_dismiss(None)`, которого нет, поэтому Esc ничего не делает.
 
-**Почему:** три диалога не закрываются по Esc.
-**Как:** заменить на `Binding("escape", "cancel", "Cancel")` + `action_cancel` (как `BaseDialog`). Или на `dismiss(None)`-фабрику. Лучше — все на `BaseDialog`.
+**Проверка (`/tmp/esc_real.py`, Textual 8.2.8).** Оба диалога с этой формой биндинга закрываются по Esc и возвращают `None`:
+```
+CommentDialog: esc -> Screen
+SaveProjectDialog: esc -> Screen
+results: [None, None]
+```
+Textual разбирает `"dismiss(None)"` как action-строку с аргументом (`app.py` → `action` + `parameters`), вызывает `dismiss(None)` напрямую, `action_dismiss` не требуется. Отдельный мини-экран с тем же биндингом ведёт себя так же (`/tmp/esc_test.py` → `D` → `Screen`).
+
+**Вывод:** находка ложная, правок не требуется. Остаётся как запись проверки — и как напоминание, что утверждения о Textual нужно подтверждать `run_test()`, а не памятью. Более широкий пункт F-024 (11 диалогов мимо `BaseDialog`) силу сохраняет — это про дубли геометрии, а не про Esc.
 
 **Связи:** F-024.
 
@@ -886,6 +930,8 @@ for b in self.query(".pro-locked"):
 
 **Связи:** F-005 (доказывает, что «мёртвый абстрактный слой» — уже повторяющаяся проблема).
 
+**[сделано]** файл удалён (0 импортов подтверждено grep по `pentool/`, `pro/`, `tests/`).
+
 ---
 
 ### F-040 [P3] `extensions` — единственный экран без тестов
@@ -894,6 +940,143 @@ for b in self.query(".pro-locked"):
 **Как:** smoke-тест на compose + список плагинов через `run_test()` (по образцу `test_decoder_screen`).
 
 **Связи:** приложение B.
+
+---
+
+### F-041 [P0] Три хендлера `ProxyDataTable` написаны с лишним подчёркиванием — infinite scroll и клик по 💬 мертвы
+
+**Где:** `pentool/tui/screens/proxy/screen.py:534`, `:1060`, `:1834` (нумерация до фикса) —
+```python
+def on__proxy_data_table_scrolled_to_top(...)    # двойное подчёркивание
+def on__proxy_data_table_comment_icon_clicked(...)
+def on__proxy_data_table_context_menu_request(...)
+```
+
+**Что:** Textual выводит имя хендлера из `Message.handler_name` = `on_` + snake_case от `__qualname__` класса сообщения. Для `ProxyDataTable.ScrolledToTop` это `on_proxy_data_table_scrolled_to_top`, с **одним** подчёркиванием. Двойное встречается только у классов с ведущим `_` в имени (`_BaseHttpWidget` → `on__base_http_widget_...`), и именно поэтому `on__base_http_widget_context_menu_request` (`:1848`, `:2533` в intruder) работает, а эти три — нет.
+
+**[проверено]** в Textual 8.2.8:
+```
+ProxyDataTable.ScrolledToTop            -> on_proxy_data_table_scrolled_to_top
+ProxyDataTable.CommentIconClicked       -> on_proxy_data_table_comment_icon_clicked
+ProxyDataTable.ContextMenuRequest       -> on_proxy_data_table_context_menu_request
+_get_dispatch_methods("on_proxy_data_table_scrolled_to_top", msg) -> []
+_get_dispatch_methods("on__proxy_data_table_scrolled_to_top", msg) -> ['on__proxy_data_table_scrolled_to_top']
+```
+
+**Почему:** (а) подгрузка старой страницы истории при прокрутке вверх не срабатывает **ни для HTTP, ни для WS** — заявленная «бесконечная» история ограничена первой страницей; (б) клик по 💬 в колонке Host не открывает комментарий; (в) `ContextMenuRequest` вдобавок никем не постился — `ProxyDataTable.on_event` (`widgets/proxy_data_table.py:82-88`) вызывал `node._open_context_menu(...)` напрямую, обходя собственное сообщение, так что хендлер был мёртв дважды.
+
+**Как:**
+1. переименовать три хендлера в производные имена;
+2. в `ProxyDataTable.on_event` постить `self.ContextMenuRequest(event.screen_x, event.screen_y)` вместо обхода DOM в поисках приватного метода экрана — это убирает и второе нарушение (виджет не должен искать `_open_context_menu` у предков);
+3. добавить регрессионный тест, обходящий AST всего `pentool/tui`: любой `on_*` без `@on`, для которого нет сообщения, — ошибка (`tests/unit/tui/test_handler_name_dispatch.py`).
+
+**Связи:** F-001 (тот же класс — «хендлер не диспатчится, исключения нет»), F-042, F-043, F-044.
+
+---
+
+### F-042 [P1] `on_input_blur` — имя не совпадает с `Input.Blurred` → `on_input_blurred`
+
+**Где:** `pentool/tui/screens/base.py:101`, `pentool/tui/widgets/tab_panel.py:435`.
+
+**Что:** `Input.Blurred.handler_name == "on_input_blurred"`. Хендлеры объявлены как `on_input_blur` и не вызываются никогда.
+
+**Почему:** суть хендлера — спрятать inline-`Input` переименования вкладки, когда он теряет фокус. Не вызывается → поле переименования остаётся висеть на экране, пока пользователь не нажмёт Enter или Esc. Видно на обоих путях переименования (двойной клик по табу в `BaseModuleScreen` и `TabbedContentPanel`).
+
+**Как:** переименовать в `on_input_blurred`. Проверка — тот же AST-тест из F-041.
+
+**Связи:** F-041.
+
+---
+
+### F-043 [P1] `SearchBar.on_static_click` — у `Static` нет click-сообщения; переключатели Regex и Req/Resp не работают мышью
+
+**Где:** `pentool/tui/widgets/search_bar.py:97` (`on_static_click`), виджеты — `:61` и `:62` (`Static` с `id="search-target-toggle"` и `id="search-regex-toggle"`).
+
+**Что:** имя `on_static_click` не соответствует ни одному сообщению (`Static` в Textual 8 вложенных `Message`-классов не объявляет — проверено: `vars(Static)` → `[]`). Клик по `Static` доставляется как обычный `events.Click`, всплывающий до `SearchBar`.
+
+**Почему:** оба переключателя строки поиска (Regex и Req/Resp) не реагируют на мышь вовсе — остаётся только клавиатура (`Tab` переключает target, regex-переключателя на клавиатуре нет). Работоспособность на 100 % держалась на прямом вызове метода из юнит-теста (`tests/unit/widgets/test_search_bar.py` вызывал `on_static_click(event)` руками), поэтому регрессия не ловилась.
+
+**Как:** переименовать в `on_click(self, event: events.Click)`; проверить `event.widget.id` как раньше.
+
+**[проверено]** после фикса: `events.Click`, посланный в `#search-regex-toggle`, доходит до `SearchBar.on_click` и переключает `_regex_enabled` (`/tmp/t_sb5.py`, `/tmp/t_sb6.py`).
+
+**Связи:** F-041, F-034 (тот же анти-паттерн в тестах).
+
+---
+
+### F-044 [P2] `LoadFromProxyDialog` ловит `DataTable.RowActivated` — такого сообщения в Textual 8 нет
+
+**Где:** `pentool/tui/dialogs/load_from_proxy.py:75`.
+
+**Что:** `hasattr(textual.widgets.DataTable, "RowActivated") == False`; в `textual_fastdatatable.DataTable` — тоже нет. Сообщение не постится ничем, хендлер мёртв.
+
+**Почему:** заявленный «double-click — загрузить сразу» не работает, остаётся кнопка Load. Мелочь, но она попадает в один класс с F-041/F-042/F-043 и показывает, что `@on`-проверки не заменяют проверку имён.
+
+**Как:** `DataTable` не постит событие двойного клика, но `Click` всплывает (`[проверено]`), поэтому детект по `event.chain == 2`:
+```python
+def on_click(self, event: events.Click) -> None:
+    if event.chain != 2:
+        return
+    if not isinstance(event.widget, DataTable) or event.widget.id != "req-table":
+        return
+    event.stop()
+    self.action_select()
+```
+
+**Связи:** F-041.
+
+---
+
+### F-045 [P1] `self.workers.cancel(...)` / `get_worker(...)` / `remove_worker(...)` не существуют — отмена автосейва не работает
+
+**Где (до фикса):**
+- `pentool/tui/mixins/autosave.py:49` — `self.workers.cancel(wname)`
+- `pentool/tui/screens/target/screen.py:144` — `self.workers.cancel(wname)`
+- `pentool/tui/screens/intruder/screen.py:2608` — `self.workers.cancel(self.workers.get_worker(name))`
+- `pentool/tui/screens/repeater/screen.py:421-425` — `self.remove_worker(worker_name, interrupt=True)`
+
+**Что:** публичный API `textual.worker_manager.WorkerManager` — ровно шесть методов: `add_worker`, `cancel_all`, `cancel_group`, `cancel_node`, `start_all`, `wait_for_complete`. Ни `cancel`, ни `get_worker` нет; `Widget.remove_worker` — тоже нет (проверено `dir(WorkerManager)`).
+
+**Почему:** каждый вызов бросал `AttributeError`, который ловился `except Exception: pass` (F-009 в чистом виде). Отмена автосейва — это защита от «сохранения в уже закрытую БД» при выходе и переключении проекта (`app.py:1716-1718` вызывает `_cancel_save_workers()` перед `api.close()`). То есть заявленный инвариант «in-flight commit never hits a closed DB» не выполнялся вовсе.
+
+**Как:** автосейв-воркеры кладутся в выделенную группу, отмена — `cancel_group`:
+```python
+class AutoSaveMixin:
+    SAVE_WORKER_GROUP: str = "autosave"
+
+    def _start_save_worker(self, save_task, worker_name, *, exit_on_error=False) -> None:
+        self._track_save_worker(worker_name)
+        self.run_worker(self._do_auto_save(save_task, worker_name),
+                        name=worker_name, group=self.SAVE_WORKER_GROUP,
+                        exclusive=False, exit_on_error=exit_on_error)
+
+    def _cancel_save_workers(self) -> None:
+        self._init_save_tasks()
+        try:
+            self.workers.cancel_group(self, self.SAVE_WORKER_GROUP)
+        except Exception:
+            pass
+        self._running_save_tasks.clear()
+```
+Три экрана (`repeater`, `intruder`, `target`) переводятся на `_start_save_worker`; дубли `_cancel_save_workers`/`_do_auto_save` из `intruder` и `target` удаляются — остаётся один миксин. `TargetScreen` теперь действительно наследует `AutoSaveMixin` (раньше дублировал его поля вручную).
+
+**Проверка:** `tests/unit/tui/test_autosave_mixin.py::TestCancelReachesWorkerManager` запускает реальный `WorkerManager`, стартует 30-секундную задачу, отменяет и убеждается, что корутина **не** дошла до конца.
+
+**Связи:** F-009.
+
+---
+
+### F-046 [P2] `Config.add_observer` без `remove_observer` + мёртвый диагностический хендлер `on_screen_unmounted`
+
+**Где:** `pentool/tui/app.py:446` (подписка), `pentool/tui/app.py:515` (`on_screen_unmounted`).
+
+**Что:** (а) `get_config()` — процесс-глобальный синглтон (`core/config.py`), `remove_observer` в `pentool/tui` не вызывается ни разу, `_observers` хранит граничный метод живого `App`; (б) хендлер `on_screen_unmounted` не соответствует ни одному событию Textual — такого класса событий нет вообще (`textual/events.py` содержит только `ScreenResume`/`ScreenSuspend`).
+
+**Почему:** (а) после `run()` объекта приложения остаётся пришпиленным к конфигу, а следующий `notify_observers` в том же процессе (тесты, встроенный запуск) дёргает `post_message` на уже закрытом `MessagePump`; (б) диагностика «стек потоков при аномальном выходе», ради которой хендлер написан, не срабатывала никогда — комментарии `app.py:163`, `:1659` ссылаются на несуществующее поведение.
+
+**Как:** снимать обсервер в `_on_exit_app` (единая точка выхода, включая `app.exit()` из кода) и удалить мёртвый хендлер вместе с комментариями, которые на него ссылаются.
+
+**Связи:** F-002 (тот же класс — «подписка без отписки»), F-041.
 
 ---
 
