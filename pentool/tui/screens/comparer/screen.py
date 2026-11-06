@@ -12,14 +12,13 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Static, TextArea
 
-from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
-from pentool.tui.widgets.content_panel import ContentPanel
-
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import COMPARER_BINDINGS
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
+from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.tui.widgets.toolbar import Toolbar
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
@@ -40,75 +39,41 @@ class ComparerScreen(ContentClipboardMixin, Widget):
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────
         yield Toolbar(
-            ToolbarButton("⇄ Compare",     "btn-cmp-compare"),
+            ToolbarButton("⇄ Compare", "btn-cmp-compare"),
             Toolbar.sep(),
-            ToolbarButton("↑ Load Left",   "btn-cmp-load-left"),
+            ToolbarButton("↑ Load Left", "btn-cmp-load-left"),
             Toolbar.sep(),
-            ToolbarButton("↑ Load Right",  "btn-cmp-load-right"),
+            ToolbarButton("↑ Load Right", "btn-cmp-load-right"),
             Toolbar.sep(),
-            ToolbarButton("📋 Copy Diff",   "btn-cmp-copy"),
+            ToolbarButton("📋 Copy Diff", "btn-cmp-copy"),
             Toolbar.sep(),
-            ToolbarButton("🗑 Clear",       "btn-cmp-clear"),
+            ToolbarButton("🗑 Clear", "btn-cmp-clear"),
         )
 
         # ── Stat bar ───────────────────────────────────────────────────────────
         with Horizontal(id="cmp-stat-bar"):
-            yield Static("[dim]— Press Compare or Ctrl+Enter to diff —[/dim]",
-                         id="cmp-stats", markup=True)
+            yield Static("[dim]— Press Compare or Ctrl+Enter to diff —[/dim]", id="cmp-stats", markup=True)
 
         # ── Two TextAreas via ContentPanel ──────────────────────────────────────
         with Horizontal(id="cmp-edit-area"):
             with Vertical(id="cmp-left-col"):
-                yield ContentPanel("Left", widget_type="textarea", buttons=["copy", "paste"],
-                                   id="cmp-left-panel")
+                yield ContentPanel("Left", widget_type="textarea", buttons=["copy", "paste"], id="cmp-left-panel")
             yield ResizeHandle("cmp-left-col", "cmp-right-col", id="cmp-resize-h")
             with Vertical(id="cmp-right-col"):
-                yield ContentPanel("Right", widget_type="textarea", buttons=["copy", "paste"],
-                                   id="cmp-right-panel")
+                yield ContentPanel("Right", widget_type="textarea", buttons=["copy", "paste"], id="cmp-right-panel")
 
-        yield ResizeHandle("cmp-edit-area", "cmp-diff-area", vertical=True,
-                           id="cmp-resize-v")
+        yield ResizeHandle("cmp-edit-area", "cmp-diff-area", vertical=True, id="cmp-resize-v")
 
         # ── Diff output ────────────────────────────────────────────────────────
         with Vertical(id="cmp-diff-area"):
-            yield ContentPanel("Diff", widget_type="richlog", wrap=False, max_lines=2000, buttons=["copy"], id="cmp-diff-area")
-
-        
-    # ── ContentPanel handlers ─────────────────────────────────────────────────
-
-    @on(ContentPanel.PasteRequested)
-    def _on_cp_paste(self, event: ContentPanel.PasteRequested) -> None:
-        """Вставка в ContentPanel из буфера обмена."""
-        from pentool.utils.copy_as import paste_from_clipboard
-        clipboard = paste_from_clipboard()
-        if clipboard:
-            panel = event.panel
-            w = panel.content_widget
-            if isinstance(w, TextArea):
-                sel = w.selection
-                is_selected = (
-                    sel is not None
-                    and sel.start != sel.end
-                )
-                if is_selected:
-                    start_row, start_col = sel.start
-                    end_row, end_col = sel.end
-                    lines = w.text.splitlines(keepends=True)
-                    if start_row == end_row:
-                        line = lines[start_row]
-                        lines[start_row] = line[:start_col] + clipboard + line[end_col:]
-                    else:
-                        lines[start_row] = lines[start_row][:start_col] + clipboard
-                        lines = lines[:start_row + 1] + lines[end_row:]
-                        if end_row < len(lines):
-                            lines[end_row] = lines[end_row][end_col:]
-                        else:
-                            lines.append('')
-                    w.load_text(''.join(lines))
-                else:
-                    w.load_text(clipboard)
-        else:
-            self.app.notify("Nothing in clipboard", severity="warning")
+            yield ContentPanel(
+                "Diff",
+                widget_type="richlog",
+                wrap=False,
+                max_lines=2000,
+                buttons=["copy"],
+                id="cmp-diff-area",
+            )
 
     # ── Toolbar ───────────────────────────────────────────────────────────────
 
@@ -160,6 +125,7 @@ class ComparerScreen(ContentClipboardMixin, Widget):
     def _copy_diff(self) -> None:
         try:
             from pentool.utils.copy_as import copy_to_clipboard
+
             if self._last_result is None:
                 self.app.notify("Run Compare first", severity="warning")
                 return
@@ -177,7 +143,8 @@ class ComparerScreen(ContentClipboardMixin, Widget):
         """Run the comparison and display the result."""
         try:
             from pentool.api.comparer_api import compare
-            left  = self.query_one("#cmp-left-panel", ContentPanel).content_widget.text
+
+            left = self.query_one("#cmp-left-panel", ContentPanel).content_widget.text
             right = self.query_one("#cmp-right-panel", ContentPanel).content_widget.text
             result = compare(left, right)
             self._last_result = result
@@ -228,9 +195,7 @@ class ComparerScreen(ContentClipboardMixin, Widget):
                     w.load_text("")
                 panel.set_title({"cmp-left-panel": "Left", "cmp-right-panel": "Right"}[panel_id])
             self.query_one("#cmp-diff-area", ContentPanel).clear_content()
-            self.query_one("#cmp-stats",    Static).update(
-                "[dim]— Press Compare or Ctrl+Enter to diff —[/dim]"
-            )
+            self.query_one("#cmp-stats", Static).update("[dim]— Press Compare or Ctrl+Enter to diff —[/dim]")
             self._last_result = None
         except Exception as exc:
             logger.debug("action_clear: %s", exc)

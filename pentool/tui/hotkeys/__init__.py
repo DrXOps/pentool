@@ -28,7 +28,7 @@ Typical flow:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar
 
 from textual.binding import Binding, BindingsMap
@@ -71,9 +71,9 @@ class HotkeyEntry:
     def to_bindings_map(self) -> BindingsMap:
         """Build a ``BindingsMap`` from a single entry."""
         from textual.binding import BindingsMap as _BM
+
         bm = _BM()
-        bm.bind(self.keys, self.action, self.description,
-                show=self.show, priority=self.priority)
+        bm.bind(self.keys, self.action, self.description, show=self.show, priority=self.priority)
         return bm
 
 
@@ -106,7 +106,6 @@ class HotkeyRegistry:
         Later registrations of the same action within the same group
         **replace** earlier ones (for runtime rebinding).
         """
-        existing = {e.action for e in self._entries.get(group, ())}
         # Remove stale action index entries for this group's old entries
         for old in self._entries.get(group, ()):
             self._action_index.pop(old.action, None)
@@ -213,8 +212,7 @@ def build_bindings_map(bindings: list[Binding]) -> BindingsMap:
     """
     bm = BindingsMap()
     for b in bindings:
-        bm.bind(b.key, b.action, b.description or "",
-                show=b.show, priority=b.priority)
+        bm.bind(b.key, b.action, b.description or "", show=b.show, priority=b.priority)
     return bm
 
 

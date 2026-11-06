@@ -10,14 +10,13 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
-from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.tui.widgets.toolbar import Toolbar
-from textual.widgets import TextArea
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
@@ -34,22 +33,23 @@ class DecoderScreen(ContentClipboardMixin, Widget):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         from pentool.api.decoder_api import OP_LABELS
+
         self._op_labels: list[str] = OP_LABELS
         self._selected_op: str = OP_LABELS[0]  # currently selected operation
-        self._chain: list[str] = []           # list of operations in the chain
+        self._chain: list[str] = []  # list of operations in the chain
 
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────
         yield Toolbar(
-            ToolbarButton("▶ Run",        "btn-dec-run"),
+            ToolbarButton("▶ Run", "btn-dec-run"),
             Toolbar.sep(),
-            ToolbarButton("+ Add Step",   "btn-dec-add"),
+            ToolbarButton("+ Add Step", "btn-dec-add"),
             Toolbar.sep(),
-            ToolbarButton("✗ Clear Chain","btn-dec-clrchain"),
+            ToolbarButton("✗ Clear Chain", "btn-dec-clrchain"),
             Toolbar.sep(),
-            ToolbarButton("⇅ Swap I/O",   "btn-dec-swap"),
+            ToolbarButton("⇅ Swap I/O", "btn-dec-swap"),
             Toolbar.sep(),
-            ToolbarButton("🔍 Smart",      "btn-dec-smart"),
+            ToolbarButton("🔍 Smart", "btn-dec-smart"),
         )
 
         # ── Operation selector (adding steps) ──────────────────────────────────
@@ -82,8 +82,7 @@ class DecoderScreen(ContentClipboardMixin, Widget):
                     id="dec-output",
                 )
 
-        yield ResizeHandle("dec-work-area", "dec-steps-area", vertical=True,
-                           id="dec-resize-v")
+        yield ResizeHandle("dec-work-area", "dec-steps-area", vertical=True, id="dec-resize-v")
 
         # ── Chain steps log ────────────────────────────────────────────────────
         with Vertical(id="dec-steps-area"):
@@ -124,53 +123,13 @@ class DecoderScreen(ContentClipboardMixin, Widget):
 
     # ── ContentPanel handlers ──────────────────────────────────────────────────
 
-    @on(ContentPanel.PasteRequested)
-    def _on_cp_paste(self, event: ContentPanel.PasteRequested) -> None:
-        """Вставка в ContentPanel (dec-input) из буфера обмена."""
-        from pentool.utils.copy_as import paste_from_clipboard
-        clipboard = paste_from_clipboard()
-        if clipboard:
-            panel = event.panel
-            w = panel.content_widget
-            if isinstance(w, TextArea):
-                sel = w.selection
-                # selection может вернуть Selection(start=(0,0), end=(0,0)) даже
-                # когда ничего не выделено — значит проверяем что start != end
-                is_selected = (
-                    sel is not None
-                    and sel.start != sel.end
-                )
-                if is_selected:
-                    # Замена выделенного текста через манипуляцию строками
-                    start_row, start_col = sel.start
-                    end_row, end_col = sel.end
-                    lines = w.text.splitlines(keepends=True)
-                    if start_row == end_row:
-                        line = lines[start_row]
-                        lines[start_row] = line[:start_col] + clipboard + line[end_col:]
-                    else:
-                        lines[start_row] = lines[start_row][:start_col] + clipboard
-                        lines = lines[:start_row + 1] + lines[end_row:]
-                        if end_row < len(lines):
-                            lines[end_row] = lines[end_row][end_col:]
-                        else:
-                            lines.append('')
-                    w.load_text(''.join(lines))
-                else:
-                    w.load_text(clipboard)
-        else:
-            self.app.notify("Nothing in clipboard", severity="warning")
-
     @on(ContentPanel.FormatToggleRequested)
     def on_dec_toggle_format(self, event: ContentPanel.FormatToggleRequested) -> None:
         """Переключение raw/formatted — не применимо к Decoder."""
         pass
 
     def _open_op_menu(self, btn: ToolbarButton) -> None:
-        items = [
-            (op, ("✓ " if op == self._selected_op else "  ") + op)
-            for op in self._op_labels
-        ]
+        items = [(op, ("✓ " if op == self._selected_op else "  ") + op) for op in self._op_labels]
         r = btn.region
         self.app.show_context_menu(items, r.x, r.y + 1, callback=self._on_op_selected)
 
@@ -213,6 +172,7 @@ class DecoderScreen(ContentClipboardMixin, Widget):
         """Auto-detect and chain-decode the input."""
         try:
             from pentool.api.decoder_api import detect_encoding, encode_op
+
             inp = self.query_one("#dec-input", ContentPanel).content_widget
             text = inp.text.strip()
             if not text:
@@ -271,6 +231,7 @@ class DecoderScreen(ContentClipboardMixin, Widget):
     def action_run_chain(self) -> None:
         try:
             from pentool.api.decoder_api import encode_op, run_chain
+
             inp_text = self.query_one("#dec-input", ContentPanel).content_widget.text
             if not inp_text:
                 self.app.notify("Input is empty", severity="warning")
@@ -317,6 +278,7 @@ class DecoderScreen(ContentClipboardMixin, Widget):
         """Copy output to clipboard (called from hotkey)."""
         try:
             from pentool.utils.copy_as import copy_to_clipboard
+
             text = self.query_one("#dec-output", ContentPanel).content_widget.text
             if text and copy_to_clipboard(text):
                 self.app.notify("Result copied", timeout=2)
