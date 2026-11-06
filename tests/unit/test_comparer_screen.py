@@ -10,14 +10,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
-from textual import on
 from textual.app import App, ComposeResult
+
 from pentool.tui.screens.comparer.screen import ComparerScreen
 from pentool.tui.widgets.content_panel import ContentPanel
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
 class ComparerTestApp(App):
@@ -51,8 +48,8 @@ def _cmp_screen(app: ComparerTestApp) -> ComparerScreen:
 # compose
 # =============================================================================
 
-class TestComparerCompose:
 
+class TestComparerCompose:
     async def test_compose_does_not_crash(self) -> None:
         """Создание ComparerScreen не падает."""
         app = ComparerTestApp()
@@ -66,6 +63,7 @@ class TestComparerCompose:
         async with app.run_test() as pilot:
             await pilot.pause()
             from textual.widgets import TextArea
+
             panel = _left_panel(app)
             assert panel.id == "cmp-left-panel"
             assert isinstance(panel.content_widget, TextArea)
@@ -76,6 +74,7 @@ class TestComparerCompose:
         async with app.run_test() as pilot:
             await pilot.pause()
             from textual.widgets import TextArea
+
             panel = _right_panel(app)
             assert panel.id == "cmp-right-panel"
             assert isinstance(panel.content_widget, TextArea)
@@ -103,6 +102,7 @@ class TestComparerCompose:
             await pilot.pause()
             panel = _diff_panel(app)
             from textual.widgets import RichLog, TextArea
+
             assert isinstance(panel.content_widget, (RichLog, TextArea))
 
 
@@ -110,8 +110,8 @@ class TestComparerCompose:
 # set_title
 # =============================================================================
 
-class TestComparerTitle:
 
+class TestComparerTitle:
     async def test_left_title_default(self) -> None:
         """По умолчанию заголовок Left."""
         app = ComparerTestApp()
@@ -149,60 +149,79 @@ class TestComparerTitle:
 # copy / paste
 # =============================================================================
 
-class TestComparerCopyPaste:
 
-    async def test_left_copy_emits_event(self) -> None:
-        """Копирование из левой панели → CopyRequested."""
+class TestComparerCopyPaste:
+    """Copy/paste через кнопки ContentPanel — проверяем эффект, не «не упало».
+
+    Раньше здесь было четыре теста без единого assert (F-034): хендлеры
+    миксина вообще не регистрировались, поэтому кнопки были no-op, и тесты
+    при этом оставались зелёными. Теперь буфер подменяется, а результат
+    проверяется по содержимому TextArea и по аргументу copy_to_clipboard.
+    """
+
+    @pytest.fixture
+    def clipboard(self, monkeypatch: pytest.MonkeyPatch):
+        state = {"copied": [], "text": "CLIP"}
+
+        def _copy(text: str) -> bool:
+            state["copied"].append(text)
+            return True
+
+        monkeypatch.setattr("pentool.utils.copy_as.copy_to_clipboard", _copy)
+        monkeypatch.setattr("pentool.utils.copy_as.paste_from_clipboard", lambda: state["text"])
+        return state
+
+    async def test_left_copy_sends_text_to_clipboard(self, clipboard) -> None:
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
-            from textual.widgets import TextArea
-            ta = _left_panel(app).content_widget
-            assert isinstance(ta, TextArea)
-            ta.load_text("left content")
+            _cmp_screen(app).load_left("left content")
             await pilot.pause()
             await pilot.click("#cmp-left-panel #cp-btn-copy")
             await pilot.pause()
-            # проверяем что текст дошёл через хендлер
-            # (нативный хендлер не постит событие на App, сразу копирует)
-            # просто не упало — уже проверка
+            assert clipboard["copied"] == ["left content"]
 
-    async def test_right_copy_emits_event(self) -> None:
-        """Копирование из правой панели не падает."""
+    async def test_right_copy_sends_text_to_clipboard(self, clipboard) -> None:
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
-            from textual.widgets import TextArea
-            ta = _right_panel(app).content_widget
-            assert isinstance(ta, TextArea)
-            ta.load_text("right content")
+            _cmp_screen(app).load_right("right content")
             await pilot.pause()
             await pilot.click("#cmp-right-panel #cp-btn-copy")
             await pilot.pause()
+            assert clipboard["copied"] == ["right content"]
 
-    async def test_left_paste_does_not_crash(self) -> None:
-        """Paste из левой панели не падает."""
+    async def test_left_paste_inserts_clipboard_text(self, clipboard) -> None:
+        from textual.widgets import TextArea
+
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cmp-left-panel #cp-btn-paste")
             await pilot.pause()
+            area = _left_panel(app).content_widget
+            assert isinstance(area, TextArea)
+            assert "CLIP" in area.text
 
-    async def test_right_paste_does_not_crash(self) -> None:
-        """Paste из правой панели не падает."""
+    async def test_right_paste_inserts_clipboard_text(self, clipboard) -> None:
+        from textual.widgets import TextArea
+
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cmp-right-panel #cp-btn-paste")
             await pilot.pause()
+            area = _right_panel(app).content_widget
+            assert isinstance(area, TextArea)
+            assert "CLIP" in area.text
 
 
 # =============================================================================
 # public API
 # =============================================================================
 
-class TestComparerPublicAPI:
 
+class TestComparerPublicAPI:
     async def test_load_left(self) -> None:
         """load_left() загружает текст и меняет заголовок."""
         app = ComparerTestApp()
@@ -211,6 +230,7 @@ class TestComparerPublicAPI:
             _cmp_screen(app).load_left("hello", label="greeting.txt")
             await pilot.pause()
             from textual.widgets import TextArea
+
             ta = _left_panel(app).content_widget
             assert isinstance(ta, TextArea)
             assert ta.text == "hello"
@@ -224,6 +244,7 @@ class TestComparerPublicAPI:
             _cmp_screen(app).load_right("world", label="data.txt")
             await pilot.pause()
             from textual.widgets import TextArea
+
             ta = _right_panel(app).content_widget
             assert isinstance(ta, TextArea)
             assert ta.text == "world"
@@ -237,6 +258,7 @@ class TestComparerPublicAPI:
             _cmp_screen(app).load_smart("first text", label="file1.txt")
             await pilot.pause()
             from textual.widgets import TextArea
+
             ta = _left_panel(app).content_widget
             assert isinstance(ta, TextArea)
             assert ta.text == "first text"
@@ -252,6 +274,7 @@ class TestComparerPublicAPI:
             _cmp_screen(app).load_smart("second text", label="file2.txt")
             await pilot.pause()
             from textual.widgets import TextArea
+
             right_ta = _right_panel(app).content_widget
             assert isinstance(right_ta, TextArea)
             assert right_ta.text == "second text"
@@ -270,6 +293,7 @@ class TestComparerPublicAPI:
             _cmp_screen(app).action_clear()
             await pilot.pause()
             from textual.widgets import TextArea
+
             left_ta = _left_panel(app).content_widget
             right_ta = _right_panel(app).content_widget
             assert isinstance(left_ta, TextArea)
@@ -310,8 +334,8 @@ class TestComparerPublicAPI:
 # ContentPanel set_title (core feature used by Comparer)
 # =============================================================================
 
-class TestContentPanelSetTitle:
 
+class TestContentPanelSetTitle:
     async def test_set_title_updates_query(self) -> None:
         """set_title() меняет _panel_title."""
         app = ComparerTestApp()
