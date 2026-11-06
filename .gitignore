@@ -67,6 +67,7 @@ t.py
 
 # Stray curl-output / scan-report scratch files dropped into the repo root
 # during manual testing (single-letter names, JSON/HTML). Never commit these.
+/1
 /21
 /cb
 /fg
@@ -107,3 +108,6 @@ promo_assets/
 
 # Журналы AI-автоматизации: события вызовов и логи агента (ai/run report)
 ai/logs/
+
+# Скачанные пакеты (не исходники проекта)
+*.deb
