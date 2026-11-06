@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# scripts/ai/agent — запуск агента в изолированном worktree.
+#
+# Создаёт (или переиспользует) worktree, применяет его изоляцию окружения и
+# запускает команду внутри. По умолчанию запускается `claude`; любую другую
+# команду можно передать после `--`.
+#
+# Использование:
+#   scripts/ai/agent <name> [--base <ref>] [-- <команда...>]
+#   scripts/ai/agent <name> --cmd 'claude -p "исправь тесты"'
+#   scripts/ai/agent <name> --keep     # не удалять worktree после выхода
+#
+# Что изолируется (см. `scripts/ai/worktree env`):
+#   каталог, ветка, TMPDIR, каталог логов, диапазон портов AI_PORT_RANGE,
+#   PYTHONPYCACHEPREFIX. Переменные видны запущенной команде и её потомкам.
+#
+# Логи: stdout/stderr команды дублируются в <worktree>/logs/agent-<ts>.log
+# (модель, задача, время — через ai/runner.py, он пишет свой JSONL рядом).
+
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "agent: не git-репозиторий" >&2
+  exit 1
+}
+cd "$root"
+
+usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+
+name=""
+base="HEAD"
+keep=0
+cmd=()
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base) base="${2:?}"; shift 2 ;;
+    --cmd) cmd=(bash -lc "${2:?}"); shift 2 ;;
+    --keep) keep=1; shift ;;
+    --) shift; cmd=("$@"); break ;;
+    -h|--help) usage 0 ;;
+    -*) echo "agent: неизвестный флаг $1" >&2; usage 1 ;;
+    *)
+      if [ -z "$name" ]; then name="$1"; shift; else
+        echo "agent: лишний аргумент '$1' (команда — после --)" >&2; exit 1
+      fi ;;
+  esac
+done
+
+if [ -z "$name" ]; then
+  echo "agent: укажите имя worktree" >&2
+  usage 1
+fi
+
+scripts/ai/worktree create "$name" --base "$base" >/dev/null
+
+# env выводит export-строки и cd; выполняем их в текущем shell.
+eval "$(scripts/ai/worktree env "$name")"
+
+mkdir -p "$AI_LOG_DIR"
+log_file="$AI_LOG_DIR/agent-$(date -u +%Y%m%dT%H%M%SZ).log"
+
+echo "agent: worktree=$AI_WORKTREE_NAME path=$AI_WORKTREE_PATH"
+echo "agent: порты=$AI_PORT_RANGE tmpdir=$TMPDIR"
+echo "agent: лог=$log_file"
+
+if [ ${#cmd[@]} -eq 0 ]; then
+  if command -v claude >/dev/null 2>&1; then
+    cmd=(claude)
+  else
+    echo "agent: claude не найден в PATH; передайте команду после --" >&2
+    exit 1
+  fi
+fi
+
+# Script-friendly: команда видит те же переменные, что напечатал `env`.
+set +e
+"${cmd[@]}" 2>&1 | tee "$log_file"
+rc=${PIPESTATUS[0]}
+set -e
+
+echo "agent: команда завершилась с кодом $rc (лог: $log_file)"
+
+if [ "$keep" -eq 0 ] && [ "${AI_KEEP_WORKTREE:-0}" = "0" ]; then
+  # Удаляем только чистые worktree: с незакоммиченными правками не трогаем,
+  # чтобы не потерять работу агента.
+  if git -C "$AI_WORKTREE_PATH" diff --quiet && git -C "$AI_WORKTREE_PATH" diff --cached --quiet; then
+    cd "$root"
+    scripts/ai/worktree remove "$name" >/dev/null 2>&1 || true
+    echo "agent: worktree удалён (правок не было)"
+  else
+    echo "agent: worktree сохранён — в нём есть незакоммиченные правки: $AI_WORKTREE_PATH"
+  fi
+fi
+
+exit "$rc"

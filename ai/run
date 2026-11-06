@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# ai/run — единая точка запуска задач на моделях.
+#
+#   ai/run run <task> -p "текст"          # задача с эскалацией
+#   ai/run run <task> -f prompt.txt       # промпт из файла
+#   echo "..." | ai/run run <task> -p -   # промпт из stdin
+#   ai/run run <task> --dry-run           # только маршрут
+#   ai/run models [--tasks]               # модели и цепочки
+#   ai/run chain <task>                   # цепочка эскалации
+#   ai/run health                         # доступность эндпоинтов
+#   ai/run report [--since ISO] [--json]  # отчёт об экономии
+#   ai/run worktree <create|list|remove|env|path> ...
+#
+# Окружение берётся из .env (если есть) и из переменных окружения процесса;
+# .env читается, но в вывод не печатается. Секреты — только из env.
+#
+# `-I` у python3: изолированный режим — не подхватывать сторонние модули из
+# текущего каталога (ai/ кладётся в проекты на любом стеке; рядом могут
+# оказаться чужие json.py и т.п.).
+
+set -euo pipefail
+
+ai_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=$(cd "$ai_dir/.." && pwd)
+cd "$root"
+
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env 2>/dev/null || true
+  set +a
+fi
+
+python_bin="${AI_PYTHON:-python3}"
+exec "$python_bin" -I "$ai_dir/runner.py" "$@"

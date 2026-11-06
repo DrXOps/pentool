@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# scripts/ai/worktree — изолированные рабочие копии для параллельных агентов.
+#
+# Зачем: два агента в одном дереве неизбежно мешают друг другу (git index,
+# .venv, порты, temp-файлы). Отдельный worktree даёт каждому свою копию
+# репозитория и своё окружение.
+#
+# Использование:
+#   scripts/ai/worktree create [name] [--base <ref>]   # создать
+#   scripts/ai/worktree list                           # список
+#   scripts/ai/worktree remove <name> [--force]        # удалить
+#   scripts/ai/worktree path <name>                    # путь к worktree
+#   scripts/ai/worktree env <name>                     # переменные изоляции
+#
+# Изоляция на каждый worktree:
+#   * каталог .worktrees/<name>/ (в .gitignore);
+#   * ветка ai/<name>;
+#   * уникальный диапазон портов (PORT_BASE + индекс*10), экспортируется из
+#     `env <name>` как AI_PORT / AI_PORT_RANGE;
+#   * свои TMPDIR, HOME-кэш-ish переменные и файл лога под .worktrees/<name>/logs;
+#   * свой .venv (создаётся лениво — см. `env`, флаг AI_SETUP_VENV=1).
+#
+# Скрипт идемпотентен: повторный `create` с тем же именем ничего не разрушает.
+# Ничего не пушит и не трогает основное рабочее дерево.
+
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "worktree: не git-репозиторий" >&2
+  exit 1
+}
+cd "$root"
+
+WT_DIR="${AI_WORKTREE_DIR:-.worktrees}"
+PORT_BASE="${AI_PORT_BASE:-9100}"
+PREFIX="${AI_BRANCH_PREFIX:-ai}"
+
+usage() {
+  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+slug() {
+  # Разрешаем буквы/цифры/дефис/подчёркивание, остальное -> '-'.
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]/-/g; s/--*/-/g; s/^-//; s/-$//'
+}
+
+wt_path() { printf '%s/%s' "$WT_DIR" "$1"; }
+
+ensure_ignored() {
+  mkdir -p "$WT_DIR"
+  if ! git check-ignore -q "$WT_DIR" 2>/dev/null; then
+    local gi=".gitignore"
+    if ! grep -qxF "$WT_DIR/" "$gi" 2>/dev/null; then
+      printf '\n# Изолированные рабочие копии для параллельных агентов (scripts/ai/worktree)\n%s/\n' "$WT_DIR" >> "$gi"
+      echo "worktree: добавил '$WT_DIR/' в $gi"
+    fi
+  fi
+}
+
+port_for() {
+  # Стабильный по имени номер: не зависит от порядка создания.
+  local name="$1" idx
+  idx=$(printf '%s' "$name" | cksum | awk '{print $1 % 90}')
+  printf '%s' $((PORT_BASE + idx * 10))
+}
+
+cmd_create() {
+  local name="${1:-}" base="HEAD"
+  shift || true
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --base) base="${2:?--base требует ref}"; shift 2 ;;
+      *) echo "worktree: неизвестный аргумент $1" >&2; exit 1 ;;
+    esac
+  done
+  if [ -z "$name" ]; then
+    name="agent-$(date -u +%Y%m%d-%H%M%S)-$$"
+  fi
+  name=$(slug "$name")
+  local path branch
+  path=$(wt_path "$name")
+  branch="$PREFIX/$name"
+
+  ensure_ignored
+
+  if [ -d "$path" ]; then
+    echo "worktree: '$name' уже существует: $path"
+  else
+    # --no-track: ветка не должна тянуть upstream основного дерева.
+    if git show-ref --verify --quiet "refs/heads/$branch"; then
+      git worktree add --no-track "$path" "$branch"
+    else
+      git worktree add --no-track -b "$branch" "$path" "$base"
+    fi
+    echo "worktree: создан $path  (ветка $branch, база $base)"
+  fi
+
+  # Служебные каталоги и env-файл не должны делать worktree «грязным»:
+  # иначе `git worktree remove` без --force откажется его удалять, и агент
+  # будет выглядеть так, будто оставил незакоммиченные правки.
+  mkdir -p "$path/logs" "$path/tmp"
+  ensure_local_ignore "$path"
+
+  local port
+  port=$(port_for "$name")
+  cat > "$path/.worktree-env" <<EOF
+# Сгенерировано scripts/ai/worktree — перезаписывается при каждом create.
+AI_WORKTREE_NAME=$name
+AI_WORKTREE_PATH=$path
+AI_BRANCH=$branch
+AI_PORT=$port
+AI_PORT_RANGE=$port-$((port + 9))
+AI_TMPDIR=$path/tmp
+AI_LOG_DIR=$path/logs
+EOF
+  echo "worktree: порт $port (диапазон $port-$((port + 9)))"
+}
+
+# Локальный (не коммитится) .git/info/exclude рабочей копии.
+ensure_local_ignore() {
+  local path="$1" exclude
+  exclude=$(git -C "$path" rev-parse --git-path info/exclude 2>/dev/null) || return 0
+  case "$exclude" in /*) ;; *) exclude="$path/$exclude" ;; esac
+  mkdir -p "$(dirname "$exclude")" 2>/dev/null || return 0
+  local entry
+  for entry in "/logs/" "/tmp/" "/.worktree-env"; do
+    grep -qxF "$entry" "$exclude" 2>/dev/null || printf '%s\n' "$entry" >> "$exclude"
+  done
+}
+
+cmd_list() {
+  git worktree list --porcelain | awk '
+    /^worktree / {path=$0; sub(/^worktree /,"",path)}
+    /^branch /   {br=$0; sub(/^branch refs\/heads\//,"",br)}
+    /^detached/  {br="(detached)"}
+    /^$/         {if (path!="") print path "\t" (br==""?"(no branch)":br); path=""; br=""}
+    END {if (path!="") print path "\t" (br==""?"(no branch)":br)}
+  ' | while IFS=$'\t' read -r p b; do
+    if [ -f "$p/.worktree-env" ]; then
+      printf '%-40s %-28s %s\n' "$b" "$(basename "$p")" "$(sed -n 's/^AI_PORT=//p' "$p/.worktree-env")"
+    else
+      printf '%-40s %-28s %s\n' "$b" "$(basename "$p")" "(main)"
+    fi
+  done
+}
+
+cmd_remove() {
+  # Флаг может стоять до имени (`remove --force wip`) или после (`remove wip --force`).
+  local name="" force=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force) force="--force"; shift ;;
+      -*) echo "worktree: неизвестный флаг $1" >&2; exit 1 ;;
+      *) name="$1"; shift ;;
+    esac
+  done
+  if [ -z "$name" ]; then
+    echo "worktree: remove требует имя" >&2
+    exit 1
+  fi
+  local path branch
+  path=$(wt_path "$(slug "$name")")
+  branch="$PREFIX/$(slug "$name")"
+  if [ ! -d "$path" ]; then
+    echo "worktree: '$name' не найден" >&2
+    exit 1
+  fi
+  git worktree remove $force "$path"
+  # Ветку удаляем, только если в неё нечего терять.
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    if git merge-base --is-ancestor "$branch" HEAD 2>/dev/null; then
+      git branch -d "$branch" >/dev/null
+      echo "worktree: ветка $branch удалена (влита в HEAD)"
+    else
+      echo "worktree: ветка $branch сохранена — в ней есть невлитые коммиты"
+    fi
+  fi
+  echo "worktree: удалён $path"
+}
+
+cmd_path() {
+  local name="${1:?path требует имя}"
+  printf '%s\n' "$root/$(wt_path "$(slug "$name")")"
+}
+
+cmd_env() {
+  # Печатает export-строки для изоляции окружения:
+  #   eval "$(scripts/ai/worktree env <name>)"
+  local name="${1:?env требует имя}"
+  name=$(slug "$name")
+  local path port
+  path="$root/$(wt_path "$name")"
+  port=$(port_for "$name")
+  [ -d "$path" ] || { echo "worktree: '$name' не создан" >&2; exit 1; }
+  cat <<EOF
+export AI_WORKTREE_NAME='$name'
+export AI_WORKTREE_PATH='$path'
+export AI_PORT='$port'
+export AI_PORT_RANGE='$port-$((port + 9))'
+export TMPDIR='$path/tmp'
+export AI_LOG_DIR='$path/logs'
+export PYTHONPYCACHEPREFIX='$path/tmp/pycache'
+export HTTUIX_SOCKET="$path/tmp/httpx.sock"
+cd '$path'
+EOF
+  if [ "${AI_SETUP_VENV:-0}" = "1" ] && [ ! -d "$path/.venv" ]; then
+    echo "worktree: создаю .venv (AI_SETUP_VENV=1)..." >&2
+    if command -v uv >/dev/null 2>&1 && [ -f "$path/pyproject.toml" ]; then
+      ( cd "$path" && uv sync >/dev/null 2>&1 ) && echo "worktree: .venv готов" >&2
+    elif command -v python3 >/dev/null 2>&1 && [ -f "$path/pyproject.toml" ]; then
+      ( cd "$path" && python3 -m venv .venv ) && echo "worktree: .venv готов" >&2
+    fi
+  fi
+}
+
+main() {
+  local cmd="${1:-}"; shift || true
+  case "$cmd" in
+    create) cmd_create "$@" ;;
+    list|ls) cmd_list "$@" ;;
+    remove|rm) cmd_remove "$@" ;;
+    path) cmd_path "$@" ;;
+    env) cmd_env "$@" ;;
+    ""|-h|--help|help) usage 0 ;;
+    *) echo "worktree: неизвестная команда '$cmd'" >&2; usage 1 ;;
+  esac
+}
+
+main "$@"

@@ -82,7 +82,7 @@ in_blacklist() {
     esac
   done
   case "$p" in
-    .claude/tmp/* | .claude/state/* | .git/*) return 0 ;;
+    .claude/tmp/* | .claude/state/* | .git/* | ai/logs/* | .worktrees/*) return 0 ;;
   esac
   return 1
 }
@@ -91,6 +91,7 @@ in_whitelist() {
   local p="$1"
   case "$p" in
     src/* | pentool/* | tests/* | test/* | docs/* | wiki/* | prompts/* | scripts/* | \
+    templates/* | ai/* | \
     tools/* | screens/* | tui-lab/* | \
     bin/* | config/* | configs/* | assets/* | infra/* | deploy/* | \
     migrations/* | .github/* | .gitlab/* | .devcontainer/* | \

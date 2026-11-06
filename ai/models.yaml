@@ -1,0 +1,151 @@
+# ai/models.yaml — маршрутизация задач на модели.
+#
+# Все значения — параметры, а не код: имена моделей, эндпоинты и лимиты
+# переопределяются переменными окружения (см. "env" у каждой модели) либо
+# правкой этого файла. Секретов здесь нет и быть не должно.
+#
+# discovery.md — откуда взято каждое имя и что является предположением.
+
+version: 1
+
+# --- Модели ----------------------------------------------------------------
+# rank: порядок эскалации (меньше = дешевле/быстрее).
+# cost_per_1k_tokens_usd: ТОЛЬКО для отчёта об экономии; null = неизвестно
+#   (тогда экономия считается в «вызовах, не ушедших в облако», а не в $).
+models:
+  local-coder:
+    provider: ollama
+    model: qwen2.5-coder:7b
+    endpoint_env: OLLAMA_ENDPOINT
+    endpoint_default: http://127.0.0.1:11434
+    model_env: OLLAMA_MODEL
+    rank: 0
+    context_tokens: 32768        # /api/show -> qwen2.context_length (подтверждено)
+    supports_tools: true         # /api/show -> capabilities: [completion, tools, insert]
+    cost_per_1k_tokens_usd: 0.0
+    timeout_sec: 120             # загрузка 4.7 GB в RAM на 4 vCPU — долгая
+    note: >
+      Экономичная модель: линт, тесты, мелкие правки, объяснение diff.
+      На WSL2 4 vCPU / 7 GB первый вызов может не уложиться в таймаут —
+      это штатная ситуация, обработчик эскалирует на следующий ранг.
+
+  haiku:
+    # ВНИМАНИЕ: gateway отдаёт эту модель в GET /v1/models, но POST
+    # /v1/messages с ней возвращает 400 «model conflicts with target
+    # provider». Проверено 2026-11-05. В цепочки не включена, пока прокси
+    # не научится её маршрутизировать; id оставлен для переключателя.
+    enabled: false
+    provider: anthropic-compatible
+    model: anthropic/claude-haiku-5.5
+    endpoint_env: ANTHROPIC_BASE_URL
+    endpoint_default: ""         # обязательна: берётся из env, не хардкодится
+    model_env: AI_MODEL_HAIKU
+    rank: 1
+    context_tokens: 200000       # [предположение] — уточнить у провайдера
+    supports_tools: true
+    cost_per_1k_tokens_usd: null
+    timeout_sec: 120
+    note: >
+      Лёгкая облачная: тексты, документация, коммит-сообщения, простые правки.
+
+  deepseek-flash:
+    provider: anthropic-compatible
+    model: deepseek/deepseek-v4.1-flash
+    endpoint_env: ANTHROPIC_BASE_URL
+    endpoint_default: ""
+    model_env: AI_MODEL_DEEPSEEK_FLASH
+    rank: 2
+    context_tokens: 128000       # [предположение]
+    supports_tools: true
+    cost_per_1k_tokens_usd: null
+    timeout_sec: 180
+    note: "Быстрый код: анализ ошибок, правки средней сложности."
+
+  deepseek-pro:
+    provider: anthropic-compatible
+    model: deepseek/deepseek-v4-pro-0813
+    endpoint_env: ANTHROPIC_BASE_URL
+    endpoint_default: ""
+    model_env: AI_MODEL_DEEPSEEK_PRO
+    rank: 3
+    context_tokens: 128000       # [предположение]
+    supports_tools: true
+    cost_per_1k_tokens_usd: null
+    timeout_sec: 300
+    note: "Сильная модель: архитектура, сложные баги, ревью больших диффов."
+
+  qwen-cloud:
+    provider: anthropic-compatible
+    model: qwen/qwen3.7-flash
+    endpoint_env: ANTHROPIC_BASE_URL
+    endpoint_default: ""
+    model_env: AI_MODEL_QWEN_CLOUD
+    rank: 4
+    context_tokens: 128000       # [предположение]
+    supports_tools: true
+    cost_per_1k_tokens_usd: null
+    timeout_sec: 180
+    note: "Резерв лёгкого уровня на случай лимитов haiku."
+
+# --- Политика: тип задачи -> цепочка моделей --------------------------------
+# Первая модель — стартовая, дальше — эскалация при неуспехе.
+# Порядок цепочки задаётся явно: он не обязан совпадать с rank.
+tasks:
+  # haiku в цепочках не используется: gateway его не маршрутизирует (см.
+  # комментарий у модели). Лёгкий облачный уровень — deepseek-flash.
+  lint:        [local-coder, deepseek-flash]
+  test-fix:    [local-coder, deepseek-flash, deepseek-pro]
+  small-edit:  [local-coder, deepseek-flash]
+  explain:     [local-coder, deepseek-flash]
+  docs:        [qwen-cloud, deepseek-flash, deepseek-pro]
+  commit-msg:  [deepseek-flash, qwen-cloud]
+  code-review: [deepseek-flash, deepseek-pro]
+  debug:       [deepseek-flash, deepseek-pro]
+  architecture: [deepseek-pro]
+  escalation:  [deepseek-pro]
+
+# --- Контекст: порог авто-сжатия -------------------------------------------
+# Значения ниже — для САМОЙ СЕССИИ Claude Code; они не задаются отсюда,
+# а продублированы здесь как документация фактической настройки.
+context:
+  # Ключ settings.json (.claude/settings.json) -> autoCompactWindow.
+  # Claude Code берёт минимум из него и реального контекста модели.
+  # 300000 = нижняя граница для сильных моделей (допустимый диапазон
+  # 100000..1000000, проверено по бинарнику 2.1.318), с запасом под
+  # сводку и ответ.
+  window_tokens: 300000
+  # Переменная окружения имеет приоритет над настройкой: CLAUDE_CODE_AUTO_COMPACT_WINDOW.
+  # Отключить: DISABLE_AUTO_COMPACT=1 (только авто) / DISABLE_COMPACT=1 (и /compact).
+  # Порог в долях от context_tokens конкретной модели — для расчёта
+  # «сколько осталось до сжатия» в хуках и отчётах.
+  compact_at_ratio: 0.65
+  # Минимальный порог: для локальной модели 32k это ~21k.
+  min_compact_tokens: 8000
+  # Сколько последних обменов всегда оставлять несжатыми.
+  keep_recent_turns: 6
+
+# --- Эскалация -------------------------------------------------------------
+escalation:
+  # Сколько раз пробовать одну и ту же модель перед переходом к следующей.
+  attempts_per_model: 1
+  # Что считается неудачей:
+  retry_on:
+    - timeout
+    - http_5xx
+    - empty_response
+    - tool_call_invalid
+    # Локальная модель может быть просто не запущена — это повод уйти в
+    # облако, а не падать. Остальные модели тоже переживут сетевой сбой.
+    - network
+  # При исчерпании цепочки — ошибка и запись в лог, без молчаливого фолбэка.
+  on_exhausted: error
+
+# --- Наблюдаемость ---------------------------------------------------------
+logging:
+  # Куда писать JSONL-события (путь от корня проекта).
+  events_path: ai/logs/events.jsonl
+  # Ротация: файл старше N дней или больше N байт -> events.jsonl.N
+  max_bytes: 5242880
+  keep_files: 5
+  # Тело запроса/ответа не пишется никогда — только метаданные.
+  capture_prompts: false
