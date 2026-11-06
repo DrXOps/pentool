@@ -25,6 +25,7 @@ def _get_sitemap(app):
     try:
         from pentool.tui.constants import SCREEN_TARGET
         from pentool.tui.screens.target.screen import TargetScreen
+
         target = app.query_one(SCREEN_TARGET, TargetScreen)
         api = target._get_api()
         if api is not None:
@@ -177,6 +178,7 @@ async def _tech_detect_and_cache(host: str, app) -> None:
     """
     # 1. Check cache через services слой (не прямой импорт PRO)
     from pentool.services.tech_detector import get_tech_cache
+
     cached = get_tech_cache(host)
     if cached is not None:
         log.info("TECH_DETECT: %s — from cache", host)
@@ -184,29 +186,19 @@ async def _tech_detect_and_cache(host: str, app) -> None:
         return
 
     # 2. Run fingerprint — через services слой (не прямой импорт PRO)
-    from pentool.utils.lightpanda import lightpanda_fetch_html, is_lightpanda_available
+    from pentool.services.tech_detector import cache_tech_profile, fingerprint_from_html, run_fingerprint
     from pentool.utils.http_client import get_shared_http_client
+    from pentool.utils.lightpanda import is_lightpanda_available, lightpanda_fetch_html
 
     url = f"https://{host}/" if "://" not in host else host
 
-    profile = None
-    try:
-        http_client = get_shared_http_client(follow_redirects=True)
-        from pentool.services.tech_detector import run_fingerprint
-        profile = await run_fingerprint(url, http_client)
-        await http_client.close()
-    except Exception as exc:
-        log.debug("TECH_DETECT: fingerprint error for %s: %s", host, exc)
+    profile = await run_fingerprint(url, get_shared_http_client(follow_redirects=True))
 
-    # 3. Fallback: try Lightpanda if fingerprint failed
+    # 3. Fallback: fetch the page with Lightpanda and run the local heuristics.
     if profile is None and is_lightpanda_available():
         try:
             html = await lightpanda_fetch_html(url, timeout=15.0)
-            if html:
-                http_client = get_shared_http_client(follow_redirects=True)
-                fp = TechFingerprinter()
-                profile = await fp.fingerprint(url, http_client, body=html)
-                await http_client.close()
+            profile = await fingerprint_from_html(url, html or "")
         except Exception as exc:
             log.debug("TECH_DETECT: lightpanda fallback error for %s: %s", host, exc)
 
@@ -215,8 +207,8 @@ async def _tech_detect_and_cache(host: str, app) -> None:
         return
 
     # 4. Кэширование: TechProfile теперь содержит все поля напрямую
-    profile_dict = profile.to_context_dict() if hasattr(profile, "to_context_dict") else {}
-    cache.set(host, profile_dict)
+    profile_dict = profile.to_context_dict() if hasattr(profile, "to_context_dict") else profile
+    cache_tech_profile(host, profile_dict)
     log.info("TECH_DETECT: %s — cached: %s", host, profile_dict)
     await _update_target_tree_tech(host, profile_dict, app)
 

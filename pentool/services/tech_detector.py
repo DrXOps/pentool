@@ -40,6 +40,7 @@ def _clear_cache() -> None:
 def get_cached_tech(url: str) -> dict[str, Any] | None:
     """Return cached tech profile for the given URL's host, or None if expired/missing."""
     from urllib.parse import urlparse
+
     host = urlparse(url).hostname or url
     with _cache_lock:
         entry = _TECH_CACHE.get(host)
@@ -62,6 +63,7 @@ def get_tech_cache(host: str) -> dict | None:
     """
     try:
         from pentool.modules.scanner.tech_cache import TechCache
+
         return TechCache().get(host)
     except ImportError:
         return None
@@ -73,6 +75,7 @@ def get_tech_cache(host: str) -> dict | None:
 async def run_fingerprint(url: str, http_client) -> Any | None:
     try:
         from pentool.modules.scanner.fingerprint import TechFingerprinter
+
         fp = TechFingerprinter()
         return await fp.fingerprint(url, http_client)
     except ImportError:
@@ -91,23 +94,89 @@ def _cache_set(host: str, profile: dict[str, Any]) -> None:
             _TECH_CACHE.popitem(last=False)
 
 
+def cache_tech_profile(host: str, profile: dict[str, Any]) -> None:
+    """Store a tech profile under ``host`` in both caches used by the app.
+
+    ``get_tech_cache`` reads the PRO persistent cache while ``detect_tech``
+    reads the in-process one; writing only one of them made the cached
+    branches permanently miss. Both writes are best-effort — a cache failure
+    must never break detection.
+    """
+    _cache_set(host, profile)
+    try:
+        from pentool.modules.scanner.tech_cache import TechCache
+
+        TechCache().set(host, profile)
+    except ImportError:
+        return
+    except Exception:
+        logger.warning("cache_tech_profile(%s): persist failed", host, exc_info=True)
+
+
+# Profile keys that carry an actual detection result — used to decide whether
+# a heuristic pass found anything worth showing the user.
+_SIGNAL_KEYS = (
+    "language",
+    "framework",
+    "cms",
+    "spa",
+    "cdn",
+    "server",
+    "frontend_js",
+    "css_framework",
+    "os",
+    "auth_methods",
+)
+
+
+def _profile_has_signal(profile: dict[str, Any]) -> bool:
+    for key in _SIGNAL_KEYS:
+        value = profile.get(key)
+        if value:
+            return True
+    return bool(profile.get("waf_name"))
+
+
+async def fingerprint_from_html(url: str, body: str) -> dict[str, Any] | None:
+    """Detect the stack from an already-fetched HTML body.
+
+    Used as the fallback when the PRO detector is unavailable or returned
+    nothing: the caller already paid for the page (Lightpanda), so this runs
+    the local heuristics over that body instead of issuing a second request.
+
+    Returns ``None`` when no signal was found, so callers can treat "nothing
+    detected" the same as "detector unavailable".
+    """
+    if not body:
+        return None
+    try:
+        profile = _make_profile({"status": None, "headers": {}, "cookies": []}, {}, body)
+    except Exception:
+        logger.warning("fingerprint_from_html(%s) failed", url, exc_info=True)
+        return None
+    if not _profile_has_signal(profile):
+        return None
+    profile["details"]["detected_from"] = "html_fallback"
+    return profile
+
+
 # ── WAF signatures ──────────────────────────────────────────────────────────
 _WAF_SIGNATURES: list[tuple[re.Pattern, str]] = [
-    (re.compile(r'cloudflare|ray\s*id:', re.I), "Cloudflare"),
-    (re.compile(r'sucuri|cloudproxy', re.I), "Sucuri"),
-    (re.compile(r'akamaighost|akamai', re.I), "Akamai"),
-    (re.compile(r'incapsula|imperva', re.I), "Imperva / Incapsula"),
-    (re.compile(r'f5\s*bigip|big-ip|ts\w{5,}=', re.I), "F5 BIG-IP ASM"),
-    (re.compile(r'mod_security|modsecurity', re.I), "ModSecurity"),
-    (re.compile(r'aws.*waf|awswaf|aws-waf', re.I), "AWS WAF"),
-    (re.compile(r'barracuda', re.I), "Barracuda WAF"),
-    (re.compile(r'fortinet|fortiweb', re.I), "Fortinet FortiWeb"),
-    (re.compile(r'comodo.*waf|cwatch', re.I), "Comodo WAF"),
-    (re.compile(r'sitelock|site_lock', re.I), "SiteLock"),
-    (re.compile(r'stackpath', re.I), "StackPath"),
-    (re.compile(r'azure.*waf|appgw', re.I), "Azure WAF"),
-    (re.compile(r'x-sucuri|x-sucuri-id', re.I), "Sucuri CloudProxy"),
-    (re.compile(r'cf-ray', re.I), "Cloudflare"),
+    (re.compile(r"cloudflare|ray\s*id:", re.I), "Cloudflare"),
+    (re.compile(r"sucuri|cloudproxy", re.I), "Sucuri"),
+    (re.compile(r"akamaighost|akamai", re.I), "Akamai"),
+    (re.compile(r"incapsula|imperva", re.I), "Imperva / Incapsula"),
+    (re.compile(r"f5\s*bigip|big-ip|ts\w{5,}=", re.I), "F5 BIG-IP ASM"),
+    (re.compile(r"mod_security|modsecurity", re.I), "ModSecurity"),
+    (re.compile(r"aws.*waf|awswaf|aws-waf", re.I), "AWS WAF"),
+    (re.compile(r"barracuda", re.I), "Barracuda WAF"),
+    (re.compile(r"fortinet|fortiweb", re.I), "Fortinet FortiWeb"),
+    (re.compile(r"comodo.*waf|cwatch", re.I), "Comodo WAF"),
+    (re.compile(r"sitelock|site_lock", re.I), "SiteLock"),
+    (re.compile(r"stackpath", re.I), "StackPath"),
+    (re.compile(r"azure.*waf|appgw", re.I), "Azure WAF"),
+    (re.compile(r"x-sucuri|x-sucuri-id", re.I), "Sucuri CloudProxy"),
+    (re.compile(r"cf-ray", re.I), "Cloudflare"),
 ]
 
 # ── Security header checks ──────────────────────────────────────────────────
@@ -136,6 +205,7 @@ async def detect_tech(url: str, force: bool = False, js_render: bool = False) ->
         graphql, wp_version, security_headers, details.
     """
     from urllib.parse import urlparse
+
     host = urlparse(url).hostname or url
     if not force:
         cached = get_cached_tech(url)
@@ -143,6 +213,7 @@ async def detect_tech(url: str, force: bool = False, js_render: bool = False) ->
             return cached
 
     import aiohttp
+
     timeout = aiohttp.ClientTimeout(total=10)
     req_headers = {"User-Agent": "Mozilla/5.0 Pentool TechDetector/1.0"}
     signals: dict[str, Any] = {"headers": {}, "html": [], "cookies": []}
@@ -199,8 +270,12 @@ async def detect_tech(url: str, force: bool = False, js_render: bool = False) ->
 
 
 def _make_profile(
-    signals: dict, h: dict, text: str,
-    server_raw: str = "", powered: str = "", generator: str = "",
+    signals: dict,
+    h: dict,
+    text: str,
+    server_raw: str = "",
+    powered: str = "",
+    generator: str = "",
 ) -> dict[str, Any]:
     """Build the full tech profile from raw signals."""
     server = server_raw or h.get("server", h.get("via", "")).lower() or None
@@ -218,7 +293,7 @@ def _make_profile(
 
     # --- Language ---
     language = None
-    if "php" in powered or "php" in server_raw or re.search(r'\.php[?\s#]', text, re.I):
+    if "php" in powered or "php" in server_raw or re.search(r"\.php[?\s#]", text, re.I):
         language = "PHP"
     elif "asp.net" in powered or "asp.net" in server_raw or "aspx" in text.lower():
         language = "C#"
@@ -322,7 +397,6 @@ def _make_profile(
     cdn = None
     via = h.get("via", "")
     cf_ray = h.get("cf-ray", "")
-    x_cache = h.get("x-cache", "")
     server_lower = server_raw or ""
     if cf_ray or "cloudflare" in server_lower or "cloudflare" in via:
         cdn = "Cloudflare"
@@ -339,7 +413,7 @@ def _make_profile(
 
     # --- Frontend JS libraries ---
     frontend_js = []
-    if re.search(r'jquery[.-]', tc):
+    if re.search(r"jquery[.-]", tc):
         frontend_js.append("jQuery")
     if "htmx" in tc or "hx-trigger" in tc or "hx-get" in tc:
         frontend_js.append("HTMX")
@@ -356,9 +430,9 @@ def _make_profile(
 
     # --- CSS frameworks ---
     css_fw = []
-    if "bootstrap" in tc or re.search(r'bootstrap\.min\.css', text, re.I):
+    if "bootstrap" in tc or re.search(r"bootstrap\.min\.css", text, re.I):
         css_fw.append("Bootstrap")
-    if "tailwind" in tc or re.search(r'tailwind\.min\.css', text, re.I):
+    if "tailwind" in tc or re.search(r"tailwind\.min\.css", text, re.I):
         css_fw.append("Tailwind")
     if "materialize" in tc or "materialize" in tc:
         css_fw.append("Materialize")
@@ -424,8 +498,8 @@ def _make_profile(
             "powered_by": powered or None,
             "server_header": server,
             "cookies": signals.get("cookies", [])[:5],
-            "has_forms": bool(re.search(r'<form[> ]', text, re.I)),
-            "has_api": bool(re.search(r'/api/', text, re.I)) or bool(re.search(r'application/json', text, re.I)),
+            "has_forms": bool(re.search(r"<form[> ]", text, re.I)),
+            "has_api": bool(re.search(r"/api/", text, re.I)) or bool(re.search(r"application/json", text, re.I)),
             "has_csp": "content-security-policy" in h,
             "has_hsts": "strict-transport-security" in h,
             "js_rendered": False,
@@ -443,10 +517,10 @@ def _detect_waf(headers: dict[str, str], body: str) -> str | None:
             return name
     # Check for WAF block page indicators
     block_indicators = [
-        (r'attention required!|cloudflare.*block', "Cloudflare (blocked)"),
-        (r'incapsula.*block|blocked.*incapsula', "Imperva / Incapsula (blocked)"),
-        (r'reference.*#[0-9a-f]{8,}', "Generic WAF (blocked)"),
-        (r'your request has been blocked', "Generic WAF (blocked)"),
+        (r"attention required!|cloudflare.*block", "Cloudflare (blocked)"),
+        (r"incapsula.*block|blocked.*incapsula", "Imperva / Incapsula (blocked)"),
+        (r"reference.*#[0-9a-f]{8,}", "Generic WAF (blocked)"),
+        (r"your request has been blocked", "Generic WAF (blocked)"),
     ]
     for pattern, name in block_indicators:
         if re.search(pattern, body, re.I):
@@ -457,6 +531,7 @@ def _detect_waf(headers: dict[str, str], body: str) -> str | None:
 async def _probe_wp_version(url: str) -> str | None:
     """Detect WordPress version via wp-json or readme.html."""
     import aiohttp
+
     timeout = aiohttp.ClientTimeout(total=5)
     headers = {"User-Agent": "Pentool TechDetector/1.0"}
 
@@ -480,7 +555,7 @@ async def _probe_wp_version(url: str) -> str | None:
             async with session.get(readme_url, headers=headers, ssl=False) as resp:
                 if resp.status == 200:
                     body = await resp.text()
-                    m = re.search(r'WordPress\s*([\d.]+)', body)
+                    m = re.search(r"WordPress\s*([\d.]+)", body)
                     if m:
                         return m.group(1)
     except Exception:
@@ -492,6 +567,7 @@ async def _probe_wp_version(url: str) -> str | None:
 async def _probe_graphql(url: str) -> bool:
     """Check if the target has a publicly accessible GraphQL endpoint."""
     import aiohttp
+
     timeout = aiohttp.ClientTimeout(total=5)
     headers = {"User-Agent": "Pentool TechDetector/1.0", "Content-Type": "application/json"}
     query = {"query": "{__schema{types{name}}}"}
@@ -520,6 +596,7 @@ async def _js_render_probe(url: str) -> str | None:
     """
     try:
         from pentool.utils.lightpanda import is_lightpanda_available, lightpanda_fetch_html
+
         if is_lightpanda_available():
             html = await lightpanda_fetch_html(url, timeout=20.0)
             if html:
@@ -528,6 +605,7 @@ async def _js_render_probe(url: str) -> str | None:
         logger.debug("_js_render_probe(%s): Lightpanda failed", url, exc_info=True)
     try:
         from pentool.api.spider_api import SpiderAPI, SpiderConfig
+
         spider = SpiderAPI(config=SpiderConfig(js_render=True))
         result = await spider.crawl(url, max_pages=1)
         if result and result.pages:
