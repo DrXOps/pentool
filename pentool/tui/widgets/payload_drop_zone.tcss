@@ -10,8 +10,3 @@ PayloadDropZone:hover {
     background: $primary-darken-3;
     border: dashed $primary;
 }
-PayloadDropZone.-drag-over {
-    background: $primary-darken-3;
-    border: solid $primary;
-    color: $primary;
-}

@@ -19,13 +19,3 @@ TargetScreen #detail-panel {
     layout: vertical;
     padding: 0 1;
 }
-TargetScreen .detail-label {
-    height: 1;
-    color: $text-muted;
-}
-TargetScreen #detail-log {
-    height: 1fr;
-}
-TargetScreen .in-scope {
-    color: $success;
-}

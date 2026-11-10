@@ -23,9 +23,16 @@ ToolbarButton.disabled {
 ToolbarButton.warn {
     color: $warning;
 }
-ToolbarButton.sending {
+ToolbarButton.pro-locked {
+    color: $text-muted;
+    text-style: dim;
+}
+/* ContentPanel wrap toggle sets these classes (widgets/content_panel.py). */
+ToolbarButton.variant-success {
+    color: $success;
+}
+ToolbarButton.variant-warning {
     color: $warning;
-    pointer: progress;
 }
 
 /* Common toolbar separator — used across all screens */

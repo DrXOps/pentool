@@ -46,12 +46,6 @@ ProxyScreen #resp-panel {
     height: 100%;
     layout: vertical;
 }
-ProxyScreen .panel-title {
-    height: 1;
-    background: $primary-darken-3;
-    color: $text-muted;
-    padding: 0 1;
-}
 ProxyScreen #req-panel HttpView,
 ProxyScreen #ws-req-panel HttpView,
 ProxyScreen #resp-panel HttpView,
@@ -107,10 +101,6 @@ ProxyScreen #intercept-hint {
     color: $text-muted;
     padding: 0 1;
     height: 1;
-}
-ProxyScreen .stub-label {
-    padding: 1 2;
-    color: $text-muted;
 }
 ProxyScreen #ws-body {
     height: 1fr;

@@ -26,10 +26,6 @@ CertInstallDialog .code {
     padding: 0 1;
     margin: 0 0 0 2;
 }
-CertInstallDialog .note {
-    color: $text-muted;
-    margin-top: 1;
-}
 CertInstallDialog #btn-close {
     margin-top: 1;
     width: 100%;

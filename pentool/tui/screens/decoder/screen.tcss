@@ -49,13 +49,6 @@ DecoderScreen #dec-output-col {
     height: 1fr;
     layout: vertical;
 }
-DecoderScreen .dec-col-label {
-    height: 1;
-    color: $text-muted;
-    background: $primary-darken-3;
-    padding: 0 1;
-    text-style: bold;
-}
 DecoderScreen #dec-input,
 DecoderScreen #dec-output {
     height: 1fr;
@@ -65,13 +58,6 @@ DecoderScreen #dec-output {
 DecoderScreen #dec-steps-area {
     height: 8;
     layout: vertical;
-}
-DecoderScreen #dec-steps-label {
-    height: 1;
-    color: $text-muted;
-    background: $primary-darken-3;
-    padding: 0 1;
-    text-style: bold;
 }
 DecoderScreen #dec-steps-log {
     height: 1fr;

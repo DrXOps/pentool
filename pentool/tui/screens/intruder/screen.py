@@ -371,7 +371,7 @@ class IntruderScreen(
             Toolbar.sep(),
             ToolbarButton("Auto §§", t("btn-mark-params")),
             Toolbar.sep(),
-            Static(_ATTACK_DESCRIPTIONS[AttackType.SNIPER], id=t("attack-type-desc")),
+            Static(_ATTACK_DESCRIPTIONS[AttackType.SNIPER], id=t("attack-type-desc"), classes="attack-type-desc"),
             id=t("toolbar"),
         )
 
@@ -442,7 +442,7 @@ class IntruderScreen(
             filter_bar,
             Horizontal(
                 ProgressBar(total=100, id=t("attack-progress"), show_eta=False),
-                Static("0/0 (0%)", id=t("progress-label")),
+                Static("0/0 (0%)", id=t("progress-label"), classes="progress-label"),
                 id=t("progress-row"),
                 classes="progress-row",
             ),
@@ -680,10 +680,6 @@ class IntruderScreen(
         self._auto_save_tab(tab)
 
     # ── DB persistence ────────────────────────────────────────────────────────
-
-    def _get_db_path(self) -> str:
-        """Database path from the app's public ``db_path`` property."""
-        return str(getattr(self.app, "db_path", "") or "")
 
     def _auto_save_tab(self, state: _IntruderTabState) -> None:
         """Save tab state to database (fire-and-forget)."""

@@ -77,6 +77,17 @@ jobs:
       run: uv run ruff check pentool/
       continue-on-error: true  # informational, don't block CI
 
+    # Каждый .tcss-селектор обязан совпадать с id/классом/типом из Python.
+    # Блокирующий: F-008 (11 мёртвых/несовпавших селекторов) без гейта
+    # откатится при следующей правке стилей.
+    - name: Check TUI CSS selectors
+      run: uv run python tools/check_tui_css.py
+
+    # Трещотка ADR-6: новые `except Exception: pass` запрещены, исторические
+    # 284 места зафиксированы в tools/silent_except_baseline.json.
+    - name: Check silent except ratchet
+      run: uv run python tools/check_silent_except.py
+
     - name: Run unit tests
       run: uv run pytest tests/unit/ -v --tb=short
 

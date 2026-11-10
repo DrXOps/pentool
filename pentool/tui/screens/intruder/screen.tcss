@@ -21,7 +21,7 @@ IntruderScreen TabbedContent ContentTabs Tabs {
     max-width: 100%;
     overflow-x: auto;
 }
-IntruderScreen TabbedContent ContentTabs Tabs TabLabel {
+IntruderScreen TabbedContent ContentTabs Tabs Tab {
     max-width: 30;
 }
 
@@ -61,37 +61,16 @@ IntruderScreen #intruder-start-stop ToolbarButton {
     width: auto;
 }
 
-/* ── Per-tab toolbar ────────────────────────────────────────────────── */
-IntruderScreen .intruder-tab-toolbar {
-    height: 1;
-}
-
-IntruderScreen .intruder-tab-toolbar Label.toolbar-label {
-    width: auto;
-    padding: 0 1;
-    color: $text-muted;
-}
-
-IntruderScreen .intruder-tab-toolbar Input {
-    width: 6;
-    height: 1;
-    border: solid $primary-darken-2;
-    padding: 0 1;
-    background: $surface;
-}
-
 /* ── Per-tab attack description ─────────────────────────────────────── */
-IntruderScreen .intruder-tab-toolbar .attack-type-desc {
+/* Per-tab widget: id is ``attack-type-desc-<tab_id>`` (IntruderScreen._wid)
+   and the matching ``attack-type-desc`` class rides along, because Textual 8
+   has no attribute selectors ( ``[id^=…]`` is a parse error, verified by
+   test_intruder_tabs.py after the first attempt). */
+IntruderScreen .attack-type-desc {
     width: 1fr;
     height: 1;
     padding: 0 1;
     color: $text-muted;
-}
-
-/* ── Payload buttons toolbar (per-tab) ─────────────────────────────── */
-IntruderScreen .intruder-tab-toolbar .pro-locked {
-    color: $text-muted;
-    text-style: dim;
 }
 
 /* ── Top area (template + payloads side by side) ────────────────────── */
@@ -186,54 +165,13 @@ IntruderScreen .intruder-results-area DataTable {
 }
 
 /* ── Filter bar (per-tab) ──────────────────────────────────────────── */
-IntruderScreen .intruder-filter-bar {
+/* Height and inner layout belong to IntruderFilterBar's own DEFAULT_CSS
+   (widgets/intruder_filter_bar.py). Only the id-level background/padding is
+   owned here; the inner Label/Input/Button rules moved with the widget. */
+IntruderScreen IntruderFilterBar {
     height: 2;
-    layout: horizontal;
     background: $panel;
     padding: 0 1;
-    align: left middle;
-}
-IntruderScreen .intruder-filter-bar Label {
-    width: auto;
-    color: $text-muted;
-    padding: 0 1;
-}
-IntruderScreen .intruder-filter-bar Input {
-    width: 8;
-    background: $surface;
-}
-IntruderScreen .intruder-filter-bar Button {
-    width: auto;
-    min-width: 8;
-    height: 1;
-    padding: 0 1;
-    border: none;
-}
-
-/* ── Grep bar (inside filter bar) ──────────────────────────────────── */
-IntruderScreen .grep-bar {
-    height: 1;
-    layout: horizontal;
-    background: $panel;
-    padding: 0 1;
-    align: left middle;
-}
-IntruderScreen .grep-bar Label {
-    width: auto;
-    color: $text-muted;
-    padding: 0 1;
-    height: 1;
-}
-IntruderScreen .grep-bar Input {
-    width: 24;
-    background: $surface;
-}
-IntruderScreen .grep-bar Button {
-    width: auto;
-    min-width: 8;
-    height: 1;
-    padding: 0 1;
-    border: none;
 }
 
 /* ── Detail panel (per-tab) ────────────────────────────────────────── */

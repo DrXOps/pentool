@@ -30,13 +30,6 @@ ComparerScreen #cmp-right-col {
     height: 1fr;
     layout: vertical;
 }
-ComparerScreen .cmp-col-label {
-    height: 1;
-    color: $text-muted;
-    background: $primary-darken-3;
-    padding: 0 1;
-    text-style: bold;
-}
 ComparerScreen #cmp-left,
 ComparerScreen #cmp-right {
     height: 1fr;
