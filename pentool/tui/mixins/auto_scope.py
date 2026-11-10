@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from urllib.parse import urlparse
 
@@ -13,6 +12,31 @@ from pentool.core.config import get_config
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)  # диагностика — убедись что логи видны
+
+# Textual worker group for fire-and-forget tech detection. Every task lives in
+# this group, so `WorkerManager.cancel_group` can stop them on app shutdown
+# (F-014: previously `asyncio.create_task` left them with no handle and no
+# cancellation path).
+TECH_DETECT_WORKER_GROUP = "tech-detect"
+
+
+def _spawn_tech_detect(host: str, app) -> None:
+    """Start tech detection as a Textual worker instead of a bare asyncio task.
+
+    `App` is a `MessagePump`, so ``run_worker`` is available and is thread-safe
+    (it bounces to the app thread via ``call_from_thread`` when needed).
+    ``exit_on_error=False`` keeps a failing fingerprint from killing the app;
+    the exception is logged by the worker itself.
+    """
+    try:
+        app.run_worker(
+            _tech_detect_and_cache(host, app),
+            group=TECH_DETECT_WORKER_GROUP,
+            exclusive=False,
+            exit_on_error=False,
+        )
+    except Exception as exc:
+        log.warning("tech_detect: worker spawn failed for %s: %s", host, exc)
 
 
 def _get_sitemap(app):
@@ -112,10 +136,7 @@ def _force_scope_host(host: str, app) -> None:
 
     # 3. Trigger async TechDetect (только если SiteMap жива)
     if sitemap_ok:
-        try:
-            asyncio.create_task(_tech_detect_and_cache(norm_host, app))
-        except Exception as exc:
-            log.warning("FORCE_SCOPE: tech_detect error: %s", exc)
+        _spawn_tech_detect(norm_host, app)
     else:
         log.warning("FORCE_SCOPE: skipped TechDetect — sitemap not available")
 
@@ -157,10 +178,7 @@ def _maybe_auto_scope_host(host: str, app) -> None:
 
     # Trigger async TechDetect
     if sitemap_ok:
-        try:
-            asyncio.create_task(_tech_detect_and_cache(norm_host, app))
-        except Exception as exc:
-            log.debug("AUTO_SCOPE: tech_detect create_task error: %s", exc)
+        _spawn_tech_detect(norm_host, app)
 
 
 def _maybe_auto_scope_request(raw: str, app) -> None:
