@@ -47,6 +47,14 @@
   не должно терять сохранённое состояние.
 - `StartStopWidget` — единственный источник логики Start/Stop; `StartStopMixin`
   удалён (был мёртв в проде).
+- **`AppMixin` — источник `err`/`_get_proxy`/`_get_proxy_api`/`_get_db_path`/
+  `_send_to_decoder`.** Любой экран, вызывающий `self.err(...)` или
+  `self._get_db_path()`, обязан иметь `AppMixin` в базовых классах, иначе путь
+  ошибки падает с `AttributeError` и маскирует исходное исключение. Шесть
+  экранов (`Target`, `Dashboard`, `Comparer`, `Decoder`, `Sequencer`,
+  `Settings`) жили без него — правилось 2026-11-10; страж —
+  `tests/unit/tui/test_app_mixin_surface.py`. Путь к БД — только
+  `app.db_path` через `AppMixin._get_db_path()`.
 - **`@on(...)` в обычном миксине не регистрируется** — Textual собирает
   декораторы только из `__dict__` конкретного класса. В миксинах хендлеры
   объявляются по соглашению об именах (`on_<message_name>`), которое
@@ -59,6 +67,10 @@
 - `WorkerManager` умеет ровно шесть операций: `add_worker`, `cancel_all`,
   `cancel_group`, `cancel_node`, `start_all`, `wait_for_complete`. Отмена —
   по группе/узлу, не по имени воркера.
+- **Техдетект живёт в Textual-воркере** (`auto_scope._spawn_tech_detect`,
+  группа `tech-detect`, `exit_on_error=False`), а не в `asyncio.create_task`:
+  у воркера есть группа, отмена и логирование исключения. Голый
+  `asyncio.create_task` для задач внутри App запрещён (F-014).
 - Каждый `EventBus.subscribe`/`Config.add_observer` имеет парный
   `unsubscribe`/`remove_observer`: на уровне виджета — в `on_unmount`, для
   приложения — в `_on_exit_app`.

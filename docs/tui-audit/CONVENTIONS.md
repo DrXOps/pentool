@@ -198,6 +198,35 @@ self.workers.cancel_group(self, self.SAVE_WORKER_GROUP)
 а не строку в `.py`. Строкой — только для 10 существующих классов (F-025),
 перевод — при следующем касании файла.
 
+### 6.4 Селектор обязан совпадать с DOM — проверяется гейтом
+
+Каждый класс/тип/id-селектор из `.tcss` должен ссылаться на что-то, что
+реально создаёт Python. F-008: 11 селекторов не совпадали — три были
+ошибкой вида (`.attack-type-desc` в CSS против `id="attack-type-desc-<tab>"`
+в коде; стили панели фильтра Intruder не применялись), остальные — мёртвые
+копипасты между экранами.
+
+- Гейт: `uv run python tools/check_tui_css.py` — блокирующий шаг CI и
+  pre-commit. Проверяет все загружаемые `.tcss` (три незагружаемых файла —
+  `filter_bar.tcss`, `menu.tcss`, `menu_bar.tcss` — пропускаются и
+  перечисляются в предупреждении).
+- **Атрибутных селекторов в Textual 8 нет.** `[id^="…"]` — ошибка
+  токенизатора (`TokenError: Expected selector or {`), а не «селектор, который
+  ни на что не попал»; проверено запуском `test_intruder_tabs.py`. Per-tab
+  виджеты поэтому несут и id (`f"{suffix}-{tab_id}"`), и **класс** с той же
+  базой (`classes="attack-type-desc"`), а `.tcss` селектит по классу.
+  Чекер отдельно ловит `[id…=…]` и требует класс.
+- Внутренние классы Textual (`toggle--button`, `-information`,
+  `text-area--selection`) и его типы (`Toast`, `ContentTabs`) берутся из
+  `DEFAULT_CSS`/`COMPONENT_CLASSES` установленной версии — вручную их
+  заводить не нужно.
+- Своя форма конструктора, которая прокидывает id позиционно
+  (`ToolbarButton(label, btn_id)`), распознаётся по телу `__init__`
+  (`super().__init__(id=btn_id)`); новый такой класс — ничего
+  настраивать не требуется, если он прокидывает `id` явно.
+- Тест на сам гейт — `tests/unit/tui/test_check_tui_css.py` (зелёный
+  репозиторий + живое обнаружение подброшенного селектора).
+
 ---
 
 ## 7. Тесты
@@ -220,6 +249,7 @@ self.workers.cancel_group(self, self.SAVE_WORKER_GROUP)
 ```bash
 uvx pre-commit run --files $(git diff --name-only HEAD)   # или --all-files
 uv run python tools/check_layers.py
+uv run python tools/check_tui_css.py
 uv run ruff check --select F pentool/tui
 scripts/run-tests.sh                                      # гейт tests/unit
 ```

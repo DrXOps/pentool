@@ -44,6 +44,10 @@ Single source of truth: `MYPLANS/` — любой файл `*plan*` или `*aud
 - Линтер: `ruff check pentool/`
 - Форматтер: `ruff format pentool/`
 - Слои: `python tools/check_layers.py`
+- TUI CSS ↔ DOM: `uv run python tools/check_tui_css.py` (селектор без
+  соответствующего id/класса/типа в Python — блокирует CI и pre-commit)
+- Молчаливые исключения: `uv run python tools/check_silent_except.py`
+  (трещотка ADR-6; `--update` понижает baseline)
 - Хуки pre-commit: `uvx pre-commit run --all-files`
 
 Тесты запускаются **через `scripts/run-tests.sh`**: после успешного прогона

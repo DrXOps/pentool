@@ -423,10 +423,13 @@ from textual.widgets import Input, Static, TabbedContent, TabPane, TextArea
 
 **Как:** (1) переписать три селектора на id-форму:
 ```tcss
-IntruderScreen Static[id^="attack-type-desc-"] { width: 1fr; height: 1; padding: 0 1; color: $text-muted; }
-IntruderScreen Static[id^="progress-label-"]    { width: auto; color: $text-muted; padding: 0 1; }
-IntruderScreen IntruderFilterBar                 { height: 2; layout: horizontal; background: $panel; padding: 0 1; align: left middle; }
+IntruderScreen .attack-type-desc                 { width: 1fr; height: 1; padding: 0 1; color: $text-muted; }
+IntruderScreen .progress-row .progress-label     { width: auto; color: $text-muted; padding: 0 1; }
+IntruderScreen IntruderFilterBar                 { height: 2; background: $panel; padding: 0 1; }
 ```
+
+> Атрибутные селекторы (`[id^="…"]`) здесь неприменимы: Textual 8 их не
+> парсит (см. статус ниже). Виджет получает класс с той же базой, что и id.
 (2) удалить мёртвые блоки; (3) добавить в `toolbar_button.tcss`:
 ```tcss
 ToolbarButton.variant-success { color: $success; }
@@ -435,6 +438,17 @@ ToolbarButton.variant-warning { color: $warning; }
 (4) добавить проверку в CI — скрипт `tools/check_tui_css.py`, сопоставляющий классы/ids из `.tcss` с литералами в `.py` (см. D-итерацию 6).
 
 **Связи:** F-007, F-038 (CSS-дубли).
+
+**Статус (2026-11-10): закрыто.** Три типа-ошибки переписаны на
+классовые селекторы (`.attack-type-desc`, `.progress-label` — класс ставится
+рядом с id; `IntruderFilterBar` по типу), 6 мёртвых блоков удалены, `.variant-success`/
+`.variant-warning`/`.pro-locked` добавлены в `toolbar_button.tcss`, `.sending`
+удалён как неиспользуемый. Гейт — `tools/check_tui_css.py` (0 проблем на
+корпусе 44 `.tcss`), шаг CI + pre-commit, тест
+`tests/unit/tui/test_check_tui_css.py`. Попутно найдено и удалено ещё 4 мёртвых
+правила (`#dec-steps-label`, `TargetScreen #detail-log`,
+`CertInstallDialog .note`, `PayloadDropZone.-drag-over`) и исправлен
+`TabLabel` → `Tab` (такого класса в Textual нет).
 
 ---
 
@@ -452,6 +466,15 @@ ToolbarButton.variant-warning { color: $warning; }
 **Связи:** F-003, F-004, F-005.
 
 ---
+
+**Статус (2026-11-10): частично закрыто, зафиксировано трещоткой.** Массовой
+правки нет (осознанно, см. ADR-6), но рост остановлен: `tools/check_silent_except.py`
+считает «молчаливые» хендлеры на файл и сверяется с
+`tools/silent_except_baseline.json` (284 в 39 файлах). Новый
+`except Exception: pass` в любом файле `pentool/tui` роняет CI и pre-commit;
+удаление старых разрешено и сужает baseline. До полного `BLE001` (неделя
+правок) остаётся пункт 1 ADR-6: `logger.exception` вместо `pass` — ревьюерское
+правило.
 
 ### F-010 [P1] `from __future__ import annotations` маскирует 8 неопределённых имён (`F821`)
 
@@ -1077,6 +1100,46 @@ class AutoSaveMixin:
 **Как:** снимать обсервер в `_on_exit_app` (единая точка выхода, включая `app.exit()` из кода) и удалить мёртвый хендлер вместе с комментариями, которые на него ссылаются.
 
 **Связи:** F-002 (тот же класс — «подписка без отписки»), F-041.
+
+---
+
+### F-047 [P0] Шесть экранов зовут `self.err(...)`, но не наследуют `AppMixin` — каждый путь ошибки падает с `AttributeError`
+
+**Где:** `target/screen.py:961`, `dashboard/screen.py:848,891`, `comparer/screen.py:115,138,153`, `decoder/screen.py:217,248,258,288`, `sequencer/screen.py:323`, `settings/screen.py:709`.
+
+**Что:** `err()`, `_get_proxy()`, `_get_proxy_api()`, `_get_db_path()`, `_send_to_decoder()` определены только в `mixins/app_mixin.py::AppMixin`. У перечисленных экранов `AppMixin` в базовых классах отсутствовал, то есть `self.err(...)` — гарантированный `AttributeError`.
+
+**Почему:** все вызовы стоят в `except`-ветках (экспорт не удался, файл не найден, сохранение не прошло). На happy-path-тестах их не видно, кроме случаев, когда ошибка уже случилась, — тогда `AttributeError` из `err` подменяет исходное исключение и пользователь видит «непонятный» трейс вместо причины. Это тот же класс, что F-041…F-044 («написано, но не исполняется»), только слоем ниже: не диспетчеризация, а наследование.
+
+**Как:** добавить `AppMixin` в базовые классы шести экранов (сделано 2026-11-10); `ProxyScreen`/`RepeaterScreen`/`IntruderScreen` уже имели его. Страж — `tests/unit/tui/test_app_mixin_surface.py` (AST-скан `self.<helper>` + MRO-проверка, два теста: общий и точечный по шести именам). Проверен мутацией: удаление `AppMixin` у `SequencerScreen` роняет оба теста.
+
+**Связи:** F-016, F-001.
+
+---
+
+### F-048 [P1] `asyncio.create_task` для техдетекта — без группы, отмены и логирования исключения
+
+**Где:** `mixins/auto_scope.py:140,185` (`_force_scope_host`, `_maybe_auto_scope_host`).
+
+**Что:** `_tech_detect_and_cache` — корутина внутри `App`, но запускалась голым `asyncio.create_task`: нет `Worker`, нет группы, нет отмены при выходе; исключение остаётся в `Task.exception()` и печатается как «Task exception was never retrieved» уже после падения.
+
+**Почему:** `_maybe_auto_scope_host` вызывается из контекстных меню Proxy/Target на каждый хост — то есть это основной путь, а не редкий. Отсутствие отмены означает, что при выходе из TUI сетевой запрос может продолжить работать.
+
+**Как:** единый `_spawn_tech_detect(host, app)` через `app.run_worker(..., group=TECH_DETECT_WORKER_GROUP, exit_on_error=False)`; `run_worker` на `DomMixin` сам прыгает в поток приложения при вызове из чужого потока. Сделано 2026-11-10.
+
+**Связи:** F-003 (эта же функция), F-013, ADR-11.
+
+---
+
+### F-049 [P2] (закрыт) Четыре способа получить путь к БД — остался один
+
+**Где:** `mixins/app_mixin.py:26`, ранее также `dashboard:623`, `intruder:684`.
+
+**Что:** на ветке `8c69d6d` формы `getattr(self.app, "_db_path", …)` уже убраны (осталось только публичное `db_path`), но `_get_db_path` был скопирован ещё в два экрана. 2026-11-10 оба локальных определения удалены — теперь единственная реализация в `AppMixin`. **Пункт закрыт.**
+
+**Как:** если понадобится иная логика пути к БД — правится `AppMixin._get_db_path`, а не экран.
+
+**Связи:** F-004, F-016, F-047.
 
 ---
 
