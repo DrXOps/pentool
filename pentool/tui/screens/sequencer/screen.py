@@ -12,29 +12,28 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Input, Label, Static, TextArea
 
-from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
-from pentool.tui.widgets.content_panel import ContentPanel
-
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import SEQUENCER_BINDINGS
-
+from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
+from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 from pentool.tui.widgets.toolbar import Toolbar
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 _SOURCE_OPTIONS = [
-    ("Manual input",  "manual"),
-    ("Proxy param",   "proxy"),
+    ("Manual input", "manual"),
+    ("Proxy param", "proxy"),
     ("Cookie header", "cookie"),
-    ("Body regex",    "body_regex"),
+    ("Body regex", "body_regex"),
 ]
 
 
-class SequencerScreen(ContentClipboardMixin, Widget):
+class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
     """Capture and entropy analysis of tokens (session IDs, CSRF, JWT…)."""
 
     DEFAULT_CSS = _CSS
@@ -44,30 +43,31 @@ class SequencerScreen(ContentClipboardMixin, Widget):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         from pentool.api.sequencer_api import Sequencer
+
         self._seq = Sequencer()
 
     def on_mount(self) -> None:
-        self._capturing = False       # live-capture mode from proxy
-        self._capture_param: str = "" # parameter/cookie name to capture
-        self._proxy_hook = None       # reference for unsubscribe
+        self._capturing = False  # live-capture mode from proxy
+        self._capture_param: str = ""  # parameter/cookie name to capture
+        self._proxy_hook = None  # reference for unsubscribe
         self._source: str = "manual"  # currently selected source
 
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────
         yield Toolbar(
-            ToolbarButton("▶ Capture",  "btn-seq-capture"),
+            ToolbarButton("▶ Capture", "btn-seq-capture"),
             Toolbar.sep(),
-            ToolbarButton("■ Stop",     "btn-seq-stop",   classes="disabled"),
+            ToolbarButton("■ Stop", "btn-seq-stop", classes="disabled"),
             Toolbar.sep(),
-            ToolbarButton("⚡ Analyze",  "btn-seq-analyze"),
+            ToolbarButton("⚡ Analyze", "btn-seq-analyze"),
             Toolbar.sep(),
-            ToolbarButton("📂 Load File","btn-seq-load"),
+            ToolbarButton("📂 Load File", "btn-seq-load"),
             Toolbar.sep(),
-            ToolbarButton("🗑 Clear",    "btn-seq-clear"),
+            ToolbarButton("🗑 Clear", "btn-seq-clear"),
             Toolbar.sep(),
-            ToolbarButton("📋 Copy",     "btn-seq-copy"),
+            ToolbarButton("📋 Copy", "btn-seq-copy"),
             Toolbar.sep(),
-            ToolbarButton("💾 Export",   "btn-seq-export"),
+            ToolbarButton("💾 Export", "btn-seq-export"),
         )
 
         # ── Config row ─────────────────────────────────────────────────────────
@@ -86,22 +86,31 @@ class SequencerScreen(ContentClipboardMixin, Widget):
         with Horizontal(id="seq-summary-bar"):
             yield Static(
                 "[dim]— Add tokens manually or capture from Proxy, then press Analyze —[/dim]",
-                id="seq-summary", markup=True,
+                id="seq-summary",
+                markup=True,
             )
 
         # ── Main area ──────────────────────────────────────────────────────────
         with Horizontal(id="seq-main-area"):
             # Left column: token input (one per line)
             with Vertical(id="seq-input-col"):
-                yield Static("Tokens (one per line)", id="seq-tokens-label",
-                             classes="seq-col-label")
+                yield Static(
+                    "Tokens (one per line)", id="seq-tokens-label", classes="seq-col-label"
+                )
                 yield TextArea(id="seq-token-area", language=None)
 
             yield ResizeHandle("seq-input-col", "seq-analysis-col", id="seq-resize-h")
 
             # Right column: analysis results
             with Vertical(id="seq-analysis-col"):
-                yield ContentPanel("Analysis", widget_type="richlog", wrap=True, max_lines=500, buttons=["copy"], id="seq-analysis-log")
+                yield ContentPanel(
+                    "Analysis",
+                    widget_type="richlog",
+                    wrap=True,
+                    max_lines=500,
+                    buttons=["copy"],
+                    id="seq-analysis-log",
+                )
 
         yield ResizeHandle("seq-main-area", "seq-gauge-area", vertical=True, id="seq-resize-v")
 
@@ -112,7 +121,6 @@ class SequencerScreen(ContentClipboardMixin, Widget):
             yield Static(" ", id="seq-assessment")
             yield Static(" ", id="seq-bits-label")
 
-        
     # ── Toolbar ───────────────────────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, "#btn-seq-capture")
@@ -149,8 +157,7 @@ class SequencerScreen(ContentClipboardMixin, Widget):
 
     def _open_source_menu(self, btn: ToolbarButton) -> None:
         items = [
-            (val, ("✓ " if val == self._source else "  ") + label)
-            for label, val in _SOURCE_OPTIONS
+            (val, ("✓ " if val == self._source else "  ") + label) for label, val in _SOURCE_OPTIONS
         ]
         r = btn.region
         self.app.show_context_menu(items, r.x, r.y + 1, callback=self._on_source_selected)
@@ -185,15 +192,15 @@ class SequencerScreen(ContentClipboardMixin, Widget):
                 self._capture_param = param
                 self._attach_proxy_hook(proxy_api, param, src)
                 src_labels = {"proxy": "param", "cookie": "cookie", "body_regex": "regex"}
-                self.app.notify(
-                    f"Capturing '{param}' ({src_labels[src]}) from Proxy…", timeout=3
-                )
+                self.app.notify(f"Capturing '{param}' ({src_labels[src]}) from Proxy…", timeout=3)
             else:
-                self.app.notify("Switch to Proxy/Cookie/Body source for live capture", severity="info")
+                self.app.notify(
+                    "Switch to Proxy/Cookie/Body source for live capture", severity="info"
+                )
                 return
 
             self.query_one("#btn-seq-capture", ToolbarButton).disabled = True
-            self.query_one("#btn-seq-stop",    ToolbarButton).disabled = False
+            self.query_one("#btn-seq-stop", ToolbarButton).disabled = False
         except Exception as exc:
             logger.debug("_start_capture: %s", exc)
 
@@ -270,13 +277,14 @@ class SequencerScreen(ContentClipboardMixin, Widget):
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import ProxyRequestDoneEvent
+
             if hasattr(self, "_proxy_hook"):
                 get_event_bus().unsubscribe(ProxyRequestDoneEvent, self._proxy_hook)
         except Exception:
             pass
         try:
             self.query_one("#btn-seq-capture", ToolbarButton).disabled = False
-            self.query_one("#btn-seq-stop",    ToolbarButton).disabled = True
+            self.query_one("#btn-seq-stop", ToolbarButton).disabled = True
         except Exception:
             pass
         self.app.notify("Capture stopped", timeout=2)
@@ -299,9 +307,7 @@ class SequencerScreen(ContentClipboardMixin, Widget):
                 text = Path(path).read_text(encoding="utf-8", errors="replace")
                 added = self._seq.add_from_text(text)
                 # Update TextArea
-                self.query_one("#seq-token-area", TextArea).load_text(
-                    "\n".join(self._seq.tokens)
-                )
+                self.query_one("#seq-token-area", TextArea).load_text("\n".join(self._seq.tokens))
                 self._update_counter()
                 self.app.notify(f"Loaded {added} tokens from {os.path.basename(path)}", timeout=3)
             except Exception as exc:
@@ -315,6 +321,7 @@ class SequencerScreen(ContentClipboardMixin, Widget):
     def _copy_report(self) -> None:
         try:
             from pentool.utils.copy_as import copy_to_clipboard
+
             report = self._seq.analyze()
             text = re.sub(r"\[/?[^\]]+\]", "", report.summary())
             if copy_to_clipboard(text):
@@ -340,7 +347,9 @@ class SequencerScreen(ContentClipboardMixin, Widget):
                 lines.append("=" * 60)
                 lines.append("")
                 lines.append(f"Token Count:  {report.token_count}")
-                lines.append(f"Length:       {report.min_length}–{report.max_length} (avg {report.avg_length:.1f})")
+                lines.append(
+                    f"Length:       {report.min_length}–{report.max_length} (avg {report.avg_length:.1f})"
+                )
                 lines.append(f"Charset:      ~{report.charset_estimate} chars")
                 lines.append(f"Entropy:      {report.mean_entropy:.3f} bits/char")
                 lines.append(f"Total bits:   {report.mean_total_bits:.1f}")
@@ -365,13 +374,12 @@ class SequencerScreen(ContentClipboardMixin, Widget):
                 for tok in report.tokens:
                     lines.append(f"  {tok}")
                 import os
+
                 if not path.endswith(".txt"):
                     path = path + ".txt"
                 with open(path, "w", encoding="utf-8") as f:
                     f.write("\n".join(lines))
-                self.app.notify(
-                    f"Report exported → {os.path.basename(path)}", timeout=3
-                )
+                self.app.notify(f"Report exported → {os.path.basename(path)}", timeout=3)
             except Exception as exc:
                 self.err(exc, "Export failed")
 
@@ -411,7 +419,9 @@ class SequencerScreen(ContentClipboardMixin, Widget):
             log.write(f"[bold cyan]── Token Analysis ── {report.token_count} tokens ──[/bold cyan]")
             log.write("")
             log.write(f"[bold]Count:[/bold]       {report.token_count}")
-            log.write(f"[bold]Length:[/bold]      {report.min_length}–{report.max_length} chars (avg {report.avg_length:.1f})")
+            log.write(
+                f"[bold]Length:[/bold]      {report.min_length}–{report.max_length} chars (avg {report.avg_length:.1f})"
+            )
             log.write(f"[bold]Charset:[/bold]     ~{report.charset_estimate} chars")
             log.write(f"[bold]Entropy:[/bold]     {report.mean_entropy:.3f} bits/char")
             log.write(f"[bold]Total bits:[/bold]  {report.mean_total_bits:.1f}")
@@ -470,14 +480,16 @@ class SequencerScreen(ContentClipboardMixin, Widget):
                 f"[{color}]{bar}[/{color}] [{color}]{bits:.0f} bits[/{color}]"
             )
             assessment = report.assessment
-            a_color = "bold red" if "WEAK" in assessment else (
-                "yellow" if "MODERATE" in assessment else (
-                    "bold green" if "STRONG" in assessment else "green"
+            a_color = (
+                "bold red"
+                if "WEAK" in assessment
+                else (
+                    "yellow"
+                    if "MODERATE" in assessment
+                    else ("bold green" if "STRONG" in assessment else "green")
                 )
             )
-            self.query_one("#seq-assessment", Static).update(
-                f"[{a_color}]{assessment}[/{a_color}]"
-            )
+            self.query_one("#seq-assessment", Static).update(f"[{a_color}]{assessment}[/{a_color}]")
             self.query_one("#seq-bits-label", Static).update(
                 f"[dim]Entropy: {report.mean_entropy:.3f} bits/char × "
                 f"{report.avg_length:.1f} chars avg = {report.mean_total_bits:.1f} bits[/dim]"
@@ -496,7 +508,7 @@ class SequencerScreen(ContentClipboardMixin, Widget):
             self.query_one("#seq-summary", Static).update(
                 "[dim]— Add tokens manually or capture from Proxy, then press Analyze —[/dim]"
             )
-            self.query_one("#seq-gauge",      Static).update(" ")
+            self.query_one("#seq-gauge", Static).update(" ")
             self.query_one("#seq-assessment", Static).update(" ")
             self.query_one("#seq-bits-label", Static).update(" ")
         except Exception as exc:

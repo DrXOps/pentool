@@ -16,6 +16,7 @@ from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import TARGET_BINDINGS
 from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
 from pentool.tui.mixins.ai_sync import AiModeSyncMixin
+from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.widgets.content_panel import ContentPanel
@@ -129,7 +130,7 @@ def _format_tech_profile(profile: dict) -> str:
     return " | ".join(parts) if parts else ""
 
 
-class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Widget):
+class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMixin, Widget):
     """Tree view of discovered hosts and URLs."""
 
     DEFAULT_CSS = _CSS

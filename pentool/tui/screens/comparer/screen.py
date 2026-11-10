@@ -14,6 +14,7 @@ from textual.widgets import Static, TextArea
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import COMPARER_BINDINGS
+from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
@@ -25,7 +26,7 @@ logger = get_logger(__name__)
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 
-class ComparerScreen(ContentClipboardMixin, Widget):
+class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
     """Side-by-side text diff with difference highlighting."""
 
     DEFAULT_CSS = _CSS

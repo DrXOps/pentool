@@ -1,7 +1,6 @@
 """Application settings screen."""
 
 from __future__ import annotations
-from pentool.core.error_guard import err
 
 from enum import Enum
 from pathlib import Path
@@ -11,6 +10,8 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.timer import Timer
 from textual.widget import Widget
+
+from pentool.core.error_guard import err
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
@@ -23,6 +24,7 @@ from textual.widgets import (
     TabPane,
 )
 
+from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.settings.hotkeys import HotkeySettingsScreen
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
@@ -34,7 +36,7 @@ class UIMode(str, Enum):
     ADVANCED = "advanced"
 
 
-class SettingsScreen(Widget):
+class SettingsScreen(AppMixin, Widget):
     """Settings dialog: Interface / Proxy / Hotkeys / Project.
 
     Mounted as a regular screen-widget; opened via ContentSwitcher.
@@ -46,15 +48,15 @@ class SettingsScreen(Widget):
     _theme_debounce: Timer | None = None
 
     _THEMES = [
-        ("Dark",           "textual-dark"),
-        ("Light",          "textual-light"),
-        ("Nord",           "nord"),
-        ("Dracula",        "dracula"),
-        ("Gruvbox",        "gruvbox"),
-        ("Tokyo Night",    "tokyo-night"),
-        ("Catppuccin",     "catppuccin-mocha"),
+        ("Dark", "textual-dark"),
+        ("Light", "textual-light"),
+        ("Nord", "nord"),
+        ("Dracula", "dracula"),
+        ("Gruvbox", "gruvbox"),
+        ("Tokyo Night", "tokyo-night"),
+        ("Catppuccin", "catppuccin-mocha"),
         ("Solarized Dark", "solarized-dark"),
-        ("Monokai",        "monokai"),
+        ("Monokai", "monokai"),
     ]
     _MODES = [("Advanced", "advanced"), ("Basic", "basic")]
 
@@ -82,7 +84,9 @@ class SettingsScreen(Widget):
                         yield Input(value="8080", id="set-proxy-port", compact=True)
                     with Horizontal(classes="row"):
                         yield Static("Upstream proxy:", classes="row-label")
-                        yield Input(placeholder="http://proxy:8080", id="set-upstream", compact=True)
+                        yield Input(
+                            placeholder="http://proxy:8080", id="set-upstream", compact=True
+                        )
                     with Horizontal(classes="row"):
                         yield Static("CA certificate:", classes="row-label")
                         yield Button("Install CA cert", id="settings-open-ca")
@@ -96,7 +100,9 @@ class SettingsScreen(Widget):
                     yield Static("Project Settings", classes="section-title")
                     with Horizontal(classes="row"):
                         yield Static("Auto-save interval (min):", classes="row-label")
-                        yield Input(placeholder="0 = disabled", id="set-autosave-interval", compact=True)
+                        yield Input(
+                            placeholder="0 = disabled", id="set-autosave-interval", compact=True
+                        )
                     with Horizontal(classes="row"):
                         yield Static("Auto-save enabled:", classes="row-label")
                         yield Checkbox("Enable auto-save", id="set-autosave-enabled", value=False)
@@ -134,7 +140,11 @@ class SettingsScreen(Widget):
                     yield Static("─" * 40, classes="license-sep")
                     with Horizontal(classes="row"):
                         yield Static("Scan Marker Header:", classes="row-label")
-                        yield Checkbox("Add custom header to all scan requests", id="set-scan-marker-enabled", value=False)
+                        yield Checkbox(
+                            "Add custom header to all scan requests",
+                            id="set-scan-marker-enabled",
+                            value=False,
+                        )
                     with Horizontal(classes="row"):
                         yield Static("Header Name:", classes="row-label")
                         yield Input(value="X-Scanner", id="set-scan-marker-name", compact=True)
@@ -208,8 +218,7 @@ class SettingsScreen(Widget):
                         yield Static("Model:", classes="row-label")
                         yield Input(id="set-ai-model-path", compact=True)
                     yield Static(
-                        "Path to the model's GGUF file. If empty, "
-                        "~/.pentool/ai/models/ is used.",
+                        "Path to the model's GGUF file. If empty, ~/.pentool/ai/models/ is used.",
                         classes="settings-hint",
                     )
 
@@ -256,6 +265,7 @@ class SettingsScreen(Widget):
     def _load_current_config(self) -> None:
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             self.query_one("#set-proxy-host", Input).value = cfg.proxy_host
             self.query_one("#set-proxy-port", Input).value = str(cfg.proxy_port)
@@ -263,6 +273,7 @@ class SettingsScreen(Widget):
             pass
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             enabled = getattr(cfg, "auto_save_enabled", False)
             interval = getattr(cfg, "auto_save_interval", 5)
@@ -272,28 +283,49 @@ class SettingsScreen(Widget):
             pass
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             self.query_one("#set-user-agent", Input).value = getattr(cfg, "default_user_agent", "")
-            self.query_one("#set-req-timeout", Input).value = str(getattr(cfg, "request_timeout", 15))
-            self.query_one("#set-conn-timeout", Input).value = str(getattr(cfg, "connect_timeout", 10))
-            self.query_one("#set-max-redirects", Input).value = str(getattr(cfg, "max_redirects", 10))
+            self.query_one("#set-req-timeout", Input).value = str(
+                getattr(cfg, "request_timeout", 15)
+            )
+            self.query_one("#set-conn-timeout", Input).value = str(
+                getattr(cfg, "connect_timeout", 10)
+            )
+            self.query_one("#set-max-redirects", Input).value = str(
+                getattr(cfg, "max_redirects", 10)
+            )
             self.query_one("#set-verify-ssl", Checkbox).value = getattr(cfg, "verify_ssl", False)
-            self.query_one("#set-collaborator-url", Input).value = getattr(cfg, "collaborator_url", "")
-            self.query_one("#set-scan-marker-enabled", Checkbox).value = getattr(cfg, "scan_marker_enabled", False)
-            self.query_one("#set-scan-marker-name", Input).value = getattr(cfg, "scan_marker_name", "X-Scanner")
-            self.query_one("#set-scan-marker-value", Input).value = getattr(cfg, "scan_marker_value", "pentool/1.0")
+            self.query_one("#set-collaborator-url", Input).value = getattr(
+                cfg, "collaborator_url", ""
+            )
+            self.query_one("#set-scan-marker-enabled", Checkbox).value = getattr(
+                cfg, "scan_marker_enabled", False
+            )
+            self.query_one("#set-scan-marker-name", Input).value = getattr(
+                cfg, "scan_marker_name", "X-Scanner"
+            )
+            self.query_one("#set-scan-marker-value", Input).value = getattr(
+                cfg, "scan_marker_value", "pentool/1.0"
+            )
         except Exception:
             pass
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
-            self.query_one("#set-send-crash-reports", Checkbox).value = getattr(cfg, "send_crash_reports", True)
-            self.query_one("#set-check-updates", Checkbox).value = getattr(cfg, "check_updates", True)
+            self.query_one("#set-send-crash-reports", Checkbox).value = getattr(
+                cfg, "send_crash_reports", True
+            )
+            self.query_one("#set-check-updates", Checkbox).value = getattr(
+                cfg, "check_updates", True
+            )
             self.query_one("#set-auto-scope", Checkbox).value = getattr(cfg, "auto_scope", False)
         except Exception:
             pass
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             saved_theme = getattr(cfg, "theme", "textual-dark")
             cycler = self.query_one("#set-theme", OptionCycler)
@@ -305,12 +337,15 @@ class SettingsScreen(Widget):
         except Exception:
             pass
 
-    # ── AI settings load ────────────────────────────────────────────────────────────
+        # ── AI settings load ────────────────────────────────────────────────────────────
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             self.query_one("#set-ai-enabled", Switch).value = getattr(cfg, "ai_enabled", False)
-            self.query_one("#set-ai-mcp-port", Input).value = str(getattr(cfg, "ai_mcp_port", 0) or 0)
+            self.query_one("#set-ai-mcp-port", Input).value = str(
+                getattr(cfg, "ai_mcp_port", 0) or 0
+            )
             model_path = getattr(cfg, "ai_mcp_model_path", "") or ""
             if model_path:
                 self.query_one("#set-ai-model-path", Input).value = model_path
@@ -322,16 +357,17 @@ class SettingsScreen(Widget):
     def _refresh_license_ui(self) -> None:
         try:
             from pentool.core.license import get_machine_id, get_session_license
+
             info = get_session_license()
             mid = get_machine_id()
 
             # Status
             status_w = self.query_one("#license-status", Static)
-            plan_w   = self.query_one("#license-plan", Static)
-            exp_w    = self.query_one("#license-expires", Static)
-            mid_w    = self.query_one("#license-machine-id", Static)
-            feat_w   = self.query_one("#license-features", Static)
-            err_w    = self.query_one("#license-error", Static)
+            plan_w = self.query_one("#license-plan", Static)
+            exp_w = self.query_one("#license-expires", Static)
+            mid_w = self.query_one("#license-machine-id", Static)
+            feat_w = self.query_one("#license-features", Static)
+            err_w = self.query_one("#license-error", Static)
 
             if info.valid and info.plan != "free":
                 status_w.update("● PRO")
@@ -339,7 +375,9 @@ class SettingsScreen(Widget):
                 status_w.add_class("license-status-pro")
                 plan_w.update(info.plan.upper())
                 exp_w.update(info.expires_text)
-                feat_w.update("\n".join(f"  ✓ {f}" for f in info.features) if info.features else "  (none)")
+                feat_w.update(
+                    "\n".join(f"  ✓ {f}" for f in info.features) if info.features else "  (none)"
+                )
             else:
                 status_w.update("● FREE")
                 status_w.remove_class("license-status-pro")
@@ -468,12 +506,15 @@ class SettingsScreen(Widget):
     async def _async_save_theme(self, theme: str) -> None:
         """Write the theme to config on a thread so disk IO doesn't stall the UI."""
         import asyncio
+
         loop = asyncio.get_running_loop()
         try:
             from pentool.core.config import get_config
+
             def _save() -> None:
                 get_config().update(theme=theme)
                 get_config().save()
+
             await loop.run_in_executor(None, _save)
         except Exception:
             pass
@@ -500,6 +541,7 @@ class SettingsScreen(Widget):
         """Show/hide tabs depending on the complexity mode."""
         try:
             from pentool.tui.widgets.module_tabs import ModuleTabs
+
             tabs_widget = self.app.query_one(ModuleTabs)  # type: ignore[attr-defined]
             tabs_widget.set_mode(mode.value)
         except Exception:
@@ -512,8 +554,10 @@ class SettingsScreen(Widget):
         the UI stays responsive during saves.
         """
         import asyncio
+
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             loop = asyncio.get_running_loop()
 
@@ -539,11 +583,13 @@ class SettingsScreen(Widget):
             return
         self.run_worker(
             self._async_save_config(changes, msg),
-            exclusive=False, thread=False,
+            exclusive=False,
+            thread=False,
         )
 
     def _collect_proxy_changes(self) -> dict:
         from pentool.core.config import get_config
+
         cfg = get_config()
         host = self.query_one("#set-proxy-host", Input).value.strip()
         port_str = self.query_one("#set-proxy-port", Input).value.strip()
@@ -556,13 +602,16 @@ class SettingsScreen(Widget):
 
     def _save_proxy_settings(self) -> None:
         try:
-            self._save_settings(self._collect_proxy_changes(), "Proxy settings saved (restart proxy to apply)")
+            self._save_settings(
+                self._collect_proxy_changes(), "Proxy settings saved (restart proxy to apply)"
+            )
         except Exception as e:
             err(e, "Save failed", self)
 
     def _save_project_settings(self) -> None:
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             changes: dict = {}
             try:
@@ -587,6 +636,7 @@ class SettingsScreen(Widget):
         try:
             from pentool.tui.constants import SCREEN_PROXY
             from pentool.tui.screens.proxy.screen import ProxyScreen
+
             proxy_screen = self.app.query_one(SCREEN_PROXY, ProxyScreen)
             proxy_screen.action_open_ca_cert()
         except Exception as e:
@@ -595,6 +645,7 @@ class SettingsScreen(Widget):
     def _save_network_settings(self) -> None:
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             changes: dict = {}
 
@@ -666,6 +717,7 @@ class SettingsScreen(Widget):
     def _save_privacy_settings(self) -> None:
         try:
             from pentool.core.config import get_config
+
             cfg = get_config()
             changes: dict = {}
 
@@ -704,6 +756,7 @@ class SettingsScreen(Widget):
         """Save the AI settings."""
         try:
             from pentool.services.ai.factory import AI_MODELS_DIR
+
             cfg = getattr(self.app, "_cfg", None)
             if cfg is None:
                 self.err(Exception("Config not loaded"), "Config not loaded")
@@ -745,12 +798,16 @@ class SettingsScreen(Widget):
     async def _async_activate(self, key: str) -> None:
         """Async activation worker."""
         from pentool.core.license import activate_license, reassign_license, refresh_session_license
+
         self.app.notify("Activating license…", timeout=2)  # type: ignore[attr-defined]
         try:
             info = await activate_license(key)
-            if not info.valid and ("slots in use" in info.error or "bound to another machine" in info.error):
+            if not info.valid and (
+                "slots in use" in info.error or "bound to another machine" in info.error
+            ):
                 # Предложить сбросить старую привязку
                 from pentool.tui.dialogs.confirm import ConfirmDialog
+
                 confirmed = await self.app.push_screen_widget(  # type: ignore[attr-defined]
                     ConfirmDialog(
                         title="License already in use",
@@ -787,6 +844,7 @@ class SettingsScreen(Widget):
     async def _async_deactivate(self) -> None:
         """Async deactivation worker."""
         from pentool.core.license import deactivate_license, refresh_session_license
+
         self.app.notify("Deactivating license…", timeout=2)  # type: ignore[attr-defined]
         try:
             await deactivate_license()
@@ -795,4 +853,3 @@ class SettingsScreen(Widget):
         except Exception as exc:
             err(exc, "Deactivation error", self)
         self.call_after_refresh(self._refresh_license_ui)
-

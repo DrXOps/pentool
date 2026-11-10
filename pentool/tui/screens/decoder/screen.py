@@ -12,6 +12,7 @@ from textual.widgets import Label, Static
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
+from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
@@ -23,7 +24,7 @@ logger = get_logger(__name__)
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 
-class DecoderScreen(ContentClipboardMixin, Widget):
+class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
     """Encoder / Decoder with operation chains."""
 
     DEFAULT_CSS = _CSS

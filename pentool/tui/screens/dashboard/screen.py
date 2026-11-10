@@ -18,6 +18,7 @@ from textual.widgets import RichLog, Static, Tree
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import DASHBOARD_BINDINGS
 from pentool.tui.mixins.ai_sync import AiModeSyncMixin
+from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.dashboard.live_dashboard import ResourceMonitor
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -181,7 +182,9 @@ class LiveChart(Vertical):
 
     DEFAULT_CSS = _CSS
 
-    def __init__(self, title: str, color: str = "green", unit: str = "req/s", chart_id: str = "", **kwargs):
+    def __init__(
+        self, title: str, color: str = "green", unit: str = "req/s", chart_id: str = "", **kwargs
+    ):
         super().__init__(id=chart_id or None, **kwargs)
         self._title = title
         self._color = color
@@ -234,7 +237,9 @@ class LiveChart(Vertical):
             self.query_one("#chart-spark", Static).update(f"[{self._color}]{spark}[/{self._color}]")
             self.query_one("#chart-axis", Static).update(axis)
             self.query_one("#chart-stats", Static).update(stats)
-            self.query_one("#chart-meta", Static).update(f"[dim]scale: 0–{mv} {self._unit}  │  window: 60s[/dim]")
+            self.query_one("#chart-meta", Static).update(
+                f"[dim]scale: 0–{mv} {self._unit}  │  window: 60s[/dim]"
+            )
         except Exception:
             pass
 
@@ -301,7 +306,9 @@ class SeverityMatrix(Vertical):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._matrix: dict[str, dict[str, int]] = {vt: {s: 0 for s in self._SEV_KEYS} for vt in self._VULN_TYPES}
+        self._matrix: dict[str, dict[str, int]] = {
+            vt: {s: 0 for s in self._SEV_KEYS} for vt in self._VULN_TYPES
+        }
 
     def compose(self) -> ComposeResult:
         yield Static(" ", id="mx-body", markup=True)
@@ -349,7 +356,11 @@ class SeverityMatrix(Vertical):
             tc = (
                 "bold red"
                 if counts.get("critical", 0) > 0
-                else ("red" if counts.get("high", 0) > 0 else ("yellow" if counts.get("medium", 0) > 0 else "dim"))
+                else (
+                    "red"
+                    if counts.get("high", 0) > 0
+                    else ("yellow" if counts.get("medium", 0) > 0 else "dim")
+                )
             )
             lines.append(f"[cyan]{vt:<6}[/cyan]{cells}[{tc}]{total:3d}[/{tc}]")
         lines.append(
@@ -365,7 +376,7 @@ class SeverityMatrix(Vertical):
             pass
 
 
-class DashboardScreen(AiModeSyncMixin, Widget):
+class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
     """Dashboard — application start screen."""
 
     DEFAULT_CSS = _CSS
@@ -451,7 +462,9 @@ class DashboardScreen(AiModeSyncMixin, Widget):
                             id="led-spider-bar",
                             classes="led-item",
                         )
-                        yield Static("[dim]●[/dim] MCP: [dim]OFF[/dim]", id="led-mcp-bar", classes="led-item")
+                        yield Static(
+                            "[dim]●[/dim] MCP: [dim]OFF[/dim]", id="led-mcp-bar", classes="led-item"
+                        )
                         yield Static(
                             "[dim]●[/dim] AI: [dim]DISABLED[/dim]",
                             id="led-ai-bar",
@@ -520,8 +533,9 @@ class DashboardScreen(AiModeSyncMixin, Widget):
                 is_active = path == current
 
                 if is_active:
-                    node_label = f"[bold cyan]{proj_name}[/bold cyan] [bold green]●[/bold green]" + (
-                        f" [dim]{ts}[/dim]" if ts else ""
+                    node_label = (
+                        f"[bold cyan]{proj_name}[/bold cyan] [bold green]●[/bold green]"
+                        + (f" [dim]{ts}[/dim]" if ts else "")
                     )
                 elif exists:
                     node_label = f"[cyan]{proj_name}[/cyan]" + (f" [dim]{ts}[/dim]" if ts else "")
@@ -579,7 +593,9 @@ class DashboardScreen(AiModeSyncMixin, Widget):
             # AI row directly under MCP: "AI: disabled" / "AI: enabled".
             try:
                 if ai_enabled:
-                    self._set_led_bar("led-ai-bar", "bold green", "AI: [bold green]ENABLED[/bold green]")
+                    self._set_led_bar(
+                        "led-ai-bar", "bold green", "AI: [bold green]ENABLED[/bold green]"
+                    )
                 else:
                     self._set_led_bar("led-ai-bar", "dim", "AI: [dim]disabled[/dim]")
             except Exception:
@@ -620,13 +636,6 @@ class DashboardScreen(AiModeSyncMixin, Widget):
             pass
         self._update_ai_status()
 
-    def _get_db_path(self) -> str:
-        """Database path from the app (``db_path`` property), or "" when absent."""
-        try:
-            return str(getattr(self.app, "db_path", "") or "")
-        except Exception:
-            return ""
-
     @work
     async def _load_stats_bg(self) -> None:
         try:
@@ -664,13 +673,17 @@ class DashboardScreen(AiModeSyncMixin, Widget):
         self._top_finding = data.get("top_finding", "—")
 
         try:
-            self.query_one("#threat-meter", ThreatMeter).update_findings(self._finding_counts, self._top_finding)
+            self.query_one("#threat-meter", ThreatMeter).update_findings(
+                self._finding_counts, self._top_finding
+            )
         except Exception as exc:
             logger.debug("_apply_stats ThreatMeter: %s", exc)
 
         try:
             matrix = self.query_one("#vuln-matrix", SeverityMatrix)
-            matrix._matrix = {vt: {s: 0 for s in SeverityMatrix._SEV_KEYS} for vt in SeverityMatrix._VULN_TYPES}
+            matrix._matrix = {
+                vt: {s: 0 for s in SeverityMatrix._SEV_KEYS} for vt in SeverityMatrix._VULN_TYPES
+            }
             matrix._refresh_display()
         except Exception as exc:
             logger.debug("_apply_stats SeverityMatrix: %s", exc)
@@ -678,7 +691,9 @@ class DashboardScreen(AiModeSyncMixin, Widget):
         total = data.get("requests", 0)
         hosts = data.get("hosts", 0)
         total_findings = sum(self._finding_counts.values())
-        self.log_activity(f"Session: {total:,} requests · {hosts} hosts · {total_findings} findings", "ok")
+        self.log_activity(
+            f"Session: {total:,} requests · {hosts} hosts · {total_findings} findings", "ok"
+        )
 
         try:
             self.query_one("#chart-requests", LiveChart).set_summary(
@@ -723,7 +738,8 @@ class DashboardScreen(AiModeSyncMixin, Widget):
         status_str = f"[{status_color}]{status}[/{status_color}]" if status else "[dim]···[/dim]"
         short_url = url[:60] + "…" if len(url) > 60 else url
         self._feed_write(
-            f"[dim]{ts}[/dim] [{method_color}]{method:<7}[/{method_color}] " f"{status_str} [dim]{short_url}[/dim]"
+            f"[dim]{ts}[/dim] [{method_color}]{method:<7}[/{method_color}] "
+            f"{status_str} [dim]{short_url}[/dim]"
         )
 
     def add_finding(self, finding) -> None:
@@ -737,7 +753,9 @@ class DashboardScreen(AiModeSyncMixin, Widget):
         self._top_finding = name
 
         try:
-            self.query_one("#threat-meter", ThreatMeter).update_findings(self._finding_counts, self._top_finding)
+            self.query_one("#threat-meter", ThreatMeter).update_findings(
+                self._finding_counts, self._top_finding
+            )
         except Exception:
             pass
         try:
@@ -764,7 +782,9 @@ class DashboardScreen(AiModeSyncMixin, Widget):
 
     def update_proxy_status(self, running: bool, port: int = 8080) -> None:
         if running:
-            self._set_led_bar("led-proxy-bar", "bold green", f"Proxy: [bold green]:{port}[/bold green]")
+            self._set_led_bar(
+                "led-proxy-bar", "bold green", f"Proxy: [bold green]:{port}[/bold green]"
+            )
         else:
             self._set_led_bar("led-proxy-bar", "dim", "Proxy: [dim]STOPPED[/dim]")
         msg = f"Proxy {'started' if running else 'stopped'} on :{port}"
@@ -772,10 +792,14 @@ class DashboardScreen(AiModeSyncMixin, Widget):
 
     def update_passive_status(self, enabled: bool) -> None:
         if enabled:
-            self._set_led_bar("led-passive-bar", "bold cyan", "Passive: [bold cyan]ARMED[/bold cyan]")
+            self._set_led_bar(
+                "led-passive-bar", "bold cyan", "Passive: [bold cyan]ARMED[/bold cyan]"
+            )
         else:
             self._set_led_bar("led-passive-bar", "dim", "Passive: [dim]OFF[/dim]")
-        self.log_activity(f"Passive scanner {'armed' if enabled else 'disabled'}", "ok" if enabled else "warning")
+        self.log_activity(
+            f"Passive scanner {'armed' if enabled else 'disabled'}", "ok" if enabled else "warning"
+        )
 
     def update_scan_status(self, scanning: bool, progress: int = 0, threads: int = 0) -> None:
         if scanning:
@@ -785,7 +809,9 @@ class DashboardScreen(AiModeSyncMixin, Widget):
                 f"Active: [bold yellow]SCANNING {progress}%[/bold yellow]",
             )
             if threads > 0:
-                self._set_led_bar("led-threads-bar", "cyan", f"Scan workers: [cyan]{threads} active[/cyan]")
+                self._set_led_bar(
+                    "led-threads-bar", "cyan", f"Scan workers: [cyan]{threads} active[/cyan]"
+                )
         else:
             self._set_led_bar("led-scan-bar", "dim", "Active: [dim]IDLE[/dim]")
             self._set_led_bar("led-threads-bar", "dim", "Scan workers: [dim]—[/dim]")
