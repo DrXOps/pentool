@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_CSS = (Path(__file__).parent / "cert_dialog.tcss").read_text(encoding="utf-8")
-
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.screen import ModalScreen
 from textual.widgets import Button, Static
 
+from pentool.tui.dialogs.base_dialog import BaseDialog
 
-class CertInstallDialog(ModalScreen[None]):
+_CSS = (Path(__file__).parent / "cert_dialog.tcss").read_text(encoding="utf-8")
+
+
+class CertInstallDialog(BaseDialog):
     """Instructions for installing the CA certificate in a browser.
 
     Shows the CA path and commands for Firefox, Chrome and system-wide.
@@ -60,15 +61,13 @@ class CertInstallDialog(ModalScreen[None]):
 
             yield Static("System-wide (Ubuntu/Debian):", classes="section-title")
             yield Static(
-                f"sudo cp '{p}' /usr/local/share/ca-certificates/pentool-ca.crt\n"
-                "sudo update-ca-certificates",
+                f"sudo cp '{p}' /usr/local/share/ca-certificates/pentool-ca.crt\n" "sudo update-ca-certificates",
                 classes="code",
             )
 
             yield Static("System-wide (Fedora/RHEL):", classes="section-title")
             yield Static(
-                f"sudo cp '{p}' /etc/pki/ca-trust/source/anchors/pentool-ca.crt\n"
-                "sudo update-ca-trust",
+                f"sudo cp '{p}' /etc/pki/ca-trust/source/anchors/pentool-ca.crt\n" "sudo update-ca-trust",
                 classes="code",
             )
 

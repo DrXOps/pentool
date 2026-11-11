@@ -10,8 +10,9 @@ from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Label
+
+from pentool.tui.dialogs.base_dialog import BaseDialog
 
 _CSS = (Path(__file__).parent / "load_from_proxy.tcss").read_text(encoding="utf-8")
 
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     pass
 
 
-class LoadFromProxyDialog(ModalScreen[str | None]):
+class LoadFromProxyDialog(BaseDialog[str | None]):
     """Modal dialog for selecting a request from proxy history.
 
     Args:

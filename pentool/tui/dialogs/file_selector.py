@@ -2,30 +2,30 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-
-_CSS = (Path(__file__).parent / "file_selector.tcss").read_text(encoding="utf-8")
-
-import time
 
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import DataTable, Input, Label, Static
 
+from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+_CSS = (Path(__file__).parent / "file_selector.tcss").read_text(encoding="utf-8")
 
 
 class FileSelectorMode(Enum):
-    OPEN = "open"           # select existing file
-    SAVE = "save"           # enter new file name
-    DIRECTORY = "dir"       # select directory
+    OPEN = "open"  # select existing file
+    SAVE = "save"  # enter new file name
+    DIRECTORY = "dir"  # select directory
 
-class FileSelectorDialog(ModalScreen):
+
+class FileSelectorDialog(BaseDialog[None]):
     """Tree-based filesystem navigation.
 
     Returns (via dismiss):
@@ -213,6 +213,7 @@ class FileSelectorDialog(ModalScreen):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
 
 def _format_size(size_bytes: int) -> str:
     """Format file size into human-readable form."""

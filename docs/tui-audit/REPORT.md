@@ -741,6 +741,23 @@ FilterBar, ProxyFilterBar, WsFilterBar, IntruderFilterBar { height: 2; layout: h
 
 ---
 
+**Статус (2026-11-11): закрыто.** Все 12 диалогов (11 из находки + PRO-шный
+`ChecksDialog`, который тест нашёл сразу) наследуют `BaseDialog`. Сам
+`BaseDialog` стал generic — `ModalScreen[_ResultT]` + `Generic[_ResultT]` —
+чтобы подклассы сохранили типизацию `dismiss(...)`, которую имели как прямые
+наследники `ModalScreen[str | None]`. Правило «type-селектор матчит
+подклассы» проверено исполнением (`/tmp/type_sel_test.py`): `BaseDialog { align:
+center middle }` применяется, поэтому per-dialog копия этого правила стала
+избыточной, а геометрические `#dialog`-блоки оставлены как осознанный override.
+
+Попутно выяснилось, что `ColorPickScreen` не был отцентрирован и не имел
+Escape-привязки вообще — закрывался только мышью.
+
+Гвард — `tests/unit/tui/test_dialogs_unified.py`: каждый `ModalScreen`-наследник
+в `pentool` обязан наследовать `BaseDialog`, а любой `Binding("escape", …)`
+обязан указывать на существующий `action_*`.
+
+
 ### F-025 [P2] `ContentPanel.DEFAULT_CSS` и 9 других inline-CSS — внутри `.py`
 
 **Где:** `dialogs/color_pick.py:25`, `dialogs/lightpanda_viewer.py:17`, `screens/scanner_unavailable.py:21`, `screens/dashboard/live_dashboard.py:47`, `widgets/content_panel.py:63`, `widgets/filter_bar_widget.py:75,133`, `widgets/intruder_filter_bar.py:22`, `widgets/hintbar_base.py:15`, `widgets/start_stop_widget.py:74`.

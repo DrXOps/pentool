@@ -14,15 +14,15 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Input, Label
 
+from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "comment_dialog.tcss").read_text(encoding="utf-8")
 
 
-class CommentDialog(ModalScreen[str | None]):
+class CommentDialog(BaseDialog[str | None]):
     """Dialog: view/edit the comment for the currently-selected request."""
 
     DEFAULT_CSS = _CSS

@@ -12,17 +12,16 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.toolbar_button import ToolbarButton
-
 
 _CSS = (Path(__file__).parent / "intruder_auto_mark.tcss").read_text(encoding="utf-8")
 
 
-class IntruderAutoMarkDialog(ModalScreen[dict | None]):
+class IntruderAutoMarkDialog(BaseDialog[dict | None]):
     """Modal dialog for choosing what to auto-mark with §§ markers.
 
     Returns a dict with boolean keys (only the keys that were offered), or None.
@@ -76,10 +75,10 @@ class IntruderAutoMarkDialog(ModalScreen[dict | None]):
                 for key, label in all_options:
                     yield Checkbox(label, value=True, id=f"mark-{key}", classes="chk")
             with Vertical(id="buttons-row"):
-                yield ToolbarButton("Select All",    "btn-select-all")
-                yield ToolbarButton("Select None",   "btn-select-none")
+                yield ToolbarButton("Select All", "btn-select-all")
+                yield ToolbarButton("Select None", "btn-select-none")
                 yield ToolbarButton("✔ Mark selected", "btn-mark")
-                yield ToolbarButton("✕ Cancel",      "btn-cancel")
+                yield ToolbarButton("✕ Cancel", "btn-cancel")
 
     @on(Checkbox.Changed)
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
@@ -96,8 +95,7 @@ class IntruderAutoMarkDialog(ModalScreen[dict | None]):
     @on(ToolbarButton.Pressed, "#btn-mark")
     def on_mark(self, _: ToolbarButton.Pressed) -> None:
         result: dict[str, bool] = {}
-        for key in ("query", "body_form", "cookie", "header",
-                     "json_keys", "json_vals", "xml_tags", "xml_content"):
+        for key in ("query", "body_form", "cookie", "header", "json_keys", "json_vals", "xml_tags", "xml_content"):
             v = self._try_bool(f"mark-{key}")
             # Only include keys that are present as checkboxes
             if f"mark-{key}" in {w.id for w in self.query(Checkbox)}:

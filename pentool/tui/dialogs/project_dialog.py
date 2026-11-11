@@ -7,13 +7,14 @@ from pathlib import Path
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
+
+from pentool.tui.dialogs.base_dialog import BaseDialog
 
 _CSS = (Path(__file__).parent / "project_dialog.tcss").read_text(encoding="utf-8")
 
 
-class SaveProjectDialog(ModalScreen[str | None]):
+class SaveProjectDialog(BaseDialog[str | None]):
     """Dialog: enter path to save the project."""
 
     DEFAULT_CSS = _CSS
@@ -47,7 +48,7 @@ class SaveProjectDialog(ModalScreen[str | None]):
         self.dismiss(path if path else None)
 
 
-class LoadProjectDialog(ModalScreen[str | None]):
+class LoadProjectDialog(BaseDialog[str | None]):
     """Dialog: enter path to load the project."""
 
     DEFAULT_CSS = _CSS

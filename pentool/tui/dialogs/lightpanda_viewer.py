@@ -7,10 +7,10 @@ import asyncio
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.screen import ModalScreen
-from textual.widgets import Static, RichLog
+from textual.widgets import RichLog, Static
 
 from pentool.core.logging import get_logger
+from pentool.tui.dialogs.base_dialog import BaseDialog
 
 logger = get_logger(__name__)
 
@@ -49,7 +49,7 @@ LightpandaViewer {
 """
 
 
-class LightpandaViewer(ModalScreen[None]):
+class LightpandaViewer(BaseDialog[None]):
     """Modal screen showing a URL rendered via Lightpanda."""
 
     DEFAULT_CSS = _CSS
@@ -78,13 +78,15 @@ class LightpandaViewer(ModalScreen[None]):
         body.write("[dim]Fetching via Lightpanda...[/dim]")
         try:
             proc = await asyncio.create_subprocess_exec(
-                "lightpanda", "fetch", "--dump", "markdown", self._url,
+                "lightpanda",
+                "fetch",
+                "--dump",
+                "markdown",
+                self._url,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=30
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
             if proc.returncode != 0:
                 err = stderr.decode("utf-8", errors="replace")[:500]
                 body.clear()

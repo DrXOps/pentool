@@ -10,17 +10,22 @@ only need per-id rules in their own .tcss file).
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Generic, TypeVar
 
 from textual.binding import Binding
 from textual.screen import ModalScreen
 
 from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
 
-
 _BASE_DIR = Path(__file__).parent
 
+# Result type returned to the caller through ``dismiss(...)``. Generic so a
+# subclass keeps the ``push_screen`` typing it had when it inherited
+# ``ModalScreen[str | None]`` directly (dialogs migrated in F-024).
+_ResultT = TypeVar("_ResultT")
 
-class BaseDialog(DialogCancelMixin, ModalScreen):
+
+class BaseDialog(DialogCancelMixin, ModalScreen[_ResultT], Generic[_ResultT]):
     """Standard dialog base: centred, sized, Escape-cancellable.
 
     Subclasses inherit:

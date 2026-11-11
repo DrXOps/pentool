@@ -8,26 +8,20 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.screen import ModalScreen
-
-_CSS = (Path(__file__).parent / "match_replace_dialog.tcss").read_text(encoding="utf-8")
-from textual.widgets import (
-    Button,
-    DataTable,
-    Input,
-    Label,
-    Static,
-)
+from textual.widgets import Button, DataTable, Input, Label, Static
 
 from pentool.api.proxy_api import MatchReplaceRule
+from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
+_CSS = (Path(__file__).parent / "match_replace_dialog.tcss").read_text(encoding="utf-8")
+
 _TARGET_OPTIONS = [("request", "Request"), ("response", "Response"), ("both", "Both")]
-_SCOPE_OPTIONS  = [("all", "All"), ("headers", "Headers"), ("body", "Body")]
+_SCOPE_OPTIONS = [("all", "All"), ("headers", "Headers"), ("body", "Body")]
 
 
-class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
+class MatchReplaceDialog(BaseDialog[list[MatchReplaceRule] | None]):
     """Dialog for managing automatic replacement rules."""
 
     DEFAULT_CSS = _CSS
@@ -52,10 +46,10 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
             yield DataTable(id="rules-table", cursor_type="row", zebra_stripes=True)
 
             with Horizontal(id="table-buttons"):
-                yield ToolbarButton("+ Add",    "btn-add")
-                yield ToolbarButton("✕ Del",    "btn-delete")
-                yield ToolbarButton("▲ Up",     "btn-up")
-                yield ToolbarButton("▼ Down",   "btn-down")
+                yield ToolbarButton("+ Add", "btn-add")
+                yield ToolbarButton("✕ Del", "btn-delete")
+                yield ToolbarButton("▲ Up", "btn-up")
+                yield ToolbarButton("▼ Down", "btn-down")
 
             with Static(id="form"):
                 yield Label("Edit rule:", id="form-title")
@@ -70,15 +64,15 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
                     yield ToolbarButton("Both ▼", "btn-sel-target", classes="sel-btn")
                 with Static(classes="form-row"):
                     yield Label("Scope:", classes="form-label")
-                    yield ToolbarButton("All ▼",  "btn-sel-scope",  classes="sel-btn")
+                    yield ToolbarButton("All ▼", "btn-sel-scope", classes="sel-btn")
                 with Static(classes="form-row form-row-checks"):
                     yield Checkbox("Regex", id="chk-regex")
                     yield Checkbox("Enabled", value=True, id="chk-enabled")
 
             with Horizontal(id="bottom-buttons"):
-                yield ToolbarButton("Apply",     "btn-apply")
+                yield ToolbarButton("Apply", "btn-apply")
                 yield ToolbarButton("Save Rule", "btn-save")
-                yield ToolbarButton("Cancel",    "btn-cancel")
+                yield ToolbarButton("Cancel", "btn-cancel")
 
     def on_mount(self) -> None:
         self._rebuild_table()
@@ -92,8 +86,11 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
         for rule in self._rules:
             en = "✓" if rule.enabled else "✗"
             table.add_row(
-                en, rule.target, rule.scope,
-                rule.match[:30], rule.replace[:20],
+                en,
+                rule.target,
+                rule.scope,
+                rule.match[:30],
+                rule.replace[:20],
                 "✓" if rule.is_regex else "✗",
                 key=rule.id,
             )
@@ -105,17 +102,17 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
             self._load_rule_to_form(self._rules[idx])
 
     def _load_rule_to_form(self, rule: MatchReplaceRule) -> None:
-        self.query_one("#input-match",  Input).value = rule.match
+        self.query_one("#input-match", Input).value = rule.match
         self.query_one("#input-replace", Input).value = rule.replace
         self._target_val = rule.target
-        self._scope_val  = rule.scope
+        self._scope_val = rule.scope
         self._update_sel_labels()
-        self.query_one("#chk-regex",   Checkbox).value = rule.is_regex
+        self.query_one("#chk-regex", Checkbox).value = rule.is_regex
         self.query_one("#chk-enabled", Checkbox).value = rule.enabled
 
     def _update_sel_labels(self) -> None:
         target_label = dict(_TARGET_OPTIONS).get(self._target_val, self._target_val).title()
-        scope_label  = dict(_SCOPE_OPTIONS).get(self._scope_val,  self._scope_val).title()
+        scope_label = dict(_SCOPE_OPTIONS).get(self._scope_val, self._scope_val).title()
         try:
             self.query_one("#btn-sel-target", ToolbarButton).label = f"{target_label} ▼"
         except Exception:
@@ -126,15 +123,15 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
             pass
 
     def _read_form(self) -> MatchReplaceRule:
-        match   = self.query_one("#input-match",  Input).value
+        match = self.query_one("#input-match", Input).value
         replace = self.query_one("#input-replace", Input).value
-        is_regex = self.query_one("#chk-regex",   Checkbox).value
-        enabled  = self.query_one("#chk-enabled", Checkbox).value
+        is_regex = self.query_one("#chk-regex", Checkbox).value
+        enabled = self.query_one("#chk-enabled", Checkbox).value
         return MatchReplaceRule(
             match=match,
             replace=replace,
-            target=self._target_val,   # type: ignore[arg-type]
-            scope=self._scope_val,     # type: ignore[arg-type]
+            target=self._target_val,  # type: ignore[arg-type]
+            scope=self._scope_val,  # type: ignore[arg-type]
             is_regex=is_regex,
             enabled=enabled,
         )
@@ -143,13 +140,12 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
 
     @on(ToolbarButton.Pressed, "#btn-sel-target")
     def on_btn_sel_target(self, event: ToolbarButton.Pressed) -> None:
-        items = [
-            (val, ("✓ " if val == self._target_val else "  ") + label)
-            for val, label in _TARGET_OPTIONS
-        ]
+        items = [(val, ("✓ " if val == self._target_val else "  ") + label) for val, label in _TARGET_OPTIONS]
         r = event.button.region
         self.app.show_context_menu(
-            items, r.x, r.y + 1,
+            items,
+            r.x,
+            r.y + 1,
             callback=self._on_target_selected,
         )
 
@@ -159,13 +155,12 @@ class MatchReplaceDialog(ModalScreen[list[MatchReplaceRule] | None]):
 
     @on(ToolbarButton.Pressed, "#btn-sel-scope")
     def on_btn_sel_scope(self, event: ToolbarButton.Pressed) -> None:
-        items = [
-            (val, ("✓ " if val == self._scope_val else "  ") + label)
-            for val, label in _SCOPE_OPTIONS
-        ]
+        items = [(val, ("✓ " if val == self._scope_val else "  ") + label) for val, label in _SCOPE_OPTIONS]
         r = event.button.region
         self.app.show_context_menu(
-            items, r.x, r.y + 1,
+            items,
+            r.x,
+            r.y + 1,
             callback=self._on_scope_selected,
         )
 

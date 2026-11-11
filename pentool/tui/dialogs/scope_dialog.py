@@ -10,9 +10,9 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Label, Static, TextArea
 
+from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "scope_dialog.tcss").read_text(encoding="utf-8")
@@ -35,6 +35,7 @@ class ScopeConfig:
         3. If regex_exclude is non-empty — URL must not match any.
         """
         from urllib.parse import urlparse
+
         try:
             parsed = urlparse(url)
             host = parsed.netloc or parsed.path
@@ -95,7 +96,7 @@ def validate_patterns(patterns: list[str]) -> list[str]:
     return invalid
 
 
-class ScopeDialog(ModalScreen[list[str] | ScopeConfig | None]):
+class ScopeDialog(BaseDialog[list[str] | ScopeConfig | None]):
     """Modal dialog for editing Scope.
 
     In `extended=True` mode returns `ScopeConfig` (hosts + regex include/exclude).
@@ -131,14 +132,12 @@ class ScopeDialog(ModalScreen[list[str] | ScopeConfig | None]):
 
             if self._extended:
                 yield Label(
-                    "Hosts (one per line, wildcards: *.example.com):\n"
-                    "Leave empty to match all hosts.",
+                    "Hosts (one per line, wildcards: *.example.com):\n" "Leave empty to match all hosts.",
                     id="hint",
                 )
             else:
                 yield Label(
-                    "One host per line. Wildcards supported: *.example.com\n"
-                    "Leave empty to intercept all hosts.",
+                    "One host per line. Wildcards supported: *.example.com\n" "Leave empty to intercept all hosts.",
                     id="hint",
                 )
 
@@ -148,11 +147,15 @@ class ScopeDialog(ModalScreen[list[str] | ScopeConfig | None]):
             )
 
             if self._extended:
-                yield Static("── Regex Include (URL must match at least one) ──",
-                             id="regex-include-label", classes="regex-section-label")
+                yield Static(
+                    "── Regex Include (URL must match at least one) ──",
+                    id="regex-include-label",
+                    classes="regex-section-label",
+                )
                 yield Label(
                     "[dim]E.g.: /api/  or  \\.(php|asp)  (empty = match all)[/dim]",
-                    id="regex-include-hint", classes="regex-hint",
+                    id="regex-include-hint",
+                    classes="regex-hint",
                 )
                 yield TextArea(
                     "\n".join(self._cfg.regex_include),
@@ -160,11 +163,15 @@ class ScopeDialog(ModalScreen[list[str] | ScopeConfig | None]):
                     classes="regex-area",
                 )
 
-                yield Static("── Regex Exclude (URL must NOT match any) ──",
-                             id="regex-exclude-label", classes="regex-section-label")
+                yield Static(
+                    "── Regex Exclude (URL must NOT match any) ──",
+                    id="regex-exclude-label",
+                    classes="regex-section-label",
+                )
                 yield Label(
                     "[dim]E.g.: \\.js$  or  /static/  (empty = exclude nothing)[/dim]",
-                    id="regex-exclude-hint", classes="regex-hint",
+                    id="regex-exclude-hint",
+                    classes="regex-hint",
                 )
                 yield TextArea(
                     "\n".join(self._cfg.regex_exclude),
@@ -175,7 +182,7 @@ class ScopeDialog(ModalScreen[list[str] | ScopeConfig | None]):
                 yield Static("", id="validation-msg", classes="validation-msg")
 
             with Horizontal(id="buttons"):
-                yield ToolbarButton("Save",   "btn-ok")
+                yield ToolbarButton("Save", "btn-ok")
                 yield ToolbarButton("Cancel", "btn-cancel")
 
     @on(ToolbarButton.Pressed, "#btn-ok")
@@ -214,11 +221,13 @@ class ScopeDialog(ModalScreen[list[str] | ScopeConfig | None]):
                 pass
             return
 
-        self.dismiss(ScopeConfig(
-            hosts=hosts,
-            regex_include=regex_include,
-            regex_exclude=regex_exclude,
-        ))
+        self.dismiss(
+            ScopeConfig(
+                hosts=hosts,
+                regex_include=regex_include,
+                regex_exclude=regex_exclude,
+            )
+        )
 
     def action_cancel(self) -> None:
         self.dismiss(None)

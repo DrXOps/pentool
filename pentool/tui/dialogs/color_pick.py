@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.screen import ModalScreen
-from textual.widgets import Button, Label
 from textual.containers import Vertical
+from textual.widgets import Button, Label
 
+from pentool.tui.dialogs.base_dialog import BaseDialog
 
 _COLOR_OPTIONS: list[tuple[str, str]] = [
     ("None", ""),
@@ -19,7 +19,7 @@ _COLOR_OPTIONS: list[tuple[str, str]] = [
 ]
 
 
-class ColorPickScreen(ModalScreen[str | None]):
+class ColorPickScreen(BaseDialog[str | None]):
     """Modal to pick a color mark for a proxy history request."""
 
     DEFAULT_CSS = """
