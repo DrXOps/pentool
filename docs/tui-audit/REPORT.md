@@ -698,6 +698,17 @@ FilterBar, ProxyFilterBar, WsFilterBar, IntruderFilterBar { height: 2; layout: h
 
 ---
 
+**Статус (2026-11-11): закрыто.** `_sync_ai_ui` больше не делает
+`self.query(".pro-locked")`: он идёт по `self._tabs` и зовёт
+`_sync_ai_ui_for_tab(tab_id, ai_on)`, который адресует конкретный контрол по id
+(`#btn-payload-smart-<tab_id>`) и перехватывает только `NoMatches`. Второй
+дефект — новая вкладка не получала режим, применённый до её создания, —
+закрыт вызовом `_apply_ai_visibility_after_mount` из `_mount_tab_body`:
+видимость применяется после монтирования таба, а не только по событию
+`AiModeChanged`. Класс `pro-locked` остался чисто стилевым
+(`toolbar_button.tcss`), как селектор нигде не используется. Тесты —
+`tests/unit/tui/test_intruder_ai_visibility.py` (5).
+
 ### F-023 [P2] `_build_tab_ui` строит дерево из `TabPane` + `Toolbar` внутри `TabbedContentPanel` — `id` через суффикс таба
 
 **Где:** `screens/intruder/screen.py:327-470`; `t = lambda s: f"{s}-{tab_id}"`.

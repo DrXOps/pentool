@@ -18,6 +18,7 @@ from textual import events as _tevents
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widgets import Input, Label, ListItem, ListView, ProgressBar, Static, TabPane, TextArea
 
 from pentool.api.intruder_api import (
@@ -371,7 +372,11 @@ class IntruderScreen(
             Toolbar.sep(),
             ToolbarButton("Auto §§", t("btn-mark-params")),
             Toolbar.sep(),
-            Static(_ATTACK_DESCRIPTIONS[AttackType.SNIPER], id=t("attack-type-desc"), classes="attack-type-desc"),
+            Static(
+                _ATTACK_DESCRIPTIONS[AttackType.SNIPER],
+                id=t("attack-type-desc"),
+                classes="attack-type-desc",
+            ),
             id=t("toolbar"),
         )
 
@@ -495,6 +500,19 @@ class IntruderScreen(
             pane.mount(inner)
         except Exception as exc:
             logger.debug("_mount_tab_body: %s", exc)
+            return
+        # New tabs start with their AI control visible; match the current mode
+        # right away instead of waiting for the next AiModeChanged (F-022).
+        self.call_after_refresh(self._apply_ai_visibility_after_mount, tab_id)
+
+    def _apply_ai_visibility_after_mount(self, tab_id: str) -> None:
+        """Re-apply AI visibility once a freshly mounted tab is in the DOM."""
+        try:
+            from pentool.core.config import get_config
+
+            self._sync_ai_ui_for_tab(tab_id, bool(get_config().ai_enabled))
+        except Exception as exc:
+            logger.debug("_apply_ai_visibility_after_mount: %s", exc)
 
     # ── TabbedContentPanel message handlers ───────────────────────────────
     # Когда пользователь переключает таб — TabbedContentPanel постит
@@ -810,15 +828,31 @@ class IntruderScreen(
     # ── AI sync ──────────────────────────────────────────────────────────
 
     def _sync_ai_ui(self) -> None:
-        """Show/hide the PRO-locked (AI) controls according to ``Config.ai_enabled``."""
+        """Show/hide the AI-gated controls according to ``Config.ai_enabled``.
+
+        The controls are addressed by id, one per tab, because every tab owns its
+        own toolbar: ``btn-payload-smart-<tab_id>``. A class query would work
+        too, but it would silently skip a tab whose UI is not mounted yet, and
+        the class name (``pro-locked``) does not say what the control gates
+        (REPORT.md F-022). Tabs still being built are skipped here and caught
+        by ``_sync_ai_ui_for_tab`` when their UI mounts.
+        """
         try:
             from pentool.core.config import get_config
 
             ai_on = bool(get_config().ai_enabled)
-            for button in self.query(".pro-locked"):
-                button.display = ai_on
+            for tab in self._tabs:
+                self._sync_ai_ui_for_tab(tab.tab_id, ai_on)
         except Exception as exc:
             logger.debug("_sync_ai_ui: %s", exc)
+
+    def _sync_ai_ui_for_tab(self, tab_id: str, ai_on: bool) -> None:
+        """Apply the AI visibility to one tab's gated controls, if it is mounted."""
+        try:
+            button = self.query_one(f"#{self._wid(tab_id, 'btn-payload-smart')}", ToolbarButton)
+        except NoMatches:
+            return  # tab UI is being (re)built; on_mount will call back
+        button.display = ai_on
 
     def _update_attack_description(self) -> None:
         try:
