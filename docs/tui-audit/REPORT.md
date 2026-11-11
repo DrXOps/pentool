@@ -536,6 +536,16 @@ yield ProxyScreen(id="screen-proxy", proxy_service=self._proxy_service)
 
 ---
 
+**Статус (2026-11-11): закрыто.** `ProxyService` создаётся в
+`PentoolApp.__init__` (конструктор не трогает event loop — соединение с БД
+открывает только `init_storage`) и передаётся в `ProxyScreen(proxy_service=…)`
+из `compose`. Присваивание приватного поля из `on_mount` удалено; осталось
+только `await self._proxy_service.init_storage()`. Тип поля в App стал
+не-Optional. Инвариант проверяется `tests/unit/tui/test_proxy_service_injection.py`:
+конструктор, значение по умолчанию `None` и AST-скан, запрещающий запись
+`<obj>._proxy_service` извне класса экрана.
+
+
 ### F-013 [P1] Непарные подписки/таймеры как класс проблемы
 
 **Где:**

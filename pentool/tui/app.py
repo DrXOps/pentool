@@ -149,7 +149,16 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self._proxy_engine: str = getattr(self._cfg, "proxy_engine", "daemon")
         self._proxy: ProxyServer | ProxyClient | None = None
         self._proxy_api: ProxyAPI = ProxyAPI()
-        self._proxy_service: ProxyService | None = None
+        # Built here, not in on_mount: ProxyService's constructor touches no
+        # event loop (only the storage is opened, later, in init_storage), so
+        # the screen can receive it through its constructor instead of having
+        # its private field assigned from outside (REPORT.md F-012).
+        self._proxy_service: ProxyService = ProxyService(
+            proxy_api=self._proxy_api,
+            db_path=self._cfg.db_path,
+            event_bus=get_event_bus(),
+            on_storage_error=self._on_storage_error,
+        )
         self._proxy_thread: threading.Thread | None = None
         self._proxy_loop: asyncio.AbstractEventLoop | None = None
         self._active_module = "dashboard"
@@ -324,7 +333,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         yield ModuleTabs(id="module-tabs")
         with ContentSwitcher(initial="screen-dashboard"):
             yield DashboardScreen(id="screen-dashboard")
-            yield ProxyScreen(id="screen-proxy")
+            yield ProxyScreen(id="screen-proxy", proxy_service=self._proxy_service)
             yield RepeaterScreen(id="screen-repeater")
             yield IntruderScreen(id="screen-intruder")
             yield ScannerScreen(id="screen-scanner")
@@ -398,22 +407,15 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # Inject Proxy into the API layer
         self._proxy_api.set_proxy(self._proxy)
 
-        # Create ProxyService and pass it to ProxyScreen — before init_storage
-        self._proxy_service = ProxyService(
-            proxy_api=self._proxy_api,
-            db_path=self._cfg.db_path,
-            event_bus=get_event_bus(),
-            on_storage_error=self._on_storage_error,
-        )
+        # The service already reached ProxyScreen through its constructor;
+        # only storage still has to be opened. Run init_storage synchronously
+        # and WAIT for it to complete before auto-opening the last project
+        # (which calls switch_db).
         try:
-            proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
-            proxy_screen._proxy_service = self._proxy_service
-            # Run init_storage synchronously and WAIT for it to complete
-            # before auto-opening last project (which calls switch_db)
             await self._proxy_service.init_storage()
-            logger.info("APP: ProxyService injected and init_storage completed")
+            logger.info("APP: ProxyService init_storage completed")
         except Exception as exc:
-            logger.warning("APP: could not inject ProxyService into ProxyScreen: %s", exc)
+            logger.warning("APP: ProxyService.init_storage failed: %s", exc)
 
         # Initialize global Event Bus and subscribe app-level handlers
         bus = get_event_bus()
