@@ -5,62 +5,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Input, Label
 
-from pentool.collections.filter_predicate import (
-    FilterOp,
-    FilterPredicate,
-    FilterSpec,
-)
+from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
+from pentool.tui.widgets.filter_bar_widget import FilterBarWidget
 from pentool.tui.widgets.toolbar_button import ToolbarButton
-from pentool.tui.widgets.filter_bar_widget import (
-    FilterBarWidget,
-)
 
-_INTRUDER_CSS = """
-IntruderFilterBar #filter-row {
-    height: 1;
-    layout: horizontal;
-    padding: 0 1;
-    background: $surface;
-}
-IntruderFilterBar .fb-label {
-    width: auto;
-    color: $text-muted;
-    padding: 0 1 0 0;
-}
-IntruderFilterBar Input {
-    height: 1;
-    width: 8;
-    border-left: solid $primary-darken-1;
-    border-right: solid $primary-darken-1;
-    background: $surface-lighten-1;
-    padding: 0 1;
-    color: $text;
-}
-IntruderFilterBar Input:focus {
-    border-left: solid $primary;
-    border-right: solid $primary;
-    background: $surface-lighten-2;
-}
-IntruderFilterBar ToolbarButton {
-    height: 1;
-    width: 14;
-    padding: 0 1;
-    background: $panel;
-    color: $text;
-    pointer: pointer;
-}
-IntruderFilterBar ToolbarButton:hover {
-    background: $primary-darken-1;
-}
-IntruderFilterBar ToolbarButton.-active {
-    color: $success;
-    background: $success-darken-3;
-}
-"""
+_CSS = (Path(__file__).parent / "intruder_filter_bar.tcss").read_text(encoding="utf-8")
 
 
 class IntruderFilterBar(FilterBarWidget):
@@ -69,7 +24,7 @@ class IntruderFilterBar(FilterBarWidget):
     class FilterChanged(FilterBarWidget.FilterChanged):
         pass
 
-    DEFAULT_CSS = _INTRUDER_CSS
+    DEFAULT_CSS = _CSS
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="filter-row"):

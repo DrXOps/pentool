@@ -681,6 +681,20 @@ def _paste_text_to_panel(self, panel: ContentPanel, text: str) -> None:
 
 **Связи:** F-038 (CSS-дубли фильтр-баров).
 
+**Статус (2026-11-11): закрыто.** `Cycler` удалён; `OptionCycler` получил
+`allow_empty: bool = False` (индекс 0 = слот «Any», `value` возвращает `""`)
+и `suffix: str = ""` (у фильтр-баров `" ▼"` — та самая подсказка, ради которой
+`Cycler` форматировал подпись сам). `reset()` в `OptionCycler` добавлен, плюс
+`set_value()` — раньше был только у него. `FilterBarWidget._render_field`,
+`_read_field` и `_clear_field` работают с `OptionCycler`; прослушка
+`Cycler.Changed` переехала в базу как `on_option_cycler_changed` (имя хендлера
+выводится Textual из имени класса сообщения, поэтому обработчик
+`on_cycler_changed` в `ProxyFilterBar` без правки просто перестал бы
+вызываться — молча, как в F-041).
+
+Гвард — `tests/unit/tui/test_filter_bar_unified.py`: класс `Cycler` не должен
+существовать, `allow_empty`/`suffix`/`reset` проверены по поведению.
+
 ---
 
 ### F-021 [P2] Три фильтр-бара с дублирующей CSS и логикой
@@ -694,6 +708,28 @@ FilterBar, ProxyFilterBar, WsFilterBar, IntruderFilterBar { height: 2; layout: h
 ```
 и убрать `.replace`,
 **Связи:** F-008, F-020, F-038.
+
+**Статус (2026-11-11): закрыто.** Введён `HistoryFilterBar` (в
+`proxy_filter_bar.py`): общая композиция (`_compose_fields()` +
+Scope/Comments-тоглы + `_compose_actions()`), общий `collect()` с тоглами,
+общий сброс и общий `DEFAULT_CSS` из `proxy_filter_bar.tcss`, где селекторы
+написаны по `HistoryFilterBar` — обе полосы наследуют один и тот же
+stylesheet, `.replace("ProxyFilterBar", "WsFilterBar")` удалён. У `WsFilterBar`
+заодно исчезли три копии (`_maybe_add_scope`, `_reset_scope`,
+`_maybe_add_comments`, `_reset_comments`, `on_toolbar_button_pressed`) —
+~90 строк.
+
+Побочный эффект, который стоит знать: у `WsFilterBar` поля назывались
+`ws-host`/`ws-url`, а остальные — `fb-*`. С префиксом `fb-` список полей стал
+однородным, и `#fb-url { width: 20 }` теперь живёт в общем `.tcss` рядом с
+`#fb-host`. Ширина `fb-status` в WS-полосе стала 7 (как в HTTP) вместо
+растянутого по контенту — это выравнивание, а не регрессия.
+
+`IntruderFilterBar` тоже переехал: inline `_INTRUDER_CSS` →
+`intruder_filter_bar.tcss` (F-025), мёртвый `widgets/filter_bar.tcss` удалён
+(F-038). Гвард — `tests/unit/tui/test_filter_bar_unified.py`: оба бара делят
+один `DEFAULT_CSS`, `.replace()` поверх `read_text()` запрещён AST-сканом,
+`filter_bar.tcss` не должен вернуться.
 
 ---
 

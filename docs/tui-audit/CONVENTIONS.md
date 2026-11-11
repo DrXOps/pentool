@@ -220,9 +220,9 @@ self.workers.cancel_group(self, self.SAVE_WORKER_GROUP)
 копипасты между экранами.
 
 - Гейт: `uv run python tools/check_tui_css.py` — блокирующий шаг CI и
-  pre-commit. Проверяет все загружаемые `.tcss` (три незагружаемых файла —
-  `filter_bar.tcss`, `menu.tcss`, `menu_bar.tcss` — пропускаются и
-  перечисляются в предупреждении).
+  pre-commit. Проверяет все загружаемые `.tcss` (два незагружаемых файла —
+  `menu.tcss`, `menu_bar.tcss` — пропускаются и перечисляются в
+  предупреждении).
 - **Атрибутных селекторов в Textual 8 нет.** `[id^="…"]` — ошибка
   токенизатора (`TokenError: Expected selector or {`), а не «селектор, который
   ни на что не попал»; проверено запуском `test_intruder_tabs.py`. Per-tab

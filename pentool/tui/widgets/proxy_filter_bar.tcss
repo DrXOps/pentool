@@ -1,16 +1,16 @@
-ProxyFilterBar {
+HistoryFilterBar {
     height: 1;
     layout: horizontal;
     background: $surface;
     padding: 0 1;
 }
-ProxyFilterBar .fb-label {
+HistoryFilterBar .fb-label {
     width: auto;
     height: 1;
     color: $text-muted;
     padding: 0 1 0 0;
 }
-ProxyFilterBar Input {
+HistoryFilterBar Input {
     height: 1;
     border-left: solid $primary-darken-1;
     border-right: solid $primary-darken-1;
@@ -18,15 +18,16 @@ ProxyFilterBar Input {
     padding: 0 1;
     color: $text;
 }
-ProxyFilterBar Input:focus {
+HistoryFilterBar Input:focus {
     border-left: solid $primary;
     border-right: solid $primary;
     background: $surface-lighten-2;
 }
-ProxyFilterBar #fb-host   { width: 16; }
-ProxyFilterBar #fb-status { width: 7; }
-ProxyFilterBar #fb-search { width: 20; }
-ProxyFilterBar #fb-apply {
+HistoryFilterBar #fb-host   { width: 16; }
+HistoryFilterBar #fb-url    { width: 20; }
+HistoryFilterBar #fb-status { width: 7; }
+HistoryFilterBar #fb-search { width: 20; }
+HistoryFilterBar #fb-apply {
     height: 1;
     width: auto;
     min-width: 7;
@@ -34,7 +35,7 @@ ProxyFilterBar #fb-apply {
     border: none;
     padding: 0 1;
 }
-ProxyFilterBar #fb-reset {
+HistoryFilterBar #fb-reset {
     height: 1;
     width: auto;
     min-width: 7;
@@ -42,12 +43,12 @@ ProxyFilterBar #fb-reset {
     border: none;
     padding: 0 1;
 }
-ProxyFilterBar .fb-sep {
+HistoryFilterBar .fb-sep {
     width: 1;
     height: 1;
     color: $primary-darken-2;
 }
-ProxyFilterBar Cycler {
+HistoryFilterBar OptionCycler {
     height: 1;
     width: 8;
     background: $panel;
@@ -55,10 +56,10 @@ ProxyFilterBar Cycler {
     padding: 0 1;
     pointer: pointer;
 }
-ProxyFilterBar Cycler:hover {
+HistoryFilterBar OptionCycler:hover {
     background: $primary-darken-1;
 }
-ProxyFilterBar ToolbarButton {
+HistoryFilterBar ToolbarButton {
     height: 1;
     width: 14;
     padding: 0 1;
@@ -66,14 +67,14 @@ ProxyFilterBar ToolbarButton {
     color: $text-muted;
     pointer: pointer;
 }
-ProxyFilterBar ToolbarButton:hover {
+HistoryFilterBar ToolbarButton:hover {
     background: $primary-darken-1;
 }
-ProxyFilterBar ToolbarButton.-active {
+HistoryFilterBar ToolbarButton.-active {
     color: $success;
     background: $success-darken-3;
 }
-ProxyFilterBar ToolbarButton.disabled {
+HistoryFilterBar ToolbarButton.disabled {
     color: $text-disabled;
     background: $panel;
     opacity: 0.5;

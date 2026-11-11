@@ -18,45 +18,12 @@ from textual.widget import Widget
 from textual.widgets import Button, Input, Label, Static
 
 from pentool.collections.filter_predicate import FilterField, FilterFieldType, FilterPredicate, FilterSpec
+from pentool.tui.widgets.option_cycler import OptionCycler
 
 # FilterBarWidget doesn't ship a DEFAULT_CSS — each concrete subclass
 # (ProxyFilterBar, IntruderFilterBar) defines its own layout, widths,
 # and styling. The base class only provides the widget tree via compose()
 # and the filter-logic via configure()/collect().
-
-
-class Cycler(Static):
-    """Циклический переключатель: клик → следующее значение."""
-
-    class Changed(Message):
-        def __init__(self, value: str) -> None:
-            super().__init__()
-            self.value = value
-
-    # DEFAULT_CSS отсутствует — стили задаются родителем (ProxyFilterBar и т.д.)
-
-    def __init__(self, options: list[tuple[str, str]], **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._options = options or []
-        self._idx: int = 0
-        self._update_label()
-
-    def value(self) -> str:
-        if self._idx == 0:
-            return ""
-        return self._options[self._idx][1]
-
-    def reset(self) -> None:
-        self._idx = 0
-        self._update_label()
-
-    def _update_label(self) -> None:
-        self.update(f"{self._options[self._idx][0]} ▼")
-
-    def on_click(self) -> None:
-        self._idx = (self._idx + 1) % len(self._options)
-        self._update_label()
-        self.post_message(self.Changed(self.value()))
 
 
 class ToggleButton(Static):
@@ -126,6 +93,10 @@ class FilterBarWidget(Widget):
 
     DEFAULT_CSS = "FilterBarWidget { height: auto; }"
 
+    #: Text of the two trailing buttons; the results bar overrides them.
+    _apply_label = "Filter"
+    _reset_label = "Clear"
+
     # ── Конфигурация ───────────────────────────────────────────────────────
 
     def configure(self) -> list[FilterField]:
@@ -135,12 +106,20 @@ class FilterBarWidget(Widget):
     # ── Compose ─────────────────────────────────────────────────────────────
 
     def compose(self) -> ComposeResult:
+        yield from self._compose_fields()
+        yield from self._compose_actions()
+
+    def _compose_fields(self) -> ComposeResult:
+        """Label + control for every field from :meth:`configure`."""
         for f in self.configure():
             yield Label(f.label, classes="fb-label")
             yield from self._render_field(f)
             yield Label(" ", classes="fb-sep")
-        yield Button("Filter", id="fb-apply", variant="primary")
-        yield Button("Clear", id="fb-reset")
+
+    def _compose_actions(self) -> ComposeResult:
+        """The trailing buttons. Override to add toggles in front of them."""
+        yield Button(self._apply_label, id="fb-apply", variant="primary")
+        yield Button(self._reset_label, id="fb-reset")
 
     def _render_field(self, field: FilterField) -> ComposeResult:
         match field.field_type:
@@ -149,7 +128,7 @@ class FilterBarWidget(Widget):
             case FilterFieldType.NUMBER:
                 yield Input(id=field.id, placeholder=field.placeholder, type="integer", compact=True)
             case FilterFieldType.CYCLER:
-                yield Cycler(id=field.id, options=field.options or [])
+                yield OptionCycler(id=field.id, options=field.options or [], allow_empty=True, suffix=" ▼")
             case FilterFieldType.TOGGLE:
                 yield ToggleButton(field.label, id=field.id)
             case FilterFieldType.RANGE:
@@ -186,7 +165,7 @@ class FilterBarWidget(Widget):
                     return self.query_one(f"#{field.id}", Input).value.strip() or None
 
                 case FilterFieldType.CYCLER:
-                    return self.query_one(f"#{field.id}", Cycler).value()
+                    return self.query_one(f"#{field.id}", OptionCycler).value
 
                 case FilterFieldType.TOGGLE:
                     tb = self.query_one(f"#{field.id}", ToggleButton)
@@ -240,7 +219,7 @@ class FilterBarWidget(Widget):
                 case FilterFieldType.TEXT | FilterFieldType.NUMBER:
                     self.query_one(f"#{field.id}", Input).value = ""
                 case FilterFieldType.CYCLER:
-                    self.query_one(f"#{field.id}", Cycler).reset()
+                    self.query_one(f"#{field.id}", OptionCycler).reset()
                 case FilterFieldType.TOGGLE:
                     self.query_one(f"#{field.id}", ToggleButton).reset()
                 case FilterFieldType.RANGE:
@@ -259,4 +238,8 @@ class FilterBarWidget(Widget):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Enter in any Input applies the filter."""
+        self._apply()
+
+    def on_option_cycler_changed(self, event: OptionCycler.Changed) -> None:
+        """Clicking a cycler re-applies at once — no separate Apply needed."""
         self._apply()

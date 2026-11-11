@@ -74,6 +74,17 @@
 - Каждый `EventBus.subscribe`/`Config.add_observer` имеет парный
   `unsubscribe`/`remove_observer`: на уровне виджета — в `on_unmount`, для
   приложения — в `_on_exit_app`.
+- **Один циклер — `OptionCycler`** (`widgets/option_cycler.py`); второго
+  класса «клик → следующее значение» нет (F-020). В фильтр-барах он создаётся
+  с `allow_empty=True` (опция 0 = «Any», `value == ""`) и `suffix=" ▼"`.
+  `Cycler`, который жил в `filter_bar_widget.py`, удалён — он не имел своего
+  CSS и `control`, поэтому `@on(...)` не мог его адресовать.
+- **Фильтры истории — один базовый класс `HistoryFilterBar`** в
+  `widgets/proxy_filter_bar.py` (`ProxyFilterBar`, `WsFilterBar`): общая
+  композиция, Scope/Comments-тоглы, общий `.tcss` с селекторами по
+  `HistoryFilterBar`. Собирать `DEFAULT_CSS` через `.replace()` по имени
+  класса запрещено — переименование молча ломает вторую полосу (F-021),
+  страж — `tests/unit/tui/test_filter_bar_unified.py`.
 
 ## Связи
 

@@ -1,0 +1,40 @@
+IntruderFilterBar #filter-row {
+    height: 1;
+    layout: horizontal;
+    padding: 0 1;
+    background: $surface;
+}
+IntruderFilterBar .fb-label {
+    width: auto;
+    color: $text-muted;
+    padding: 0 1 0 0;
+}
+IntruderFilterBar Input {
+    height: 1;
+    width: 8;
+    border-left: solid $primary-darken-1;
+    border-right: solid $primary-darken-1;
+    background: $surface-lighten-1;
+    padding: 0 1;
+    color: $text;
+}
+IntruderFilterBar Input:focus {
+    border-left: solid $primary;
+    border-right: solid $primary;
+    background: $surface-lighten-2;
+}
+IntruderFilterBar ToolbarButton {
+    height: 1;
+    width: 14;
+    padding: 0 1;
+    background: $panel;
+    color: $text;
+    pointer: pointer;
+}
+IntruderFilterBar ToolbarButton:hover {
+    background: $primary-darken-1;
+}
+IntruderFilterBar ToolbarButton.-active {
+    color: $success;
+    background: $success-darken-3;
+}

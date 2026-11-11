@@ -125,9 +125,9 @@ def _loaded_tcss_names() -> set[str]:
     """Names of ``.tcss`` files some Python module actually reads.
 
     Textual only applies a stylesheet a class loads (``DEFAULT_CSS = Path(...).
-    read_text()`` or ``CSS_PATH``). Three files in the repo are loaded by nobody
-    (``filter_bar.tcss``, ``menu.tcss``, ``menu_bar.tcss`` — Appendix D), so their
-    selectors cannot bite and checking them would only produce noise.
+    read_text()`` or ``CSS_PATH``). Two files in the repo are loaded by nobody
+    (``menu.tcss``, ``menu_bar.tcss`` — Appendix D), so their selectors cannot
+    bite and checking them would only produce noise.
     """
     names: set[str] = set()
     for path in TUI.rglob("*.py"):
