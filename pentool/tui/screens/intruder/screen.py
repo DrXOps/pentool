@@ -95,6 +95,63 @@ _LAZY_SOURCE_TYPES = (
 DataTable = IntruderResultsTable
 
 
+#: Suffixes for the per-tab widget ids. ``_wid(tab_id, suffix)`` turns a
+#: suffix into a real id (``<suffix>-<tab_id>``); both halves of the
+#: contract — the id used at mount and the id used at query — must name
+#: the same entry here, so a typo cannot survive as a runtime LookupError
+#: on a tab the user happens to open (F-023).
+class _TabId:
+    # ATTACK TOOLBAR + TEMPLATE
+    TOOLBAR = "toolbar"
+    BTN_ATTACK_TYPE = "btn-attack-type"
+    BTN_ADD_MARKER = "btn-add-marker"
+    BTN_CLEAR_MARKERS = "btn-clear-markers"
+    BTN_MARK_PARAMS = "btn-mark-params"
+    ATTACK_TYPE_DESC = "attack-type-desc"
+    TEMPLATE_PANEL = "template-panel"
+    POSITIONS_PANEL = "positions-panel"
+
+    # PAYLOADS
+    PAYLOAD_BUTTONS_TOOLBAR = "payload-buttons-toolbar"
+    BTN_PAYLOAD_SET = "btn-payload-set"
+    BTN_PAYLOAD_ADD = "btn-payload-add"
+    BTN_PAYLOAD_REMOVE = "btn-payload-remove"
+    BTN_PAYLOAD_CLEAR = "btn-payload-clear"
+    BTN_PAYLOAD_LOAD = "btn-payload-load"
+    BTN_PAYLOAD_GENERATE = "btn-payload-generate"
+    BTN_PAYLOAD_SMART = "btn-payload-smart"
+    PAYLOAD_LIST = "payload-list"
+    PAYLOAD_COUNT_LABEL = "payload-count-label"
+    PAYLOADS_PANEL = "payloads-panel"
+
+    # PROCESSING
+    PROCESSING_BAR = "processing-bar"
+    PROC_URL_ENCODE = "proc-url-encode"
+    PROC_BASE64 = "proc-base64"
+    PROC_HTML_ENCODE = "proc-html-encode"
+    PROC_MD5 = "proc-md5"
+
+    # RESULTS
+    RESULTS_AREA = "results-area"
+    INTRUDER_FILTER_BAR = "intruder-filter-bar"
+    PROGRESS_ROW = "progress-row"
+    ATTACK_PROGRESS = "attack-progress"
+    PROGRESS_LABEL = "progress-label"
+    RESULTS_TABLE = "results-table"
+
+    # DETAIL
+    INTRUDER_DETAIL_PANEL = "intruder-detail-panel"
+    DETAIL_REQUEST = "detail-request"
+    DETAIL_REQUEST_COL = "detail-request-col"
+    DETAIL_RESPONSE = "detail-response"
+    DETAIL_RESPONSE_COL = "detail-response-col"
+
+    # LAYOUT
+    TOP_AREA = "top-area"
+    BODY_RIGHT = "body-right"
+    TAB_BODY = "tab-body"
+
+
 @dataclass
 class _IntruderTabState:
     """Состояние одного таба Intruder — теперь хранит ВСЁ, включая
@@ -332,7 +389,7 @@ class IntruderScreen(
         tab = self._active_tab
         if tab is None:
             raise LookupError("no active tab")
-        wid = self._wid(tab.tab_id, "template-panel")
+        wid = self._wid(tab.tab_id, _TabId.TEMPLATE_PANEL)
         return self.query_one(f"#{wid}", ContentPanel)
 
     # ── BUILD TAB UI — per-tab только template + payloads ─────────────────
@@ -357,27 +414,23 @@ class IntruderScreen(
         toolbar → top (template+payloads) → results → filter → detail.
         """
 
-        def t(suffix: str) -> str:
-            """Per-tab widget id: ``<name>-<tab_id>``."""
-            return f"{suffix}-{tab_id}"
-
         # ── Attack toolbar (per-tab): Sniper/Add§§/Clear§§/Auto§§ ─────────────
         # (как в _compose_positions до мультитаба a315ada)
         attack_toolbar = Toolbar(
             Label("Attack:", classes="toolbar-label"),
-            ToolbarButton("Sniper ▼", t("btn-attack-type")),
+            ToolbarButton("Sniper ▼", self._wid(tab_id, _TabId.BTN_ATTACK_TYPE)),
             Toolbar.sep(),
-            ToolbarButton("Add §§", t("btn-add-marker")),
-            ToolbarButton("Clear §§", t("btn-clear-markers")),
+            ToolbarButton("Add §§", self._wid(tab_id, _TabId.BTN_ADD_MARKER)),
+            ToolbarButton("Clear §§", self._wid(tab_id, _TabId.BTN_CLEAR_MARKERS)),
             Toolbar.sep(),
-            ToolbarButton("Auto §§", t("btn-mark-params")),
+            ToolbarButton("Auto §§", self._wid(tab_id, _TabId.BTN_MARK_PARAMS)),
             Toolbar.sep(),
             Static(
                 _ATTACK_DESCRIPTIONS[AttackType.SNIPER],
-                id=t("attack-type-desc"),
+                id=self._wid(tab_id, _TabId.ATTACK_TYPE_DESC),
                 classes="attack-type-desc",
             ),
-            id=t("toolbar"),
+            id=self._wid(tab_id, _TabId.TOOLBAR),
         )
 
         # ── Template editor (в левой positions-колонке) ────────────────
@@ -389,10 +442,10 @@ class IntruderScreen(
                 widget_type="textarea",
                 initial_text=state.template_text or "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
                 buttons=["copy", "paste", "clear"],
-                id=t("template-panel"),
+                id=self._wid(tab_id, _TabId.TEMPLATE_PANEL),
                 classes="intruder-template-panel",
             ),
-            id=t("positions-panel"),
+            id=self._wid(tab_id, _TabId.POSITIONS_PANEL),
             classes="intruder-positions-panel",
         )
 
@@ -400,92 +453,92 @@ class IntruderScreen(
         payloads_toolbar = Toolbar(
             Toolbar.sep(),
             Label("Payload set:"),
-            ToolbarButton("Set 1 ▼", t("btn-payload-set")),
+            ToolbarButton("Set 1 ▼", self._wid(tab_id, _TabId.BTN_PAYLOAD_SET)),
             Toolbar.sep(),
-            ToolbarButton("Add", t("btn-payload-add")),
-            ToolbarButton("Remove", t("btn-payload-remove")),
-            ToolbarButton("Clear", t("btn-payload-clear")),
-            ToolbarButton("Load from file…", t("btn-payload-load")),
-            ToolbarButton("Generate…", t("btn-payload-generate")),
-            ToolbarButton("🧠 Smart…", t("btn-payload-smart"), classes="pro-locked"),
-            id=t("payload-buttons-toolbar"),
+            ToolbarButton("Add", self._wid(tab_id, _TabId.BTN_PAYLOAD_ADD)),
+            ToolbarButton("Remove", self._wid(tab_id, _TabId.BTN_PAYLOAD_REMOVE)),
+            ToolbarButton("Clear", self._wid(tab_id, _TabId.BTN_PAYLOAD_CLEAR)),
+            ToolbarButton("Load from file…", self._wid(tab_id, _TabId.BTN_PAYLOAD_LOAD)),
+            ToolbarButton("Generate…", self._wid(tab_id, _TabId.BTN_PAYLOAD_GENERATE)),
+            ToolbarButton("🧠 Smart…", self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART), classes="pro-locked"),
+            id=self._wid(tab_id, _TabId.PAYLOAD_BUTTONS_TOOLBAR),
         )
 
         pldiv = Vertical(
             Static("Payloads", classes="section-title"),
             payloads_toolbar,
-            ListView(id=t("payload-list"), classes="intruder-payload-list"),
-            Static("", id=t("payload-count-label"), classes="payload-count-label"),
+            ListView(id=self._wid(tab_id, _TabId.PAYLOAD_LIST), classes="intruder-payload-list"),
+            Static("", id=self._wid(tab_id, _TabId.PAYLOAD_COUNT_LABEL), classes="payload-count-label"),
             classes="intruder-payloads-panel",
-            id=t("payloads-panel"),
+            id=self._wid(tab_id, _TabId.PAYLOADS_PANEL),
         )
 
         # ── Processing bar ──────────────────────────────────────────────
         proc = Horizontal(
             Label("Processing:", classes="proc-label"),
-            Checkbox("URL encode", id=t("proc-url-encode"), value=False),
-            Checkbox("Base64", id=t("proc-base64"), value=False),
-            Checkbox("HTML encode", id=t("proc-html-encode"), value=False),
-            Checkbox("MD5", id=t("proc-md5"), value=False),
+            Checkbox("URL encode", id=self._wid(tab_id, _TabId.PROC_URL_ENCODE), value=False),
+            Checkbox("Base64", id=self._wid(tab_id, _TabId.PROC_BASE64), value=False),
+            Checkbox("HTML encode", id=self._wid(tab_id, _TabId.PROC_HTML_ENCODE), value=False),
+            Checkbox("MD5", id=self._wid(tab_id, _TabId.PROC_MD5), value=False),
             classes="proc-bar",
-            id=t("processing-bar"),
+            id=self._wid(tab_id, _TabId.PROCESSING_BAR),
         )
 
         # ── Top area (template + payloads + processing) ────────────────
         top_area = Horizontal(
             template,
-            Vertical(pldiv, proc, id=t("body-right"), classes="intruder-body-right"),
-            id=t("top-area"),
+            Vertical(pldiv, proc, id=self._wid(tab_id, _TabId.BODY_RIGHT), classes="intruder-body-right"),
+            id=self._wid(tab_id, _TabId.TOP_AREA),
             classes="intruder-top-area",
         )
 
         # ── Results + progress ──────────────────────────────────────────
         # Фильтр — СВЕРХУ, над таблицей (как в оригинальной компоновке a315ada:
         # filter bar → progress → results-table → detail).
-        filter_bar = _IntruderFilterBar(id=t("intruder-filter-bar"))
+        filter_bar = _IntruderFilterBar(id=self._wid(tab_id, _TabId.INTRUDER_FILTER_BAR))
         results_col = Vertical(
             filter_bar,
             Horizontal(
-                ProgressBar(total=100, id=t("attack-progress"), show_eta=False),
-                Static("0/0 (0%)", id=t("progress-label"), classes="progress-label"),
-                id=t("progress-row"),
+                ProgressBar(total=100, id=self._wid(tab_id, _TabId.ATTACK_PROGRESS), show_eta=False),
+                Static("0/0 (0%)", id=self._wid(tab_id, _TabId.PROGRESS_LABEL), classes="progress-label"),
+                id=self._wid(tab_id, _TabId.PROGRESS_ROW),
                 classes="progress-row",
             ),
             DataTable(
-                id=t("results-table"),
+                id=self._wid(tab_id, _TabId.RESULTS_TABLE),
                 columns=_RESULTS_COL_NAMES,
                 column_widths=[5, 45, 8, 10, 10, 30],
                 cursor_type="row",
                 zebra_stripes=True,
                 max_column_content_width=120,
             ),
-            id=t("results-area"),
+            id=self._wid(tab_id, _TabId.RESULTS_AREA),
             classes="intruder-results-area",
         )
 
         # ── Detail panel (per-tab) ─────────────────────────────────────
         detail_panel = Horizontal(
             Vertical(
-                HttpView("Request", id=t("detail-request"), classes="detail-view"),
-                id=t("detail-request-col"),
+                HttpView("Request", id=self._wid(tab_id, _TabId.DETAIL_REQUEST), classes="detail-view"),
+                id=self._wid(tab_id, _TabId.DETAIL_REQUEST_COL),
                 classes="detail-col",
             ),
-            ResizeHandle(t("detail-request-col"), t("detail-response-col")),
+            ResizeHandle(self._wid(tab_id, _TabId.DETAIL_REQUEST_COL), self._wid(tab_id, _TabId.DETAIL_RESPONSE_COL)),
             Vertical(
-                HttpView("Response", id=t("detail-response"), classes="detail-view"),
-                id=t("detail-response-col"),
+                HttpView("Response", id=self._wid(tab_id, _TabId.DETAIL_RESPONSE), classes="detail-view"),
+                id=self._wid(tab_id, _TabId.DETAIL_RESPONSE_COL),
                 classes="detail-col",
             ),
-            id=t("intruder-detail-panel"),
+            id=self._wid(tab_id, _TabId.INTRUDER_DETAIL_PANEL),
             classes="intruder-detail-panel",
         )
 
         inner = Vertical(
             top_area,
-            ResizeHandle(t("top-area"), t("results-area"), vertical=True),
+            ResizeHandle(self._wid(tab_id, _TabId.TOP_AREA), self._wid(tab_id, _TabId.RESULTS_AREA), vertical=True),
             results_col,
             detail_panel,
-            id=t("tab-body"),
+            id=self._wid(tab_id, _TabId.TAB_BODY),
             classes="intruder-tab-body",
         )
 
@@ -526,7 +579,7 @@ class IntruderScreen(
             return
         # Save template text from per-tab editor
         try:
-            wid = self._wid(state.tab_id, "template-panel")
+            wid = self._wid(state.tab_id, _TabId.TEMPLATE_PANEL)
             panel = self.query_one(f"#{wid}", ContentPanel)
             w = panel.content_widget
             if isinstance(w, TextArea):
@@ -849,7 +902,7 @@ class IntruderScreen(
     def _sync_ai_ui_for_tab(self, tab_id: str, ai_on: bool) -> None:
         """Apply the AI visibility to one tab's gated controls, if it is mounted."""
         try:
-            button = self.query_one(f"#{self._wid(tab_id, 'btn-payload-smart')}", ToolbarButton)
+            button = self.query_one(f"#{self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART)}", ToolbarButton)
         except NoMatches:
             return  # tab UI is being (re)built; on_mount will call back
         button.display = ai_on
@@ -859,7 +912,7 @@ class IntruderScreen(
             tab = self._active_tab
             if tab:
                 desc = _ATTACK_DESCRIPTIONS.get(tab.attack_type, "")
-                wid = self._wid(tab.tab_id, "attack-type-desc")
+                wid = self._wid(tab.tab_id, _TabId.ATTACK_TYPE_DESC)
                 self.query_one(f"#{wid}", Static).update(desc)
         except Exception as exc:
             logger.debug("_update_attack_description: %s", exc)
@@ -1012,7 +1065,7 @@ class IntruderScreen(
             attack_type_str = state.get("attack_type", "sniper")
             try:
                 tab.attack_type = AttackType(attack_type_str)
-                btn = self.query_one(f"#{self._wid(tab.tab_id, 'btn-attack-type')}", ToolbarButton)
+                btn = self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_ATTACK_TYPE)}", ToolbarButton)
                 btn.label = f"⚡ {tab.attack_type.value.replace('_', ' ').title()}"
             except Exception as exc:
                 logger.debug("op: %s", exc)
@@ -1229,13 +1282,13 @@ class IntruderScreen(
                 tab.attack_type = at
                 new_label = f"{_ATTACK_LABELS[at]} ▼"
                 try:
-                    b = screen.query_one(f"#{screen._wid(t_id, 'btn-attack-type')}", ToolbarButton)
+                    b = screen.query_one(f"#{screen._wid(t_id, _TabId.BTN_ATTACK_TYPE)}", ToolbarButton)
                     b.label = new_label
                 except Exception as e:
                     logger.warning("attack-type btn update failed: %s", e)
                 desc = _ATTACK_DESCRIPTIONS.get(at, "")
                 try:
-                    screen.query_one(f"#{screen._wid(t_id, 'attack-type-desc')}", Static).update(desc)
+                    screen.query_one(f"#{screen._wid(t_id, _TabId.ATTACK_TYPE_DESC)}", Static).update(desc)
                 except Exception as exc:
                     logger.debug("op: %s", exc)
                 screen._update_payload_select()
@@ -1264,7 +1317,7 @@ class IntruderScreen(
                     return
                 tab.active_set_idx = idx
                 label = f"Set {idx + 1} ▼" if n <= 1 else f"Set {idx + 1}/{n} ▼"
-                self.query_one(f"#{self._wid(t_id, 'btn-payload-set')}", ToolbarButton).label = label
+                self.query_one(f"#{self._wid(t_id, _TabId.BTN_PAYLOAD_SET)}", ToolbarButton).label = label
                 self._refresh_payload_list()
                 self._highlight_nth_marker(idx)
             except Exception as exc:
@@ -1545,9 +1598,9 @@ class IntruderScreen(
                 if tab:
                     tab.attack_type = AttackType.BATTERING_RAM
                 try:
-                    btn = self.query_one(f"#{self._wid(tab.tab_id, 'btn-attack-type')}", ToolbarButton)
+                    btn = self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_ATTACK_TYPE)}", ToolbarButton)
                     btn.label = f"{_ATTACK_LABELS[AttackType.BATTERING_RAM]} ▼"
-                    self.query_one(f"#{self._wid(tab.tab_id, 'attack-type-desc')}", Static).update(
+                    self.query_one(f"#{self._wid(tab.tab_id, _TabId.ATTACK_TYPE_DESC)}", Static).update(
                         _ATTACK_DESCRIPTIONS[AttackType.BATTERING_RAM]
                     )
                 except Exception as exc:
@@ -1586,7 +1639,7 @@ class IntruderScreen(
         tab.active_set_idx = idx
         try:
             label = f"Set {idx + 1} ▼" if n <= 1 else f"Set {idx + 1}/{n} ▼"
-            self.query_one(f"#{self._wid(tab.tab_id, 'btn-payload-set')}", ToolbarButton).label = label
+            self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_PAYLOAD_SET)}", ToolbarButton).label = label
         except Exception as exc:
             logger.debug("op: %s", exc)
         self._refresh_payload_list()
@@ -1601,7 +1654,7 @@ class IntruderScreen(
             return
         tab_id = tab.tab_id
         try:
-            lv = self.query_one(f"#{self._wid(tab_id, 'payload-list')}", ListView)
+            lv = self.query_one(f"#{self._wid(tab_id, _TabId.PAYLOAD_LIST)}", ListView)
             lv.clear()
             active = tab.payload_sources[tab.active_set_idx] if tab.active_set_idx < len(tab.payload_sources) else []
             if isinstance(active, FilePayloadSource):
@@ -1639,7 +1692,7 @@ class IntruderScreen(
             return
         tab_id = tab.tab_id
         try:
-            label = self.query_one(f"#{self._wid(tab_id, 'payload-count-label')}", Static)
+            label = self.query_one(f"#{self._wid(tab_id, _TabId.PAYLOAD_COUNT_LABEL)}", Static)
         except Exception:
             return
         active = tab.payload_sources[tab.active_set_idx] if tab.active_set_idx < len(tab.payload_sources) else []
@@ -1738,7 +1791,7 @@ class IntruderScreen(
             )
             return
         try:
-            lv = self.query_one(f"#{self._wid(tab.tab_id, 'payload-list')}", ListView)
+            lv = self.query_one(f"#{self._wid(tab.tab_id, _TabId.PAYLOAD_LIST)}", ListView)
             idx = lv.index
             if idx is not None and tab.active_set_idx < len(tab.payload_sources):
                 payloads = tab.payload_sources[tab.active_set_idx]
@@ -1876,7 +1929,7 @@ class IntruderScreen(
             return
         tab_id = tab.tab_id
         try:
-            label = self.query_one(f"#{self._wid(tab_id, 'payload-count-label')}", Static)
+            label = self.query_one(f"#{self._wid(tab_id, _TabId.PAYLOAD_COUNT_LABEL)}", Static)
             pct = f" ({bytes_read / total_bytes * 100:.0f}%)" if total_bytes else ""
             if target_idx == tab.active_set_idx:
                 label.update(f"[dim]{count:,} line(s) counted so far{pct}…[/dim]")
@@ -2130,7 +2183,7 @@ class IntruderScreen(
         if tab is None:
             return
         try:
-            pb = self.query_one(f"#{self._wid(tab.tab_id, 'attack-progress')}", ProgressBar)
+            pb = self.query_one(f"#{self._wid(tab.tab_id, _TabId.ATTACK_PROGRESS)}", ProgressBar)
             if done == 0:
                 pb.update(total=max(1, total), progress=0)
             else:
@@ -2139,7 +2192,7 @@ class IntruderScreen(
             logger.debug("op: %s", exc)
         try:
             pct = f"{done / total * 100:.1f}%" if total > 0 else "0%"
-            self.query_one(f"#{self._wid(tab.tab_id, 'progress-label')}", Static).update(f"{done}/{total} ({pct})")
+            self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROGRESS_LABEL)}", Static).update(f"{done}/{total} ({pct})")
         except Exception as exc:
             logger.debug("op: %s", exc)
 
@@ -2243,8 +2296,8 @@ class IntruderScreen(
         tab.all_results = []
         tab.filtered_results = []
         try:
-            self.query_one(f"#{self._wid(tab.tab_id, 'progress-label')}", Static).update("0/0 (0%)")
-            self.query_one(f"#{self._wid(tab.tab_id, 'attack-progress')}", ProgressBar).update(total=100)
+            self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROGRESS_LABEL)}", Static).update("0/0 (0%)")
+            self.query_one(f"#{self._wid(tab.tab_id, _TabId.ATTACK_PROGRESS)}", ProgressBar).update(total=100)
         except Exception as exc:
             logger.debug("op: %s", exc)
 
@@ -2253,7 +2306,7 @@ class IntruderScreen(
         if tab is None:
             return None
         try:
-            return self.query_one(f"#{self._wid(tab.tab_id, 'results-table')}", DataTable)
+            return self.query_one(f"#{self._wid(tab.tab_id, _TabId.RESULTS_TABLE)}", DataTable)
         except Exception:
             return None
 
@@ -2370,7 +2423,7 @@ class IntruderScreen(
         tab = self._active_tab
         if tab is None:
             return
-        table_id = self._wid(tab.tab_id, "results-table")
+        table_id = self._wid(tab.tab_id, _TabId.RESULTS_TABLE)
         if event.data_table.id != table_id:
             return
         self._sort_table_sql(
@@ -2395,7 +2448,7 @@ class IntruderScreen(
         tab = self._active_tab
         if tab is None:
             return
-        table_id = self._wid(tab.tab_id, "results-table")
+        table_id = self._wid(tab.tab_id, _TabId.RESULTS_TABLE)
         if event.data_table.id != table_id:
             return
         result = self._result_at_row(event.data_table, event.cursor_row)
@@ -2410,7 +2463,7 @@ class IntruderScreen(
         tab = self._active_tab
         if tab is None:
             return
-        table_id = self._wid(tab.tab_id, "results-table")
+        table_id = self._wid(tab.tab_id, _TabId.RESULTS_TABLE)
         if event.data_table.id != table_id:
             return
         result = self._result_at_row(event.data_table, event.cursor_row)
@@ -2426,7 +2479,7 @@ class IntruderScreen(
         req_raw = result.request_raw or ""
         resp_raw = result.response_raw or ""
         try:
-            panel = self.query_one(f"#{self._wid(tab.tab_id, 'intruder-detail-panel')}")
+            panel = self.query_one(f"#{self._wid(tab.tab_id, _TabId.INTRUDER_DETAIL_PANEL)}")
             panel.display = True
         except Exception as exc:
             logger.warning("INTRUDER: _show_detail panel query failed: %s", exc)
@@ -2437,12 +2490,12 @@ class IntruderScreen(
         if tab is None:
             return
         try:
-            req_view = self.query_one(f"#{self._wid(tab.tab_id, 'detail-request')}", HttpView)
+            req_view = self.query_one(f"#{self._wid(tab.tab_id, _TabId.DETAIL_REQUEST)}", HttpView)
             req_view.load_raw_http(req_raw)
         except Exception as exc:
             logger.debug("_load_detail_content: req_view error: %s", exc)
         try:
-            resp_view = self.query_one(f"#{self._wid(tab.tab_id, 'detail-response')}", HttpView)
+            resp_view = self.query_one(f"#{self._wid(tab.tab_id, _TabId.DETAIL_RESPONSE)}", HttpView)
             if resp_raw:
                 resp_view.load_raw_http(resp_raw)
             else:
@@ -2455,7 +2508,7 @@ class IntruderScreen(
         if tab is None:
             return
         try:
-            panel = self.query_one(f"#{self._wid(tab.tab_id, 'intruder-detail-panel')}")
+            panel = self.query_one(f"#{self._wid(tab.tab_id, _TabId.INTRUDER_DETAIL_PANEL)}")
             panel.display = False
             tab.current_result = None
         except Exception as exc:
@@ -2598,13 +2651,13 @@ class IntruderScreen(
             return []
         ops = []
         try:
-            if self.query_one(f"#{self._wid(tab.tab_id, 'proc-url-encode')}", Checkbox).value:
+            if self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROC_URL_ENCODE)}", Checkbox).value:
                 ops.append("url_encode")
-            if self.query_one(f"#{self._wid(tab.tab_id, 'proc-base64')}", Checkbox).value:
+            if self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROC_BASE64)}", Checkbox).value:
                 ops.append("base64_encode")
-            if self.query_one(f"#{self._wid(tab.tab_id, 'proc-html-encode')}", Checkbox).value:
+            if self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROC_HTML_ENCODE)}", Checkbox).value:
                 ops.append("html_encode")
-            if self.query_one(f"#{self._wid(tab.tab_id, 'proc-md5')}", Checkbox).value:
+            if self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROC_MD5)}", Checkbox).value:
                 ops.append("md5")
         except Exception as exc:
             logger.debug("op: %s", exc)

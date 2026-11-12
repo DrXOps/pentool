@@ -143,9 +143,14 @@ class TestIntruderButtons:
         assert 'StartStopWidget(id="intruder-start-stop")' in src
         assert '"intruder-threads"' in src
         assert '"intruder-delay"' in src
-        # В per-tab toolbar остались кнопки содержимого, но не StartStop
+        # В per-tab toolbar остались кнопки содержимого, но не StartStop.
+        # Идентификаторы собираются из _TabId (F-023), поэтому проверяем
+        # константу и её значение, а не литерал в тексте метода.
+        from pentool.tui.screens.intruder.screen import _TabId
+
         mount_src = inspect.getsource(IntruderScreen._mount_tab_body)
-        assert "btn-add-marker" in mount_src
+        assert _TabId.BTN_ADD_MARKER == "btn-add-marker"
+        assert "_TabId.BTN_ADD_MARKER" in mount_src
         assert "StartStopWidget(" not in mount_src
 
     def test_intruder_has_ssw_methods(self, mock_intruder_deps):
