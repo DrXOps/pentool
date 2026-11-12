@@ -467,8 +467,11 @@ class IntruderScreen(
         pldiv = Vertical(
             Static("Payloads", classes="section-title"),
             payloads_toolbar,
-            ListView(id=self._wid(tab_id, _TabId.PAYLOAD_LIST), classes="intruder-payload-list"),
+            # Счётчик — над списком, как в компоновке до мультитаба: он
+            # показывает, сколько строк пришло при загрузке файла, и при
+            # потоковом чтении растёт на глазах — под списком этого не видно.
             Static("", id=self._wid(tab_id, _TabId.PAYLOAD_COUNT_LABEL), classes="payload-count-label"),
+            ListView(id=self._wid(tab_id, _TabId.PAYLOAD_LIST), classes="intruder-payload-list"),
             classes="intruder-payloads-panel",
             id=self._wid(tab_id, _TabId.PAYLOADS_PANEL),
         )
@@ -484,9 +487,19 @@ class IntruderScreen(
             id=self._wid(tab_id, _TabId.PROCESSING_BAR),
         )
 
-        # ── Top area (template + payloads + processing) ────────────────
+        # ── Top area (template | handle | payloads + processing) ───────
         top_area = Horizontal(
             template,
+            # Разделитель Positions|Payloads был в компоновке до мультитаба и
+            # потерялся при переносе: обе панели фиксированы, и на широком
+            # терминале шаблон нельзя было отдать под больше места.
+            # Цели — прямые дети top-area: ResizeHandle пишет width в них
+            # напрямую, а `payloads-panel` вложен в `body-right`, и правка его
+            # ширины ничего бы не дала.
+            ResizeHandle(
+                self._wid(tab_id, _TabId.POSITIONS_PANEL),
+                self._wid(tab_id, _TabId.BODY_RIGHT),
+            ),
             Vertical(pldiv, proc, id=self._wid(tab_id, _TabId.BODY_RIGHT), classes="intruder-body-right"),
             id=self._wid(tab_id, _TabId.TOP_AREA),
             classes="intruder-top-area",
@@ -500,7 +513,11 @@ class IntruderScreen(
             filter_bar,
             Horizontal(
                 ProgressBar(total=100, id=self._wid(tab_id, _TabId.ATTACK_PROGRESS), show_eta=False),
-                Static("0/0 (0%)", id=self._wid(tab_id, _TabId.PROGRESS_LABEL), classes="progress-label"),
+                Static(
+                    "0/0 (0%)",
+                    id=self._wid(tab_id, _TabId.PROGRESS_LABEL),
+                    classes="progress-label",
+                ),
                 id=self._wid(tab_id, _TabId.PROGRESS_ROW),
                 classes="progress-row",
             ),
@@ -523,7 +540,10 @@ class IntruderScreen(
                 id=self._wid(tab_id, _TabId.DETAIL_REQUEST_COL),
                 classes="detail-col",
             ),
-            ResizeHandle(self._wid(tab_id, _TabId.DETAIL_REQUEST_COL), self._wid(tab_id, _TabId.DETAIL_RESPONSE_COL)),
+            ResizeHandle(
+                self._wid(tab_id, _TabId.DETAIL_REQUEST_COL),
+                self._wid(tab_id, _TabId.DETAIL_RESPONSE_COL),
+            ),
             Vertical(
                 HttpView("Response", id=self._wid(tab_id, _TabId.DETAIL_RESPONSE), classes="detail-view"),
                 id=self._wid(tab_id, _TabId.DETAIL_RESPONSE_COL),
@@ -535,7 +555,11 @@ class IntruderScreen(
 
         inner = Vertical(
             top_area,
-            ResizeHandle(self._wid(tab_id, _TabId.TOP_AREA), self._wid(tab_id, _TabId.RESULTS_AREA), vertical=True),
+            ResizeHandle(
+                self._wid(tab_id, _TabId.TOP_AREA),
+                self._wid(tab_id, _TabId.RESULTS_AREA),
+                vertical=True,
+            ),
             results_col,
             detail_panel,
             id=self._wid(tab_id, _TabId.TAB_BODY),
@@ -692,6 +716,14 @@ class IntruderScreen(
             ToolbarButton("➖ Tab", "btn-close-tab"),
             Toolbar.sep(),
             StartStopWidget(id="intruder-start-stop"),
+            Toolbar.sep(),
+            # Результаты живут в активной вкладке, поэтому _clear_results /
+            # _export_csv в _on_toolbar_pressed берут её же. Кнопки были
+            # потеряны в cb11bfd — тот коммит переписал этот Toolbar целиком
+            # и выронил их, оставив обработчики без создателя.
+            ToolbarButton("Clear results", "btn-clear-results"),
+            Toolbar.sep(),
+            ToolbarButton("Export CSV", "btn-export-csv"),
             Toolbar.sep(),
             Label("Threads:", classes="toolbar-label"),
             Input("10", id="intruder-threads", placeholder="10", compact=True, type="integer"),

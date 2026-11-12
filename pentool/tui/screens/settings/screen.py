@@ -10,25 +10,16 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.timer import Timer
 from textual.widget import Widget
+from textual.widgets import Button, Input, Static, Switch, TabbedContent, TabPane
 
 from pentool.core.error_guard import err
-
-_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
-
-from textual.widgets import (
-    Button,
-    Input,
-    Static,
-    Switch,
-    TabbedContent,
-    TabPane,
-)
-
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.settings.hotkeys import HotkeySettingsScreen
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+_CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 
 class UIMode(str, Enum):
@@ -84,9 +75,7 @@ class SettingsScreen(AppMixin, Widget):
                         yield Input(value="8080", id="set-proxy-port", compact=True)
                     with Horizontal(classes="row"):
                         yield Static("Upstream proxy:", classes="row-label")
-                        yield Input(
-                            placeholder="http://proxy:8080", id="set-upstream", compact=True
-                        )
+                        yield Input(placeholder="http://proxy:8080", id="set-upstream", compact=True)
                     with Horizontal(classes="row"):
                         yield Static("CA certificate:", classes="row-label")
                         yield Button("Install CA cert", id="settings-open-ca")
@@ -100,9 +89,7 @@ class SettingsScreen(AppMixin, Widget):
                     yield Static("Project Settings", classes="section-title")
                     with Horizontal(classes="row"):
                         yield Static("Auto-save interval (min):", classes="row-label")
-                        yield Input(
-                            placeholder="0 = disabled", id="set-autosave-interval", compact=True
-                        )
+                        yield Input(placeholder="0 = disabled", id="set-autosave-interval", compact=True)
                     with Horizontal(classes="row"):
                         yield Static("Auto-save enabled:", classes="row-label")
                         yield Checkbox("Enable auto-save", id="set-autosave-enabled", value=False)
@@ -221,6 +208,12 @@ class SettingsScreen(AppMixin, Widget):
                         "Path to the model's GGUF file. If empty, ~/.pentool/ai/models/ is used.",
                         classes="settings-hint",
                     )
+                    # Commit 0f563b3 dropped this button when the enabled switch
+                    # became live-saving, but _save_ai_settings() stayed behind
+                    # the selector: MCP port and model path loaded from config
+                    # and could never be written back. Same shape as the
+                    # Intruder buttons lost in cb11bfd (test_on_selectors_resolve).
+                    yield ToolbarButton("Save", "settings-save-ai")
 
             with TabPane("License", id="tab-license"):
                 with Vertical(classes="settings-pane"):
@@ -286,40 +279,22 @@ class SettingsScreen(AppMixin, Widget):
 
             cfg = get_config()
             self.query_one("#set-user-agent", Input).value = getattr(cfg, "default_user_agent", "")
-            self.query_one("#set-req-timeout", Input).value = str(
-                getattr(cfg, "request_timeout", 15)
-            )
-            self.query_one("#set-conn-timeout", Input).value = str(
-                getattr(cfg, "connect_timeout", 10)
-            )
-            self.query_one("#set-max-redirects", Input).value = str(
-                getattr(cfg, "max_redirects", 10)
-            )
+            self.query_one("#set-req-timeout", Input).value = str(getattr(cfg, "request_timeout", 15))
+            self.query_one("#set-conn-timeout", Input).value = str(getattr(cfg, "connect_timeout", 10))
+            self.query_one("#set-max-redirects", Input).value = str(getattr(cfg, "max_redirects", 10))
             self.query_one("#set-verify-ssl", Checkbox).value = getattr(cfg, "verify_ssl", False)
-            self.query_one("#set-collaborator-url", Input).value = getattr(
-                cfg, "collaborator_url", ""
-            )
-            self.query_one("#set-scan-marker-enabled", Checkbox).value = getattr(
-                cfg, "scan_marker_enabled", False
-            )
-            self.query_one("#set-scan-marker-name", Input).value = getattr(
-                cfg, "scan_marker_name", "X-Scanner"
-            )
-            self.query_one("#set-scan-marker-value", Input).value = getattr(
-                cfg, "scan_marker_value", "pentool/1.0"
-            )
+            self.query_one("#set-collaborator-url", Input).value = getattr(cfg, "collaborator_url", "")
+            self.query_one("#set-scan-marker-enabled", Checkbox).value = getattr(cfg, "scan_marker_enabled", False)
+            self.query_one("#set-scan-marker-name", Input).value = getattr(cfg, "scan_marker_name", "X-Scanner")
+            self.query_one("#set-scan-marker-value", Input).value = getattr(cfg, "scan_marker_value", "pentool/1.0")
         except Exception:
             pass
         try:
             from pentool.core.config import get_config
 
             cfg = get_config()
-            self.query_one("#set-send-crash-reports", Checkbox).value = getattr(
-                cfg, "send_crash_reports", True
-            )
-            self.query_one("#set-check-updates", Checkbox).value = getattr(
-                cfg, "check_updates", True
-            )
+            self.query_one("#set-send-crash-reports", Checkbox).value = getattr(cfg, "send_crash_reports", True)
+            self.query_one("#set-check-updates", Checkbox).value = getattr(cfg, "check_updates", True)
             self.query_one("#set-auto-scope", Checkbox).value = getattr(cfg, "auto_scope", False)
         except Exception:
             pass
@@ -343,9 +318,7 @@ class SettingsScreen(AppMixin, Widget):
 
             cfg = get_config()
             self.query_one("#set-ai-enabled", Switch).value = getattr(cfg, "ai_enabled", False)
-            self.query_one("#set-ai-mcp-port", Input).value = str(
-                getattr(cfg, "ai_mcp_port", 0) or 0
-            )
+            self.query_one("#set-ai-mcp-port", Input).value = str(getattr(cfg, "ai_mcp_port", 0) or 0)
             model_path = getattr(cfg, "ai_mcp_model_path", "") or ""
             if model_path:
                 self.query_one("#set-ai-model-path", Input).value = model_path
@@ -375,9 +348,7 @@ class SettingsScreen(AppMixin, Widget):
                 status_w.add_class("license-status-pro")
                 plan_w.update(info.plan.upper())
                 exp_w.update(info.expires_text)
-                feat_w.update(
-                    "\n".join(f"  ✓ {f}" for f in info.features) if info.features else "  (none)"
-                )
+                feat_w.update("\n".join(f"  ✓ {f}" for f in info.features) if info.features else "  (none)")
             else:
                 status_w.update("● FREE")
                 status_w.remove_class("license-status-pro")
@@ -602,9 +573,7 @@ class SettingsScreen(AppMixin, Widget):
 
     def _save_proxy_settings(self) -> None:
         try:
-            self._save_settings(
-                self._collect_proxy_changes(), "Proxy settings saved (restart proxy to apply)"
-            )
+            self._save_settings(self._collect_proxy_changes(), "Proxy settings saved (restart proxy to apply)")
         except Exception as e:
             err(e, "Save failed", self)
 
@@ -802,9 +771,7 @@ class SettingsScreen(AppMixin, Widget):
         self.app.notify("Activating license…", timeout=2)  # type: ignore[attr-defined]
         try:
             info = await activate_license(key)
-            if not info.valid and (
-                "slots in use" in info.error or "bound to another machine" in info.error
-            ):
+            if not info.valid and ("slots in use" in info.error or "bound to another machine" in info.error):
                 # Предложить сбросить старую привязку
                 from pentool.tui.dialogs.confirm import ConfirmDialog
 
