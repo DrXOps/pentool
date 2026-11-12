@@ -68,7 +68,14 @@ def test_no_literal_suffix_survives_in_wid_calls() -> None:
 def test_mount_body_creates_every_id_through_the_table() -> None:
     """The builder must not hand-write ``f"{suffix}-{tab_id}"`` anymore."""
     tree = ast.parse(_SCREEN.read_text(encoding="utf-8"))
-    body = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "_mount_tab_body")
+    # The builder is a coroutine (it awaits ``pane.mount``), so it is an
+    # AsyncFunctionDef; walking only FunctionDef silently found nothing to
+    # check and the Next() below raised StopIteration instead of failing.
+    body = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "_mount_tab_body"
+    )
     used = {attr.attr for attr, _ in _refs(body)}
     assert used, "_mount_tab_body creates no ids from _TabId — did the rewrite regress?"
     # Every id= in the body is either from the table or the tab id itself.

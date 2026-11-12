@@ -224,6 +224,15 @@ class TabbedContentPanel(Widget, Generic[TState]):
                 state.tab_uid = uuid.uuid4().hex
             if hasattr(state, "name"):
                 state.name = name
+        elif hasattr(state, "tab_id"):
+            # A caller-supplied state comes from persistence and either has no
+            # tab_id or one from a previous run. The per-tab widget ids are
+            # built from ``state.tab_id`` by the owner (``_wid(tab_id, …)``), so
+            # leaving it stale means the tab body mounts under a different id
+            # than the one every lookup uses — the pane stays an empty
+            # placeholder forever. ``tab_uid`` is the persistence key and is
+            # deliberately left alone.
+            state.tab_id = tab_id
 
         # Step 1: build the TabPane (children via *args get mounted when added).
         pane_id = getattr(state, "name", f"Tab {self._counter}")

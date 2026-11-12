@@ -406,19 +406,25 @@ class IntruderScreen(
         placeholder = Static("…", id=f"tab-placeholder-{tab_id}")
         return TabPane(state.name, placeholder, id=tab_id)
 
-    def _mount_tab_body(self, tab_id: str, state: _IntruderTabState) -> None:
+    async def _mount_tab_body(self, tab_id: str, state: _IntruderTabState) -> None:
         """Поэтапно собрать полное содержимое aтаки внутрь TabPane.
 
         Вызывается из _on_tab_created (после того как таб добавлен в DOM
         и стал активным). tab-body — вертикальный стек:
         toolbar → top (template+payloads) → results → filter → detail.
+        Метод асинхронный ради одного await: call_after_refresh выполняет
+        возвращённую корутину через commit, поэтому монтирование успевает
+        завершиться до загрузки данных таба.
         """
 
         # ── Attack toolbar (per-tab): Sniper/Add§§/Clear§§/Auto§§ ─────────────
         # (как в _compose_positions до мультитаба a315ada)
+        # Подпись и описание берутся из state, а не из литерала: таб может
+        # подниматься из БД с уже выбранным типом атаки, и раньше он
+        # показывал «Sniper ▼» с описанием снипера при state=battering_ram.
         attack_toolbar = Toolbar(
             Label("Attack:", classes="toolbar-label"),
-            ToolbarButton("Sniper ▼", self._wid(tab_id, _TabId.BTN_ATTACK_TYPE)),
+            ToolbarButton(f"{_ATTACK_LABELS[state.attack_type]} ▼", self._wid(tab_id, _TabId.BTN_ATTACK_TYPE)),
             Toolbar.sep(),
             ToolbarButton("Add §§", self._wid(tab_id, _TabId.BTN_ADD_MARKER)),
             ToolbarButton("Clear §§", self._wid(tab_id, _TabId.BTN_CLEAR_MARKERS)),
@@ -426,7 +432,7 @@ class IntruderScreen(
             ToolbarButton("Auto §§", self._wid(tab_id, _TabId.BTN_MARK_PARAMS)),
             Toolbar.sep(),
             Static(
-                _ATTACK_DESCRIPTIONS[AttackType.SNIPER],
+                _ATTACK_DESCRIPTIONS.get(state.attack_type, ""),
                 id=self._wid(tab_id, _TabId.ATTACK_TYPE_DESC),
                 classes="attack-type-desc",
             ),
@@ -574,13 +580,29 @@ class IntruderScreen(
                 ph.remove()
             except Exception:
                 pass
-            pane.mount(inner)
+            # mount() — не мгновенная вставка: он планируется в очереди
+            # сообщений, и без await дети появляются в DOM на произвольном
+            # такте позже. Тогда _refresh_payload_list ищет ListView раньше
+            # времени, ловит NoMatches и глотает его, а таб остаётся с пустым
+            # списком payload'ов. AwaitComplete гарантирует, что к следующей
+            # строке дерево уже собрано.
+            await pane.mount(inner)
         except Exception as exc:
             logger.debug("_mount_tab_body: %s", exc)
             return
         # New tabs start with their AI control visible; match the current mode
         # right away instead of waiting for the next AiModeChanged (F-022).
         self.call_after_refresh(self._apply_ai_visibility_after_mount, tab_id)
+        # Содержимое таба — сразу после монтирования, без откладывания на
+        # очередной refresh: таб может прийти из БД уже с payload_sources,
+        # attack_type и активным набором, и до этой строки он показывал бы
+        # пустой список и «Set 1 ▼» независимо от того, что лежит в БД.
+        # Хелперы читают _active_tab, поэтому при пачечном восстановлении
+        # (вкладки создаются подряд, активна последняя) этот вызов наполнит
+        # активную вкладку, а не ту, чьё тело сейчас доехало, — data-driven,
+        # поэтому данные всегда попадают в свои виджеты. Остальные вкладки
+        # наполняются на TabActivated, когда их открывают.
+        self._load_active_tab_content()
 
     def _apply_ai_visibility_after_mount(self, tab_id: str) -> None:
         """Re-apply AI visibility once a freshly mounted tab is in the DOM."""
@@ -615,7 +637,10 @@ class IntruderScreen(
     @on(TabbedContentPanel.TabActivated, "#intruder-tabs")
     def _on_tab_activated(self, event: TabbedContentPanel.TabActivated) -> None:
         """Таб переключён — обновляем UI (данные уже в state)."""
-        self._rebuild_table_data()
+        # Данные, а не только таблица: восстановление из БД создаёт вкладки
+        # пачкой и активной делает последнюю, поэтому тела остальных (и их
+        # списки payload'ов) заполняются здесь, когда пользователь их откроет.
+        self._load_active_tab_content()
         # Синхронизируем глобальный toolbar с активной вкладкой
         tab = self._active_tab
         if tab is not None:
@@ -659,8 +684,14 @@ class IntruderScreen(
         state = event.tab_state
         if not isinstance(state, _IntruderTabState):
             return
+        # _load_active_tab_content НЕ ставится здесь в очередь рядом с
+        # _mount_tab_body: обе функции уходят в один батч refresh-колбэков, и
+        # тогда _refresh_payload_list ищет ListView до того, как mount()
+        # действительно добавил содержимое таба в DOM. NoMatches глотается
+        # try/except, поэтому восстановленный из БД таб оставался с пустым
+        # списком payload'ов до первого ручного действия. Загрузку данных
+        # планирует сам _mount_tab_body — уже после pane.mount(inner).
         self.call_after_refresh(self._mount_tab_body, state.tab_id, state)
-        self.call_after_refresh(self._load_active_tab_content)
 
     @on(TabbedContentPanel.TabClosed, "#intruder-tabs")
     def _on_tab_closed(self, event: TabbedContentPanel.TabClosed) -> None:
@@ -750,8 +781,11 @@ class IntruderScreen(
     def action_new_tab(self) -> None:
         """Создать новый таб с дефолтным состоянием."""
         self._tab_counter_adjust()
+        # Данные нового таба подгружает _load_active_tab_content, который
+        # _mount_tab_body планирует после монтирования содержимого. Здесь
+        # планировать нельзя: к этому моменту _post_tab_messages ещё не
+        # создал ни одного per-tab виджета.
         self._tc_panel.action_new_tab()
-        self.call_after_refresh(self._load_active_tab_content)
 
     def _tab_counter_adjust(self) -> None:
         """Подстроить _tab_counter под TabbedContentPanel (для совместимости тестов)."""
@@ -761,11 +795,22 @@ class IntruderScreen(
         self._tc_panel.action_close_tab()
 
     def _load_active_tab_content(self) -> None:
-        """Подгрузить данные активного таба."""
+        """Подгрузить данные активного таба в только что смонтированные виджеты.
+
+        Вызывается из _mount_tab_body последней строкой — уже после того,
+        как pane.mount(inner) действительно добавил виджеты в DOM. Таб может
+        прийти из БД уже с payload_sources, attack_type и счётом активного
+        набора, поэтому каждый per-tab виджет получает значение из state:
+        раньше список payload'ов оставался пустым, а подпись набора —
+        «Set 1 ▼» независимо от того, что лежало в БД.
+
+        Таблица результатов перестраивается всегда, даже без активного таба:
+        это и делал прежний _on_tab_activated, и вызов из него не должен
+        терять это поведение из-за раннего return.
+        """
         tab = self._active_tab
-        if tab is None:
-            return
-        # Rebuild results (данные из таба)
+        if tab is not None:
+            self._update_payload_select()
         self._rebuild_table_data()
 
     def _save_current_tab_state(self) -> None:
