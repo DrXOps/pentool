@@ -1272,15 +1272,16 @@ class AutoSaveMixin:
 
 ### F-050 [P1] (закрыт) Содержимое вкладки Intruder терялось при порте на мультитаб
 
-**Где:** `widgets/tab_panel.py:227`, `screens/intruder/screen.py:409`, `:614`.
+**Где:** `widgets/tab_panel.py:227`, `screens/intruder/screen.py:409`, `:614`, `_do_load_tabs_from_db`, `storage/intruder_storage.py:173`.
 
-**Что:** три отдельные потери, каждая молчаливая:
+**Что:** четыре отдельные потери, каждая молчаливая:
 
 | Потеря | Механизм | Симптом |
 |---|---|---|
 | `state.tab_id` не присваивался состоянию из БД | `action_new_tab(state=…)` генерировал `tab_id`, но писал его только в собственные `_states`/`_meta`; в переданном объекте оставался пустой | тело таба монтировалось под одним id, все `_wid()`-запросы шли по другому → вкладка навсегда пустой placeholder, без ошибок в логе |
 | подпись типа атаки — литерал | `ToolbarButton("Sniper ▼")`, `Static(_ATTACK_DESCRIPTIONS[SNIPER])` | таб из БД с `battering_ram` показывал «Sniper ▼» и описание снипера |
 | загрузка данных планировалась в одном батче с монтированием | `call_after_refresh(_mount_tab_body)` + `call_after_refresh(_load_active_tab_content)`; `mount()` асинхронен | `_refresh_payload_list` искал `ListView` до его появления, `except Exception` глотал `NoMatches` → пустой список payload'ов до первого клика |
+| восстановление читало `td.get("name")` | `IntruderStorage.get_tabs()` пишет ключ `tab_name`; `.get()` с дефолтом не падает | все вкладки проекта открывались как «Tab 0» — одинаково, сколько бы их ни было |
 
 **Почему:** `mount` не вставляет детей синхронно — он планируется в очереди
 сообщений. Два `call_after_refresh` подряд выполняются в одном батче, поэтому
@@ -1292,9 +1293,12 @@ class AutoSaveMixin:
 а `_load_active_tab_content()` вызывается его последней строкой — один путь,
 один порядок. Подпись и описание берутся из `state.attack_type`.
 `action_new_tab` переписывает `tab_id` у любого переданного состояния
-(`tab_uid` — ключ персистентности — не трогает). Гварды —
-`tests/unit/tui/test_intruder_toolbar_wiring.py::TestRestoredTabShowsItsData`
-(39 строк и подпись «Battering Ram ▼» сразу после `action_new_tab`).
+(`tab_uid` — ключ персистентности — не трогает), а имя берётся из `tab_name`.
+Гварды — `tests/unit/tui/test_intruder_toolbar_wiring.py::TestRestoredTabShowsItsData`
+(39 строк и подпись «Battering Ram ▼» сразу после `action_new_tab`) и
+`tests/unit/tui/test_intruder_tab_restore.py` — настоящий round trip через
+`IntruderStorage`, плюс AST-сверка ключей: каждое `td.get(...)` в
+восстановлении обязано встречаться в return-словаре `get_tabs()`.
 
 **Связи:** F-023, F-030, F-022.
 

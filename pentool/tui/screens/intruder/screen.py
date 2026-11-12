@@ -876,11 +876,15 @@ class IntruderScreen(
             if existing:
                 continue
 
-            # Create state
-            tab_id = f"intruder-tab-{self._counter_gen()}"
-            name = td.get("name", f"Tab {self._counter_gen()}")
+            # Create state. ``tab_id`` is a placeholder: action_new_tab()
+            # assigns the real one, because only the panel knows its counter.
+            # The name is the DB's ``tab_name`` — reading ``td["name"]`` here
+            # always missed, since get_tabs() builds the dict with that key,
+            # so every restored tab was called the same fallback "Tab 0" and
+            # a multi-tab project came back as N identical labels.
+            name = td.get("tab_name") or td.get("name") or "Tab"
             state = _IntruderTabState(
-                tab_id=tab_id,
+                tab_id="",
                 tab_uid=tab_uid,
                 name=name,
                 target_url=td.get("target_url", ""),
@@ -897,10 +901,6 @@ class IntruderScreen(
 
             # Add tab via TabbedContentPanel
             self._tc_panel.action_new_tab(state=state)
-
-    def _counter_gen(self) -> int:
-        """Подстроиться под счётчик TabbedContentPanel."""
-        return 0  # TabbedContentPanel генерирует tab_id сам
 
     # ── Rename (BaseModuleScreen interface) ───────────────────────────────────
 
