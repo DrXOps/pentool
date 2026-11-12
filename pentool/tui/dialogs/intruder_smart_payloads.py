@@ -13,7 +13,6 @@ from pentool.core.logging import get_logger
 from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
-
 _CSS = (Path(__file__).parent / "intruder_smart_payloads.tcss").read_text(encoding="utf-8")
 
 logger = get_logger(__name__)
@@ -32,31 +31,55 @@ class SmartPayloadsDialog(BaseDialog):
             with Horizontal(classes="row"):
                 yield Label("Context:")
                 yield Select(
-                    [("String", "string"), ("Numeric", "numeric"), ("JSON", "json"),
-                     ("XML", "xml"), ("URL", "url"), ("Cookie", "cookie"),
-                     ("Header", "header"), ("Path", "path")],
-                    id="smart-context", value="string", classes="compact",
+                    [
+                        ("String", "string"),
+                        ("Numeric", "numeric"),
+                        ("JSON", "json"),
+                        ("XML", "xml"),
+                        ("URL", "url"),
+                        ("Cookie", "cookie"),
+                        ("Header", "header"),
+                        ("Path", "path"),
+                    ],
+                    id="smart-context",
+                    value="string",
+                    classes="compact",
                 )
             with Horizontal(classes="row"):
                 yield Label("Tech hint:")
                 yield Select(
-                    [("Unknown", "unknown"), ("PHP", "php"), ("Java", "java"),
-                     ("Node.js", "node"), ("Python", "python"), (".NET", "dotnet")],
-                    id="smart-tech", value="unknown", classes="compact",
+                    [
+                        ("Unknown", "unknown"),
+                        ("PHP", "php"),
+                        ("Java", "java"),
+                        ("Node.js", "node"),
+                        ("Python", "python"),
+                        (".NET", "dotnet"),
+                    ],
+                    id="smart-tech",
+                    value="unknown",
+                    classes="compact",
                 )
             with Horizontal(classes="row"):
                 yield Label("WAF profile:")
                 yield Select(
-                    [("None", "none"), ("Generic", "generic"), ("Cloudflare", "cloudflare"),
-                     ("ModSecurity", "modsec"), ("F5", "f5")],
-                    id="smart-waf", value="none", classes="compact",
+                    [
+                        ("None", "none"),
+                        ("Generic", "generic"),
+                        ("Cloudflare", "cloudflare"),
+                        ("ModSecurity", "modsec"),
+                        ("F5", "f5"),
+                    ],
+                    id="smart-waf",
+                    value="none",
+                    classes="compact",
                 )
             with Horizontal(classes="row"):
                 yield Label("Count:")
                 yield Input("50", id="smart-count", compact=True)
             with Horizontal(id="buttons"):
                 yield ToolbarButton("✔ Generate", "btn-smart-ok")
-                yield ToolbarButton("✕ Cancel",   "btn-smart-cancel")
+                yield ToolbarButton("✕ Cancel", "btn-smart-cancel")
 
     @on(ToolbarButton.Pressed, "#btn-smart-ok")
     def _smart_ok(self, _: ToolbarButton.Pressed) -> None:
@@ -69,6 +92,7 @@ class SmartPayloadsDialog(BaseDialog):
     def _generate(self) -> None:
         try:
             from pentool.core.plugin_manager import load_pro_module
+
             payloads_pro = load_pro_module("payloads_pro")
             ctx = str(self.query_one("#smart-context", Select).value or "string")
             tech = str(self.query_one("#smart-tech", Select).value or "unknown")

@@ -1,6 +1,3 @@
-SaveProjectDialog {
-    align: center middle;
-}
 SaveProjectDialog > Vertical {
     width: 60;
     height: auto;
@@ -25,9 +22,6 @@ SaveProjectDialog Button {
     min-width: 10;
 }
 
-LoadProjectDialog {
-    align: center middle;
-}
 LoadProjectDialog > Vertical {
     width: 60;
     height: auto;

@@ -6,19 +6,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
-_HINT_CSS = """
-HintBarBase {
-    height: 1;
-    dock: none;
-    background: $surface;
-    padding: 0 1;
-    color: $text-muted;
-}
-"""
+_HINT_CSS = (Path(__file__).parent / "hintbar_base.tcss").read_text(encoding="utf-8")
 
 
 class HintBarBase(Widget):

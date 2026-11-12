@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal
 
 from textual import on
@@ -68,62 +69,7 @@ class ContentPanel(Widget):
         def control(self) -> "ContentPanel":
             return self.panel
 
-    DEFAULT_CSS = """
-    ContentPanel {
-        height: auto;
-        width: 1fr;
-        layout: vertical;
-    }
-    ContentPanel > .cp-title {
-        height: 1;
-        layout: horizontal;
-        align: left middle;
-        background: $primary-darken-3;
-        padding: 0 1;
-    }
-    ContentPanel > .cp-title > Static {
-        width: 1fr;
-        height: 1;
-        color: $text-muted;
-        text-style: bold;
-    }
-    /* Кнопки в заголовке */
-    ContentPanel > .cp-title > ToolbarButton {
-        width: auto;
-        min-width: 4;
-        height: 1;
-        padding: 0;
-        background: transparent;
-        border: none;
-        pointer: pointer;
-    }
-    ContentPanel > .cp-title > ToolbarButton:focus {
-        border: none;
-    }
-    ContentPanel > #cp-body {
-        height: 1fr;
-        min-height: 6;
-    }
-    ContentPanel RichLog {
-        border: none;
-        padding: 0 1;
-        height: 1fr;
-        min-height: 6;
-    }
-    ContentPanel RichLog:focus {
-        border: none;
-        outline: none;
-    }
-    ContentPanel TextArea {
-        border: none;
-        height: 1fr;
-        min-height: 6;
-    }
-    ContentPanel TextArea:focus {
-        border: none;
-        outline: none;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "content_panel.tcss").read_text(encoding="utf-8")
 
     # ── Иконки (минималистичные unicode) ──────────────────────────────
     BUTTONS_COPY: ClassVar[str] = "⎙"

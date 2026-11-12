@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Button, Label
 
 from pentool.tui.dialogs.base_dialog import BaseDialog
+
+_CSS = (Path(__file__).parent / "color_pick.tcss").read_text(encoding="utf-8")
 
 _COLOR_OPTIONS: list[tuple[str, str]] = [
     ("None", ""),
@@ -22,16 +26,7 @@ _COLOR_OPTIONS: list[tuple[str, str]] = [
 class ColorPickScreen(BaseDialog[str | None]):
     """Modal to pick a color mark for a proxy history request."""
 
-    DEFAULT_CSS = """
-    ColorPickScreen > Vertical {
-        width: 30;
-        height: auto;
-        border: round $primary;
-        padding: 1 2;
-        background: $panel;
-    }
-    ColorPickScreen Button { margin: 0; width: 100%; }
-    """
+    DEFAULT_CSS = _CSS
 
     def compose(self) -> ComposeResult:
         with Vertical():

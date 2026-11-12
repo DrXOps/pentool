@@ -1,0 +1,3 @@
+FilterBarWidget {
+    height: auto;
+}

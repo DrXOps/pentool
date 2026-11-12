@@ -1,0 +1,7 @@
+HintBarBase {
+height: 1;
+dock: none;
+background: $surface;
+padding: 0 1;
+color: $text-muted;
+}

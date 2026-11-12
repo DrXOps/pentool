@@ -1,0 +1,9 @@
+ScannerUnavailableScreen {
+    align: center middle;
+}
+ScannerUnavailableScreen > Vertical {
+    width: auto;
+    height: auto;
+    border: round $warning;
+    padding: 2 4;
+}

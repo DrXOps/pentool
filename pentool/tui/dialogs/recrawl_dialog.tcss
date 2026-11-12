@@ -1,6 +1,3 @@
-RecrawlDialog {
-    align: center middle;
-}
 RecrawlDialog #dialog {
     width: 40;
     height: auto;

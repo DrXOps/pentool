@@ -1,0 +1,5 @@
+ResourceMonitor {
+    height: 7;
+    border: solid $primary-darken-3;
+    padding: 0 1;
+}

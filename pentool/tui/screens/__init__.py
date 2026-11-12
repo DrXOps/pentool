@@ -1,5 +1,6 @@
 """TUI screens package."""
 import pkgutil
+
 __path__ = pkgutil.extend_path(__path__, __name__)
 
 from pentool.tui.screens.comparer.screen import ComparerScreen
@@ -20,9 +21,11 @@ from pentool.tui.screens.target.screen import TargetScreen
 # do not have the PRO submodule checked out.
 try:
     from pentool.tui.screens.scanner.screen import ScannerScreen
+
     SCANNER_SCREEN_AVAILABLE = True
 except (ImportError, FileNotFoundError):
     from pentool.tui.screens.scanner_unavailable import ScannerUnavailableScreen as ScannerScreen
+
     SCANNER_SCREEN_AVAILABLE = False
 
 __all__ = [

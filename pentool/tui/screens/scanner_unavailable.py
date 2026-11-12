@@ -9,6 +9,8 @@ rest of the TUI (all FREE modules) still starts normally.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widget import Widget
@@ -18,17 +20,7 @@ from textual.widgets import Static
 class ScannerUnavailableScreen(Widget):
     """Drop-in replacement for ScannerScreen when the PRO package is missing."""
 
-    DEFAULT_CSS = """
-    ScannerUnavailableScreen {
-        align: center middle;
-    }
-    ScannerUnavailableScreen > Vertical {
-        width: auto;
-        height: auto;
-        border: round $warning;
-        padding: 2 4;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "scanner_unavailable.tcss").read_text(encoding="utf-8")
 
     def __init__(self, **kwargs) -> None:
         # ScannerScreen.__init__ accepts arbitrary **kwargs (e.g. id=...);

@@ -1,6 +1,3 @@
-FileSelectorDialog {
-    align: center middle;
-}
 FileSelectorDialog #dialog {
     width: 70;
     height: 24;

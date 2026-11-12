@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
@@ -19,6 +20,9 @@ from textual.widgets import Button, Input, Label, Static
 
 from pentool.collections.filter_predicate import FilterField, FilterFieldType, FilterPredicate, FilterSpec
 from pentool.tui.widgets.option_cycler import OptionCycler
+
+_TOGGLE_CSS = (Path(__file__).parent / "toggle_button.tcss").read_text(encoding="utf-8")
+_FILTER_BAR_CSS = (Path(__file__).parent / "filter_bar_widget.tcss").read_text(encoding="utf-8")
 
 # FilterBarWidget doesn't ship a DEFAULT_CSS — each concrete subclass
 # (ProxyFilterBar, IntruderFilterBar) defines its own layout, widths,
@@ -33,15 +37,7 @@ class ToggleButton(Static):
     Детали (цвета, hover, active) задаются родительским CSS.
     """
 
-    DEFAULT_CSS = """
-    ToggleButton {
-        height: 1;
-        width: auto;
-        padding: 0 1;
-        background: $panel;
-        color: $text;
-    }
-    """
+    DEFAULT_CSS = _TOGGLE_CSS
 
     class Toggled(Message):
         def __init__(self, active: bool) -> None:
@@ -91,7 +87,7 @@ class FilterBarWidget(Widget):
             super().__init__()
             self.spec = spec
 
-    DEFAULT_CSS = "FilterBarWidget { height: auto; }"
+    DEFAULT_CSS = _FILTER_BAR_CSS
 
     #: Text of the two trailing buttons; the results bar overrides them.
     _apply_label = "Filter"

@@ -65,10 +65,10 @@
 | Компонент | Файл | Сообщения | Заметки |
 |---|---|---|---|
 | `FilterBarWidget` | `widgets/filter_bar_widget.py` | `FilterChanged` | База: `configure()` → список `FilterField`, `predicates()` → `FilterSpec` |
-| `ProxyFilterBar`, `WsFilterBar` | `widgets/proxy_filter_bar.py` | `FilterChanged` | Наследники под прокси и WebSocket |
+| `ProxyFilterBar`, `WsFilterBar` | `widgets/proxy_filter_bar.py` | `FilterChanged` | Наследники общего `HistoryFilterBar` (одна композиция, один `.tcss`) |
 | `IntruderFilterBar` | `widgets/intruder_filter_bar.py` | `FilterChanged` | Результаты атаки |
-| `Cycler`, `ToggleButton` | `widgets/filter_bar_widget.py` | `Changed`, `Toggled` | Внутренние для фильтр-баров; в новом коде — `OptionCycler` |
-| `OptionCycler` | `widgets/option_cycler.py` | `Changed` | Циклер для одиночного значения (поглощает `Cycler`, F-020 — отложено) |
+| `ToggleButton` | `widgets/filter_bar_widget.py` | `Toggled` | Внутренний для фильтр-баров |
+| `OptionCycler` | `widgets/option_cycler.py` | `Changed` | Единственный циклер (F-020 закрыт: `Cycler` удалён); `allow_empty` + `suffix` для фильтр-баров |
 | `SearchBar` | `widgets/search_bar.py` | `Search`, `TargetToggle`, `Closed` | Поиск в панели; переключатели — `on_click`, у `Static` нет click-сообщения (F-043) |
 | `NiceCheckbox` | `widgets/nice_checkbox.py` | — | Чекбокс с глифом `[✓]` вместо `▐X▌` |
 
@@ -92,12 +92,11 @@
 | Компонент | Файл | Базовый класс |
 |---|---|---|
 | `BaseDialog` | `dialogs/base_dialog.py` | `DialogCancelMixin + ModalScreen`; даёт `DEFAULT_CSS`, `Binding("escape", "cancel")` |
-| `ConfirmDialog` | `dialogs/confirm.py` | ✅ `BaseDialog` |
-| `GenerateDialog`, `InputDialog`, `SmartPayloadsDialog`, `TextInputDialog`, `RecrawlDialog` | `dialogs/*.py` | ✅ `BaseDialog` |
-| `CertInstallDialog`, `ColorPickScreen`, `CommentDialog`, `FileSelectorDialog`, `IntruderAutoMarkDialog`, `LightpandaViewer`, `LoadFromProxyDialog`, `MatchReplaceDialog`, `SaveProjectDialog`, `LoadProjectDialog`, `ScopeDialog` | `dialogs/*.py` | ⬜ прямой `ModalScreen` — миграция отложена (F-024) |
+| Все 18 диалогов | `dialogs/*.py` | ✅ `BaseDialog` — F-024 закрыт 2026-11-11 |
 
-**Новый диалог пишется только от `BaseDialog`**, даже если сосед по
-каталогу этого не делает. `Binding("escape", "dismiss(None)")` работает
+**Новый диалог пишется только от `BaseDialog`** — гвард
+`tests/unit/tui/test_dialogs_unified.py` роняет тест на любом прямом
+`ModalScreen`-наследнике. `Binding("escape", "dismiss(None)")` работает
 (проверено, F-037 опровергнута), но с `BaseDialog` это не нужно писать
 вообще.
 

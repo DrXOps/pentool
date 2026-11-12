@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -14,39 +15,7 @@ from pentool.tui.dialogs.base_dialog import BaseDialog
 
 logger = get_logger(__name__)
 
-_CSS = """
-LightpandaViewer {
-    align: center middle;
-    background: $surface 50%;
-}
-
-#lightpanda-dialog {
-    width: 90%;
-    height: 90%;
-    border: round $primary;
-    background: $surface;
-}
-
-#lightpanda-header {
-    height: 3;
-    padding: 0 1;
-    text-style: bold;
-    background: $primary;
-    color: $text;
-    content-align: center middle;
-}
-
-#lightpanda-body {
-    height: 1fr;
-    margin: 1;
-}
-
-#lightpanda-footer {
-    height: 1;
-    padding: 0 1;
-    color: $text-disabled;
-}
-"""
+_CSS = (Path(__file__).parent / "lightpanda_viewer.tcss").read_text(encoding="utf-8")
 
 
 class LightpandaViewer(BaseDialog[None]):

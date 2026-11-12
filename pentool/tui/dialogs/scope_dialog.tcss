@@ -1,6 +1,3 @@
-ScopeDialog {
-    align: center middle;
-}
 ScopeDialog #dialog {
     width: 65;
     height: auto;

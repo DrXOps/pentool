@@ -12,7 +12,6 @@ from textual.widgets import Input, Label
 from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
-
 _CSS = (Path(__file__).parent / "intruder_input.tcss").read_text(encoding="utf-8")
 
 
@@ -32,7 +31,7 @@ class InputDialog(BaseDialog):
             yield Label(self._prompt, id="prompt-label")
             yield Input(id="input-value", placeholder="value...", compact=True)
             with Horizontal(id="buttons"):
-                yield ToolbarButton("✔ Add",   "btn-ok")
+                yield ToolbarButton("✔ Add", "btn-ok")
                 yield ToolbarButton("✕ Close", "btn-cancel")
 
     def on_mount(self) -> None:

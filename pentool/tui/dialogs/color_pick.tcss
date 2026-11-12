@@ -1,0 +1,11 @@
+ColorPickScreen > Vertical {
+    width: 30;
+    height: auto;
+    border: round $primary;
+    padding: 1 2;
+    background: $panel;
+}
+ColorPickScreen Button {
+    margin: 0;
+    width: 100%;
+}

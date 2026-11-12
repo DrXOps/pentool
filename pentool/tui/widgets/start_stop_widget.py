@@ -26,6 +26,7 @@ API экрана для управления состоянием:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import ClassVar
 
 from textual import on
@@ -79,12 +80,7 @@ class StartStopWidget(Widget):
         def control(self) -> "StartStopWidget":
             return self._widget  # type: ignore
 
-    DEFAULT_CSS = """
-    StartStopWidget {
-        height: 1;
-        layout: horizontal;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "start_stop_widget.tcss").read_text(encoding="utf-8")
 
     # ── ID constants ─────────────────────────────────────────────────
     ID_START: ClassVar[str] = "btn-start"

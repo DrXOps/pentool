@@ -14,7 +14,6 @@ from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
-
 _CSS = (Path(__file__).parent / "intruder_generate.tcss").read_text(encoding="utf-8")
 
 
@@ -33,7 +32,8 @@ class GenerateDialog(BaseDialog):
                 yield Label("Mode:")
                 yield OptionCycler(
                     [("Numeric range", "numeric"), ("Char brute-force", "char")],
-                    initial="numeric", id="mode-select",
+                    initial="numeric",
+                    id="mode-select",
                 )
             with Vertical(id="numeric-fields"):
                 with Horizontal(classes="row"):
@@ -66,16 +66,16 @@ class GenerateDialog(BaseDialog):
 
     def _sync_mode_visibility(self) -> None:
         mode = self.query_one("#mode-select", OptionCycler).value
-        self.query_one("#numeric-fields").display = (mode == "numeric")
-        self.query_one("#char-fields").display = (mode == "char")
+        self.query_one("#numeric-fields").display = mode == "numeric"
+        self.query_one("#char-fields").display = mode == "char"
 
     def _build_source(self):
         mode = self.query_one("#mode-select", OptionCycler).value
         try:
             if mode == "numeric":
                 start = int(self.query_one("#gen-start", Input).value or "0")
-                end   = int(self.query_one("#gen-end",   Input).value or "100")
-                step  = int(self.query_one("#gen-step",  Input).value or "1")
+                end = int(self.query_one("#gen-end", Input).value or "100")
+                step = int(self.query_one("#gen-step", Input).value or "1")
                 return NumericPayloadSource(start, end, step)
             else:
                 charset = self.query_one("#gen-charset", Input).value or ""

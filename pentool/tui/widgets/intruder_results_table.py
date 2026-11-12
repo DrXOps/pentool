@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from pentool.tui.widgets.data_table import ArrowBackendDataTable
 
-
 _RESULTS_COL_NAMES = ["#", "Payload(s)", "Status", "Length", "Time(ms)", "Error"]
 _RESULTS_COL_WIDTHS = [5, 45, 8, 10, 10, 30]
 

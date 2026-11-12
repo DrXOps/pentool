@@ -1,6 +1,3 @@
-CommentDialog {
-    align: center middle;
-}
 CommentDialog #dialog {
     width: 60;
     height: auto;

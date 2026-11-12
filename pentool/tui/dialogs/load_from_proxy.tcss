@@ -1,6 +1,3 @@
-LoadFromProxyDialog {
-    align: center middle;
-}
 LoadFromProxyDialog #dialog {
     width: 90;
     height: 34;

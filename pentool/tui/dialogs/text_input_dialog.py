@@ -12,7 +12,6 @@ from textual.widgets import Input, Label
 from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
-
 _CSS = (Path(__file__).parent / "text_input_dialog.tcss").read_text(encoding="utf-8")
 
 
@@ -37,7 +36,7 @@ class TextInputDialog(BaseDialog):
                 yield Label(f"[dim]{self._hint}[/dim]", id="hint", classes="hint")
             yield Input(self._initial, id="text-input", placeholder="Type here...")
             with Horizontal(id="buttons"):
-                yield ToolbarButton("✔ OK",     "btn-ok")
+                yield ToolbarButton("✔ OK", "btn-ok")
                 yield ToolbarButton("✕ Cancel", "btn-cancel")
 
     @on(ToolbarButton.Pressed, "#btn-ok")

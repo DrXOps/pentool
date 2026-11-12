@@ -15,13 +15,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import psutil
-
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
-
 # ── Helper functions ───────────────────────────────────────────────────────
+
 
 def _hbar(value: float, max_val: float = 100.0, width: int = 20) -> str:
     """Horizontal progress bar."""
@@ -41,16 +40,11 @@ def _color_by_percent(pct: float) -> str:
 
 # ── Resource Monitor ───────────────────────────────────────────────────────
 
+
 class ResourceMonitor(Widget):
     """CPU + RAM thermometers."""
 
-    DEFAULT_CSS = """
-    ResourceMonitor {
-        height: 7;
-        border: solid $primary-darken-3;
-        padding: 0 1;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "live_dashboard.tcss").read_text(encoding="utf-8")
 
     @staticmethod
     def _get_git_branch(root: Path) -> str:
@@ -97,16 +91,16 @@ class ResourceMonitor(Widget):
             # Extra info: number of process threads
             try:
                 import os
+
                 proc = psutil.Process(os.getpid())
                 threads = proc.num_threads()
-                self.query_one("#res-extra", Static).update(
-                    f"[dim]system threads: {threads}[/dim]"
-                )
+                self.query_one("#res-extra", Static).update(f"[dim]system threads: {threads}[/dim]")
             except Exception:
                 pass
             # Version info: show dev mode when running from source
             try:
                 from pentool import __version__
+
                 pentool_root = Path(__file__).resolve().parent.parent.parent.parent.parent
                 is_dev = (pentool_root / ".git").exists()
                 if is_dev:
@@ -115,9 +109,7 @@ class ResourceMonitor(Widget):
                         f"[bold green]DEV[/bold green] [bold]{__version__}[/bold] [dim]({branch})[/dim]"
                     )
                 else:
-                    self.query_one("#res-version", Static).update(
-                        f"[dim]v{__version__}[/dim]"
-                    )
+                    self.query_one("#res-version", Static).update(f"[dim]v{__version__}[/dim]")
             except Exception:
                 pass
         except ImportError:

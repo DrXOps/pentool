@@ -1,6 +1,3 @@
-IntruderAutoMarkDialog {
-    align: center middle;
-}
 IntruderAutoMarkDialog #dialog {
     width: 56;
     height: auto;

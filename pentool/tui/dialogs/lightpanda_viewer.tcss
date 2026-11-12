@@ -1,0 +1,31 @@
+LightpandaViewer {
+align: center middle;
+background: $surface 50%;
+}
+
+#lightpanda-dialog {
+width: 90%;
+height: 90%;
+border: round $primary;
+background: $surface;
+}
+
+#lightpanda-header {
+height: 3;
+padding: 0 1;
+text-style: bold;
+background: $primary;
+color: $text;
+content-align: center middle;
+}
+
+#lightpanda-body {
+height: 1fr;
+margin: 1;
+}
+
+#lightpanda-footer {
+height: 1;
+padding: 0 1;
+color: $text-disabled;
+}

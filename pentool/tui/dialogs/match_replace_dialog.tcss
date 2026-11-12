@@ -1,6 +1,3 @@
-MatchReplaceDialog {
-    align: center middle;
-}
 MatchReplaceDialog #dialog {
     width: 80;
     height: auto;
@@ -100,5 +97,4 @@ MatchReplaceDialog #bottom-buttons ToolbarButton {
     margin: 0 1;
     padding: 0 2;
 }
-/* toolbar-sep fix */
-.toolbar-sep { width: auto; }
+/* .toolbar-sep base rule lives in widgets/toolbar_button.tcss — do not repeat it here. */
