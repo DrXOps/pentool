@@ -1294,11 +1294,15 @@ class IntruderScreen(
         if tab is None:
             return
         spec = event.spec
+        # Read the previous state BEFORE clearing it. This line used to sit
+        # right after the three assignments below, so ``had_extract`` was
+        # always False: adding the pattern worked, removing it never did —
+        # the "Extract" column stayed in the table with nothing to fill it.
+        had_extract = bool(tab.grep_extract_patterns)
         filter_predicates: list[FilterPredicate] = []
         tab.grep_match_patterns = []
         tab.grep_extract_patterns = []
         tab.grep_only_match = False
-        had_extract = bool(tab.grep_extract_patterns)
         if spec and not spec.is_empty:
             for p in spec.predicates:
                 match p.field:
