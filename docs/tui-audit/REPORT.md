@@ -1033,12 +1033,13 @@ await pilot.pause()
 
 ### F-035 [P2] `HotkeyRegistry` — публичный API, которым никто не пользуется
 
-**Где:** `hotkeys/__init__.py:80-202` — класс `HotkeyRegistry` с `register/rebind/set_show/get_*`. Единственный пользователь — `hotkeys/defaults.py:171-180` (bootstrap при импорте). `rebind`/`set_show` не вызываются ни из `SettingsScreen`, ни из `HotkeySettingsScreen`.
-**Что:** `HotkeySettingsScreen` (`screens/settings/hotkeys.py:43`) редактирует **свой словарь** `DEFAULT_HOTKEYS` и не касается реестра.
-**Почему:** переопределение хоткеев из UI не работает. Тест его тоже нет.
-**Как:** либо подключить `HotkeySettingsScreen` к `registry.rebind(...)` + `app._bindings = build_global_bindings()`, либо (проще и рекомендую) удалить `HotkeyRegistry` до момента, когда горячие клавиши станут настраиваемыми, и оставить `defaults.py` как источник `BINDINGS`. Сравнить риск: удалить ~120 строк мёртвого API.
+**Где:** `hotkeys/__init__.py` — класс `HotkeyRegistry` с `register/rebind/set_show/get_*`; `screens/settings/hotkeys.py` — `HotkeySettingsScreen`.
+**Что:** `rebind`/`set_show`/`get_by_action`/`_action_index` не вызывались ниоткуда. `HotkeySettingsScreen` редактировал **свой словарь** `DEFAULT_HOTKEYS` (вторая, руками набранная копия таблицы) и не касался ни реестра, ни `BINDINGS`; кнопка Save целиком состояла из `self.app.notify("Hotkeys saved (restart required for some bindings)")` — не сохранялось ничего, не перебиндивалось ничего. Вторая копия таблицы уже разошлась с настоящей: `send_to_intruder: ctrl+i` и `repeater_send: ctrl+space` — клавиши, которых терминал не производит (F-052).
+**Почему:** пользователю показывали экран настроек хоткеев, который (а) перечислял не те клавиши, что работают, и (б) обещал сохранение, которого нет.
+**Как сделано (2026-11-12):** мёртвое API удалено (`rebind`, `set_show`, `get_by_action`, `_action_index`, `get_all_bindings`, `get_bindings`, `to_bindings_map`, поле `keychain` — тоже никем не читалось); `HotkeyRegistry` оставлен с двумя реальными читателями — `defaults.py` (bootstrap) и `keyhintbar.py` (`get_entries`), плюс новый `groups()` (порядок регистрации). Удалены девять `build_*_bindings()`, кроме `build_global_bindings()` — единственного, у которого есть вызывающий (`app.py:144`). Поле `HotkeyEntry.group` тоже убрано: группа хранится ключом реестра, а копия в записи у всех неглобальных записей молча оставалась `"global"`. `HotkeySettingsScreen` переписан в read-only таблицу поверх реестра (`Group / Keys / Action / Description`) с явной строкой «per-user overrides are not implemented yet»; кнопки Save, Reset, поле ввода и `DEFAULT_HOTKEYS` удалены, CSS сокращён с 74 до 16 строк.
+**Гварды:** `tests/unit/tui/test_hotkey_settings_is_honest.py` — таблица выводится из реестра (сверка множеств), а не набрана рядом; в `compose` нет ни `Button`, ни `Input` (AST); в модуле нет вызовов `.notify(...)`/`.rebind(...)` (AST, а не подстрока — докстринг о старом баге не должен валить тест). `test_hotkey_keys_are_reachable.py` теперь строит `_GROUPS` из `registry.groups()`, так что новая группа не может проскочить мимо проверки клавиш. Проверено мутацией: возврат кнопки и поля в `compose` валит два теста; пропуск последней группы в `compose` валит сверку состава.
 
-**Связи:** F-033.
+**Связи:** F-033, F-052.
 
 ---
 

@@ -31,33 +31,16 @@ from textual import events
 from textual._ansi_sequences import ANSI_SEQUENCES_KEYS
 from textual._xterm_parser import XTermParser
 
-from pentool.tui.hotkeys.defaults import (
-    _COMPARER_ENTRIES,
-    _DASHBOARD_ENTRIES,
-    _DECODER_ENTRIES,
-    _GLOBAL_ENTRIES,
-    _INTRUDER_ENTRIES,
-    _MODULE_ENTRIES,
-    _PROXY_ENTRIES,
-    _REPEATER_ENTRIES,
-    _SCANNER_ENTRIES,
-    _SEQUENCER_ENTRIES,
-    _TARGET_ENTRIES,
-)
+from pentool.tui.hotkeys import registry
+from pentool.tui.hotkeys.defaults import _MODULE_ENTRIES
 
-_GROUPS = {
-    "global": _GLOBAL_ENTRIES,
-    "module": _MODULE_ENTRIES,
-    "proxy": _PROXY_ENTRIES,
-    "repeater": _REPEATER_ENTRIES,
-    "intruder": _INTRUDER_ENTRIES,
-    "scanner": _SCANNER_ENTRIES,
-    "target": _TARGET_ENTRIES,
-    "dashboard": _DASHBOARD_ENTRIES,
-    "decoder": _DECODER_ENTRIES,
-    "comparer": _COMPARER_ENTRIES,
-    "sequencer": _SEQUENCER_ENTRIES,
-}
+#: Every group the application registers, read from the registry rather than
+#: retyped: a group added to ``defaults.py`` and not added here would escape
+#: the guard entirely. ``module`` is not a registered group of its own — its
+#: entries are folded into ``global`` — but it is checked separately so that a
+#: module letter cannot hide behind the global table.
+_GROUPS = {group: registry.get_entries(group) for group in registry.groups()}
+_GROUPS["module"] = _MODULE_ENTRIES
 
 #: Bytes that a classic terminal sends for Ctrl+I / Ctrl+H — the key names
 #: ``ctrl+i``/``ctrl+h`` never occur in an event.

@@ -30,11 +30,10 @@ def _e(
     keys: str,
     action: str,
     description: str,
-    group: str = "global",
     show: bool = True,
     priority: bool = False,
 ) -> HotkeyEntry:
-    return HotkeyEntry(keys, action, description, group, show, priority)
+    return HotkeyEntry(keys, action, description, show, priority)
 
 
 def _entries_to_bindings(entries: list[HotkeyEntry]) -> list[Binding]:
@@ -197,64 +196,11 @@ registry.register("comparer", _COMPARER_ENTRIES)
 registry.register("sequencer", _SEQUENCER_ENTRIES)
 
 
-# ── Build BindingsMap helpers for __init__ ────────────────────────────
+# ── Build BindingsMap helper for the App ──────────────────────────────
 
 
 def build_global_bindings() -> BindingsMap:
+    """The App's own bindings, as a ``BindingsMap``."""
     from pentool.tui.hotkeys import build_bindings_map
 
     return build_bindings_map(_entries_to_bindings(_GLOBAL_ENTRIES))
-
-
-def build_proxy_bindings() -> BindingsMap:
-    from pentool.tui.hotkeys import build_bindings_map
-
-    return build_bindings_map(_entries_to_bindings(_PROXY_ENTRIES))
-
-
-def build_repeater_bindings() -> BindingsMap:
-    from pentool.tui.hotkeys import build_bindings_map
-
-    return build_bindings_map(_entries_to_bindings(_REPEATER_ENTRIES))
-
-
-def build_intruder_bindings() -> BindingsMap:
-    from pentool.tui.hotkeys import build_bindings_map
-
-    return build_bindings_map(_entries_to_bindings(_INTRUDER_ENTRIES))
-
-
-def build_scanner_bindings() -> BindingsMap:
-    from pentool.tui.hotkeys import build_bindings_map
-
-    return build_bindings_map(_entries_to_bindings(_SCANNER_ENTRIES))
-
-
-def build_target_bindings() -> BindingsMap:
-    from pentool.tui.hotkeys import build_bindings_map
-
-    return build_bindings_map(_entries_to_bindings(_TARGET_ENTRIES))
-
-
-def build_dashboard_bindings() -> BindingsMap:
-    from pentool.tui.hotkeys import build_bindings_map
-
-    return build_bindings_map(_entries_to_bindings(_DASHBOARD_ENTRIES))
-
-
-def build_decoder_bindings() -> BindingsMap:
-    from pentool.tui.hotkeys import build_bindings_map
-
-    return build_bindings_map(_entries_to_bindings(_DECODER_ENTRIES))
-
-
-def build_comparer_bindings() -> BindingsMap:
-    from pentool.tui.hotkeys import build_bindings_map
-
-    return build_bindings_map(_entries_to_bindings(_COMPARER_ENTRIES))
-
-
-def build_sequencer_bindings() -> BindingsMap:
-    from pentool.tui.hotkeys import build_bindings_map
-
-    return build_bindings_map(_entries_to_bindings(_SEQUENCER_ENTRIES))
