@@ -178,7 +178,7 @@ graph LR
 | F-005 | ✅ исправлено | `_get_active_text`/`_jump_to_match` работают через `ContentPanel.content_widget`; `TextArea` импортирован |
 | F-006 | ✅ исправлено (частично) | `Toolbar(id=None)` по умолчанию — дублей `#toolbar` больше нет; дубли `#dialog` в диалогах остаются (F-024) |
 | F-007 | ✅ исправлено | 53 неиспользуемые константы удалены (ADR-9); гвард `test_constants_are_used.py` |
-| F-008 | ⏳ отложено | нужен `tools/check_tui_css.py`, чтобы фикс не откатился |
+| F-008 | ✅ исправлено | селекторы сверены с DOM, мёртвые удалены; гейт `tools/check_tui_css.py` в CI и pre-commit |
 | F-009 | ⏳ отложено | введение `BLE001` блокирующим правилом — отдельная итерация (615 правок) |
 | F-010 | ✅ исправлено | `F821` в `pentool/tui` — 0 (`TYPE_CHECKING`-импорты) |
 | F-011 | ✅ исправлено | удалён мёртвый `query_one(ToolbarButton)` и несуществующий `from textual.widgets import Toolbar` — лог-спам `NoMatches` на каждом `AiModeChanged` прекратился |

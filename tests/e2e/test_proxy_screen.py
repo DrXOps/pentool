@@ -1,4 +1,5 @@
 """E2E: ProxyScreen widgets and basic interactions."""
+
 from __future__ import annotations
 
 import pytest
@@ -8,7 +9,6 @@ from pentool.tui.app import PentoolApp
 
 @pytest.mark.e2e
 class TestProxyScreen:
-
     async def test_intercept_button_present(self) -> None:
         """#btn-intercept присутствует в DOM."""
         app = PentoolApp()
@@ -93,7 +93,6 @@ class TestProxyScreen:
             assert proxy.enforce_scope is False
             assert btn.label == "☐ Skip out-of-scope"
 
-
     async def test_selection_race_ignores_stale_slow_load(self) -> None:
         """Regression: clicking A then quickly B must NOT paint A's details
         when A's async load finishes last (slow disk / weak hardware).
@@ -104,7 +103,6 @@ class TestProxyScreen:
         load whose id no longer matches the current selection.
         """
         import asyncio
-
         from unittest.mock import AsyncMock
 
         from pentool.tui.screens.proxy.screen import ProxyScreen

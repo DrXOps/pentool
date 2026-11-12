@@ -902,15 +902,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def _focus_repeater_editor(self, repeater) -> None:
         """Set focus to the RequestEditor in the active Repeater tab."""
         try:
-            from textual.widgets import TextArea
-
             from pentool.tui.widgets.request_editor import RequestEditor
 
             tab_id = repeater._active_tab_id
             if tab_id:
                 editor = repeater.query_one(f"#req-editor-{tab_id}", RequestEditor)
-                area = editor.query_one("#editor-area", TextArea)
-                area.focus()
+                # The TextArea is ContentPanel's #cp-body-widget; focusing a
+                # made-up "#editor-area" raised NoMatches into the except below.
+                editor.content_widget.focus()
         except Exception:
             pass
 

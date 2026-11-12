@@ -1,4 +1,5 @@
 """E2E: RepeaterScreen — load request, new tab."""
+
 from __future__ import annotations
 
 import pytest
@@ -12,7 +13,6 @@ from pentool.utils.parser import ParsedRequest
 
 @pytest.mark.e2e
 class TestRepeaterScreen:
-
     async def test_send_button_present(self) -> None:
         """После press R → #btn-send присутствует в DOM."""
         app = PentoolApp()
@@ -37,7 +37,15 @@ class TestRepeaterScreen:
             assert len(editors) > 0
 
     async def test_load_request(self) -> None:
-        """load_request(ParsedRequest(...)) — RequestEditor существует."""
+        """``load_request(raw)`` puts the text into the active tab's editor.
+
+        The signature has always taken raw HTTP text; the test used to pass a
+        ``ParsedRequest`` whose ``.replace`` raised inside the handler's
+        ``except Exception: pass``, so nothing was loaded and the assertion
+        ("an editor exists") could not tell.
+        """
+        from pentool.utils.parser import build_http_request
+
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
@@ -52,11 +60,11 @@ class TestRepeaterScreen:
                 headers={"Host": "example.com"},
             )
             screen = app.query_one(RepeaterScreen)
-            screen.load_request(req)
+            screen.load_request(build_http_request(req))
             await pilot.pause()
 
-            editors = app.query(RequestEditor)
-            assert len(editors) > 0
+            editor = screen._editor(screen._active_tab_id)
+            assert editor.get_text().startswith("GET / HTTP/1.1"), "request text did not reach the editor"
 
     async def test_new_tab_action(self) -> None:
         """screen.action_new_tab() не крашит."""

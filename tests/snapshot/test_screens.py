@@ -39,6 +39,7 @@ def isolated_config(tmp_path):
 async def test_repeater_screen(assert_snapshot) -> None:
     """Repeater screen: TabbedContent with Tab 1, two editors."""
     from pentool.tui.app import PentoolApp
+
     app = PentoolApp()
     app._skip_project_guard = True
     async with app.run_test(size=SNAP_SIZE) as pilot:
@@ -55,6 +56,7 @@ async def test_repeater_screen(assert_snapshot) -> None:
 async def test_intruder_screen(assert_snapshot) -> None:
     """Intruder screen: Start/Pause/Stop toolbar, Positions+Payloads, Results."""
     from pentool.tui.app import PentoolApp
+
     app = PentoolApp()
     app._skip_project_guard = True
     async with app.run_test(size=SNAP_SIZE) as pilot:
@@ -71,6 +73,7 @@ async def test_intruder_screen(assert_snapshot) -> None:
 async def test_decoder_screen(assert_snapshot) -> None:
     """Decoder screen: Coming in Stage 13 stub."""
     from pentool.tui.app import PentoolApp
+
     app = PentoolApp()
     app._skip_project_guard = True
     async with app.run_test(size=SNAP_SIZE) as pilot:
@@ -86,6 +89,7 @@ async def test_decoder_screen(assert_snapshot) -> None:
 async def test_settings_screen(assert_snapshot) -> None:
     """Settings screen: Interface/Proxy/Hotkeys/Project subtabs."""
     from pentool.tui.app import PentoolApp
+
     app = PentoolApp()
     async with app.run_test(size=SNAP_SIZE) as pilot:
         await pilot.pause()
@@ -100,6 +104,7 @@ async def test_settings_screen(assert_snapshot) -> None:
 async def test_proxy_intercept_tab(assert_snapshot) -> None:
     """Proxy → Intercept tab: empty intercept."""
     from pentool.tui.app import PentoolApp
+
     app = PentoolApp()
     app._skip_project_guard = True
     async with app.run_test(size=SNAP_SIZE) as pilot:
@@ -116,7 +121,7 @@ async def test_repeater_with_request(assert_snapshot) -> None:
     """Repeater: real HTTP request loaded into editor."""
     from pentool.tui.app import PentoolApp
     from pentool.tui.screens.repeater.screen import RepeaterScreen
-    from pentool.utils.parser import ParsedRequest
+    from pentool.utils.parser import ParsedRequest, build_http_request
 
     app = PentoolApp()
     app._skip_project_guard = True
@@ -136,7 +141,8 @@ async def test_repeater_with_request(assert_snapshot) -> None:
             body='{"username":"admin","password":"secret123"}',
         )
         screen = app.query_one(RepeaterScreen)
-        screen.load_request(req)
+        screen.load_request(build_http_request(req))
+        await pilot.pause()
         await pilot.pause()
         svg = app.export_screenshot()
     assert_snapshot(svg, "repeater_with_request")
@@ -148,7 +154,7 @@ async def test_intruder_with_markers(assert_snapshot) -> None:
     """Intruder: request with §§ markers loaded into Positions."""
     from pentool.tui.app import PentoolApp
     from pentool.tui.screens.intruder.screen import IntruderScreen
-    from pentool.utils.parser import ParsedRequest
+    from pentool.utils.parser import ParsedRequest, build_http_request
 
     app = PentoolApp()
     app._skip_project_guard = True
@@ -164,7 +170,8 @@ async def test_intruder_with_markers(assert_snapshot) -> None:
             body="user=§admin§&pass=§secret§",
         )
         screen = app.query_one(IntruderScreen)
-        screen.load_request(req)
+        screen.load_request(build_http_request(req))
+        await pilot.pause()
         await pilot.pause()
         svg = app.export_screenshot()
     assert_snapshot(svg, "intruder_with_markers")
@@ -172,24 +179,10 @@ async def test_intruder_with_markers(assert_snapshot) -> None:
 
 @pytest.mark.snapshot
 @pytest.mark.asyncio
-async def test_module_tabs_repeater_active(assert_snapshot) -> None:
-    """ModuleTabs: Repeater tab active."""
-    from pentool.tui.app import PentoolApp
-    app = PentoolApp()
-    app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("R")
-        await pilot.pause()
-        svg = app.export_screenshot()
-    assert_snapshot(svg, "module_tabs_repeater")
-
-
-@pytest.mark.snapshot
-@pytest.mark.asyncio
 async def test_comparer_screen(assert_snapshot) -> None:
     """Comparer screen: side-by-side diff."""
     from pentool.tui.app import PentoolApp
+
     app = PentoolApp()
     app._skip_project_guard = True
     async with app.run_test(size=SNAP_SIZE) as pilot:
@@ -205,6 +198,7 @@ async def test_comparer_screen(assert_snapshot) -> None:
 async def test_sequencer_screen(assert_snapshot) -> None:
     """Sequencer screen: token entropy analysis toolbar."""
     from pentool.tui.app import PentoolApp
+
     app = PentoolApp()
     app._skip_project_guard = True
     async with app.run_test(size=SNAP_SIZE) as pilot:

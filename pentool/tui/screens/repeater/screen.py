@@ -8,6 +8,7 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widgets import Input, Static, TabbedContent, TabPane, TextArea
 from textual.widgets.text_area import Selection
 
@@ -486,20 +487,21 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         Only reacts to the editor of the CURRENTLY active tab — inactive
         tabs' TextAreas aren't edited by the user, but load_raw() on a
         background tab (e.g. project reload) would otherwise also fire this.
+
+        The TextArea lives inside ``ContentPanel`` as ``#cp-body-widget``;
+        this handler used to look for ``#editor-area``, which no widget has,
+        and the resulting ``NoMatches`` was swallowed by ``except Exception``.
+        The "*" marker was therefore never set (F-031), and only an e2e test
+        running the real app could see it.
         """
         tab_id = self._active_tab_id
         if tab_id is None:
             return
         try:
             editor = self._editor(tab_id)
-        except Exception:
+        except NoMatches:
             return
-        try:
-            from textual.widgets import TextArea
-
-            area = editor.query_one("#editor-area", TextArea)
-        except Exception:
-            return
+        area = editor.content_widget
         if event.text_area is not area:
             return
         state = self._get_tab_state(tab_id)

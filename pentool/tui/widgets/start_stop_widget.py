@@ -45,28 +45,36 @@ class StartStopWidget(Widget):
 
     class StartRequested(Message):
         """Пользователь нажал Start (когда был IDLE)."""
+
         ALLOW_SELECTOR_MATCH = True
+
         @property
         def control(self) -> "StartStopWidget":
             return self._widget  # type: ignore
 
     class PauseRequested(Message):
         """Пользователь нажал Pause (когда был RUNNING)."""
+
         ALLOW_SELECTOR_MATCH = True
+
         @property
         def control(self) -> "StartStopWidget":
             return self._widget  # type: ignore
 
     class ResumeRequested(Message):
         """Пользователь нажал Resume (когда был PAUSED)."""
+
         ALLOW_SELECTOR_MATCH = True
+
         @property
         def control(self) -> "StartStopWidget":
             return self._widget  # type: ignore
 
     class StopRequested(Message):
         """Пользователь нажал Stop."""
+
         ALLOW_SELECTOR_MATCH = True
+
         @property
         def control(self) -> "StartStopWidget":
             return self._widget  # type: ignore
@@ -80,7 +88,7 @@ class StartStopWidget(Widget):
 
     # ── ID constants ─────────────────────────────────────────────────
     ID_START: ClassVar[str] = "btn-start"
-    ID_STOP:  ClassVar[str] = "btn-stop"
+    ID_STOP: ClassVar[str] = "btn-stop"
 
     def __init__(self, id: str | None = None) -> None:
         super().__init__(id=id)
@@ -89,9 +97,9 @@ class StartStopWidget(Widget):
 
     def compose(self) -> ...:
         yield Toolbar(
-            ToolbarButton("▶ Start",   self.ID_START, classes="active"),
+            ToolbarButton("▶ Start", self.ID_START, classes="active"),
             Toolbar.sep(),
-            ToolbarButton("■ Stop",    self.ID_STOP,  classes="disabled"),
+            ToolbarButton("■ Stop", self.ID_STOP, classes="disabled"),
         )
 
     # ── Свойства для чтения состояния ────────────────────────────────
@@ -114,7 +122,7 @@ class StartStopWidget(Widget):
         self._running = running
         try:
             btn_start = self.query_one(f"#{self.ID_START}", ToolbarButton)
-            btn_stop  = self.query_one(f"#{self.ID_STOP}",  ToolbarButton)
+            btn_stop = self.query_one(f"#{self.ID_STOP}", ToolbarButton)
             if running:
                 btn_start.label = "⏸ Pause"
                 btn_start.remove_class("active")
@@ -129,7 +137,15 @@ class StartStopWidget(Widget):
             pass
 
     def set_paused(self, paused: bool) -> None:
-        """Переключить UI между Pause <-> Resume (не меняя _running)."""
+        """Переключить UI между Pause <-> Resume (не меняя _running).
+
+        Снятие паузы возвращает кнопку к «⏸ Pause» только если атака реально
+        идёт. Иначе «не на паузе» — это и «остановлено», и подпись обязана
+        остаться «▶ Start»: экран синхронизирует состояние парой
+        ``set_running(False)`` + ``set_paused(False)``, и второй вызов не
+        должен отменять первый (F-031: свежий таб Intruder показывал «⏸ Pause»
+        до первого запуска).
+        """
         self._paused = paused
         try:
             btn_start = self.query_one(f"#{self.ID_START}", ToolbarButton)
@@ -137,10 +153,14 @@ class StartStopWidget(Widget):
                 btn_start.label = "▶ Resume"
                 btn_start.remove_class("warn")
                 btn_start.add_class("active")
-            else:
+            elif self._running:
                 btn_start.label = "⏸ Pause"
                 btn_start.remove_class("active")
                 btn_start.add_class("warn")
+            else:
+                btn_start.label = "▶ Start"
+                btn_start.remove_class("warn")
+                btn_start.add_class("active")
         except Exception:
             pass
 

@@ -22,22 +22,22 @@ SNAPS_DIR.mkdir(exist_ok=True)
 # Patterns removed before comparison (unstable values)
 _UNSTABLE_PATTERNS = [
     # Unique terminal class hash — changes every run
-    (re.compile(r'terminal-\d+-'), 'terminal-HASH-'),
+    (re.compile(r"terminal-\d+-"), "terminal-HASH-"),
     # Date/time in title if present
-    (re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'), 'TIMESTAMP'),
+    (re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"), "TIMESTAMP"),
     # Time HH:MM:SS and HH:MM in SVG text (dynamic UI values)
-    (re.compile(r'\d{2}:\d{2}:\d{2}'), 'HH:MM:SS'),
-    (re.compile(r'\b\d{2}:\d{2}\b'), 'HH:MM'),
+    (re.compile(r"\d{2}:\d{2}:\d{2}"), "HH:MM:SS"),
+    (re.compile(r"\b\d{2}:\d{2}\b"), "HH:MM"),
     # Any path /home/... and /tmp/...
-    (re.compile(r'/(?:home|tmp)/\S+'), '/PATH'),
+    (re.compile(r"/(?:home|tmp)/\S+"), "/PATH"),
     # textLength — may change due to different terminal content
     (re.compile(r'textLength="[\d.]+"'), 'textLength="X"'),
     # Entire line with terminal-screen content (unstable bash output)
-    (re.compile(r'(?<=>)bash[^<]*'), 'bash...'),
+    (re.compile(r"(?<=>)bash[^<]*"), "bash..."),
     # Style CSS classes — may differ in count/order for different content
-    (re.compile(r'\.terminal-HASH-r\d+ \{ [^}]+ \}'), '.terminal-HASH-rX { STYLE }'),
+    (re.compile(r"\.terminal-HASH-r\d+ \{ [^}]+ \}"), ".terminal-HASH-rX { STYLE }"),
     # HTML entities and escape characters in terminal output
-    (re.compile(r'&#\d+;'), 'CHAR'),
+    (re.compile(r"&#\d+;"), "CHAR"),
 ]
 
 
@@ -61,14 +61,18 @@ class SnapshotMismatch(AssertionError):
         )
 
 
-def _make_diff(baseline: str, actual: str, context: int = 3) -> str:
-    """Show first differences between two SVG strings."""
+def _make_diff(baseline: str, actual: str) -> str:
+    """Show the first differing lines between two SVG strings.
+
+    Only mismatching lines are reported: an SVG line is a whole row of rects or
+    a whole text run, so a ±one-character change already shows as a full line
+    and surrounding rows add nothing but noise.
+    """
     b_lines = baseline.splitlines()
     a_lines = actual.splitlines()
     diffs = []
     for i, (b, a) in enumerate(zip(b_lines, a_lines)):
         if b != a:
-            start = max(0, i - context)
             diffs.append(f"  Line {i + 1}:")
             diffs.append(f"  - {b[:120]}")
             diffs.append(f"  + {a[:120]}")
@@ -100,9 +104,12 @@ def assert_snapshot(request):
         normalized = _normalize(svg)
 
         if update_mode or not snap_path.exists():
+            # ``exists()`` has to be read BEFORE writing: after write_text() it
+            # is always true and every run reported "updated", including the
+            # first one that actually created the file.
+            existed = snap_path.exists()
             snap_path.write_text(normalized, encoding="utf-8")
-            action = "updated" if snap_path.exists() else "created"
-            pytest.skip(f"Snapshot {action}: {snap_path.name}")
+            pytest.skip(f"Snapshot {'updated' if existed else 'created'}: {snap_path.name}")
             return
 
         baseline = snap_path.read_text(encoding="utf-8")

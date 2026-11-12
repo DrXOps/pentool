@@ -5,13 +5,10 @@ Checks: widget events, ModuleTabs, ProxyAPI callbacks.
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
 from pentool.core.config import Config, set_config
-from pentool.utils.parser import ParsedRequest, ParsedResponse
+from pentool.utils.parser import ParsedRequest
 
 
 @pytest.fixture(autouse=True)
@@ -51,8 +48,9 @@ class TestModuleTabsEvents:
     @pytest.mark.asyncio
     async def test_content_switcher_changes_on_event(self) -> None:
         """ModuleSelected changes ContentSwitcher."""
-        from pentool.tui.app import PentoolApp
         from textual.widgets import ContentSwitcher
+
+        from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
         # Without _skip_project_guard switching is blocked when no project is loaded
@@ -68,8 +66,9 @@ class TestModuleTabsEvents:
     @pytest.mark.asyncio
     async def test_module_tabs_select_module(self) -> None:
         """app.action_switch_module switches ContentSwitcher programmatically."""
-        from pentool.tui.app import PentoolApp
         from textual.widgets import ContentSwitcher
+
+        from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
         app._skip_project_guard = True
@@ -137,9 +136,16 @@ class TestStatusBar:
 class TestRepeaterFlow:
     @pytest.mark.asyncio
     async def test_load_request_populates_editor(self) -> None:
-        """load_request() fills #request-editor."""
+        """load_request(raw) fills the active tab's request editor.
+
+        ``load_request`` takes raw HTTP text, not a ``ParsedRequest``: the old
+        version passed the object, its ``.replace`` raised inside the handler's
+        ``except Exception: pass``, and the assertion only checked that *some*
+        editor existed — which is true on an empty screen too.
+        """
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.repeater.screen import RepeaterScreen
+        from pentool.utils.parser import build_http_request
 
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
@@ -153,13 +159,11 @@ class TestRepeaterFlow:
                 headers={"Host": "example.com"},
             )
             screen = app.query_one(RepeaterScreen)
-            screen.load_request(req)
+            screen.load_request(build_http_request(req))
             await pilot.pause()
 
-            # RepeaterScreen uses dynamic IDs like #req-editor-{tab_id}
-            from pentool.tui.widgets.request_editor import RequestEditor
-            editors = app.query(RequestEditor)
-            assert len(editors) > 0
+            editor = screen._editor(screen._active_tab_id)
+            assert "GET /test HTTP/1.1" in editor.get_text(), "request text did not reach the editor"
 
     @pytest.mark.asyncio
     async def test_new_tab_adds_tab(self) -> None:
@@ -183,9 +187,10 @@ class TestRepeaterFlow:
 class TestIntruderFlow:
     @pytest.mark.asyncio
     async def test_load_request_populates_positions(self) -> None:
-        """load_request() fills #positions-editor."""
+        """load_request(raw) fills the Intruder template with its §§ markers."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.intruder.screen import IntruderScreen
+        from pentool.utils.parser import build_http_request
 
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
@@ -200,17 +205,16 @@ class TestIntruderFlow:
                 body="user=§admin§&pass=§secret§",
             )
             screen = app.query_one(IntruderScreen)
-            screen.load_request(req)
+            screen.load_request(build_http_request(req))
             await pilot.pause()
-            # Intruder positions editor uses #template-editor
-            editor = app.query_one("#template-editor")
-            assert editor is not None
+
+            template = screen._template_editor().get_text()
+            assert "user=§admin§&pass=§secret§" in template, "markers did not reach the template editor"
 
     @pytest.mark.asyncio
     async def test_start_without_markers_shows_error(self) -> None:
         """Start attack without markers — notify about error."""
         from pentool.tui.app import PentoolApp
-        from pentool.tui.screens.intruder.screen import IntruderScreen
 
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
