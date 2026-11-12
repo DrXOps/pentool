@@ -864,6 +864,16 @@ ProxyScreen #inspector-panel { display: block; }
 
 **Связи:** F-038.
 
+**Статус: закрыто 2026-11-12.** `PentoolApp.on_resize` ставит класс `narrow`
+на активный `Screen` (`event.size.width < NARROW_BREAKPOINT`, 80) и больше
+ничего не трогает; `_inspector_visible` меняет только
+`action_toggle_inspector`. Правило матчинга — в `app.tcss`, **не** в
+`screens/proxy/screen.tcss`: Textual префиксует первый селектор
+`DEFAULT_CSS` типом самого виджета (`textual/css/parse.py:174`), поэтому
+`Screen.narrow …` в стилях `ProxyScreen` стал бы `ProxyScreen Screen.narrow …`
+и не сработал бы. Гвард — `tests/unit/tui/test_responsive_layout.py`
+(реальный `resize_terminal` туда-обратно + AST-скан `on_resize`).
+
 ---
 
 ### F-028 [P2] Единственный `@work(thread=True)` использует `time.sleep` для анимации

@@ -62,6 +62,11 @@ ProxyScreen InspectorPanel {
 ProxyScreen InspectorPanel.-visible {
     display: block;
 }
+/* The narrow-terminal rule for the inspector lives in app.tcss, next to
+   NARROW_BREAKPOINT: Textual prefixes the first selector of a widget's
+   DEFAULT_CSS with the widget's own type (textual/css/parse.py:174), so a
+   rule rooted at `Screen` would become `ProxyScreen Screen …` and never
+   match. Screen-scoped rules whose root is an ancestor belong in app.tcss. */
 ProxyScreen #intercept-req-area {
     height: 2fr;
     min-height: 5;

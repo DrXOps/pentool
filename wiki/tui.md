@@ -104,6 +104,15 @@ grep, ни подсветка. Все 10 исторических inline-CSS п�
 - **Каждый `.tcss` должен кем-то загружаться.** Файл, который никто не
   читает, — хуже отсутствующего: он выглядит как стиль (F-038;
   `menu.tcss`, `menu_bar.tcss` — единственные два исключения, оба мёртвые).
+- **Правило, корень которого — предок виджета, живёт в `app.tcss`.**
+  Textual префиксует первый селектор `DEFAULT_CSS` типом самого виджета
+  (`textual/css/parse.py:174`: `if scope and selectors[0].name != scope`).
+  Поэтому `Screen.narrow InspectorPanel { … }`, написанное в
+  `screens/proxy/screen.tcss`, разбирается как
+  `ProxyScreen Screen.narrow InspectorPanel { … }` — и не совпадает никогда,
+  без единой ошибки в логе. Такие правила (адаптив по ширине, глобальные
+  состояния) кладём в `pentool/tui/app.tcss`, где скопа нет. Гейт этого не
+  ловит: селектор валиден, он просто не матчится.
 
 Гвард: `tests/unit/tui/test_css_hygiene.py` (четыре правила выше, проверено
 мутациями: строка CSS в `.py`, hex-цвет, повторное центрирование, второй
@@ -254,6 +263,15 @@ scripts/run-tests.sh          # гейт tests/unit + маркер для Stop-�
 - **Фильтры истории — `HistoryFilterBar`** (`ProxyFilterBar`, `WsFilterBar`):
   общая композиция, тоглы Scope/Comments, один `.tcss` с селекторами по
   базовому классу.
+- **`on_resize` меняет класс, а не состояние пользователя** (F-027/ADR-7).
+  `PentoolApp.on_resize` ставит `narrow` на активный `Screen` при ширине
+  `< NARROW_BREAKPOINT` (80); что спрятать — решает CSS в `app.tcss`. Старый
+  код звал `ProxyScreen.action_toggle_inspector()`, то есть переключал
+  `_inspector_visible`: терминал сужался — инспектор исчезал навсегда, потому
+  что обратно флаг никто не ставил. Гварды —
+  `tests/unit/tui/test_responsive_layout.py`: реальный прогон с
+  `resize_terminal` туда-обратно плюс AST-скан `on_resize` на запрет вызовов
+  `action_toggle_inspector`/`action_hide_detail`.
 
 ## Связи
 

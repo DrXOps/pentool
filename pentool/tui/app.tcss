@@ -92,3 +92,17 @@ Toast.-success     { border: round $success; }
 Toast.-warning     { border: round $warning; }
 Toast.-error       { border: round $error; }
 Toast.-critical    { border: heavy $error; }
+
+/* ── Narrow terminal (NARROW_BREAKPOINT, F-027/ADR-7) ──────────────────────
+   PentoolApp.on_resize() sets the `narrow` class on the active Screen; only
+   the layout reacts, the user's own toggles never do. Rules live here, in the
+   app's global stylesheet, because Textual prefixes the first selector of a
+   widget's DEFAULT_CSS with that widget's type (textual/css/parse.py:174) —
+   a `Screen.narrow …` rule written in a screen's own .tcss would be parsed as
+   `<ThatScreen> Screen.narrow …` and never match. */
+
+/* Narrow terminal: the inspector is the first thing to go, but
+   `_inspector_visible` is untouched — widening the terminal brings it back. */
+Screen.narrow ProxyScreen InspectorPanel.-visible {
+    display: none;
+}

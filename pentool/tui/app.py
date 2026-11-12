@@ -789,17 +789,32 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         """Config Observer callback (named to avoid Textual _on_* dispatch collision)."""
         self.post_message(ConfigChanged(changed_fields))
 
+    #: Below this terminal width the layout switches to its compact form.
+    NARROW_BREAKPOINT: int = 80
+
     def on_resize(self, event) -> None:
-        """Adaptive layout depending on terminal width."""
-        width = event.size.width
-        # Hide Inspector by default when width < 80
-        if width < 80:
-            try:
-                screen = self.query_one(SCREEN_PROXY, ProxyScreen)
-                if screen._inspector_visible:
-                    screen.action_toggle_inspector()
-            except Exception as e:
-                logger.debug("on_resize: could not toggle inspector: %s", e)
+        """Adapt the layout to the terminal width — never the user's state.
+
+        This used to call ``ProxyScreen.action_toggle_inspector()`` when the
+        terminal dropped below 80 columns. That flipped ``_inspector_visible``,
+        so widening the terminal again did *not* bring the inspector back: a
+        layout reaction had permanently changed a user preference (F-027,
+        ADR-7).
+
+        Now the width only sets a class on the base screen. CSS decides what a
+        narrow terminal shows, and the user's own choice survives the trip
+        down to 60 columns and back.
+
+        The class goes on ``screen_stack[0]`` rather than ``self.screen``: the
+        latter is the top of the stack, so an open dialog would take the class
+        with it and the module underneath would stay unmarked until the next
+        resize.
+        """
+        try:
+            stack = self.screen_stack
+            stack[0].set_class(event.size.width < self.NARROW_BREAKPOINT, "narrow")
+        except Exception as exc:  # pragma: no cover - screen missing during teardown
+            logger.debug("on_resize: could not set narrow class: %s", exc)
 
     @on(ModuleSelected)
     def on_module_selected(self, event: ModuleSelected) -> None:
