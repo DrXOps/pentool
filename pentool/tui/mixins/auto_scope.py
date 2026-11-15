@@ -35,8 +35,12 @@ def _spawn_tech_detect(host: str, app) -> None:
             exclusive=False,
             exit_on_error=False,
         )
-    except Exception as exc:
-        log.warning("tech_detect: worker spawn failed for %s: %s", host, exc)
+    except Exception:
+        # Воркер не завёлся — техдетект хоста не запустится вовсе, и в дереве
+        # у него не будет строки Tech. `run_worker` может упасть по разным
+        # причинам (приложение уже закрывается, группа занята), поэтому
+        # трейсбек.
+        log.exception("tech_detect: worker spawn failed for %s", host)
 
 
 def _get_sitemap(app):

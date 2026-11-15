@@ -360,10 +360,12 @@ class ProjectManager:
                 # the documented default (OFF) rather than carrying over
                 # whatever the previous project had in memory.
                 self._proxy.set_enforce_scope(False)
-            except Exception as exc:
+            except Exception:
                 # У нового проекта остались история, scope и правила
                 # Match&Replace прошлого — то есть чужой проект виден в новом.
-                logger.debug("project: new-project proxy state not reset: %s", exc)
+                # Ловится всё: это прокси-объект, и его состояние чистится
+                # пятью независимыми сеттерами.
+                logger.exception("project: new-project proxy state not reset")
 
         # Single exclusive worker — no two switches can run in parallel.
         self._app.run_worker(
@@ -386,10 +388,14 @@ class ProjectManager:
             dash._populate_projects()
             verb = "created" if is_new else "opened"
             dash.log_activity(f'Project "{os.path.splitext(os.path.basename(path))[0]}" {verb} from {path}', "ok")
-        except Exception as exc:
+        except NoMatches as exc:
+            # Экрана дашборда нет в дереве (проект открывают не со стартового
+            # экрана) — записи в ленте не будет, и это нормально.
+            logger.debug("project: dashboard not mounted for switch log: %s", exc)
+        except Exception:
             # Проект переключён, но в ленте дашборда об этом нет записи —
             # а именно по ленте пользователь понимает, что произошло.
-            logger.debug("project: switch not logged to dashboard feed: %s", exc)
+            logger.exception("project: switch not logged to dashboard feed")
 
     # ── Internal async helpers ────────────────────────────────────────────────
 

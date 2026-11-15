@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from textual import on
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, InvalidThemeError
 from textual.containers import Vertical
 from textual.css.query import NoMatches
 from textual.widgets import Checkbox, ContentSwitcher
@@ -130,6 +130,27 @@ def _setup_faulthandler(log_file: str) -> None:
         # faulthandler — диагностика «на всякий случай»: её отсутствие не
         # должно мешать запуску, но и молчать о нём нельзя (ADR-6).
         logger.debug("faulthandler setup skipped: %s", exc)
+
+
+def _release_pyarrow_thread() -> None:
+    """Let pyarrow's jemalloc arena release its worker thread immediately.
+
+    pyarrow starts a non-daemon thread that otherwise lives until ``os._exit``,
+    which makes a plain quit hang for a moment. The call is best-effort and has
+    exactly two expected refusals: pyarrow is not installed (``ImportError`` —
+    it is an optional dependency of the payload engine) and the wheel was built
+    without jemalloc (``ArrowNotImplementedError``, a ``RuntimeError``). Both
+    are named here instead of a blanket ``except Exception``: a signature change
+    in pyarrow must fail loudly rather than be filed under "no jemalloc".
+    """
+    try:
+        import pyarrow as pa
+
+        pa.jemalloc_set_decay_ms(0)
+    except (ImportError, RuntimeError) as exc:
+        # Поток pyarrow проживёт до os._exit — выход задержится на мгновение,
+        # а не сломается; запись объясняет, почему задержка есть.
+        logger.debug("jemalloc decay not configured: %s", exc)
 
 
 class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin, ProjectAutoSaveMixin, App):
@@ -395,8 +416,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
         try:
             await init_db(self._cfg.db_path)
-        except Exception as exc:
-            logger.warning("DB init failed: %s", exc)
+        except Exception:
+            # Без схемы ни один модуль не откроет проект: приложение стартует,
+            # но всё, что пишет в базу, будет падать уже своими ошибками.
+            logger.exception("DB init failed")
 
         if self._proxy_engine == "daemon":
             # Isolated: ProxyClient facade over the daemon subprocess. Events
@@ -435,8 +458,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             await self._proxy_service.init_storage()
             logger.info("APP: ProxyService init_storage completed")
-        except Exception as exc:
-            logger.warning("APP: ProxyService.init_storage failed: %s", exc)
+        except Exception:
+            # Хранилище прокси не открылось: история запросов не пишется, а
+            # экран Proxy показывает пустоту при живом трафике.
+            logger.exception("ProxyService.init_storage failed")
 
         # Initialize global Event Bus and subscribe app-level handlers
         bus = get_event_bus()
@@ -458,16 +483,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # "Start Proxy" is pressed it is already ready and doesn't slow startup (option C)
         self.run_worker(self._prewarm_ca(), exclusive=False, thread=False)
 
-        # Allow jemalloc (pyarrow) to release the background thread immediately,
-        # otherwise it is non-daemon and blocks process exit
-        try:
-            import pyarrow as pa
-
-            pa.jemalloc_set_decay_ms(0)
-        except Exception as exc:
-            # pyarrow нет или у него нет jemalloc — тогда его фоновый поток
-            # просто проживёт до os._exit. Запись объясняет, почему так.
-            logger.debug("jemalloc decay not configured: %s", exc)
+        _release_pyarrow_thread()
 
         from pentool.utils.terminal_check import get_terminal_warning
 
@@ -488,11 +504,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         saved_theme = getattr(self._cfg, "theme", "textual-dark")
         try:
             self.theme = saved_theme
-        except Exception as exc:
+        except InvalidThemeError as exc:
             # Тема из конфига — пользовательский выбор, и если она перестала
             # существовать (переименована в новой Textual), приложение
             # остаётся на тёмной по умолчанию. Без записи это неотличимо от
-            # «настройка не сохранилась».
+            # «настройка не сохранилась». Ловится ровно `InvalidThemeError`,
+            # которым Textual отвечает на незарегистрированное имя.
             logger.debug("saved theme %r not applied: %s", saved_theme, exc)
 
         # Auto-save (Block 3.3) — start if enabled in config
@@ -544,13 +561,18 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                     _spec.loader.exec_module(_mod)
                     _mod.activate_coords_worker(self)
         except Exception as exc:  # логируем в /tmp (диагностика съёмки)
+            # Здесь широкий `except` оправдан и назван осознанно: выполняется
+            # произвольный внешний файл (`exec_module`), и падать он может
+            # чем угодно. Ошибка попадает и в журнал приложения, и в /tmp —
+            # второй нужен сценарию записи, который читает файл мимо лога.
+            logger.exception("coords activation failed: %s", exc)
             try:
                 import traceback as _tb
 
                 with open("/tmp/pentool_coords_err.log", "a") as _f:
                     _f.write(f"PENTOOL coords activation error: {exc!r}\n")
                     _tb.print_exc(file=_f)
-            except Exception as log_exc:
+            except OSError as log_exc:
                 # Уже в ветке «записать ошибку не удалось»: единственное, что
                 # остаётся, — не уронить приложение из-за диагностики.
                 logger.debug("coords activation error not recorded: %s", log_exc)
@@ -577,16 +599,20 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             new_path = self._project_path_for_target(urls[0])
             self._pm.switch_project_db(new_path, is_new=True)
-        except Exception as exc:
-            logger.warning("seed: new project create failed: %s", exc)
+        except Exception:
+            # Проект не создан — и весь остальной seed пойдёт в предыдущий
+            # проект, то есть данные для нового хоста окажутся в чужой базе.
+            logger.exception("seed: new project create failed")
 
         for url in urls:
             try:
                 from pentool.utils.parser import ParsedRequest
 
                 self.post_message(SendUrlToTarget(ParsedRequest(method="GET", url=url)))
-            except Exception as exc:
-                logger.debug("seed url %s: %s", url, exc)
+            except Exception:
+                # Хост из --url не попал в Target вовсе: флаг сработал, а цели
+                # в дереве нет — поэтому здесь нужен traceback, а не строка.
+                logger.exception("seed: url %s not seeded", url)
 
         real = bool(getattr(self, "_pending_start_smart", False))
         use_ai = bool(getattr(self, "_pending_start_ai", False))
@@ -598,18 +624,20 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
                 self.run_worker(start_ai(self._cfg, _force=True))
                 logger.info("seed: --ai: starting MCP server")
-            except Exception as exc:
-                logger.warning("seed: --ai start failed: %s", exc)
+            except Exception:
+                # --ai не запустился: AI-панель останется неактивной, хотя
+                # флаг был передан, — причину показывает только traceback.
+                logger.exception("seed: --ai start failed")
             try:
                 from pentool.core.config import get_config
 
                 cfg = get_config()
                 cfg.ai_enabled = True
-            except Exception as exc:
+            except Exception:
                 # Флаг --ai остаётся включённым только в конфиге: если записать
                 # его не удалось, следующий запуск будет уже без AI, и без
                 # записи об этом догадаться неоткуда.
-                logger.debug("seed: --ai flag not persisted: %s", exc)
+                logger.exception("seed: --ai flag not persisted")
 
         # Start the proxy so --real traffic (and subsequent manual use) can be
         # intercepted and land in the project.
@@ -618,8 +646,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             if not (self._proxy and self._proxy.is_running):
                 self._start_proxy()
                 proxy_started = True
-        except Exception as exc:
-            logger.warning("seed: proxy start failed: %s", exc)
+        except Exception:
+            # Прокси не поднялся — при --real трафик не пойдёт через него
+            # вовсе, то есть проект останется пустым без видимой причины.
+            logger.exception("seed: proxy start failed")
 
         logger.info(
             "seed: --real=%s proxy_started=%s proxy_running=%s",
@@ -640,8 +670,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 host = parsed.netloc or parsed.hostname or target_url
                 logger.info("seed: force-scope %s (real=%s)", host, real)
                 _force_scope_host(host, self)
-            except Exception as exc:
-                logger.warning("seed: force-scope error for %s: %s", target_url, exc)
+            except Exception:
+                # Хост не попал в scope: запросы к нему уйдут в Proxy-историю
+                # как out-of-scope, а техдетект не запустится вовсе.
+                logger.exception("seed: force-scope failed for %s", target_url)
 
         if real:
             # Actually fetch the target(s) through the proxy so real requests
@@ -848,8 +880,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             stack = self.screen_stack
             stack[0].set_class(event.size.width < self.NARROW_BREAKPOINT, "narrow")
-        except Exception as exc:  # pragma: no cover - screen missing during teardown
-            logger.debug("on_resize: could not set narrow class: %s", exc)
+        except IndexError:  # pragma: no cover - screen missing during teardown
+            # Стек экранов пуст только когда приложение уже разбирают; класс
+            # `narrow` тогда все равно никому не нужен. Ловится `IndexError`,
+            # а не `Exception`, чтобы опечатка в `set_class` была видна.
+            logger.debug("on_resize: no screen to mark narrow")
 
     @on(ModuleSelected)
     def on_module_selected(self, event: ModuleSelected) -> None:
@@ -930,9 +965,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             tabs = proxy_screen.query_one("#proxy-subtabs", TabbedContent)
             tabs.active = tab_id
             self.call_after_refresh(lambda tid=tab_id: self._focus_proxy_table(proxy_screen, tid))
-        except Exception as exc:
+        except NoMatches as exc:
             # Пользователь нажал горячую клавишу вкладки — и остался на старой.
-            # Молчание превращает это в «клавиша не работает».
+            # Экран Proxy или панель вкладок ещё не смонтированы; именно это
+            # и значит `NoMatches`, других причин тут нет.
             logger.debug("proxy_tab %s: switch failed: %s", tab_id, exc)
 
     def _focus_proxy_table(self, proxy_screen: object, tab_id: str) -> None:
@@ -951,9 +987,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 table.focus()
                 if table.row_count > 0:
                     table.move_cursor(row=0)
-        except Exception as exc:
+        except (NoMatches, ImportError) as exc:
             # Фокус — не то, ради чего стоит падать, но «переключился на tab,
             # а клавиатура осталась в старом» иначе не диагностируется.
+            # Две ожидаемые причины названы: таблицы нет в дереве
+            # (`NoMatches`) и нет самого `textual_fastdatatable` (`ImportError`).
             logger.debug("_focus_proxy_table %s: %s", tab_id, exc)
 
     def _focus_repeater_editor(self, repeater) -> None:
@@ -967,9 +1005,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 # The TextArea is ContentPanel's #cp-body-widget; focusing a
                 # made-up "#editor-area" raised NoMatches into the except below.
                 editor.content_widget.focus()
-        except Exception as exc:
+        except NoMatches as exc:
             # Комментарий выше — ровно про этот except: он уже однажды прятал
-            # опечатку в селекторе. Без записи он спрячет и следующую.
+            # опечатку в селекторе. Поэтому ловится ровно `NoMatches` —
+            # «редактора нет в дереве», — а `AttributeError` от неверного
+            # объекта пусть всплывает: это опечатка, её надо видеть.
             logger.debug("_focus_repeater_editor: %s", exc)
 
     def action_repeater_send(self) -> None:
@@ -979,10 +1019,15 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             repeater = self.query_one(SCREEN_REPEATER, RepeaterScreen)
             repeater.action_send()
-        except Exception as exc:
+        except NoMatches as exc:
+            # Экрана Repeater нет в дереве — активный модуль и DOM разошлись
+            # (переключение ещё не доехало). Горячая клавиша не сработает.
+            logger.debug("repeater_send: screen not mounted: %s", exc)
+        except Exception:
             # Ctrl+Space молча ничего не делает — худший из возможных исходов
-            # горячей клавиши: пользователь нажимает её ещё и ещё.
-            logger.debug("repeater_send: %s", exc)
+            # горячей клавиши: пользователь нажимает её ещё и ещё. Всё, что не
+            # `NoMatches`, здесь — сбой внутри отправки, и нужен трейсбек.
+            logger.exception("repeater_send: send failed")
 
     # Modules available without an open project
     _FREE_MODULES = {"dashboard", "settings"}
@@ -994,10 +1039,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
             lic = get_session_license()
             scanner_available = lic.valid and lic.has_feature("scanner_pro")
-        except Exception as exc:
+        except Exception:
             # Ошибка чтения лицензии — это «не знаем», а не «можно»: вкладка
-            # Scanner остаётся запертой, и причина остаётся в журнале.
-            logger.debug("license check failed, Scanner stays locked: %s", exc)
+            # Scanner остаётся запертой, и причина остаётся в журнале
+            # трейсбеком — иначе «лицензия не работает» не отличить от
+            # испорченного файла лицензии.
+            logger.exception("license check failed, Scanner stays locked")
             scanner_available = False
         try:
             self.query_one("#module-tabs", ModuleTabs).set_scanner_locked(not scanner_available)
@@ -1300,8 +1347,16 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             screen.add_request_row(msg.req)
             if self._proxy and self._proxy.intercept_enabled:
                 screen.show_intercepted_request(msg.req)  # type: ignore[arg-type]
-        except Exception as e:
-            logger.debug("on_proxy_request_added: %s", e)
+        except NoMatches as e:
+            # Вкладки Intercept нет в дереве — экран ещё собирается. Это
+            # ожидаемое состояние, и оно обязано остаться тихим: запись на
+            # каждый запрос прокси утопила бы журнал.
+            logger.debug("on_proxy_request_added: panel not mounted: %s", e)
+        except Exception:
+            # Всё остальное здесь — дефект: запрос не появился в истории,
+            # хотя прокси его поймал. Трейсбек нужен, и нужен именно на
+            # каждый запрос — сломанный путь строки и есть весь трафик.
+            logger.exception("on_proxy_request_added: row not added")
 
     @on(ProxyRequestDone)
     def on_proxy_request_done(self, msg: ProxyRequestDone) -> None:
@@ -1321,8 +1376,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             screen.update_request_row(msg.req)
             if self._proxy and self._proxy.intercept_enabled:
                 screen.show_intercept_response(msg.req)  # type: ignore[arg-type]
-        except Exception as e:
-            logger.debug("on_proxy_request_done (proxy screen): %s", e)
+        except NoMatches as e:
+            # Панели ответа нет в дереве — экран ещё собирается; тихо, как и
+            # для нового запроса выше.
+            logger.debug("on_proxy_request_done: panel not mounted: %s", e)
+        except Exception:
+            # Строка осталась без статуса и ответа: в истории видно «—»
+            # вместо кода, и других следов сбоя нет.
+            logger.exception("on_proxy_request_done: row not updated")
         # Auto-build SiteMap
         self.post_message(SendToTarget(msg.req))
 
@@ -1333,8 +1394,13 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             if target is None:
                 return  # quiet no-op — Target screen not mounted; do NOT log each call
             target.add_request_from_proxy(msg.req)
-        except Exception as e:
-            logger.debug("on_send_to_target: %s", e)
+        except NoMatches as e:
+            # Дерево Target ещё не смонтировано — тихо, как и выше.
+            logger.debug("on_send_to_target: tree not mounted: %s", e)
+        except Exception:
+            # Запрос не попал в дерево сайта: пользователь видит пустой
+            # Target при живом трафике в Proxy, и другого следа нет.
+            logger.exception("on_send_to_target: request not added to sitemap")
 
     def _add_raw_to_target(self, raw: str) -> None:
         try:
@@ -1345,8 +1411,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             if target is None:
                 return
             target.add_request_from_proxy(req)
-        except Exception as e:
-            logger.debug("_add_raw_to_target: %s", e)
+        except NoMatches as e:
+            logger.debug("_add_raw_to_target: tree not mounted: %s", e)
+        except Exception:
+            # Сырой запрос не разобран или не лёг в SiteMap: экран Target
+            # отстаёт от того, что реально отправлено.
+            logger.exception("_add_raw_to_target: raw request not added")
 
     @on(SendToRepeater)
     def on_send_to_repeater(self, msg: SendToRepeater) -> None:
@@ -1395,8 +1465,15 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # making the scope change from Proxy appear to have never
             # happened once the project is reloaded.
             self.run_worker(api.save(), exclusive=False)
-        except Exception as e:
-            logger.debug("on_sync_scope_to_target: %s", e)
+        except NoMatches as e:
+            # Экрана Target нет в дереве (проект только открывается) — scope
+            # из Proxy всё равно лёг в ProxyServer, терять нечего.
+            logger.debug("on_sync_scope_to_target: screen not mounted: %s", e)
+        except Exception:
+            # Переключение Scope из Proxy не доехало до дерева Target:
+            # пользователь видит, что галка не сработала, и второй попытки
+            # у этого клика нет.
+            logger.exception("on_sync_scope_to_target: scope not applied to sitemap")
 
     @on(SyncScopeToProxy)
     def on_sync_scope_to_proxy(self, msg: SyncScopeToProxy) -> None:
@@ -1423,7 +1500,9 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             try:
                 self._cfg.scope = list(proxy.scope)
                 self._cfg.save()
-            except Exception as e:
+            except OSError as e:
+                # Диск недоступен или config.yaml не записался: в памяти scope
+                # новый, а на диске — старый, и следующий старт его вернёт.
                 logger.warning("on_sync_scope_to_proxy: failed to save config: %s", e)
             # Persist per-project (DB) too — otherwise a scope change made
             # from Target only lived in Config (global) and proxy.scope
@@ -1433,7 +1512,9 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             try:
                 proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
                 self.run_worker(proxy_screen._save_scope_setting(list(proxy.scope)))
-            except Exception as e:
+            except NoMatches as e:
+                # Экрана Proxy нет в дереве — сохранение в проект пропущено;
+                # при следующем переключении проекта вернётся старая настройка.
                 logger.debug("on_sync_scope_to_proxy: failed to persist scope per-project: %s", e)
             # Refresh Proxy screen's ScopeToggle state if mounted
             try:
@@ -1446,12 +1527,21 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                     st.add_class("disabled")
                 else:
                     st.remove_class("disabled")
-            except Exception as exc:
+            except NoMatches as exc:
                 # Кнопка Scope на экране Proxy останется в прежнем состоянии —
                 # то есть покажет ровно противоположное тому, что сохранено.
+                # `NoMatches` здесь — либо экран, либо фильтр-бар, либо сама
+                # кнопка ещё не в дереве; других причин у этой цепочки нет.
                 logger.debug("on_sync_scope_to_proxy: scope toggle not refreshed: %s", exc)
-        except Exception as e:
-            logger.debug("on_sync_scope_to_proxy: %s", e)
+        except NoMatches as e:
+            # Сюда попадает только `self.query_one(SCREEN_PROXY, ...)` выше —
+            # экрана Proxy нет, синхронизировать нечего.
+            logger.debug("on_sync_scope_to_proxy: proxy screen not mounted: %s", e)
+        except Exception:
+            # Scope обновлён в одном месте и не обновлён в другом: Target и
+            # Proxy начнут расходиться, а это ровно тот односторонний баг,
+            # ради которого этот хендлер и написан.
+            logger.exception("on_sync_scope_to_proxy: scope not mirrored")
 
     @on(SendHostToScanner)
     def on_send_host_to_scanner(self, msg: SendHostToScanner) -> None:
@@ -1510,16 +1600,26 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             target = self.query_one(SCREEN_TARGET, TargetScreen)
             target.add_request_from_proxy(msg.req)
-        except Exception as e:
-            logger.debug("on_send_url_to_target: %s", e)
+        except NoMatches as e:
+            # Экрана Target нет в дереве: URL из --url не виден, но проект и
+            # прокси уже созданы — при монтировании дерево соберётся из БД.
+            logger.debug("on_send_url_to_target: screen not mounted: %s", e)
+        except Exception:
+            # URL из --url не попал в дерево сайта вовсе.
+            logger.exception("on_send_url_to_target: url not added")
 
     @on(ProxyClearHistory)
     def on_proxy_clear_history(self, msg: ProxyClearHistory) -> None:
         try:
             screen = self.query_one(SCREEN_PROXY, ProxyScreen)
             screen.action_clear_list()
-        except Exception as e:
-            logger.debug("on_proxy_clear_history: %s", e)
+        except NoMatches as e:
+            # Экрана Proxy нет в дереве — чистить нечего.
+            logger.debug("on_proxy_clear_history: screen not mounted: %s", e)
+        except Exception:
+            # Пользователь нажал «очистить» и ждёт пустую таблицу, а строки
+            # остаются: выглядит как «кнопка не работает».
+            logger.exception("on_proxy_clear_history: list not cleared")
 
     @on(ProxyLoadProject)
     def on_proxy_load_project(self, msg: ProxyLoadProject) -> None:
@@ -1527,8 +1627,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             screen = self.query_one(SCREEN_PROXY, ProxyScreen)
             screen.load_from_project()
-        except Exception as e:
-            logger.debug("on_proxy_load_project: %s", e)
+        except NoMatches as e:
+            # Экрана Proxy нет в дереве — загружать нечего, таблица соберётся
+            # при его монтировании.
+            logger.debug("on_proxy_load_project: screen not mounted: %s", e)
+        except Exception:
+            # Таблица осталась от прошлого проекта: открытый проект и то, что
+            # показывает Proxy, — разные базы.
+            logger.exception("on_proxy_load_project: table not reloaded")
 
     @on(ConfigChanged)
     def on_config_changed(self, msg: ConfigChanged) -> None:
@@ -1563,7 +1669,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 new_theme = fields["theme"]
                 if getattr(self, "theme", None) != new_theme:
                     self.theme = new_theme
-            except Exception as exc:
+            except InvalidThemeError as exc:
                 # Пользователь только что сохранил тему и ждёт, что она
                 # применится; отказ Textual принять имя темы иначе не заметен.
                 logger.debug("config: theme %r not applied: %s", fields.get("theme"), exc)
@@ -1837,10 +1943,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             bus.unsubscribe_all(self._on_bus_passive_toggled)
             bus.unsubscribe_all(self._on_bus_proxy_captured)
             bus.unsubscribe_all(self._on_bus_proxy_completed)
-        except Exception as exc:
+        except Exception:
             # Не отписались — мёртвый App продолжит получать события шины.
-            # Процесс всё равно завершается жёстко, но след нужен.
-            logger.debug("APP: EventBus unsubscribe on quit failed: %s", exc)
+            # Процесс всё равно завершается жёстко, но след нужен, и целиком:
+            # по строке не понять, какая из семи подписок не снялась.
+            logger.exception("APP: EventBus unsubscribe on quit failed")
         # Stop proxy — reuse the same robust path as manual stop, but the
         # async variant so Ctrl+Q does NOT freeze the TUI renderer, and with
         # short grace windows (proxy.stop cancels tasks fast; the 8080 port is

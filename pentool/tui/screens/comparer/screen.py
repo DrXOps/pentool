@@ -9,6 +9,7 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Static, TextArea
 
@@ -154,6 +155,10 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
             result = compare(left, right)
             self._last_result = result
             self._render_result(result)
+        except NoMatches as exc:
+            # Панели сравнения нет в дереве (экран ещё собирается) — читать
+            # нечего, и Ctrl+Enter ничего не сделает.
+            logger.debug("comparer: panel not mounted for compare: %s", exc)
         except Exception as exc:
             self.err(exc, "Compare error")
 
@@ -202,8 +207,10 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
             self.query_one("#cmp-diff-panel", ContentPanel).clear_content()
             self.query_one("#cmp-stats", Static).update("[dim]— Press Compare or Ctrl+Enter to diff —[/dim]")
             self._last_result = None
-        except Exception as exc:
-            logger.debug("action_clear: %s", exc)
+        except NoMatches as exc:
+            # Очистка не дошла до всех панелей: на экране остался прежний diff,
+            # хотя кнопка нажата. Панели нет в дереве.
+            logger.debug("comparer: panel not mounted for clear: %s", exc)
 
     # ── Public API (loading from other modules) ───────────────────────────────
 

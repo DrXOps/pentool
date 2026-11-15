@@ -86,21 +86,26 @@ class InterceptMixin:
         try:
             editor = self.query_one("#intercept-panel", ContentPanel).content_widget
             modified = editor.text
-        except Exception as exc:
+        except NoMatches as exc:
+            # Панели перехвата нет в дереве (вкладка не смонтирована) —
+            # отправляем исходный запрос, править нечего.
+            logger.debug("intercept: no editor to read, sending original: %s", exc)
+            modified = None
+        except Exception:
             # `modified = None` ниже означает «отправить запрос без правок».
             # Если редактор был, но не прочитался, правки пользователя тихо
-            # теряются и уходит исходный запрос.
-            logger.debug("intercept: edited request not read, sending original: %s", exc)
+            # теряются и уходит исходный запрос — это трейсбек, а не строка.
+            logger.exception("intercept: edited request not read, sending original")
             modified = None
         if modified is not None and self._intercept_show_special_chars:
             try:
                 from pentool.tui.widgets.request_editor import decode_special_chars
 
                 modified = decode_special_chars(modified)
-            except Exception as exc:
+            except Exception:
                 # В запрос уйдут литеральные «\r\n» вместо CRLF — сервер
                 # ответит 400, и связь с отображением спецсимволов не видна.
-                logger.debug("intercept: special chars not decoded before forward: %s", exc)
+                logger.exception("intercept: special chars not decoded before forward")
         # Display the sent request in the bottom-left panel
         sent_text = modified if modified and modified.strip() else ""
         try:

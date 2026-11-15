@@ -185,9 +185,10 @@ class FileSelectorDialog(BaseDialog[None]):
                         self._navigate_to(self._current_dir / entry_name)
                         event.prevent_default()
                         return
-            except Exception as exc:
+            except NoMatches as exc:
                 # Вход в каталог не состоялся — Enter тут же подтвердит выбор,
-                # и диалог закроется с путём вместо перехода внутрь.
+                # и диалог закроется с путём вместо перехода внутрь. Таблицы
+                # нет в дереве — единственная причина здесь.
                 logger.debug("file dialog: enter-target not resolved: %s", exc)
             self.action_confirm()
             event.prevent_default()
@@ -217,9 +218,10 @@ class FileSelectorDialog(BaseDialog[None]):
                 path = self._current_dir / filename
                 self.dismiss(str(path))
                 return
-        except Exception as exc:
+        except NoMatches as exc:
             # Введённое вручную имя не прочитано — OK вернёт выделенный в
             # таблице файл (или None), то есть не то, что видит пользователь.
+            # Поля имени нет в дереве — единственная причина `NoMatches`.
             logger.debug("file dialog: manual filename not read: %s", exc)
 
         if self._selected_path:

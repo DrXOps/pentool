@@ -337,10 +337,11 @@ class ProxyScreen(
             from pentool.core.events import WebSocketFrameEvent
 
             get_event_bus().subscribe(WebSocketFrameEvent, self._on_ws_frame_event)
-        except Exception as exc:
+        except Exception:
             # Без подписки вкладка WS History остаётся пустой навсегда: ни
-            # ошибки, ни «нет кадров» — просто пусто.
-            logger.debug("proxy: WS frame subscription failed: %s", exc)
+            # ошибки, ни «нет кадров» — просто пусто. Причина (импорт шины,
+            # конфликт ключа подписки) видна только в трейсбеке.
+            logger.exception("proxy: WS frame subscription failed")
 
     def _on_ws_frame_event(self, event) -> None:
         """WS frame received — append to log (thread-safe)."""
@@ -393,10 +394,12 @@ class ProxyScreen(
             from pentool.core.events import WebSocketFrameEvent
 
             get_event_bus().unsubscribe(WebSocketFrameEvent, self._on_ws_frame_event)
-        except Exception as exc:
+        except Exception:
             # Отписаться не удалось — шина продолжит звать метод снятого
-            # экрана; это утечка ровно того рода, что чинит ADR-6.
-            logger.debug("proxy: WS frame unsubscribe failed on unmount: %s", exc)
+            # экрана; это утечка ровно того рода, что чинит ADR-6. Нужен
+            # трейсбек: по строке не видно, шина не нашла подписку или упала
+            # внутри.
+            logger.exception("proxy: WS frame unsubscribe failed on unmount")
 
     async def _reload_table(
         self,
@@ -1132,17 +1135,19 @@ class ProxyScreen(
                 self._select_ws_row(event.cursor_row)
             else:
                 self._select_row(event.cursor_row)
-        except Exception as exc:
-            logger.error("PROXY SCREEN: on_data_table_row_highlighted crashed: %s", exc, exc_info=True)
+        except Exception:
+            logger.exception("PROXY SCREEN: on_data_table_row_highlighted crashed")
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
         """Give focus to DataTable on any cursor movement — required for mouse scroll."""
         try:
             event.data_table.focus()
-        except Exception as exc:
+        except Exception:
             # Без фокуса колесо мыши перестаёт листать таблицу — то есть
             # «прокрутка сломалась». Иначе это выглядит как проблема Textual.
-            logger.debug("proxy: table not focused on cell highlight: %s", exc)
+            # Трейсбек, потому что фокус в Textual может не взяться по разным
+            # причинам, и по строке их не различить.
+            logger.exception("proxy: table not focused on cell highlight")
 
     def _debounced_load(self, row_id: int | None) -> None:
         """Run _load_row_details with guard against widget-removed race."""
@@ -1150,9 +1155,12 @@ class ProxyScreen(
             app = self.app
             if not app.is_running:
                 return
-        except Exception as exc:
-            # Приложение уже разбирается — загрузка деталей бессмысленна.
-            logger.debug("proxy: debounced load skipped, app not usable: %s", exc)
+        except Exception:
+            # Виджет уже снят: `self.app` поднимается по цепочке родителей и
+            # не находит приложения (Textual бросает `NoActiveAppError`, а он
+            # живёт в приватном модуле — импортировать его ради одного
+            # хендлера дороже, чем записать трейсбек).
+            logger.exception("proxy: debounced load skipped, app not usable")
             return
         self.run_worker(self._load_row_details(row_id))
 
@@ -1281,9 +1289,10 @@ class ProxyScreen(
                 panel.add_class("-visible")
             else:
                 panel.remove_class("-visible")
-        except Exception as exc:
+        except NoMatches as exc:
             # Флаг уже переключён, а панель — нет: следующее нажатие вернёт
-            # флаг и панель разъедется с состоянием навсегда.
+            # флаг и панель разъедется с состоянием навсегда. `NoMatches` —
+            # панели нет в дереве (вкладка не смонтирована).
             logger.debug("proxy: inspector panel not toggled: %s", exc)
 
     def _switch_proxy_tab(self, tab_id: str) -> None:
@@ -1679,10 +1688,11 @@ class ProxyScreen(
                 btn.label = "⏳ Starting..."
                 btn.remove_class("inactive")
                 btn.add_class("active")
-            except Exception as exc:
+            except NoMatches as exc:
                 # Это только мгновенная реакция до запуска; сам запуск ниже
                 # выполнится. След нужен, чтобы «кнопка не отозвалась» имело
-                # объяснение.
+                # объяснение: кнопки нет в дереве, то есть toolbar ещё не
+                # собран.
                 logger.debug("proxy: start feedback not painted: %s", exc)
         elif proxy and proxy.is_running:
             try:
@@ -1690,7 +1700,9 @@ class ProxyScreen(
                 btn.label = "⏳ Stopping..."
                 btn.remove_class("active")
                 btn.add_class("inactive")
-            except Exception as exc:
+            except NoMatches as exc:
+                # То же для остановки: кнопка останется с подписью «Stop», а
+                # прокси уже гасится — причина только «её нет в дереве».
                 logger.debug("proxy: stop feedback not painted: %s", exc)
         self.app.action_toggle_proxy()  # type: ignore[attr-defined]
         self.call_after_refresh(self._sync_proxy_button)
@@ -1975,9 +1987,10 @@ class ProxyScreen(
             cursor_row = table.cursor_row
             if 0 <= cursor_row < len(self._rows_cache):
                 self._selected_req_id = self._rows_cache[cursor_row].get("id")
-        except Exception as exc:
+        except NoMatches as exc:
             # Меню откроется, но действия в нём будут применены не к той
-            # строке, на которую пользователь кликнул.
+            # строке, на которую пользователь кликнул: таблицы нет в дереве
+            # (вкладка history не смонтирована).
             logger.debug("proxy: cursor row not resolved for context menu: %s", exc)
         self._open_context_menu(event.screen_x, event.screen_y)
 
@@ -2009,9 +2022,9 @@ class ProxyScreen(
                     # This event is from DataTable — ignore it (ContextMenuRequest handles it)
                     return
                 node = getattr(node, "parent", None)
-        except Exception as exc:
+        except NoMatches as exc:
             # Не смогли понять, чей это клик — меню откроется как «табличное»
-            # даже над текстовой панелью.
+            # даже над текстовой панелью. `NoMatches` — таблицы нет в дереве.
             logger.debug("proxy: click source not resolved: %s", exc)
         # Click outside text panel and DataTable — open the table context menu
         self._open_context_menu(event.screen_x, event.screen_y)
@@ -2023,9 +2036,10 @@ class ProxyScreen(
             try:
                 table = self.query_one("#request-list", DataTable)
                 self._select_row(table.cursor_row)
-            except Exception as exc:
+            except NoMatches as exc:
                 # Двойной клик по строке ничего не открыл: пользователь
-                # повторит его, и это будет выглядеть как зависание.
+                # повторит его, и это будет выглядеть как зависание. Причина —
+                # таблицы нет в дереве, то есть вкладка History не смонтирована.
                 logger.debug("proxy: double-click did not open row details: %s", exc)
 
     def _open_context_menu(self, x: int, y: int) -> None:

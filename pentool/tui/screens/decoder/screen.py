@@ -303,8 +303,11 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
             self.query_one("#dec-steps-log", ContentPanel).clear_content()
             self._chain.clear()
             self._update_chain_display()
-        except Exception as exc:
-            logger.debug("action_clear_all: %s", exc)
+        except NoMatches as exc:
+            # Одна из трёх панелей не в дереве — «Clear all» оставил часть
+            # прежнего вывода на экране. `NoMatches` называет причину; всё
+            # остальное пусть всплывает.
+            logger.debug("decoder: clear all — panel not mounted: %s", exc)
 
     # ── Public API (loading from other modules) ───────────────────────────────
 

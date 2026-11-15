@@ -6,6 +6,7 @@ no longer need to import a separate mixin.
 
 from __future__ import annotations
 
+from textual.css.query import NoMatches
 from textual.events import Click
 from textual.widget import Widget
 from textual.widgets import Input, Tab, TabbedContent
@@ -81,8 +82,10 @@ class BaseModuleScreen(Widget):
                         self._rename_tabs_widget_id,
                     )
                     return
-            except Exception as e:
-                _log.debug("BaseModuleScreen: error finding TabbedContent: %s", e)
+            except NoMatches as e:
+                # Вкладок экрана нет в дереве — переименовывать нечего, двойной
+                # клик по вкладке просто ничего не сделает.
+                _log.debug("BaseModuleScreen: TabbedContent not in tree: %s", e)
                 return
 
         _log.debug("BaseModuleScreen: DOUBLE CLICK → _start_rename(%r)", pane_id)
@@ -105,9 +108,10 @@ class BaseModuleScreen(Widget):
             inp = self.query_one(f"#{self._rename_input_id}", Input)
             if inp.display:
                 inp.display = False
-        except Exception as e:
+        except NoMatches as e:
             # Поле переименования остаётся висеть поверх вкладок после ухода
             # фокуса — оно перекрывает заголовки, а нажатия уходят в него.
+            # Поля нет в дереве — единственная причина `NoMatches` здесь.
             _log.debug("BaseModuleScreen: rename input not hidden on blur: %s", e)
 
     # ── Abstract interface ────────────────────────────────────────────────────

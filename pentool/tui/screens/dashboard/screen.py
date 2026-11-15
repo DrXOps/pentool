@@ -485,9 +485,10 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         try:
             feed = self.query_one("#feed-log", RichLog)
             feed.write("[dim cyan]ℹ Live feed ready. Waiting for events...[/dim cyan]")
-        except Exception as exc:
+        except NoMatches as exc:
             # Первая строка ленты — единственное подтверждение, что лента
             # вообще работает; её отсутствие неотличимо от «событий не было».
+            # `NoMatches` — ленты нет в дереве (экран ещё собирается).
             logger.debug("dashboard: live feed greeting not written: %s", exc)
         self._load_stats_bg()
         self._populate_projects()
@@ -661,8 +662,10 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
                 return
             data = await self._fetch_stats(db_path)
             self._apply_stats(data)
-        except Exception as exc:
-            logger.debug("_load_stats_bg: %s", exc)
+        except Exception:
+            # Карточки статистики остаются с прошлыми числами (или пустыми):
+            # дашборд показывает не то, что в базе, и других следов нет.
+            logger.exception("_load_stats_bg failed")
 
     async def _fetch_stats(self, db_path: str) -> dict:
         from pentool.api.scanner_api import ScannerAPI
@@ -934,13 +937,16 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
     def action_new_project(self) -> None:
         try:
             self.app.action_new_project()  # type: ignore
-        except Exception as exc:
+        except Exception:
             # Ctrl+N на дашборде ничего не открыл — «создать проект» перестало
-            # быть доступным из стартового экрана.
-            logger.debug("dashboard: new project not started: %s", exc)
+            # быть доступным из стартового экрана. Причина — сбой в самом
+            # действии приложения, поэтому трейсбек.
+            logger.exception("dashboard: new project not started")
 
     def action_save_project(self) -> None:
         try:
             self.app.action_save_project()  # type: ignore
-        except Exception as exc:
-            logger.debug("dashboard: save project not started: %s", exc)
+        except Exception:
+            # Ctrl+S молчит: проект не сохранён, и никакого другого признака
+            # этого не будет до закрытия приложения.
+            logger.exception("dashboard: save project not started")

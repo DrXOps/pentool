@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Generic, TypeVar
 
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.events import Click
 from textual.message import Message
 from textual.widget import Widget
@@ -269,8 +270,10 @@ class TabbedContentPanel(Widget, Generic[TState]):
             # _scroll_active_tab. Никаких отложенных call_after_refresh активаций.
             tc.add_pane(pane)
             tc.active = tab_id
-        except Exception as exc:
-            logger.warning("action_new_tab setup failed: %s", exc)
+        except Exception:
+            # Новая вкладка добавлена в `_states`, но панели в DOM нет:
+            # переключение на неё покажет пустоту, а вкладка не закроется.
+            logger.exception("action_new_tab setup failed for %s", tab_id)
 
         self._active_tab_id = tab_id
 
@@ -326,9 +329,10 @@ class TabbedContentPanel(Widget, Generic[TState]):
         try:
             tc = self.tabs_content
             tc.remove_pane(tab_id)
-        except Exception as exc:
+        except NoMatches as exc:
             # Панель остаётся в DOM, хотя из `_states` её уже убрали ниже —
-            # вкладка видна, но недоступна для переключения.
+            # вкладка видна, но недоступна для переключения. `NoMatches` —
+            # контейнера вкладок нет в дереве (экран разбирают).
             logger.debug("tab_panel: pane %s not removed: %s", tab_id, exc)
         self._states.pop(tab_id, None)
         self._meta.pop(tab_id, None)
@@ -339,9 +343,9 @@ class TabbedContentPanel(Widget, Generic[TState]):
             try:
                 tc = self.tabs_content
                 tc.active = new_id
-            except Exception as exc:
+            except NoMatches as exc:
                 # Заголовок переключился, содержимое — нет: неверная вкладка
-                # на экране при верном состоянии.
+                # на экране при верном состоянии. Контейнера нет в дереве.
                 logger.debug("tab_panel: active tab not switched to %s: %s", new_id, exc)
         else:
             self._active_tab_id = None
@@ -481,8 +485,9 @@ class TabbedContentPanel(Widget, Generic[TState]):
             inp = self.query_one(f"#{self._rename_input_id}", Input)
             if inp.display:
                 inp.display = False
-        except Exception as exc:
-            # Поле переименования останется поверх вкладок после ухода фокуса.
+        except NoMatches as exc:
+            # Поле переименования останется поверх вкладок после ухода фокуса;
+            # поля нет в дереве — панель уже снята.
             logger.debug("tab_panel: rename input not hidden on blur: %s", exc)
 
     def _update_tab_label(self, tab_id: str, name: str) -> None:

@@ -801,8 +801,12 @@ class IntruderScreen(
                                 area.selection = Selection((row, start), (row, end))
 
                         self.call_after_refresh(_sel)
-                except Exception as exc:
-                    logger.debug("op: %s", exc)
+                except (LookupError, NoMatches) as exc:
+                    # Таба нет или его тело не смонтировано — двойной клик
+                    # ничего не выделит. Названы ровно эти две причины:
+                    # `LookupError` из `_template_editor` и `NoMatches` из
+                    # `content_widget`; опечатка в этом блоке всплывёт.
+                    logger.debug("op: double-click select skipped: %s", exc)
                 return
             self._last_click_time = now
         await super().on_event(event)
@@ -918,8 +922,10 @@ class IntruderScreen(
                 ),
                 exclusive=False,
             )
-        except Exception as exc:
-            logger.debug("_auto_save_tab: %s", exc)
+        except Exception:
+            # Автосохранение таба не встало в очередь: правки живут только в
+            # памяти и пропадут при перезапуске, о чём ничего не скажет.
+            logger.exception("_auto_save_tab failed")
 
     def _load_tabs_from_db(self) -> None:
         """Load saved tabs from database and restore them."""
@@ -1025,19 +1031,25 @@ class IntruderScreen(
         for tab_id, attack in list(self._live_attacks.items()):
             try:
                 self.workers.cancel_group(self, self._attack_group(tab_id))
-            except Exception as exc:
-                logger.debug("on_unmount: cancel_group: %s", exc)
+            except Exception:
+                # Воркер атаки не снят: он продолжит писать в БД проекта,
+                # который уже закрывают, и досчитает до конца после ухода
+                # с экрана. Это утечка, и её причина нужна целиком.
+                logger.exception("on_unmount: cancel_group failed for %s", tab_id)
             try:
                 # Воркер остановки живёт на App: у экрана вот-вот снимут всех
                 # воркеров, и он не должен попасть под раздачу.
                 self.app.run_worker(attack.stop(), exit_on_error=False)  # type: ignore[attr-defined]
-            except Exception as exc:
-                logger.debug("on_unmount: attack.stop: %s", exc)
+            except Exception:
+                # Атака не погашена — после ухода с экрана интерфейса, который
+                # её остановит, уже не будет.
+                logger.exception("on_unmount: attack.stop failed for %s", tab_id)
         self._live_attacks.clear()
         try:
             self.workers.cancel_node(self)
-        except Exception as exc:
-            logger.debug("on_unmount: cancel_node: %s", exc)
+        except Exception:
+            # Хвосты загрузок переживут экран и могут дописать в закрытую БД.
+            logger.exception("on_unmount: cancel_node failed")
 
     def on_mount(self) -> None:
         # Create the first tab via TabbedContentPanel
@@ -1408,7 +1420,11 @@ class IntruderScreen(
             our_editor = self._template_editor()
             if event.widget is not our_editor.content_widget:
                 return
-        except Exception:
+        except (LookupError, NoMatches):
+            # Таба ещё нет (`LookupError` из `_template_editor`) или тело таба
+            # не смонтировано (`NoMatches` из `content_widget`): событие пришло
+            # от TextArea вне шаблона, и запоминать нечего. Широкий `except`
+            # здесь глотал бы и опечатку в имени поля события.
             return
         sel = event.selection
         if sel.start != sel.end:
@@ -1426,7 +1442,11 @@ class IntruderScreen(
             our_editor = self._template_editor()
             if event.widget is not our_editor.content_widget:
                 return
-        except Exception:
+        except (LookupError, NoMatches):
+            # Правка пришла из чужого редактора (шаблона нет или тело таба не
+            # смонтировано) — наборы payload не пересчитываем. Молчание здесь
+            # не последствие, а норма: печатание в редакторе ответа не должно
+            # трогать payload-селект Intruder.
             return
         self._update_payload_select()
         if self._state_loaded:
@@ -1476,8 +1496,14 @@ class IntruderScreen(
                     table.add_column("Extract")
                 elif table:
                     table.remove_column("Extract")
-            except Exception as exc:
-                logger.debug("op: %s", exc)
+            except NoMatches as exc:
+                # Таблицы результатов нет в дереве (таб не смонтирован) —
+                # колонку добавят при его сборке.
+                logger.debug("intruder: Extract column not toggled: %s", exc)
+            except Exception:
+                # Колонка осталась прежней: фильтр с извлечением применён, а
+                # данные из ответов на экране не показать.
+                logger.exception("intruder: Extract column toggle failed")
         if not self._ssw.running:
             api = self._get_api()
             if api:
@@ -2233,7 +2259,11 @@ class IntruderScreen(
             w = editor.content_widget
             template = w.text if isinstance(w, TextArea) else ""
             logger.info("INTRUDER: template len=%d", len(template))
-        except Exception as e:
+        except (LookupError, NoMatches) as e:
+            # Таба нет или его тело не смонтировано. Раньше здесь стоял
+            # `except Exception`; он ловил и ту же пару, и опечатку в имени
+            # поля — но опечатка дала бы «не удалось получить шаблон» вместо
+            # настоящей причины, поэтому пара названа явно.
             logger.error("INTRUDER: cannot get template: %s", e)
             return
         if not template.strip():
@@ -2273,7 +2303,10 @@ class IntruderScreen(
                 threads = max(1, min(threads, 5))
             else:
                 threads = max(1, min(threads, 200))
-        except Exception:
+        except (NoMatches, ValueError) as exc:
+            # Поля нет в дереве или в нём не число — атака пойдёт на 5/10
+            # потоках, тогда как на экране останется то, что ввели.
+            logger.debug("intruder: thread count not usable, falling back: %s", exc)
             threads = 5 if not is_pro else 10
 
         try:
@@ -2282,7 +2315,10 @@ class IntruderScreen(
                 delay_ms = max(100, delay_ms)
             else:
                 delay_ms = max(0, delay_ms)
-        except Exception:
+        except (NoMatches, ValueError) as exc:
+            # То же для задержки: атака пойдёт с другим темпом, чем показывает
+            # поле задержки, и по экрану этого не понять.
+            logger.debug("intruder: delay not usable, falling back: %s", exc)
             delay_ms = 100 if not is_pro else 0
 
         turb_cb = self.query_one("#intruder-turbo", Checkbox)
@@ -2352,8 +2388,9 @@ class IntruderScreen(
         """
         try:
             self.workers.cancel_group(self, self._attack_group(tab.tab_id))
-        except Exception as exc:
-            logger.debug("_stop_tab_attack: cancel_group: %s", exc)
+        except Exception:
+            # Воркер атаки остался: закрытый таб продолжит слать запросы.
+            logger.exception("_stop_tab_attack: cancel_group failed for %s", tab.tab_id)
         attack = getattr(tab, "attack", None)
         self._live_attacks.pop(tab.tab_id, None)
         tab.running = False
@@ -2364,8 +2401,10 @@ class IntruderScreen(
             # успел выполниться — атака осталась бы жива.
             try:
                 self.app.run_worker(attack.stop(), exit_on_error=False)  # type: ignore[attr-defined]
-            except Exception as exc:
-                logger.debug("_stop_tab_attack: attack.stop: %s", exc)
+            except Exception:
+                # `tab.running` уже False, а атака продолжает идти: экран
+                # считает её закрытой, Stop нажимать больше не на что.
+                logger.exception("_stop_tab_attack: attack.stop failed for %s", tab.tab_id)
 
     async def _run_attack(self, tab: _IntruderTabState, attack: "IntruderAttack") -> None:
         """Запустить изолированную атаку вкладки.
@@ -2774,8 +2813,11 @@ class IntruderScreen(
             panel = self.query_one(f"#{self._wid(tab.tab_id, _TabId.INTRUDER_DETAIL_PANEL)}")
             panel.display = False
             tab.current_result = None
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except NoMatches as exc:
+            # Панели деталей нет в дереве (таб не смонтирован). `current_result`
+            # сбрасывается в том же `try`, поэтому вместе с панелью остаётся и
+            # выделенный результат — отсюда запись, а не молчание.
+            logger.debug("intruder: detail panel not hidden: %s", exc)
 
     # ── Context menu ───────────────────────────────────────────────────
 
@@ -2849,8 +2891,14 @@ class IntruderScreen(
                 import webbrowser
 
                 webbrowser.open(result.url)
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except NoMatches as exc:
+            # Таблицы результатов нет в дереве — открывать нечего. Горячая
+            # клавиша промолчит, но это «экран не собран», а не поломка.
+            logger.debug("intruder: open in browser — no results table: %s", exc)
+        except Exception:
+            # Браузер не открылся: со стороны выглядит как «клавиша не
+            # работает», и повторить её пользователь может бесконечно.
+            logger.exception("intruder: open in browser failed")
 
     def _copy_selected_payload(self) -> None:
         try:

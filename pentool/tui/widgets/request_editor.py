@@ -305,10 +305,10 @@ class _BaseHttpWidget(Widget):
                 try:
                     area = self.query_one(f"#{self._textarea_id}", TextArea)
                     self.call_after_refresh(_select_word_at_cursor, area)
-                except Exception as exc:
-                    # Двойной клик не выделил слово. Ничего не ломает, но и
-                    # не работает — а причина без записи не восстанавливается.
-                    logger.debug("editor: double-click word select not scheduled: %s", exc)
+                except NoMatches as exc:
+                    # Текстовой области нет в дереве (редактор ещё собирается)
+                    # — двойной клик не выделит слово.
+                    logger.debug("editor: no TextArea for word select: %s", exc)
                 return
             self._last_click_time = now
             if event.ctrl:

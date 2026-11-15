@@ -229,14 +229,19 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         """
         try:
             cancelled = self.workers.cancel_group(self, self.CRAWL_GROUP)
-        except Exception as exc:
-            logger.debug("on_unmount: cancel_group: %s", exc)
+        except Exception:
+            # Отмена обхода при уходе с экрана не удалась — воркеры продолжают
+            # писать в БД проекта, который уже закрывают. Причину надо видеть
+            # целиком: от этого зависит, останутся ли висеть их задачи.
+            logger.exception("on_unmount: cancel_group failed")
             return
         if cancelled:
             try:
                 self.app.spider_crawl_finished()  # type: ignore[attr-defined]
-            except Exception as exc:
-                logger.debug("on_unmount: spider_crawl_finished: %s", exc)
+            except Exception:
+                # Счётчик активных обходов остался завышенным: индикатор
+                # прогресса показывает обход, которого уже нет.
+                logger.exception("on_unmount: spider_crawl_finished failed")
 
     def _sync_ai_ui(self) -> None:
         """Проверить ai_enabled и скрыть/показать AI-элементы."""
@@ -288,10 +293,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 for host in api.sitemap.get_hosts():
                     if api.sitemap.is_in_scope(host):
                         scope_hosts.add(host)
-        except Exception as exc:
+        except Exception:
             # Пустой набор означает «scope потерян при перезагрузке» — это
-            # ровно то, что сохранение выше и предотвращает.
-            logger.debug("target: scope hosts not collected before reload: %s", exc)
+            # ровно то, что сохранение выше и предотвращает. Поэтому здесь
+            # трейсбек, а не строка: без него в журнале будет только «пусто».
+            logger.exception("target: scope hosts not collected before reload")
         self._load_worker(scope_hosts)
 
     @work(group="target-load")
@@ -304,15 +310,18 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 for host in scope_hosts:
                     try:
                         api.set_in_scope(host, True)
-                    except Exception as exc:
+                    except Exception:
                         # Один хост не вернулся в scope после перезагрузки —
                         # дерево покажет его как «вне scope», и это выглядит
-                        # как случайная потеря настройки.
-                        logger.debug("target: scope not restored for %s: %s", host, exc)
+                        # как случайная потеря настройки. Трейсбек нужен:
+                        # причина может быть в БД, а не в самом хосте.
+                        logger.exception("target: scope not restored for %s", host)
             tree_data = api.get_tree()
             self._build_tree(tree_data)
-        except Exception as exc:
-            logger.warning("TargetScreen._load_worker: %s", exc)
+        except Exception:
+            # Дерево осталось от прошлого проекта или пустое: экран Target
+            # показывает не то, что лежит в открытой базе.
+            logger.exception("TargetScreen._load_worker failed")
 
     def _build_tree(self, tree_data: dict) -> None:
         tree = self.query_one("#site-tree", Tree)
@@ -415,10 +424,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                     tech_str = _format_tech_profile(cached)
                     if tech_str:
                         log.write(f"[dim cyan]Tech: {esc(tech_str)}[/dim cyan]")
-            except Exception as exc:
+            except Exception:
                 # Профиль технологий просто не появится в деталях. Ожидаемо
-                # при пустом кэше, но не отличимо от сбоя без записи.
-                logger.debug("target: tech cache not read for %s: %s", host, exc)
+                # при пустом кэше, но не отличимо от сбоя без записи, поэтому
+                # трейсбек: у `get_tech_cache` две ветки — «нет» и «сломалось».
+                logger.exception("target: tech cache not read for %s", host)
 
             log.write(f"Endpoints: {len(nodes)}")
             total = sum(n.request_count for n in nodes)
@@ -560,9 +570,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                     domain = urlparse(node_label).hostname or ""
                 elif "." in node_label:
                     domain = node_label.split(":")[0].strip()
-        except Exception as exc:
+        except NoMatches as exc:
             # Ниже есть запасной путь по _selected_host; без записи нельзя
-            # понять, что основной перестал работать.
+            # понять, что основной перестал работать. Ловится ровно «дерева
+            # нет в дереве виджетов» — то есть экран ещё не собран.
             logger.debug("target: domain from tree cursor not read: %s", exc)
         if not domain:
             domain = self._selected_host
@@ -659,10 +670,15 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 cfg = get_config()
                 cfg.scope = list(effective_hosts)
                 cfg.save()
-            except Exception as exc:
-                logger.warning("_sync_scope_rules: proxy sync: %s", exc)
-        except Exception as exc:
-            logger.warning("_sync_scope_rules: %s", exc)
+            except Exception:
+                # Scope применён в SiteMap, но Proxy об этом не узнал и
+                # config.yaml не обновился: после рестарта вернётся старый
+                # scope, а Proxy будет считать новые хосты out-of-scope.
+                logger.exception("_sync_scope_rules: proxy sync failed")
+        except Exception:
+            # Ни один хост из диалога не применился — диалог закрылся как
+            # успешный, а дерево осталось с прежним scope.
+            logger.exception("_sync_scope_rules failed")
 
     @work(group="target-scope", exclusive=True)
     async def _set_scope_worker(self, host: str, in_scope: bool) -> None:
@@ -682,8 +698,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             # Auto-detect tech stack for new in-scope hosts (fire-and-forget)
             if in_scope and not host.startswith("*"):
                 asyncio.ensure_future(self._auto_detect_tech(host))
-        except Exception as exc:
-            logger.warning("_set_scope_worker: %s", exc)
+        except Exception:
+            # Галка «in scope» нажата, а хост не переключился: пользователь
+            # видит, что клик не сработал, и второй попытки у него нет.
+            logger.exception("_set_scope_worker failed for %s", host)
 
     async def _auto_detect_tech(self, host: str) -> None:
         """Fire-and-forget tech detection when a host is added to scope."""
@@ -735,8 +753,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 # данные, которых больше нет.
                 logger.debug("target: details not cleared with site map: %s", exc)
             self.app.notify("Site map cleared", severity="information")
-        except Exception as exc:
-            logger.warning("_clear_worker: %s", exc)
+        except Exception:
+            # «Очистить» не сработало: карта осталась на экране, а уведомление
+            # об успехе не пришло — единственное, что скажет, что именно
+            # сломалось, это трейсбек.
+            logger.exception("_clear_worker failed")
 
     # ── Crawler (uses SpiderAPI / AsyncSpider) ───────────────────────────────
     #
@@ -805,10 +826,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         # own SpiderAPI and drives the counter directly).
         try:
             self.app.spider_crawl_started()  # type: ignore[attr-defined]
-        except Exception as exc:
+        except Exception:
             # Индикатор обхода не загорится, а обход пойдёт: пользователь
-            # увидит минутную тишину без признака работы.
-            logger.debug("target: spider indicator not started: %s", exc)
+            # увидит минутную тишину без признака работы. Трейсбек — потому
+            # что счётчик на экране теперь расходится с реальностью до конца.
+            logger.exception("target: spider indicator not started")
         # "🤖 Use AI" toolbar checkbox — when set, add AI-suggested endpoints
         # after each host's crawl.
         use_ai = False
@@ -836,14 +858,16 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 # count=False: this is a discovery event, not a real HTTP request.
                 # Re-crawling the same page must not inflate the node counter.
                 api.add_request(ParsedRequest(method="GET", url=url), count=False)
-            except Exception as exc:
-                logger.debug("lazy add %s: %s", url, exc)
+            except Exception:
+                # Найденный URL не попал в SiteMap: страница обойдена, а в
+                # дереве её нет — и это происходит на каждой странице.
+                logger.exception("lazy add failed for %s", url)
             try:
                 self.call_after_refresh(self._refresh_tree)
-            except Exception as exc:
+            except Exception:
                 # Ленивая подача работает только вместе с перерисовкой: без
                 # неё найденные URL копятся в модели, но не в дереве.
-                logger.debug("target: tree refresh not scheduled after page: %s", exc)
+                logger.exception("target: tree refresh not scheduled after page")
 
         # Создаём один SpiderAPI на весь краул, а не на каждый host
         # (предотвращает утечку процесс-пула).
@@ -853,8 +877,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 url = host if "://" in host else f"https://{host}"
                 try:
                     result = await spider.crawl(url, db_path=db_path, on_page=_on_page_async)
-                except Exception as exc:
-                    logger.warning("action_crawl_scope: crawl failed for %s: %s", host, exc)
+                except Exception:
+                    # Один хост упал, остальные обходятся дальше — но в итоге
+                    # «errors: N» без причины; трейсбек нужен, чтобы понять,
+                    # это сеть, таймаут или парсер.
+                    logger.exception("action_crawl_scope: crawl failed for %s", host)
                     total_errors += 1
                     continue
                 total_pages += len(result.pages)
@@ -870,16 +897,19 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         finally:
             try:
                 self.app.spider_crawl_finished()  # type: ignore[attr-defined]
-            except Exception as exc:
+            except Exception:
                 # Счётчик активных обходов не уменьшился — индикатор Spider
-                # останется горящим навсегда после этого обхода.
-                logger.debug("target: spider indicator not finished: %s", exc)
+                # останется горящим навсегда после этого обхода. Это
+                # единственный след утечки счётчика, поэтому трейсбек.
+                logger.exception("target: spider indicator not finished")
 
         self.call_after_refresh(self._refresh_tree)
         try:
             await api.save()
-        except Exception as exc:
-            logger.debug("action_crawl_scope: save failed: %s", exc)
+        except Exception:
+            # Найденное в этом обходе осталось только в памяти: следующий
+            # запуск приложения его не увидит.
+            logger.exception("action_crawl_scope: save failed")
 
         msg = (
             f"Crawl done: {total_pages} page(s), {total_endpoints} endpoint(s), "

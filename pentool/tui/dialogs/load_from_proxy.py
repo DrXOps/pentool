@@ -11,6 +11,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, DataTable, Label
+from textual.widgets.data_table import RowDoesNotExist
 
 from pentool.tui.dialogs.base_dialog import BaseDialog
 
@@ -102,7 +103,10 @@ class LoadFromProxyDialog(BaseDialog[str | None]):
             table = self.query_one("#req-table", DataTable)
             try:
                 table.get_row_at(table.cursor_row)
-            except Exception:
+            except RowDoesNotExist:
+                # Курсор стоит на пустой таблице — выбирать нечего, и Enter
+                # закрывает диалог как «отмена»; раньше это делал широкий
+                # `except`, который глотал и ошибки программиста.
                 self.dismiss(None)
                 return
             # row_key — row key, find the corresponding request

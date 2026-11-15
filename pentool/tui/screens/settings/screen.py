@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 
 from textual import on
-from textual.app import ComposeResult
+from textual.app import ComposeResult, InvalidThemeError
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.timer import Timer
@@ -434,10 +434,12 @@ class SettingsScreen(AppMixin, Widget):
         try:
             widget = event.control
             wid = widget.id if widget else None
-        except Exception as exc:
+        except Exception:
             # Без id не сработает ни одна ветка — то есть переключение темы и
-            # режима UI молча перестанет применяться.
-            logger.debug("settings: cycler event source unknown: %s", exc)
+            # режима UI молча перестанет применяться. `event.control` —
+            # свойство Textual, и падать там может только сам фреймворк, так
+            # что причина должна остаться целиком.
+            logger.exception("settings: cycler event source unknown")
             wid = None
 
         if wid == "set-theme":
@@ -446,7 +448,7 @@ class SettingsScreen(AppMixin, Widget):
         elif wid == "set-ui-mode":
             try:
                 self._apply_ui_mode(UIMode(event.value))
-            except Exception as exc:
+            except ValueError as exc:
                 # Значение из списка, которого нет в UIMode: режим останется
                 # прежним. Молча — это выглядит как «переключатель не работает».
                 logger.debug("settings: UI mode %r not applied: %s", event.value, exc)
@@ -493,7 +495,7 @@ class SettingsScreen(AppMixin, Widget):
         try:
             if getattr(self.app, "theme", None) != theme:
                 self.app.theme = theme  # type: ignore[attr-defined]
-        except Exception as exc:
+        except InvalidThemeError as exc:
             # Save уже записал тему в конфиг — то есть файл и экран разойдутся.
             logger.debug("settings: theme %r not applied on save: %s", theme, exc)
         # Persist in a thread worker so yaml.dump + file.write don't block the event loop.
@@ -523,17 +525,24 @@ class SettingsScreen(AppMixin, Widget):
         try:
             theme_val = self.query_one("#set-theme", OptionCycler).value
             self._apply_theme(theme_val)
-        except Exception as exc:
+        except NoMatches as exc:
             # Ниже всё равно покажем «applied» — поэтому запись единственное
-            # место, где видно, что применилось не всё.
+            # место, где видно, что применилось не всё. Поля темы нет в дереве.
             logger.debug("settings: theme not read on save: %s", exc)
+        except Exception:
+            # Поле есть, но тема не применилась: конфиг сохранён, экран — нет.
+            logger.exception("settings: theme not applied on save")
 
         # Apply UI mode (no config write needed — ModuleTabs handles it)
         try:
             mode_val = self.query_one("#set-ui-mode", OptionCycler).value
             self._apply_ui_mode(UIMode(mode_val))
-        except Exception as exc:
-            logger.debug("settings: UI mode not applied on save: %s", exc)
+        except NoMatches as exc:
+            logger.debug("settings: UI mode selector not found on save: %s", exc)
+        except ValueError as exc:
+            # В поле режима значение вне UIMode — вкладки останутся прежними,
+            # хотя «applied» уже показано.
+            logger.debug("settings: UI mode %r not applied on save: %s", mode_val, exc)
 
         self.app.notify("Interface settings applied", timeout=2)  # type: ignore[attr-defined]
 
@@ -544,9 +553,10 @@ class SettingsScreen(AppMixin, Widget):
 
             tabs_widget = self.app.query_one(ModuleTabs)  # type: ignore[attr-defined]
             tabs_widget.set_mode(mode.value)
-        except Exception as exc:
+        except NoMatches as exc:
             # Набор вкладок останется прежним: пользователь выбрал Advanced, а
-            # вкладки не появились — «переключатель не работает».
+            # вкладки не появились — «переключатель не работает». Вкладок нет
+            # в дереве (приложение ещё собирается или уже разбирается).
             logger.debug("settings: module tabs mode %r not applied: %s", mode.value, exc)
 
     async def _async_save_config(self, changes: dict, notify_msg: str) -> None:

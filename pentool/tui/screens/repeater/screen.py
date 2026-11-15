@@ -407,10 +407,12 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         # handles silently. Mirrors IntruderScreen.reload_from_project.
         try:
             self.workers.cancel_node(self)
-        except Exception as exc:
+        except Exception:
             # Воркер, переживший switch_db, обратится к закрытому соединению и
             # уронит TUI — это и есть причина, по которой отмена стоит первой.
-            logger.debug("repeater: in-flight workers not cancelled: %s", exc)
+            # Падение произойдёт уже в другом месте, поэтому трейсбек нужен
+            # здесь, где видна настоящая причина.
+            logger.exception("repeater: in-flight workers not cancelled")
         generation = self._tabs_generation
         # Point the persistent RepeaterAPI at the new project's DB instead of
         # constructing a fresh one — switch_db() closes the old connection
@@ -547,9 +549,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         text of the tab's last successful Send."""
         try:
             panel = self._diff_panel
-        except Exception as exc:
+        except NoMatches as exc:
             # Панели нет — Ctrl+D ничего не сделает. Ожидаемо только если
-            # экран ещё не собран; иначе это опечатка в id.
+            # экран ещё не собран; `NoMatches` — ровно этот случай, а опечатка
+            # в id всплывёт как `NoMatches` с другим селектором в тексте.
             logger.debug("repeater: diff panel not found for toggle: %s", exc)
             return
         now_visible = panel.toggle()
@@ -583,8 +586,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 bar.hide()
             else:
                 bar.show()
-        except Exception as exc:
-            # Ctrl+F не показал панель поиска — клавиша выглядит мёртвой.
+        except NoMatches as exc:
+            # Ctrl+F не показал панель поиска — клавиша выглядит мёртвой;
+            # панели нет в дереве, то есть экран ещё не собран.
             logger.debug("repeater: search bar not toggled: %s", exc)
 
     def on_search_bar_search(self, event: SearchBar.Search) -> None:
@@ -598,9 +602,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             bar = self._search_bar
             self._search_target = bar._search_target
-        except Exception as exc:
+        except NoMatches as exc:
             # Цель поиска останется прежней: пользователь переключил
-            # Req/Resp, а искать будет в другом поле. Молча — сбивает.
+            # Req/Resp, а искать будет в другом поле. Молча — сбивает. Панели
+            # поиска нет в дереве — единственная причина `NoMatches` здесь.
             logger.debug("repeater: search target not synced: %s", exc)
 
     def on_search_bar_closed(self, event: SearchBar.Closed) -> None:
@@ -757,10 +762,17 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             editor = self._editor(tab_id)
             raw = editor.get_text()
-        except Exception as exc:
-            # Send нажат, а запрос не прочитан — то есть ничего не отправится
-            # и ничего не скажет почему. Худший исход для кнопки Send.
-            logger.debug("repeater: request text not read for send: %s", exc)
+        except NoMatches as exc:
+            # Send нажат, а редактора нет в дереве (вкладка не смонтирована) —
+            # запрос не прочитан, и отправлять нечего.
+            logger.debug("repeater: editor not found for send: %s", exc)
+            self._notify("Could not read the request — see the log", severity="error")
+            return
+        except Exception:
+            # Тот же исход, но причина другая: текст не прочитался из уже
+            # найденного редактора. Пользователю всё равно «не прочиталось»,
+            # а нам нужен трейсбек — это дефект, а не несмонтированная панель.
+            logger.exception("repeater: request text not read for send")
             self._notify("Could not read the request — see the log", severity="error")
             return
         if not raw.strip():
@@ -769,9 +781,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self._set_status("Sending...")
         try:
             self._cancel_btn.disabled = False
-        except Exception as exc:
-            # Кнопка Cancel остаётся серой, пока запрос в полёте: отменить
-            # долгий запрос будет нечем.
+        except NoMatches as exc:
+            # Кнопки Cancel нет в дереве — отменять долгий запрос будет нечем.
             logger.debug("repeater: cancel button not enabled: %s", exc)
         self.run_worker(self._do_send(tab_id, raw), exclusive=False, name="repeater-send")
 
@@ -814,9 +825,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self._sending = False
         try:
             self._cancel_btn.disabled = True
-        except Exception as exc:
+        except NoMatches as exc:
             # Cancel остаётся активным после завершения — нажатие на него
-            # отменит уже завершённый запрос.
+            # отменит уже завершённый запрос. Кнопки нет в дереве.
             logger.debug("repeater: cancel button not disabled after send: %s", exc)
         self.app.notify(f"HTTP {resp.status} — {elapsed_ms}ms", timeout=2)
         await service.close()
@@ -832,9 +843,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 try:
                     self._send_btn.disabled = False
                     self._cancel_btn.disabled = True
-                except Exception as exc:
+                except NoMatches as exc:
                     # Воркер закончился (успешно или нет), а кнопки остались в
-                    # положении «идёт отправка» — экран залипает.
+                    # положении «идёт отправка» — экран залипает. Причина —
+                    # кнопок нет в дереве, то есть экран уже разбирают.
                     logger.debug("repeater: send/cancel buttons not reset: %s", exc)
 
     def action_clear(self) -> None:
@@ -844,9 +856,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             self._editor(tab_id).clear()
             self._viewer(tab_id).clear()
-        except Exception as exc:
+        except NoMatches as exc:
             # Статус ниже скажет «Cleared», а на экране останется прежний
-            # запрос — прямое противоречие между словом и делом.
+            # запрос — прямое противоречие между словом и делом. Панелей нет
+            # в дереве, то есть вкладка не смонтирована.
             logger.debug("repeater: tab %s not cleared: %s", tab_id, exc)
         self._set_status("Cleared")
 
@@ -1026,8 +1039,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             idx = ids.index(current) if current in ids else 0
             next_idx = (idx + 1) % len(ids)
             tabs.active = ids[next_idx]
-        except Exception as exc:
-            # Ctrl+Tab не переключил вкладку — клавиша выглядит мёртвой.
+        except NoMatches as exc:
+            # Ctrl+Tab не переключил вкладку — клавиша выглядит мёртвой;
+            # панели вкладок нет в дереве.
             logger.debug("repeater: next tab not activated: %s", exc)
 
     def action_send_to_scanner(self) -> None:

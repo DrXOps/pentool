@@ -186,10 +186,14 @@ self.workers.cancel_group(self, self.SAVE_WORKER_GROUP)
 молчаливом хендлере в любом файле. Причина, по которой запрет такой строгий:
 именно эти `pass` скрывали F-001…F-005 и F-041…F-045.
 
-Остаток — 514 широких `except Exception` в `pentool/tui/`, 105 из них без
+Остаток — 463 широких `except Exception` в `pentool/tui/`, 51 из них без
 записи в журнал (тело — запасной путь, а не `pass`). Их правят по правилу
-пункта 1 ADR-6 и закроют блокирующим `BLE001` (700 срабатываний по
-`pentool/`) — отдельная итерация.
+пункта 1 ADR-6 и закроют блокирующим `BLE001` (586 срабатываний по
+`pentool/`) — отдельная итерация. В самих хендлерах
+(`on_*`/`action_*`/`watch_*`/воркер) правило уже механическое:
+`tests/unit/tui/test_handler_exceptions_logged.py` требует трейсбека
+(`logger.exception`, `exc_info=True`, `err(exc, ...)` или `raise`) и валит
+`logger.debug("...: %s", exc)`.
 
 Точечный `except NoMatches` тоже стал механическим: каждый `try`, чьё тело
 состоит только из `query_one`/`query`, обязан ловить `NoMatches`, и это

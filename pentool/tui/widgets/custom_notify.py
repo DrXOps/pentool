@@ -92,11 +92,13 @@ class CustomNotifyCard(Widget):
             )
             # Force the final state in case the animations above never run.
             self.set_timer(0.4, self._force_visible)
-        except Exception as exc:
+        except Exception:
             # Animation is cosmetic — never break the notification itself.
             # Но если анимация не запустилась, карточка осталась бы невидимой;
             # _force_visible ниже это чинит, а запись объясняет, почему.
-            logger.debug("notify: card animation not started: %s", exc)
+            # Ловится всё: анимация — это три вызова Rich/Textual подряд, и
+            # любой из них вправе не сработать.
+            logger.exception("notify: card animation not started")
             self._force_visible()
 
     def _force_visible(self) -> None:
@@ -104,18 +106,18 @@ class CustomNotifyCard(Widget):
         try:
             self.styles.opacity = 1.0
             self.styles.offset_y = 0.0
-        except Exception as exc:
+        except Exception:
             # Карточка уведомления останется с нулевой прозрачностью — то есть
             # показана и не видна одновременно.
-            logger.debug("notify: card not forced visible: %s", exc)
+            logger.exception("notify: card not forced visible")
 
     def on_click(self, event) -> None:
         try:
             widget = event.widget if hasattr(event, "widget") else None
-        except Exception as exc:
+        except Exception:
             # Считаем, что клик пришёлся не по крестику — карточка закроется
             # целиком. Без записи не понять, почему крестик иногда не работает.
-            logger.debug("notify: click target unknown: %s", exc)
+            logger.exception("notify: click target unknown")
             widget = None
         if widget is not None and getattr(widget, "id", None) == "toast-close":
             self.remove()

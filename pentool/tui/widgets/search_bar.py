@@ -113,7 +113,10 @@ class SearchBar(Widget):
                 self.toggle_target()
                 self.post_message(self.TargetToggle())
         except Exception:
-            logger.debug("search bar: toggle/click handler failed", exc_info=True)
+            # Тогл Regex/цели поиска не переключился — клик по нему выглядит
+            # потерянным. Трейсбек: `event.widget` — свойство Textual, и по
+            # строке не видно, какая из двух веток упала.
+            logger.exception("search bar: toggle/click handler failed")
 
     def on_key(self, event) -> None:
         if event.key == "escape":
