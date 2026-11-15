@@ -243,6 +243,10 @@ class IntruderScreen(
         # Auto-save state
         self._state_loaded: bool = False
         self._running_save_tasks: list[str] = []
+        # tab_id -> живая атака. Нужен ровно затем, чтобы on_unmount мог
+        # погасить атаки: к этому моменту DOM-дерева уже нет, и состояние
+        # табов из панели не достать.
+        self._live_attacks: dict[str, object] = {}
 
     # ── Active tab state ─────────────────────────────────────────────────
 
@@ -744,7 +748,17 @@ class IntruderScreen(
 
     @on(TabbedContentPanel.TabClosed, "#intruder-tabs")
     def _on_tab_closed(self, event: TabbedContentPanel.TabClosed) -> None:
-        """Таб закрыт — загрузить оставшийся."""
+        """Таб закрыт — погасить его атаку и загрузить оставшийся.
+
+        Панель постит закрытое состояние в сообщении: из ``_states`` таб уже
+        удалён, и без него нельзя понять, чью атаку глушить.
+        """
+        closed = event.tab_state
+        if isinstance(closed, _IntruderTabState) and (closed.running or closed.attack is not None):
+            self._stop_tab_attack(closed)
+            if self._active_tab is None:
+                self._ssw.set_running(False)
+                self._ssw.set_paused(False)
         state = self._active_tab
         if state:
             self._rebuild_table_data()
@@ -987,6 +1001,31 @@ class IntruderScreen(
         self._auto_save_tab(state)
 
     # ── Mount, show ──────────────────────────────────────────────────────
+
+    def on_unmount(self) -> None:
+        """Экран уходит — ни одна атака не должна пережить его.
+
+        ``cancel_node`` снимает и хвосты загрузок; атаки гасим поимённо, чтобы
+        сначала встал воркер, а потом уже сама атака (см. ``_stop_tab_attack``).
+        """
+        # DOM к этому моменту уже снят (Textual размонтирует поддерево до
+        # on_unmount узла), поэтому атаки берём из своего словаря.
+        for tab_id, attack in list(self._live_attacks.items()):
+            try:
+                self.workers.cancel_group(self, self._attack_group(tab_id))
+            except Exception as exc:
+                logger.debug("on_unmount: cancel_group: %s", exc)
+            try:
+                # Воркер остановки живёт на App: у экрана вот-вот снимут всех
+                # воркеров, и он не должен попасть под раздачу.
+                self.app.run_worker(attack.stop(), exit_on_error=False)  # type: ignore[attr-defined]
+            except Exception as exc:
+                logger.debug("on_unmount: attack.stop: %s", exc)
+        self._live_attacks.clear()
+        try:
+            self.workers.cancel_node(self)
+        except Exception as exc:
+            logger.debug("on_unmount: cancel_node: %s", exc)
 
     def on_mount(self) -> None:
         # Create the first tab via TabbedContentPanel
@@ -2270,7 +2309,42 @@ class IntruderScreen(
             severity="success",
             title="Intruder",
         )
-        self.run_worker(self._run_attack(tab, attack), exclusive=False, name=f"intruder-attack-{tab.tab_id}")
+        group = self._attack_group(tab.tab_id)
+        self._live_attacks[tab.tab_id] = attack
+        self.run_worker(self._run_attack(tab, attack), exclusive=False, name=group, group=group)
+
+    @staticmethod
+    def _attack_group(tab_id: str) -> str:
+        """Группа воркера атаки таба — по ней её снимает закрытие вкладки.
+
+        Name и group намеренно совпадают: ``on_worker_state_changed``
+        разбирает имя, а ``cancel_group`` ищет группу, и вторая строка с
+        теми же буквами разъехалась бы при первом же переименовании.
+        """
+        return f"intruder-attack-{tab_id}"
+
+    def _stop_tab_attack(self, tab: _IntruderTabState) -> None:
+        """Остановить атаку таба: снять воркер и попросить саму атаку встать.
+
+        Воркер снимается первым: ``attack.stop()`` на длинном сетевом цикле
+        возвращается не сразу, а закрытая вкладка не должна ждать.
+        """
+        try:
+            self.workers.cancel_group(self, self._attack_group(tab.tab_id))
+        except Exception as exc:
+            logger.debug("_stop_tab_attack: cancel_group: %s", exc)
+        attack = getattr(tab, "attack", None)
+        self._live_attacks.pop(tab.tab_id, None)
+        tab.running = False
+        tab.paused = False
+        if attack is not None:
+            # На App, а не на экране: экран может уходить (on_unmount), и тогда
+            # собственный cancel_node снял бы воркер остановки раньше, чем он
+            # успел выполниться — атака осталась бы жива.
+            try:
+                self.app.run_worker(attack.stop(), exit_on_error=False)  # type: ignore[attr-defined]
+            except Exception as exc:
+                logger.debug("_stop_tab_attack: attack.stop: %s", exc)
 
     async def _run_attack(self, tab: _IntruderTabState, attack: "IntruderAttack") -> None:
         """Запустить изолированную атаку вкладки.
@@ -2298,6 +2372,7 @@ class IntruderScreen(
             err(exc, "Intruder attack error", self, severity="error")
         finally:
             _tab.running = False
+            self._live_attacks.pop(_tab.tab_id, None)
             _tab.paused = False
             _tab.attack = None
             logger.info(
@@ -2384,11 +2459,8 @@ class IntruderScreen(
 
     def action_stop(self) -> None:
         tab = self._active_tab
-        if tab is not None and tab.attack is not None:
-            self.run_worker(tab.attack.stop(), exit_on_error=False)
         if tab is not None:
-            tab.running = False
-            tab.paused = False
+            self._stop_tab_attack(tab)
         self._ssw.set_running(False)
         self.app.notify("Attack stopped", severity="warning")
 
