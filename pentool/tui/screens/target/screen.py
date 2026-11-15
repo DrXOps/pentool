@@ -138,6 +138,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
 
     BINDINGS = TARGET_BINDINGS
 
+    #: Группа воркера обхода сайта (ADR-11). Имя нужно в двух местах — в
+    #: декораторе и в on_unmount, — поэтому оно константа, а не литерал.
+    CRAWL_GROUP = "target-crawl"
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._target_api = None
@@ -208,6 +212,29 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         """При показе — синхронизировать AI UI."""
         self._sync_ai_ui()
 
+    def on_unmount(self) -> None:
+        """Уход с экрана снимает обход сайта.
+
+        Обход идёт минутами и держит сеть и процесс-пул: за пределами экрана
+        его результат некому показать, а ActivityIndicator продолжал бы
+        гореть. Остальные воркеры экрана короткие — их снимет сам Textual
+        вместе с узлом.
+
+        Счётчик активных обходов уменьшаем здесь же: воркер, снятый отменой,
+        до своего ``finally`` может не дойти, и счётчик остался бы завышенным
+        навсегда.
+        """
+        try:
+            cancelled = self.workers.cancel_group(self, self.CRAWL_GROUP)
+        except Exception as exc:
+            logger.debug("on_unmount: cancel_group: %s", exc)
+            return
+        if cancelled:
+            try:
+                self.app.spider_crawl_finished()  # type: ignore[attr-defined]
+            except Exception as exc:
+                logger.debug("on_unmount: spider_crawl_finished: %s", exc)
+
     def _sync_ai_ui(self) -> None:
         """Проверить ai_enabled и скрыть/показать AI-элементы."""
         try:
@@ -258,7 +285,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             pass
         self._load_worker(scope_hosts)
 
-    @work
+    @work(group="target-load")
     async def _load_worker(self, scope_hosts: set[str] | None = None) -> None:
         try:
             api = self._get_api()
@@ -582,7 +609,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             _on_result,
         )
 
-    @work
+    @work(group="target-scope", exclusive=True)
     async def _sync_scope_rules(self, hosts: list[str]) -> None:
         """Sync ScopeDialog hosts into SiteMap scope (exact + wildcard)."""
         try:
@@ -617,7 +644,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         except Exception as exc:
             logger.warning("_sync_scope_rules: %s", exc)
 
-    @work
+    @work(group="target-scope", exclusive=True)
     async def _set_scope_worker(self, host: str, in_scope: bool) -> None:
         try:
             api = self._get_api()
@@ -673,7 +700,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
     def action_clear(self) -> None:
         self._clear_worker()
 
-    @work
+    @work(group="target-scope", exclusive=True)
     async def _clear_worker(self) -> None:
         try:
             api = self._get_api()
@@ -743,7 +770,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
 
         self.app.push_screen(RecrawlDialog(host), on_dialog)
 
-    @work
+    @work(group=CRAWL_GROUP, exclusive=True)
     async def _crawl_hosts_worker(self, hosts: list[str]) -> None:
         from pentool.api.spider_api import SpiderAPI, SpiderConfig
 
@@ -953,7 +980,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             _on_path,
         )
 
-    @work
+    @work(group="target-export", exclusive=True)
     async def _export_worker(self, path: str) -> None:
         try:
             api = self._get_api()

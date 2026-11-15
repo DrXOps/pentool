@@ -628,7 +628,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             pass
         self._update_ai_status()
 
-    @work
+    @work(group="dashboard-stats", exclusive=True)
     async def _load_stats_bg(self) -> None:
         try:
             db_path = self._get_db_path()
