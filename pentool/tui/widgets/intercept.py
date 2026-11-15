@@ -20,9 +20,12 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from pentool.api.proxy_api import InterceptedRequest
+from pentool.core.logging import get_logger
 from pentool.tui.markup import esc
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+logger = get_logger(__name__)
 
 
 class _InterceptHost(Protocol):
@@ -36,7 +39,11 @@ class _InterceptHost(Protocol):
         ...
 
     def query_one(
-        self, selector: str | type, expect_type: type | tuple[type, ...] | None = None, /, **kwargs: Any
+        self,
+        selector: str | type,
+        expect_type: type | tuple[type, ...] | None = None,
+        /,
+        **kwargs: Any,
     ) -> Any:
         ...
 
@@ -77,26 +84,36 @@ class InterceptMixin:
         try:
             editor = self.query_one("#intercept-panel", ContentPanel).content_widget
             modified = editor.text
-        except Exception:
+        except Exception as exc:
+            # `modified = None` ниже означает «отправить запрос без правок».
+            # Если редактор был, но не прочитался, правки пользователя тихо
+            # теряются и уходит исходный запрос.
+            logger.debug("intercept: edited request not read, sending original: %s", exc)
             modified = None
         if modified is not None and self._intercept_show_special_chars:
             try:
                 from pentool.tui.widgets.request_editor import decode_special_chars
 
                 modified = decode_special_chars(modified)
-            except Exception:
-                pass
+            except Exception as exc:
+                # В запрос уйдут литеральные «\r\n» вместо CRLF — сервер
+                # ответит 400, и связь с отображением спецсимволов не видна.
+                logger.debug("intercept: special chars not decoded before forward: %s", exc)
         # Display the sent request in the bottom-left panel
         sent_text = modified if modified and modified.strip() else ""
         try:
             self.query_one("#intercept-sent-req", HttpView).load_raw_http(sent_text)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Нижняя панель покажет предыдущий запрос под только что
+            # отправленным — прямое расхождение с тем, что ушло на сервер.
+            logger.debug("intercept: sent request not shown: %s", exc)
         # Clear the response panel — waiting for the server response
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Ответ от прошлого перехвата останется на экране и будет прочитан
+            # как ответ на этот запрос.
+            logger.debug("intercept: response panel not cleared before forward: %s", exc)
         proxy.forward(req.id, modified if modified and modified.strip() else None)
         self._intercept_req = None
         # If there are queued requests — show the next one immediately
@@ -126,16 +143,18 @@ class InterceptMixin:
             self.query_one("#intercept-panel", ContentPanel).content_widget.load_text(
                 "(No requests waiting for intercept)"
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            # Кнопки уже показывают «Dropped», а в редакторе остался
+            # отброшенный запрос: пользователь может нажать Forward по нему.
+            logger.debug("intercept: editor not reset after drop: %s", exc)
         try:
             self.query_one("#intercept-sent-req", HttpView).clear()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("intercept: sent panel not cleared after drop: %s", exc)
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("intercept: response panel not cleared after drop: %s", exc)
 
     def _toggle_intercept_special_chars(self: _InterceptHost, btn: ToolbarButton) -> None:
         """Toggle display of literal \\r\\n / \\n special chars in the Intercept editor."""
@@ -143,7 +162,10 @@ class InterceptMixin:
             from pentool.tui.widgets.request_editor import decode_special_chars, visualize_special_chars
 
             editor = self.query_one("#intercept-panel", ContentPanel).content_widget
-        except Exception:
+        except Exception as exc:
+            # Кнопка «Special» переключает флаг, но если редактор не найден —
+            # переключать нечего, и кнопка выглядит сломанной.
+            logger.debug("intercept: panel not found for special-chars toggle: %s", exc)
             return
         # Commit the current text before switching mode representation
         current = editor.text
@@ -177,8 +199,10 @@ class InterceptMixin:
             editor._highlights = defaultdict(list, _build_http_highlights(normalized))
             editor._line_cache.clear()
             editor.refresh()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Подсветка — украшение, но её отсутствие при живом остальном
+            # редакторе выглядит как «перестало работать».
+            logger.debug("intercept: header highlighting not applied: %s", exc)
 
     def _disable_intercept_buttons(self: _InterceptHost, hint: str = "") -> None:
         """Disable Forward/Drop and update the hint."""
@@ -187,13 +211,16 @@ class InterceptMixin:
         try:
             self.query_one("#btn-forward", ToolbarButton).disabled = True
             self.query_one("#btn-drop", ToolbarButton).disabled = True
-        except Exception:
-            pass
+        except Exception as exc:
+            # Кнопки остаются активными, хотя перехватывать нечего: Forward
+            # нажмётся и ничего не сделает.
+            logger.debug("intercept: buttons not disabled: %s", exc)
         if hint:
             try:
                 self.query_one("#intercept-hint", Label).update(hint)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Подсказка — единственное объяснение, почему кнопки серые.
+                logger.debug("intercept: hint not updated: %s", exc)
 
     def show_intercepted_request(self: _InterceptHost, req: InterceptedRequest) -> None:
         """Called from app when a request is intercepted — displays it in the Intercept Tab.
@@ -211,8 +238,10 @@ class InterceptMixin:
                 self.query_one("#intercept-hint", Label).update(
                     f"⏸ {esc(req.method)} {esc(req.url)}  (+{len(self._intercept_pending)} queued)"
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                # Запрос встал в очередь, но счётчик очереди на экране не
+                # вырос — пользователь не знает, что ждёт ещё один.
+                logger.debug("intercept: queue hint not updated: %s", exc)
             return
         self._display_intercept_req(req)
 
@@ -227,7 +256,10 @@ class InterceptMixin:
             from pentool.utils.parser import build_http_request
 
             raw = build_http_request(req.to_parsed_request())
-        except Exception:
+        except Exception as exc:
+            # Показываем заглушку вместо запроса — но без записи не понять,
+            # что на самом деле пришло от прокси.
+            logger.debug("intercept: request could not be rendered: %s", exc)
             raw = f"{req.method} {req.url}\n\n(could not render request)"
         self._intercept_raw_full = raw
         try:
@@ -237,33 +269,40 @@ class InterceptMixin:
             else:
                 editor.load_text(raw)
                 self._apply_intercept_highlight(raw)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Запрос перехвачен и ждёт Forward, но в редакторе его нет —
+            # пользователь отправит пустое или прошлое содержимое.
+            logger.debug("intercept: request not shown in editor: %s", exc)
         # Clear only the response panel — leave Sent Request as-is
         # (it is updated only in action_forward/action_drop)
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Новый перехваченный запрос, а в панели ответа — ответ прошлого.
+            logger.debug("intercept: response panel not cleared for new request: %s", exc)
         try:
             self.query_one("#btn-forward", ToolbarButton).disabled = False
             self.query_one("#btn-drop", ToolbarButton).disabled = False
-        except Exception:
-            pass
+        except Exception as exc:
+            # Запрос ждёт решения, а кнопки Forward/Drop серые — прокси
+            # заблокирован, и разблокировать его из UI нечем.
+            logger.debug("intercept: buttons not enabled for new request: %s", exc)
         queued = len(self._intercept_pending)
         hint = f"⏸ Intercepted: {req.method} {req.url}"
         if queued:
             hint += f"  (+{queued} queued)"
         try:
             self.query_one("#intercept-hint", Label).update(hint)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("intercept: hint not set for new request: %s", exc)
         # Switch to the Intercept tab
         try:
             tabs = self.query_one("#proxy-subtabs", TabbedContent)
             tabs.active = "tab-intercept"
-        except Exception:
-            pass
+        except Exception as exc:
+            # Перехват идёт, а пользователь не видит вкладку с ним — запрос
+            # просто висит, и понять это из UI нельзя.
+            logger.debug("intercept: intercept tab not activated: %s", exc)
 
     def show_intercept_response(self: _InterceptHost, req: InterceptedRequest) -> None:
         from textual.widgets import Label
@@ -279,14 +318,17 @@ class InterceptMixin:
             body = resp.body or ""
             raw = f"{status_line}\r\n{headers}\r\n\r\n{body}"
             self.query_one("#intercept-resp-viewer", HttpView).load_raw_http(raw)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Ответ пришёл, а панель его не показала — со стороны Send
+            # выглядит неудавшимся.
+            logger.debug("intercept: response not shown: %s", exc)
         try:
             self.query_one("#intercept-hint", Label).update(
                 f"✓ Response: {req.response.status} — {esc(req.method)} {esc(req.url)}"
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            # Строка-подсказка останется на «Forwarded — waiting…» навсегда.
+            logger.debug("intercept: response hint not updated: %s", exc)
 
     def action_toggle_intercept(self: _InterceptHost) -> None:
         self.app.action_toggle_intercept()  # type: ignore[attr-defined]

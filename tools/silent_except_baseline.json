@@ -22,7 +22,6 @@
   "pentool/tui/widgets/diff_panel.py": 1,
   "pentool/tui/widgets/filter_bar_widget.py": 1,
   "pentool/tui/widgets/inspector_panel.py": 2,
-  "pentool/tui/widgets/intercept.py": 17,
   "pentool/tui/widgets/intruder_filter_bar.py": 2,
   "pentool/tui/widgets/module_tabs.py": 7,
   "pentool/tui/widgets/payload_drop_zone.py": 1,
