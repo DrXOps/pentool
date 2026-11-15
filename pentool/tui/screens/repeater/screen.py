@@ -583,8 +583,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 bar.hide()
             else:
                 bar.show()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Ctrl+F не показал панель поиска — клавиша выглядит мёртвой.
+            logger.debug("repeater: search bar not toggled: %s", exc)
 
     def on_search_bar_search(self, event: SearchBar.Search) -> None:
         """User submitted a search query via SearchBar."""
