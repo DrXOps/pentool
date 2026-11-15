@@ -9,7 +9,7 @@
   "pentool/tui/mixins/proxy_runtime.py": 1,
   "pentool/tui/mixins/request_context_menu.py": 2,
   "pentool/tui/mixins/safe_query.py": 1,
-  "pentool/tui/project_manager.py": 10,
+  "pentool/tui/project_manager.py": 1,
   "pentool/tui/screens/base.py": 1,
   "pentool/tui/screens/dashboard/live_dashboard.py": 5,
   "pentool/tui/screens/decoder/screen.py": 3,

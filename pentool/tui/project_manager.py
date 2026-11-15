@@ -15,13 +15,7 @@ from typing import TYPE_CHECKING
 from pentool.core.db_schema import init_db
 from pentool.core.error_guard import err as _err
 from pentool.core.logging import get_logger
-from pentool.tui.constants import (
-    SCREEN_DASHBOARD,
-    SCREEN_INTRUDER,
-    SCREEN_PROXY,
-    SCREEN_SCANNER,
-    SCREEN_TARGET,
-)
+from pentool.tui.constants import SCREEN_DASHBOARD, SCREEN_INTRUDER, SCREEN_PROXY, SCREEN_SCANNER, SCREEN_TARGET
 from pentool.tui.messages import ProxyLoadProject
 
 if TYPE_CHECKING:
@@ -77,6 +71,7 @@ class ProjectManager:
 
     def open_project(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
+
         current = self._app._project_path
         start_dir = os.path.dirname(current) if current else os.path.expanduser("~")
 
@@ -100,6 +95,7 @@ class ProjectManager:
 
     def save_project(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
+
         current = self._app._project_path or self._cfg.db_path
         start_dir = os.path.dirname(current) if current else os.path.expanduser("~")
 
@@ -109,6 +105,7 @@ class ProjectManager:
             if not path.endswith(".db"):
                 path = path + ".db"
             import shutil
+
             src = self._cfg.db_path
             try:
                 shutil.copy2(src, path)
@@ -117,10 +114,11 @@ class ProjectManager:
                 self._app.notify(f"Saved to {os.path.basename(path)}", timeout=3)
                 try:
                     from pentool.tui.screens.dashboard.screen import DashboardScreen
+
                     dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
                     dash.log_activity(
                         f'Project "{os.path.splitext(os.path.basename(path))[0]}" saved to {path}',
-                        "ok"
+                        "ok",
                     )
                     dash._populate_projects()
                 except Exception:
@@ -139,6 +137,7 @@ class ProjectManager:
 
     def save_project_json(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
+
         current = self._app._project_path or self._cfg.db_path
         start_dir = os.path.dirname(current) if current else os.path.expanduser("~")
 
@@ -160,6 +159,7 @@ class ProjectManager:
 
     def open_project_json(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
+
         current = self._app._project_path or self._cfg.db_path
         start_dir = os.path.dirname(current) if current else os.path.expanduser("~")
 
@@ -186,6 +186,7 @@ class ProjectManager:
     def _do_save_json(self, path: str) -> None:
         """Collect data from all APIs and save to JSON v2."""
         from pentool.core.project import save_project
+
         try:
             # Proxy (scope, match/replace) — without http_history (read from SQLite)
             proxy_export = self._proxy_api.export_project_data()
@@ -206,6 +207,7 @@ class ProjectManager:
             # Scanner findings
             try:
                 from pentool.tui.screens.scanner.screen import ScannerScreen
+
                 scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
                 scanner_export = scanner_screen.get_scanner_export()
             except Exception:
@@ -213,6 +215,7 @@ class ProjectManager:
             # Target sitemap
             try:
                 from pentool.tui.screens.target.screen import TargetScreen
+
                 target_screen = self._app.query_one(SCREEN_TARGET, TargetScreen)
                 target_api = target_screen._get_api()
                 target_export = target_api.export_project_data()
@@ -221,6 +224,7 @@ class ProjectManager:
             # Intruder results
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
+
                 intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
                 intruder_export = intruder_screen.get_intruder_export()
             except Exception:
@@ -230,10 +234,10 @@ class ProjectManager:
 
             data = {
                 **proxy_export,
-                "scanner":  scanner_export,
+                "scanner": scanner_export,
                 "intruder": intruder_export,
-                "spider":   spider_export,
-                "target":   target_export,
+                "spider": spider_export,
+                "target": target_export,
             }
             save_project(path, data)
             self.update_project_name(path)
@@ -244,6 +248,7 @@ class ProjectManager:
 
     def _do_load_json(self, path: str) -> None:
         from pentool.core.project import load_project
+
         data, err = load_project(path)
         if err:
             _err(Exception(err), "Load failed")
@@ -257,6 +262,7 @@ class ProjectManager:
             scanner_count = 0
             try:
                 from pentool.tui.screens.scanner.screen import ScannerScreen
+
                 scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
                 db_path = self._cfg.db_path
                 scanner_api = scanner_screen._get_or_create_api(db_path)
@@ -269,6 +275,7 @@ class ProjectManager:
             target_count = 0
             try:
                 from pentool.tui.screens.target.screen import TargetScreen
+
                 target_screen = self._app.query_one(SCREEN_TARGET, TargetScreen)
                 target_api = target_screen._get_api()
                 target_count = target_api.import_project_data(data.get("target", {}))
@@ -279,6 +286,7 @@ class ProjectManager:
             intruder_count = 0
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
+
                 intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
                 intruder_api = getattr(intruder_screen, "_api", None)
                 if intruder_api:
@@ -296,9 +304,7 @@ class ProjectManager:
                 f"target: {target_count}, intruder: {intruder_count}",
                 timeout=5,
             )
-            logger.info(
-                "APP: project loaded from JSON: %s, total items: %d", path, total
-            )
+            logger.info("APP: project loaded from JSON: %s, total items: %d", path, total)
         except Exception as exc:
             _err(exc, "Load failed")
 
@@ -349,8 +355,10 @@ class ProjectManager:
                 # the documented default (OFF) rather than carrying over
                 # whatever the previous project had in memory.
                 self._proxy.set_enforce_scope(False)
-            except Exception:
-                pass
+            except Exception as exc:
+                # У нового проекта остались история, scope и правила
+                # Match&Replace прошлого — то есть чужой проект виден в новом.
+                logger.debug("project: new-project proxy state not reset: %s", exc)
 
         # Single exclusive worker — no two switches can run in parallel.
         self._app.run_worker(
@@ -368,15 +376,15 @@ class ProjectManager:
 
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen
+
             dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dash._populate_projects()
             verb = "created" if is_new else "opened"
-            dash.log_activity(
-                f'Project "{os.path.splitext(os.path.basename(path))[0]}" {verb} from {path}',
-                "ok"
-            )
-        except Exception:
-            pass
+            dash.log_activity(f'Project "{os.path.splitext(os.path.basename(path))[0]}" {verb} from {path}', "ok")
+        except Exception as exc:
+            # Проект переключён, но в ленте дашборда об этом нет записи —
+            # а именно по ленте пользователь понимает, что произошло.
+            logger.debug("project: switch not logged to dashboard feed: %s", exc)
 
     # ── Internal async helpers ────────────────────────────────────────────────
 
@@ -404,6 +412,7 @@ class ProjectManager:
         if is_new:
             try:
                 from pentool.tui.screens.proxy.screen import ProxyScreen
+
                 screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
                 # Await directly — do NOT use action_clear_list() here because it
                 # spawns a run_worker that races with _reload_from_storage below.
@@ -414,8 +423,10 @@ class ProjectManager:
                 try:
                     screen.query_one("#req-editor").clear()
                     screen.query_one("#resp-viewer").clear()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Таблица очищена, а панели показывают запрос прошлого
+                    # проекта — данные нового проекта выглядят уже открытыми.
+                    logger.debug("_do_switch: detail panels not cleared: %s", exc)
                 screen._selected_req_id = None
             except Exception as exc:
                 logger.debug("_do_switch: clear for new project: %s", exc)
@@ -442,13 +453,13 @@ class ProjectManager:
             try:
                 from pentool.tui.constants import SCREEN_REPEATER
                 from pentool.tui.screens.repeater.screen import RepeaterScreen
+
                 repeater = self._app.query_one(SCREEN_REPEATER, RepeaterScreen)
                 if is_new:
                     await repeater.reset_for_new_project()
                 else:
                     await repeater.reload_from_project(path)
-                logger.info("_reload_project_screens: repeater %s",
-                            "reset" if is_new else "reloaded")
+                logger.info("_reload_project_screens: repeater %s", "reset" if is_new else "reloaded")
             except Exception as exc:
                 logger.debug("_reload_project_screens repeater: %s", exc)
 
@@ -471,7 +482,8 @@ class ProjectManager:
                 # raised ImportError when PRO wasn't installed, which surfaced
                 # as an ugly "No module named 'pentool.tui.screens.scanner'"
                 # DEBUG log and silently left the scanner screen stale.
-                from pentool.tui.screens import ScannerScreen, SCANNER_SCREEN_AVAILABLE
+                from pentool.tui.screens import SCANNER_SCREEN_AVAILABLE, ScannerScreen
+
                 if not SCANNER_SCREEN_AVAILABLE:
                     logger.debug("_reload_project_screens scanner: PRO not available — skip")
                     return
@@ -491,12 +503,15 @@ class ProjectManager:
         async def _reload_target(is_new: bool = False) -> None:
             try:
                 from pentool.tui.screens.target.screen import TargetScreen
+
                 target_screen = self._app.query_one(SCREEN_TARGET, TargetScreen)
                 if target_screen._target_api is not None:
                     try:
                         await target_screen._target_api.save()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        # Несохранённые изменения карты сайта прошлого проекта
+                        # теряются при переключении — молча.
+                        logger.debug("project: old site map not saved before switch: %s", exc)
                     # SiteMap now holds one persistent SQLite connection
                     # (BaseSqliteStorage) — close it before dropping the
                     # instance, otherwise a leaked connection to the old
@@ -504,8 +519,10 @@ class ProjectManager:
                     # FDs/locks across project switches.
                     try:
                         await target_screen._target_api.close()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        # Соединение остаётся открытым до выхода: дескрипторы и
+                        # блокировки копятся с каждым переключением проекта.
+                        logger.debug("project: old site map connection not closed: %s", exc)
                 target_screen._target_api = None
                 target_screen._get_api()
                 # For a brand-new project the DB is empty, but guard anyway:
@@ -516,8 +533,11 @@ class ProjectManager:
                     try:
                         target_screen._target_api.clear()
                         target_screen._target_api.sitemap._scope_hosts.clear()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        # Узлы прошлого проекта могут появиться в новом — это
+                        # ровно тот «артефакт, протекающий между проектами»,
+                        # ради которого блок и написан.
+                        logger.debug("project: new project's site map not cleared: %s", exc)
                 target_screen._load_sitemap()
                 logger.info("_reload_project_screens: target reloaded from %s", path)
             except Exception as exc:
@@ -526,6 +546,7 @@ class ProjectManager:
         async def _reload_dashboard() -> None:
             try:
                 from pentool.tui.screens.dashboard.screen import DashboardScreen
+
                 dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
                 dash.refresh_stats()
             except Exception as exc:
@@ -534,6 +555,7 @@ class ProjectManager:
         async def _reload_intruder() -> None:
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
+
                 intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
                 await intruder_screen.reload_from_project(path)
                 logger.info("_reload_project_screens: intruder reloaded from %s", path)
@@ -570,18 +592,21 @@ class ProjectManager:
         """Collect Spider session data from EventBus history."""
         from pentool.core.event_bus import get_event_bus
         from pentool.core.events import SpiderFinished
+
         sessions = []
         try:
             bus = get_event_bus()
             events = bus.get_history(event_type=SpiderFinished, limit=100)
             for ev in events:
-                sessions.append({
-                    "base_url":        getattr(ev, "base_url", ""),
-                    "pages_count":     getattr(ev, "pages_count", 0),
-                    "forms_count":     getattr(ev, "forms_count", 0),
-                    "endpoints_count": getattr(ev, "endpoints_count", 0),
-                    "timestamp":       getattr(ev, "timestamp", 0),
-                })
+                sessions.append(
+                    {
+                        "base_url": getattr(ev, "base_url", ""),
+                        "pages_count": getattr(ev, "pages_count", 0),
+                        "forms_count": getattr(ev, "forms_count", 0),
+                        "endpoints_count": getattr(ev, "endpoints_count", 0),
+                        "timestamp": getattr(ev, "timestamp", 0),
+                    }
+                )
         except Exception as exc:
             logger.debug("_collect_spider_sessions: %s", exc)
         return {"sessions": sessions}
@@ -594,19 +619,24 @@ class ProjectManager:
             name = name[:-3]
         try:
             from pentool.tui.widgets.statusbar import StatusBar
+
             bar = self._app.query_one(StatusBar)
             bar.set_project(name, path, saved)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Строка состояния будет показывать прежний проект — то есть
+            # называть файл, с которым приложение уже не работает.
+            logger.debug("project: status bar not updated with %r: %s", name, exc)
         try:
             self._app.sub_title = f"project: {name}"
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("project: window title not updated: %s", exc)
         if path and path != "new project":
             try:
                 self._cfg.add_recent_project(path)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Проект открыт, но в списке «недавних» на дашборде его не
+                # будет — следующий раз его придётся искать вручную.
+                logger.debug("project: %s not added to recent projects: %s", path, exc)
 
 
 # Lazy import to avoid circular reference at module load
