@@ -15,7 +15,6 @@
   "pentool/tui/screens/decoder/screen.py": 3,
   "pentool/tui/screens/intruder/screen.py": 8,
   "pentool/tui/screens/sequencer/screen.py": 4,
-  "pentool/tui/screens/target/screen.py": 18,
   "pentool/tui/widgets/activity_indicator.py": 3,
   "pentool/tui/widgets/content_panel.py": 1,
   "pentool/tui/widgets/context_menu.py": 3,

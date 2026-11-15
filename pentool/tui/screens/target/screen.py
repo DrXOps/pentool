@@ -204,8 +204,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         if getattr(self, "_ai_hidden_on_compose", False):
             try:
                 self.query_one("#ai-crawl-box").display = False
-            except Exception:
-                pass
+            except Exception as exc:
+                # Блок AI останется видимым при выключенном AI — именно то
+                # расхождение, ради которого этот код и написан.
+                logger.debug("target: AI crawl box not hidden on mount: %s", exc)
         self._init_ai_sync()
 
     def on_show(self) -> None:
@@ -242,8 +244,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
 
             ai_on = bool(get_config().ai_enabled)
             self.query_one("#ai-crawl-box").display = ai_on
-        except Exception:
-            pass
+        except Exception as exc:
+            # Единственное место, где AI-блок показывается/скрывается по
+            # глобальной настройке; его отказ — видимое расхождение.
+            logger.debug("target: AI UI not synced: %s", exc)
 
     def _get_api(self):
         if self._target_api is None:
@@ -262,8 +266,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         self._selected_node_data = None
         try:
             self.query_one("#detail-panel", ContentPanel).clear_content()
-        except Exception:
-            pass
+        except Exception as exc:
+            # В деталях остаются данные прошлого проекта — ровно тот
+            # «артефакт, протекающий между проектами», о котором комментарий.
+            logger.debug("target: detail panel not cleared on reload: %s", exc)
 
         # Save current scope hosts before reload
         scope_hosts: set[str] = set()
@@ -281,8 +287,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 for host in api.sitemap.get_hosts():
                     if api.sitemap.is_in_scope(host):
                         scope_hosts.add(host)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Пустой набор означает «scope потерян при перезагрузке» — это
+            # ровно то, что сохранение выше и предотвращает.
+            logger.debug("target: scope hosts not collected before reload: %s", exc)
         self._load_worker(scope_hosts)
 
     @work(group="target-load")
@@ -295,8 +303,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 for host in scope_hosts:
                     try:
                         api.set_in_scope(host, True)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        # Один хост не вернулся в scope после перезагрузки —
+                        # дерево покажет его как «вне scope», и это выглядит
+                        # как случайная потеря настройки.
+                        logger.debug("target: scope not restored for %s: %s", host, exc)
             tree_data = api.get_tree()
             self._build_tree(tree_data)
         except Exception as exc:
@@ -332,8 +343,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                                 f"[dim cyan]{esc(tech_str)}[/dim cyan]",
                                 data={"type": "tech", "host": host},
                             )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Строка технологий пропадёт из дерева у одного хоста —
+                    # дерево останется рабочим, но профиль будет неполным.
+                    logger.debug("target: tech leaf not added for %s: %s", host, exc)
 
             # Multi-level tree: split each path into segments so endpoints like
             # /api/users/123 become api → users → 123 rather than a flat list.
@@ -401,8 +414,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                     tech_str = _format_tech_profile(cached)
                     if tech_str:
                         log.write(f"[dim cyan]Tech: {esc(tech_str)}[/dim cyan]")
-            except Exception:
-                pass
+            except Exception as exc:
+                # Профиль технологий просто не появится в деталях. Ожидаемо
+                # при пустом кэше, но не отличимо от сбоя без записи.
+                logger.debug("target: tech cache not read for %s: %s", host, exc)
 
             log.write(f"Endpoints: {len(nodes)}")
             total = sum(n.request_count for n in nodes)
@@ -544,8 +559,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                     domain = urlparse(node_label).hostname or ""
                 elif "." in node_label:
                     domain = node_label.split(":")[0].strip()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Ниже есть запасной путь по _selected_host; без записи нельзя
+            # понять, что основной перестал работать.
+            logger.debug("target: domain from tree cursor not read: %s", exc)
         if not domain:
             domain = self._selected_host
 
@@ -569,8 +586,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             domain_input = recon.query_one("#recon-domain")
             if hasattr(domain_input, "value"):
                 domain_input.value = domain
-        except Exception:
-            pass
+        except Exception as exc:
+            # Recon открылся с пустым полем домена — пользователю придётся
+            # ввести его вручную, хотя он выбран в дереве.
+            logger.debug("target: recon domain not prefilled: %s", exc)
 
     def action_add_to_scope(self) -> None:
         if self._selected_host:
@@ -710,8 +729,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             self._selected_node_data = None
             try:
                 self.query_one("#detail-panel", ContentPanel).clear_content()
-            except Exception:
-                pass
+            except Exception as exc:
+                # Карта очищена, а в деталях остался прежний узел — ссылка на
+                # данные, которых больше нет.
+                logger.debug("target: details not cleared with site map: %s", exc)
             self.app.notify("Site map cleared", severity="information")
         except Exception as exc:
             logger.warning("_clear_worker: %s", exc)
@@ -783,15 +804,19 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         # own SpiderAPI and drives the counter directly).
         try:
             self.app.spider_crawl_started()  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except Exception as exc:
+            # Индикатор обхода не загорится, а обход пойдёт: пользователь
+            # увидит минутную тишину без признака работы.
+            logger.debug("target: spider indicator not started: %s", exc)
         # "🤖 Use AI" toolbar checkbox — when set, add AI-suggested endpoints
         # after each host's crawl.
         use_ai = False
         try:
             use_ai = self.query_one("#cfg-ai-use", Checkbox).value
-        except Exception:
-            pass
+        except Exception as exc:
+            # Считаем «выключено» — это безопасно, но при включённом
+            # чекбоксе AI-подсказки просто не появятся.
+            logger.debug("target: AI checkbox not read, assuming off: %s", exc)
         logger.info("action_crawl_scope: use_ai=%s (AI-enabled checkbox)", use_ai)
         total_pages = 0
         total_endpoints = 0
@@ -814,8 +839,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 logger.debug("lazy add %s: %s", url, exc)
             try:
                 self.call_after_refresh(self._refresh_tree)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Ленивая подача работает только вместе с перерисовкой: без
+                # неё найденные URL копятся в модели, но не в дереве.
+                logger.debug("target: tree refresh not scheduled after page: %s", exc)
 
         # Создаём один SpiderAPI на весь краул, а не на каждый host
         # (предотвращает утечку процесс-пула).
@@ -842,8 +869,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         finally:
             try:
                 self.app.spider_crawl_finished()  # type: ignore[attr-defined]
-            except Exception:
-                pass
+            except Exception as exc:
+                # Счётчик активных обходов не уменьшился — индикатор Spider
+                # останется горящим навсегда после этого обхода.
+                logger.debug("target: spider indicator not finished: %s", exc)
 
         self.call_after_refresh(self._refresh_tree)
         try:
@@ -894,7 +923,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                     for node in api.get_paths(h):
                         if node.path and node.path != "/":
                             known.append(f"https://{h}{node.path}")
-                except Exception:
+                except Exception as exc:
+                    # Один хост не дал своих путей — AI-подсказка будет беднее,
+                    # но обход продолжится. Запись называет хост.
+                    logger.debug("target: paths for %s not read for AI context: %s", h, exc)
                     continue
 
             # Use js_render for SPA to get full rendered HTML
@@ -945,15 +977,19 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                         async with session.head(full_url, ssl=False) as resp:
                             if resp.status < 500:
                                 valid = True
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        # HEAD не поддерживается сервером или сеть отвалилась —
+                        # ниже пробуем GET. Ожидаемый ход, но причина нужна.
+                        logger.debug("target: HEAD probe failed for %s: %s", full_url, exc)
                     if not valid:
                         try:
                             async with session.get(full_url, ssl=False) as resp:
                                 if resp.status < 500:
                                     valid = True
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            # Оба зонда не прошли — эндпоинт отбрасывается как
+                            # несуществующий, хотя мог быть живым.
+                            logger.debug("target: GET probe failed for %s: %s", full_url, exc)
                     if not valid:
                         continue
                     # count=False: AI-suggested paths are discoveries, not real HTTP —
@@ -961,7 +997,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                     try:
                         api.add_request(ParsedRequest(method=method, url=full_url), count=False)
                         added += 1
-                    except Exception:
+                    except Exception as exc:
+                        # Предложенный AI эндпоинт не попал в карту — счётчик
+                        # добавленных ниже соврёт в меньшую сторону.
+                        logger.debug("target: AI endpoint %s not added: %s", full_url, exc)
                         continue
             return added
         except Exception as exc:
