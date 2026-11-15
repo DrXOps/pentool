@@ -94,9 +94,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         with Horizontal(id="seq-main-area"):
             # Left column: token input (one per line)
             with Vertical(id="seq-input-col"):
-                yield Static(
-                    "Tokens (one per line)", id="seq-tokens-label", classes="seq-col-label"
-                )
+                yield Static("Tokens (one per line)", id="seq-tokens-label", classes="seq-col-label")
                 yield TextArea(id="seq-token-area", language=None)
 
             yield ResizeHandle("seq-input-col", "seq-analysis-col", id="seq-resize-h")
@@ -156,20 +154,20 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         self._open_source_menu(event.button)
 
     def _open_source_menu(self, btn: ToolbarButton) -> None:
-        items = [
-            (val, ("✓ " if val == self._source else "  ") + label) for label, val in _SOURCE_OPTIONS
-        ]
+        items = [(val, ("✓ " if val == self._source else "  ") + label) for label, val in _SOURCE_OPTIONS]
         r = btn.region
         self.app.show_context_menu(items, r.x, r.y + 1, callback=self._on_source_selected)
 
     def _on_source_selected(self, val: str) -> None:
         self._source = val
-        label = next((l for l, v in _SOURCE_OPTIONS if v == val), val)
+        label = next((lbl for lbl, v in _SOURCE_OPTIONS if v == val), val)
         try:
             btn = self.query_one("#btn-seq-source", ToolbarButton)
             btn.label = f"{label} ▼"
-        except Exception:
-            pass
+        except Exception as exc:
+            # Кнопка показывает прежний источник, а захват идёт из нового —
+            # токены приходят не из того места, что написано на экране.
+            logger.debug("sequencer: source button label not updated: %s", exc)
 
     def _start_capture(self) -> None:
         """Start capturing tokens from the proxy."""
@@ -194,9 +192,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
                 src_labels = {"proxy": "param", "cookie": "cookie", "body_regex": "regex"}
                 self.app.notify(f"Capturing '{param}' ({src_labels[src]}) from Proxy…", timeout=3)
             else:
-                self.app.notify(
-                    "Switch to Proxy/Cookie/Body source for live capture", severity="info"
-                )
+                self.app.notify("Switch to Proxy/Cookie/Body source for live capture", severity="info")
                 return
 
             self.query_one("#btn-seq-capture", ToolbarButton).disabled = True
@@ -280,22 +276,25 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
 
             if hasattr(self, "_proxy_hook"):
                 get_event_bus().unsubscribe(ProxyRequestDoneEvent, self._proxy_hook)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Подписка остаётся: каждый запрос прокси продолжает капать в
+            # Sequencer после «Stop», и счётчик токенов растёт сам собой.
+            logger.debug("sequencer: proxy hook not unsubscribed: %s", exc)
         try:
             self.query_one("#btn-seq-capture", ToolbarButton).disabled = False
             self.query_one("#btn-seq-stop", ToolbarButton).disabled = True
-        except Exception:
-            pass
+        except Exception as exc:
+            # Кнопки остались в положении «идёт захват», хотя захват остановлен.
+            logger.debug("sequencer: capture buttons not reset: %s", exc)
         self.app.notify("Capture stopped", timeout=2)
 
     def _update_counter(self) -> None:
         try:
-            self.query_one("#seq-counter", Static).update(
-                f"Captured: [bold]{self._seq.count}[/bold]"
-            )
-        except Exception:
-            pass
+            self.query_one("#seq-counter", Static).update(f"Captured: [bold]{self._seq.count}[/bold]")
+        except Exception as exc:
+            # Счётчик замирает на старом числе — по нему решают, хватает ли
+            # токенов для анализа, так что решение принимается вслепую.
+            logger.debug("sequencer: counter not updated: %s", exc)
 
     def _load_file(self) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
@@ -347,9 +346,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
                 lines.append("=" * 60)
                 lines.append("")
                 lines.append(f"Token Count:  {report.token_count}")
-                lines.append(
-                    f"Length:       {report.min_length}–{report.max_length} (avg {report.avg_length:.1f})"
-                )
+                lines.append(f"Length:       {report.min_length}–{report.max_length} (avg {report.avg_length:.1f})")
                 lines.append(f"Charset:      ~{report.charset_estimate} chars")
                 lines.append(f"Entropy:      {report.mean_entropy:.3f} bits/char")
                 lines.append(f"Total bits:   {report.mean_total_bits:.1f}")
@@ -362,9 +359,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
                     for r in report.fips_results:
                         lo = str(r.threshold_low) if r.threshold_low is not None else "—"
                         hi = str(r.threshold_high) if r.threshold_high is not None else "—"
-                        lines.append(
-                            f"  {r.status:<10} {r.name:<22} value={r.value}  range={lo}–{hi}"
-                        )
+                        lines.append(f"  {r.status:<10} {r.name:<22} value={r.value}  range={lo}–{hi}")
                     all_pass = all(r.passed for r in report.fips_results)
                     lines.append(f"\n  Overall: {'ALL PASS' if all_pass else 'SOME TESTS FAILED'}")
                 else:
@@ -476,18 +471,12 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
                 color = "bold green"
 
             bar = "█" * filled + "░" * (width - filled)
-            self.query_one("#seq-gauge", Static).update(
-                f"[{color}]{bar}[/{color}] [{color}]{bits:.0f} bits[/{color}]"
-            )
+            self.query_one("#seq-gauge", Static).update(f"[{color}]{bar}[/{color}] [{color}]{bits:.0f} bits[/{color}]")
             assessment = report.assessment
             a_color = (
                 "bold red"
                 if "WEAK" in assessment
-                else (
-                    "yellow"
-                    if "MODERATE" in assessment
-                    else ("bold green" if "STRONG" in assessment else "green")
-                )
+                else ("yellow" if "MODERATE" in assessment else ("bold green" if "STRONG" in assessment else "green"))
             )
             self.query_one("#seq-assessment", Static).update(f"[{a_color}]{assessment}[/{a_color}]")
             self.query_one("#seq-bits-label", Static).update(

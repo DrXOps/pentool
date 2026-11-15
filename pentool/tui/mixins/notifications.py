@@ -26,8 +26,11 @@ class NotificationsMixin:
             from pentool.tui.widgets.module_tabs import ModuleTabs
 
             self.query_one("#module-tabs", ModuleTabs).flash(message, severity, timeout)  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except Exception as exc:
+            # Сообщение-вспышка не показано вовсе. Это не критично (уведомление
+            # дублируется тостом у вызывающего), но повторяющаяся ошибка здесь
+            # означает, что строка модулей разошлась с #module-tabs.
+            logger.debug("flash: module tabs unavailable: %s", exc)
 
     def notify(
         self,

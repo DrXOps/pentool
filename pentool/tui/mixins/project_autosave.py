@@ -39,15 +39,18 @@ class ProjectAutoSaveMixin:
             try:
                 self._auto_save_timer.pause()  # type: ignore[attr-defined]
                 self._auto_save_timer.stop()  # type: ignore[attr-defined]
-            except Exception:
-                pass
+            except Exception as exc:
+                # Старый таймер не остановлен — он продолжит тикать рядом с
+                # новым, и проект будет сохраняться дважды за интервал.
+                logger.debug("auto-save: previous timer not stopped: %s", exc)
             self._auto_save_timer = None  # type: ignore[attr-defined]
 
         if getattr(self._cfg, "auto_save_enabled", False):  # type: ignore[attr-defined]
             interval_min = max(1, getattr(self._cfg, "auto_save_interval", 5))
             interval_sec = interval_min * 60
             self._auto_save_timer = self.set_interval(  # type: ignore[attr-defined]
-                interval_sec, self._auto_save_tick  # type: ignore[attr-defined]
+                interval_sec,
+                self._auto_save_tick,  # type: ignore[attr-defined]
             )
             logger.info("APP: auto-save enabled, interval=%d min", interval_min)
         else:

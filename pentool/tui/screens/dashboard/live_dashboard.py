@@ -19,6 +19,10 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 # ── Helper functions ───────────────────────────────────────────────────────
 
 
@@ -57,8 +61,10 @@ class ResourceMonitor(Widget):
                     return ref[16:]
                 # detached HEAD — show short hash
                 return ref[:8]
-        except Exception:
-            pass
+        except Exception as exc:
+            # Панель покажет "?" вместо ветки — а ещё это единственный случай,
+            # когда git-репозиторий у проекта есть, но HEAD прочитать нельзя.
+            logger.debug("resource monitor: git branch not read: %s", exc)
         return "?"
 
     def compose(self) -> ComposeResult:
@@ -95,8 +101,10 @@ class ResourceMonitor(Widget):
                 proc = psutil.Process(os.getpid())
                 threads = proc.num_threads()
                 self.query_one("#res-extra", Static).update(f"[dim]system threads: {threads}[/dim]")
-            except Exception:
-                pass
+            except Exception as exc:
+                # Строка «system threads» останется пустой — сама по себе
+                # косметика, но повтор раз в 2 с означает сломанный psutil.
+                logger.debug("resource monitor: threads not read: %s", exc)
             # Version info: show dev mode when running from source
             try:
                 from pentool import __version__
@@ -110,12 +118,17 @@ class ResourceMonitor(Widget):
                     )
                 else:
                     self.query_one("#res-version", Static).update(f"[dim]v{__version__}[/dim]")
-            except Exception:
-                pass
+            except Exception as exc:
+                # Поле версии пустое — не видно ни версии, ни DEV-режима, и
+                # именно это первое, что просят в отчёте об ошибке.
+                logger.debug("resource monitor: version line not drawn: %s", exc)
         except ImportError:
             try:
                 self.query_one("#res-cpu", Static).update("[dim]psutil not installed[/dim]")
-            except Exception:
-                pass
-        except Exception:
-            pass
+            except Exception as exc:
+                # Причина пустой панели ресурсов пользователю не сообщается.
+                logger.debug("resource monitor: psutil notice not shown: %s", exc)
+        except Exception as exc:
+            # Тик монитора целиком пропущен: панель показывает цифры
+            # предыдущего тика, будто система не меняется.
+            logger.debug("resource monitor: update skipped: %s", exc)

@@ -7,6 +7,10 @@ from pathlib import Path
 from textual.message import Message
 from textual.widget import Widget
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 _CSS = (Path(__file__).parent / "payload_drop_zone.tcss").read_text(encoding="utf-8")
 
 
@@ -24,6 +28,7 @@ class PayloadDropZone(Widget):
 
     class PayloadsLoaded(Message):
         """Payloads successfully loaded from file."""
+
         def __init__(self, payloads: list[str], source_path: str = "") -> None:
             super().__init__()
             self.payloads = payloads
@@ -41,6 +46,7 @@ class PayloadDropZone(Widget):
 
     def load_from_path(self, path: str) -> None:
         from pentool.api.intruder_api import load_payloads_from_file
+
         payloads = load_payloads_from_file(path)
         if payloads:
             self.post_message(self.PayloadsLoaded(payloads, source_path=path))
@@ -62,5 +68,7 @@ class PayloadDropZone(Widget):
                 ),
                 _on_selected,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            # Диалог выбора файла не открылся — кнопка «Load from file»
+            # выглядит нажатой, но на экране ничего не происходит.
+            logger.debug("payload drop zone: file dialog not opened: %s", exc)

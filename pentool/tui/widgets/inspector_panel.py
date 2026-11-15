@@ -10,7 +10,10 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
+from pentool.core.logging import get_logger
 from pentool.tui.markup import esc
+
+logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "inspector_panel.tcss").read_text(encoding="utf-8")
 
@@ -63,7 +66,10 @@ class InspectorPanel(Widget):
         try:
             parsed_url = urlparse(req.url)
             qparams = {k: ", ".join(v) for k, v in parse_qs(parsed_url.query).items()}
-        except Exception:
+        except Exception as exc:
+            # Секция «Query Parameters» пуста: параметры в URL есть, но в
+            # инспекторе их нет — легко принять за запрос без query.
+            logger.debug("inspector: query string not parsed: %s", exc)
             qparams = {}
         self._add_section(widgets, "Query Parameters", qparams)
 
@@ -74,15 +80,19 @@ class InspectorPanel(Widget):
             if "application/x-www-form-urlencoded" in ct:
                 try:
                     body_params = {k: ", ".join(v) for k, v in parse_qs(body_text).items()}
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Форма объявлена, но не разобрана — секция «Body
+                    # Parameters» пуста, как будто тело без параметров.
+                    logger.debug("inspector: form body not parsed: %s", exc)
             elif "application/json" in ct:
                 try:
                     d = json.loads(body_text)
                     if isinstance(d, dict):
                         body_params = {k: str(v) for k, v in d.items()}
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # JSON-тело не разобралось (обрезанный ответ, JPEG в
+                    # Content-Type) — инспектор покажет пустую секцию.
+                    logger.debug("inspector: JSON body not parsed: %s", exc)
         self._add_section(widgets, "Body Parameters", body_params)
 
         cookies: dict[str, str] = {}

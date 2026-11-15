@@ -165,8 +165,10 @@ class ProxyRuntimeMixin:
                                 t.cancel()
 
                         self._proxy_loop.call_soon_threadsafe(_cancel_all)  # type: ignore[attr-defined]
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        # Зависшие задачи прокси не отменены: поток ниже может
+                        # не дождаться остановки, и порт останется занятым.
+                        logger.debug("APP: proxy tasks not cancelled: %s", exc)
         if self._proxy_thread and self._proxy_thread.is_alive():  # type: ignore[attr-defined]
             self._proxy_thread.join(timeout=1.5)  # type: ignore[attr-defined]
             if self._proxy_thread.is_alive():  # type: ignore[attr-defined]

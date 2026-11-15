@@ -33,8 +33,11 @@ from textual import on
 from textual.message import Message
 from textual.widget import Widget
 
+from pentool.core.logging import get_logger
 from pentool.tui.widgets.toolbar import Toolbar
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+logger = get_logger(__name__)
 
 
 class StartStopWidget(Widget):
@@ -129,8 +132,10 @@ class StartStopWidget(Widget):
                 btn_start.remove_class("warn")
                 btn_start.add_class("active")
                 btn_stop.disabled = True
-        except Exception:
-            pass
+        except Exception as exc:
+            # Кнопки остались в прежнем положении: атака идёт, а UI показывает
+            # «▶ Start» (или наоборот), и Stop может быть недоступен.
+            logger.debug("start/stop: running state %s not shown: %s", running, exc)
 
     def set_paused(self, paused: bool) -> None:
         """Переключить UI между Pause <-> Resume (не меняя _running).
@@ -157,8 +162,10 @@ class StartStopWidget(Widget):
                 btn_start.label = "▶ Start"
                 btn_start.remove_class("warn")
                 btn_start.add_class("active")
-        except Exception:
-            pass
+        except Exception as exc:
+            # Подпись кнопки не отражает паузу: следующий клик по «⏸ Pause»
+            # снимет паузу вместо её постановки, то есть наоборот.
+            logger.debug("start/stop: paused state %s not shown: %s", paused, exc)
 
     # ── Обработка нажатий ──────────────────────────────────────────
 

@@ -13,8 +13,11 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Input, Label, Static
 
+from pentool.core.logging import get_logger
 from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "file_selector.tcss").read_text(encoding="utf-8")
 
@@ -88,8 +91,10 @@ class FileSelectorDialog(BaseDialog[None]):
         # Update path label
         try:
             self.query_one("#path-label", Static).update(str(self._current_dir))
-        except Exception:
-            pass
+        except Exception as exc:
+            # Строка пути останется от предыдущего каталога, а таблица уже
+            # показывает новый — пользователь читает путь, в котором его нет.
+            logger.debug("file dialog: path label not updated: %s", exc)
 
         entries = []
         try:
@@ -106,9 +111,13 @@ class FileSelectorDialog(BaseDialog[None]):
                     prefix = "📁 " if is_dir else "📄 "
                     entries.append((prefix + entry.name, size, modified, is_dir, entry.name))
                 except (PermissionError, OSError):
+                    # Запись, которую нельзя прочитать, не показывается вовсе —
+                    # каталог выглядит короче, чем он есть на диске.
+                    logger.debug("file dialog: entry %s unreadable, skipped", entry)
                     continue
-        except (PermissionError, OSError):
-            pass
+        except (PermissionError, OSError) as exc:
+            # Каталог не открылся — таблица пустая, причину видно только здесь.
+            logger.debug("file dialog: %s not listed: %s", self._current_dir, exc)
 
         # Sort: directories first
         dirs = [(n, s, m, d, raw) for n, s, m, d, raw in entries if d]
@@ -131,8 +140,10 @@ class FileSelectorDialog(BaseDialog[None]):
             if not is_dir:
                 try:
                     self.query_one("#filename-input", Input).value = entry_name
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # В поле останется прошлое имя: OK подтвердит не тот файл,
+                    # который выделен в таблице.
+                    logger.debug("file dialog: filename field not set to %r: %s", entry_name, exc)
 
             # Double-click: same row, interval < 500 ms
             now = time.monotonic()
@@ -173,8 +184,10 @@ class FileSelectorDialog(BaseDialog[None]):
                         self._navigate_to(self._current_dir / entry_name)
                         event.prevent_default()
                         return
-            except Exception:
-                pass
+            except Exception as exc:
+                # Вход в каталог не состоялся — Enter тут же подтвердит выбор,
+                # и диалог закроется с путём вместо перехода внутрь.
+                logger.debug("file dialog: enter-target not resolved: %s", exc)
             self.action_confirm()
             event.prevent_default()
 
@@ -203,8 +216,10 @@ class FileSelectorDialog(BaseDialog[None]):
                 path = self._current_dir / filename
                 self.dismiss(str(path))
                 return
-        except Exception:
-            pass
+        except Exception as exc:
+            # Введённое вручную имя не прочитано — OK вернёт выделенный в
+            # таблице файл (или None), то есть не то, что видит пользователь.
+            logger.debug("file dialog: manual filename not read: %s", exc)
 
         if self._selected_path:
             self.dismiss(self._selected_path)

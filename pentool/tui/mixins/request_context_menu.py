@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class RequestContextMenuMixin:
     """Unified HTTP request context menu for all modules."""
@@ -114,7 +118,14 @@ class RequestContextMenuMixin:
         raw = self._cm_get_raw_request()
         if action == "copy_url":
             self._cm_do_copy_url(raw)
-        elif action in ("copy_curl", "copy_fetch", "copy_ffuf", "copy_sqlmap", "copy_nmap", "copy_jwt"):
+        elif action in (
+            "copy_curl",
+            "copy_fetch",
+            "copy_ffuf",
+            "copy_sqlmap",
+            "copy_nmap",
+            "copy_jwt",
+        ):
             self._cm_do_copy_as(action, raw)
         elif action == "open_browser":
             self._cm_do_open_browser(raw)
@@ -149,16 +160,21 @@ class RequestContextMenuMixin:
                 text = focused.text or ""
             if text:
                 copy_to_clipboard(text)
-        except Exception:
-            pass
+        except Exception as exc:
+            # «Copy selection» не копирует ничего, и пользователь узнаёт об
+            # этом только вставив пустой буфер. Обычный ход при окне без
+            # выделяемого текста — потому debug, а не warning.
+            logger.debug("ctx menu: copy selection failed: %s", exc)
 
     def _cm_do_select_all(self) -> None:
         try:
             focused = self.app.focused  # type: ignore[attr-defined]
             if hasattr(focused, "select_all"):
                 focused.select_all()
-        except Exception:
-            pass
+        except Exception as exc:
+            # «Select all» молча ничего не выделил — следующее действие с
+            # выделением окажется пустым.
+            logger.debug("ctx menu: select all failed: %s", exc)
 
     def _cm_do_copy_url(self, raw: str) -> None:
         from pentool.utils.copy_as import copy_to_clipboard, extract_url_from_raw

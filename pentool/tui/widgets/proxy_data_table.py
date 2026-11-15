@@ -11,7 +11,10 @@ from __future__ import annotations
 from textual import events as _events
 from textual.message import Message
 
+from pentool.core.logging import get_logger
 from pentool.tui.widgets.data_table import ArrowBackendDataTable
+
+logger = get_logger(__name__)
 
 
 class ProxyDataTable(ArrowBackendDataTable):
@@ -67,8 +70,11 @@ class ProxyDataTable(ArrowBackendDataTable):
 
                     return format_size(int(raw))
                 return "-"
-        except Exception:
-            pass
+        except Exception as exc:
+            # Колонка Size падает обратно на исходное значение бэкенда —
+            # размер показывается в байтах, неформатированным, и глазами его
+            # не сверить с соседними строками.
+            logger.debug("proxy table: size cell not formatted: %s", exc)
         return super()._get_cell_renderable(row_index, column_index)
 
     # ── on_event: контекстное меню + comment icon ────────────────────────

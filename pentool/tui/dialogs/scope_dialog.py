@@ -12,9 +12,12 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Label, Static, TextArea
 
+from pentool.core.logging import get_logger
 from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.markup import esc
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "scope_dialog.tcss").read_text(encoding="utf-8")
 
@@ -218,8 +221,10 @@ class ScopeDialog(BaseDialog[list[str] | ScopeConfig | None]):
                 self.query_one("#validation-msg", Static).update(
                     f"[bold red]Invalid regex: {esc(', '.join(bad_all[:3]))}[/bold red]"
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                # Невалидная регулярка не показана: диалог просто не закроется,
+                # и пользователь не поймёт, почему OK ничего не делает.
+                logger.debug("scope dialog: validation message not shown: %s", exc)
             return
 
         self.dismiss(

@@ -59,8 +59,10 @@ class DiffPanel(Widget):
         try:
             self.query_one("#diff-panel-log", RichLog).clear()
             self.query_one("#diff-panel-title", Static).update("Diff vs. last sent")
-        except Exception:
-            pass
+        except Exception as exc:
+            # Панель остаётся с диффом от предыдущего запроса: «Diff vs. last
+            # sent» показывает расхождение с чужим запросом.
+            logger.debug("DiffPanel.clear: %s", exc)
 
     def toggle(self) -> bool:
         """Toggle visibility. Returns the new visible state."""

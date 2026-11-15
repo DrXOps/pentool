@@ -9,8 +9,11 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Input, Label
 
+from pentool.core.logging import get_logger
 from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "intruder_input.tcss").read_text(encoding="utf-8")
 
@@ -53,8 +56,10 @@ class InputDialog(BaseDialog):
                 self._on_add(value)
                 inp.value = ""
                 inp.focus()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Значение остаётся в поле: строка попала в набор или нет —
+            # неизвестно, и повторный Enter может добавить дубликат.
+            logger.debug("intruder input: value not added: %s", exc)
 
     def on_key(self, event) -> None:
         if event.key == "escape":

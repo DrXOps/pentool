@@ -19,7 +19,10 @@ from textual.widget import Widget
 from textual.widgets import Button, Input, Label, Static
 
 from pentool.collections.filter_predicate import FilterField, FilterFieldType, FilterPredicate, FilterSpec
+from pentool.core.logging import get_logger
 from pentool.tui.widgets.option_cycler import OptionCycler
+
+logger = get_logger(__name__)
 
 _TOGGLE_CSS = (Path(__file__).parent / "toggle_button.tcss").read_text(encoding="utf-8")
 _FILTER_BAR_CSS = (Path(__file__).parent / "filter_bar_widget.tcss").read_text(encoding="utf-8")
@@ -221,8 +224,10 @@ class FilterBarWidget(Widget):
                 case FilterFieldType.RANGE:
                     self.query_one(f"#{field.id}-lo", Input).value = ""
                     self.query_one(f"#{field.id}-hi", Input).value = ""
-        except Exception:
-            pass
+        except Exception as exc:
+            # Поле фильтра не очищено: после «Reset» таблица остаётся
+            # отфильтрованной по прежнему значению, хотя бар выглядит пустым.
+            logger.debug("filter bar: field %r not cleared: %s", field.id, exc)
 
     # ── Handlers ───────────────────────────────────────────────────────────
 

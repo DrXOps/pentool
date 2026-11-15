@@ -140,8 +140,10 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
         try:
             btn = self.query_one("#btn-dec-op-select", ToolbarButton)
             btn.label = f"{op} ▼"
-        except Exception:
-            pass
+        except Exception as exc:
+            # Кнопка покажет прежнюю операцию, а цепочка строится уже из новой —
+            # что именно выполнится, по экрану не прочитать.
+            logger.debug("decoder: op button label not updated: %s", exc)
 
     def _add_step(self) -> None:
         try:
@@ -157,8 +159,10 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
         self._update_chain_display()
         try:
             self.query_one("#dec-steps-log", ContentPanel).clear_content()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Старые шаги остаются в панели лога после «Clear» — журнал
+            # описывает цепочку, которой уже нет.
+            logger.debug("decoder: steps log not cleared: %s", exc)
 
     def _swap_io(self) -> None:
         try:
@@ -225,8 +229,10 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
                 lbl.update(" → ".join(self._chain))
             else:
                 lbl.update("[dim](empty)[/dim]")
-        except Exception:
-            pass
+        except Exception as exc:
+            # Дисплей цепочки не обновлён — он показывает шаги, которых в
+            # цепочке уже нет (или наоборот), и Run выполнит не то.
+            logger.debug("decoder: chain display not updated: %s", exc)
 
     # ── Run ───────────────────────────────────────────────────────────────────
 

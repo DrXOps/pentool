@@ -105,8 +105,10 @@ class BaseModuleScreen(Widget):
             inp = self.query_one(f"#{self._rename_input_id}", Input)
             if inp.display:
                 inp.display = False
-        except Exception:
-            pass
+        except Exception as e:
+            # Поле переименования остаётся висеть поверх вкладок после ухода
+            # фокуса — оно перекрывает заголовки, а нажатия уходят в него.
+            _log.debug("BaseModuleScreen: rename input not hidden on blur: %s", e)
 
     # ── Abstract interface ────────────────────────────────────────────────────
 

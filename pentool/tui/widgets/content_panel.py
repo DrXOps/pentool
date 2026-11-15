@@ -19,8 +19,11 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import RichLog, Static, TextArea
 
+from pentool.core.logging import get_logger
 from pentool.tui.markup import esc
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -209,8 +212,10 @@ class ContentPanel(Widget):
         self._panel_title = title
         try:
             self.query_one(".cp-title > Static", Static).update(esc(title))
-        except Exception:
-            pass
+        except Exception as exc:
+            # Заголовок на экране отстаёт от того, что реально загружено в
+            # панель: две панели рядом выглядят одинаково.
+            logger.debug("content panel: title %r not shown: %s", title, exc)
 
     def write_to_log(self, text: str) -> None:
         if self._widget_type == "richlog":

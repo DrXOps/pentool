@@ -19,6 +19,10 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class AutoSaveMixin:
     """Mix-in that provides tracked, cancellable auto-save workers.
@@ -61,8 +65,10 @@ class AutoSaveMixin:
         """Await a save coroutine, then drop it from the tracked list."""
         try:
             await coro
-        except Exception:
-            pass
+        except Exception as exc:
+            # Состояние модуля не сохранилось: после перезапуска пользователь
+            # увидит более старую версию, чем та, с которой работал.
+            logger.debug("autosave: %s did not save: %s", worker_name, exc)
         finally:
             self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
@@ -71,8 +77,10 @@ class AutoSaveMixin:
         self._init_save_tasks()
         try:
             self.workers.cancel_group(self, self.SAVE_WORKER_GROUP)  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except Exception as exc:
+            # Группа не отменена — сохранение доработает уже после закрытия
+            # БД (ровно тот случай, ради которого миксин и существует).
+            logger.debug("autosave: worker group not cancelled: %s", exc)
         self._running_save_tasks.clear()
 
     # ── Worker-name helper ────────────────────────────────────────────────────

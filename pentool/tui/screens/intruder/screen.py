@@ -1752,8 +1752,10 @@ class IntruderScreen(
                 marked_body = _json.dumps(_mark_json(parsed), indent=2, ensure_ascii=False)
                 new_lines = lines[:body_lines_start] + marked_body.split("\n")
                 lines = new_lines
-            except (_json.JSONDecodeError, Exception):
-                pass
+            except Exception as exc:
+                # Тело объявлено как JSON, но не разобралось — маркеры в него
+                # не попали, и атака пойдёт без позиций в этом теле.
+                logger.debug("payload markers: JSON body not marked: %s", exc)
         if options is None or options.get("cookie", True):
             for i, line in enumerate(lines):
                 if line.lower().startswith("cookie:"):
@@ -1808,8 +1810,10 @@ class IntruderScreen(
                         logger.debug("op: %s", exc)
                     new_lines = lines[:body_lines_start] + [ln for ln in marked_xml.split("\n") if ln.strip()]
                     lines = new_lines
-                except (ET.ParseError, Exception):
-                    pass
+                except Exception as exc:
+                    # XML-тело не разобралось или не собралось обратно —
+                    # позиции в нём не размечены, и Intruder нечего подставлять.
+                    logger.debug("payload markers: XML body not marked: %s", exc)
         new_text = "\n".join(lines)
         try:
             w.load_text(new_text)

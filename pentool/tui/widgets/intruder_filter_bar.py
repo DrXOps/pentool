@@ -12,8 +12,11 @@ from textual.containers import Horizontal
 from textual.widgets import Input, Label
 
 from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
+from pentool.core.logging import get_logger
 from pentool.tui.widgets.filter_bar_widget import FilterBarWidget
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "intruder_filter_bar.tcss").read_text(encoding="utf-8")
 
@@ -80,8 +83,10 @@ class IntruderFilterBar(FilterBarWidget):
             tb = self.query_one("#grep-only-toggle", ToolbarButton)
             if tb.has_class("active"):
                 predicates.append(FilterPredicate("grep_only_match", FilterOp.EQ, True))
-        except Exception:
-            pass
+        except Exception as exc:
+            # «Only matches» включён, но предикат не добавлен — таблица
+            # покажет все строки, хотя переключатель говорит обратное.
+            logger.debug("intruder filter: only-matches predicate not applied: %s", exc)
 
     def _apply(self) -> None:
         self._emit(FilterSpec(predicates=self.collect()))
@@ -96,8 +101,10 @@ class IntruderFilterBar(FilterBarWidget):
             tb = self.query_one("#grep-only-toggle", ToolbarButton)
             tb.remove_class("active")
             tb.label = "○ Only matches"
-        except Exception:
-            pass
+        except Exception as exc:
+            # После Reset переключатель остаётся в позиции «включён», а фильтр
+            # уже сброшен — следующее Apply вернёт прежнее поведение.
+            logger.debug("intruder filter: only-matches toggle not reset: %s", exc)
         self._emit(FilterSpec())
 
     def on_toolbar_button_pressed(self, event: ToolbarButton.Pressed) -> None:

@@ -11,9 +11,12 @@ from textual.containers import Horizontal
 from textual.widgets import Button, DataTable, Input, Label, Static
 
 from pentool.api.proxy_api import MatchReplaceRule
+from pentool.core.logging import get_logger
 from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "match_replace_dialog.tcss").read_text(encoding="utf-8")
 
@@ -115,12 +118,15 @@ class MatchReplaceDialog(BaseDialog[list[MatchReplaceRule] | None]):
         scope_label = dict(_SCOPE_OPTIONS).get(self._scope_val, self._scope_val).title()
         try:
             self.query_one("#btn-sel-target", ToolbarButton).label = f"{target_label} ▼"
-        except Exception:
-            pass
+        except Exception as exc:
+            # Кнопка покажет прежнее значение — правило сохранится с одним
+            # target/scope, а пользователь увидит другое на экране.
+            logger.debug("match/replace: target label not updated: %s", exc)
         try:
             self.query_one("#btn-sel-scope", ToolbarButton).label = f"{scope_label} ▼"
-        except Exception:
-            pass
+        except Exception as exc:
+            # То же для scope: экран и сохраняемое правило расходятся.
+            logger.debug("match/replace: scope label not updated: %s", exc)
 
     def _read_form(self) -> MatchReplaceRule:
         match = self.query_one("#input-match", Input).value
