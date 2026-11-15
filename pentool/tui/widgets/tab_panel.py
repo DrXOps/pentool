@@ -326,8 +326,10 @@ class TabbedContentPanel(Widget, Generic[TState]):
         try:
             tc = self.tabs_content
             tc.remove_pane(tab_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Панель остаётся в DOM, хотя из `_states` её уже убрали ниже —
+            # вкладка видна, но недоступна для переключения.
+            logger.debug("tab_panel: pane %s not removed: %s", tab_id, exc)
         self._states.pop(tab_id, None)
         self._meta.pop(tab_id, None)
         # Switch to last remaining tab
@@ -337,8 +339,10 @@ class TabbedContentPanel(Widget, Generic[TState]):
             try:
                 tc = self.tabs_content
                 tc.active = new_id
-            except Exception:
-                pass
+            except Exception as exc:
+                # Заголовок переключился, содержимое — нет: неверная вкладка
+                # на экране при верном состоянии.
+                logger.debug("tab_panel: active tab not switched to %s: %s", new_id, exc)
         else:
             self._active_tab_id = None
         if state is not None:
@@ -358,8 +362,10 @@ class TabbedContentPanel(Widget, Generic[TState]):
         try:
             tc = self.tabs_content
             tc.active = tab_id
-        except Exception:
-            pass
+        except Exception as exc:
+            # Состояние считает вкладку активной, а экран показывает прежнюю —
+            # правки пойдут не туда.
+            logger.debug("tab_panel: switch to %s not shown: %s", tab_id, exc)
         state = self._states.get(tab_id)
         if state is not None:
             self.post_message(self.TabActivated(self, tab_id, state))
@@ -383,8 +389,10 @@ class TabbedContentPanel(Widget, Generic[TState]):
             try:
                 tc = self.tabs_content
                 await tc.remove_pane(tab_id)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Именно эта гонка и описана в docstring выше: не снятый pane
+                # с тем же id ломает следующий add_pane.
+                logger.debug("tab_panel: pane %s not removed in close_all: %s", tab_id, exc)
             if state is not None:
                 self.post_message(self.TabClosed(self, tab_id, state))
         self._states.clear()
@@ -452,8 +460,9 @@ class TabbedContentPanel(Widget, Generic[TState]):
             inp.focus()
             inp.action_select_all()
             inp._rename_tab_id = tab_id  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except Exception as exc:
+            # Поле переименования не открылось — F2 по вкладке «не работает».
+            logger.debug("tab_panel: rename not started for %s: %s", tab_id, exc)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id != self._rename_input_id:
@@ -472,8 +481,9 @@ class TabbedContentPanel(Widget, Generic[TState]):
             inp = self.query_one(f"#{self._rename_input_id}", Input)
             if inp.display:
                 inp.display = False
-        except Exception:
-            pass
+        except Exception as exc:
+            # Поле переименования останется поверх вкладок после ухода фокуса.
+            logger.debug("tab_panel: rename input not hidden on blur: %s", exc)
 
     def _update_tab_label(self, tab_id: str, name: str) -> None:
         try:
@@ -481,8 +491,10 @@ class TabbedContentPanel(Widget, Generic[TState]):
             tab_widget = tc.get_tab(tab_id)
             if tab_widget is not None:
                 tab_widget.label = name
-        except Exception:
-            pass
+        except Exception as exc:
+            # Имя в состоянии сменилось, а на заголовке — старое: переименование
+            # выглядит неприменившимся.
+            logger.debug("tab_panel: label not updated for %s: %s", tab_id, exc)
 
     def update_tab_label(self, tab_id: str, label: str) -> None:
         """Публичный метод для обновления лейбла (напр. с * маркером dirty)."""

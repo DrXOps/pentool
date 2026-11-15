@@ -9,22 +9,25 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static, Tab, Tabs
 
+from pentool.core.logging import get_logger
 from pentool.tui.messages import ModuleSelected
+
+logger = get_logger(__name__)
 
 # Module list: (id, display name, hotkey)
 MODULES: list[tuple[str, str, str]] = [
-    ("dashboard",  "Dashboard",  "^H"),
-    ("proxy",      "Proxy",      "^P"),
-    ("repeater",   "Repeater",   "^R"),
-    ("intruder",   "Intruder",   "^I"),
-    ("scanner",    "Scanner",    "^S"),
-    ("target",     "Target",     "^T"),
-    ("decoder",    "Decoder",    "^D"),
-    ("comparer",   "Comparer",   "^C"),
-    ("sequencer",  "Sequencer",  "^Q"),
+    ("dashboard", "Dashboard", "^H"),
+    ("proxy", "Proxy", "^P"),
+    ("repeater", "Repeater", "^R"),
+    ("intruder", "Intruder", "^I"),
+    ("scanner", "Scanner", "^S"),
+    ("target", "Target", "^T"),
+    ("decoder", "Decoder", "^D"),
+    ("comparer", "Comparer", "^C"),
+    ("sequencer", "Sequencer", "^Q"),
     ("extensions", "Extensions", "^E"),
-    ("recon",      "Recon",      "^N"),
-    ("settings",   "Settings",   "^,"),
+    ("recon", "Recon", "^N"),
+    ("settings", "Settings", "^,"),
 ]
 
 # Modules available in basic (no-project) mode
@@ -64,8 +67,10 @@ class ModuleTabs(Widget):
         try:
             tabs = self.query_one("#module-tabs-inner", Tabs)
             tabs.active = f"tab-{module_id}"
-        except Exception:
-            pass
+        except Exception as exc:
+            # `active_module` уже присвоен, а подсветка вкладки — нет: строка
+            # вкладок и содержимое расходятся.
+            logger.debug("tabs: %r not selected: %s", module_id, exc)
 
     def set_mode(self, mode: str) -> None:
         try:
@@ -78,11 +83,14 @@ class ModuleTabs(Widget):
                         tab.styles.display = "none"
                     else:
                         tab.styles.display = "block"
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Одна вкладка не переключила видимость: режим Basic
+                    # покажет её, хотя не должен (или наоборот).
+                    logger.debug("tabs: mode %r not applied to %s: %s", mode, mod_id, exc)
             tabs.refresh()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Весь режим UI не применился — переключатель в Settings молчит.
+            logger.debug("tabs: mode %r not applied at all: %s", mode, exc)
 
     def set_scanner_locked(self, locked: bool) -> None:
         """Grey-out the Scanner tab when no valid license is present.
@@ -100,8 +108,10 @@ class ModuleTabs(Widget):
                 tab.remove_class("tab-locked")
                 tab.tooltip = None
             tabs.refresh()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Вкладка Scanner выглядит доступной без лицензии (или заперта
+            # при валидной) — расхождение с проверкой в `_switch_to`.
+            logger.debug("tabs: scanner lock %s not applied: %s", locked, exc)
 
     def flash(self, message: str, severity: str = "information", timeout: float = 2.5) -> None:
         """Flash a short message on the right of the module row for *timeout* seconds.
@@ -110,9 +120,9 @@ class ModuleTabs(Widget):
         """
         colors = {
             "information": "$primary",
-            "warning":     "$warning",
-            "error":       "$error",
-            "success":     "$success",
+            "warning": "$warning",
+            "error": "$error",
+            "success": "$success",
         }
         color = colors.get(severity, "$primary")
         try:
@@ -123,17 +133,22 @@ class ModuleTabs(Widget):
             if hasattr(self, "_tooltip2_timer") and self._tooltip2_timer is not None:
                 try:
                     self._tooltip2_timer.stop()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Таймер уже сработал — останавливать нечего; ссылка ниже
+                    # перезаписывается новым.
+                    logger.debug("tabs: flash timer already gone: %s", exc)
             self._tooltip2_timer = self.set_timer(timeout, self._hide_tooltip2)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Сообщение пользователю не показано вовсе — самый дорогой из
+            # здешних молчаливых исходов.
+            logger.debug("tabs: flash %r not shown: %s", message, exc)
 
     def _hide_tooltip2(self) -> None:
         try:
             tip = self.query_one("#tooltip2", Static)
             tip.update("")
             tip.display = False
-        except Exception:
-            pass
+        except Exception as exc:
+            # Сообщение вспышки останется на экране навсегда.
+            logger.debug("tabs: flash not hidden: %s", exc)
         self._tooltip2_timer = None

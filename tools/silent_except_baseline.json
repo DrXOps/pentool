@@ -22,9 +22,7 @@
   "pentool/tui/widgets/filter_bar_widget.py": 1,
   "pentool/tui/widgets/inspector_panel.py": 2,
   "pentool/tui/widgets/intruder_filter_bar.py": 2,
-  "pentool/tui/widgets/module_tabs.py": 7,
   "pentool/tui/widgets/payload_drop_zone.py": 1,
   "pentool/tui/widgets/proxy_data_table.py": 1,
-  "pentool/tui/widgets/start_stop_widget.py": 2,
-  "pentool/tui/widgets/tab_panel.py": 7
+  "pentool/tui/widgets/start_stop_widget.py": 2
 }
