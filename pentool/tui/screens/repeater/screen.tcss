@@ -12,9 +12,6 @@ RepeaterScreen #content-row {
 RepeaterScreen #content-row > #tabs-area {
     width: 1fr;
 }
-RepeaterScreen TabbedContent {
-    height: 1fr;
-}
 RepeaterScreen TabbedContent ContentSwitcher {
     height: 1fr;
 }

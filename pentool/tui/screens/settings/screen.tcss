@@ -5,9 +5,6 @@
 SettingsScreen {
     layout: vertical;
 }
-SettingsScreen TabbedContent {
-    height: 1fr;
-}
 SettingsScreen .settings-pane {
     padding: 1 2;
     layout: vertical;

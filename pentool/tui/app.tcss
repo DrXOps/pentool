@@ -20,6 +20,13 @@ ContentSwitcher > * {
     height: 1fr;
 }
 
+/* Каждая вкладка занимает своего родителя целиком. Правило принадлежит
+   здесь, а не трём экранам по отдельности: Intruder, Repeater и Settings
+   держали по одинаковой копии `TabbedContent { height: 1fr }` (F-038). */
+TabbedContent {
+    height: 1fr;
+}
+
 /* Wrapper around GlobalHintBar + ModuleHintBar + StatusBar.
    Each child's DEFAULT_CSS hard-codes `dock: bottom` — overridden
    here with `dock: none` so they stack vertically. */

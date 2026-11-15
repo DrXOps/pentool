@@ -3,9 +3,6 @@ IntruderScreen {
 }
 
 /* ── Tabs ────────────────────────────────────────────────────────────── */
-IntruderScreen TabbedContent {
-    height: 1fr;
-}
 IntruderScreen TabbedContent ContentSwitcher {
     height: 1fr;
 }
