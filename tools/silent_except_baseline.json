@@ -18,7 +18,6 @@
   "pentool/tui/screens/proxy/screen.py": 31,
   "pentool/tui/screens/repeater/screen.py": 28,
   "pentool/tui/screens/sequencer/screen.py": 4,
-  "pentool/tui/screens/settings/screen.py": 30,
   "pentool/tui/screens/target/screen.py": 18,
   "pentool/tui/widgets/activity_indicator.py": 3,
   "pentool/tui/widgets/content_panel.py": 1,

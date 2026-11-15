@@ -13,6 +13,7 @@ from textual.widget import Widget
 from textual.widgets import Button, Input, Static, Switch, TabbedContent, TabPane
 
 from pentool.core.error_guard import err
+from pentool.core.logging import get_logger
 from pentool.tui.markup import esc
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.settings.hotkeys import HotkeySettingsScreen
@@ -21,6 +22,8 @@ from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
+
+logger = get_logger(__name__)
 
 
 class UIMode(str, Enum):
@@ -263,8 +266,10 @@ class SettingsScreen(AppMixin, Widget):
             cfg = get_config()
             self.query_one("#set-proxy-host", Input).value = cfg.proxy_host
             self.query_one("#set-proxy-port", Input).value = str(cfg.proxy_port)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Поле останется пустым, а Save запишет пустую строку поверх
+            # сохранённого хоста — то есть молчание здесь дороже, чем кажется.
+            logger.debug("settings: proxy fields not prefilled: %s", exc)
         try:
             from pentool.core.config import get_config
 
@@ -273,8 +278,8 @@ class SettingsScreen(AppMixin, Widget):
             interval = getattr(cfg, "auto_save_interval", 5)
             self.query_one("#set-autosave-enabled", Checkbox).value = enabled
             self.query_one("#set-autosave-interval", Input).value = str(interval)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("settings: auto-save fields not prefilled: %s", exc)
         try:
             from pentool.core.config import get_config
 
@@ -288,8 +293,10 @@ class SettingsScreen(AppMixin, Widget):
             self.query_one("#set-scan-marker-enabled", Checkbox).value = getattr(cfg, "scan_marker_enabled", False)
             self.query_one("#set-scan-marker-name", Input).value = getattr(cfg, "scan_marker_name", "X-Scanner")
             self.query_one("#set-scan-marker-value", Input).value = getattr(cfg, "scan_marker_value", "pentool/1.0")
-        except Exception:
-            pass
+        except Exception as exc:
+            # Девять полей в одном блоке: без записи не видно, что Save
+            # отправит значения по умолчанию вместо сохранённых.
+            logger.debug("settings: request/scan fields not prefilled: %s", exc)
         try:
             from pentool.core.config import get_config
 
@@ -297,8 +304,8 @@ class SettingsScreen(AppMixin, Widget):
             self.query_one("#set-send-crash-reports", Checkbox).value = getattr(cfg, "send_crash_reports", True)
             self.query_one("#set-check-updates", Checkbox).value = getattr(cfg, "check_updates", True)
             self.query_one("#set-auto-scope", Checkbox).value = getattr(cfg, "auto_scope", False)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("settings: checkbox fields not prefilled: %s", exc)
         try:
             from pentool.core.config import get_config
 
@@ -310,8 +317,10 @@ class SettingsScreen(AppMixin, Widget):
                 if val == saved_theme:
                     cycler.set_value(val)
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            # Циклер останется на первой теме списка, а сохранённая тема —
+            # другой; без записи это выглядит как «настройка слетела».
+            logger.debug("settings: theme cycler not prefilled: %s", exc)
 
         # ── AI settings load ────────────────────────────────────────────────────────────
         try:
@@ -323,8 +332,8 @@ class SettingsScreen(AppMixin, Widget):
             model_path = getattr(cfg, "ai_mcp_model_path", "") or ""
             if model_path:
                 self.query_one("#set-ai-model-path", Input).value = model_path
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("settings: AI fields not prefilled: %s", exc)
 
     # ── License UI ─────────────────────────────────────────────────────────────
 
@@ -373,10 +382,14 @@ class SettingsScreen(AppMixin, Widget):
                     inp = self.query_one("#license-key-input", Input)
                     if not inp.value:
                         inp.value = info.license_key
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as exc:
+                    # Поле просто останется пустым — пользователю придётся
+                    # ввести ключ заново; это не потеря, но и не норма.
+                    logger.debug("settings: license key not prefilled: %s", exc)
+        except Exception as exc:
+            # Панель лицензии останется в состоянии, собранном в compose —
+            # то есть покажет «FREE» независимо от того, что на диске.
+            logger.debug("settings: license panel not refreshed: %s", exc)
 
     @on(ToolbarButton.Pressed, "#settings-save")
     def on_btn_settings_save(self, _: ToolbarButton.Pressed) -> None:
@@ -420,7 +433,10 @@ class SettingsScreen(AppMixin, Widget):
         try:
             widget = event.control
             wid = widget.id if widget else None
-        except Exception:
+        except Exception as exc:
+            # Без id не сработает ни одна ветка — то есть переключение темы и
+            # режима UI молча перестанет применяться.
+            logger.debug("settings: cycler event source unknown: %s", exc)
             wid = None
 
         if wid == "set-theme":
@@ -429,8 +445,10 @@ class SettingsScreen(AppMixin, Widget):
         elif wid == "set-ui-mode":
             try:
                 self._apply_ui_mode(UIMode(event.value))
-            except Exception:
-                pass
+            except Exception as exc:
+                # Значение из списка, которого нет в UIMode: режим останется
+                # прежним. Молча — это выглядит как «переключатель не работает».
+                logger.debug("settings: UI mode %r not applied: %s", event.value, exc)
 
     def _apply_theme_debounced(self, theme: str) -> None:
         """Schedule a theme preview after a short debounce (150 ms).
@@ -441,8 +459,10 @@ class SettingsScreen(AppMixin, Widget):
         if self._theme_debounce is not None:
             try:
                 self._theme_debounce.stop()
-            except Exception:
-                pass
+            except Exception as exc:
+                # Таймер уже сработал — его нечего останавливать. Ссылку всё
+                # равно обнуляем ниже, поэтому здесь достаточно следа.
+                logger.debug("settings: theme debounce timer already gone: %s", exc)
             self._theme_debounce = None
         # set_timer fires once after the delay
         self._theme_debounce = self.set_timer(0.15, lambda: self._do_apply_theme(theme))
@@ -458,8 +478,10 @@ class SettingsScreen(AppMixin, Widget):
             # Guard: skip if Textual already has this theme (avoids double refresh_css).
             if getattr(self.app, "theme", None) != theme:
                 self.app.theme = theme  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except Exception as exc:
+            # Пользователь кликнул тему и ждёт предпросмотра; отказ Textual
+            # принять имя темы иначе не виден вообще.
+            logger.debug("settings: theme preview %r not applied: %s", theme, exc)
 
     def _apply_theme(self, theme: str) -> None:
         """Apply theme immediately (no debounce) and persist to config via async worker.
@@ -470,8 +492,9 @@ class SettingsScreen(AppMixin, Widget):
         try:
             if getattr(self.app, "theme", None) != theme:
                 self.app.theme = theme  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except Exception as exc:
+            # Save уже записал тему в конфиг — то есть файл и экран разойдутся.
+            logger.debug("settings: theme %r not applied on save: %s", theme, exc)
         # Persist in a thread worker so yaml.dump + file.write don't block the event loop.
         self.run_worker(self._async_save_theme(theme), exclusive=False, thread=False)
 
@@ -488,8 +511,10 @@ class SettingsScreen(AppMixin, Widget):
                 get_config().save()
 
             await loop.run_in_executor(None, _save)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Тема применена на экране, но не попала в config.yaml — после
+            # перезапуска вернётся прежняя. Пользователь этого не увидит.
+            logger.warning("settings: theme %r not saved to disk: %s", theme, exc)
 
     def _save_interface_settings(self) -> None:
         """Apply theme and UI mode, then persist to config asynchronously."""
@@ -497,15 +522,17 @@ class SettingsScreen(AppMixin, Widget):
         try:
             theme_val = self.query_one("#set-theme", OptionCycler).value
             self._apply_theme(theme_val)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Ниже всё равно покажем «applied» — поэтому запись единственное
+            # место, где видно, что применилось не всё.
+            logger.debug("settings: theme not read on save: %s", exc)
 
         # Apply UI mode (no config write needed — ModuleTabs handles it)
         try:
             mode_val = self.query_one("#set-ui-mode", OptionCycler).value
             self._apply_ui_mode(UIMode(mode_val))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("settings: UI mode not applied on save: %s", exc)
 
         self.app.notify("Interface settings applied", timeout=2)  # type: ignore[attr-defined]
 
@@ -516,8 +543,10 @@ class SettingsScreen(AppMixin, Widget):
 
             tabs_widget = self.app.query_one(ModuleTabs)  # type: ignore[attr-defined]
             tabs_widget.set_mode(mode.value)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Набор вкладок останется прежним: пользователь выбрал Advanced, а
+            # вкладки не появились — «переключатель не работает».
+            logger.debug("settings: module tabs mode %r not applied: %s", mode.value, exc)
 
     async def _async_save_config(self, changes: dict, notify_msg: str) -> None:
         """Apply *changes* to config and flush to disk in an executor thread.
@@ -588,16 +617,18 @@ class SettingsScreen(AppMixin, Widget):
                 enabled = self.query_one("#set-autosave-enabled", Checkbox).value
                 if enabled != getattr(cfg, "auto_save_enabled", False):
                     changes["auto_save_enabled"] = enabled
-            except Exception:
-                pass
+            except Exception as exc:
+                # Поле не прочитано — значит, его новое значение не сохранится,
+                # а уведомление ниже всё равно скажет «saved».
+                logger.debug("settings: auto_save_enabled not collected: %s", exc)
             try:
                 interval_str = self.query_one("#set-autosave-interval", Input).value.strip()
                 if interval_str.isdigit():
                     interval = max(1, int(interval_str))
                     if interval != getattr(cfg, "auto_save_interval", 5):
                         changes["auto_save_interval"] = interval
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: auto_save_interval not collected: %s", exc)
             self._save_settings(changes, "Project settings saved")
         except Exception as e:
             err(e, "Save failed", self)
@@ -623,8 +654,8 @@ class SettingsScreen(AppMixin, Widget):
                 ua = self.query_one("#set-user-agent", Input).value.strip()
                 if ua and ua != cfg.default_user_agent:
                     changes["default_user_agent"] = ua
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: default_user_agent not collected: %s", exc)
 
             try:
                 req_str = self.query_one("#set-req-timeout", Input).value.strip()
@@ -632,8 +663,8 @@ class SettingsScreen(AppMixin, Widget):
                     v = max(1, int(req_str))
                     if v != cfg.request_timeout:
                         changes["request_timeout"] = v
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: request_timeout not collected: %s", exc)
 
             try:
                 conn_str = self.query_one("#set-conn-timeout", Input).value.strip()
@@ -641,8 +672,8 @@ class SettingsScreen(AppMixin, Widget):
                     v = max(1, int(conn_str))
                     if v != cfg.connect_timeout:
                         changes["connect_timeout"] = v
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: connect_timeout not collected: %s", exc)
 
             try:
                 redir_str = self.query_one("#set-max-redirects", Input).value.strip()
@@ -650,22 +681,22 @@ class SettingsScreen(AppMixin, Widget):
                     v = max(0, int(redir_str))
                     if v != cfg.max_redirects:
                         changes["max_redirects"] = v
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: max_redirects not collected: %s", exc)
 
             try:
                 ssl_v = self.query_one("#set-verify-ssl", Checkbox).value
                 if ssl_v != cfg.verify_ssl:
                     changes["verify_ssl"] = ssl_v
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: verify_ssl not collected: %s", exc)
 
             try:
                 collab = self.query_one("#set-collaborator-url", Input).value.strip()
                 if collab != cfg.collaborator_url:
                     changes["collaborator_url"] = collab
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: collaborator_url not collected: %s", exc)
 
             try:
                 marker_en = self.query_one("#set-scan-marker-enabled", Checkbox).value
@@ -677,8 +708,8 @@ class SettingsScreen(AppMixin, Widget):
                 marker_val = self.query_one("#set-scan-marker-value", Input).value.strip()
                 if marker_val != cfg.scan_marker_value:
                     changes["scan_marker_value"] = marker_val
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: scan-marker fields not collected: %s", exc)
 
             self._save_settings(changes, "Network settings saved")
         except Exception as e:
@@ -695,22 +726,22 @@ class SettingsScreen(AppMixin, Widget):
                 crash_v = self.query_one("#set-send-crash-reports", Checkbox).value
                 if crash_v != getattr(cfg, "send_crash_reports", True):
                     changes["send_crash_reports"] = crash_v
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: send_crash_reports not collected: %s", exc)
 
             try:
                 upd_v = self.query_one("#set-check-updates", Checkbox).value
                 if upd_v != getattr(cfg, "check_updates", True):
                     changes["check_updates"] = upd_v
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: check_updates not collected: %s", exc)
 
             try:
                 scope_v = self.query_one("#set-auto-scope", Checkbox).value
                 if scope_v != getattr(cfg, "auto_scope", False):
                     changes["auto_scope"] = scope_v
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: auto_scope not collected: %s", exc)
 
             self._save_settings(changes, "Privacy settings saved")
         except Exception as e:
@@ -736,8 +767,10 @@ class SettingsScreen(AppMixin, Widget):
             try:
                 port_v = self.query_one("#set-ai-mcp-port", Input).value.strip()
                 changes["ai_mcp_port"] = int(port_v) if port_v else 0
-            except Exception:
-                pass
+            except Exception as exc:
+                # Порт остаётся прежним, хотя пользователь его менял: молчание
+                # превращает это в «настройка не сохранилась».
+                logger.debug("settings: ai_mcp_port not collected: %s", exc)
             try:
                 model_v = self.query_one("#set-ai-model-path", Input).value.strip()
                 if model_v:
@@ -746,8 +779,8 @@ class SettingsScreen(AppMixin, Widget):
                     models = list(AI_MODELS_DIR.iterdir())
                     if models:
                         changes["ai_mcp_model_path"] = str(models[0])
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("settings: ai_mcp_model_path not collected: %s", exc)
 
             self._save_settings(changes, "AI settings saved")
         except Exception as e:
@@ -758,7 +791,10 @@ class SettingsScreen(AppMixin, Widget):
     def _do_activate_license(self) -> None:
         try:
             key = self.query_one("#license-key-input", Input).value.strip()
-        except Exception:
+        except Exception as exc:
+            # Пустой ключ ниже даст понятное «Enter a license key first» —
+            # это правильный пользовательский исход, но причина другая.
+            logger.debug("settings: license key input unreadable: %s", exc)
             key = ""
         if not key:
             self.app.notify("Enter a license key first", severity="warning", timeout=3)  # type: ignore[attr-defined]
