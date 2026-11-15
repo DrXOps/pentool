@@ -8,6 +8,7 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Button, Input, Static, Switch, TabbedContent, TabPane
@@ -791,7 +792,7 @@ class SettingsScreen(AppMixin, Widget):
     def _do_activate_license(self) -> None:
         try:
             key = self.query_one("#license-key-input", Input).value.strip()
-        except Exception as exc:
+        except NoMatches as exc:
             # Пустой ключ ниже даст понятное «Enter a license key first» —
             # это правильный пользовательский исход, но причина другая.
             logger.debug("settings: license key input unreadable: %s", exc)

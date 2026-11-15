@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import RichLog, Static
 
@@ -59,7 +60,7 @@ class DiffPanel(Widget):
         try:
             self.query_one("#diff-panel-log", RichLog).clear()
             self.query_one("#diff-panel-title", Static).update("Diff vs. last sent")
-        except Exception as exc:
+        except NoMatches as exc:
             # Панель остаётся с диффом от предыдущего запроса: «Diff vs. last
             # sent» показывает расхождение с чужим запросом.
             logger.debug("DiffPanel.clear: %s", exc)

@@ -462,7 +462,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             try:
                 inp = self.query_one("#rename-input", Input)
-            except Exception as exc:
+            except NoMatches as exc:
                 # Поля ещё нет — ниже создаём его сами. Ожидаемый ход; запись
                 # отличает его от опечатки в id.
                 logger.debug("repeater: rename input not found, creating: %s", exc)

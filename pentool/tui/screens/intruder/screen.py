@@ -1918,7 +1918,10 @@ class IntruderScreen(
         tab_id = tab.tab_id
         try:
             label = self.query_one(f"#{self._wid(tab_id, _TabId.PAYLOAD_COUNT_LABEL)}", Static)
-        except Exception:
+        except NoMatches as exc:
+            # Подпись «N line(s)» не обновлена — при загрузке файла она
+            # остаётся от прошлого набора, и размер payload врут.
+            logger.debug("intruder: payload count label not found: %s", exc)
             return
         active = tab.payload_sources[tab.active_set_idx] if tab.active_set_idx < len(tab.payload_sources) else []
         if isinstance(active, FilePayloadSource):
@@ -2556,8 +2559,10 @@ class IntruderScreen(
         try:
             self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROGRESS_LABEL)}", Static).update("0/0 (0%)")
             self.query_one(f"#{self._wid(tab.tab_id, _TabId.ATTACK_PROGRESS)}", ProgressBar).update(total=100)
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except NoMatches as exc:
+            # Результаты очищены, а прогресс и счётчик «N/M» показывают
+            # прошлую атаку — экран говорит, что данные есть, хотя их нет.
+            logger.debug("intruder: progress not reset with results: %s", exc)
 
     def _results_table(self) -> DataTable | None:
         tab = self._active_tab

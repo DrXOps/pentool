@@ -5,6 +5,7 @@ from __future__ import annotations
 import types
 
 import pytest
+from textual.css.query import NoMatches
 
 from pentool.tui.mixins.notifications import NotificationsMixin
 
@@ -29,7 +30,9 @@ class _FakeApp(NotificationsMixin, _FakeBase):
         self.timers.append((delay, callback))
 
     def query_one(self, selector, cls=None):
-        raise Exception("unmounted")
+        # Строки модулей нет в дереве — ровно `NoMatches` (ADR-6 п.4):
+        # `flash()` на этом и рассчитан, а `Exception` скрывал бы опечатку.
+        raise NoMatches()
 
     def _refresh_notifications(self):
         # Textual App provides this; fake exposes a no-op for the scheduled cb.
@@ -73,6 +76,7 @@ class TestNotificationsMixin:
 
     def test_notify_does_not_raise_when_refresh_missing(self):
         """Host without _refresh_notifications -> timer scheduling skipped, no raise."""
+
         # A host that does NOT define _refresh_notifications (e.g. a non-App
         # object, or a class that dropped it). notify must not blow up.
         class _NoRefresh(_FakeApp):

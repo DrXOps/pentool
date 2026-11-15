@@ -11,6 +11,7 @@ from pathlib import Path
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import RichLog, Static, Tree
 
@@ -205,7 +206,7 @@ class LiveChart(Vertical):
         self._summary = text
         try:
             self.query_one("#chart-summary", Static).update(text)
-        except Exception as exc:
+        except NoMatches as exc:
             # Значение запомнено, а на экране — прежнее: сводка отстаёт от
             # графика на один шаг и это неотличимо от «ещё не обновилось».
             logger.debug("dashboard: chart summary not painted: %s", exc)
@@ -238,7 +239,7 @@ class LiveChart(Vertical):
             self.query_one("#chart-axis", Static).update(axis)
             self.query_one("#chart-stats", Static).update(stats)
             self.query_one("#chart-meta", Static).update(f"[dim]scale: 0–{mv} {self._unit}  │  window: 60s[/dim]")
-        except Exception as exc:
+        except NoMatches as exc:
             # _render_chart зовётся на каждый пакет — молчание здесь означало
             # бы график, который «замер», без объяснения.
             logger.debug("dashboard: chart not rendered: %s", exc)
@@ -368,7 +369,7 @@ class SeverityMatrix(Vertical):
     def _refresh_display(self) -> None:
         try:
             self.query_one("#mx-body", Static).update(self._build_text())
-        except Exception as exc:
+        except NoMatches as exc:
             # Матрица находок перестаёт перерисовываться — новые находки в
             # ней не появляются, хотя лента их показывает.
             logger.debug("dashboard: severity matrix not refreshed: %s", exc)
@@ -689,14 +690,14 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
 
         try:
             self.query_one("#threat-meter", ThreatMeter).update_findings(self._finding_counts, self._top_finding)
-        except Exception as exc:
+        except NoMatches as exc:
             logger.debug("_apply_stats ThreatMeter: %s", exc)
 
         try:
             matrix = self.query_one("#vuln-matrix", SeverityMatrix)
             matrix._matrix = {vt: {s: 0 for s in SeverityMatrix._SEV_KEYS} for vt in SeverityMatrix._VULN_TYPES}
             matrix._refresh_display()
-        except Exception as exc:
+        except NoMatches as exc:
             logger.debug("_apply_stats SeverityMatrix: %s", exc)
 
         total = data.get("requests", 0)
@@ -708,7 +709,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             self.query_one("#chart-requests", LiveChart).set_summary(
                 f"[dim]Total: [/dim][bold]{total:,}[/bold][dim] reqs · [/dim][bold]{hosts}[/bold][dim] hosts[/dim]"
             )
-        except Exception as exc:
+        except NoMatches as exc:
             logger.debug("_apply_stats chart_summary: %s", exc)
 
     def action_refresh_dash(self) -> None:
@@ -719,7 +720,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         """Write to the live-feed RichLog."""
         try:
             self.query_one("#feed-log", RichLog).write(text)
-        except Exception as exc:
+        except NoMatches as exc:
             # Единственное место, куда дашборд пишет всё, что происходит.
             # Пропуск здесь означает «лента молчит, хотя события идут».
             logger.debug("dashboard: feed write failed: %s", exc)
@@ -727,7 +728,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
     def _set_led_bar(self, widget_id: str, color: str, label: str) -> None:
         try:
             self.query_one(f"#{widget_id}", Static).update(f"[{color}]●[/{color}] {label}")
-        except Exception as exc:
+        except NoMatches as exc:
             # Индикатор останется в прежнем состоянии (например, «OFF» при
             # включённом AI).
             logger.debug("dashboard: LED %s not set: %s", widget_id, exc)
@@ -766,13 +767,13 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
 
         try:
             self.query_one("#threat-meter", ThreatMeter).update_findings(self._finding_counts, self._top_finding)
-        except Exception as exc:
+        except NoMatches as exc:
             # Счётчики уже увеличены, а шкала угрозы — нет: она отстаёт от
             # ленты, и разница накапливается.
             logger.debug("dashboard: threat meter not updated with finding: %s", exc)
         try:
             self.query_one("#vuln-matrix", SeverityMatrix).add_finding(vuln_type, sev)
-        except Exception as exc:
+        except NoMatches as exc:
             # В матрице находка не появится, хотя в ленте она есть.
             logger.debug("dashboard: finding not added to matrix: %s", exc)
 

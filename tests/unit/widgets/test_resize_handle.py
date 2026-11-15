@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
+from textual.css.query import NoMatches
 from textual.events import MouseDown, MouseMove, MouseUp
 
 from pentool.tui.widgets.resize_handle import ResizeHandle
@@ -17,7 +17,7 @@ def _fake_md(button: int = 1, sx: int = 0, sy: int = 0) -> MagicMock:
     ev.screen_x = sx
     ev.screen_y = sy
     ev.is_stopped = False
-    ev.stop = lambda: setattr(ev, 'is_stopped', True)
+    ev.stop = lambda: setattr(ev, "is_stopped", True)
     return ev
 
 
@@ -27,7 +27,7 @@ def _fake_mm(sx: int = 0, sy: int = 0) -> MagicMock:
     ev.screen_x = sx
     ev.screen_y = sy
     ev.is_stopped = False
-    ev.stop = lambda: setattr(ev, 'is_stopped', True)
+    ev.stop = lambda: setattr(ev, "is_stopped", True)
     return ev
 
 
@@ -35,7 +35,7 @@ def _fake_mu() -> MagicMock:
     """Fake MouseUp."""
     ev = MagicMock(spec=MouseUp)
     ev.is_stopped = False
-    ev.stop = lambda: setattr(ev, 'is_stopped', True)
+    ev.stop = lambda: setattr(ev, "is_stopped", True)
     return ev
 
 
@@ -141,7 +141,7 @@ class TestMouseDown:
     def test_query_failure_ignores(self) -> None:
         h = _make_handle()
         mock_app = MagicMock()
-        mock_app.query_one = Mock(side_effect=Exception("boom"))
+        mock_app.query_one = Mock(side_effect=NoMatches())
 
         with patch("textual.widget.Widget.app", new=mock_app, create=True):
             h.on_mouse_down(_fake_md(button=1))
@@ -173,8 +173,10 @@ class TestMouseMove:
         mock_app.query_one = lambda sel, cls=None: {"#left-panel": left, "#right-panel": right}.get(sel)
         parent_mock = MagicMock()
 
-        with patch("textual.widget.Widget.app", new=mock_app, create=True), \
-             patch.object(ResizeHandle, "parent", new=parent_mock, create=True):
+        with (
+            patch("textual.widget.Widget.app", new=mock_app, create=True),
+            patch.object(ResizeHandle, "parent", new=parent_mock, create=True),
+        ):
             ev = _fake_mm(sx=400, sy=100)
             h.on_mouse_move(ev)
 
@@ -196,8 +198,10 @@ class TestMouseMove:
         mock_app.query_one = lambda sel, cls=None: {"#left-panel": left, "#right-panel": right}.get(sel)
         parent_mock = MagicMock()
 
-        with patch("textual.widget.Widget.app", new=mock_app, create=True), \
-             patch.object(ResizeHandle, "parent", new=parent_mock, create=True):
+        with (
+            patch("textual.widget.Widget.app", new=mock_app, create=True),
+            patch.object(ResizeHandle, "parent", new=parent_mock, create=True),
+        ):
             ev = _fake_mm(sx=100, sy=500)
             h.on_mouse_move(ev)
 
@@ -208,7 +212,7 @@ class TestMouseMove:
         h = _make_handle()
         h._dragging = True
         mock_app = MagicMock()
-        mock_app.query_one = Mock(side_effect=Exception("boom"))
+        mock_app.query_one = Mock(side_effect=NoMatches())
 
         with patch("textual.widget.Widget.app", new=mock_app, create=True):
             h.on_mouse_move(_fake_mm())
@@ -219,7 +223,6 @@ class TestMouseUp:
         h = _make_handle()
         h._dragging = False
         h.on_mouse_up(_fake_mu())
-
 
     def test_drag_ends(self) -> None:
         h = _make_handle()

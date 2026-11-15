@@ -9,6 +9,7 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Input, Label, Static, TextArea
 
@@ -283,7 +284,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         try:
             self.query_one("#btn-seq-capture", ToolbarButton).disabled = False
             self.query_one("#btn-seq-stop", ToolbarButton).disabled = True
-        except Exception as exc:
+        except NoMatches as exc:
             # Кнопки остались в положении «идёт захват», хотя захват остановлен.
             logger.debug("sequencer: capture buttons not reset: %s", exc)
         self.app.notify("Capture stopped", timeout=2)
@@ -291,7 +292,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
     def _update_counter(self) -> None:
         try:
             self.query_one("#seq-counter", Static).update(f"Captured: [bold]{self._seq.count}[/bold]")
-        except Exception as exc:
+        except NoMatches as exc:
             # Счётчик замирает на старом числе — по нему решают, хватает ли
             # токенов для анализа, так что решение принимается вслепую.
             logger.debug("sequencer: counter not updated: %s", exc)
@@ -500,8 +501,10 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
             self.query_one("#seq-gauge", Static).update(" ")
             self.query_one("#seq-assessment", Static).update(" ")
             self.query_one("#seq-bits-label", Static).update(" ")
-        except Exception as exc:
-            logger.debug("action_clear_tokens: %s", exc)
+        except NoMatches as exc:
+            # Токены очищены, а панели анализа показывают энтропию и оценку
+            # прошлого набора — цифры относятся к данным, которых больше нет.
+            logger.debug("sequencer: analysis panels not cleared with tokens: %s", exc)
 
     def on_unmount(self) -> None:
         self._stop_capture()

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock, patch
 
+from textual.css.query import NoMatches
+
 from pentool.tui.widgets.search_bar import SearchBar
 
 
@@ -88,7 +90,8 @@ class TestFireSearch:
 
     def test_fire_search_query_failure(self) -> None:
         b = _make_bar()
-        b.query_one = Mock(side_effect=Exception("boom"))
+        # Поля нет в дереве — ровно `NoMatches` (ADR-6 п.4), не любая ошибка.
+        b.query_one = Mock(side_effect=NoMatches())
         b.post_message = MagicMock()
         b._fire_search(1)
         b.post_message.assert_not_called()
@@ -116,7 +119,8 @@ class TestToggleTarget:
     def test_toggle_tolerates_exception(self) -> None:
         b = _make_bar()
         b._search_target = "request"
-        b.query_one = Mock(side_effect=Exception("boom"))
+        # Тогла нет в дереве — ровно `NoMatches` (ADR-6 п.4).
+        b.query_one = Mock(side_effect=NoMatches())
         b.toggle_target()
         assert b._search_target == "response"
 
@@ -207,7 +211,8 @@ class TestSetCount:
 
     def test_set_count_tolerates_exception(self) -> None:
         b = _make_bar()
-        b.query_one = Mock(side_effect=Exception("boom"))
+        # Счётчика нет в дереве — ровно `NoMatches` (ADR-6 п.4).
+        b.query_one = Mock(side_effect=NoMatches())
         b.set_count(0, 0)
 
 

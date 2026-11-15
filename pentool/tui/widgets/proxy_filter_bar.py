@@ -19,11 +19,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.widgets import Label
 
 from pentool.collections.filter_predicate import FilterField, FilterFieldType, FilterOp, FilterPredicate
+from pentool.core.logging import get_logger
 from pentool.tui.widgets.filter_bar_widget import FilterBarWidget
 from pentool.tui.widgets.toolbar_button import ToolbarButton
+
+logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "proxy_filter_bar.tcss").read_text(encoding="utf-8")
 
@@ -100,13 +104,18 @@ class HistoryFilterBar(FilterBarWidget):
     def _toggle_active(self, toggle_id: str) -> bool:
         try:
             return self.query_one(f"#{toggle_id}", ToolbarButton).has_class("active")
-        except Exception:
+        except NoMatches as exc:
+            # Тогл считается выключенным — «★ Scope»/«Comments» на экране
+            # горят, а фильтр их не учитывает.
+            logger.debug("proxy filter: toggle %s not found: %s", toggle_id, exc)
             return False
 
     def _set_toggle(self, toggle_id: str, active: bool, label: str) -> None:
         try:
             button = self.query_one(f"#{toggle_id}", ToolbarButton)
-        except Exception:
+        except NoMatches as exc:
+            # Положение тогла не обновилось — подпись расходится с фильтром.
+            logger.debug("proxy filter: toggle %s not set: %s", toggle_id, exc)
             return
         button.set_class(active, "active")
         button.label = label

@@ -24,6 +24,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from textual.css.query import NoMatches
 from textual.widgets import Static
 
 from pentool.tui.widgets import filter_bar_widget
@@ -133,7 +134,9 @@ def test_bar_renders_scope_and_comments_toggles(bar: type[HistoryFilterBar]) -> 
 
 def test_ws_bar_still_pins_websocket_only() -> None:
     bar = object.__new__(WsFilterBar)
-    bar.query_one = lambda *a, **k: (_ for _ in ()).throw(LookupError)  # type: ignore[method-assign]
+    # Молчание тоглов — ровно `NoMatches`: виджета нет в дереве. Раньше здесь
+    # стоял `LookupError`, и это скрывало, что бар ловил вообще всё (ADR-6 п.4).
+    bar.query_one = lambda *a, **k: (_ for _ in ()).throw(NoMatches())  # type: ignore[method-assign]
     fields = bar.collect()
     assert any(p.field == "is_websocket" for p in fields)
 

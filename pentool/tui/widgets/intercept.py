@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from textual.css.query import NoMatches
+
 from pentool.api.proxy_api import InterceptedRequest
 from pentool.core.logging import get_logger
 from pentool.tui.markup import esc
@@ -103,14 +105,14 @@ class InterceptMixin:
         sent_text = modified if modified and modified.strip() else ""
         try:
             self.query_one("#intercept-sent-req", HttpView).load_raw_http(sent_text)
-        except Exception as exc:
+        except NoMatches as exc:
             # Нижняя панель покажет предыдущий запрос под только что
             # отправленным — прямое расхождение с тем, что ушло на сервер.
             logger.debug("intercept: sent request not shown: %s", exc)
         # Clear the response panel — waiting for the server response
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
-        except Exception as exc:
+        except NoMatches as exc:
             # Ответ от прошлого перехвата останется на экране и будет прочитан
             # как ответ на этот запрос.
             logger.debug("intercept: response panel not cleared before forward: %s", exc)
@@ -143,17 +145,17 @@ class InterceptMixin:
             self.query_one("#intercept-panel", ContentPanel).content_widget.load_text(
                 "(No requests waiting for intercept)"
             )
-        except Exception as exc:
+        except NoMatches as exc:
             # Кнопки уже показывают «Dropped», а в редакторе остался
             # отброшенный запрос: пользователь может нажать Forward по нему.
             logger.debug("intercept: editor not reset after drop: %s", exc)
         try:
             self.query_one("#intercept-sent-req", HttpView).clear()
-        except Exception as exc:
+        except NoMatches as exc:
             logger.debug("intercept: sent panel not cleared after drop: %s", exc)
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
-        except Exception as exc:
+        except NoMatches as exc:
             logger.debug("intercept: response panel not cleared after drop: %s", exc)
 
     def _toggle_intercept_special_chars(self: _InterceptHost, btn: ToolbarButton) -> None:
@@ -211,14 +213,14 @@ class InterceptMixin:
         try:
             self.query_one("#btn-forward", ToolbarButton).disabled = True
             self.query_one("#btn-drop", ToolbarButton).disabled = True
-        except Exception as exc:
+        except NoMatches as exc:
             # Кнопки остаются активными, хотя перехватывать нечего: Forward
             # нажмётся и ничего не сделает.
             logger.debug("intercept: buttons not disabled: %s", exc)
         if hint:
             try:
                 self.query_one("#intercept-hint", Label).update(hint)
-            except Exception as exc:
+            except NoMatches as exc:
                 # Подсказка — единственное объяснение, почему кнопки серые.
                 logger.debug("intercept: hint not updated: %s", exc)
 
@@ -238,7 +240,7 @@ class InterceptMixin:
                 self.query_one("#intercept-hint", Label).update(
                     f"⏸ {esc(req.method)} {esc(req.url)}  (+{len(self._intercept_pending)} queued)"
                 )
-            except Exception as exc:
+            except NoMatches as exc:
                 # Запрос встал в очередь, но счётчик очереди на экране не
                 # вырос — пользователь не знает, что ждёт ещё один.
                 logger.debug("intercept: queue hint not updated: %s", exc)
@@ -277,13 +279,13 @@ class InterceptMixin:
         # (it is updated only in action_forward/action_drop)
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
-        except Exception as exc:
+        except NoMatches as exc:
             # Новый перехваченный запрос, а в панели ответа — ответ прошлого.
             logger.debug("intercept: response panel not cleared for new request: %s", exc)
         try:
             self.query_one("#btn-forward", ToolbarButton).disabled = False
             self.query_one("#btn-drop", ToolbarButton).disabled = False
-        except Exception as exc:
+        except NoMatches as exc:
             # Запрос ждёт решения, а кнопки Forward/Drop серые — прокси
             # заблокирован, и разблокировать его из UI нечем.
             logger.debug("intercept: buttons not enabled for new request: %s", exc)
@@ -293,13 +295,13 @@ class InterceptMixin:
             hint += f"  (+{queued} queued)"
         try:
             self.query_one("#intercept-hint", Label).update(hint)
-        except Exception as exc:
+        except NoMatches as exc:
             logger.debug("intercept: hint not set for new request: %s", exc)
         # Switch to the Intercept tab
         try:
             tabs = self.query_one("#proxy-subtabs", TabbedContent)
             tabs.active = "tab-intercept"
-        except Exception as exc:
+        except NoMatches as exc:
             # Перехват идёт, а пользователь не видит вкладку с ним — запрос
             # просто висит, и понять это из UI нельзя.
             logger.debug("intercept: intercept tab not activated: %s", exc)
@@ -318,7 +320,7 @@ class InterceptMixin:
             body = resp.body or ""
             raw = f"{status_line}\r\n{headers}\r\n\r\n{body}"
             self.query_one("#intercept-resp-viewer", HttpView).load_raw_http(raw)
-        except Exception as exc:
+        except NoMatches as exc:
             # Ответ пришёл, а панель его не показала — со стороны Send
             # выглядит неудавшимся.
             logger.debug("intercept: response not shown: %s", exc)
@@ -326,7 +328,7 @@ class InterceptMixin:
             self.query_one("#intercept-hint", Label).update(
                 f"✓ Response: {req.response.status} — {esc(req.method)} {esc(req.url)}"
             )
-        except Exception as exc:
+        except NoMatches as exc:
             # Строка-подсказка останется на «Forwarded — waiting…» навсегда.
             logger.debug("intercept: response hint not updated: %s", exc)
 
@@ -345,7 +347,10 @@ class InterceptMixin:
         proxy = self._get_proxy()
         try:
             btn = self.query_one("#btn-intercept", ToolbarButton)
-        except Exception:
+        except NoMatches as exc:
+            # Кнопка перехвата остаётся в прежнем положении — по ней решают,
+            # включён перехват или нет.
+            logger.debug("intercept: toggle button not synced: %s", exc)
             return
         enabled = proxy and proxy.intercept_enabled
         if enabled:

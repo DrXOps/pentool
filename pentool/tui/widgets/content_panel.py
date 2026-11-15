@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 
 from textual import on
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -212,7 +213,7 @@ class ContentPanel(Widget):
         self._panel_title = title
         try:
             self.query_one(".cp-title > Static", Static).update(esc(title))
-        except Exception as exc:
+        except NoMatches as exc:
             # Заголовок на экране отстаёт от того, что реально загружено в
             # панель: две панели рядом выглядят одинаково.
             logger.debug("content panel: title %r not shown: %s", title, exc)

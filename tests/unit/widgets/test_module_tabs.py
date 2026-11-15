@@ -4,14 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
-from textual.widgets import Static
+from textual.css.query import NoMatches
 
-from pentool.tui.widgets.module_tabs import (
-    BASIC_MODULES,
-    MODULES,
-    ModuleTabs,
-)
+from pentool.tui.widgets.module_tabs import BASIC_MODULES, MODULES, ModuleTabs
 
 
 def _make_tabs() -> ModuleTabs:
@@ -84,7 +79,8 @@ class TestSetMode:
 
     def test_set_mode_handles_exception(self) -> None:
         t = _make_tabs()
-        t.query_one = Mock(side_effect=Exception("boom"))
+        # Панели нет в дереве — ровно `NoMatches` (ADR-6 п.4), не любая ошибка.
+        t.query_one = Mock(side_effect=NoMatches())
         t.set_mode("basic")
 
 
@@ -117,7 +113,8 @@ class TestSetScannerLocked:
 
     def test_lock_handles_exception(self) -> None:
         t = _make_tabs()
-        t.query_one = Mock(side_effect=Exception("boom"))
+        # Вкладки нет в дереве — ровно `NoMatches` (ADR-6 п.4).
+        t.query_one = Mock(side_effect=NoMatches())
         t.set_scanner_locked(True)
 
 
@@ -145,7 +142,8 @@ class TestFlash:
 
     def test_flash_handles_exception(self) -> None:
         t = _make_tabs()
-        t.query_one = Mock(side_effect=Exception("boom"))
+        # Строки вкладок нет — ровно `NoMatches` (ADR-6 п.4).
+        t.query_one = Mock(side_effect=NoMatches())
         t.flash("hi")
 
 
@@ -161,12 +159,14 @@ class TestHideTooltip:
 
     def test_hide_tooltip_handles_exception(self) -> None:
         t = _make_tabs()
-        t.query_one = Mock(side_effect=Exception("boom"))
+        # Подсказки нет в дереве — ровно `NoMatches` (ADR-6 п.4).
+        t.query_one = Mock(side_effect=NoMatches())
         t._hide_tooltip2()  # should not raise
 
 
 class TestMessage:
     def test_module_selected_message(self) -> None:
         from pentool.tui.messages import ModuleSelected
+
         msg = ModuleSelected("repeater")
         assert msg.module_id == "repeater"

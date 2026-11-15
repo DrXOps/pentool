@@ -11,6 +11,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widgets import DataTable, Input, Label, Static
 
 from pentool.core.logging import get_logger
@@ -91,7 +92,7 @@ class FileSelectorDialog(BaseDialog[None]):
         # Update path label
         try:
             self.query_one("#path-label", Static).update(str(self._current_dir))
-        except Exception as exc:
+        except NoMatches as exc:
             # Строка пути останется от предыдущего каталога, а таблица уже
             # показывает новый — пользователь читает путь, в котором его нет.
             logger.debug("file dialog: path label not updated: %s", exc)
@@ -140,7 +141,7 @@ class FileSelectorDialog(BaseDialog[None]):
             if not is_dir:
                 try:
                     self.query_one("#filename-input", Input).value = entry_name
-                except Exception as exc:
+                except NoMatches as exc:
                     # В поле останется прошлое имя: OK подтвердит не тот файл,
                     # который выделен в таблице.
                     logger.debug("file dialog: filename field not set to %r: %s", entry_name, exc)

@@ -16,6 +16,7 @@ from pathlib import Path
 
 import psutil
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Static
 
@@ -125,7 +126,7 @@ class ResourceMonitor(Widget):
         except ImportError:
             try:
                 self.query_one("#res-cpu", Static).update("[dim]psutil not installed[/dim]")
-            except Exception as exc:
+            except NoMatches as exc:
                 # Причина пустой панели ресурсов пользователю не сообщается.
                 logger.debug("resource monitor: psutil notice not shown: %s", exc)
         except Exception as exc:

@@ -9,6 +9,7 @@ from pathlib import Path
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Tree
 
@@ -204,7 +205,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         if getattr(self, "_ai_hidden_on_compose", False):
             try:
                 self.query_one("#ai-crawl-box").display = False
-            except Exception as exc:
+            except NoMatches as exc:
                 # Блок AI останется видимым при выключенном AI — именно то
                 # расхождение, ради которого этот код и написан.
                 logger.debug("target: AI crawl box not hidden on mount: %s", exc)
@@ -266,7 +267,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         self._selected_node_data = None
         try:
             self.query_one("#detail-panel", ContentPanel).clear_content()
-        except Exception as exc:
+        except NoMatches as exc:
             # В деталях остаются данные прошлого проекта — ровно тот
             # «артефакт, протекающий между проектами», о котором комментарий.
             logger.debug("target: detail panel not cleared on reload: %s", exc)
@@ -729,7 +730,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             self._selected_node_data = None
             try:
                 self.query_one("#detail-panel", ContentPanel).clear_content()
-            except Exception as exc:
+            except NoMatches as exc:
                 # Карта очищена, а в деталях остался прежний узел — ссылка на
                 # данные, которых больше нет.
                 logger.debug("target: details not cleared with site map: %s", exc)
@@ -813,7 +814,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         use_ai = False
         try:
             use_ai = self.query_one("#cfg-ai-use", Checkbox).value
-        except Exception as exc:
+        except NoMatches as exc:
             # Считаем «выключено» — это безопасно, но при включённом
             # чекбоксе AI-подсказки просто не появятся.
             logger.debug("target: AI checkbox not read, assuming off: %s", exc)

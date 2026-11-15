@@ -10,6 +10,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widgets import Label, Static, TextArea
 
 from pentool.core.logging import get_logger
@@ -221,7 +222,7 @@ class ScopeDialog(BaseDialog[list[str] | ScopeConfig | None]):
                 self.query_one("#validation-msg", Static).update(
                     f"[bold red]Invalid regex: {esc(', '.join(bad_all[:3]))}[/bold red]"
                 )
-            except Exception as exc:
+            except NoMatches as exc:
                 # Невалидная регулярка не показана: диалог просто не закроется,
                 # и пользователь не поймёт, почему OK ничего не делает.
                 logger.debug("scope dialog: validation message not shown: %s", exc)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock, patch
 
+from textual.css.query import NoMatches
+
 from pentool.tui.widgets.diff_panel import DiffPanel
 
 
@@ -129,7 +131,6 @@ class TestClear:
 
     def test_clear_handles_exception(self) -> None:
         p = _make_panel()
-        p.query_one = Mock(side_effect=Exception("boom"))  # type: ignore[method-assign]
+        # Панелей нет в дереве — ровно `NoMatches`, а не любая ошибка (ADR-6 п.4).
+        p.query_one = Mock(side_effect=NoMatches())  # type: ignore[method-assign]
         p.clear()
-
-

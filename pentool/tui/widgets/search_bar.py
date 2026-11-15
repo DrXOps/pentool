@@ -6,6 +6,7 @@ from pathlib import Path
 
 from textual import events
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Button, Input, Label, Static
@@ -75,13 +76,13 @@ class SearchBar(Widget):
     def _focus_input(self) -> None:
         try:
             self.query_one("#search-input", Input).focus()
-        except Exception:
+        except NoMatches:
             logger.debug("search bar: focus input failed", exc_info=True)
 
     def _fire_search(self, direction: int = 1) -> None:
         try:
             query = self.query_one("#search-input", Input).value
-        except Exception:
+        except NoMatches:
             logger.debug("search bar: read query failed", exc_info=True)
             return
         if query:
@@ -133,7 +134,9 @@ class SearchBar(Widget):
                 count_label.update("No matches")
             else:
                 count_label.update(f"{current}/{total}")
-        except Exception:
+        except NoMatches:
+            # Счётчик совпадений замирает, хотя поиск отработал — по нему
+            # решают, искать дальше или менять запрос.
             logger.debug("search bar: count update failed", exc_info=True)
 
     def toggle_target(self) -> None:
@@ -144,5 +147,7 @@ class SearchBar(Widget):
             tgt.update(label)
             tgt.remove_class("search-target-req", "search-target-resp")
             tgt.add_class(f"search-target-{'req' if self._search_target == 'request' else 'resp'}")
-        except Exception:
+        except NoMatches:
+            # Переключатель цели поиска остаётся на прежней подписи, а поиск
+            # уже идёт по другой стороне — экран врёт о том, что ищется.
             logger.debug("search bar: toggle target label failed", exc_info=True)

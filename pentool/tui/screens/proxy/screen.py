@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Label, Static, TabbedContent, TabPane
 
@@ -477,7 +478,10 @@ class ProxyScreen(
     def _update_history_count_label(self) -> None:
         try:
             label = self.query_one("#history-count", Static)
-        except Exception:
+        except NoMatches as exc:
+            # Счётчик не обновлён — «Showing N of M» остаётся от прошлой
+            # страницы, и по нему не понять, сколько записей загружено.
+            logger.debug("proxy: history counter not found: %s", exc)
             return
         shown = len(self._rows_cache)
         total = self._history_total
@@ -492,7 +496,10 @@ class ProxyScreen(
         otherwise it's blank (everything loaded)."""
         try:
             label = self.query_one("#ws-history-count", Static)
-        except Exception:
+        except NoMatches as exc:
+            # То же для WS History: счётчик отстаёт от фактически показанных
+            # строк, и «прокрутите вверх» не появляется, когда нужно.
+            logger.debug("proxy: WS history counter not found: %s", exc)
             return
         shown = len(self._ws_rows_cache)
         total = self._ws_history_total
@@ -661,7 +668,10 @@ class ProxyScreen(
             arrow = _rows_to_arrow(rows)
             try:
                 table = self.query_one("#ws-request-list", DataTable)
-            except Exception:
+            except NoMatches as exc:
+                # Таблица WS не найдена — загруженная страница не показана,
+                # хотя счётчик уже увеличили: «Showing N of M» врёт.
+                logger.debug("proxy: WS table not found, page not shown: %s", exc)
                 return
             table.set_data(arrow)
             table._ordered_columns = None
@@ -694,7 +704,7 @@ class ProxyScreen(
         for btn_id, tip in tooltips.items():
             try:
                 self.query_one(f"#{btn_id}", ToolbarButton).tooltip = tip
-            except Exception as exc:
+            except NoMatches as exc:
                 # Кнопки нет в дереве — подсказка ей и не нужна; но именно
                 # такая тишина скрывает опечатку в одном из семи id.
                 logger.debug("proxy: tooltip for #%s not set: %s", btn_id, exc)
@@ -1693,7 +1703,7 @@ class ProxyScreen(
         try:
             self.query_one("#req-editor", HttpView).clear()
             self.query_one("#resp-viewer", HttpView).clear()
-        except Exception as exc:
+        except NoMatches as exc:
             # История очищена, а панели показывают запрос, которого больше нет.
             logger.debug("proxy: detail panels not cleared with history: %s", exc)
         self._selected_req_id = None
@@ -1862,7 +1872,7 @@ class ProxyScreen(
             enabled = bool(proxy and proxy.enforce_scope)
         try:
             btn = self.query_one("#btn-enforce-scope", ToolbarButton)
-        except Exception as exc:
+        except NoMatches as exc:
             # Кнопки нет — синхронизировать нечего (экран ещё не собран).
             logger.debug("proxy: enforce-scope button not found: %s", exc)
             return
@@ -1895,7 +1905,10 @@ class ProxyScreen(
         proxy = self._get_proxy()
         try:
             btn = self.query_one("#btn-proxy", ToolbarButton)
-        except Exception:
+        except NoMatches as exc:
+            # Кнопка прокси не синхронизируется: Start показывает остановленный
+            # сервер (и наоборот), а прокси при этом работает.
+            logger.debug("proxy: proxy button not synced: %s", exc)
             return
         if proxy and proxy.is_running:
             btn.label = f"● Proxy:{proxy.port}"

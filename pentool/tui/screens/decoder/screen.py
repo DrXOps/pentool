@@ -7,6 +7,7 @@ from pathlib import Path
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
@@ -159,7 +160,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
         self._update_chain_display()
         try:
             self.query_one("#dec-steps-log", ContentPanel).clear_content()
-        except Exception as exc:
+        except NoMatches as exc:
             # Старые шаги остаются в панели лога после «Clear» — журнал
             # описывает цепочку, которой уже нет.
             logger.debug("decoder: steps log not cleared: %s", exc)
@@ -312,5 +313,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
             self.query_one("#dec-input", ContentPanel).content_widget.load_text(text)
             self.query_one("#dec-output", ContentPanel).clear_content()
             self.query_one("#dec-steps-log", ContentPanel).clear_content()
-        except Exception as exc:
-            logger.debug("load_text: %s", exc)
+        except NoMatches as exc:
+            # Текст загружен, а лог шагов прошлой операции остался — он
+            # описывает то, чего с новым входом уже не будет.
+            logger.debug("decoder: load_text panels not reset: %s", exc)

@@ -16,9 +16,11 @@ import inspect
 # mutation was leftover from older layout and is handled centrally in the root
 # tests/conftest.py if ever needed.
 
+
 def test_search_bar_target_toggle():
     """toggle_target() actually flips _search_target request<->response
     (behaviour, not just "method exists")."""
+    from textual.css.query import NoMatches
     from textual.message import Message
 
     from pentool.tui.widgets.search_bar import SearchBar
@@ -26,10 +28,17 @@ def test_search_bar_target_toggle():
     # TargetToggle must be a Message so it can be posted/consumed.
     assert issubclass(SearchBar.TargetToggle, Message), "TargetToggle not a Message"
 
-    # Unmounted widget: query_one() inside toggle_target is wrapped in
-    # try/except, so the headless instance still flips its state.
+    # Unmounted widget: toggle_target() asks the DOM for the toggle label and
+    # still flips its state when the label is absent. Absent means `NoMatches`,
+    # which is exactly what the handler catches (ADR-6 п.4) — a widget built by
+    # `__new__` skips `Widget.__init__`, so its DOM query would raise
+    # `AttributeError` instead, and that is the test's artefact, not the app's.
+    def _unmounted_query(selector, expect_type=None):
+        raise NoMatches()
+
     sb = SearchBar.__new__(SearchBar)
     sb._search_target = "request"
+    sb.query_one = _unmounted_query
     sb.toggle_target()
     assert sb._search_target == "response", "toggle_target did not flip to response"
     sb.toggle_target()
@@ -39,14 +48,17 @@ def test_search_bar_target_toggle():
 def test_repeater_on_key_ctrl_f():
     """ctrl+f for toggle_search is now in BINDINGS (replaced on_key)."""
     from pentool.tui.hotkeys.defaults import REPEATER_BINDINGS
+
     actions = {b.action for b in REPEATER_BINDINGS}
     assert "toggle_search" in actions, "toggle_search not bound via BINDINGS"
     from pentool.tui.screens.repeater.screen import RepeaterScreen
+
     assert hasattr(RepeaterScreen, "action_toggle_search"), "action_toggle_search missing"
 
 
 def test_repeater_get_active_text_search_target():
     from pentool.tui.screens.repeater.screen import RepeaterScreen
+
     src = inspect.getsource(RepeaterScreen._get_active_text)
     assert "search_target" in src, "_get_active_text does not check search_target"
     assert any(x in src for x in ("ResponseViewer", "resp-viewer", "_viewer")), "no response viewer fallback"
@@ -54,6 +66,7 @@ def test_repeater_get_active_text_search_target():
 
 def test_repeater_cancel_node_before_switch_db():
     from pentool.tui.screens.repeater.screen import RepeaterScreen
+
     src = inspect.getsource(RepeaterScreen.reload_from_project)
     assert "cancel_node" in src, "missing cancel_node before switch_db"
     assert "switch_db" in src, "switch_db not called in reload_from_project"
@@ -72,8 +85,8 @@ def test_proxy_reload_table_has_comment():
 
 
 def test_http_storage_build_where_has_comment():
-    from pentool.storage.http_storage import HttpStorage
-    from pentool.collections.filter_predicate import FilterSpec, FilterPredicate, FilterOp
+    from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
+
     # Фильтрация по комментариям теперь идёт через FilterPredicate с NOT_NULL
     spec = FilterSpec(predicates=[FilterPredicate("comment", FilterOp.NOT_NULL, None)])
     where, params = spec.to_sql()
@@ -83,11 +96,13 @@ def test_http_storage_build_where_has_comment():
 
 def test_response_viewer_language():
     from pentool.tui.widgets.request_editor import ResponseViewer
+
     src = inspect.getsource(ResponseViewer.load_response)
     assert "area.language" in src, "language not set on TextArea for html/json/xml"
 
 
 def test_intruder_btn_pause_removed():
     from pentool.tui.screens.intruder.screen import IntruderScreen
+
     src = inspect.getsource(IntruderScreen.compose)
     assert "btn-pause" not in src, "btn-pause still present in Intruder toolbar"

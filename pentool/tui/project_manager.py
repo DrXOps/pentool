@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from textual.css.query import NoMatches
+
 from pentool.core.db_schema import init_db
 from pentool.core.error_guard import err as _err
 from pentool.core.logging import get_logger
@@ -426,7 +428,7 @@ class ProjectManager:
                 try:
                     screen.query_one("#req-editor").clear()
                     screen.query_one("#resp-viewer").clear()
-                except Exception as exc:
+                except NoMatches as exc:
                     # Таблица очищена, а панели показывают запрос прошлого
                     # проекта — данные нового проекта выглядят уже открытыми.
                     logger.debug("_do_switch: detail panels not cleared: %s", exc)

@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from textual.css.query import NoMatches
 from textual.events import MouseDown, MouseMove, MouseUp
 from textual.widget import Widget
+
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "resize_handle.tcss").read_text(encoding="utf-8")
 
@@ -52,7 +57,10 @@ class ResizeHandle(Widget):
         try:
             left = self.app.query_one(f"#{self._left_id}")
             right = self.app.query_one(f"#{self._right_id}")
-        except Exception:
+        except NoMatches as exc:
+            # Одна из панелей не смонтирована — перетаскивание молча не
+            # начнётся (или не продолжится), разделитель выглядит мёртвым.
+            logger.debug("resize handle: panel %s/%s missing: %s", self._left_id, self._right_id, exc)
             return
 
         self._dragging = True
@@ -76,7 +84,10 @@ class ResizeHandle(Widget):
         try:
             left = self.app.query_one(f"#{self._left_id}")
             right = self.app.query_one(f"#{self._right_id}")
-        except Exception:
+        except NoMatches as exc:
+            # Панель исчезла посреди перетаскивания — движение дальше молчит,
+            # разделитель остаётся «зажатым» без обратной связи.
+            logger.debug("resize handle: panel gone during drag: %s", exc)
             return
 
         delta = event.screen_y - self._drag_start_y if self._vertical else event.screen_x - self._drag_start_x

@@ -9,6 +9,7 @@ from pathlib import Path
 from textual import events as _tevents
 from textual import on
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import TextArea
@@ -590,7 +591,11 @@ class RequestEditor(ContentPanel):
     def get_text(self) -> str:
         try:
             raw_area = self.query_one("#cp-body-widget", TextArea).text
-        except Exception:
+        except NoMatches as exc:
+            # Возвращаем пустую строку — вызывающий отправит пустой запрос,
+            # и по журналу будет видно, что редактора не было, а не что
+            # пользователь ничего не набрал.
+            logger.debug("editor: get_text found no editor: %s", exc)
             raw_area = ""
 
         if self._special_chars_mode:
@@ -624,7 +629,7 @@ class RequestEditor(ContentPanel):
         """Apply/remove special char visualization in the editor."""
         try:
             area = self.query_one("#cp-body-widget", TextArea)
-        except Exception as exc:
+        except NoMatches as exc:
             # Кнопка «Special» не переключит режим: редактора нет.
             logger.debug("editor: special-chars toggle found no editor: %s", exc)
             return
@@ -657,7 +662,7 @@ class RequestEditor(ContentPanel):
         """
         try:
             area = self.query_one("#cp-body-widget", TextArea)
-        except Exception as exc:
+        except NoMatches as exc:
             # Beautify вернёт False — вызывающий напечатает «нет валидного
             # JSON/XML», хотя причина в другом.
             logger.debug("editor: beautify found no editor: %s", exc)
@@ -824,7 +829,7 @@ class ResponseViewer(ContentPanel):
         """
         try:
             area = self.query_one("#cp-body-widget", TextArea)
-        except Exception as exc:
+        except NoMatches as exc:
             # Возвращаем False как «нечего форматировать», хотя причины разные.
             logger.debug("editor: response beautify found no editor: %s", exc)
             return False

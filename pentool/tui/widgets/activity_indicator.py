@@ -49,6 +49,7 @@ from pathlib import Path
 from typing import Callable
 
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Static
 
@@ -230,7 +231,7 @@ class ActivityIndicator(Widget):
             self._active_state[t.key] = active
             try:
                 widget = self.query_one(f"#activity-{t.key}", Static)
-            except Exception as exc:
+            except NoMatches as exc:
                 # Глифа нет в дереве — пропускаем (обычный ход при частичной
                 # сборке). Запись отличает это от опечатки в id.
                 logger.debug("activity: glyph %s not found: %s", t.key, exc)
@@ -252,7 +253,7 @@ class ActivityIndicator(Widget):
         for t in self._checkers:
             try:
                 widget = self.query_one(f"#activity-{t.key}", Static)
-            except Exception as exc:
+            except NoMatches as exc:
                 # Тот же случай, что и в _poll_state: глифа пока нет.
                 logger.debug("activity: blink glyph %s not found: %s", t.key, exc)
                 continue

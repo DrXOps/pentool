@@ -13,6 +13,7 @@ from typing import Any
 from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
+from textual.css.query import NoMatches
 from textual.widgets import Checkbox, ContentSwitcher
 
 from pentool import __version__
@@ -384,7 +385,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # Init ModuleHintBar with the starting module (dashboard)
         try:
             self.query_one(ModuleHintBar).set_module("dashboard")
-        except Exception as exc:
+        except NoMatches as exc:
             # Подсказки клавиш при старте — единственное, что скажет
             # пользователю, как тут что-то делать; их пропажа должна быть
             # видна в журнале.
@@ -858,7 +859,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self._switch_to(module_id)
         try:
             self.query_one(ModuleTabs).select_module(module_id)
-        except Exception as exc:
+        except NoMatches as exc:
             # Экран уже переключён строкой выше; отказ здесь означает, что
             # подсветка вкладки разошлась с содержимым — это видно глазом, но
             # причину показывает только запись.
@@ -1000,7 +1001,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             scanner_available = False
         try:
             self.query_one("#module-tabs", ModuleTabs).set_scanner_locked(not scanner_available)
-        except Exception as exc:
+        except NoMatches as exc:
             # Замок не встал — вкладка выглядит доступной. Без записи это
             # выглядит как «лицензия не работает», а не как «виджета нет».
             logger.debug("scanner tab lock not applied: %s", exc)
@@ -1072,7 +1073,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # Update ModuleHintBar to show the new module's keybindings
         try:
             self.query_one(ModuleHintBar).set_module(module_id)
-        except Exception as exc:
+        except NoMatches as exc:
             # Подсказки клавиш останутся от прошлого модуля — то есть будут
             # врать. Не критично, но и не то, о чём стоит молчать.
             logger.debug("hint bar not updated for %s: %s", module_id, exc)
@@ -1273,7 +1274,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         setattr(self, _ts_attr, now)
         try:
             screen = self.query_one(selector, cls)
-        except Exception:
+        except NoMatches:
             # Screen not mounted (other tab / being torn down). Cache None so we
             # DON'T re-hunt on every request — this is the anti-spam that stops
             # the per-request query_one→NoMatches→log loop under load.
