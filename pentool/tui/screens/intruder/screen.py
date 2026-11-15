@@ -263,8 +263,10 @@ class IntruderScreen(
             st = panel.active_state
             if st is not None:
                 return st  # type: ignore[return-value]
-        except Exception:
-            pass
+        except Exception as exc:
+            # Ниже — запасной путь для тестов без compose. Запись отличает
+            # «экрана ещё нет» от «панель есть, но сломана».
+            logger.debug("intruder: tab panel state unavailable: %s", exc)
         # Fallback для тестов (без compose)
         if hasattr(self, "_tabs") and self._active_tab_id:
             for t in self._tabs:
@@ -587,8 +589,10 @@ class IntruderScreen(
             try:
                 ph = pane.query_one(f"#tab-placeholder-{tab_id}")
                 ph.remove()
-            except Exception:
-                pass
+            except Exception as exc:
+                # Заглушка уже снята предыдущим проходом — обычный ход. Запись
+                # отличает его от опечатки в id placeholder'а.
+                logger.debug("intruder: placeholder for %s not removed: %s", tab_id, exc)
             # mount() — не мгновенная вставка: он планируется в очереди
             # сообщений, и без await дети появляются в DOM на произвольном
             # такте позже. Тогда _refresh_payload_list ищет ListView раньше
@@ -641,8 +645,11 @@ class IntruderScreen(
             w = panel.content_widget
             if isinstance(w, TextArea):
                 state.template_text = w.text
-        except Exception:
-            pass
+        except Exception as exc:
+            # В state остаётся прежний шаблон — правки пользователя в этом
+            # табе теряются при переключении. Ровно тот класс потерь, что
+            # описаны в комментарии ниже.
+            logger.debug("intruder: template text not saved for tab %s: %s", state.tab_id, exc)
         # Threads/Delay/Turbo живут в глобальном toolbar и описывают активный
         # таб, поэтому их надо снять ДО того, как toolbar перерисуется под
         # новый таб. Без этого значения оставались только в state-дефолтах:
@@ -887,8 +894,11 @@ class IntruderScreen(
             w = editor.content_widget
             if isinstance(w, TextArea):
                 tab.template_text = w.text
-        except Exception:
-            pass
+        except Exception as exc:
+            # Шаблон в state остаётся прежним, а `_auto_save_tab` ниже
+            # сохранит в БД именно его — то есть правка не переживёт
+            # перезапуск, хотя автосохранение «работало».
+            logger.debug("intruder: current template text not saved: %s", exc)
         self._auto_save_tab(tab)
 
     # ── DB persistence ────────────────────────────────────────────────────────
@@ -985,8 +995,10 @@ class IntruderScreen(
             inp.focus()
             inp.action_select_all()
             inp._rename_tab_id = tab_id
-        except Exception:
-            pass
+        except Exception as exc:
+            # F2 по вкладке ничего не делает — вкладка не переименовывается,
+            # и со стороны это «клавиша не работает».
+            logger.debug("intruder: rename not started for %s: %s", tab_id, exc)
 
     def _rename_tab(self, tab_id: str, new_name: str) -> None:
         state = None
@@ -1265,8 +1277,10 @@ class IntruderScreen(
                     w = editor.content_widget
                     if isinstance(w, TextArea):
                         w.text = template
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Сохранённый шаблон есть, а в редакторе — пусто: вкладка
+                    # откроется пустой, хотя данные в БД лежат.
+                    logger.debug("intruder: saved template not restored for tab %s: %s", _tab_uid, exc)
             attack_type_str = state.get("attack_type", "sniper")
             try:
                 tab.attack_type = AttackType(attack_type_str)

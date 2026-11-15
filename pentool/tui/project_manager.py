@@ -121,8 +121,11 @@ class ProjectManager:
                         "ok",
                     )
                     dash._populate_projects()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Файл сохранён (уведомление выше уже показано), но в
+                    # ленте и в списке проектов этого нет — расхождение
+                    # между «Saved» и пустым списком на дашборде.
+                    logger.debug("project: save not reflected on dashboard: %s", exc)
             except Exception as e:
                 _err(e, "Save failed")
 
