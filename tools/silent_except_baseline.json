@@ -1,5 +1,4 @@
 {
-  "pentool/tui/app.py": 31,
   "pentool/tui/dialogs/file_selector.py": 4,
   "pentool/tui/dialogs/intruder_input.py": 1,
   "pentool/tui/dialogs/match_replace_dialog.py": 2,
@@ -13,7 +12,7 @@
   "pentool/tui/project_manager.py": 10,
   "pentool/tui/screens/base.py": 1,
   "pentool/tui/screens/dashboard/live_dashboard.py": 5,
-  "pentool/tui/screens/dashboard/screen.py": 20,
+  "pentool/tui/screens/dashboard/screen.py": 19,
   "pentool/tui/screens/decoder/screen.py": 3,
   "pentool/tui/screens/intruder/screen.py": 8,
   "pentool/tui/screens/proxy/screen.py": 31,

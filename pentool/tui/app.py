@@ -125,8 +125,10 @@ def _setup_faulthandler(log_file: str) -> None:
                 )
             except (ValueError, OSError):
                 pass
-    except Exception:
-        pass
+    except Exception as exc:
+        # faulthandler — диагностика «на всякий случай»: её отсутствие не
+        # должно мешать запуску, но и молчать о нём нельзя (ADR-6).
+        logger.debug("faulthandler setup skipped: %s", exc)
 
 
 class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin, ProjectAutoSaveMixin, App):
@@ -275,8 +277,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 "APP: --- fatal all-thread dump begin ---\n%s\n--- fatal all-thread dump end ---",
                 _buf.getvalue(),
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            # Молча здесь было бы хуже всего: этот дамп добавляют ровно к тому
+            # падению, которое не удаётся поймать, и его отсутствие нужно
+            # видеть в журнале, а не искать глазами.
+            logger.debug("APP: all-thread dump failed: %s", exc)
         super()._handle_exception(error)
 
     @staticmethod
@@ -335,8 +340,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 _tss.Screen._handle_mouse_move = _guarded_mm
 
             logger.debug("APP: Screen mouse-dispatch guarded against layout races")
-        except Exception:
-            pass
+        except Exception as exc:
+            # Патч не обязателен для работы, но если он не встал — мышь будет
+            # падать на гонке раскладки так же, как падала до него, и это
+            # единственный след, по которому это можно понять.
+            logger.debug("APP: layout-race guard not installed: %s", exc)
 
     def compose(self) -> ComposeResult:
         yield ModuleTabs(id="module-tabs")
@@ -376,8 +384,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # Init ModuleHintBar with the starting module (dashboard)
         try:
             self.query_one(ModuleHintBar).set_module("dashboard")
-        except Exception:
-            pass
+        except Exception as exc:
+            # Подсказки клавиш при старте — единственное, что скажет
+            # пользователю, как тут что-то делать; их пропажа должна быть
+            # видна в журнале.
+            logger.debug("starting hint bar not initialised: %s", exc)
 
         # _exit_caller_stack removed — dead code (was always empty, see __init__).
 
@@ -452,8 +463,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             import pyarrow as pa
 
             pa.jemalloc_set_decay_ms(0)
-        except Exception:
-            pass
+        except Exception as exc:
+            # pyarrow нет или у него нет jemalloc — тогда его фоновый поток
+            # просто проживёт до os._exit. Запись объясняет, почему так.
+            logger.debug("jemalloc decay not configured: %s", exc)
 
         from pentool.utils.terminal_check import get_terminal_warning
 
@@ -474,8 +487,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         saved_theme = getattr(self._cfg, "theme", "textual-dark")
         try:
             self.theme = saved_theme
-        except Exception:
-            pass
+        except Exception as exc:
+            # Тема из конфига — пользовательский выбор, и если она перестала
+            # существовать (переименована в новой Textual), приложение
+            # остаётся на тёмной по умолчанию. Без записи это неотличимо от
+            # «настройка не сохранилась».
+            logger.debug("saved theme %r not applied: %s", saved_theme, exc)
 
         # Auto-save (Block 3.3) — start if enabled in config
         self._setup_auto_save()
@@ -532,8 +549,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 with open("/tmp/pentool_coords_err.log", "a") as _f:
                     _f.write(f"PENTOOL coords activation error: {exc!r}\n")
                     _tb.print_exc(file=_f)
-            except Exception:
-                pass
+            except Exception as log_exc:
+                # Уже в ветке «записать ошибку не удалось»: единственное, что
+                # остаётся, — не уронить приложение из-за диагностики.
+                logger.debug("coords activation error not recorded: %s", log_exc)
 
     async def _auto_open_last_project(self) -> None:
         """Open the last project from recent_projects at startup."""
@@ -585,8 +604,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
                 cfg = get_config()
                 cfg.ai_enabled = True
-            except Exception:
-                pass
+            except Exception as exc:
+                # Флаг --ai остаётся включённым только в конфиге: если записать
+                # его не удалось, следующий запуск будет уже без AI, и без
+                # записи об этом догадаться неоткуда.
+                logger.debug("seed: --ai flag not persisted: %s", exc)
 
         # Start the proxy so --real traffic (and subsequent manual use) can be
         # intercepted and land in the project.
@@ -727,8 +749,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             target = self.query_one(SCREEN_TARGET, TargetScreen)
             target._refresh_tree()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Экран Target строится лениво: при --url прогоне его может ещё не
+            # быть, и это нормально. Отличить норму от «дерево не обновилось»
+            # можно только по записи.
+            logger.debug("--real: Target tree not refreshed: %s", exc)
 
     def _project_path_for_target(self, url: str) -> str:
         """Build a clean .db path for a target URL with a date+time stamp so each
@@ -833,8 +858,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self._switch_to(module_id)
         try:
             self.query_one(ModuleTabs).select_module(module_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Экран уже переключён строкой выше; отказ здесь означает, что
+            # подсветка вкладки разошлась с содержимым — это видно глазом, но
+            # причину показывает только запись.
+            logger.debug("switch_module: tab highlight not updated: %s", exc)
 
     def on_key(self, event) -> None:
         """Ctrl+A select-all, Ctrl+E export, F2-F4 module tabs."""
@@ -901,8 +929,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             tabs = proxy_screen.query_one("#proxy-subtabs", TabbedContent)
             tabs.active = tab_id
             self.call_after_refresh(lambda tid=tab_id: self._focus_proxy_table(proxy_screen, tid))
-        except Exception:
-            pass
+        except Exception as exc:
+            # Пользователь нажал горячую клавишу вкладки — и остался на старой.
+            # Молчание превращает это в «клавиша не работает».
+            logger.debug("proxy_tab %s: switch failed: %s", tab_id, exc)
 
     def _focus_proxy_table(self, proxy_screen: object, tab_id: str) -> None:
         """Focus the DataTable in the specified Proxy tab."""
@@ -920,8 +950,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 table.focus()
                 if table.row_count > 0:
                     table.move_cursor(row=0)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Фокус — не то, ради чего стоит падать, но «переключился на tab,
+            # а клавиатура осталась в старом» иначе не диагностируется.
+            logger.debug("_focus_proxy_table %s: %s", tab_id, exc)
 
     def _focus_repeater_editor(self, repeater) -> None:
         """Set focus to the RequestEditor in the active Repeater tab."""
@@ -934,8 +966,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 # The TextArea is ContentPanel's #cp-body-widget; focusing a
                 # made-up "#editor-area" raised NoMatches into the except below.
                 editor.content_widget.focus()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Комментарий выше — ровно про этот except: он уже однажды прятал
+            # опечатку в селекторе. Без записи он спрячет и следующую.
+            logger.debug("_focus_repeater_editor: %s", exc)
 
     def action_repeater_send(self) -> None:
         """Ctrl+Space / ctrl-at — send the request to Repeater regardless of focus depth."""
@@ -944,8 +978,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             repeater = self.query_one(SCREEN_REPEATER, RepeaterScreen)
             repeater.action_send()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Ctrl+Space молча ничего не делает — худший из возможных исходов
+            # горячей клавиши: пользователь нажимает её ещё и ещё.
+            logger.debug("repeater_send: %s", exc)
 
     # Modules available without an open project
     _FREE_MODULES = {"dashboard", "settings"}
@@ -957,12 +993,17 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
             lic = get_session_license()
             scanner_available = lic.valid and lic.has_feature("scanner_pro")
-        except Exception:
+        except Exception as exc:
+            # Ошибка чтения лицензии — это «не знаем», а не «можно»: вкладка
+            # Scanner остаётся запертой, и причина остаётся в журнале.
+            logger.debug("license check failed, Scanner stays locked: %s", exc)
             scanner_available = False
         try:
             self.query_one("#module-tabs", ModuleTabs).set_scanner_locked(not scanner_available)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Замок не встал — вкладка выглядит доступной. Без записи это
+            # выглядит как «лицензия не работает», а не как «виджета нет».
+            logger.debug("scanner tab lock not applied: %s", exc)
 
     def _switch_to(self, module_id: str) -> None:
         if module_id == self._active_module:
@@ -989,8 +1030,18 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                         timeout=5,
                     )
                     return
-            except Exception:
-                pass
+            except Exception as exc:
+                # Раньше здесь стоял `pass`, и любой сбой чтения лицензии
+                # открывал платный экран — то есть ошибка работала на
+                # пользователя, а не против него. Теперь наоборот: не смогли
+                # проверить — не пускаем, и пишем почему.
+                logger.warning("scanner license check failed, access denied: %s", exc)
+                self.notify(
+                    "🔒 Scanner — could not verify the license. Try `pentool license status`.",
+                    severity="warning",
+                    timeout=5,
+                )
+                return
 
         # Block Recon if no valid license (ai_discovery feature)
         if module_id == "recon":
@@ -1005,16 +1056,26 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                         timeout=5,
                     )
                     return
-            except Exception:
-                pass
+            except Exception as exc:
+                # Тот же fail-open, что и у Scanner: не смогли проверить
+                # лицензию — значит, не пускаем (и пишем почему).
+                logger.warning("recon license check failed, access denied: %s", exc)
+                self.notify(
+                    "🔒 Recon — could not verify the license. Try `pentool license status`.",
+                    severity="warning",
+                    timeout=5,
+                )
+                return
         screen_id = f"screen-{module_id}"
         self.query_one(ContentSwitcher).current = screen_id
         self._active_module = module_id
         # Update ModuleHintBar to show the new module's keybindings
         try:
             self.query_one(ModuleHintBar).set_module(module_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Подсказки клавиш останутся от прошлого модуля — то есть будут
+            # врать. Не критично, но и не то, о чём стоит молчать.
+            logger.debug("hint bar not updated for %s: %s", module_id, exc)
         # Refresh AI-dependent UI whenever we switch to Target: the "🤖 Use AI"
         # checkbox visibility tracks the global ai_enabled, and this must be
         # re-applied when the Target screen is (re)shown — otherwise a checkbox
@@ -1078,8 +1139,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             s = bus.stats()
             status["eventbus_handlers"] = s.get("total_handlers", 0)
             status["eventbus_history"] = s.get("history_size", 0)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Поля просто не появятся в выводе — но читатель статуса должен
+            # понимать, что их отсутствие значит «не смогли», а не «нет шины».
+            status["eventbus"] = f"error: {exc}"
 
         # AI status
         try:
@@ -1382,8 +1445,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                     st.add_class("disabled")
                 else:
                     st.remove_class("disabled")
-            except Exception:
-                pass
+            except Exception as exc:
+                # Кнопка Scope на экране Proxy останется в прежнем состоянии —
+                # то есть покажет ровно противоположное тому, что сохранено.
+                logger.debug("on_sync_scope_to_proxy: scope toggle not refreshed: %s", exc)
         except Exception as e:
             logger.debug("on_sync_scope_to_proxy: %s", e)
 
@@ -1497,8 +1562,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 new_theme = fields["theme"]
                 if getattr(self, "theme", None) != new_theme:
                     self.theme = new_theme
-            except Exception:
-                pass
+            except Exception as exc:
+                # Пользователь только что сохранил тему и ждёт, что она
+                # применится; отказ Textual принять имя темы иначе не заметен.
+                logger.debug("config: theme %r not applied: %s", fields.get("theme"), exc)
         # Restart the auto-save timer if the relevant fields have changed.
         # Use call_after_refresh so the current message-dispatch cycle finishes
         # before we touch the timer (avoids a race where stop() is called on a
@@ -1524,8 +1591,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.update_proxy_status(running)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Прокси уже запущен/остановлен; на дашборде об этом останется
+            # прошлое состояние — самый заметный из «залипших» индикаторов.
+            logger.debug("dashboard proxy status not updated: %s", exc)
 
     def _sync_ai_global(self) -> None:
         """Управляет MCP сервером + публикует AiModeChanged EventBus.
@@ -1632,24 +1701,28 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.add_finding(event.finding)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Dashboard есть всегда, поэтому отказ здесь — не «ещё не собран»,
+            # а настоящая потеря: находка не попала в ленту.
+            logger.debug("bus: finding not shown on Dashboard: %s", exc)
 
     def _on_bus_scan_started(self, event: ScanStarted) -> None:
         """Scan started → update status on Dashboard."""
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.update_scan_status(True, 0)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("bus: scan-started status not shown: %s", exc)
 
     def _on_bus_scan_finished(self, event: ScanFinished) -> None:
         """Scan finished → reset status on Dashboard."""
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.update_scan_status(False, 100)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Скан кончился, а индикатор продолжает идти — самый заметный из
+            # симптомов этого класса ошибок.
+            logger.debug("bus: scan-finished status not shown: %s", exc)
 
     def _on_bus_scan_progress(self, event: ScanProgressEvent) -> None:
         """Scan progress → Dashboard (optional, for live updates)."""
@@ -1660,8 +1733,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
             dashboard.update_passive_status(event.enabled)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("bus: passive LED not updated: %s", exc)
 
     async def _on_exit_app(self) -> None:
         """Log exit reason (Textual run() returns silently on non-action_quit exits)."""
@@ -1681,15 +1754,19 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 getattr(self, "is_running", False),
             )
             logger.info("APP: exit stack:\n%s", "".join(traceback.format_stack()))
-        except Exception:
-            pass
+        except Exception as exc:
+            # Диагностика выхода сама по себе может упасть (экран уже снят) —
+            # это не повод падать на выходе, но повод оставить след.
+            logger.debug("APP: exit diagnostics failed: %s", exc)
         # Config is a process-wide singleton: an observer left behind keeps this
         # App (and its whole widget tree) alive for the life of the process and
         # fires on a torn-down app on the next launch (REPORT F-046).
         try:
             self._cfg.remove_observer(self._cfg_observer_cb)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Именно этот отказ и оставляет утечку F-046: следующий запуск
+            # получит наблюдателя от мёртвого App.
+            logger.debug("APP: config observer not removed on exit: %s", exc)
         await super()._on_exit_app()
 
     async def _close_all_storages(self) -> None:
@@ -1725,20 +1802,25 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 logger.warning("APP: %s storage close error on quit: %s", name, e)
 
         # Spider CPU pool
+        # Spider CPU pool
         try:
             from pentool.api.spider_api import shutdown_spider_pool
 
             shutdown_spider_pool()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Пул не погашен — процесс завершится ниже через os._exit, так что
+            # это безопасно; но если однажды уберут жёсткий выход, след
+            # понадобится.
+            logger.debug("APP: spider pool not shut down: %s", exc)
 
         # AI MCP server
         try:
             from pentool.services.ai.factory import stop_ai
 
             await stop_ai()
-        except Exception:
-            pass
+        except Exception as exc:
+            # MCP-процесс, переживший TUI, остаётся сиротой на порту.
+            logger.debug("APP: AI MCP server not stopped: %s", exc)
 
     async def action_quit(self) -> None:
         # Deliberate quit underway — _on_exit_app logs it as such instead of as
@@ -1754,8 +1836,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             bus.unsubscribe_all(self._on_bus_passive_toggled)
             bus.unsubscribe_all(self._on_bus_proxy_captured)
             bus.unsubscribe_all(self._on_bus_proxy_completed)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Не отписались — мёртвый App продолжит получать события шины.
+            # Процесс всё равно завершается жёстко, но след нужен.
+            logger.debug("APP: EventBus unsubscribe on quit failed: %s", exc)
         # Stop proxy — reuse the same robust path as manual stop, but the
         # async variant so Ctrl+Q does NOT freeze the TUI renderer, and with
         # short grace windows (proxy.stop cancels tasks fast; the 8080 port is
