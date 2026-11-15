@@ -170,6 +170,14 @@ grep, ни подсветка. Все 10 исторических inline-CSS п�
 - **Контейнеры не задают id по умолчанию.** Все экраны смонтированы
   одновременно внутри `ContentSwitcher`; общий `id="toolbar"` делает
   `query_one("#toolbar")` недетерминированным (F-006, F-018).
+- **Один id — один узел на пути исполнения.** Два узла с одним id делают
+  `query_one` неоднозначным: без типа он вернёт первый, с типом — поднимет
+  `WrongType`, и в `except Exception` это тихая потеря функциональности.
+  Именно так `ComparerScreen` не рендерил диф: `Vertical` и её `ContentPanel`
+  оба звались `cmp-diff-area`, а `query_one("#cmp-diff-area", ContentPanel)`
+  падал `WrongType`. Гейт `tools/check_tui_css.py` падает на повторе `id=`
+  литерала в одной функции; `if`/`else` и `try`/`except` различаются, поэтому
+  `ContentPanel.compose` (TextArea в одной ветке, RichLog в другой) легален.
 - **Per-tab id строятся из константы, а не из литерала с двух сторон.**
   `_TabId` в `screens/intruder/screen.py`: 38 суффиксов, монтаж и
   `query_one` читают одну таблицу. Опечатка в литерале не ловилась ничем —
