@@ -38,18 +38,18 @@ SEVERITIES = ("information", "success", "warning", "error", "critical")
 # manually (critical alerts shouldn't vanish on their own).
 _DEFAULT_TIMEOUTS: dict[str, float | None] = {
     "information": 2.5,
-    "success":     3.0,
-    "warning":     4.0,
-    "error":       6.0,
-    "critical":    None,
+    "success": 3.0,
+    "warning": 4.0,
+    "error": 6.0,
+    "critical": None,
 }
 
 _ICONS: dict[str, str] = {
     "information": "ℹ",
-    "success":     "✓",
-    "warning":     "⚠",
-    "error":       "✖",
-    "critical":    "‼",
+    "success": "✓",
+    "warning": "⚠",
+    "error": "✖",
+    "critical": "‼",
 }
 
 # Cap on simultaneously visible toasts — oldest is dropped when exceeded,
@@ -92,8 +92,11 @@ class CustomNotifyCard(Widget):
             )
             # Force the final state in case the animations above never run.
             self.set_timer(0.4, self._force_visible)
-        except Exception:
+        except Exception as exc:
             # Animation is cosmetic — never break the notification itself.
+            # Но если анимация не запустилась, карточка осталась бы невидимой;
+            # _force_visible ниже это чинит, а запись объясняет, почему.
+            logger.debug("notify: card animation not started: %s", exc)
             self._force_visible()
 
     def _force_visible(self) -> None:
@@ -101,13 +104,18 @@ class CustomNotifyCard(Widget):
         try:
             self.styles.opacity = 1.0
             self.styles.offset_y = 0.0
-        except Exception:
-            pass
+        except Exception as exc:
+            # Карточка уведомления останется с нулевой прозрачностью — то есть
+            # показана и не видна одновременно.
+            logger.debug("notify: card not forced visible: %s", exc)
 
     def on_click(self, event) -> None:
         try:
             widget = event.widget if hasattr(event, "widget") else None
-        except Exception:
+        except Exception as exc:
+            # Считаем, что клик пришёлся не по крестику — карточка закроется
+            # целиком. Без записи не понять, почему крестик иногда не работает.
+            logger.debug("notify: click target unknown: %s", exc)
             widget = None
         if widget is not None and getattr(widget, "id", None) == "toast-close":
             self.remove()
@@ -160,13 +168,16 @@ class CustomNotify(Widget):
             if toast.is_mounted:
                 toast.remove()
             self._refresh_display()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Карточка остаётся на экране после истечения таймаута — то есть
+            # уведомление «не закрывается само».
+            logger.debug("notify: toast not dismissed: %s", exc)
 
     def _refresh_display(self) -> None:
         """Hide the rack once the last card is gone so an empty container
         paints and reserves nothing (mirrors Textual's ToastRack)."""
         try:
             self.display = bool(self.children)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Пустая стопка остаётся видимой и занимает место над Footer.
+            logger.debug("notify: rack display not refreshed: %s", exc)

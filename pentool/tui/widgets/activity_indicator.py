@@ -52,6 +52,10 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 _CSS = (Path(__file__).parent / "activity_indicator.tcss").read_text(encoding="utf-8")
 
 # How fast an active glyph blinks (full on/off cycles per second).
@@ -210,18 +214,26 @@ class ActivityIndicator(Widget):
             from pentool.core.config import get_config
 
             ai_cfg_on = bool(getattr(get_config(), "ai_enabled", False))
-        except Exception:
-            pass
+        except Exception as exc:
+            # Считаем AI выключенным — глиф приглушится. Раз в секунду; запись
+            # только при отказе, иначе журнал забился бы повторами.
+            logger.debug("activity: ai_enabled not read, assuming off: %s", exc)
 
         for t in self._checkers:
             try:
                 active = bool(t.is_active())
-            except Exception:
+            except Exception as exc:
+                # Состояние неизвестно — глиф покажет «idle». Это безопасно,
+                # но работающий модуль будет выглядеть выключенным.
+                logger.debug("activity: state of %s unknown: %s", t.key, exc)
                 active = False
             self._active_state[t.key] = active
             try:
                 widget = self.query_one(f"#activity-{t.key}", Static)
-            except Exception:
+            except Exception as exc:
+                # Глифа нет в дереве — пропускаем (обычный ход при частичной
+                # сборке). Запись отличает это от опечатки в id.
+                logger.debug("activity: glyph %s not found: %s", t.key, exc)
                 continue
             widget.tooltip = f"{t.label}: {'running' if active else 'idle'}"
             # AI glyph — show dimmed/strikethrough when AI is disabled in config
@@ -240,7 +252,9 @@ class ActivityIndicator(Widget):
         for t in self._checkers:
             try:
                 widget = self.query_one(f"#activity-{t.key}", Static)
-            except Exception:
+            except Exception as exc:
+                # Тот же случай, что и в _poll_state: глифа пока нет.
+                logger.debug("activity: blink glyph %s not found: %s", t.key, exc)
                 continue
             active = self._active_state.get(t.key, False)
             widget.set_class(not active, "idle")

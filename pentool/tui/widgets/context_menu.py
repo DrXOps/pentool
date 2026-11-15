@@ -10,6 +10,10 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 _CSS = (Path(__file__).parent / "context_menu.tcss").read_text(encoding="utf-8")
 
 
@@ -78,18 +82,23 @@ class ContextMenu(Widget):
             if y + menu_h > screen_h:
                 y = max(0, screen_h - menu_h)
             self.styles.offset = (x, y)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Меню останется в исходной точке — может выйти за край экрана,
+            # и часть пунктов станет недоступна.
+            logger.debug("context menu: position not corrected: %s", exc)
 
     def _dismiss(self) -> None:
         try:
             self.app.capture_mouse(None)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Мышь остаётся захваченной снятым меню: клики по интерфейсу
+            # перестают доходить до виджетов.
+            logger.debug("context menu: mouse capture not released: %s", exc)
         try:
             self.remove()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Меню не снято — висит поверх интерфейса после выбора пункта.
+            logger.debug("context menu: not removed on dismiss: %s", exc)
 
     def _highlight(self, idx: int) -> None:
         for i, (_, w) in enumerate(self._action_items):
@@ -109,13 +118,12 @@ class ContextMenu(Widget):
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
         r = self.region
-        left = r.x if r.width  > 0 else self._menu_x
-        top  = r.y if r.height > 0 else self._menu_y
-        w    = r.width  if r.width  > 0 else 30
-        h    = r.height if r.height > 0 else len(self._action_items) + 2
+        left = r.x if r.width > 0 else self._menu_x
+        top = r.y if r.height > 0 else self._menu_y
+        w = r.width if r.width > 0 else 30
+        h = r.height if r.height > 0 else len(self._action_items) + 2
 
-        inside = (left <= event.screen_x < left + w and
-                  top  <= event.screen_y < top  + h)
+        inside = left <= event.screen_x < left + w and top <= event.screen_y < top + h
 
         if not inside:
             self._dismiss()
@@ -124,8 +132,7 @@ class ContextMenu(Widget):
         # item.region — absolute coordinates (same as event.screen_x/y)
         for action, widget in self._action_items:
             wr = widget.region
-            if (wr.y <= event.screen_y < wr.y + wr.height and
-                    wr.x <= event.screen_x < wr.x + wr.width):
+            if wr.y <= event.screen_y < wr.y + wr.height and wr.x <= event.screen_x < wr.x + wr.width:
                 self._select(action)
                 return
         # Click on border or separator — do not close
