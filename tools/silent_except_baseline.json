@@ -26,7 +26,6 @@
   "pentool/tui/widgets/module_tabs.py": 7,
   "pentool/tui/widgets/payload_drop_zone.py": 1,
   "pentool/tui/widgets/proxy_data_table.py": 1,
-  "pentool/tui/widgets/request_editor.py": 15,
   "pentool/tui/widgets/start_stop_widget.py": 2,
   "pentool/tui/widgets/tab_panel.py": 7
 }
