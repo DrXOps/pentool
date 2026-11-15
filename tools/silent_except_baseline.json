@@ -15,7 +15,6 @@
   "pentool/tui/screens/dashboard/screen.py": 19,
   "pentool/tui/screens/decoder/screen.py": 3,
   "pentool/tui/screens/intruder/screen.py": 8,
-  "pentool/tui/screens/proxy/screen.py": 31,
   "pentool/tui/screens/repeater/screen.py": 28,
   "pentool/tui/screens/sequencer/screen.py": 4,
   "pentool/tui/screens/target/screen.py": 18,
