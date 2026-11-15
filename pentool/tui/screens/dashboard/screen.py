@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
-import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -593,20 +593,22 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         except Exception:
             pass
 
-    @work(thread=True)
-    def _boot_animate(self) -> None:
-        time.sleep(0.2)
+    @work(group="dashboard-boot")
+    async def _boot_animate(self) -> None:
+        """Постепенно дописать приветствие в ленту.
+
+        Раньше это был поток с ``time.sleep`` и ``call_from_thread`` на каждую
+        строку: второй способ трогать UI извне event loop, который надо было
+        держать в голове при любом касании дашборда (F-028). Пауза нужна
+        только для «печатного» эффекта, поэтому она асинхронная, а группа
+        воркера позволяет снять анимацию вместе с экраном (ADR-11).
+        """
+        await asyncio.sleep(0.2)
         for color, line in _BOOT_LINES:
-            time.sleep(0.12)
-            try:
-                self.app.call_from_thread(self._boot_write, color, line)
-            except Exception:
-                break
-        time.sleep(0.3)
-        try:
-            self.app.call_from_thread(self._boot_write, "[dim]", "─" * 48)
-        except Exception:
-            pass
+            await asyncio.sleep(0.12)
+            self._boot_write(color, line)
+        await asyncio.sleep(0.3)
+        self._boot_write("[dim]", "─" * 48)
 
     def _boot_write(self, color: str, line: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
