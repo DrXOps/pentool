@@ -25,6 +25,15 @@ What it checks (all selectors, no allowlist)
    a class name defined in ``pentool`` (or a Textual base we cannot see, in
    which case it is reported as an unknown only if it also is not a known
    Textual widget).
+4. No ``id=`` literal appears twice in one composable function, unless the two
+   sit in mutually exclusive ``if``/``elif``/``else`` or ``try``/``except``
+   branches. Two nodes with one id make ``query_one`` ambiguous — it returns
+   the first and the styles of the second leak onto it. ``ComparerScreen``
+   carried exactly this: a ``Vertical`` and the ``ContentPanel`` inside it both
+   named ``cmp-diff-area``, so ``query_one("#cmp-diff-area", ContentPanel)``
+   raised ``WrongType`` into a swallowed ``except`` and the diff never
+   rendered. F-006 (``#toolbar``) and F-024 (``#dialog``) are the same shape
+   across screens.
 
 Exit codes: 0 — clean, 1 — problems found (the CI gate).
 
@@ -254,6 +263,69 @@ def _constant_strings(node: ast.AST) -> list[str]:
     return out
 
 
+def _branch_key(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> tuple[int, ...]:
+    """Identify the branch a node sits in, so siblings can be told apart.
+
+    Two yields with the same ``id=`` are only a bug when the widget can be
+    mounted on the same path — ``if textarea: … else: RichLog`` in
+    ``ContentPanel.compose`` is fine. Walking up to the nearest ``If``/``Try``
+    and recording which arm we are in separates those cases; anything else
+    ends the walk and both nodes look like the same branch.
+    """
+    arms: list[int] = []
+    current = node
+    while True:
+        parent = parents.get(current)
+        if parent is None:
+            return tuple(arms)
+        if isinstance(parent, ast.If):
+            arms.append(0 if current in parent.body else 1)
+        elif isinstance(parent, ast.Try):
+            if current in parent.body:
+                arms.append(0)
+            elif current in parent.handlers:
+                arms.append(1)
+            elif current in parent.orelse:
+                arms.append(2)
+            else:
+                arms.append(3)
+        elif isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return tuple(arms)
+        current = parent
+
+
+def _duplicate_ids(tree: ast.AST) -> list[tuple[str, int, int, str]]:
+    """``id=`` literals repeated on one code path inside a function.
+
+    Returns ``(function, first_line, second_line, id)`` tuples.
+    """
+    parents: dict[ast.AST, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+
+    out: list[tuple[str, int, int, str]] = []
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        seen: dict[tuple[str, tuple[int, ...]], int] = {}
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.Call):
+                continue
+            for kw in node.keywords:
+                if kw.arg != _ID_KW:
+                    continue
+                value = kw.value
+                if not (isinstance(value, ast.Constant) and isinstance(value.value, str)):
+                    continue
+                key = (value.value, _branch_key(node, parents))
+                if key in seen:
+                    out.append((fn.name, seen[key], kw.value.lineno, value.value))
+                else:
+                    seen[key] = kw.value.lineno
+    return out
+
+
 def collect_python() -> tuple[set[str], set[str], set[str], set[str], set[int]]:
     """Return (ids, id_prefixes, classes, widget_type_names) from pentool/tui."""
     ids: set[str] = set()
@@ -438,6 +510,17 @@ def main(argv: list[str] | None = None) -> int:
         for tag in tags:
             if tag not in types:
                 problems.append(f"{file}:{lineno}: type {tag} is not a known class")
+
+    for path in sorted(TUI.rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # pragma: no cover - already reported above
+            continue
+        for fn_name, first, second, dup_id in _duplicate_ids(tree):
+            problems.append(
+                f"{path}:{second}: id #{dup_id} is already used at line {first} "
+                f"in {fn_name}() on the same code path — query_one becomes ambiguous"
+            )
 
     if problems:
         print(f"check_tui_css: {len(problems)} problem(s)", file=sys.stderr)

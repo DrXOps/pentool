@@ -85,3 +85,58 @@ def test_attribute_selectors_are_rejected(
     captured = capsys.readouterr().err
     assert code == 1, "attribute selector slipped through the gate"
     assert "not supported by Textual 8" in captured
+
+
+def test_duplicate_id_on_one_path_is_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Two widgets with one id in the same compose make ``query_one`` ambiguous.
+
+    ``ComparerScreen`` had exactly this: a ``Vertical`` and the ``ContentPanel``
+    inside it both carried ``id="cmp-diff-area"``, so
+    ``query_one("#cmp-diff-area", ContentPanel)`` raised ``WrongType`` into a
+    swallowed ``except`` and the diff never rendered.
+    """
+    tool = _load_tool()
+
+    tui = tmp_path / "tui"
+    tui.mkdir()
+    (tui / "screen.py").write_text(
+        "def compose():\n" "    with Vertical(id='dup'):\n" "        yield ContentPanel(id='dup')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(tool, "TUI", tui)
+    monkeypatch.setattr(tool, "ROOT", tmp_path)
+
+    code = tool.main([])
+    captured = capsys.readouterr().err
+    assert code == 1, "a duplicated id slipped through the gate"
+    assert "query_one becomes ambiguous" in captured
+
+
+def test_same_id_in_exclusive_branches_is_allowed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``if textarea: … else: RichLog`` may reuse the id — only one mounts.
+
+    ``ContentPanel.compose`` relies on this: ``#cp-body-widget`` names the
+    TextArea in one arm and the RichLog in the other.
+    """
+    tool = _load_tool()
+
+    tui = tmp_path / "tui"
+    tui.mkdir()
+    (tui / "screen.py").write_text(
+        "def compose():\n"
+        "    if kind == 'textarea':\n"
+        "        yield TextArea(id='body')\n"
+        "    else:\n"
+        "        yield RichLog(id='body')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(tool, "TUI", tui)
+    monkeypatch.setattr(tool, "ROOT", tmp_path)
+
+    code = tool.main([])
+    captured = capsys.readouterr().err
+    assert code == 0, f"mutually exclusive ids were reported as a duplicate: {captured!r}"
