@@ -212,6 +212,20 @@ class TabbedContentPanel(Widget, Generic[TState]):
         Returns:
             tab_id.
         """
+        # Создание вкладки делает её активной так же, как переключение, но
+        # TabDeactivated по этому пути не приходит: ``tc.active = tab_id``
+        # выставляется до того, как pane попал в DOM, поэтому Textual не постит
+        # TabActivated для этой панели вовсе (проверено: обработчик
+        # on_tabbed_content_tab_activated не вызывается ни разу), а значит не
+        # срабатывает и ветка «деактивировать старый». Владелец так и не узнаёт,
+        # что прежний таб перестал быть активным — и всё, что он хранил «на
+        # вкладку» вне state (глобальный toolbar Intruder: Threads/Delay/Turbo),
+        # остаётся несохранённым. Поэтому постим сами, пока _active_tab_id ещё
+        # указывает на старый таб.
+        previous_id = self._active_tab_id
+        if previous_id and previous_id in self._states:
+            self.post_message(self.TabDeactivated(self, previous_id, self._states[previous_id]))
+
         self._counter += 1
         tab_id = f"{self._tab_id_prefix}{self._counter}"
         if state is None:

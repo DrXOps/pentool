@@ -213,6 +213,10 @@ class IntruderScreen(
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
+        # Чьи значения сейчас показывает глобальный toolbar. Нужен, чтобы
+        # TabDeactivated не переписал состояние таба значениями соседнего
+        # (см. _save_toolbar_to_tab).
+        self._toolbar_tab_id: str | None = None
         # Старый _tabs для обратной совместимости (тесты)
         self._tabs: list[_IntruderTabState] = []
         self._active_tab_id: str | None = None
@@ -384,9 +388,9 @@ class IntruderScreen(
     def _tab_widget(self, tab_id: str, suffix: str, widget_cls: type) -> object:
         return self.query_one(f"#{self._wid(tab_id, suffix)}", widget_cls)
 
-    def _template_editor(self) -> ContentPanel:
-        """Вернуть ContentPanel активного таба (геттер per-tab)."""
-        tab = self._active_tab
+    def _template_editor(self, tab: _IntruderTabState | None = None) -> ContentPanel:
+        """Вернуть ContentPanel таба (по умолчанию — активного)."""
+        tab = tab if tab is not None else self._active_tab
         if tab is None:
             raise LookupError("no active tab")
         wid = self._wid(tab.tab_id, _TabId.TEMPLATE_PANEL)
@@ -593,6 +597,8 @@ class IntruderScreen(
         # New tabs start with their AI control visible; match the current mode
         # right away instead of waiting for the next AiModeChanged (F-022).
         self.call_after_refresh(self._apply_ai_visibility_after_mount, tab_id)
+        # Tooltips ставятся здесь: кнопки таба в DOM только с этой строки.
+        self._apply_tab_tooltips(tab_id)
         # Содержимое таба — сразу после монтирования, без откладывания на
         # очередной refresh: таб может прийти из БД уже с payload_sources,
         # attack_type и активным набором, и до этой строки он показывал бы
@@ -632,7 +638,48 @@ class IntruderScreen(
                 state.template_text = w.text
         except Exception:
             pass
+        # Threads/Delay/Turbo живут в глобальном toolbar и описывают активный
+        # таб, поэтому их надо снять ДО того, как toolbar перерисуется под
+        # новый таб. Без этого значения оставались только в state-дефолтах:
+        # пользователь вводил 77 потоков, уходил на другой таб и возвращался
+        # к тем же 10 — правка терялась молча.
+        self._save_toolbar_to_tab(state)
         self._auto_save_tab(state)
+
+    def _save_toolbar_to_tab(self, state: _IntruderTabState) -> None:
+        """Перенести Threads/Delay/Turbo из глобального toolbar в state таба.
+
+        Ошибки не пробрасываются: toolbar может быть ещё не смонтирован
+        (первый таб создаётся в ``on_mount`` до раскладки), и это не повод
+        ронять переключение вкладок.
+        """
+        if self._toolbar_tab_id != state.tab_id:
+            # Toolbar показывает ДРУГОЙ таб (пачечное восстановление создаёт
+            # вкладки подряд, а _sync_toolbar_from_tab успевает пройти только
+            # для активной). Сохранять сейчас — значит записать в этот таб
+            # чужие значения: восстановленные из БД 55 потоков превращались
+            # в дефолтные 10 при первом же переключении.
+            return
+        try:
+            threads = self.query_one("#intruder-threads", Input)
+            delay = self.query_one("#intruder-delay", Input)
+            turbo = self.query_one("#intruder-turbo", Checkbox)
+        except NoMatches:
+            return
+        # Пустое поле — не ноль потоков, а «пользователь стёр значение»;
+        # запуск атаки трактует это как дефолт, поэтому и здесь оставляем
+        # state как есть, а не сохраняем 0.
+        if threads.value.strip():
+            try:
+                state.thread_count = int(threads.value)
+            except ValueError:
+                pass
+        if delay.value.strip():
+            try:
+                state.delay_ms = int(delay.value)
+            except ValueError:
+                pass
+        state.turbo_mode = bool(turbo.value)
 
     @on(TabbedContentPanel.TabActivated, "#intruder-tabs")
     def _on_tab_activated(self, event: TabbedContentPanel.TabActivated) -> None:
@@ -670,6 +717,7 @@ class IntruderScreen(
                 cb.value = False
                 cb.disabled = True
                 cb.tooltip = "⚡ Turbo mode requires PRO license"
+            self._toolbar_tab_id = tab.tab_id
         except Exception as exc:
             logger.debug("_sync_toolbar_from_tab: %s", exc)
 
@@ -810,6 +858,7 @@ class IntruderScreen(
         """
         tab = self._active_tab
         if tab is not None:
+            self._sync_attack_type_ui(tab)
             self._update_payload_select()
         self._rebuild_table_data()
 
@@ -984,35 +1033,74 @@ class IntruderScreen(
             return  # tab UI is being (re)built; on_mount will call back
         button.display = ai_on
 
-    def _update_attack_description(self) -> None:
+    def _sync_attack_type_ui(self, tab: _IntruderTabState) -> None:
+        """Привести кнопку типа атаки и её описание к ``tab.attack_type``.
+
+        Состояние таба — единственный источник правды, а показывают его два
+        разных виджета. Пока каждый писатель (меню, загрузка из БД, активация
+        вкладки) правил их сам, они расходились: ``_do_load_state`` писал в
+        кнопку ``⚡ Sniper`` и не трогал описание, а ``_load_active_tab_content``
+        не трогал ни то, ни другое — вкладка, открытая после смены типа,
+        показывала подпись от прошлого значения.
+
+        NoMatches не пробрасывается: тело таба может быть ещё не смонтировано,
+        и тогда UI поправит ``_load_active_tab_content`` на активации.
+        """
         try:
-            tab = self._active_tab
-            if tab:
-                desc = _ATTACK_DESCRIPTIONS.get(tab.attack_type, "")
-                wid = self._wid(tab.tab_id, _TabId.ATTACK_TYPE_DESC)
-                self.query_one(f"#{wid}", Static).update(desc)
-        except Exception as exc:
-            logger.debug("_update_attack_description: %s", exc)
+            btn = self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_ATTACK_TYPE)}", ToolbarButton)
+            btn.label = f"{_ATTACK_LABELS.get(tab.attack_type, 'Sniper')} ▼"
+        except NoMatches:
+            return
+        try:
+            self.query_one(f"#{self._wid(tab.tab_id, _TabId.ATTACK_TYPE_DESC)}", Static).update(
+                _ATTACK_DESCRIPTIONS.get(tab.attack_type, "")
+            )
+        except NoMatches:
+            logger.debug("_sync_attack_type_ui: description not mounted for %s", tab.tab_id)
+
+    #: Tooltips для кнопок глобального toolbar. Их id — без суффикса таба:
+    #: StartStopWidget один на экран и лежит в compose(), а не в теле таба.
+    #: Раньше обе группы шли через ``_wid(tab_id, …)``, и эти три запроса
+    #: промахивались молча — подсказки на Start/Stop пропали при переходе на
+    #: мультитаб. ``btn-pause`` не существует вовсе: пауза — это та же
+    #: ``btn-start``, перекрашенная StartStopWidget, поэтому подсказка у неё
+    #: общая.
+    _GLOBAL_TOOLTIPS: dict[str, str] = {
+        StartStopWidget.ID_START: "Start / Pause attack (Ctrl+Enter)",
+        StartStopWidget.ID_STOP: "Stop attack",
+    }
+
+    #: Tooltips для кнопок, живущих внутри таба — id собирается ``_wid``.
+    _TAB_TOOLTIPS: dict[str, str] = {
+        _TabId.BTN_ADD_MARKER: "Wrap selected text in §markers§",
+        _TabId.BTN_CLEAR_MARKERS: "Remove all §markers§ from template",
+        _TabId.BTN_PAYLOAD_ADD: "Add new payload manually",
+        _TabId.BTN_PAYLOAD_LOAD: "Load payloads from file",
+    }
 
     def _setup_tooltips(self) -> None:
-        tips = {
-            "btn-start": "Start attack (Ctrl+Enter)",
-            "btn-pause": "Pause / Resume attack (Ctrl+P)",
-            "btn-stop": "Stop attack",
-            "btn-add-marker": "Wrap selected text in §markers§",
-            "btn-clear-markers": "Remove all §markers§ from template",
-            "btn-payload-add": "Add new payload manually",
-            "btn-payload-load": "Load payloads from file",
-        }
-        # Tooltips ставятся на кнопки активного таба через общий суффикс
-        tab = self._active_tab
-        if tab is None:
-            return
-        for base_id, tip in tips.items():
+        """Подсказки на кнопки глобального toolbar (табы — отдельно)."""
+        for wid, tip in self._GLOBAL_TOOLTIPS.items():
             try:
-                self.query_one(f"#{self._wid(tab.tab_id, base_id)}", ToolbarButton).tooltip = tip
-            except Exception as exc:
-                logger.debug("op: %s", exc)
+                self.query_one(f"#{wid}", ToolbarButton).tooltip = tip
+            except NoMatches:
+                # StartStopWidget ещё не смонтирован — не наш случай, но
+                # глотать стоит только «нет виджета», а не любую ошибку.
+                logger.debug("_setup_tooltips: #%s not mounted yet", wid)
+
+    def _apply_tab_tooltips(self, tab_id: str) -> None:
+        """Подсказки на per-tab кнопки. Зовётся после mount тела таба.
+
+        Из ``on_mount`` их ставить нельзя: ``compose`` создаёт только пустые
+        TabPane, тела монтируются позже (``_mount_tab_body``), поэтому запрос по
+        ``#…-<tab_id>`` не находил ничего, а NoMatches глотался — подсказки не
+        появлялись ни у первого таба, ни у новых.
+        """
+        for suffix, tip in self._TAB_TOOLTIPS.items():
+            try:
+                self.query_one(f"#{self._wid(tab_id, suffix)}", ToolbarButton).tooltip = tip
+            except NoMatches:
+                logger.debug("_apply_tab_tooltips: #%s not mounted", self._wid(tab_id, suffix))
 
     # ── API lazy singleton ───────────────────────────────────────────────
 
@@ -1142,10 +1230,9 @@ class IntruderScreen(
             attack_type_str = state.get("attack_type", "sniper")
             try:
                 tab.attack_type = AttackType(attack_type_str)
-                btn = self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_ATTACK_TYPE)}", ToolbarButton)
-                btn.label = f"⚡ {tab.attack_type.value.replace('_', ' ').title()}"
-            except Exception as exc:
-                logger.debug("op: %s", exc)
+                self._sync_attack_type_ui(tab)
+            except ValueError as exc:
+                logger.debug("_do_load_state: unknown attack_type %r: %s", attack_type_str, exc)
             payloads = state.get("payloads", [[]])
             if payloads and isinstance(payloads, list):
                 tab.payload_sources = deserialize_payloads(payloads)
@@ -1155,18 +1242,23 @@ class IntruderScreen(
         except Exception as exc:
             logger.debug("_do_load_state: %s", exc)
 
-    def _auto_save_state(self) -> None:
+    def _auto_save_state(self, tab: _IntruderTabState | None = None) -> None:
+        """Сохранить состояние таба (по умолчанию — активного).
+
+        ``tab`` явный нужен путям, которые правят не активную вкладку (меню,
+        открытое до переключения): иначе в БД ушёл бы соседний таб.
+        """
         api = self._get_api()
         if api is None:
             return
         try:
-            tab = self._active_tab
+            tab = tab if tab is not None else self._active_tab
             if tab is None:
                 return
             # Читаем template из per-tab editor
             template = ""
             try:
-                editor = self._template_editor()
+                editor = self._template_editor(tab)
                 w = editor.content_widget
                 if isinstance(w, TextArea):
                     template = w.text
@@ -1355,27 +1447,20 @@ class IntruderScreen(
         t_id = tab.tab_id
 
         def _on_select(action: str) -> None:
+            # Тип атаки принадлежит табу, из которого открыли меню. Пока
+            # callback брал ``_active_tab``, а рисовал по ``t_id``, смена
+            # вкладки при открытом меню меняла один таб и показывала другой.
+            tab = screen._tc_panel.get_state(t_id)
+            if tab is None:
+                return
             try:
-                at = AttackType(action)
-                tab = screen._active_tab
-                if tab is None:
-                    return
-                tab.attack_type = at
-                new_label = f"{_ATTACK_LABELS[at]} ▼"
-                try:
-                    b = screen.query_one(f"#{screen._wid(t_id, _TabId.BTN_ATTACK_TYPE)}", ToolbarButton)
-                    b.label = new_label
-                except Exception as e:
-                    logger.warning("attack-type btn update failed: %s", e)
-                desc = _ATTACK_DESCRIPTIONS.get(at, "")
-                try:
-                    screen.query_one(f"#{screen._wid(t_id, _TabId.ATTACK_TYPE_DESC)}", Static).update(desc)
-                except Exception as exc:
-                    logger.debug("op: %s", exc)
-                screen._update_payload_select()
-                screen._auto_save_state()
-            except Exception as e:
-                logger.warning("_on_select attack type failed: %s", e)
+                tab.attack_type = AttackType(action)
+            except ValueError as exc:
+                logger.warning("_on_select attack type: %s", exc)
+                return
+            screen._sync_attack_type_ui(tab)
+            screen._update_payload_select(tab)
+            screen._auto_save_state(tab)
 
         self.app.show_context_menu(items, x, y, callback=_on_select)
 
@@ -1391,18 +1476,21 @@ class IntruderScreen(
         t_id = tab.tab_id
 
         def _on_select(action: str) -> None:
+            # Набор принадлежит табу, из которого открыли меню: пока callback
+            # брал ``_active_tab``, переключение вкладки при открытом меню
+            # меняло набор одного таба и перерисовывало список другого.
+            tab = self._tc_panel.get_state(t_id)
+            if tab is None:
+                return
             try:
-                idx = int(action)
-                tab = self._active_tab
-                if tab is None:
-                    return
-                tab.active_set_idx = idx
-                label = f"Set {idx + 1} ▼" if n <= 1 else f"Set {idx + 1}/{n} ▼"
-                self.query_one(f"#{self._wid(t_id, _TabId.BTN_PAYLOAD_SET)}", ToolbarButton).label = label
-                self._refresh_payload_list()
-                self._highlight_nth_marker(idx)
-            except Exception as exc:
-                logger.debug("op: %s", exc)
+                tab.active_set_idx = int(action)
+            except ValueError as exc:
+                logger.debug("_open_payload_set_menu: bad action %r: %s", action, exc)
+                return
+            # Подпись и список пересчитывает _update_payload_select: он же
+            # зажимает индекс в границы набора и добивает недостающие наборы.
+            self._update_payload_select(tab)
+            self._highlight_nth_marker(tab.active_set_idx, tab)
 
         self.app.show_context_menu(items, x, y, callback=_on_select)
 
@@ -1678,14 +1766,7 @@ class IntruderScreen(
             if n > 1 and (tab is None or tab.attack_type == AttackType.SNIPER):
                 if tab:
                     tab.attack_type = AttackType.BATTERING_RAM
-                try:
-                    btn = self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_ATTACK_TYPE)}", ToolbarButton)
-                    btn.label = f"{_ATTACK_LABELS[AttackType.BATTERING_RAM]} ▼"
-                    self.query_one(f"#{self._wid(tab.tab_id, _TabId.ATTACK_TYPE_DESC)}", Static).update(
-                        _ATTACK_DESCRIPTIONS[AttackType.BATTERING_RAM]
-                    )
-                except Exception as exc:
-                    logger.debug("op: %s", exc)
+                    self._sync_attack_type_ui(tab)
                 self.app.notify(
                     f"Marked {n} positions — switched to Battering Ram "
                     "(Sniper only fills one position per request; change "
@@ -1700,12 +1781,17 @@ class IntruderScreen(
 
     # ── Payload list management ──────────────────────────────────────────
 
-    def _update_payload_select(self) -> None:
-        tab = self._active_tab
+    def _update_payload_select(self, tab: _IntruderTabState | None = None) -> None:
+        """Пересчитать наборы payload'ов и подпись «Set N» для таба.
+
+        ``tab`` явный — на случай, когда действие адресовано не активной
+        вкладке (меню, открытое до переключения). Без него берётся активная.
+        """
+        tab = tab if tab is not None else self._active_tab
         if tab is None:
             return
         try:
-            editor = self._template_editor()
+            editor = self._template_editor(tab)
             w = editor.content_widget
             template = w.text if isinstance(w, TextArea) else ""
         except Exception:
@@ -1723,14 +1809,14 @@ class IntruderScreen(
             self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_PAYLOAD_SET)}", ToolbarButton).label = label
         except Exception as exc:
             logger.debug("op: %s", exc)
-        self._refresh_payload_list()
+        self._refresh_payload_list(tab)
 
     def _tab_id_for_widget(self) -> str | None:
         t = self._active_tab
         return t.tab_id if t else None
 
-    def _refresh_payload_list(self) -> None:
-        tab = self._active_tab
+    def _refresh_payload_list(self, tab: _IntruderTabState | None = None) -> None:
+        tab = tab if tab is not None else self._active_tab
         if tab is None:
             return
         tab_id = tab.tab_id
@@ -1789,11 +1875,11 @@ class IntruderScreen(
             n = len(active)
             label.update(f"[dim]{n:,} line(s)[/dim]" if n else "")
 
-    def _highlight_nth_marker(self, n: int) -> None:
+    def _highlight_nth_marker(self, n: int, tab: _IntruderTabState | None = None) -> None:
         try:
             from textual.widgets.text_area import Selection
 
-            editor = self._template_editor()
+            editor = self._template_editor(tab)
             w = editor.content_widget
             if not isinstance(w, TextArea):
                 return
