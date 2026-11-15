@@ -12,6 +12,7 @@ from textual.widgets import Label, Static
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
+from pentool.tui.markup import esc
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.widgets.content_panel import ContentPanel
@@ -210,10 +211,10 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
                     preview = val[:100].replace("\n", "↵")
                     label = f"Step {i}" if i > 0 else "Input"
                     log.write(f"[bold]{label}[/bold] [{color}]{op}[/{color}]")
-                    log.write(f"  [dim]{preview}[/dim]  [dim]({len(val)} chars)[/dim]")
+                    log.write(f"  [dim]{esc(preview)}[/dim]  [dim]({len(val)} chars)[/dim]")
             else:
                 log.write("[yellow]Smart decode: no known encoding detected[/yellow]")
-                log.write(f"[dim]Input ({len(text)} chars): {text[:80]}[/dim]")
+                log.write(f"[dim]Input ({len(text)} chars): {esc(text[:80])}[/dim]")
         except Exception as exc:
             self.err(exc, "Smart decode error")
 
@@ -269,7 +270,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
                 color = "dim" if i == 0 else ("green" if not value.startswith("[error") else "red")
                 preview = value[:100].replace("\n", "↵") + ("…" if len(value) > 100 else "")
                 log.write(f"[bold]{step_label}[/bold] [{color}]{op}[/{color}]")
-                log.write(f"  [dim]{preview}[/dim]  [dim]({len(value)} chars)[/dim]")
+                log.write(f"  [dim]{esc(preview)}[/dim]  [dim]({len(value)} chars)[/dim]")
         except Exception as exc:
             logger.debug("_render_steps: %s", exc)
 

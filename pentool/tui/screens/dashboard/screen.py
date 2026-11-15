@@ -16,6 +16,7 @@ from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import DASHBOARD_BINDINGS
+from pentool.tui.markup import esc
 from pentool.tui.mixins.ai_sync import AiModeSyncMixin
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.dashboard.live_dashboard import ResourceMonitor
@@ -283,7 +284,7 @@ class ThreatMeter(Vertical):
                 f"[green]LOW:{c.get('low', 0):4d}[/green]  "
                 f"[blue]INFO:{c.get('info', 0):3d}[/blue]"
             )
-            top = f"[dim]Top finding: [/dim][yellow]{self._top_finding[:55]}[/yellow]"
+            top = f"[dim]Top finding: [/dim][yellow]{esc(self._top_finding[:55])}[/yellow]"
             self.query_one("#tm-gauge", Static).update(gauge)
             self.query_one("#tm-breakdown", Static).update(breakdown)
             self.query_one("#tm-top", Static).update(top)
@@ -427,7 +428,11 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
                 with Horizontal(id="mid-row"):
                     with Vertical(id="feed-panel"):
                         yield Static("┌─ LIVE FEED ─", id="feed-panel-title")
-                        yield RichLog(wrap=False, max_lines=300, id="feed-log")
+                        # markup=True обязателен: весь фид написан тегами ([dim], [cyan]…),
+                        # а RichLog по умолчанию их не парсит и показывает
+                        # пользователю служебный текст как есть. Внешние значения
+                        # в строках экранируются через esc().
+                        yield RichLog(markup=True, wrap=False, max_lines=300, id="feed-log")
                     with Vertical(id="status-panel"):
                         yield Static("┌─ STATUS ─", id="status-panel-title")
                         yield Static(
@@ -521,17 +526,17 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
                 is_active = path == current
 
                 if is_active:
-                    node_label = f"[bold cyan]{proj_name}[/bold cyan] [bold green]●[/bold green]" + (
+                    node_label = f"[bold cyan]{esc(proj_name)}[/bold cyan] [bold green]●[/bold green]" + (
                         f" [dim]{ts}[/dim]" if ts else ""
                     )
                 elif exists:
-                    node_label = f"[cyan]{proj_name}[/cyan]" + (f" [dim]{ts}[/dim]" if ts else "")
+                    node_label = f"[cyan]{esc(proj_name)}[/cyan]" + (f" [dim]{ts}[/dim]" if ts else "")
                 else:
-                    node_label = f"[dim]{proj_name} (missing)[/dim]"
+                    node_label = f"[dim]{esc(proj_name)} (missing)[/dim]"
 
                 # Add as a node with a child leaf showing the path
                 node = root.add(node_label, data=path)
-                node.add_leaf(f"[dim]{path}[/dim]", data=path)
+                node.add_leaf(f"[dim]{esc(path)}[/dim]", data=path)
                 if is_active:
                     node.expand()
 
@@ -607,7 +612,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         ts = datetime.now().strftime("%H:%M:%S")
         try:
             log = self.query_one("#feed-log", RichLog)
-            log.write(f"[dim green]{ts}[/dim green] {color}{line}[/]")
+            log.write(f"[dim green]{ts}[/dim green] {color}{esc(line)}[/]")
         except Exception:
             pass
 
@@ -717,7 +722,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         status_str = f"[{status_color}]{status}[/{status_color}]" if status else "[dim]···[/dim]"
         short_url = url[:60] + "…" if len(url) > 60 else url
         self._feed_write(
-            f"[dim]{ts}[/dim] [{method_color}]{method:<7}[/{method_color}] " f"{status_str} [dim]{short_url}[/dim]"
+            f"[dim]{ts}[/dim] [{method_color}]{method:<7}[/{method_color}] " f"{status_str} [dim]{esc(short_url)}[/dim]"
         )
 
     def add_finding(self, finding) -> None:
@@ -745,7 +750,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         short_url = url[:45] + "…" if len(url) > 45 else url
         self._feed_write(
             f"[dim]{ts}[/dim] {icon} [{color}]{sev.upper():<8}[/{color}] "
-            f"[bold]{vuln_type}[/bold] [dim]{short_url}[/dim]"
+            f"[bold]{esc(vuln_type)}[/bold] [dim]{esc(short_url)}[/dim]"
         )
 
     def log_activity(self, message: str, level: str = "info") -> None:
@@ -754,7 +759,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         colors = {"info": "cyan", "warning": "yellow", "error": "red", "ok": "bold green"}
         color = colors.get(level, "white")
         prefix = {"info": "ℹ", "warning": "⚠", "error": "✗", "ok": "✓"}.get(level, "·")
-        self._feed_write(f"[dim]{ts}[/dim] [{color}]{prefix} {message}[/{color}]")
+        self._feed_write(f"[dim]{ts}[/dim] [{color}]{prefix} {esc(message)}[/{color}]")
 
     def update_proxy_status(self, running: bool, port: int = 8080) -> None:
         if running:

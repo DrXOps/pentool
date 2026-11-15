@@ -19,6 +19,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import RichLog, Static, TextArea
 
+from pentool.tui.markup import esc
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 if TYPE_CHECKING:
@@ -199,10 +200,15 @@ class ContentPanel(Widget):
             w.clear()
 
     def set_title(self, title: str) -> None:
-        """Обновить заголовок панели (Static в .cp-title)."""
+        """Обновить заголовок панели (Static в .cp-title).
+
+        Заголовок всегда текст, не разметка: в него попадают имена файлов
+        (могут содержать ``[``) и метки языка ответа в квадратных скобках
+        (``[html]``, ``[json]``) — без экранирования Rich съедает их молча.
+        """
         self._panel_title = title
         try:
-            self.query_one(".cp-title > Static", Static).update(title)
+            self.query_one(".cp-title > Static", Static).update(esc(title))
         except Exception:
             pass
 

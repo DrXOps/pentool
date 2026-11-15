@@ -831,7 +831,17 @@ Escape-привязки вообще — закрывался только мы�
 
 ---
 
-### F-026 [P2] `RichLog` с `markup=True` принимает непроверенный текст (HTTP-ответы, URL)
+### F-026 [P2] ✅ `RichLog` с `markup=True` принимал непроверенный текст (HTTP-ответы, URL)
+
+**Закрыто 2026-11-15:** единый `pentool/tui/markup.esc`; 20 писателей
+(Comparer, Repeater `DiffPanel`, лента Dashboard, WS-лог Proxy, дерево и
+detail-панель Target, inspector, decoder, lightpanda, ответ лицензионного
+сервера, заголовки `ContentPanel`); `notify()` объявляет `markup=False`.
+Попутно: `#feed-log` был `RichLog` без `markup=True` и показывал теги
+служебным текстом; панель дифа Comparer делила id с контейнером, из-за
+чего `_render_result`/`action_clear` падали `WrongType`. Гвард —
+`tests/unit/tui/test_markup_escaping.py` (12 тестов, каждый проверен
+мутацией).
 
 **Где:** `widgets/content_panel.py:191-196` (все 11 `ContentPanel` с RichLog), `screens/target/screen.py:369-400` (`log.write(f"[bold]{host}[/bold]")`, `f"  {n.path} …"`), `screens/comparer/screen.py:209-216`, `screens/decoder/screen.py:245-309`.
 

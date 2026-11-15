@@ -10,6 +10,8 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
+from pentool.tui.markup import esc
+
 _CSS = (Path(__file__).parent / "inspector_panel.tcss").read_text(encoding="utf-8")
 
 
@@ -46,12 +48,16 @@ class InspectorPanel(Widget):
                 scheme = "https" if req_headers.get("X-Forwarded-Proto", "") == "https" or "443" in host else "http"
                 url = f"{scheme}://{host}{url}"
 
-        self._add_section(widgets, "Request Attributes", {
-            "Method":    req.method,
-            "URL":       url or "(unknown)",
-            "HTTP":      getattr(req, "http_version", "HTTP/1.1"),
-            "Body size": f"{len(req.body) if req.body else 0} bytes",
-        })
+        self._add_section(
+            widgets,
+            "Request Attributes",
+            {
+                "Method": req.method,
+                "URL": url or "(unknown)",
+                "HTTP": getattr(req, "http_version", "HTTP/1.1"),
+                "Body size": f"{len(req.body) if req.body else 0} bytes",
+            },
+        )
         self._add_section(widgets, "Request Headers", req_headers)
 
         try:
@@ -106,6 +112,4 @@ class InspectorPanel(Widget):
                 val_str = str(value)
                 if len(val_str) > 55:
                     val_str = val_str[:52] + "…"
-                widgets.append(
-                    Static(f"  [bold]{key}[/bold]: {val_str}", classes="kv-row", markup=True)
-                )
+                widgets.append(Static(f"  [bold]{esc(key)}[/bold]: {esc(val_str)}", classes="kv-row", markup=True))

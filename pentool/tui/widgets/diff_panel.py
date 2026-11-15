@@ -13,6 +13,7 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static
 
 from pentool.core.logging import get_logger
+from pentool.tui.markup import esc
 
 _CSS = (Path(__file__).parent / "diff_panel.tcss").read_text(encoding="utf-8")
 
@@ -32,19 +33,20 @@ class DiffPanel(Widget):
         """Render a diff of old_text (last sent) -> new_text (current)."""
         try:
             from pentool.api.comparer_api import compare
+
             result = compare(old_text or "", new_text or "")
             log = self.query_one("#diff-panel-log", RichLog)
             log.clear()
             for dl in result.lines:
                 if dl.tag == "equal":
-                    log.write(f"[dim]  {dl.left[:200]}[/dim]")
+                    log.write(f"[dim]  {esc(dl.left[:200])}[/dim]")
                 elif dl.tag == "insert":
-                    log.write(f"[green]+ {dl.right[:200]}[/green]")
+                    log.write(f"[green]+ {esc(dl.right[:200])}[/green]")
                 elif dl.tag == "delete":
-                    log.write(f"[red]- {dl.left[:200]}[/red]")
+                    log.write(f"[red]- {esc(dl.left[:200])}[/red]")
                 elif dl.tag == "replace":
-                    log.write(f"[red]- {dl.left[:200]}[/red]")
-                    log.write(f"[green]+ {dl.right[:200]}[/green]")
+                    log.write(f"[red]- {esc(dl.left[:200])}[/red]")
+                    log.write(f"[green]+ {esc(dl.right[:200])}[/green]")
             s = result.stats
             self.query_one("#diff-panel-title", Static).update(
                 f"Diff vs. last sent  [green]+{s.added_lines}[/green] "

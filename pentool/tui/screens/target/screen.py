@@ -14,6 +14,7 @@ from textual.widgets import Tree
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import TARGET_BINDINGS
+from pentool.tui.markup import esc
 from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
 from pentool.tui.mixins.ai_sync import AiModeSyncMixin
 from pentool.tui.mixins.app_mixin import AppMixin
@@ -286,9 +287,9 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             total_reqs = sum(n.request_count for n in nodes)
             in_scope = api.sitemap.is_in_scope(host)
             if in_scope:
-                host_label = f"[bold green]★ {host}[/bold green] [dim green](in scope)[/dim green] ({total_reqs})"
+                host_label = f"[bold green]★ {esc(host)}[/bold green] [dim green](in scope)[/dim green] ({total_reqs})"
             else:
-                host_label = f"{host} ({total_reqs})"
+                host_label = f"{esc(host)} ({total_reqs})"
             host_node = root.add(host_label, data={"type": "host", "host": host, "in_scope": in_scope})
 
             # TechDetect нода — если есть кэшированный профиль, показываем технологии
@@ -301,7 +302,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                         tech_str = _format_tech_profile(cached)
                         if tech_str:
                             host_node.add_leaf(
-                                f"[dim cyan]{tech_str}[/dim cyan]",
+                                f"[dim cyan]{esc(tech_str)}[/dim cyan]",
                                 data={"type": "tech", "host": host},
                             )
                 except Exception:
@@ -331,7 +332,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             if is_last:
                 methods_str = " ".join(sorted(node.methods)) if node.methods else "GET"
                 parent.add_leaf(
-                    f"{seg}  [{methods_str}] ({node.request_count})",
+                    f"{esc(seg)}  [{methods_str}] ({node.request_count})",
                     data={"type": "path", "host": host, "node": node},
                 )
             else:
@@ -344,7 +345,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             d = child.data or {}
             if d.get("type") == "dir" and d.get("dir") == seg:
                 return child
-        return node.add(seg, data={"type": "dir", "host": host, "dir": seg})
+        return node.add(esc(seg), data={"type": "dir", "host": host, "dir": seg})
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         data = event.node.data
@@ -361,7 +362,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             nodes = api.get_paths(host)
             in_scope = api.sitemap.is_in_scope(host)
             scope_str = "[green]YES[/green]" if in_scope else "[red]NO[/red]"
-            log.write(f"[bold]{host}[/bold]")
+            log.write(f"[bold]{esc(host)}[/bold]")
             log.write(f"In scope: {scope_str}")
 
             # TechDetect — читаем из кэша
@@ -372,7 +373,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 if cached:
                     tech_str = _format_tech_profile(cached)
                     if tech_str:
-                        log.write(f"[dim cyan]Tech: {tech_str}[/dim cyan]")
+                        log.write(f"[dim cyan]Tech: {esc(tech_str)}[/dim cyan]")
             except Exception:
                 pass
 
@@ -383,13 +384,13 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 log.write("")
                 log.write("[dim]Paths:[/dim]")
                 for n in nodes[:20]:
-                    log.write(f"  {n.path}  {' '.join(sorted(n.methods))}")
+                    log.write(f"  {esc(n.path)}  {' '.join(sorted(n.methods))}")
 
         elif data.get("type") == "path":
             node = data["node"]
             self._selected_host = data["host"]
             self._selected_node_data = node
-            log.write(f"[bold]{node.host}{node.path}[/bold]")
+            log.write(f"[bold]{esc(node.host)}{esc(node.path)}[/bold]")
             log.write(f"Methods: {', '.join(sorted(node.methods))}")
             log.write(f"Requests: {node.request_count}")
             log.write(f"Last seen: {node.last_seen.strftime('%Y-%m-%d %H:%M')}")
@@ -1018,7 +1019,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                     tech_str = _format_tech_profile(profile)
                     if tech_str:
                         child.add_leaf(
-                            f"[dim cyan]{tech_str}[/dim cyan]",
+                            f"[dim cyan]{esc(tech_str)}[/dim cyan]",
                             data={"type": "tech", "host": host},
                         )
                     break

@@ -20,6 +20,7 @@ from pentool.collections.filter_predicate import FilterOp, FilterPredicate, Filt
 from pentool.core.logging import get_logger
 from pentool.services.proxy_service import ProxyService
 from pentool.tui.hotkeys.defaults import PROXY_BINDINGS
+from pentool.tui.markup import esc
 from pentool.tui.messages import SendToIntruder, SendToRepeater, SyncScopeToTarget
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
@@ -365,7 +366,7 @@ class ProxyScreen(
                 log.write(
                     f"[{dir_color}]{dir_arrow} {op_name}[/{dir_color}] "
                     f"[dim]{getattr(event, 'request_id', '')}[/dim] "
-                    f"{body}"
+                    f"{esc(body)}"
                 )
             elif opcode == 0x2:
                 log.write(

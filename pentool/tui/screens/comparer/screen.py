@@ -14,6 +14,7 @@ from textual.widgets import Static, TextArea
 
 from pentool.core.logging import get_logger
 from pentool.tui.hotkeys.defaults import COMPARER_BINDINGS
+from pentool.tui.markup import esc
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.widgets.content_panel import ContentPanel
@@ -66,6 +67,9 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
         yield ResizeHandle("cmp-edit-area", "cmp-diff-area", vertical=True, id="cmp-resize-v")
 
         # ── Diff output ────────────────────────────────────────────────────────
+        # Панель дифа живёт внутри #cmp-diff-area и носит свой id: два узла с
+        # одним id делают query_one("#cmp-diff-area", ContentPanel) исключением
+        # WrongType, а не находкой.
         with Vertical(id="cmp-diff-area"):
             yield ContentPanel(
                 "Diff",
@@ -73,7 +77,7 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
                 wrap=False,
                 max_lines=2000,
                 buttons=["copy"],
-                id="cmp-diff-area",
+                id="cmp-diff-panel",
             )
 
     # ── Toolbar ───────────────────────────────────────────────────────────────
@@ -169,19 +173,19 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
             self.query_one("#cmp-stats", Static).update(stat_text)
 
             # Diff log
-            log = self.query_one("#cmp-diff-area", ContentPanel).content_widget
+            log = self.query_one("#cmp-diff-panel", ContentPanel).content_widget
             log.clear()
             for dl in result.lines:
                 if dl.tag == "equal":
                     # Show only a few context lines around changes
-                    log.write(f"[dim]  {dl.left[:120]}[/dim]")
+                    log.write(f"[dim]  {esc(dl.left[:120])}[/dim]")
                 elif dl.tag == "insert":
-                    log.write(f"[green]+ {dl.right[:120]}[/green]")
+                    log.write(f"[green]+ {esc(dl.right[:120])}[/green]")
                 elif dl.tag == "delete":
-                    log.write(f"[red]- {dl.left[:120]}[/red]")
+                    log.write(f"[red]- {esc(dl.left[:120])}[/red]")
                 elif dl.tag == "replace":
-                    log.write(f"[red]- {dl.left[:120]}[/red]")
-                    log.write(f"[green]+ {dl.right[:120]}[/green]")
+                    log.write(f"[red]- {esc(dl.left[:120])}[/red]")
+                    log.write(f"[green]+ {esc(dl.right[:120])}[/green]")
         except Exception as exc:
             logger.debug("_render_result: %s", exc)
 
@@ -195,7 +199,7 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
                 if isinstance(w, TextArea):
                     w.load_text("")
                 panel.set_title({"cmp-left-panel": "Left", "cmp-right-panel": "Right"}[panel_id])
-            self.query_one("#cmp-diff-area", ContentPanel).clear_content()
+            self.query_one("#cmp-diff-panel", ContentPanel).clear_content()
             self.query_one("#cmp-stats", Static).update("[dim]— Press Compare or Ctrl+Enter to diff —[/dim]")
             self._last_result = None
         except Exception as exc:

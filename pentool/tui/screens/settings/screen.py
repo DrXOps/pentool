@@ -13,6 +13,7 @@ from textual.widget import Widget
 from textual.widgets import Button, Input, Static, Switch, TabbedContent, TabPane
 
 from pentool.core.error_guard import err
+from pentool.tui.markup import esc
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.settings.hotkeys import HotkeySettingsScreen
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
@@ -346,9 +347,9 @@ class SettingsScreen(AppMixin, Widget):
                 status_w.update("● PRO")
                 status_w.remove_class("license-status-free")
                 status_w.add_class("license-status-pro")
-                plan_w.update(info.plan.upper())
-                exp_w.update(info.expires_text)
-                feat_w.update("\n".join(f"  ✓ {f}" for f in info.features) if info.features else "  (none)")
+                plan_w.update(esc(info.plan.upper()))
+                exp_w.update(esc(info.expires_text))
+                feat_w.update("\n".join(f"  ✓ {esc(f)}" for f in info.features) if info.features else "  (none)")
             else:
                 status_w.update("● FREE")
                 status_w.remove_class("license-status-pro")
@@ -360,7 +361,7 @@ class SettingsScreen(AppMixin, Widget):
             mid_w.update(mid[:16] + "…" if len(mid) > 16 else mid)
 
             if info.error:
-                err_w.update(f"[red]{info.error}[/red]")
+                err_w.update(f"[red]{esc(info.error)}[/red]")
                 err_w.add_class("visible")
             else:
                 err_w.update("")
@@ -780,7 +781,7 @@ class SettingsScreen(AppMixin, Widget):
                         title="License already in use",
                         message=(
                             f"This key is already activated on another machine.\n\n"
-                            f"{info.error}\n\n"
+                            f"{esc(info.error)}\n\n"
                             "Do you want to deactivate the old machine and "
                             "activate this one instead?"
                         ),
@@ -797,7 +798,8 @@ class SettingsScreen(AppMixin, Widget):
                     return
             refresh_session_license(info)
             if info.valid:
-                self.app.notify(f"✓ License activated: {info.plan.upper()}", timeout=4)  # type: ignore[attr-defined]
+                plan = esc(info.plan.upper())
+                self.app.notify(f"✓ License activated: {plan}", timeout=4)  # type: ignore[attr-defined]
             else:
                 self.err(Exception(info.error), "License activation failed")
         except Exception as exc:

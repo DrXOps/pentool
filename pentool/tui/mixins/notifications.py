@@ -36,10 +36,14 @@ class NotificationsMixin:
         title: str = "",
         severity: str = "information",
         timeout: float | None = None,
-        markup: bool = True,
+        markup: bool = False,
         sound: bool = True,
     ) -> None:
         """Standard notification via Textual's built-in toast rack.
+
+        ``markup`` is ``False`` by default, unlike Textual: the message is
+        usually data from outside (an exception, a URL, a filename), and Rich
+        markup in it either raises or becomes a ``[link=javascript:…]``.
 
         Renders severity-styled cards bottom-right WITHOUT reserving a zone
         (no dark band). Sound is layered on top, respecting the user's

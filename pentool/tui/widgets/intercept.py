@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from pentool.api.proxy_api import InterceptedRequest
+from pentool.tui.markup import esc
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -208,7 +209,7 @@ class InterceptMixin:
             self._intercept_pending.append(req)
             try:
                 self.query_one("#intercept-hint", Label).update(
-                    f"⏸ {req.method} {req.url}  (+{len(self._intercept_pending)} queued)"
+                    f"⏸ {esc(req.method)} {esc(req.url)}  (+{len(self._intercept_pending)} queued)"
                 )
             except Exception:
                 pass
@@ -282,7 +283,7 @@ class InterceptMixin:
             pass
         try:
             self.query_one("#intercept-hint", Label).update(
-                f"✓ Response: {req.response.status} — {req.method} {req.url}"
+                f"✓ Response: {req.response.status} — {esc(req.method)} {esc(req.url)}"
             )
         except Exception:
             pass

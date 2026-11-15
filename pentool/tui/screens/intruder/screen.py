@@ -42,6 +42,7 @@ from pentool.tui.dialogs.intruder_generate import GenerateDialog
 from pentool.tui.dialogs.intruder_input import InputDialog
 from pentool.tui.dialogs.intruder_smart_payloads import SmartPayloadsDialog
 from pentool.tui.hotkeys.defaults import INTRUDER_BINDINGS
+from pentool.tui.markup import esc
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.ai_sync import AiModeSyncMixin
 from pentool.tui.mixins.app_mixin import AppMixin
@@ -1865,9 +1866,9 @@ class IntruderScreen(
         active = tab.payload_sources[tab.active_set_idx] if tab.active_set_idx < len(tab.payload_sources) else []
         if isinstance(active, FilePayloadSource):
             if active.is_count_known:
-                label.update(f"[dim]{active.cached_count:,} line(s) — {Path(active.path).name}[/dim]")
+                label.update(f"[dim]{active.cached_count:,} line(s) — {esc(Path(active.path).name)}[/dim]")
             else:
-                label.update(f"[dim]counting… — {Path(active.path).name}[/dim]")
+                label.update(f"[dim]counting… — {esc(Path(active.path).name)}[/dim]")
         elif isinstance(active, (NumericPayloadSource, CharPayloadSource, ChainedPayloadSource)):
             n = len(active)
             label.update(f"[dim]{n:,} value(s)[/dim]" if n else "")

@@ -236,11 +236,20 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         severity: str = "information",
         title: str | None = None,
         timeout: int | None = None,
+        markup: bool = False,
     ) -> None:
-        """Override Textual App.notify — log error notifications to pentool.log."""
+        """Override Textual App.notify — log error notifications to pentool.log.
+
+        ``markup`` defaults to ``False`` here, unlike Textual. Notification text
+        is almost always data from outside — an exception message from ``err()``,
+        a URL, a filename, a license-server reply — and Rich markup in it either
+        raises ``MarkupError`` or turns into a ``[link=javascript:…]`` link. A
+        caller that really wants styling passes ``markup=True`` and escapes its
+        own values (:func:`pentool.tui.markup.esc`).
+        """
         if severity == "error":
             logger.error("UI NOTIFICATION: [%s] %s", severity, message)
-        super().notify(message, severity=severity, title=title, timeout=timeout)
+        super().notify(message, severity=severity, title=title, timeout=timeout, markup=markup)
 
     def _handle_exception(self, error: Exception) -> None:
         """Catch fatal exceptions — log before passing to Textual."""

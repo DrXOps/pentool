@@ -12,6 +12,7 @@ from textual.widgets import RichLog, Static
 
 from pentool.core.logging import get_logger
 from pentool.tui.dialogs.base_dialog import BaseDialog
+from pentool.tui.markup import esc
 
 logger = get_logger(__name__)
 
@@ -35,7 +36,7 @@ class LightpandaViewer(BaseDialog[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="lightpanda-dialog"):
-            yield Static(f"Lightpanda: {self._url}", id="lightpanda-header")
+            yield Static(f"Lightpanda: {esc(self._url)}", id="lightpanda-header")
             yield RichLog(id="lightpanda-body", highlight=True, markup=True, wrap=True)
             yield Static("Esc / Ctrl+C to close", id="lightpanda-footer")
 
@@ -60,11 +61,11 @@ class LightpandaViewer(BaseDialog[None]):
                 err = stderr.decode("utf-8", errors="replace")[:500]
                 body.clear()
                 body.write(f"[red]Lightpanda error (exit={proc.returncode}):[/red]")
-                body.write(err)
+                body.write(esc(err))
                 return
             body.clear()
             text = stdout.decode("utf-8", errors="replace")
-            body.write(text)
+            body.write(esc(text))
         except asyncio.TimeoutError:
             body.clear()
             body.write("[red]Lightpanda timed out after 30s[/red]")
@@ -73,4 +74,4 @@ class LightpandaViewer(BaseDialog[None]):
             body.write("[red]Lightpanda not found. Install: pip install lightpanda[/red]")
         except Exception as exc:
             body.clear()
-            body.write(f"[red]Error: {exc}[/red]")
+            body.write(f"[red]Error: {esc(exc)}[/red]")

@@ -13,6 +13,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Label, Static, TextArea
 
 from pentool.tui.dialogs.base_dialog import BaseDialog
+from pentool.tui.markup import esc
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "scope_dialog.tcss").read_text(encoding="utf-8")
@@ -215,7 +216,7 @@ class ScopeDialog(BaseDialog[list[str] | ScopeConfig | None]):
             bad_all = bad_inc + bad_exc
             try:
                 self.query_one("#validation-msg", Static).update(
-                    f"[bold red]Invalid regex: {', '.join(bad_all[:3])}[/bold red]"
+                    f"[bold red]Invalid regex: {esc(', '.join(bad_all[:3]))}[/bold red]"
                 )
             except Exception:
                 pass
