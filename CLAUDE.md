@@ -48,7 +48,12 @@ Single source of truth: `MYPLANS/` — любой файл `*plan*` или `*aud
   соответствующего id/класса/типа в Python — блокирует CI и pre-commit)
 - Молчаливые исключения: `uv run python tools/check_silent_except.py`
   (трещотка ADR-6; `--update` понижает baseline)
-- Хуки pre-commit: `uvx pre-commit run --all-files`
+- Широкие исключения: `uv run python tools/check_broad_except.py`
+  (вторая трещотка ADR-6 по всему `pentool/` — считает `ruff BLE001`,
+  потолок на файл в `tools/broad_except_baseline.json`, `--update` понижает)
+- Хуки pre-commit: `uvx pre-commit run --files $(git diff --name-only HEAD)`.
+  **Не `--all-files`**: он переформатирует ~233 файла (black 120 против
+  текущего состояния репозитория) и утащит в дифф весь проект.
 
 Тесты запускаются **через `scripts/run-tests.sh`**: после успешного прогона
 скрипт пишет маркер `.claude/state/tests-passed`, который читает Stop-хук.

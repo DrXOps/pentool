@@ -88,6 +88,12 @@ jobs:
     - name: Check silent except ratchet
       run: uv run python tools/check_silent_except.py
 
+    # Трещотка ADR-6 по всему pentool/: число `except Exception`, которые ни
+    # логируют, ни пробрасывают (ruff BLE001), растёт только вниз. Базовая
+    # линия — tools/broad_except_baseline.json (585 мест на 92 файла).
+    - name: Check blind except ratchet
+      run: uv run python tools/check_broad_except.py
+
     - name: Run unit tests
       run: uv run pytest tests/unit/ -v --tb=short
 

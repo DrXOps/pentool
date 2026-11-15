@@ -50,6 +50,17 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Трещотка ADR-6 по всему pentool/: число `except Exception`, которые ни
+      # логируют, ни пробрасывают (ruff BLE001), в файле не растёт. Базовая
+      # линия — tools/broad_except_baseline.json (585 мест на 92 файла);
+      # понижение — `python tools/check_broad_except.py --update`.
+      - id: check-broad-except
+        name: no new blind except Exception (ADR-6 ratchet)
+        entry: uv run python tools/check_broad_except.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       # guard-git-staging: в коммит попадают только файлы проекта.
       # Проверяет ИНДЕКС, а не команду — работает и для `git commit` из IDE,
       # и в CI (через --files-from). Логика и списки продублированы из
