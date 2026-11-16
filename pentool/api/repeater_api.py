@@ -73,6 +73,10 @@ class RepeaterAPI(ExportableAPI):
     async def delete_tab(self, tab_uid: str) -> None:
         return await self._repeater.delete_tab(tab_uid)
 
+    async def seed_tabs_from_history(self) -> list[dict]:
+        """Одноразовая миграция реестра вкладок из истории отправок."""
+        return await self._repeater.seed_tabs_from_history()
+
     async def switch_db(self, db_path: str) -> None:
         """Point Repeater at different project DB (one persistent connection, mirrors IntruderAPI)."""
         self._db_path = db_path

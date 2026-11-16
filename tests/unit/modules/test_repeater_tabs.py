@@ -109,3 +109,43 @@ async def test_empty_uid_is_ignored(repeater) -> None:
     """Без uid строку не с чем сопоставить — лучше no-op, чем строка-сирота."""
     await repeater.save_tab("", "Tab 1", "GET / HTTP/1.1\r\n\r\n")
     assert await repeater.get_tabs() == []
+
+
+@pytest.mark.asyncio
+async def test_seed_builds_the_registry_from_history_once(repeater) -> None:
+    """Миграция старого проекта: вкладки собираются из истории ровно один раз."""
+    req = ParsedRequest(method="GET", url="http://example.com/a", headers={})
+    resp = ParsedResponse(status=200, reason="OK", body="OK")
+    await repeater.save_to_history(req, resp, tab_name="Login")
+    await repeater.save_to_history(req, resp, tab_name="Search")
+    # Более поздняя запись того же имени должна выиграть.
+    req_new = ParsedRequest(method="PUT", url="http://example.com/login2", headers={})
+    await repeater.save_to_history(req_new, resp, tab_name="Login")
+
+    seeded = await repeater.seed_tabs_from_history()
+
+    assert [t["tab_name"] for t in seeded] == ["Login", "Search"]
+    assert "PUT" in seeded[0]["request_text"], "взята не самая свежая запись имени"
+    assert all(t["tab_uid"] for t in seeded), "у собранных вкладок нет uid"
+
+    before = [t["tab_uid"] for t in seeded]
+    again = await repeater.seed_tabs_from_history()
+    assert [t["tab_uid"] for t in again] == before, "повторная миграция пересобрала реестр"
+
+
+@pytest.mark.asyncio
+async def test_seed_does_nothing_without_history(repeater) -> None:
+    assert await repeater.seed_tabs_from_history() == []
+    assert await repeater.get_tabs() == []
+
+
+@pytest.mark.asyncio
+async def test_seed_does_not_override_an_existing_registry(repeater) -> None:
+    req = ParsedRequest(method="GET", url="http://example.com/a", headers={})
+    resp = ParsedResponse(status=200, reason="OK", body="OK")
+    await repeater.save_to_history(req, resp, tab_name="FromHistory")
+    await repeater.save_tab("uid-a", "Mine", "GET /mine HTTP/1.1\r\n\r\n")
+
+    tabs = await repeater.seed_tabs_from_history()
+
+    assert [t["tab_name"] for t in tabs] == ["Mine"], "миграция перезаписала живой реестр"

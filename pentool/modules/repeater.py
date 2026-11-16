@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from sqlite3 import OperationalError, ProgrammingError
@@ -10,7 +11,7 @@ from sqlite3 import OperationalError, ProgrammingError
 from pentool.core.logging import get_logger
 from pentool.storage.base_sqlite_storage import BaseSqliteStorage
 from pentool.utils.http_client import HTTPClient
-from pentool.utils.parser import ParsedRequest, ParsedResponse
+from pentool.utils.parser import ParsedRequest, ParsedResponse, build_http_request
 
 logger = get_logger(__name__)
 
@@ -252,6 +253,42 @@ class Repeater(BaseSqliteStorage):
             return
         await self._db.execute("DELETE FROM repeater_tabs WHERE tab_uid = ?", (tab_uid,))
         await self._db.commit()
+
+    async def seed_tabs_from_history(self) -> list[dict]:
+        """Одноразовая миграция: собрать реестр вкладок из истории отправок.
+
+        До 2026-11-16 набором вкладок считались последние 20 строк
+        `repeater_entries`, сгруппированные по `tab_name`. У существующего
+        проекта строк в `repeater_tabs` нет, и после обновления он открылся бы
+        одной пустой вкладкой — то есть пользователь потерял бы то, что видел
+        раньше.
+
+        Поэтому при пустом реестре вкладки один раз собираются из истории (те же
+        правила группировки: новейшая запись на имя) и записываются в реестр.
+        Дальше источником истины остаётся только реестр, и закрытие вкладки
+        становится окончательным. Повторный вызов ничего не делает.
+        """
+        existing = await self.get_tabs()
+        if existing:
+            return existing
+
+        entries = await self.get_history(limit=20)
+        if not entries:
+            return []
+
+        newest_per_name: dict[str, RepeaterEntry] = {}
+        for entry in reversed(entries):  # oldest first → newest wins
+            newest_per_name[entry.tab_name] = entry
+
+        for order, (name, entry) in enumerate(newest_per_name.items()):
+            await self.save_tab(
+                uuid.uuid4().hex,
+                name,
+                build_http_request(entry.request),
+                order,
+            )
+        logger.info("REPEATER: реестр вкладок собран из истории (%d)", len(newest_per_name))
+        return await self.get_tabs()
 
 
 def _row_to_entry(row: object) -> RepeaterEntry:

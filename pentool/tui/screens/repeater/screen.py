@@ -239,6 +239,13 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             if generation != self._tabs_generation:
                 return
             if not tabs:
+                # Проект, созданный до появления реестра: вкладки у него жили
+                # в истории. Один раз собираем реестр из неё, иначе после
+                # обновления пользователь увидел бы одну пустую вкладку.
+                tabs = await repeater_api.seed_tabs_from_history()
+                if generation != self._tabs_generation:
+                    return
+            if not tabs:
                 self.call_after_refresh(self._new_tab_if_current, generation)
                 return
 
