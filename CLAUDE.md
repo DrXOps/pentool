@@ -111,6 +111,23 @@ screens/ tui-lab/ bin/ ai/` и корневые файлы. Каталог `ai/`
 Не отключай и не редактируй хуки `.claude/hooks/`, чтобы «просто завершить
 сессию». Не используй `--no-verify`.
 
+## DeepSeek Harness (DSH)
+
+- Те же хуки работают и под DSH: их вызывает нативный плагин профиля
+  `@local/pentool-hooks` через `.claude/dsh/dispatch.sh` внутри WSL.
+  Скрипты `.claude/hooks/*.sh` не менялись и остаются единственным
+  источником правил; плагин только доставляет их вызовы.
+- Команды проекта выполняются в WSL: `wsl -e bash -lc 'cd /mnt/d/PROJECTS/pentool && …'`.
+  Сэндбокс DSH блокирует `wsl.exe`, поэтому нужен полный доступ к файловой
+  системе — в ограниченных режимах хуки и тесты не запустятся.
+- `format-on-edit.sh` в DSH **выключен** (`formatHook: false` в конфиге
+  плагина): `ruff format` с line-length 100 переформатирует файлы,
+  отформатированные black на 120 — см. «Грабли» в `MYPLANS/`.
+- Проверка моста без агента: `wsl -e bash /mnt/d/PROJECTS/pentool/.claude/dsh/selftest.sh`
+  (ожидается `7 passed, 0 failed`).
+- События `PreCompact` в DSH нет: `context-state.sh --save` не вызывается,
+  `.claude/state/context/latest.md` обновляется только в Claude Code.
+
 ## Starter kit
 
 - Установлен поэтапно 2026-11-05; см. `README-starter-kit.md`.
