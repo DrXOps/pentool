@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -35,6 +36,33 @@ class StatusBar(Widget):
     project_path: reactive[str] = reactive("")
     project_saved: reactive[bool] = reactive(True)
     current_time: reactive[str] = reactive("")
+
+    def __init__(
+        self,
+        *children: Widget,
+        now: Callable[[], datetime] | None = None,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+        disabled: bool = False,
+        markup: bool = True,
+    ) -> None:
+        """``now`` is the clock seam.
+
+        The bar prints the wall clock every second, so a screenshot of it can
+        never be byte-stable across runs. Snapshot tests hand in a frozen
+        clock instead of normalising the time out of the SVG afterwards — the
+        normalised baseline would also hide a real change to the time format.
+        """
+        super().__init__(
+            *children,
+            name=name,
+            id=id,
+            classes=classes,
+            disabled=disabled,
+            markup=markup,
+        )
+        self._now: Callable[[], datetime] = now or datetime.now
 
     def compose(self) -> ComposeResult:
         with _Left():
@@ -85,9 +113,7 @@ class StatusBar(Widget):
             widget.update("[yellow]● Unsaved[/yellow]")
 
     def _update_time(self) -> None:
-        self.query_one("#current-time", Static).update(
-            datetime.now().strftime("%H:%M:%S")
-        )
+        self.query_one("#current-time", Static).update(self._now().strftime("%H:%M:%S"))
 
     def set_proxy_status(self, running: bool, port: int = 8080) -> None:
         self.proxy_running = running

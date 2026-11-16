@@ -7,6 +7,8 @@ import os
 import signal
 import threading
 import time
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -163,8 +165,16 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     BINDINGS = []
 
-    def __init__(self) -> None:
+    def __init__(self, *, now: Callable[[], datetime] | None = None) -> None:
+        """``now`` is the clock seam for snapshot tests.
+
+        The status bar shows the wall clock, so nothing that renders it can be
+        byte-stable across two runs. Tests pass a frozen clock here instead of
+        normalising timestamps out of the resulting SVG — a normalising regex
+        would also hide a change to the time format itself.
+        """
         super().__init__()
+        self._now: Callable[[], datetime] = now or datetime.now
         self._bindings = build_global_bindings()
         self._cfg = get_config()
         # Proxy backend: 'daemon' (default, isolated subprocess via ProxyClient)
@@ -397,7 +407,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         with Vertical(id="bottom-dock"):
             yield ModuleHintBar(id="module-hints")
             yield GlobalHintBar(id="global-hints")
-            yield StatusBar(id="statusbar")
+            yield StatusBar(id="statusbar", now=self._now)
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
@@ -794,7 +804,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
         e.g. ~/.config/pentool/projects/xss-game.appspot.com_20260818_185030.db
         """
-        from datetime import datetime
         from urllib.parse import urlparse
 
         host = urlparse(url if "://" in url else f"//{url}").netloc or url
