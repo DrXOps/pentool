@@ -109,6 +109,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self._running_save_tasks: list[str] = []  # worker names for auto-save, cancelled on exit
         # Single persistent RepeaterAPI — created lazily via _get_api()
         self._repeater_api = None
+        # Экран выгружается (приложение остановилось или ушло с модуля):
+        # отложенные call_after_refresh больше не должны создавать вкладки.
+        self._tearing_down: bool = False
 
     # ── Query-one short-hands ──────────────────────────────────────────────
     # All 43 query_one() calls replaced with property/helper accessors below
@@ -212,6 +215,16 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             )
         return self._repeater_api
 
+    def on_unmount(self) -> None:
+        """Экран выгружается: отложенные сборки вкладок и автосейв больше не нужны.
+
+        Без флага `_new_tab_if_current`, поставленный в очередь
+        `call_after_refresh`, успевал отработать уже при остановке приложения и
+        валил её исключением из `tabs.active`.
+        """
+        self._tearing_down = True
+        self._cancel_save_workers()
+
     def _load_tabs_from_db(self) -> None:
         """Load saved tabs from database on mount."""
         generation = self._tabs_generation
@@ -266,8 +279,14 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             self.call_after_refresh(self._new_tab_if_current, generation)
 
     def _new_tab_if_current(self, generation: int) -> None:
-        if generation == self._tabs_generation:
-            self.action_new_tab()
+        if generation != self._tabs_generation:
+            return
+        if self._tearing_down or not getattr(self, "is_attached", True):
+            # Экран уже выгружается. Создание вкладки здесь доходило до
+            # `add_pane` и падало на `tabs.active` — то есть валило остановку
+            # приложения исключением из отложенного callback'а.
+            return
+        self.action_new_tab()
 
     def _create_tab_ui(self, tab_id: str, state: _TabState, generation: int | None = None) -> None:
         """Create tab UI and mount widgets."""
@@ -288,6 +307,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             logger.debug("_create_tab_ui failed: %s", exc)
 
     def action_new_tab(self) -> None:
+        if self._tearing_down:
+            return
         # Commit the outgoing tab BEFORE the new one takes over `_active_tab_id`:
         # `_save_current_tab_state()` reads that field, and assigning it here
         # (as this method and `_create_tab_ui` do) makes the TabActivated that
@@ -305,7 +326,15 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         tabs = self._tabs_w
         pane = TabPane(name, id=tab_id)
         tabs.add_pane(pane)
-        tabs.active = tab_id
+        try:
+            tabs.active = tab_id
+        except ValueError as exc:
+            # Приложение остановилось между add_pane и активацией: панель уже
+            # добавлена, а активировать её нечем. Вкладку откатываем целиком,
+            # иначе состояние и DOM разойдутся.
+            logger.debug("repeater: tab %s not activated during teardown: %s", tab_id, exc)
+            self._tabs = [t for t in self._tabs if t.tab_id != tab_id]
+            return
         self._active_tab_id = tab_id
         self.call_after_refresh(self._mount_tab_widgets, tab_id, state)
 
