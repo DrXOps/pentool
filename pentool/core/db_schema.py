@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
+from sqlite3 import OperationalError, ProgrammingError
 from typing import AsyncIterator
 
 import aiosqlite
@@ -169,19 +170,19 @@ async def init_db(db_path: str) -> None:
         for col_name, col_def in _new_vuln_cols:
             try:
                 await db.execute(f"ALTER TABLE vulnerabilities ADD COLUMN {col_name} {col_def}")
-            except Exception:
+            except (OperationalError, ProgrammingError):
                 pass  # Column already exists — expected
 
         # Migration: add request_number to intruder_results (for old DBs)
         try:
             await db.execute("ALTER TABLE intruder_results ADD COLUMN request_number INTEGER NOT NULL DEFAULT 0")
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass  # Column already exists — expected
 
         # Migration: add response_raw to intruder_results (for detail panel)
         try:
             await db.execute("ALTER TABLE intruder_results ADD COLUMN response_raw TEXT DEFAULT NULL")
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass  # Column already exists — expected
 
         # Migration: add scan_tab_uid/scan_session_id to vulnerabilities (for
@@ -193,7 +194,7 @@ async def init_db(db_path: str) -> None:
         ):
             try:
                 await db.execute(f"ALTER TABLE vulnerabilities ADD COLUMN {col_name} {col_def}")
-            except Exception:
+            except (OperationalError, ProgrammingError):
                 pass  # Column already exists — expected
 
         # Migration: add tab_uid to scanner_tabs (for old DBs) — stable
@@ -202,11 +203,11 @@ async def init_db(db_path: str) -> None:
         # can silently overwrite/merge a different tab's saved row).
         try:
             await db.execute("ALTER TABLE scanner_tabs ADD COLUMN tab_uid TEXT DEFAULT ''")
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass  # Column already exists — expected
         try:
             await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_scanner_tabs_uid " "ON scanner_tabs (tab_uid)")
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass
 
         # Migration: add tab_uid to intruder_state/intruder_results (for old
@@ -219,19 +220,19 @@ async def init_db(db_path: str) -> None:
         # other's saved template/payloads.
         try:
             await db.execute("ALTER TABLE intruder_state ADD COLUMN tab_uid TEXT DEFAULT ''")
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass  # Column already exists — expected
         try:
             await db.execute("ALTER TABLE intruder_state ADD COLUMN target_url TEXT DEFAULT ''")
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass  # Column already exists — expected
         try:
             await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_intruder_state_uid " "ON intruder_state (tab_uid)")
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass
         try:
             await db.execute("ALTER TABLE intruder_results ADD COLUMN tab_uid TEXT DEFAULT ''")
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass  # Column already exists — expected
 
         await db.commit()
@@ -259,7 +260,7 @@ async def init_db(db_path: str) -> None:
         for _idx_sql in _extra_indexes:
             try:
                 await db.execute(_idx_sql)
-            except Exception:
+            except (OperationalError, ProgrammingError):
                 pass  # best-effort — index creation on a busy DB can fail
 
         await db.commit()
