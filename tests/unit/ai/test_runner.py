@@ -37,6 +37,21 @@ def cfg():
     return runner.load_config()
 
 
+@pytest.fixture(autouse=True)
+def _cloud_endpoint_env(monkeypatch):
+    """Облачный эндпоинт берётся только из окружения: `ai/models.yaml` хранит имя
+    переменной, а не URL. Тесты не должны зависеть от того, что случайно
+    оказалось в окружении хост-процесса — под Claude Code там был
+    `ANTHROPIC_BASE_URL`, под другим харнессом его нет, и разбор цепочки падал
+    в `resolve_model` ещё до подмены `call_model`.
+
+    Тесты, проверяющие отсутствие переменной, удаляют её сами через
+    `monkeypatch.delenv` — это перекрывает значение отсюда.
+    """
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://gw.invalid")
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "test-token")
+
+
 # ---------------------------------------------------------------------------
 # Конфигурация
 # ---------------------------------------------------------------------------
