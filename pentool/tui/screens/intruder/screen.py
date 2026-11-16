@@ -1418,7 +1418,12 @@ class IntruderScreen(
         """Remember the selection in template-editor."""
         try:
             our_editor = self._template_editor()
-            if event.widget is not our_editor.content_widget:
+            # `TextArea.SelectionChanged` carries `text_area`; there is no
+            # `widget` on this message, and asking for it raised `AttributeError`
+            # on every selection until the handler was narrowed — the old broad
+            # `except Exception` swallowed it, so the remembered selection was
+            # always empty and «mark selection» never had a range to work with.
+            if event.text_area is not our_editor.content_widget:
                 return
         except (LookupError, NoMatches):
             # Таба ещё нет (`LookupError` из `_template_editor`) или тело таба
@@ -1440,7 +1445,12 @@ class IntruderScreen(
         """Recompute payload sets on template text change."""
         try:
             our_editor = self._template_editor()
-            if event.widget is not our_editor.content_widget:
+            # Same message shape as above: `Changed` carries `text_area`.
+            # Reading `event.widget` raised `AttributeError` on every keystroke
+            # in the template editor, so payload sets were never recomputed and
+            # the auto-save never ran — the handler looked implemented and was
+            # dead.
+            if event.text_area is not our_editor.content_widget:
                 return
         except (LookupError, NoMatches):
             # Правка пришла из чужого редактора (шаблона нет или тело таба не
