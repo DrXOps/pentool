@@ -5,10 +5,8 @@ InspectorPanel {
     background: $surface;
 }
 InspectorPanel .section-title {
-    height: 1;
-    background: $primary-darken-3;
+    /* height/background/padding — из общего .panel-title (F-038). */
     color: $text-muted;
-    padding: 0 1;
     text-style: bold;
 }
 InspectorPanel .kv-row {

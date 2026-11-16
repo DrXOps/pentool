@@ -95,7 +95,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         with Horizontal(id="seq-main-area"):
             # Left column: token input (one per line)
             with Vertical(id="seq-input-col"):
-                yield Static("Tokens (one per line)", id="seq-tokens-label", classes="seq-col-label")
+                yield Static("Tokens (one per line)", id="seq-tokens-label", classes="seq-col-label panel-title")
                 yield TextArea(id="seq-token-area", language=None)
 
             yield ResizeHandle("seq-input-col", "seq-analysis-col", id="seq-resize-h")

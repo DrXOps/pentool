@@ -4,11 +4,9 @@ ContentPanel {
     layout: vertical;
 }
 ContentPanel > .cp-title {
-    height: 1;
+    /* height/background/padding — из общего .panel-title (F-038). */
     layout: horizontal;
     align: left middle;
-    background: $primary-darken-3;
-    padding: 0 1;
 }
 ContentPanel > .cp-title > Static {
     width: 1fr;

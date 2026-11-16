@@ -84,6 +84,16 @@ Checkbox:focus > .toggle--label {
     text-style: none;
 }
 
+/* Панельный заголовок: одна строка, тёмная подложка, отступ по бокам.
+   Раньше эти три свойства были скопированы в семи файлах (F-038). Всё, что
+   отличается — цвет текста, жирность, раскладка, ширина — осталось в правилах
+   конкретных виджетов; класс добавляется к виджету в Python. */
+.panel-title {
+    height: 1;
+    background: $primary-darken-3;
+    padding: 0 1;
+}
+
 /* Override Textual's built-in toast: replace the default vertical
    severity stripe on the left edge with a full border all the way round,
    and force every toast onto a single line — long text is truncated with

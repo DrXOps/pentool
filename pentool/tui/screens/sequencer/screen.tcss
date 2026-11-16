@@ -62,10 +62,8 @@ SequencerScreen #seq-input-col {
     layout: vertical;
 }
 SequencerScreen .seq-col-label {
-    height: 1;
+    /* height/background/padding — из общего .panel-title (F-038). */
     color: $text-muted;
-    background: $primary-darken-3;
-    padding: 0 1;
     text-style: bold;
 }
 SequencerScreen #seq-token-area {

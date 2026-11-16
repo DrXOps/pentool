@@ -109,10 +109,8 @@ IntruderScreen .intruder-payload-list {
 }
 
 IntruderScreen .section-title {
-    height: 1;
-    background: $primary-darken-3;
+    /* height/background/padding — из общего .panel-title (F-038). */
     color: $text-muted;
-    padding: 0 1;
 }
 
 IntruderScreen .payload-count-label {

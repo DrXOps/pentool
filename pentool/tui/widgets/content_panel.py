@@ -125,7 +125,7 @@ class ContentPanel(Widget):
         self._wrap_state = wrap
 
     def compose(self) -> ComposeResult:
-        with Horizontal(classes="cp-title"):
+        with Horizontal(classes="cp-title panel-title"):
             yield Static(self._panel_title)
             for bk in self._buttons:
                 lbl = self.BUTTON_LABELS.get(bk, bk)

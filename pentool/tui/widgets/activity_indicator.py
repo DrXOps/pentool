@@ -100,6 +100,10 @@ class ActivityIndicator(Widget):
                 the checker callables below are built at construction time).
         """
         super().__init__(**kwargs)
+        # Общий вид панельного заголовка: одна строка, тёмная подложка, отступ
+        # по бокам (F-038). Класс добавляется здесь, а не в месте создания,
+        # чтобы новые точки монтирования не забывали о нём.
+        self.add_class("panel-title")
         self._checkers: list[_Tracked] = self._build_checkers(app_ref)
         # Cached from the last _poll_state() run — the blink tick reads this
         # instead of re-invoking is_active() every ~0.25s.

@@ -114,7 +114,7 @@ class InspectorPanel(Widget):
 
     @staticmethod
     def _add_section(widgets: list, title: str, items: dict) -> None:
-        widgets.append(Static(f" {title}", classes="section-title"))
+        widgets.append(Static(f" {title}", classes="section-title panel-title"))
         if not items:
             widgets.append(Static("  (none)", classes="empty-msg"))
         else:

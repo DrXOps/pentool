@@ -1,10 +1,8 @@
 ActivityIndicator {
+    /* height/background/padding — из общего .panel-title (F-038). */
     width: auto;
-    height: 1;
     layout: horizontal;
-    padding: 0 1;
     margin: 0 1;
-    background: $primary-darken-3;
 }
 ActivityIndicator .activity-glyph {
     /* 2 cells wide, not 3 — every tracked emoji (after the VS16 fix on

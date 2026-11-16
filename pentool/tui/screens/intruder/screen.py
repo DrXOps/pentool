@@ -452,7 +452,7 @@ class IntruderScreen(
 
         # ── Template editor (в левой positions-колонке) ────────────────
         template = Vertical(
-            Static("Positions", classes="section-title"),
+            Static("Positions", classes="section-title panel-title"),
             attack_toolbar,
             ContentPanel(
                 title="Request Template",
@@ -482,7 +482,7 @@ class IntruderScreen(
         )
 
         pldiv = Vertical(
-            Static("Payloads", classes="section-title"),
+            Static("Payloads", classes="section-title panel-title"),
             payloads_toolbar,
             # Счётчик — над списком, как в компоновке до мультитаба: он
             # показывает, сколько строк пришло при загрузке файла, и при

@@ -27,7 +27,7 @@ class DiffPanel(Widget):
     DEFAULT_CSS = _CSS
 
     def compose(self) -> ComposeResult:
-        yield Static("Diff vs. last sent", id="diff-panel-title")
+        yield Static("Diff vs. last sent", id="diff-panel-title", classes="panel-title")
         yield RichLog(id="diff-panel-log", highlight=True, markup=True, wrap=False, max_lines=2000)
 
     def show_diff(self, old_text: str, new_text: str) -> None:
