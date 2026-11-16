@@ -28,6 +28,19 @@ from pentool.tui.screens.repeater.screen import RepeaterScreen
 DEFAULT_REQUEST = "GET / HTTP/1.1"
 
 
+@pytest.fixture(autouse=True)
+def _no_project_history(monkeypatch):
+    """Экран должен стартовать без истории проекта этой машины.
+
+    Иначе `on_mount` восстанавливает вкладки из `~/.config/pentool/pentool.db`,
+    активной становится восстановленная вкладка со своим сохранённым запросом,
+    и утверждение «новая вкладка показывает запрос по умолчанию» зависит от
+    того, чем пользователь занимался до запуска тестов. Ровно так этот файл и
+    падал в полном прогоне, проходя в одиночку.
+    """
+    monkeypatch.setattr(RepeaterScreen, "_get_db_path", lambda _self: "")
+
+
 async def _open_repeater(pilot) -> RepeaterScreen:
     await pilot.pause()
     await pilot.press("R")
