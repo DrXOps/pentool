@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from sqlite3 import OperationalError, ProgrammingError
 from typing import Any
 from urllib.parse import urlparse
 
 from pentool.collections.filter_predicate import FilterSpec
 from pentool.core.logging import get_logger
 from pentool.storage.base_sqlite_storage import BaseSqliteStorage
+from pentool.storage.large_body_handler import THRESHOLD as _LARGE_BODY_THRESHOLD
 
 logger = get_logger(__name__)
 
@@ -72,8 +74,6 @@ CREATE TRIGGER IF NOT EXISTS requests_au AFTER UPDATE ON requests BEGIN
 END;
 """
 
-from pentool.storage.large_body_handler import THRESHOLD as _LARGE_BODY_THRESHOLD
-
 
 class HttpStorage(BaseSqliteStorage):
     """Async SQLite storage for HTTP records.
@@ -105,7 +105,7 @@ class HttpStorage(BaseSqliteStorage):
             try:
                 await self._db.execute(migration)
                 await self._db.commit()
-            except Exception:
+            except (OperationalError, ProgrammingError):
                 pass  # column already exists
         await self._db.execute("PRAGMA synchronous=NORMAL")
         await self._db.execute("PRAGMA cache_size=-32000")  # 32 MB cache
@@ -178,13 +178,22 @@ class HttpStorage(BaseSqliteStorage):
                 request_body, response_body, request_body_ref, response_body_ref)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
-                time.time(), host, method, url, has_params,
-                status_code, length, mime_type, ext,
+                time.time(),
+                host,
+                method,
+                url,
+                has_params,
+                status_code,
+                length,
+                mime_type,
+                ext,
                 1 if is_websocket else 0,
                 json.dumps(dict(req_headers)),
                 json.dumps(resp_headers),
-                req_body_store, resp_body_store,
-                None, None,
+                req_body_store,
+                resp_body_store,
+                None,
+                None,
             ),
         ) as cur:
             row_id = cur.lastrowid
@@ -196,21 +205,25 @@ class HttpStorage(BaseSqliteStorage):
 
         # Save large bodies with the real row_id
         from pentool.storage.large_body_handler import LargeBodyHandler
+
         if req_body_ref == "__large__" and req_body:
             ref = LargeBodyHandler.store(row_id, "req", req_body.encode())
-            await self._db.execute(
-                "UPDATE requests SET request_body_ref=? WHERE id=?", (ref, row_id)
-            )
+            await self._db.execute("UPDATE requests SET request_body_ref=? WHERE id=?", (ref, row_id))
         if resp_body_ref == "__large__" and resp_body:
             ref = LargeBodyHandler.store(row_id, "resp", resp_body.encode())
-            await self._db.execute(
-                "UPDATE requests SET response_body_ref=? WHERE id=?", (ref, row_id)
-            )
+            await self._db.execute("UPDATE requests SET response_body_ref=? WHERE id=?", (ref, row_id))
 
         # Step 2: commit UPDATE if there were large bodies
         if (req_body_ref == "__large__" and req_body) or (resp_body_ref == "__large__" and resp_body):
             await self._db.commit()
-        logger.debug("HttpStorage: add_request saved row_id=%d (%s %s, ws=%s, status=%s)", row_id, method, url, is_websocket, status_code)
+        logger.debug(
+            "HttpStorage: add_request saved row_id=%d (%s %s, ws=%s, status=%s)",
+            row_id,
+            method,
+            url,
+            is_websocket,
+            status_code,
+        )
         return row_id
 
     async def update_response(self, row_id: int, resp: Any) -> None:
@@ -238,18 +251,16 @@ class HttpStorage(BaseSqliteStorage):
                status_code=?, length=?, mime_type=?,
                response_headers=?, response_body=?, response_body_ref=?
                WHERE id=?""",
-            (status_code, length, mime_type,
-             json.dumps(resp_headers), resp_body_store, None, row_id),
+            (status_code, length, mime_type, json.dumps(resp_headers), resp_body_store, None, row_id),
         )
         await self._db.commit()
 
         # Save large body with the real row_id
         if resp_body_ref == "__large__" and rb:
             from pentool.storage.large_body_handler import LargeBodyHandler
+
             ref = LargeBodyHandler.store(row_id, "resp", rb.encode())
-            await self._db.execute(
-                "UPDATE requests SET response_body_ref=? WHERE id=?", (ref, row_id)
-            )
+            await self._db.execute("UPDATE requests SET response_body_ref=? WHERE id=?", (ref, row_id))
             await self._db.commit()
         logger.debug("HttpStorage: update_response row_id=%d status=%s", row_id, status_code)
 
@@ -263,6 +274,7 @@ class HttpStorage(BaseSqliteStorage):
             row = await cur.fetchone()
         if row:
             from pentool.storage.large_body_handler import LargeBodyHandler
+
             if row["request_body_ref"]:
                 LargeBodyHandler.delete(row["request_body_ref"])
             if row["response_body_ref"]:
@@ -283,8 +295,7 @@ class HttpStorage(BaseSqliteStorage):
         where, params = self._build_where(filters)
         direction = "DESC" if desc else "ASC"
         # Validate order_by against injection
-        valid_cols = {"id", "timestamp", "host", "method", "url",
-                      "status_code", "length", "mime_type"}
+        valid_cols = {"id", "timestamp", "host", "method", "url", "status_code", "length", "mime_type"}
         if order_by not in valid_cols:
             order_by = "id"
 
@@ -305,9 +316,7 @@ class HttpStorage(BaseSqliteStorage):
     async def get_full_entry(self, row_id: int) -> dict | None:
         """Load a full record including bodies."""
         assert self._db
-        async with self._db.execute(
-            "SELECT * FROM requests WHERE id=?", (row_id,)
-        ) as cur:
+        async with self._db.execute("SELECT * FROM requests WHERE id=?", (row_id,)) as cur:
             row = await cur.fetchone()
         if not row:
             return None
@@ -316,20 +325,21 @@ class HttpStorage(BaseSqliteStorage):
 
         # Load bodies from disk if needed
         from pentool.storage.large_body_handler import LargeBodyHandler
+
         if entry.get("request_body_ref"):
             try:
-                entry["request_body"] = LargeBodyHandler.load(
-                    entry["request_body_ref"]
-                ).decode("utf-8", errors="replace")
+                entry["request_body"] = LargeBodyHandler.load(entry["request_body_ref"]).decode(
+                    "utf-8", errors="replace"
+                )
             except Exception as e:
                 logger.warning("get_full_entry: failed to load req body ref=%s: %s", entry["request_body_ref"], e)
                 entry["request_body"] = "(could not load body)"
 
         if entry.get("response_body_ref"):
             try:
-                entry["response_body"] = LargeBodyHandler.load(
-                    entry["response_body_ref"]
-                ).decode("utf-8", errors="replace")
+                entry["response_body"] = LargeBodyHandler.load(entry["response_body_ref"]).decode(
+                    "utf-8", errors="replace"
+                )
             except Exception as e:
                 logger.warning("get_full_entry: failed to load resp body ref=%s: %s", entry["response_body_ref"], e)
                 entry["response_body"] = "(could not load body)"
@@ -340,7 +350,7 @@ class HttpStorage(BaseSqliteStorage):
             if raw:
                 try:
                     entry[key] = json.loads(raw)
-                except Exception as e:
+                except (ValueError, TypeError) as e:
                     logger.warning("get_full_entry: bad JSON in %s (row_id=%s): %s", key, entry.get("id"), e)
                     entry[key] = {}
             else:
@@ -363,12 +373,13 @@ class HttpStorage(BaseSqliteStorage):
                 (limit,),
             ) as cur:
                 rows = await cur.fetchall()
-        except Exception as exc:
+        except (OperationalError, ProgrammingError) as exc:
             logger.warning("export_all_requests: query failed: %s", exc)
             return []
 
         result = []
         from pentool.storage.large_body_handler import LargeBodyHandler
+
         # Конвертируем sqlite3.Row → dict, чтобы работал .get()
         rows = [dict(r) for r in rows]
         # Batch-load all large bodies to avoid N+1 disk reads
@@ -391,12 +402,13 @@ class HttpStorage(BaseSqliteStorage):
                 entry["response_body"] = ""
             # Deserialize headers
             import json as _json
+
             for key in ("request_headers", "response_headers"):
                 raw = entry.get(key)
                 if raw and isinstance(raw, str):
                     try:
                         entry[key] = _json.loads(raw)
-                    except Exception:
+                    except (ValueError, TypeError):
                         entry[key] = {}
                 elif not raw:
                     entry[key] = {}
@@ -407,17 +419,13 @@ class HttpStorage(BaseSqliteStorage):
     async def count(self, filters: FilterSpec | None = None) -> int:
         assert self._db
         where, params = self._build_where(filters)
-        async with self._db.execute(
-            f"SELECT COUNT(*) FROM requests {where}", params
-        ) as cur:
+        async with self._db.execute(f"SELECT COUNT(*) FROM requests {where}", params) as cur:
             row = await cur.fetchone()
         return row[0] if row else 0
 
     async def count_distinct_hosts(self) -> int:
         assert self._db
-        async with self._db.execute(
-            "SELECT COUNT(DISTINCT host) FROM requests"
-        ) as cur:
+        async with self._db.execute("SELECT COUNT(DISTINCT host) FROM requests") as cur:
             row = await cur.fetchone()
         return row[0] if row else 0
 
@@ -445,6 +453,7 @@ class HttpStorage(BaseSqliteStorage):
         """Delete all records and associated large body files from disk."""
         assert self._db
         from pentool.storage.large_body_handler import LargeBodyHandler
+
         # First collect all file refs
         async with self._db.execute(
             "SELECT request_body_ref, response_body_ref FROM requests"
@@ -475,45 +484,32 @@ class HttpStorage(BaseSqliteStorage):
     async def update_comment(self, request_id: int, comment: str) -> None:
         """Update comment for a request."""
         assert self._db
-        await self._db.execute(
-            "UPDATE requests SET comment = ? WHERE id = ?",
-            (comment, request_id)
-        )
+        await self._db.execute("UPDATE requests SET comment = ? WHERE id = ?", (comment, request_id))
         await self._db.commit()
 
     async def get_comment(self, request_id: int) -> str:
         """Get comment for a request."""
         assert self._db
-        async with self._db.execute(
-            "SELECT comment FROM requests WHERE id = ?", (request_id,)
-        ) as cur:
+        async with self._db.execute("SELECT comment FROM requests WHERE id = ?", (request_id,)) as cur:
             row = await cur.fetchone()
         return row[0] if row else ""
 
     async def update_tags(self, request_id: int, tags: str) -> None:
         """Update tags for a request (comma-separated)."""
         assert self._db
-        await self._db.execute(
-            "UPDATE requests SET tags = ? WHERE id = ?",
-            (tags, request_id)
-        )
+        await self._db.execute("UPDATE requests SET tags = ? WHERE id = ?", (tags, request_id))
         await self._db.commit()
 
     async def update_color(self, request_id: int, color: str) -> None:
         """Update color mark for a request."""
         assert self._db
-        await self._db.execute(
-            "UPDATE requests SET color = ? WHERE id = ?",
-            (color, request_id)
-        )
+        await self._db.execute("UPDATE requests SET color = ? WHERE id = ?", (color, request_id))
         await self._db.commit()
 
     async def get_tags(self, request_id: int) -> str:
         """Get tags for a request."""
         assert self._db
-        async with self._db.execute(
-            "SELECT tags FROM requests WHERE id = ?", (request_id,)
-        ) as cur:
+        async with self._db.execute("SELECT tags FROM requests WHERE id = ?", (request_id,)) as cur:
             row = await cur.fetchone()
         return row[0] if row else ""
 

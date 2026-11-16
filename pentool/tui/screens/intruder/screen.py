@@ -1270,7 +1270,7 @@ class IntruderScreen(
                 delay_input.placeholder = "0"
                 turbo_checkbox.disabled = False
                 turbo_checkbox.tooltip = "⚡ Turbo: HTTP pipelining, connection pooling"
-        except Exception as exc:
+        except NoMatches as exc:
             logger.debug("_apply_license_limits error: %s", exc)
 
     async def _do_load_state(self, api: "IntruderAPI") -> None:
@@ -1672,7 +1672,7 @@ class IntruderScreen(
 
                     _json.loads(body_text)
                     has_json = True
-                except Exception as exc:
+                except (ValueError, TypeError) as exc:
                     logger.debug("op: %s", exc)
         has_query = "?" in lines[0] if lines else False
         has_cookie = any(line.lower().startswith("cookie:") for line in lines[1:body_start])

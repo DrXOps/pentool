@@ -141,7 +141,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
         try:
             btn = self.query_one("#btn-dec-op-select", ToolbarButton)
             btn.label = f"{op} ▼"
-        except Exception as exc:
+        except NoMatches as exc:
             # Кнопка покажет прежнюю операцию, а цепочка строится уже из новой —
             # что именно выполнится, по экрану не прочитать.
             logger.debug("decoder: op button label not updated: %s", exc)

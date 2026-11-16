@@ -26,6 +26,6 @@ def load_project(path: str | Path) -> tuple[dict[str, Any], str]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except Exception as e:
+    except (OSError, ValueError, TypeError) as e:
         return {}, f"JSON parse error: {e}"
     return data, ""

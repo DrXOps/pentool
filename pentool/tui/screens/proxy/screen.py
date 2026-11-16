@@ -1373,7 +1373,7 @@ class ProxyScreen(
             r = table.region
             x = r.x + 2
             y = r.y + 1 + table.cursor_row
-        except Exception as exc:
+        except NoMatches as exc:
             # Меню откроется в углу вместо строки — заметно, но причина без
             # записи не восстанавливается.
             logger.debug("proxy: context menu position unknown, using default: %s", exc)
@@ -2081,7 +2081,7 @@ class ProxyScreen(
             view = self.query_one("#req-editor", HttpView)
             area = view.query_one("#http-body", TextArea)
             return area.text or ""
-        except Exception as exc:
+        except NoMatches as exc:
             # Возвращаем «пустой запрос» — вызывающий отправит его как есть,
             # то есть в Repeater уйдёт заготовка вместо выбранного запроса.
             logger.debug("proxy: request text not read: %s", exc)

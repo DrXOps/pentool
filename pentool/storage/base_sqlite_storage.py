@@ -26,6 +26,7 @@ already present in the codebase:
 from __future__ import annotations
 
 from pathlib import Path
+from sqlite3 import OperationalError, ProgrammingError
 
 import aiosqlite
 
@@ -52,6 +53,7 @@ class BaseSqliteStorage:
         self._db_path = str(Path(path).expanduser())
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         from pentool.utils.aiosql_daemon import make_aiosqlite_daemon
+
         # `aiosqlite.connect()` is synchronous: the worker thread is only
         # started on the first `await` (via __await__ → _thread.start()). So we
         # must flag it daemon BEFORE awaiting, or make_aiosqlite_daemon would
@@ -95,14 +97,14 @@ class BaseSqliteStorage:
             return
         db = self._db
         self._db = None  # ← защита: ensure_open() вернёт False для всех
-                         #   последующих обращений, даже если реальное
-                         #   закрытие ещё не завершилось (гонка между
-                         #   async воркером и switch_db / action_quit).
+        #   последующих обращений, даже если реальное
+        #   закрытие ещё не завершилось (гонка между
+        #   async воркером и switch_db / action_quit).
         try:
             # WAL checkpoint so .db-wal/-shm don't linger on disk.
             await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             await db.commit()
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass
         await db.close()
 

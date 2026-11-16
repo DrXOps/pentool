@@ -106,7 +106,7 @@ def _setup_faulthandler(log_file: str) -> None:
         path = str(log_file)
         try:
             _fh = open(path, "a", buffering=1)
-        except Exception:
+        except OSError:
             # Fall back to stderr if the configured log path isn't writable.
             _fh = None
         faulthandler.enable(file=_fh, all_threads=True) if _fh is not None else faulthandler.enable(all_threads=True)
