@@ -282,6 +282,14 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             logger.debug("_create_tab_ui failed: %s", exc)
 
     def action_new_tab(self) -> None:
+        # Commit the outgoing tab BEFORE the new one takes over `_active_tab_id`:
+        # `_save_current_tab_state()` reads that field, and assigning it here
+        # (as this method and `_create_tab_ui` do) makes the TabActivated that
+        # follows save the *new* tab instead — whose editor is not built yet, so
+        # it is a no-op and the text typed in the old tab never reaches its
+        # state or the database. The widget keeps it until a project reload,
+        # which is exactly where the loss surfaces.
+        self._save_current_tab_state()
         self._tab_counter += 1
         tab_id = f"tab-{self._tab_counter}"
         name = f"Tab {self._tab_counter}"
