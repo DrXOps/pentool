@@ -30,6 +30,12 @@ _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 logger = get_logger(__name__)
 
+#: Frames to wait for a freshly mounted editor to compose its TextArea. Mount
+#: is asynchronous and `call_after_refresh` runs once per frame, so a couple
+#: of attempts is already generous; the cap exists so a genuinely broken
+#: compose fails loudly instead of rescheduling forever.
+_MOUNT_ATTEMPTS = 5
+
 
 class _TabState:
     """State of a single Repeater tab."""
@@ -48,6 +54,13 @@ class _TabState:
         # marker on the tab label and for the Ctrl+D diff panel.
         self.last_sent_text: str | None = None
         self.is_dirty: bool = False
+        # True only once the tab's editor has been created and filled from
+        # `request_text`. Until then the editor is empty for a reason — it does
+        # not exist yet — and reading it back would overwrite the default
+        # request with "". `TabbedContent` announces a fresh tab twice, and the
+        # second announcement lands before the editor is filled, so without
+        # this flag every new tab opened empty.
+        self.ui_ready: bool = False
 
 
 class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, AppMixin):
@@ -353,14 +366,37 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             # нажмётся, а печатать будет некуда.
             logger.error("repeater: tab %s editor/viewer not mounted: %s", tab_id, exc, exc_info=True)
 
-    def _init_tab_content(self, tab_id: str, state: _TabState) -> None:
+    def _init_tab_content(self, tab_id: str, state: _TabState, attempt: int = 0) -> None:
         try:
             editor = self._editor(tab_id)
+        except Exception as exc:
+            logger.error("repeater: tab %s editor not reachable: %s", tab_id, exc, exc_info=True)
+            return
+        if not editor.content_mounted:
+            # The editor widget exists but its TextArea has not been composed
+            # yet — `req_panel.mount(editor)` returns before the children are
+            # in the DOM. Loading now raises `NoMatches` inside `load_raw`,
+            # which reports it as a failed load and leaves the tab empty while
+            # `state.request_text` still holds the request. Wait for the mount
+            # instead of guessing.
+            if attempt >= _MOUNT_ATTEMPTS:
+                logger.error(
+                    "repeater: tab %s editor body never composed; request text not shown",
+                    tab_id,
+                )
+                return
+            self.call_after_refresh(self._init_tab_content, tab_id, state, attempt + 1)
+            return
+        try:
             editor.load_raw(state.request_text)
         except Exception as exc:
             # Восстановленная вкладка пуста, хотя её текст лежит в state —
             # то есть автосохранение сработало, а загрузка нет.
-            logger.debug("repeater: tab %s request text not restored: %s", tab_id, exc)
+            logger.error("repeater: tab %s request text not restored: %s", tab_id, exc, exc_info=True)
+        else:
+            # From here the editor is the source of truth for this tab; only
+            # now may its text be read back into `state.request_text`.
+            state.ui_ready = True
         # load_raw() -> TextArea.load_text() posts a Changed event; this
         # initial load must NOT mark the tab dirty. Clear it back to False
         # after the (already-scheduled) Changed handler has run.
@@ -707,6 +743,13 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             return
         state = self._get_tab_state(self._active_tab_id)
         if state is None:
+            return
+        if not state.ui_ready:
+            # The editor for this tab does not exist yet, so `get_text()`
+            # returns "" — saving it would replace the tab's own request text
+            # with an empty string. TabbedContent fires TabActivated twice for
+            # a new tab and the second one arrives before the editor is built;
+            # that is the path that emptied every freshly opened tab.
             return
         try:
             editor = self._editor(self._active_tab_id)

@@ -159,6 +159,18 @@ class ContentPanel(Widget):
     def content_widget(self) -> RichLog | TextArea:
         return self.query_one("#cp-body-widget")
 
+    @property
+    def content_mounted(self) -> bool:
+        """True once the body widget exists in the DOM.
+
+        A panel is mounted before its children: ``req_panel.mount(editor)``
+        returns while ``#cp-body-widget`` is still being composed. Code that
+        loads text right after mounting must ask this first — ``load_raw``
+        used to swallow the resulting ``NoMatches`` and leave the editor empty
+        while its own ``_raw_full`` said the request was loaded.
+        """
+        return bool(len(self.query("#cp-body-widget")))
+
     def get_text(self) -> str:
         w = self.content_widget
         if isinstance(w, TextArea):
