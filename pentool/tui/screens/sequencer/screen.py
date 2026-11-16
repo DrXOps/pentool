@@ -165,7 +165,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         try:
             btn = self.query_one("#btn-seq-source", ToolbarButton)
             btn.label = f"{label} ▼"
-        except Exception as exc:
+        except NoMatches as exc:
             # Кнопка показывает прежний источник, а захват идёт из нового —
             # токены приходят не из того места, что написано на экране.
             logger.debug("sequencer: source button label not updated: %s", exc)

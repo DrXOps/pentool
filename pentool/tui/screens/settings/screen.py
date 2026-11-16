@@ -383,7 +383,7 @@ class SettingsScreen(AppMixin, Widget):
                     inp = self.query_one("#license-key-input", Input)
                     if not inp.value:
                         inp.value = info.license_key
-                except Exception as exc:
+                except NoMatches as exc:
                     # Поле просто останется пустым — пользователю придётся
                     # ввести ключ заново; это не потеря, но и не норма.
                     logger.debug("settings: license key not prefilled: %s", exc)
@@ -699,7 +699,7 @@ class SettingsScreen(AppMixin, Widget):
                 ssl_v = self.query_one("#set-verify-ssl", Checkbox).value
                 if ssl_v != cfg.verify_ssl:
                     changes["verify_ssl"] = ssl_v
-            except Exception as exc:
+            except NoMatches as exc:
                 logger.debug("settings: verify_ssl not collected: %s", exc)
 
             try:

@@ -177,7 +177,7 @@ class ActivityIndicator(Widget):
                 # используем _runner — он None когда простаивает и объект
                 # DiscoveryRunner когда запущен.
                 return screen._runner is not None
-            except Exception:
+            except NoMatches:
                 return None
 
         return [

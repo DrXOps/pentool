@@ -489,7 +489,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             tree = self.query_one("#site-tree", Tree)
             r = tree.region
             x, y = r.x + 2, r.y + 3
-        except Exception:
+        except NoMatches:
             x, y = 5, 5
         self._show_context_menu_at(x, y)
 

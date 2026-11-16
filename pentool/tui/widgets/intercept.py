@@ -169,7 +169,7 @@ class InterceptMixin:
             from pentool.tui.widgets.request_editor import decode_special_chars, visualize_special_chars
 
             editor = self.query_one("#intercept-panel", ContentPanel).content_widget
-        except Exception as exc:
+        except NoMatches as exc:
             # Кнопка «Special» переключает флаг, но если редактор не найден —
             # переключать нечего, и кнопка выглядит сломанной.
             logger.debug("intercept: panel not found for special-chars toggle: %s", exc)

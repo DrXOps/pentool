@@ -32,14 +32,10 @@ class InterceptedRequest:
     is_https: bool = False
     is_websocket: bool = False
     # asyncio.Event — set when the user has made a decision
-    _decision_event: asyncio.Event = field(
-        default_factory=asyncio.Event, repr=False, compare=False
-    )
+    _decision_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False, compare=False)
     # If the user edited the request before forwarding
     _modified_raw: str | None = field(default=None, repr=False, compare=False)
-    _lock: threading.Lock = field(
-        default_factory=threading.Lock, repr=False, compare=False
-    )
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Ensure the lock is always a fresh instance (dataclass field factory
@@ -93,17 +89,18 @@ class InterceptedRequest:
                 "reason": resp.reason,
                 "headers": resp.headers,
                 "body": resp.body if isinstance(resp.body, str) else resp.body.decode("utf-8", errors="replace"),
-            } if resp else None,
+            }
+            if resp
+            else None,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "InterceptedRequest":
         """Restore InterceptedRequest from a dict (deserialization from project)."""
-        from datetime import datetime, timezone
         ts_raw = data.get("timestamp", "")
         try:
             ts = datetime.fromisoformat(ts_raw)
-        except Exception:
+        except (ValueError, TypeError):
             ts = datetime.now(timezone.utc)
 
         resp_data = data.get("response")

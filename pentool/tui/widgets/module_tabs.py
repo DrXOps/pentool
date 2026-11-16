@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static, Tab, Tabs
@@ -67,7 +68,7 @@ class ModuleTabs(Widget):
         try:
             tabs = self.query_one("#module-tabs-inner", Tabs)
             tabs.active = f"tab-{module_id}"
-        except Exception as exc:
+        except NoMatches as exc:
             # `active_module` уже присвоен, а подсветка вкладки — нет: строка
             # вкладок и содержимое расходятся.
             logger.debug("tabs: %r not selected: %s", module_id, exc)
@@ -83,7 +84,7 @@ class ModuleTabs(Widget):
                         tab.styles.display = "none"
                     else:
                         tab.styles.display = "block"
-                except Exception as exc:
+                except NoMatches as exc:
                     # Одна вкладка не переключила видимость: режим Basic
                     # покажет её, хотя не должен (или наоборот).
                     logger.debug("tabs: mode %r not applied to %s: %s", mode, mod_id, exc)
