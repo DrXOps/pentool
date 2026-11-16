@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 
 from pentool.api.base_api import ExportableAPI
-from pentool.storage.intruder_storage import IntruderStorage
+from pentool.collections.filter_predicate import FilterSpec
+from pentool.core.logging import get_logger
 from pentool.modules.intruder import (
     AttackType,
     ChainedPayloadSource,
@@ -24,6 +25,9 @@ from pentool.modules.intruder import (
     load_payloads_from_file,
     process_payload,
 )
+from pentool.storage.intruder_storage import IntruderStorage
+
+logger = get_logger(__name__)
 
 __all__ = [
     "IntruderAPI",
@@ -46,9 +50,7 @@ __all__ = [
 ]
 
 
-
 class IntruderAPI(ExportableAPI):
-
     def __init__(
         self,
         db_path: str | None = None,
@@ -96,6 +98,7 @@ class IntruderAPI(ExportableAPI):
         """
         if turbo_mode:
             from pentool.modules.intruder_turbo import TurboIntruderAttack
+
             return TurboIntruderAttack(config)
         return IntruderAttack(config, db_path=self._db_path, http_client=self._http_client)
 
@@ -110,6 +113,7 @@ class IntruderAPI(ExportableAPI):
         if turbo_mode:
             # Turbo Mode: connection pooling + Keep-Alive
             from pentool.modules.intruder_turbo import TurboIntruderAttack
+
             self._attack = TurboIntruderAttack(config)
         else:
             # Standard mode
@@ -123,7 +127,7 @@ class IntruderAPI(ExportableAPI):
             await self._task
         except asyncio.CancelledError:
             pass
-        return self._attack.attack_id if hasattr(self._attack, 'attack_id') else "turbo"
+        return self._attack.attack_id if hasattr(self._attack, "attack_id") else "turbo"
 
     async def pause(self) -> None:
         """Pause the attack (Turbo mode unsupported — guarded by hasattr)."""
@@ -142,11 +146,11 @@ class IntruderAPI(ExportableAPI):
     def get_results(self) -> list[IntruderResult]:
         if self._attack:
             # Turbo mode uses get_results(), standard mode uses results property
-            if hasattr(self._attack, 'get_results'):
+            if hasattr(self._attack, "get_results"):
                 return self._attack.get_results()
             return self._attack.results
         # Fallback: results restored from the DB
-        return list(getattr(self, '_restored_results', []))
+        return list(getattr(self, "_restored_results", []))
 
     def get_progress(self) -> tuple[int, int]:
         if self._attack:
@@ -169,9 +173,7 @@ class IntruderAPI(ExportableAPI):
         """
         return generate_numeric_payloads(start, end, step)
 
-    async def generate_chars(
-        self, charset: str, min_len: int, max_len: int
-    ) -> list[str]:
+    async def generate_chars(self, charset: str, min_len: int, max_len: int) -> list[str]:
         """Eager charset brute-force generation — kept for backward
         compatibility. Prefer constructing
         `CharPayloadSource(charset, min_len, max_len)` directly — this
@@ -219,9 +221,7 @@ class IntruderAPI(ExportableAPI):
         """Close the underlying persistent SQLite connection, if open."""
         await self._repo.close()
 
-    async def save_result(
-        self, result: IntruderResult, project_id: int | None = None, tab_uid: str = ""
-    ) -> None:
+    async def save_result(self, result: IntruderResult, project_id: int | None = None, tab_uid: str = "") -> None:
         """Save a single intruder result to DB."""
         await self._repo.save_result(result, project_id, tab_uid=tab_uid)
 
@@ -236,8 +236,12 @@ class IntruderAPI(ExportableAPI):
     ) -> list[IntruderResult]:
         """Load intruder results from DB with optional FilterSpec and ORDER BY."""
         return await self._repo.get_results(
-            attack_id, limit, tab_uid=tab_uid, filters=filters,
-            order_by=order_by, desc=desc,
+            attack_id,
+            limit,
+            tab_uid=tab_uid,
+            filters=filters,
+            order_by=order_by,
+            desc=desc,
         )
 
     # ── Project persistence ────────────────────────────────────────────────────
@@ -283,7 +287,7 @@ class IntruderAPI(ExportableAPI):
                 ts_raw = rd.get("timestamp", "")
                 try:
                     ts = datetime.fromisoformat(ts_raw)
-                except Exception:
+                except (ValueError, TypeError):
                     ts = datetime.now(timezone.utc)
                 result = IntruderResult(
                     id=rd.get("id", ""),
@@ -302,7 +306,5 @@ class IntruderAPI(ExportableAPI):
                     self._restored_results.append(result)
                 loaded += 1
             except Exception as exc:
-                logger.warning(
-                    "IntruderAPI.import_project_data: skip result: %s", exc
-                )
+                logger.warning("IntruderAPI.import_project_data: skip result: %s", exc)
         return loaded
