@@ -645,11 +645,11 @@ class IntruderScreen(
             w = panel.content_widget
             if isinstance(w, TextArea):
                 state.template_text = w.text
-        except Exception as exc:
+        except Exception:
             # В state остаётся прежний шаблон — правки пользователя в этом
             # табе теряются при переключении. Ровно тот класс потерь, что
-            # описаны в комментарии ниже.
-            logger.debug("intruder: template text not saved for tab %s: %s", state.tab_id, exc)
+            # описаны в комментарии ниже, поэтому error с трейсбеком.
+            logger.error("intruder: template text not saved for tab %s", state.tab_id, exc_info=True)
         # Threads/Delay/Turbo живут в глобальном toolbar и описывают активный
         # таб, поэтому их надо снять ДО того, как toolbar перерисуется под
         # новый таб. Без этого значения оставались только в state-дефолтах:
@@ -898,11 +898,11 @@ class IntruderScreen(
             w = editor.content_widget
             if isinstance(w, TextArea):
                 tab.template_text = w.text
-        except Exception as exc:
+        except Exception:
             # Шаблон в state остаётся прежним, а `_auto_save_tab` ниже
             # сохранит в БД именно его — то есть правка не переживёт
-            # перезапуск, хотя автосохранение «работало».
-            logger.debug("intruder: current template text not saved: %s", exc)
+            # перезапуск, хотя автосохранение «работало». Потеря данных → error.
+            logger.error("intruder: current template text not saved", exc_info=True)
         self._auto_save_tab(tab)
 
     # ── DB persistence ────────────────────────────────────────────────────────
@@ -1289,10 +1289,11 @@ class IntruderScreen(
                     w = editor.content_widget
                     if isinstance(w, TextArea):
                         w.text = template
-                except Exception as exc:
+                except Exception:
                     # Сохранённый шаблон есть, а в редакторе — пусто: вкладка
-                    # откроется пустой, хотя данные в БД лежат.
-                    logger.debug("intruder: saved template not restored for tab %s: %s", _tab_uid, exc)
+                    # откроется пустой, хотя данные в БД лежат. Это потеря
+                    # данных на восстановлении, поэтому error с трейсбеком.
+                    logger.error("intruder: saved template not restored for tab %s", _tab_uid, exc_info=True)
             attack_type_str = state.get("attack_type", "sniper")
             try:
                 tab.attack_type = AttackType(attack_type_str)

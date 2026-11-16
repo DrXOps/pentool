@@ -519,10 +519,11 @@ class ProjectManager:
                 if target_screen._target_api is not None:
                     try:
                         await target_screen._target_api.save()
-                    except Exception as exc:
+                    except Exception:
                         # Несохранённые изменения карты сайта прошлого проекта
-                        # теряются при переключении — молча.
-                        logger.debug("project: old site map not saved before switch: %s", exc)
+                        # теряются при переключении — молча. Это потеря данных
+                        # пользователя, поэтому warning с трейсбеком.
+                        logger.warning("project: old site map not saved before switch", exc_info=True)
                     # SiteMap now holds one persistent SQLite connection
                     # (BaseSqliteStorage) — close it before dropping the
                     # instance, otherwise a leaked connection to the old

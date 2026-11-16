@@ -147,10 +147,11 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             app = self.app
             if hasattr(app, "notify"):
                 app.notify(msg, severity=severity, timeout=timeout)
-        except Exception as exc:
+        except Exception:
             # Уведомление не показано — то есть пользователь не узнал ни об
-            # ошибке отправки, ни о результате. Молчание здесь особенно дорого.
-            logger.debug("repeater: notify(%r) failed: %s", msg[:60], exc)
+            # ошибке отправки, ни о результате. Молчание здесь особенно дорого,
+            # поэтому это warning с трейсбеком, а не debug.
+            logger.warning("repeater: notify(%r) failed", msg[:60], exc_info=True)
 
     def _editor(self, tab_id: str | None = None) -> RequestEditor:
         tid = tab_id or self._active_tab_id
@@ -805,10 +806,11 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             state.request_text = editor.get_text()
             # Auto-save to DB (async, fire-and-forget)
             self._auto_save_tab_to_db(state)
-        except Exception as exc:
+        except Exception:
             # Текст вкладки не попал в state — при переключении он потеряется,
             # то есть это ровно та потеря, ради которой автосохранение и есть.
-            logger.debug("repeater: tab %s state not saved: %s", self._active_tab_id, exc)
+            # Уровень error и трейсбек: потерю данных нельзя оставлять в debug.
+            logger.error("repeater: tab %s state not saved", self._active_tab_id, exc_info=True)
 
     def _auto_save_tab_to_db(self, state: _TabState) -> None:
         """Persist one tab (upsert by `tab_uid`), fire-and-forget.
@@ -1051,10 +1053,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             editor = self._editor(self._active_tab_id)
             editor.load_raw(raw)
-        except Exception as exc:
+        except Exception:
             # Запрос не загрузился — вкладка останется с прежним текстом, а
-            # пользователь уверен, что отправил новый.
-            logger.debug("repeater: request not loaded into tab %s: %s", self._active_tab_id, exc)
+            # пользователь уверен, что отправил новый. Потеря данных → error.
+            logger.error("repeater: request not loaded into tab %s", self._active_tab_id, exc_info=True)
 
     def load_request_in_new_tab(self, raw: str) -> None:
         """Open a new tab and load the request into it.
