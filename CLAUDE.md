@@ -42,7 +42,9 @@ Single source of truth: `MYPLANS/` — любой файл `*plan*` или `*aud
 - Тесты: `scripts/run-tests.sh` (прогоняет `TEST_COMMAND` из `.claude/hooks/config.env`)
 - Полный прогон: `uv run pytest -q` (integration/e2e/snapshot/perf — отдельно)
 - Линтер: `ruff check pentool/`
-- Форматтер: `ruff format pentool/`
+- Форматтер: `ruff format pentool/` (line-length 120 — один стандарт с
+  black/isort, задан в `[tool.ruff]`; до 2026-11-16 здесь стояло 100, и
+  форматтер переписывал файлы вопреки black)
 - Слои: `python tools/check_layers.py`
 - TUI CSS ↔ DOM: `uv run python tools/check_tui_css.py` (селектор без
   соответствующего id/класса/типа в Python — блокирует CI и pre-commit)
@@ -52,8 +54,9 @@ Single source of truth: `MYPLANS/` — любой файл `*plan*` или `*aud
   (вторая трещотка ADR-6 по всему `pentool/` — считает `ruff BLE001`,
   потолок на файл в `tools/broad_except_baseline.json`, `--update` понижает)
 - Хуки pre-commit: `uvx pre-commit run --files $(git diff --name-only HEAD)`.
-  **Не `--all-files`**: он переформатирует ~233 файла (black 120 против
-  текущего состояния репозитория) и утащит в дифф весь проект.
+  **Не `--all-files`**: репозиторий исторически накопил расхождение с
+  форматтерами (на 2026-11-16 `ruff format` при 120 хотел бы переписать 84
+  файла из 198), поэтому `--all-files` утащит в дифф весь проект.
 
 Тесты запускаются **через `scripts/run-tests.sh`**: после успешного прогона
 скрипт пишет маркер `.claude/state/tests-passed`, который читает Stop-хук.
@@ -120,9 +123,11 @@ screens/ tui-lab/ bin/ ai/` и корневые файлы. Каталог `ai/`
 - Команды проекта выполняются в WSL: `wsl -e bash -lc 'cd /mnt/d/PROJECTS/pentool && …'`.
   Сэндбокс DSH блокирует `wsl.exe`, поэтому нужен полный доступ к файловой
   системе — в ограниченных режимах хуки и тесты не запустятся.
-- `format-on-edit.sh` в DSH **выключен** (`formatHook: false` в конфиге
-  плагина): `ruff format` с line-length 100 переформатирует файлы,
-  отформатированные black на 120 — см. «Грабли» в `MYPLANS/`.
+- `format-on-edit.sh` в DSH **выключен** по умолчанию (`formatHook: false` в
+  конфиге плагина). Причина, по которой он был опасен, устранена 2026-11-16:
+  `[tool.ruff] line-length` выровнен с black/isort на 120, и `ruff format`
+  больше не переписывает файлы по 100. Включать осознанно — хук правит файл на
+  диске после каждой правки.
 - Проверка моста без агента: `wsl -e bash /mnt/d/PROJECTS/pentool/.claude/dsh/selftest.sh`
   (ожидается `7 passed, 0 failed`).
 - События `PreCompact` в DSH нет: `context-state.sh --save` не вызывается,
