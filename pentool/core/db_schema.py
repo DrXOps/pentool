@@ -33,6 +33,23 @@ CREATE TABLE IF NOT EXISTS repeater_entries (
     timestamp           TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Repeater tabs: one row per open tab. `repeater_entries` above is send
+-- HISTORY (append-only, one row per send) and is not a tab registry: deriving
+-- the tab set from its last rows made a closed tab reappear after a restart,
+-- because closing only forgot the tab in memory. `tab_uid` is the stable
+-- identity generated once per tab and kept for its lifetime (the same idea as
+-- scanner_tabs/intruder_state): `tab_name` is cosmetic and user-renameable, so
+-- upserting by name would let two tabs with one name overwrite each other.
+CREATE TABLE IF NOT EXISTS repeater_tabs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id   INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    tab_uid      TEXT    NOT NULL DEFAULT '',
+    tab_name     TEXT    NOT NULL DEFAULT 'Tab',
+    request_text TEXT    NOT NULL DEFAULT '',
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS intruder_results (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id          INTEGER REFERENCES projects(id) ON DELETE CASCADE,
@@ -133,42 +150,37 @@ async def init_db(db_path: str) -> None:
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     from pentool.utils.aiosql_daemon import make_aiosqlite_daemon
+
     _raw_db = make_aiosqlite_daemon(aiosqlite.connect(db_path))
     async with _raw_db as db:
         await db.executescript(_SCHEMA)
         await db.commit()
         # Migration: add new columns to vulnerabilities (for old DBs)
         _new_vuln_cols = [
-            ("name",         "TEXT NOT NULL DEFAULT ''"),
-            ("payload",      "TEXT DEFAULT ''"),
-            ("description",  "TEXT DEFAULT ''"),
-            ("cwe",          "TEXT DEFAULT ''"),
-            ("remediation",  "TEXT DEFAULT ''"),
+            ("name", "TEXT NOT NULL DEFAULT ''"),
+            ("payload", "TEXT DEFAULT ''"),
+            ("description", "TEXT DEFAULT ''"),
+            ("cwe", "TEXT DEFAULT ''"),
+            ("remediation", "TEXT DEFAULT ''"),
             ("mitre_attack", "TEXT DEFAULT ''"),
-            ("request_raw",  "TEXT DEFAULT ''"),
+            ("request_raw", "TEXT DEFAULT ''"),
             ("response_raw", "TEXT DEFAULT ''"),
         ]
         for col_name, col_def in _new_vuln_cols:
             try:
-                await db.execute(
-                    f"ALTER TABLE vulnerabilities ADD COLUMN {col_name} {col_def}"
-                )
+                await db.execute(f"ALTER TABLE vulnerabilities ADD COLUMN {col_name} {col_def}")
             except Exception:
                 pass  # Column already exists — expected
 
         # Migration: add request_number to intruder_results (for old DBs)
         try:
-            await db.execute(
-                "ALTER TABLE intruder_results ADD COLUMN request_number INTEGER NOT NULL DEFAULT 0"
-            )
+            await db.execute("ALTER TABLE intruder_results ADD COLUMN request_number INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass  # Column already exists — expected
 
         # Migration: add response_raw to intruder_results (for detail panel)
         try:
-            await db.execute(
-                "ALTER TABLE intruder_results ADD COLUMN response_raw TEXT DEFAULT NULL"
-            )
+            await db.execute("ALTER TABLE intruder_results ADD COLUMN response_raw TEXT DEFAULT NULL")
         except Exception:
             pass  # Column already exists — expected
 
@@ -176,13 +188,11 @@ async def init_db(db_path: str) -> None:
         # old DBs) — scopes findings to the scan tab/run that discovered them,
         # instead of every tab showing every finding ever saved to this DB.
         for col_name, col_def in (
-            ("scan_tab_uid",    "TEXT DEFAULT ''"),
+            ("scan_tab_uid", "TEXT DEFAULT ''"),
             ("scan_session_id", "TEXT DEFAULT ''"),
         ):
             try:
-                await db.execute(
-                    f"ALTER TABLE vulnerabilities ADD COLUMN {col_name} {col_def}"
-                )
+                await db.execute(f"ALTER TABLE vulnerabilities ADD COLUMN {col_name} {col_def}")
             except Exception:
                 pass  # Column already exists — expected
 
@@ -191,16 +201,11 @@ async def init_db(db_path: str) -> None:
         # tab_name (which resets to "Scan 1", "Scan 2"... every restart and
         # can silently overwrite/merge a different tab's saved row).
         try:
-            await db.execute(
-                "ALTER TABLE scanner_tabs ADD COLUMN tab_uid TEXT DEFAULT ''"
-            )
+            await db.execute("ALTER TABLE scanner_tabs ADD COLUMN tab_uid TEXT DEFAULT ''")
         except Exception:
             pass  # Column already exists — expected
         try:
-            await db.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_scanner_tabs_uid "
-                "ON scanner_tabs (tab_uid)"
-            )
+            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_scanner_tabs_uid " "ON scanner_tabs (tab_uid)")
         except Exception:
             pass
 
@@ -213,28 +218,19 @@ async def init_db(db_path: str) -> None:
         # differently-uid'd tabs sharing a name silently overwrite each
         # other's saved template/payloads.
         try:
-            await db.execute(
-                "ALTER TABLE intruder_state ADD COLUMN tab_uid TEXT DEFAULT ''"
-            )
+            await db.execute("ALTER TABLE intruder_state ADD COLUMN tab_uid TEXT DEFAULT ''")
         except Exception:
             pass  # Column already exists — expected
         try:
-            await db.execute(
-                "ALTER TABLE intruder_state ADD COLUMN target_url TEXT DEFAULT ''"
-            )
+            await db.execute("ALTER TABLE intruder_state ADD COLUMN target_url TEXT DEFAULT ''")
         except Exception:
             pass  # Column already exists — expected
         try:
-            await db.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_intruder_state_uid "
-                "ON intruder_state (tab_uid)"
-            )
+            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_intruder_state_uid " "ON intruder_state (tab_uid)")
         except Exception:
             pass
         try:
-            await db.execute(
-                "ALTER TABLE intruder_results ADD COLUMN tab_uid TEXT DEFAULT ''"
-            )
+            await db.execute("ALTER TABLE intruder_results ADD COLUMN tab_uid TEXT DEFAULT ''")
         except Exception:
             pass  # Column already exists — expected
 
@@ -252,6 +248,9 @@ async def init_db(db_path: str) -> None:
             "CREATE INDEX IF NOT EXISTS idx_requests_status ON requests (status_code)",
             # intruder_results: filtering by attack_id
             "CREATE INDEX IF NOT EXISTS idx_intruder_results_attack ON intruder_results (attack_id)",
+            # Частичный индекс: пустой tab_uid — это «вкладка ещё не сохранена»,
+            # а не конфликтующая строка (иначе второй INSERT с '' упал бы).
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_repeater_tabs_uid " "ON repeater_tabs (tab_uid) WHERE tab_uid != ''",
             # vulnerabilities: filtering by host/url/severity
             "CREATE INDEX IF NOT EXISTS idx_vulns_host ON vulnerabilities (host)",
             "CREATE INDEX IF NOT EXISTS idx_vulns_severity ON vulnerabilities (severity)",
@@ -286,6 +285,7 @@ async def get_db(db_path: str) -> AsyncIterator[aiosqlite.Connection]:
         aiosqlite.Connection object.
     """
     from pentool.utils.aiosql_daemon import make_aiosqlite_daemon
+
     _raw_db = make_aiosqlite_daemon(aiosqlite.connect(db_path))
     async with _raw_db as db:
         db.row_factory = aiosqlite.Row
@@ -312,9 +312,7 @@ async def get_project_setting(db_path: str, key: str, default: str | None = None
     """
     try:
         async with aiosqlite.connect(db_path) as db:
-            async with db.execute(
-                "SELECT value FROM project_settings WHERE key = ?", (key,)
-            ) as cur:
+            async with db.execute("SELECT value FROM project_settings WHERE key = ?", (key,)) as cur:
                 row = await cur.fetchone()
                 return row[0] if row else default
     except Exception:

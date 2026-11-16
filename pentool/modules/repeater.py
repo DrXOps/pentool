@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from sqlite3 import OperationalError, ProgrammingError
 
 from pentool.core.logging import get_logger
 from pentool.storage.base_sqlite_storage import BaseSqliteStorage
@@ -87,6 +88,7 @@ class Repeater(BaseSqliteStorage):
         # defined in one place. Idempotent (CREATE TABLE/INDEX IF NOT EXISTS).
         await self._connect(path)
         from pentool.core.db_schema import _SCHEMA
+
         await self._db.executescript(_SCHEMA)
         await self._db.commit()
 
@@ -102,7 +104,9 @@ class Repeater(BaseSqliteStorage):
             response = await client.send(request)
             logger.info(
                 "REPEATER: response %s %s -> %d (%d bytes)",
-                request.method, request.url, response.status,
+                request.method,
+                request.url,
+                response.status,
                 len(response.body) if response.body else 0,
             )
 
@@ -184,6 +188,69 @@ class Repeater(BaseSqliteStorage):
             "DELETE FROM repeater_entries WHERE id=?",
             (entry_id,),
         )
+        await self._db.commit()
+
+    # ── Tabs ────────────────────────────────────────────────────────────────
+    # `repeater_entries` — это ИСТОРИЯ отправок: одна строка на отправку,
+    # только добавление. Набор открытых вкладок живёт в `repeater_tabs` под
+    # стабильным `tab_uid` (как у Scanner и Intruder). Выводить вкладки из
+    # истории нельзя: закрытие забывало вкладку только в памяти, и после
+    # перезапуска она возвращалась (F-053).
+
+    async def save_tab(
+        self,
+        tab_uid: str,
+        tab_name: str,
+        request_text: str,
+        sort_order: int = 0,
+    ) -> None:
+        """Upsert одной вкладки по её стабильному `tab_uid`.
+
+        Имя и текст заменяемы: `tab_uid` создаётся один раз за жизнь вкладки,
+        а переименование — косметика, которая не должна создавать новую строку.
+        """
+        if not tab_uid or not await self.ensure_open():
+            return
+        try:
+            await self._db.execute(
+                """
+                INSERT OR REPLACE INTO repeater_tabs
+                    (tab_uid, project_id, tab_name, request_text, sort_order, updated_at)
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (tab_uid, self._project_id, tab_name, request_text, sort_order),
+            )
+            await self._db.commit()
+        except (OperationalError, ProgrammingError) as exc:
+            # Тот же класс гонки, что в IntruderStorage: close()/switch_db()
+            # мог случиться между execute() и commit().
+            logger.debug("save_tab failed (likely race): %s", exc)
+
+    async def get_tabs(self) -> list[dict]:
+        """Все сохранённые вкладки проекта в порядке создания."""
+        if not await self.ensure_open():
+            return []
+        cursor = await self._db.execute(
+            "SELECT tab_uid, tab_name, request_text, sort_order FROM repeater_tabs "
+            "WHERE project_id IS ? ORDER BY sort_order, id",
+            (self._project_id,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "tab_uid": row[0],
+                "tab_name": row[1],
+                "request_text": row[2],
+                "sort_order": row[3],
+            }
+            for row in rows
+        ]
+
+    async def delete_tab(self, tab_uid: str) -> None:
+        """Забыть вкладку. История (`repeater_entries`) не трогается — это лог."""
+        if not tab_uid or not await self.ensure_open():
+            return
+        await self._db.execute("DELETE FROM repeater_tabs WHERE tab_uid = ?", (tab_uid,))
         await self._db.commit()
 
 

@@ -40,12 +40,16 @@ _MOUNT_ATTEMPTS = 5
 class _TabState:
     """State of a single Repeater tab."""
 
-    def __init__(self, tab_id: str, name: str) -> None:
+    def __init__(self, tab_id: str, name: str, tab_uid: str = "") -> None:
         self.tab_id = tab_id
         self.name = name
         import uuid as _uuid
 
-        self.tab_uid: str = _uuid.uuid4().hex
+        # Стабильная идентичность вкладки: переживает переименование и
+        # перезапуск. У восстановленной вкладки uid приходит из БД, а не
+        # генерируется заново — иначе каждая перезагрузка создавала бы новые
+        # строки, а прежние оставались бы сиротами.
+        self.tab_uid: str = tab_uid or _uuid.uuid4().hex
         self.request_text: str = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
         self.response_text: str = ""
         self.sending: bool = False
@@ -228,26 +232,21 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         if generation is None:
             generation = self._tabs_generation
         try:
-            entries = await repeater_api.get_history(limit=20)
+            # Набор вкладок — это таблица `repeater_tabs`, а не история
+            # отправок: история append-only, и выводить из неё вкладки значило
+            # воскрешать закрытые после перезапуска (F-053).
+            tabs = await repeater_api.get_tabs()
             if generation != self._tabs_generation:
                 return
-            if not entries:
+            if not tabs:
                 self.call_after_refresh(self._new_tab_if_current, generation)
                 return
 
-            # Group entries by tab_name — keep the most recent entry per tab
-            tabs_dict: dict = {}
-            for entry in reversed(entries):  # oldest first → newest wins
-                tabs_dict[entry.tab_name] = entry
-
-            for tab_name, entry in tabs_dict.items():
+            for row in tabs:
                 self._tab_counter += 1
                 tab_id = f"tab-{self._tab_counter}"
-                from pentool.utils.parser import build_http_request
-
-                raw = build_http_request(entry.request)
-                state = _TabState(tab_id, tab_name)
-                state.request_text = raw
+                state = _TabState(tab_id, row["tab_name"], tab_uid=row["tab_uid"])
+                state.request_text = row["request_text"] or state.request_text
                 self._tabs.append(state)
                 self.call_after_refresh(self._create_tab_ui, tab_id, state, generation)
 
@@ -405,6 +404,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             # From here the editor is the source of truth for this tab; only
             # now may its text be read back into `state.request_text`.
             state.ui_ready = True
+            # Вкладка должна пережить перезапуск сразу, а не только после
+            # первой правки: строка в `repeater_tabs` — это и есть набор
+            # вкладок проекта.
+            self._auto_save_tab_to_db(state)
         # load_raw() -> TextArea.load_text() posts a Changed event; this
         # initial load must NOT mark the tab dirty. Clear it back to False
         # after the (already-scheduled) Changed handler has run.
@@ -425,7 +428,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             return
         tabs = self._tabs_w
         tabs.remove_pane(tab_id)
+        closing = self._get_tab_state(tab_id)
         self._tabs = [t for t in self._tabs if t.tab_id != tab_id]
+        if closing is not None:
+            self._delete_tab_from_db(closing)
         if self._tabs:
             self._active_tab_id = self._tabs[-1].tab_id
             tabs.active = self._active_tab_id
@@ -470,23 +476,22 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self.run_worker(self._do_load_tabs(repeater_api, generation), exclusive=True)
 
     async def _close_all_tabs(self) -> None:
-        """Remove all tabs and reset state (await remove_pane to avoid race with action_new_tab)."""
+        """Remove all tabs and reset state.
+
+        `TabbedContent.clear_panes()` — штатный способ снять все панели сразу.
+        Снятие по одной оставляло внутренний `Tabs` обновляющим `active` по уже
+        исчезнувшей панели (`ValueError: No Tab with id '--content-tab-tab-N'`);
+        всплывало это на перезагрузке проекта, когда на экране одна вкладка.
+        """
         self._cancel_save_workers()
 
         self._tabs_generation += 1  # invalidate any in-flight _do_load_tabs from on_mount
         try:
-            tabs = self._tabs_w
-            for state in list(self._tabs):
-                try:
-                    await tabs.remove_pane(state.tab_id)
-                except Exception as exc:
-                    # Панель не снялась — вкладка останется в DOM, хотя из
-                    # списка состояния её уже убрали. Это видимое расхождение.
-                    logger.debug("repeater: pane %s not removed: %s", state.tab_id, exc)
+            await self._tabs_w.clear_panes()
         except Exception as exc:
-            # Ниже список всё равно очищается — то есть вкладки в дереве
-            # станут сиротами без состояния.
-            logger.debug("repeater: tab teardown aborted, state reset anyway: %s", exc)
+            # Панели не снялись — ниже список всё равно очищается, то есть
+            # вкладки в дереве станут сиротами без состояния.
+            logger.debug("repeater: panes not cleared: %s", exc)
         self._tabs = []
         self._active_tab_id = None
         self._tab_counter = 0  # counter reset — numbering always starts at 1
@@ -770,33 +775,42 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             logger.debug("repeater: tab %s state not saved: %s", self._active_tab_id, exc)
 
     def _auto_save_tab_to_db(self, state: _TabState) -> None:
-        """Save tab state to database (non-blocking, fire-and-forget).
+        """Persist one tab (upsert by `tab_uid`), fire-and-forget.
 
         Worker is tracked in _running_save_tasks and cancelled on
         _close_all_tabs() / reset_for_new_project() / reload_from_project()
-        so that an in-flight save_to_history commit doesn't hit a closed
-        database when the user exits or switches projects.
+        so that an in-flight commit doesn't hit a closed database when the
+        user exits or switches projects.
         """
         try:
-            from pentool.utils.parser import ParsedResponse, parse_http_request
-
-            parsed = parse_http_request(state.request_text)
-            # Don't save empty or placeholder requests
-            if not parsed or not parsed.url or not parsed.method:
-                return
-
-            response = ParsedResponse(status=0, headers={}, body="")
-
             repeater_api = self._get_api()
             if repeater_api is None:
                 return
 
+            order = next((i for i, t in enumerate(self._tabs) if t is state), 0)
             self._start_save_worker(
-                repeater_api.save_to_history(parsed, response, tab_name=state.name),
+                repeater_api.save_tab(state.tab_uid, state.name, state.request_text, order),
                 self._save_worker_name(f"save-{state.tab_id}"),
             )
         except Exception as exc:
             logger.debug("_auto_save_tab_to_db: %s", exc)
+
+    def _delete_tab_from_db(self, state: _TabState) -> None:
+        """Forget the tab in the database so it does not return on restart (F-053).
+
+        The send history (`repeater_entries`) is deliberately left alone: it is
+        a log of what was sent, not a registry of open tabs.
+        """
+        try:
+            repeater_api = self._get_api()
+            if repeater_api is None:
+                return
+            self._start_save_worker(
+                repeater_api.delete_tab(state.tab_uid),
+                self._save_worker_name(f"delete-{state.tab_id}"),
+            )
+        except Exception as exc:
+            logger.debug("_delete_tab_from_db: %s", exc)
 
     def _get_tab_state(self, tab_id: str) -> _TabState | None:
         for t in self._tabs:

@@ -11,7 +11,6 @@ __all__ = ["RepeaterAPI", "RepeaterEntry"]
 
 
 class RepeaterAPI(ExportableAPI):
-
     def __init__(
         self,
         db_path: str,
@@ -54,6 +53,25 @@ class RepeaterAPI(ExportableAPI):
 
     async def delete_entry(self, entry_id: int) -> None:
         return await self._repeater.delete_entry(entry_id)
+
+    # ── Tabs ────────────────────────────────────────────────────────────────
+    # Вкладки хранятся отдельно от истории отправок: закрытие вкладки должно
+    # её забывать, а `repeater_entries` — лог, который закрытие не чистит.
+
+    async def save_tab(
+        self,
+        tab_uid: str,
+        tab_name: str,
+        request_text: str,
+        sort_order: int = 0,
+    ) -> None:
+        return await self._repeater.save_tab(tab_uid, tab_name, request_text, sort_order)
+
+    async def get_tabs(self) -> list[dict]:
+        return await self._repeater.get_tabs()
+
+    async def delete_tab(self, tab_uid: str) -> None:
+        return await self._repeater.delete_tab(tab_uid)
 
     async def switch_db(self, db_path: str) -> None:
         """Point Repeater at different project DB (one persistent connection, mirrors IntruderAPI)."""
