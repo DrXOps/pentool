@@ -1,87 +1,53 @@
-"""Snapshot tests: TUI visual regressions.
+"""Снапшоты экранов TUI: визуальные регрессии.
 
-Run (first time — create baseline):
-    pytest tests/snapshot/ -v
-
-Subsequent run (compare with baseline):
-    pytest tests/snapshot/ -v
-
-Update baseline after intentional UI changes:
+Первый прогон (создать эталоны):
     pytest tests/snapshot/ --snapshot-update
 
-Window size is always 200x50 — full screen without widget clipping.
-Snapshots are stored in tests/snapshot/snaps/*.svg
+Обычный прогон (сравнить с эталоном):
+    pytest tests/snapshot/
 
-Two determinism rules, both enforced here rather than hidden in normalisation:
+Обновить эталон после осознанного изменения интерфейса:
+    pytest tests/snapshot/ --snapshot-update
 
-* the clock is frozen (``PentoolApp(now=...)``) — the status bar prints the
-  wall time every second, and erasing it with a regex would also erase a
-  change to the time format;
-* the screenshot is taken once the screen stops changing (``settle``) —
-  a guessed number of ``pilot.pause()`` calls is what made the Repeater
-  baseline flaky, because its editor fills one frame after the layout.
+Окно всегда 200x50 — полный экран без обрезки виджетов. Эталоны хранит
+`pytest-textual-snapshot`; кадр снимается только на замороженных часах и после
+того, как экран перестал меняться (см. `helpers.py`).
 """
 
 from __future__ import annotations
 
-from datetime import datetime
-
 import pytest
 
 from pentool.core.config import Config, set_config
-from tests.snapshot.conftest import settle
-
-# Standard size for all snapshots: full window
-SNAP_SIZE = (200, 50)
-
-
-class _FrozenClock(datetime):
-    """``datetime`` whose ``now()`` is fixed.
-
-    Subclassing rather than stubbing keeps the other classmethods —
-    ``fromtimestamp``/``strptime`` — working, so widgets that format file
-    mtimes (dashboard, file selector) still behave like production.
-    """
-
-    @classmethod
-    def now(cls, tz=None) -> datetime:
-        return cls(2026, 1, 1, 12, 0, 0)
-
-
-def _app():
-    """A fresh app on the frozen clock."""
-    from pentool.tui.app import PentoolApp
-
-    return PentoolApp(now=_FrozenClock.now)
+from tests.snapshot.helpers import SNAP_SIZE, make_app, settle
 
 
 def _repeater_ready(app):
-    """The active Repeater tab has mounted its editor *and* its request text.
+    """Активная вкладка Repeater собрала редактор *и* получила текст запроса.
 
-    Both halves matter. Without the editor there is nothing to photograph but
-    the layout; without the text the editor paints an empty box, which is a
-    stable frame — a "has the screen stopped changing" poll returns it
-    immediately and commits an empty baseline.
+    Обе половины важны: без редактора фотографировать нечего, кроме layout, а
+    без текста редактор рисует пустую рамку — кадр устойчивый, поэтому проверка
+    «экран перестал меняться» вернула бы его сразу и эталон закрепил бы пустоту.
     """
     from textual.css.query import NoMatches
 
     from pentool.tui.screens.repeater.screen import RepeaterScreen
 
-    screen = app.query_one(RepeaterScreen)
     try:
+        screen = app.query_one(RepeaterScreen)
         return bool(screen._editor().get_text())
     except (NoMatches, LookupError):
         return False
 
 
 def _intruder_ready(app):
-    """Intruder's template editor is mounted and holds the request."""
+    """Редактор шаблона Intruder собран и держит запрос."""
     from textual.css.query import NoMatches
 
     from pentool.tui.screens.intruder.screen import IntruderScreen
 
-    screen = app.query_one(IntruderScreen)
     try:
+        screen = app.query_one(IntruderScreen)
         return bool(screen._template_editor().get_text())
     except (NoMatches, LookupError):
         return False
@@ -99,84 +65,81 @@ def isolated_config(tmp_path):
 
 
 @pytest.mark.snapshot
-@pytest.mark.asyncio
-async def test_repeater_screen(assert_snapshot) -> None:
-    """Repeater screen: TabbedContent with Tab 1, two editors."""
-    app = _app()
+def test_repeater_screen(snap_compare) -> None:
+    """Repeater: TabbedContent с вкладкой Tab 1 и двумя редакторами."""
+    app = make_app()
     app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("R")
-        svg = await settle(app, pilot, ready=lambda: _repeater_ready(app), what="Repeater tab")
-    assert_snapshot(svg, "repeater_screen")
+    assert snap_compare(
+        app,
+        press=["R"],
+        terminal_size=SNAP_SIZE,
+        run_before=lambda pilot: settle(pilot, ready=lambda: _repeater_ready(pilot.app), what="Repeater tab"),
+    )
 
 
 @pytest.mark.snapshot
-@pytest.mark.asyncio
-async def test_intruder_screen(assert_snapshot) -> None:
-    """Intruder screen: Start/Pause/Stop toolbar, Positions+Payloads, Results."""
-    app = _app()
+def test_intruder_screen(snap_compare) -> None:
+    """Intruder: тулбар Start/Pause/Stop, Positions+Payloads, Results."""
+    app = make_app()
     app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("I")
-        svg = await settle(app, pilot, ready=lambda: _intruder_ready(app), what="Intruder template")
-    assert_snapshot(svg, "intruder_screen")
+    assert snap_compare(
+        app,
+        press=["I"],
+        terminal_size=SNAP_SIZE,
+        run_before=lambda pilot: settle(pilot, ready=lambda: _intruder_ready(pilot.app), what="Intruder template"),
+    )
 
 
 @pytest.mark.snapshot
-@pytest.mark.asyncio
-async def test_decoder_screen(assert_snapshot) -> None:
-    """Decoder screen: Coming in Stage 13 stub."""
-    app = _app()
+def test_decoder_screen(snap_compare) -> None:
+    """Decoder: заглушка этапа 13."""
+    app = make_app()
     app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("D")
-        svg = await settle(app, pilot)
-    assert_snapshot(svg, "decoder_screen")
+    assert snap_compare(
+        app,
+        press=["D"],
+        terminal_size=SNAP_SIZE,
+        run_before=lambda pilot: settle(pilot, what="Decoder"),
+    )
 
 
 @pytest.mark.snapshot
-@pytest.mark.asyncio
-async def test_settings_screen(assert_snapshot) -> None:
-    """Settings screen: Interface/Proxy/Hotkeys/Project subtabs."""
-    app = _app()
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("ctrl+comma")
-        svg = await settle(app, pilot)
-    assert_snapshot(svg, "settings_screen")
+def test_settings_screen(snap_compare) -> None:
+    """Settings: подтабы Interface/Proxy/Hotkeys/Project."""
+    app = make_app()
+    assert snap_compare(
+        app,
+        press=["ctrl+comma"],
+        terminal_size=SNAP_SIZE,
+        run_before=lambda pilot: settle(pilot, what="Settings"),
+    )
 
 
 @pytest.mark.snapshot
-@pytest.mark.asyncio
-async def test_proxy_intercept_tab(assert_snapshot) -> None:
-    """Proxy → Intercept tab: empty intercept."""
-    app = _app()
+def test_proxy_intercept_tab(snap_compare) -> None:
+    """Proxy → вкладка Intercept: пустой перехват."""
+    app = make_app()
     app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("P")
-        svg = await settle(app, pilot)
-    assert_snapshot(svg, "proxy_intercept_tab")
+    assert snap_compare(
+        app,
+        press=["P"],
+        terminal_size=SNAP_SIZE,
+        run_before=lambda pilot: settle(pilot, what="Proxy intercept"),
+    )
 
 
 @pytest.mark.snapshot
-@pytest.mark.asyncio
-async def test_repeater_with_request(assert_snapshot) -> None:
-    """Repeater: real HTTP request loaded into editor."""
+def test_repeater_with_request(snap_compare) -> None:
+    """Repeater: реальный HTTP-запрос в редакторе."""
     from pentool.tui.screens.repeater.screen import RepeaterScreen
     from pentool.utils.parser import ParsedRequest, build_http_request
 
-    app = _app()
+    app = make_app()
     app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("R")
-        await pilot.pause()
 
-        req = ParsedRequest(
+    async def load(pilot) -> None:
+        await settle(pilot, what="Repeater before load")
+        request = ParsedRequest(
             method="POST",
             url="http://target.example.com/api/login",
             headers={
@@ -186,59 +149,56 @@ async def test_repeater_with_request(assert_snapshot) -> None:
             },
             body='{"username":"admin","password":"secret123"}',
         )
-        screen = app.query_one(RepeaterScreen)
-        screen.load_request(build_http_request(req))
-        svg = await settle(app, pilot, ready=lambda: _repeater_ready(app), what="Repeater tab")
-    assert_snapshot(svg, "repeater_with_request")
+        pilot.app.query_one(RepeaterScreen).load_request(build_http_request(request))
+        await settle(pilot, ready=lambda: _repeater_ready(pilot.app), what="Repeater tab")
+
+    assert snap_compare(app, press=["R"], terminal_size=SNAP_SIZE, run_before=load)
 
 
 @pytest.mark.snapshot
-@pytest.mark.asyncio
-async def test_intruder_with_markers(assert_snapshot) -> None:
-    """Intruder: request with §§ markers loaded into Positions."""
+def test_intruder_with_markers(snap_compare) -> None:
+    """Intruder: запрос с маркерами §§, разобранный в Positions."""
     from pentool.tui.screens.intruder.screen import IntruderScreen
     from pentool.utils.parser import ParsedRequest, build_http_request
 
-    app = _app()
+    app = make_app()
     app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("I")
-        await pilot.pause()
 
-        req = ParsedRequest(
+    async def load(pilot) -> None:
+        await settle(pilot, what="Intruder before load")
+        request = ParsedRequest(
             method="POST",
             url="http://target.example.com/login",
             headers={"Host": "target.example.com"},
             body="user=§admin§&pass=§secret§",
         )
-        screen = app.query_one(IntruderScreen)
-        screen.load_request(build_http_request(req))
-        svg = await settle(app, pilot, ready=lambda: _intruder_ready(app), what="Intruder template")
-    assert_snapshot(svg, "intruder_with_markers")
+        pilot.app.query_one(IntruderScreen).load_request(build_http_request(request))
+        await settle(pilot, ready=lambda: _intruder_ready(pilot.app), what="Intruder template")
+
+    assert snap_compare(app, press=["I"], terminal_size=SNAP_SIZE, run_before=load)
 
 
 @pytest.mark.snapshot
-@pytest.mark.asyncio
-async def test_comparer_screen(assert_snapshot) -> None:
-    """Comparer screen: side-by-side diff."""
-    app = _app()
+def test_comparer_screen(snap_compare) -> None:
+    """Comparer: сравнение двух ответов бок о бок."""
+    app = make_app()
     app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("C")
-        svg = await settle(app, pilot)
-    assert_snapshot(svg, "comparer_screen")
+    assert snap_compare(
+        app,
+        press=["C"],
+        terminal_size=SNAP_SIZE,
+        run_before=lambda pilot: settle(pilot, what="Comparer"),
+    )
 
 
 @pytest.mark.snapshot
-@pytest.mark.asyncio
-async def test_sequencer_screen(assert_snapshot) -> None:
-    """Sequencer screen: token entropy analysis toolbar."""
-    app = _app()
+def test_sequencer_screen(snap_compare) -> None:
+    """Sequencer: тулбар анализа энтропии токена."""
+    app = make_app()
     app._skip_project_guard = True
-    async with app.run_test(size=SNAP_SIZE) as pilot:
-        await pilot.pause()
-        await pilot.press("Q")
-        svg = await settle(app, pilot)
-    assert_snapshot(svg, "sequencer_screen")
+    assert snap_compare(
+        app,
+        press=["Q"],
+        terminal_size=SNAP_SIZE,
+        run_before=lambda pilot: settle(pilot, what="Sequencer"),
+    )

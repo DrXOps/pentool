@@ -111,3 +111,7 @@ ai/logs/
 
 # Скачанные пакеты (не исходники проекта)
 *.deb
+
+# HTML-отчёт о несовпадении снапшотов: pytest-textual-snapshot пересоздаёт его
+# на каждом падении (tests/snapshot)
+snapshot_report.html
