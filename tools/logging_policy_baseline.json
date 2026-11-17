@@ -1,6 +1,5 @@
 {
   "pentool/tui/screens/intruder/screen.py": 18,
   "pentool/tui/screens/proxy/screen.py": 25,
-  "pentool/tui/screens/settings/screen.py": 19,
   "pentool/utils/cert.py": 1
 }
