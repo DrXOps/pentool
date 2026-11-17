@@ -500,10 +500,10 @@ class HttpView(ContentPanel):
         try:
             area = self.query_one("#cp-body-widget", TextArea)
             _load_into_textarea(area, text, highlight_terms)
-        except Exception as exc:
+        except Exception:
             # Панель просят показать запрос/ответ, а она не показала: на экране
             # останется предыдущее содержимое под новым заголовком.
-            logger.debug("editor: raw HTTP not loaded into panel: %s", exc)
+            logger.warning("editor: raw HTTP not loaded into panel", exc_info=True)
 
     def clear(self) -> None:
         """Очистить содержимое."""
@@ -582,11 +582,11 @@ class RequestEditor(ContentPanel):
             area._highlights = defaultdict(list, _build_http_highlights(normalized))
             area._line_cache.clear()
             area.refresh()
-        except Exception as exc:
+        except Exception:
             # `_raw_full` уже присвоен, поэтому get_text() вернёт новый текст,
             # хотя на экране прежний — расхождение между тем, что видно, и
-            # тем, что уйдёт на сервер.
-            logger.debug("editor: raw request not loaded into editor: %s", exc)
+            # тем, что уйдёт на сервер. Это ошибка, а не косметика.
+            logger.error("editor: raw request not loaded into editor", exc_info=True)
 
     def get_text(self) -> str:
         try:
@@ -769,10 +769,10 @@ class ResponseViewer(ContentPanel):
             lang_str = f"  [{lang}]" if lang else ""
             label_text = f"{self._label}  ·  {resp.status} {resp.reason}  ·  {size_str}{lang_str}"
             self.set_title(label_text)
-        except Exception as exc:
+        except Exception:
             # Заголовок панели остаётся прежним — то есть показывает статус и
             # размер прошлого ответа под новым телом.
-            logger.debug("editor: response label not updated: %s", exc)
+            logger.warning("editor: response label not updated", exc_info=True)
 
         try:
             area = self.query_one("#cp-body-widget", TextArea)
@@ -797,18 +797,19 @@ class ResponseViewer(ContentPanel):
             area._highlights = hl
             area._line_cache.clear()
             area.refresh()
-        except Exception as exc:
+        except Exception:
             # Ответ пришёл и записан в панель, но подсветка (и, возможно,
             # сам текст) не применились — панель покажет прошлый ответ.
-            logger.debug("editor: response not rendered in panel: %s", exc)
+            logger.warning("editor: response not rendered in panel", exc_info=True)
 
     def load_raw(self, text: str) -> None:
         self._reset_label()
         try:
             area = self.query_one("#cp-body-widget", TextArea)
             _load_into_textarea(area, text)
-        except Exception as exc:
-            logger.debug("editor: raw response text not loaded: %s", exc)
+        except Exception:
+            # Сырой текст ответа не показан — на экране остался прошлый.
+            logger.warning("editor: raw response text not loaded", exc_info=True)
 
     def clear(self) -> None:
         self._reset_label()

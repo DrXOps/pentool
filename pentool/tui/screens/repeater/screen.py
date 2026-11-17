@@ -274,9 +274,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             if not self._tabs:
                 self.call_after_refresh(self._new_tab_if_current, generation)
 
-        except Exception as exc:
-            # Table may not exist yet in a brand-new project — that's fine
-            logger.debug("_do_load_tabs: %s", exc)
+        except Exception:
+            # Вкладки проекта не восстановлены — пользователь увидит один пустой
+            # таб и решит, что данные пропали. Это потеря, поэтому error.
+            logger.error("_do_load_tabs: tabs not restored", exc_info=True)
             self.call_after_refresh(self._new_tab_if_current, generation)
 
     def _new_tab_if_current(self, generation: int) -> None:
@@ -830,8 +831,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 repeater_api.save_tab(state.tab_uid, state.name, state.request_text, order),
                 self._save_worker_name(f"save-{state.tab_id}"),
             )
-        except Exception as exc:
-            logger.debug("_auto_save_tab_to_db: %s", exc)
+        except Exception:
+            # Вкладка не попала в реестр: после перезапуска её не будет, хотя
+            # пользователь в ней работал.
+            logger.error("_auto_save_tab_to_db: tab not persisted", exc_info=True)
 
     def _delete_tab_from_db(self, state: _TabState) -> None:
         """Forget the tab in the database so it does not return on restart (F-053).
@@ -1075,9 +1078,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             editor = self._editor(self._active_tab_id)
             editor.load_raw(raw)
-        except Exception as exc:
+        except Exception:  # logging-ok: ожидаемый путь — повтор через таймер
             # Widget not yet mounted — retry with an extra defer
-            logger.debug("repeater: editor not ready, retrying via timer: %s", exc)
+            logger.debug("repeater: editor not ready, retrying via timer")
             state = self._get_tab_state(self._active_tab_id)
             if state is not None:
                 state.request_text = raw
@@ -1090,13 +1093,13 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             editor = self._editor(self._active_tab_id)
             editor.load_raw(raw)
-        except Exception as exc:
+        except Exception:
             # Повтор тоже не удался: текст уже лежит в state, но на экране его
             # нет. Молчание здесь означало бы «запрос потерялся» без следа.
             logger.warning(
-                "repeater: request still not loaded into tab %s after retry: %s",
+                "repeater: request still not loaded into tab %s after retry",
                 self._active_tab_id,
-                exc,
+                exc_info=True,
             )
 
     def _set_status(self, msg: str) -> None:

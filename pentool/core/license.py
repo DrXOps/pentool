@@ -11,6 +11,17 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# PRO-package verify/extract/platform helpers now live in
+# core/license_update.py (Этап 6) — re-exported here under the same names so
+# existing call sites don't change. Импорт поднят в верхний блок: раньше он
+# стоял после констант, и это давало E402 при каждом касании файла.
+from pentool.core.license_update import current_platform as _current_platform
+from pentool.core.license_update import safe_extract_tar as _safe_extract_tar
+from pentool.core.license_update import verify_pro_package_signature as _verify_pro_package_signature
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 _LICENSE_FILE = Path.home() / ".pentool" / "license.dat"
 _GRACE_PERIOD_DAYS = 7
 
@@ -19,10 +30,12 @@ def _base_version(v: str) -> str:
     """Strip dev/pre/suffix for X.Y.Z comparison (dev builds mismatch PRO otherwise)."""
     try:
         from packaging.version import Version
+
         return Version(v).base_version
     except Exception:
         # Fallback: strip everything from the first non X.Y.Z separator.
         import re
+
         m = re.match(r"^\d+(\.\d+)*", v)
         return m.group(0) if m else v
 
@@ -31,16 +44,6 @@ _LICENSE_API_BASE = "https://pentool-license.akashtanov2020.workers.dev"
 
 # PRO package delivery
 PRO_PACKAGE_DIR = Path.home() / ".pentool" / "pro"
-
-# PRO-package verify/extract/platform helpers now live in
-# core/license_update.py (Этап 6) — re-exported here under the same names so
-# existing call sites don't change.
-from pentool.core.license_update import (
-    PRO_PACKAGE_PUBLIC_KEY_B64 as _PRO_PACKAGE_PUBLIC_KEY_B64,
-    current_platform as _current_platform,
-    safe_extract_tar as _safe_extract_tar,
-    verify_pro_package_signature as _verify_pro_package_signature,
-)
 
 # ed25519 public key (base64) matching pentool-backend's LICENSE_SIGNING_KEY.
 # Every /api/validate and /api/trial/start response is signed server-side —
@@ -56,19 +59,18 @@ _LICENSE_SIGNING_PUBLIC_KEY_B64 = "1yrqLbj5Ei2/NpBBAg/mAn2hSZazTKoq909spi8LqT0="
 _SIGNATURE_MAX_AGE_SECONDS = _GRACE_PERIOD_DAYS * 24 * 3600
 
 
-
 @dataclass
 class LicenseInfo:
     """Information about the current license."""
 
     valid: bool = False
-    plan: str = "free"                      # "free" | "pro" | "enterprise"
+    plan: str = "free"  # "free" | "pro" | "enterprise"
     features: list[str] = field(default_factory=list)
-    expires: str | None = None           # ISO date or None (permanent)
+    expires: str | None = None  # ISO date or None (permanent)
     machine_id: str = ""
     license_key: str = ""
-    last_check: float | None = None      # timestamp of last online check
-    error: str = ""                         # error message if not valid
+    last_check: float | None = None  # timestamp of last online check
+    error: str = ""  # error message if not valid
 
     def has_feature(self, feature: str) -> bool:
         return self.valid and feature in self.features
@@ -107,6 +109,7 @@ def get_machine_id() -> str:
     # 3. Fallback: hostname + MAC (как было раньше)
     try:
         import socket
+
         hostname = socket.gethostname()
         mac = hex(uuid.getnode())[2:]
         raw = f"{hostname}:{mac}"
@@ -121,7 +124,11 @@ def _load_cached() -> dict | None:
             data = json.loads(_LICENSE_FILE.read_text(encoding="utf-8"))
             return data
     except Exception:
-        pass
+        # Кэш лицензии не прочитан — состояние придётся получать заново, а при
+        # отсутствии сети пользователь увидит «не активировано». Данные целы,
+        # поэтому warning, но с трейсбеком: иначе не отличить порчу файла от
+        # ошибки в разборе.
+        logger.warning("license: cached state not loaded", exc_info=True)
     return None
 
 
@@ -133,12 +140,18 @@ def _save_cached(data: dict) -> None:
             encoding="utf-8",
         )
     except Exception:
-        pass
+        # Кэш не записан: следующий запуск будет вынужден идти в сеть, а без неё
+        # покажет «не активировано» при живой лицензии.
+        logger.warning("license: cached state not saved", exc_info=True)
 
 
 def _canonical_license_payload(
-    valid: bool, plan: str, features: list[str], expires: str | None,
-    machine_id: str, ts: int,
+    valid: bool,
+    plan: str,
+    features: list[str],
+    expires: str | None,
+    machine_id: str,
+    ts: int,
 ) -> bytes:
     """Reconstruct the exact byte string the server signed.
 
@@ -157,17 +170,20 @@ def _canonical_license_payload(
 
 
 def _verify_license_signature(
-    valid: bool, plan: str, features: list[str], expires: str | None,
-    machine_id: str, ts: int, sig_b64: str,
+    valid: bool,
+    plan: str,
+    features: list[str],
+    expires: str | None,
+    machine_id: str,
+    ts: int,
+    sig_b64: str,
 ) -> bool:
     """Verify ed25519 signature over license verdict (tamper-evident)."""
     try:
         from cryptography.exceptions import InvalidSignature
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-        public_key = Ed25519PublicKey.from_public_bytes(
-            base64.b64decode(_LICENSE_SIGNING_PUBLIC_KEY_B64)
-        )
+        public_key = Ed25519PublicKey.from_public_bytes(base64.b64decode(_LICENSE_SIGNING_PUBLIC_KEY_B64))
         message = _canonical_license_payload(valid, plan, features, expires, machine_id, ts)
         signature = base64.b64decode(sig_b64.strip())
         public_key.verify(signature, message)
@@ -191,7 +207,9 @@ def get_license() -> LicenseInfo:
     if not sig or ts is None:
         # Pre-signature cache format (or tampered/stripped) — cannot trust it.
         return LicenseInfo(
-            valid=False, plan="free", machine_id=my_machine_id,
+            valid=False,
+            plan="free",
+            machine_id=my_machine_id,
             license_key=cached.get("license_key", ""),
             error="License cache is unsigned or corrupted. Please re-activate.",
         )
@@ -204,14 +222,18 @@ def get_license() -> LicenseInfo:
 
     if not _verify_license_signature(valid_flag, plan, features, expires, cached_machine_id, ts, sig):
         return LicenseInfo(
-            valid=False, plan="free", machine_id=my_machine_id,
+            valid=False,
+            plan="free",
+            machine_id=my_machine_id,
             license_key=cached.get("license_key", ""),
             error="License signature invalid — cache may have been tampered with. Please re-activate.",
         )
 
     if cached_machine_id != my_machine_id:
         return LicenseInfo(
-            valid=False, plan="free", machine_id=my_machine_id,
+            valid=False,
+            plan="free",
+            machine_id=my_machine_id,
             license_key=cached.get("license_key", ""),
             error="License was issued for a different machine.",
         )
@@ -262,19 +284,20 @@ def refresh_session_license(info: "LicenseInfo | None" = None) -> "LicenseInfo":
     return _session_license
 
 
-class FeatureNotAvailable(Exception):
+class FeatureNotAvailable(Exception):  # noqa: N818 — публичное имя, на него ссылаются декоратор и вызывающие
     """Feature not available in the current plan."""
+
     def __init__(self, feature: str, plan_required: str = "pro"):
         self.feature = feature
         self.plan_required = plan_required
         super().__init__(
-            f"Feature '{feature}' requires {plan_required.upper()} plan. "
-            f"Upgrade at https://pentool.pro/upgrade"
+            f"Feature '{feature}' requires {plan_required.upper()} plan. " f"Upgrade at https://pentool.pro/upgrade"
         )
 
 
 def require_feature(feature: str, plan_required: str = "pro"):
     """Decorator: raise FeatureNotAvailable if feature is not licensed."""
+
     def decorator(func):
         import asyncio as _asyncio
         import functools
@@ -294,6 +317,7 @@ def require_feature(feature: str, plan_required: str = "pro"):
         if _asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
+
     return decorator
 
 
@@ -315,16 +339,16 @@ async def activate_license(key: str) -> LicenseInfo:
 
     if not key:
         return LicenseInfo(
-            valid=False, plan="free",
+            valid=False,
+            plan="free",
             machine_id=machine_id,
             error="License key is empty",
         )
 
     try:
         import aiohttp
-        async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10)
-        ) as session:
+
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
             async with session.post(
                 f"{_LICENSE_API_BASE}/api/validate",
                 json={"key": key, "machine_id": machine_id},
@@ -334,7 +358,9 @@ async def activate_license(key: str) -> LicenseInfo:
                 if resp.status != 200:
                     data = await resp.json()
                     return LicenseInfo(
-                        valid=False, plan="free", machine_id=machine_id,
+                        valid=False,
+                        plan="free",
+                        machine_id=machine_id,
                         license_key=key,
                         error=data.get("message", f"License server returned HTTP {resp.status}"),
                     )
@@ -350,30 +376,42 @@ async def activate_license(key: str) -> LicenseInfo:
         if valid:
             if not sig or ts is None:
                 return LicenseInfo(
-                    valid=False, plan="free", machine_id=machine_id, license_key=key,
+                    valid=False,
+                    plan="free",
+                    machine_id=machine_id,
+                    license_key=key,
                     error="License server response was unsigned — refusing to trust it.",
                 )
             if not _verify_license_signature(valid, plan, features, expires, machine_id, ts, sig):
                 return LicenseInfo(
-                    valid=False, plan="free", machine_id=machine_id, license_key=key,
+                    valid=False,
+                    plan="free",
+                    machine_id=machine_id,
+                    license_key=key,
                     error="License server response failed signature verification.",
                 )
-            _save_cached({
-                "valid": True,
-                "plan": plan,
-                "features": features,
-                "expires": expires,
-                "machine_id": machine_id,
-                "license_key": key,
-                "sig": sig,
-                "ts": ts,
-            })
+            _save_cached(
+                {
+                    "valid": True,
+                    "plan": plan,
+                    "features": features,
+                    "expires": expires,
+                    "machine_id": machine_id,
+                    "license_key": key,
+                    "sig": sig,
+                    "ts": ts,
+                }
+            )
             if features:
                 await download_pro_package(key, machine_id)
 
         return LicenseInfo(
-            valid=valid, plan=plan, features=features, expires=expires,
-            machine_id=machine_id, license_key=key,
+            valid=valid,
+            plan=plan,
+            features=features,
+            expires=expires,
+            machine_id=machine_id,
+            license_key=key,
             last_check=(ts / 1000.0) if ts else time.time(),
             error="" if valid else data.get("message", "Activation failed"),
         )
@@ -401,9 +439,8 @@ async def reassign_license(key: str) -> LicenseInfo:
 
     try:
         import aiohttp
-        async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10)
-        ) as session:
+
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
             async with session.post(
                 f"{_LICENSE_API_BASE}/api/reassign",
                 json={"key": key, "new_machine_id": machine_id},
@@ -413,14 +450,18 @@ async def reassign_license(key: str) -> LicenseInfo:
                 data = await resp.json()
                 if resp.status != 200:
                     return LicenseInfo(
-                        valid=False, plan="free", machine_id=machine_id,
+                        valid=False,
+                        plan="free",
+                        machine_id=machine_id,
                         license_key=key,
                         error=data.get("message", f"Reassign failed (HTTP {resp.status})"),
                     )
 
                 if not data.get("reassigned"):
                     return LicenseInfo(
-                        valid=False, plan="free", machine_id=machine_id,
+                        valid=False,
+                        plan="free",
+                        machine_id=machine_id,
                         license_key=key,
                         error="Server did not confirm reassignment",
                     )
@@ -429,7 +470,9 @@ async def reassign_license(key: str) -> LicenseInfo:
                 return await activate_license(key)
     except Exception as exc:
         return LicenseInfo(
-            valid=False, plan="free", machine_id=machine_id,
+            valid=False,
+            plan="free",
+            machine_id=machine_id,
             license_key=key,
             error=f"Reassign failed: {exc}",
         )
@@ -447,9 +490,8 @@ async def deactivate_license() -> None:
     if info.valid and info.license_key:
         try:
             import aiohttp
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=8)
-            ) as session:
+
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session:
                 await session.post(
                     f"{_LICENSE_API_BASE}/api/deactivate",
                     json={"key": info.license_key, "machine_id": info.machine_id},
@@ -477,9 +519,8 @@ async def start_trial() -> LicenseInfo:
 
     try:
         import aiohttp
-        async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10)
-        ) as session:
+
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
             async with session.post(
                 f"{_LICENSE_API_BASE}/api/trial/start",
                 json={"machine_id": machine_id},
@@ -498,28 +539,39 @@ async def start_trial() -> LicenseInfo:
 
                     if not sig or ts is None:
                         return LicenseInfo(
-                            valid=False, plan="free", machine_id=machine_id,
+                            valid=False,
+                            plan="free",
+                            machine_id=machine_id,
                             error="License server response was unsigned — refusing to trust it.",
                         )
                     if not _verify_license_signature(True, plan, features, expires, machine_id, ts, sig):
                         return LicenseInfo(
-                            valid=False, plan="free", machine_id=machine_id,
+                            valid=False,
+                            plan="free",
+                            machine_id=machine_id,
                             error="License server response failed signature verification.",
                         )
 
-                    _save_cached({
-                        "valid": True,
-                        "plan": plan,
-                        "features": features,
-                        "expires": expires,
-                        "machine_id": machine_id,
-                        "license_key": key,
-                        "sig": sig,
-                        "ts": ts,
-                    })
+                    _save_cached(
+                        {
+                            "valid": True,
+                            "plan": plan,
+                            "features": features,
+                            "expires": expires,
+                            "machine_id": machine_id,
+                            "license_key": key,
+                            "sig": sig,
+                            "ts": ts,
+                        }
+                    )
                     info = LicenseInfo(
-                        valid=True, plan=plan, features=features, expires=expires,
-                        machine_id=machine_id, license_key=key, last_check=ts / 1000.0,
+                        valid=True,
+                        plan=plan,
+                        features=features,
+                        expires=expires,
+                        machine_id=machine_id,
+                        license_key=key,
+                        last_check=ts / 1000.0,
                     )
                     if features:
                         await download_pro_package(key, machine_id)
@@ -557,6 +609,7 @@ _PRO_BUILD_MARKER = PRO_PACKAGE_DIR / ".build_id"
 @dataclass
 class ProSyncResult:
     """Result of PRO auto-update: updated flag + user-facing warning."""
+
     updated: bool = False
     warning: str = ""
 
@@ -585,6 +638,9 @@ def _write_pro_meta(build_id: str) -> None:
     try:
         from pentool import __version__ as free_version
     except Exception:
+        # Версия приложения не прочиталась — это признак сломанной установки,
+        # поэтому warning с трейсбеком, а не тихая пустая строка.
+        logger.warning("license: app version not readable for PRO meta", exc_info=True)
         free_version = ""
     try:
         _PRO_META_FILE.write_text(
@@ -593,7 +649,9 @@ def _write_pro_meta(build_id: str) -> None:
         )
         _PRO_BUILD_MARKER.unlink(missing_ok=True)  # migrate off the legacy marker
     except Exception:
-        pass
+        # Метаданные PRO не записаны — пакет сочтут несовместимым, хотя он
+        # установлен и работает. Причина должна быть видна.
+        logger.warning("license: PRO build meta not written", exc_info=True)
 
 
 def is_pro_package_compatible() -> tuple[bool, str]:
@@ -649,10 +707,9 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
     plat = _current_platform()
     try:
         import aiohttp
+
         build_id: str | None = None
-        async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=60)
-        ) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as session:
             async with session.post(
                 f"{_LICENSE_API_BASE}/api/download",
                 json={"key": key, "machine_id": machine_id, "platform": plat},
@@ -710,6 +767,10 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
             try:
                 build_id = await _fetch_pro_build_id(plat)
             except Exception:
+                # Установка продолжится с build_id «unknown:…» — это неточная
+                # метка, но не потеря данных. warning, чтобы сбой сети не
+                # выглядел как нормальный ход установки.
+                logger.warning("license: PRO build_id not fetched", exc_info=True)
                 build_id = None
         if not build_id:
             build_id = f"unknown:{time.time()}"
@@ -717,6 +778,9 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
 
         return True
     except Exception:
+        # Установка PRO провалилась: вызывающий получит False и покажет ошибку,
+        # но в журнале должна остаться причина — иначе разбор невозможен.
+        logger.error("license: PRO package download/install failed", exc_info=True)
         return False
 
 
@@ -724,9 +788,8 @@ async def _fetch_pro_build_id(plat: str) -> str | None:
     """Query /api/pro/version for current PRO build_id (None on failure)."""
     try:
         import aiohttp
-        async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=8)
-        ) as session:
+
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session:
             async with session.get(
                 f"{_LICENSE_API_BASE}/api/pro/version",
                 params={"platform": plat},

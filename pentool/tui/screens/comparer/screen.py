@@ -221,8 +221,10 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
             if isinstance(w, TextArea):
                 w.load_text(text)
             panel.set_title(label)
-        except Exception as exc:
-            logger.debug("load_left: %s", exc)
+        except Exception:
+            # Текст не попал в левую панель: сравнивать нечего, а пользователь
+            # считает, что данные загружены.
+            logger.warning("load_left: text not shown", exc_info=True)
 
     def load_right(self, text: str, label: str = "Right") -> None:
         try:
@@ -231,8 +233,9 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
             if isinstance(w, TextArea):
                 w.load_text(text)
             panel.set_title(label)
-        except Exception as exc:
-            logger.debug("load_right: %s", exc)
+        except Exception:
+            # Текст не попал в правую панель — то же, что и слева.
+            logger.warning("load_right: text not shown", exc_info=True)
 
     def load_smart(self, text: str, label: str = "") -> None:
         try:
@@ -242,5 +245,7 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
                 self.load_left(text, label or "Left")
             else:
                 self.load_right(text, label or "Right")
-        except Exception as exc:
-            logger.debug("load_smart: %s", exc)
+        except Exception:
+            # Не удалось даже определить, свободна ли левая панель: выбор стороны
+            # для сравнения сделан наугад.
+            logger.warning("load_smart: side not resolved", exc_info=True)

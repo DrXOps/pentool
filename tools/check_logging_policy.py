@@ -119,13 +119,19 @@ def _is_data_path(name: str) -> bool:
 
 
 def _handler_logs_loudly(handler: ast.ExceptHandler, source: str) -> bool:
-    """Пробрасывает, или logger.*(… exc_info=True), или logger.exception(…)."""
+    """Пробрасывает, или logger.*(… exc_info=True), или logger.exception(…), или err(exc, …)."""
     for stmt in ast.walk(ast.Module(body=handler.body, type_ignores=[])):
         if isinstance(stmt, ast.Raise):
             return True
         if not isinstance(stmt, ast.Call):
             continue
         func = stmt.func
+        # `err(exc, ...)` / `self.err(exc, ...)`: pentool.core.error_guard печатает
+        # traceback и уведомляет пользователя — та же честная форма, что и
+        # logger.exception, и гвард слоя 2 её уже признаёт.
+        name = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else ""
+        if name == "err" and stmt.args:
+            return True
         if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
             continue
         if func.value.id != "logger" or func.attr not in _LOUD:
@@ -137,9 +143,20 @@ def _handler_logs_loudly(handler: ast.ExceptHandler, source: str) -> bool:
     return False
 
 
+def _has_pragma(handler: ast.ExceptHandler, lines: list[str]) -> bool:
+    """Прагма может оказаться не на строке `except`.
+
+    Форматтер вправе развернуть длинный заголовок в многострочный
+    (`except (\n    Exception\n):  # logging-ok: …`), и тогда комментарий
+    уезжает со строки `lineno`. Поэтому смотрим ещё пару строк ниже.
+    """
+    start = handler.lineno - 1
+    return any(_PRAGMA in lines[i] for i in range(start, min(start + 3, len(lines))))
+
+
 def count_violations(tree: ast.AST, source: str) -> int:
     """Сколько широких `except` в путях данных молчат о причине."""
-    lineno_to_line = source.splitlines()
+    lines = source.splitlines()
     count = 0
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -149,8 +166,7 @@ def count_violations(tree: ast.AST, source: str) -> int:
         for inner in ast.walk(node):
             if not isinstance(inner, ast.ExceptHandler) or not _is_blind(inner):
                 continue
-            line = lineno_to_line[inner.lineno - 1] if inner.lineno <= len(lineno_to_line) else ""
-            if _PRAGMA in line:
+            if _has_pragma(inner, lines):
                 continue
             if not _handler_logs_loudly(inner, source):
                 count += 1
@@ -188,8 +204,9 @@ def list_violations() -> list[tuple[str, int, str]]:
             for inner in ast.walk(node):
                 if not isinstance(inner, ast.ExceptHandler) or not _is_blind(inner):
                     continue
-                line = lines[inner.lineno - 1] if inner.lineno <= len(lines) else ""
-                if _PRAGMA in line or _handler_logs_loudly(inner, source):
+                if _has_pragma(inner, lines):
+                    continue
+                if _handler_logs_loudly(inner, source):
                     continue
                 rel = str(path.relative_to(ROOT)).replace("\\", "/")
                 found.append((rel, inner.lineno, node.name))
