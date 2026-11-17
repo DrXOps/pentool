@@ -57,6 +57,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TUI = ROOT / "pentool" / "tui"
 
+
+def tui_roots() -> list[Path]:
+    """Все TUI-корни: основной пакет и PRO (если сабмодуль установлен).
+
+    Считается при каждом вызове, а не на импорте: тесты подменяют ROOT/TUI
+    на временный каталог, и закэшированный список продолжал бы сканировать
+    настоящий репозиторий (поймано тестами гейта).
+    """
+    roots = [TUI]
+    pro_tui = ROOT / "pro" / "pentool" / "tui"
+    if pro_tui.is_dir():
+        roots.append(pro_tui)
+    return roots
+
+
 # Extract the CSS selector part before ``{``.
 _SELECTOR_RE = re.compile(r"^\s*([^\n{}]+?)\s*\{", re.M)
 # A token in a compound selector: tag, #id, .class, or a pseudo-class.
@@ -118,7 +133,7 @@ _ID_KW = "id"
 
 
 def _iter_tcss() -> list[Path]:
-    return sorted(TUI.rglob("*.tcss"))
+    return sorted(p for tui in tui_roots() for p in tui.rglob("*.tcss"))
 
 
 def _strip_comments(text: str) -> str:
@@ -139,7 +154,7 @@ def _loaded_tcss_names() -> set[str]:
     bite and checking them would only produce noise.
     """
     names: set[str] = set()
-    for path in TUI.rglob("*.py"):
+    for path in (p for tui in tui_roots() for p in tui.rglob("*.py")):
         for match in re.finditer(r"([A-Za-z0-9_\-]+\.tcss)", path.read_text(encoding="utf-8")):
             names.add(match.group(1))
     return names
@@ -334,7 +349,7 @@ def collect_python() -> tuple[set[str], set[str], set[str], set[str], set[int]]:
     types: set[str] = set()
     id_arg_indexes: set[int] = set()
     id_calls: list[tuple[int, str]] = []  # (positional index, literal value)
-    for path in sorted(TUI.rglob("*.py")):
+    for path in sorted(p for tui in tui_roots() for p in tui.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError as exc:  # pragma: no cover - defensive
@@ -511,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
             if tag not in types:
                 problems.append(f"{file}:{lineno}: type {tag} is not a known class")
 
-    for path in sorted(TUI.rglob("*.py")):
+    for path in sorted(p for tui in tui_roots() for p in tui.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:  # pragma: no cover - already reported above

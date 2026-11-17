@@ -29,6 +29,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -38,6 +39,16 @@ __all__ = ["get_logger", "setup_logging", "_NamedLogger", "_load_logging_rules"]
 
 
 def setup_logging(log_file: str, level: str = "INFO") -> logging.Logger:
+    """Настроить логирование.
+
+    `PENTOOL_LOG_FILE` переопределяет путь: тесты пишут в /tmp, а не в
+    настоящий журнал на 9p — иначе DEBUG-запись на каждый зонд делает прогон
+    в разы медленнее (замер: 8 мин против 3).
+    """
+    log_file = os.environ.get("PENTOOL_LOG_FILE", log_file)
+    # `PENTOOL_LOG_LEVEL` — для тестов и CI: прогон с DEBUG на каждый зонд
+    # пишет тысячи записей и замедляет набор втрое.
+    level = os.environ.get("PENTOOL_LOG_LEVEL", level)
     """Configure logging: write to file (DEBUG) and to console (given level)."""
     log_path = Path(log_file)
     log_path.parent.mkdir(parents=True, exist_ok=True)

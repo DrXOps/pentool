@@ -34,6 +34,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TUI = ROOT / "pentool" / "tui"
+
+
+def tui_roots() -> list:
+    """TUI-корни: основной пакет и PRO, если сабмодуль установлен."""
+    roots = [TUI]
+    pro_tui = ROOT / "pro" / "pentool" / "tui"
+    if pro_tui.is_dir():
+        roots.append(pro_tui)
+    return roots
+
+
 BASELINE = ROOT / "tools" / "silent_except_baseline.json"
 
 _SILENT_BODY = (ast.Pass, ast.Continue)
@@ -75,7 +86,7 @@ def count_silent(tree: ast.AST) -> int:
 
 def scan() -> dict[str, int]:
     counts: dict[str, int] = {}
-    for path in sorted(TUI.rglob("*.py")):
+    for path in sorted(p for tui in tui_roots() for p in tui.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError as exc:  # pragma: no cover - defensive
@@ -111,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         merged = {path: n for path, n in merged.items() if n}
         BASELINE.write_text(json.dumps(dict(sorted(merged.items())), indent=2) + "\n", encoding="utf-8")
         total = sum(merged.values())
-        print(f"check_silent_except: baseline updated — {total} silent handlers " f"in {len(merged)} files")
+        print(f"check_silent_except: baseline updated — {total} silent handlers in {len(merged)} files")
         return 0
 
     grown = {path: (baseline.get(path, 0), count) for path, count in current.items() if count > baseline.get(path, 0)}

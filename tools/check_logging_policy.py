@@ -57,6 +57,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "pentool"
+
+
+def packages() -> list:
+    """Пакеты для проверки: основной и PRO (если сабмодуль установлен)."""
+    found = [PACKAGE]
+    pro_package = ROOT / "pro" / "pentool"
+    if pro_package.is_dir():
+        found.append(pro_package)
+    return found
+
+
 BASELINE = ROOT / "tools" / "logging_policy_baseline.json"
 
 #: Имена функций, работающих с состоянием: тут молчание = потеря данных.
@@ -188,7 +199,7 @@ def count_violations(tree: ast.AST, source: str) -> int:
 
 def scan() -> dict[str, int]:
     counts: dict[str, int] = {}
-    for path in sorted(PACKAGE.rglob("*.py")):
+    for path in sorted(p for package in packages() for p in package.rglob("*.py")):
         source = path.read_text(encoding="utf-8")
         try:
             tree = ast.parse(source)
@@ -204,7 +215,7 @@ def scan() -> dict[str, int]:
 def list_violations() -> list[tuple[str, int, str]]:
     """(файл, строка, имя функции) для каждого нарушения — для пофайловой чистки."""
     found: list[tuple[str, int, str]] = []
-    for path in sorted(PACKAGE.rglob("*.py")):
+    for path in sorted(p for package in packages() for p in package.rglob("*.py")):
         source = path.read_text(encoding="utf-8")
         try:
             tree = ast.parse(source)

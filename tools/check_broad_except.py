@@ -38,12 +38,47 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "pentool"
+
+
+def _default_packages() -> list:
+    """Пакеты для проверки: основной и PRO (если сабмодуль установлен).
+
+    Вычисляется при вызове: тесты подменяют PACKAGE/ROOT на временный
+    каталог, и закэшированный список ломал бы их.
+    """
+    found = [PACKAGE]
+    pro_package = ROOT / "pro" / "pentool"
+    if pro_package.is_dir():
+        found.append(pro_package)
+    return found
+
+
 BASELINE = ROOT / "tools" / "broad_except_baseline.json"
 RULE = "BLE001"
 
 
-def scan(package: Path = PACKAGE, root: Path = ROOT) -> dict[str, int]:
-    """Per-file count of ``BLE001`` findings, as ruff sees them, relative to *root*."""
+def scan(package_list: list[Path] | Path | None = None, root: Path = ROOT) -> dict[str, int]:
+    """Per-file count of ``BLE001`` findings across packages, relative to *root*.
+
+    Первый аргумент принимает и один путь, и список: исторический вызов
+    ``scan(package, root)`` из тестов должен продолжать работать.
+    """
+    if package_list is None:
+        targets = _default_packages()
+    elif isinstance(package_list, (str, Path)):
+        targets = [Path(package_list)]
+    else:
+        targets = list(package_list)
+
+    counts: dict[str, int] = {}
+    for package in targets:
+        for path, count in _scan_one(package, root).items():
+            counts[path] = counts.get(path, 0) + count
+    return counts
+
+
+def _scan_one(package: Path, root: Path) -> dict[str, int]:
+    """Один пакет: то, что ruff называет ``BLE001``, в пересчёте на файл."""
     procedure = [
         sys.executable,
         "-m",

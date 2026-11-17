@@ -6,6 +6,14 @@ Async fixtures are declared with @pytest_asyncio.fixture.
 
 from __future__ import annotations
 
+import os
+import tempfile
+
+# Тесты пишут журнал в /tmp, а не в настоящий ~/.config/pentool/logs/:
+# DEBUG-запись на каждый зонд в файл на 9p замедляла прогон втрое.
+os.environ.setdefault("PENTOOL_LOG_FILE", str(__import__("pathlib").Path(tempfile.gettempdir()) / "pentool-tests.log"))
+os.environ.setdefault("PENTOOL_LOG_LEVEL", "WARNING")
+
 from pathlib import Path
 from unittest.mock import MagicMock
 
