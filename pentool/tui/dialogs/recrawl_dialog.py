@@ -31,7 +31,7 @@ class RecrawlDialog(BaseDialog):
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             yield Label(
-                f"[bold]Host:[/bold] {self._host}\n\n" f"This host was already crawled. What would you like to do?",
+                f"[bold]Host:[/bold] {self._host}\n\nThis host was already crawled. What would you like to do?",
                 id="question",
             )
             with Horizontal(id="buttons"):

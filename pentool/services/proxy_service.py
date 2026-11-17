@@ -76,8 +76,7 @@ class ProxyService(BaseService):
             if len(self._pre_storage_queue) >= self._pre_storage_queue_max:
                 dropped = self._pre_storage_queue.pop(0)
                 logger.error(
-                    "ProxyService: pre_storage_queue full (%d), dropping oldest "
-                    "queued request id=%s to bound memory",
+                    "ProxyService: pre_storage_queue full (%d), dropping oldest queued request id=%s to bound memory",
                     self._pre_storage_queue_max,
                     getattr(dropped, "id", "?"),
                 )

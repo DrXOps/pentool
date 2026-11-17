@@ -212,8 +212,7 @@ def _ensure_pro_compatible(
             raise SystemExit(1)
         else:
             print(
-                "[pentool] UNSAFE: --unsafe-skip-pro-compat-check set — starting anyway. "
-                "PRO features stay disabled.",
+                "[pentool] UNSAFE: --unsafe-skip-pro-compat-check set — starting anyway. PRO features stay disabled.",
                 file=sys.stderr,
             )
 

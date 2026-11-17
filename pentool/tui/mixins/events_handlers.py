@@ -53,7 +53,8 @@ class ProxyEventHandlersMixin:
         if not self._app_still_running():  # type: ignore[attr-defined]
             return
         self.call_from_thread(  # type: ignore[attr-defined]
-            self.post_message, ProxyRequestAdded(req)  # type: ignore[attr-defined]
+            self.post_message,
+            ProxyRequestAdded(req),  # type: ignore[attr-defined]
         )
 
     def _on_bus_proxy_completed(self, event: ProxyRequestCompleted) -> None:
@@ -72,5 +73,6 @@ class ProxyEventHandlersMixin:
             return
         self._pending_done_ids.add(req_id)  # type: ignore[attr-defined]
         self.call_from_thread(  # type: ignore[attr-defined]
-            self.post_message, ProxyRequestDone(req)  # type: ignore[attr-defined]
+            self.post_message,
+            ProxyRequestDone(req),  # type: ignore[attr-defined]
         )

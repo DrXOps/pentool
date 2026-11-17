@@ -11,7 +11,7 @@ import warnings
 from pentool.storage.intruder_storage import IntruderStorage  # noqa: F401
 
 warnings.warn(
-    "Import from pentool.api.intruder_storage is deprecated. " "Use pentool.storage.intruder_storage instead.",
+    "Import from pentool.api.intruder_storage is deprecated. Use pentool.storage.intruder_storage instead.",
     DeprecationWarning,
     stacklevel=2,
 )

@@ -380,8 +380,7 @@ class ProxyScreen(
                 )
             else:
                 log.write(
-                    f"[{dir_color}]{dir_arrow} {op_name}[/{dir_color}] "
-                    f"[dim]{getattr(event, 'request_id', '')}[/dim]"
+                    f"[{dir_color}]{dir_arrow} {op_name}[/{dir_color}] [dim]{getattr(event, 'request_id', '')}[/dim]"
                 )
         except Exception as exc:
             # Кадр не показан. Без записи это неотличимо от «кадров не было».
@@ -849,8 +848,7 @@ class ProxyScreen(
         _t2 = time.monotonic()
         if (_t2 - _t0) > 0.2:
             logger.warning(
-                "PROXY SCREEN: _update_and_reload slow: wait_row_id=%.1fms "
-                "update_resp=%.1fms total=%.1fms req=%s %s",
+                "PROXY SCREEN: _update_and_reload slow: wait_row_id=%.1fms update_resp=%.1fms total=%.1fms req=%s %s",
                 (_t1 - _t0) * 1000,
                 (_t2 - _t1) * 1000,
                 (_t2 - _t0) * 1000,

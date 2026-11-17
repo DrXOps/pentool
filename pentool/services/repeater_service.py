@@ -16,7 +16,6 @@ logger = get_logger(__name__)
 
 
 class RepeaterService(BaseService):
-
     def __init__(
         self,
         repeater_api: RepeaterAPI | None = None,
@@ -40,12 +39,7 @@ class RepeaterService(BaseService):
             logger.error("RepeaterService: parse error: %s", exc)
             return None, 0, f"Parse error: {exc}"
 
-        logger.info(
-            "RepeaterService: sending %s %s (follow_redirects=%s)",
-            req.method,
-            req.url,
-            follow_redirects
-        )
+        logger.info("RepeaterService: sending %s %s (follow_redirects=%s)", req.method, req.url, follow_redirects)
 
         t0 = time.monotonic()
         try:
@@ -55,6 +49,7 @@ class RepeaterService(BaseService):
             # duplicated HTTP path in the service.
             if self._repeater_api is None:
                 from pentool.core.config import get_config
+
                 cfg = get_config()
                 self._repeater_api = RepeaterAPI(
                     db_path=cfg.db_path,
@@ -70,7 +65,7 @@ class RepeaterService(BaseService):
                 "RepeaterService: response %d (%d bytes, %dms)",
                 resp.status,
                 len(resp.body) if resp.body else 0,
-                elapsed_ms
+                elapsed_ms,
             )
             return resp, elapsed_ms, None
 

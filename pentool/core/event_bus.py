@@ -125,7 +125,9 @@ class EventBus:
             except Exception as exc:
                 logger.warning(
                     "EventBus: handler %s raised %s for event %s",
-                    handler, exc, type(event).__name__,
+                    handler,
+                    exc,
+                    type(event).__name__,
                 )
 
     def emit_threadsafe(
@@ -158,7 +160,9 @@ class EventBus:
                 except Exception as exc:
                     logger.warning(
                         "EventBus: threadsafe handler %s raised %s for %s",
-                        handler, exc, type(event).__name__,
+                        handler,
+                        exc,
+                        type(event).__name__,
                     )
 
         try:
@@ -207,9 +211,7 @@ class EventBus:
             try:
                 handler(event)
             except Exception as exc:
-                logger.warning(
-                    "EventBus.replay: handler %s raised %s", handler, exc
-                )
+                logger.warning("EventBus.replay: handler %s raised %s", handler, exc)
 
     def clear_history(
         self,
@@ -237,9 +239,9 @@ class EventBus:
         """Stats for debugging."""
         with self._lock:
             return {
-                "history_size":    len(self._history),
+                "history_size": len(self._history),
                 "subscriber_types": len(self._subscribers),
-                "total_handlers":  sum(len(v) for v in self._subscribers.values()),
+                "total_handlers": sum(len(v) for v in self._subscribers.values()),
             }
 
 

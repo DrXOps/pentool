@@ -495,7 +495,7 @@ class AsyncSpider:
                 return scheme, start_url
             http_url = start_url.replace("https://", "http://", 1)
             logger.info(
-                "AsyncSpider: %s speaks plain HTTP, not HTTPS (WRONG_VERSION_NUMBER) " "— retrying crawl as %s",
+                "AsyncSpider: %s speaks plain HTTP, not HTTPS (WRONG_VERSION_NUMBER) — retrying crawl as %s",
                 domain,
                 http_url,
             )

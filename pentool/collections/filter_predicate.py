@@ -121,7 +121,7 @@ class FilterPredicate:
                 # Tags: match a tag inside comma-separated list
                 tag = self.value
                 return (
-                    f"({self.field} = ? OR {self.field} LIKE ? OR " f"{self.field} LIKE ? OR {self.field} LIKE ?)",
+                    f"({self.field} = ? OR {self.field} LIKE ? OR {self.field} LIKE ? OR {self.field} LIKE ?)",
                     [tag, f"{tag},%", f"%,{tag},%", f"%,{tag}"],
                 )
 

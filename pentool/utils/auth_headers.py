@@ -11,10 +11,17 @@ from __future__ import annotations
 # Header names (lowercase) considered likely to carry session/auth state.
 # Not an exhaustive list — just the common cases (cookie-based sessions,
 # bearer/JWT tokens, common custom API-key header names).
-AUTH_HEADER_KEYS: frozenset[str] = frozenset({
-    "cookie", "authorization", "x-auth-token", "x-api-key",
-    "x-access-token", "bearer", "session",
-})
+AUTH_HEADER_KEYS: frozenset[str] = frozenset(
+    {
+        "cookie",
+        "authorization",
+        "x-auth-token",
+        "x-api-key",
+        "x-access-token",
+        "bearer",
+        "session",
+    }
+)
 
 
 def extract_auth_headers(headers: dict) -> dict:
@@ -25,7 +32,4 @@ def extract_auth_headers(headers: dict) -> dict:
     """
     if not headers:
         return {}
-    return {
-        k: v for k, v in headers.items()
-        if k.lower() in AUTH_HEADER_KEYS
-    }
+    return {k: v for k, v in headers.items() if k.lower() in AUTH_HEADER_KEYS}

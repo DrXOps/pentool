@@ -6,21 +6,18 @@ from textual.message import Message
 
 
 class SendToRepeater(Message):
-
     def __init__(self, raw: str) -> None:
         super().__init__()
         self.raw = raw
 
 
 class SendToIntruder(Message):
-
     def __init__(self, raw: str) -> None:
         super().__init__()
         self.raw = raw
 
 
 class SendToTarget(Message):
-
     def __init__(self, req: object) -> None:
         super().__init__()
         self.req = req
@@ -45,7 +42,6 @@ class SyncScopeToProxy(Message):
 
 
 class SendHostToScanner(Message):
-
     def __init__(self, host: str) -> None:
         super().__init__()
         self.host = host
@@ -76,21 +72,18 @@ class ProxyLoadProject(Message):
 
 
 class SendToScanner(Message):
-
     def __init__(self, urls: str) -> None:
         super().__init__()
         self.urls = urls  # newline-separated
 
 
 class SendRequestToScanner(Message):
-
     def __init__(self, request: object) -> None:
         super().__init__()
         self.request = request
 
 
 class SendUrlToTarget(Message):
-
     def __init__(self, req: object) -> None:
         super().__init__()
         self.req = req

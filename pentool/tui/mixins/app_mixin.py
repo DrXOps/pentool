@@ -1,4 +1,5 @@
 """AppMixin — common helpers for TUI screens that access the app level."""
+
 from __future__ import annotations
 
 from pentool.core.error_guard import err as _err
@@ -33,6 +34,7 @@ class AppMixin:
         try:
             from pentool.tui.constants import SCREEN_DECODER
             from pentool.tui.screens.decoder.screen import DecoderScreen
+
             if not text:
                 self.app.notify("No text to send", severity="warning")  # type: ignore[attr-defined]
                 return
@@ -47,6 +49,7 @@ class AppMixin:
         try:
             from pentool.tui.constants import SCREEN_COMPARER
             from pentool.tui.screens.comparer.screen import ComparerScreen
+
             if not text:
                 self.app.notify("No text to send", severity="warning")  # type: ignore[attr-defined]
                 return

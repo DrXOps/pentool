@@ -58,11 +58,13 @@ class IntruderService(BaseService):
         try:
             await self._api.start_attack(config, _on_result, _on_progress, turbo_mode=turbo_mode)
             results = self._api.get_results()
-            self._emit(IntruderFinished(
-                total_results=len(results),
-                stopped_early=False,
-                source="intruder",
-            ))
+            self._emit(
+                IntruderFinished(
+                    total_results=len(results),
+                    stopped_early=False,
+                    source="intruder",
+                )
+            )
             return results
         except Exception as exc:
             logger.warning("IntruderService.start_attack error: %s", exc)
@@ -77,8 +79,10 @@ class IntruderService(BaseService):
 
     async def stop(self) -> None:
         await self._api.stop()
-        self._emit(IntruderFinished(
-            total_results=len(self._api.get_results()),
-            stopped_early=True,
-            source="intruder",
-        ))
+        self._emit(
+            IntruderFinished(
+                total_results=len(self._api.get_results()),
+                stopped_early=True,
+                source="intruder",
+            )
+        )

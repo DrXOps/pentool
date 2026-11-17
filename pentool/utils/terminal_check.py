@@ -9,11 +9,7 @@ LEGACY_TERMINALS = {"xterm", "rxvt", "linux", "vt100", "dumb"}
 
 
 def check_terminal() -> tuple[str, bool]:
-    term = (
-        os.environ.get("TERM_PROGRAM")
-        or os.environ.get("TERMINAL_EMULATOR")
-        or os.environ.get("TERM", "unknown")
-    )
+    term = os.environ.get("TERM_PROGRAM") or os.environ.get("TERMINAL_EMULATOR") or os.environ.get("TERM", "unknown")
     term_lower = term.lower()
     is_modern = any(t in term_lower for t in MODERN_TERMINALS)
     return term, is_modern

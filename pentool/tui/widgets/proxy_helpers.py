@@ -15,11 +15,11 @@ import datetime
 COL_NAMES = ["ID", "Host", "Method", "URL", "Status", "Size", "Time"]
 
 _COLOR_DOTS: dict[str, str] = {
-    "red":    "🔴",
+    "red": "🔴",
     "orange": "🟠",
     "yellow": "🟡",
-    "green":  "🟢",
-    "blue":   "🔵",
+    "green": "🟢",
+    "blue": "🔵",
     "purple": "🟣",
 }
 
@@ -46,15 +46,18 @@ def format_size(size: int | None) -> str:
 def make_empty_table():
     """Empty Arrow table with the required columns."""
     import pyarrow as pa
-    return pa.table({
-        "ID":     pa.array([], type=pa.int64()),
-        "Host":   pa.array([], type=pa.string()),
-        "Method": pa.array([], type=pa.string()),
-        "URL":    pa.array([], type=pa.string()),
-        "Status": pa.array([], type=pa.string()),
-        "Size":   pa.array([], type=pa.int64()),
-        "Time":   pa.array([], type=pa.string()),
-    })
+
+    return pa.table(
+        {
+            "ID": pa.array([], type=pa.int64()),
+            "Host": pa.array([], type=pa.string()),
+            "Method": pa.array([], type=pa.string()),
+            "URL": pa.array([], type=pa.string()),
+            "Status": pa.array([], type=pa.string()),
+            "Size": pa.array([], type=pa.int64()),
+            "Time": pa.array([], type=pa.string()),
+        }
+    )
 
 
 def row_to_record(r: dict) -> tuple:
@@ -101,6 +104,7 @@ def row_to_record(r: dict) -> tuple:
 def rows_to_arrow(rows: list[dict]):
     """Convert a list of dicts from HttpStorage into an Arrow table."""
     import pyarrow as pa
+
     if not rows:
         return make_empty_table()
     ids, hosts, methods, urls, statuses, sizes, times = [], [], [], [], [], [], []
@@ -115,12 +119,14 @@ def rows_to_arrow(rows: list[dict]):
         times.append(tstr)
     # Size: nullable int64 — None/null отображается как "-"
     size_array = pa.array(sizes, type=pa.int64())
-    return pa.table({
-        "ID":     pa.array(ids,      type=pa.int64()),
-        "Host":   pa.array(hosts,    type=pa.string()),
-        "Method": pa.array(methods,  type=pa.string()),
-        "URL":    pa.array(urls,     type=pa.string()),
-        "Status": pa.array(statuses, type=pa.string()),
-        "Size":   size_array,
-        "Time":   pa.array(times,    type=pa.string()),
-    })
+    return pa.table(
+        {
+            "ID": pa.array(ids, type=pa.int64()),
+            "Host": pa.array(hosts, type=pa.string()),
+            "Method": pa.array(methods, type=pa.string()),
+            "URL": pa.array(urls, type=pa.string()),
+            "Status": pa.array(statuses, type=pa.string()),
+            "Size": size_array,
+            "Time": pa.array(times, type=pa.string()),
+        }
+    )

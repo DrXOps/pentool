@@ -330,7 +330,7 @@ class CharPayloadSource:
         return result
 
     def __repr__(self) -> str:
-        return f"CharPayloadSource(charset={self.charset!r}, " f"min_len={self.min_len}, max_len={self.max_len})"
+        return f"CharPayloadSource(charset={self.charset!r}, min_len={self.min_len}, max_len={self.max_len})"
 
 
 class ChainedPayloadSource:

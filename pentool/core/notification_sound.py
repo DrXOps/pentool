@@ -44,9 +44,7 @@ def play_notification_sound(severity: str = "information") -> None:
     if not _BUSY.acquire(blocking=False):
         return
     try:
-        thread = threading.Thread(
-            target=_play_blocking, args=(severity,), daemon=True
-        )
+        thread = threading.Thread(target=_play_blocking, args=(severity,), daemon=True)
         thread.start()
     except Exception as exc:
         _BUSY.release()

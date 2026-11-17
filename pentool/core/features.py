@@ -6,14 +6,16 @@ from enum import Enum
 
 class FeatureStatus(str, Enum):
     """Feature status."""
-    STABLE = "stable"    # Stable, ready for production
-    BETA = "beta"        # Stable, but in beta testing
-    ALPHA = "alpha"      # Experimental, may be unstable
+
+    STABLE = "stable"  # Stable, ready for production
+    BETA = "beta"  # Stable, but in beta testing
+    ALPHA = "alpha"  # Experimental, may be unstable
 
 
 @dataclass
 class Feature:
     """Description of a single feature."""
+
     name: str
     description: str
     status: FeatureStatus
@@ -56,156 +58,44 @@ FEATURES = {
     # ────────────────────────────────────────────────────────────────────
     # FREE PLAN — basic tools
     # ────────────────────────────────────────────────────────────────────
-    "proxy": Feature(
-        "proxy",
-        "HTTP/HTTPS Proxy with interception",
-        FeatureStatus.STABLE,
-        "free"
-    ),
-    "repeater": Feature(
-        "repeater",
-        "Repeater — replay and modify requests",
-        FeatureStatus.STABLE,
-        "free"
-    ),
-    "intruder_basic": Feature(
-        "intruder_basic",
-        "Intruder (Sniper, Battering Ram)",
-        FeatureStatus.BETA,
-        "free"
-    ),
-    "decoder": Feature(
-        "decoder",
-        "Decoder — encode/decode data",
-        FeatureStatus.STABLE,
-        "free"
-    ),
-    "comparer": Feature(
-        "comparer",
-        "Comparer — compare requests/responses",
-        FeatureStatus.STABLE,
-        "free"
-    ),
-    "httpql": Feature(
-        "httpql",
-        "HTTPQL — filter request history",
-        FeatureStatus.BETA,
-        "free"
-    ),
-
+    "proxy": Feature("proxy", "HTTP/HTTPS Proxy with interception", FeatureStatus.STABLE, "free"),
+    "repeater": Feature("repeater", "Repeater — replay and modify requests", FeatureStatus.STABLE, "free"),
+    "intruder_basic": Feature("intruder_basic", "Intruder (Sniper, Battering Ram)", FeatureStatus.BETA, "free"),
+    "decoder": Feature("decoder", "Decoder — encode/decode data", FeatureStatus.STABLE, "free"),
+    "comparer": Feature("comparer", "Comparer — compare requests/responses", FeatureStatus.STABLE, "free"),
+    "httpql": Feature("httpql", "HTTPQL — filter request history", FeatureStatus.BETA, "free"),
     # ────────────────────────────────────────────────────────────────────
     # LITE PLAN — extended capabilities
     # ────────────────────────────────────────────────────────────────────
-    "scanner_extended": Feature(
-        "scanner_extended",
-        "Scanner — extended security checks",
-        FeatureStatus.ALPHA,
-        "lite"
-    ),
+    "scanner_extended": Feature("scanner_extended", "Scanner — extended security checks", FeatureStatus.ALPHA, "lite"),
     "intruder_all_types": Feature(
-        "intruder_all_types",
-        "Intruder (Pitchfork, Cluster Bomb)",
-        FeatureStatus.ALPHA,
-        "lite"
+        "intruder_all_types", "Intruder (Pitchfork, Cluster Bomb)", FeatureStatus.ALPHA, "lite"
     ),
-    "spider": Feature(
-        "spider",
-        "Spider — automatic site crawling",
-        FeatureStatus.BETA,
-        "lite"
-    ),
-    "match_replace": Feature(
-        "match_replace",
-        "Match & Replace — auto-modify requests",
-        FeatureStatus.BETA,
-        "lite"
-    ),
-    "target_scope": Feature(
-        "target_scope",
-        "Target Scope — manage testing scope",
-        FeatureStatus.STABLE,
-        "lite"
-    ),
-
+    "spider": Feature("spider", "Spider — automatic site crawling", FeatureStatus.BETA, "lite"),
+    "match_replace": Feature("match_replace", "Match & Replace — auto-modify requests", FeatureStatus.BETA, "lite"),
+    "target_scope": Feature("target_scope", "Target Scope — manage testing scope", FeatureStatus.STABLE, "lite"),
     # ────────────────────────────────────────────────────────────────────
     # MEDIUM PLAN — professional tools
     # ────────────────────────────────────────────────────────────────────
-    "oob_detection": Feature(
-        "oob_detection",
-        "Out-of-Band vulnerability detection",
-        FeatureStatus.ALPHA,
-        "medium"
-    ),
+    "oob_detection": Feature("oob_detection", "Out-of-Band vulnerability detection", FeatureStatus.ALPHA, "medium"),
     "websocket_intercept": Feature(
-        "websocket_intercept",
-        "WebSocket interception and modification",
-        FeatureStatus.ALPHA,
-        "medium"
+        "websocket_intercept", "WebSocket interception and modification", FeatureStatus.ALPHA, "medium"
     ),
-    "plugins": Feature(
-        "plugins",
-        "Plugin system",
-        FeatureStatus.ALPHA,
-        "medium"
-    ),
-    "sequencer": Feature(
-        "sequencer",
-        "Sequencer — token randomness analysis",
-        FeatureStatus.BETA,
-        "medium"
-    ),
+    "plugins": Feature("plugins", "Plugin system", FeatureStatus.ALPHA, "medium"),
+    "sequencer": Feature("sequencer", "Sequencer — token randomness analysis", FeatureStatus.BETA, "medium"),
     "passive_scanner": Feature(
-        "passive_scanner",
-        "Passive Scanner — background traffic analysis",
-        FeatureStatus.BETA,
-        "medium"
+        "passive_scanner", "Passive Scanner — background traffic analysis", FeatureStatus.BETA, "medium"
     ),
-    "turbo_mode": Feature(
-        "turbo_mode",
-        "Turbo Mode Intruder (10x speed)",
-        FeatureStatus.BETA,
-        "medium"
-    ),
-
+    "turbo_mode": Feature("turbo_mode", "Turbo Mode Intruder (10x speed)", FeatureStatus.BETA, "medium"),
     # ────────────────────────────────────────────────────────────────────
     # FULL PLAN — enterprise capabilities
     # ────────────────────────────────────────────────────────────────────
-    "ai_analysis": Feature(
-        "ai_analysis",
-        "AI vulnerability analysis (GPT-4)",
-        FeatureStatus.ALPHA,
-        "full"
-    ),
-    "pro_reports": Feature(
-        "pro_reports",
-        "PRO reports (HTML/PDF/JSON)",
-        FeatureStatus.ALPHA,
-        "full"
-    ),
-    "collaboration": Feature(
-        "collaboration",
-        "Collaborative project work",
-        FeatureStatus.ALPHA,
-        "full"
-    ),
-    "api_access": Feature(
-        "api_access",
-        "REST API for automation",
-        FeatureStatus.BETA,
-        "full"
-    ),
-    "custom_scanner_checks": Feature(
-        "custom_scanner_checks",
-        "Custom Scanner checks",
-        FeatureStatus.ALPHA,
-        "full"
-    ),
-    "payloads_pro": Feature(
-        "payloads_pro",
-        "PRO payload sets for Intruder/Scanner",
-        FeatureStatus.ALPHA,
-        "full"
-    ),
+    "ai_analysis": Feature("ai_analysis", "AI vulnerability analysis (GPT-4)", FeatureStatus.ALPHA, "full"),
+    "pro_reports": Feature("pro_reports", "PRO reports (HTML/PDF/JSON)", FeatureStatus.ALPHA, "full"),
+    "collaboration": Feature("collaboration", "Collaborative project work", FeatureStatus.ALPHA, "full"),
+    "api_access": Feature("api_access", "REST API for automation", FeatureStatus.BETA, "full"),
+    "custom_scanner_checks": Feature("custom_scanner_checks", "Custom Scanner checks", FeatureStatus.ALPHA, "full"),
+    "payloads_pro": Feature("payloads_pro", "PRO payload sets for Intruder/Scanner", FeatureStatus.ALPHA, "full"),
 }
 
 
@@ -221,7 +111,6 @@ LIMITS = {
         "medium": 50000,
         "full": -1,  # unlimited
     },
-
     # Intruder
     "intruder_max_threads": {
         "free": 10,
@@ -235,7 +124,6 @@ LIMITS = {
         "medium": 100000,
         "full": -1,  # unlimited
     },
-
     # Scanner
     "scanner_max_depth": {
         "free": 2,
@@ -255,7 +143,6 @@ LIMITS = {
         "medium": 20,
         "full": 50,
     },
-
     # Spider
     "spider_max_depth": {
         "free": 2,
@@ -269,7 +156,6 @@ LIMITS = {
         "medium": 1000,
         "full": -1,  # unlimited
     },
-
     # Projects
     "projects_max": {
         "free": 5,
@@ -277,7 +163,6 @@ LIMITS = {
         "medium": 100,
         "full": -1,  # unlimited
     },
-
     # Export
     "export_formats": {
         "free": ["txt"],
@@ -315,6 +200,7 @@ PLAN_DESCRIPTIONS = {
 # ═══════════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def has_feature(feature_name: str, plan: str) -> bool:
     """Check if a feature is available for the given plan.
@@ -357,11 +243,7 @@ def get_feature_status(feature_name: str) -> str:
 
 
 def get_features_for_plan(plan: str) -> list[Feature]:
-    return [
-        feature
-        for feature in FEATURES.values()
-        if has_feature(feature.name, plan)
-    ]
+    return [feature for feature in FEATURES.values() if has_feature(feature.name, plan)]
 
 
 def get_plan_info(plan: str) -> dict:
@@ -380,8 +262,5 @@ def get_plan_info(plan: str) -> dict:
             }
             for f in features
         ],
-        "limits": {
-            limit_name: get_limit(limit_name, plan)
-            for limit_name in LIMITS.keys()
-        },
+        "limits": {limit_name: get_limit(limit_name, plan) for limit_name in LIMITS.keys()},
     }

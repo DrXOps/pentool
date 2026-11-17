@@ -12,11 +12,11 @@ __all__ = ["compare", "compare_lines", "CompareStats", "DiffLine", "DiffResult"]
 class DiffLine:
     """One line of the diff result."""
 
-    tag: str           # "equal" | "replace" | "insert" | "delete"
-    left: str          # left side text (empty if insert)
-    right: str         # right side text (empty if delete)
-    line_left: int     # left line number (0 if absent)
-    line_right: int    # right line number (0 if absent)
+    tag: str  # "equal" | "replace" | "insert" | "delete"
+    left: str  # left side text (empty if insert)
+    right: str  # right side text (empty if delete)
+    line_left: int  # left line number (0 if absent)
+    line_right: int  # right line number (0 if absent)
 
 
 @dataclass
@@ -96,13 +96,15 @@ def compare_lines(left_lines: list[str], right_lines: list[str]) -> DiffResult:
     for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
             for k in range(i2 - i1):
-                diff_lines.append(DiffLine(
-                    tag="equal",
-                    left=left_lines[i1 + k],
-                    right=right_lines[j1 + k],
-                    line_left=ln_left + k,
-                    line_right=ln_right + k,
-                ))
+                diff_lines.append(
+                    DiffLine(
+                        tag="equal",
+                        left=left_lines[i1 + k],
+                        right=right_lines[j1 + k],
+                        line_left=ln_left + k,
+                        line_right=ln_right + k,
+                    )
+                )
             equal += i2 - i1
             ln_left += i2 - i1
             ln_right += j2 - j1
@@ -116,43 +118,64 @@ def compare_lines(left_lines: list[str], right_lines: list[str]) -> DiffResult:
                 l_text = left_chunk[k] if k < len(left_chunk) else ""
                 r_text = right_chunk[k] if k < len(right_chunk) else ""
                 if l_text and r_text:
-                    diff_lines.append(DiffLine(
-                        tag="replace",
-                        left=l_text, right=r_text,
-                        line_left=ln_left + k if k < len(left_chunk) else 0,
-                        line_right=ln_right + k if k < len(right_chunk) else 0,
-                    ))
+                    diff_lines.append(
+                        DiffLine(
+                            tag="replace",
+                            left=l_text,
+                            right=r_text,
+                            line_left=ln_left + k if k < len(left_chunk) else 0,
+                            line_right=ln_right + k if k < len(right_chunk) else 0,
+                        )
+                    )
                 elif l_text:
-                    diff_lines.append(DiffLine(
-                        tag="delete", left=l_text, right="",
-                        line_left=ln_left + k, line_right=0,
-                    ))
+                    diff_lines.append(
+                        DiffLine(
+                            tag="delete",
+                            left=l_text,
+                            right="",
+                            line_left=ln_left + k,
+                            line_right=0,
+                        )
+                    )
                 else:
-                    diff_lines.append(DiffLine(
-                        tag="insert", left="", right=r_text,
-                        line_left=0, line_right=ln_right + k,
-                    ))
+                    diff_lines.append(
+                        DiffLine(
+                            tag="insert",
+                            left="",
+                            right=r_text,
+                            line_left=0,
+                            line_right=ln_right + k,
+                        )
+                    )
             changed += max(len(left_chunk), len(right_chunk))
             ln_left += i2 - i1
             ln_right += j2 - j1
 
         elif tag == "delete":
             for k in range(i2 - i1):
-                diff_lines.append(DiffLine(
-                    tag="delete",
-                    left=left_lines[i1 + k], right="",
-                    line_left=ln_left + k, line_right=0,
-                ))
+                diff_lines.append(
+                    DiffLine(
+                        tag="delete",
+                        left=left_lines[i1 + k],
+                        right="",
+                        line_left=ln_left + k,
+                        line_right=0,
+                    )
+                )
             removed += i2 - i1
             ln_left += i2 - i1
 
         elif tag == "insert":
             for k in range(j2 - j1):
-                diff_lines.append(DiffLine(
-                    tag="insert",
-                    left="", right=right_lines[j1 + k],
-                    line_left=0, line_right=ln_right + k,
-                ))
+                diff_lines.append(
+                    DiffLine(
+                        tag="insert",
+                        left="",
+                        right=right_lines[j1 + k],
+                        line_left=0,
+                        line_right=ln_right + k,
+                    )
+                )
             added += j2 - j1
             ln_right += j2 - j1
 

@@ -206,7 +206,7 @@ async def init_db(db_path: str) -> None:
         except (OperationalError, ProgrammingError):
             pass  # Column already exists — expected
         try:
-            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_scanner_tabs_uid " "ON scanner_tabs (tab_uid)")
+            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_scanner_tabs_uid ON scanner_tabs (tab_uid)")
         except (OperationalError, ProgrammingError):
             pass
 
@@ -227,7 +227,7 @@ async def init_db(db_path: str) -> None:
         except (OperationalError, ProgrammingError):
             pass  # Column already exists — expected
         try:
-            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_intruder_state_uid " "ON intruder_state (tab_uid)")
+            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_intruder_state_uid ON intruder_state (tab_uid)")
         except (OperationalError, ProgrammingError):
             pass
         try:
@@ -251,7 +251,7 @@ async def init_db(db_path: str) -> None:
             "CREATE INDEX IF NOT EXISTS idx_intruder_results_attack ON intruder_results (attack_id)",
             # Частичный индекс: пустой tab_uid — это «вкладка ещё не сохранена»,
             # а не конфликтующая строка (иначе второй INSERT с '' упал бы).
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_repeater_tabs_uid " "ON repeater_tabs (tab_uid) WHERE tab_uid != ''",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_repeater_tabs_uid ON repeater_tabs (tab_uid) WHERE tab_uid != ''",
             # vulnerabilities: filtering by host/url/severity
             "CREATE INDEX IF NOT EXISTS idx_vulns_host ON vulnerabilities (host)",
             "CREATE INDEX IF NOT EXISTS idx_vulns_severity ON vulnerabilities (severity)",

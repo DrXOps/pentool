@@ -22,35 +22,45 @@ __all__ = [
 
 # ── Operations registry ────────────────────────────────────────────────────────
 
+
 def _url_encode(s: str) -> str:
     return urllib.parse.quote(s, safe="")
+
 
 def _url_decode(s: str) -> str:
     return urllib.parse.unquote(s)
 
+
 def _base64_encode(s: str) -> str:
     return base64.b64encode(s.encode()).decode()
+
 
 def _base64_decode(s: str) -> str:
     # Add padding if needed
     padded = s + "=" * (4 - len(s) % 4) if len(s) % 4 else s
     return base64.b64decode(padded).decode("utf-8", errors="replace")
 
+
 def _base64url_encode(s: str) -> str:
     return base64.urlsafe_b64encode(s.encode()).decode().rstrip("=")
+
 
 def _base64url_decode(s: str) -> str:
     padded = s + "=" * (4 - len(s) % 4) if len(s) % 4 else s
     return base64.urlsafe_b64decode(padded).decode("utf-8", errors="replace")
 
+
 def _html_encode(s: str) -> str:
     return html.escape(s, quote=True)
+
 
 def _html_decode(s: str) -> str:
     return html.unescape(s)
 
+
 def _hex_encode(s: str) -> str:
     return s.encode().hex()
+
 
 def _hex_decode(s: str) -> str:
     # Remove separators
@@ -64,6 +74,7 @@ def _hex_decode(s: str) -> str:
         hex_only = "0" + hex_only
     return bytes.fromhex(hex_only).decode("utf-8", errors="replace")
 
+
 def _unicode_encode(s: str) -> str:
     result = ""
     for ch in s:
@@ -74,11 +85,13 @@ def _unicode_encode(s: str) -> str:
             result += ch
     return result
 
+
 def _unicode_decode(s: str) -> str:
     try:
         return s.encode("raw_unicode_escape").decode("unicode_escape")
     except Exception:
         return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), s)
+
 
 def _jwt_decode(s: str) -> str:
     """Decode JWT header + payload without signature verification."""
@@ -96,25 +109,33 @@ def _jwt_decode(s: str) -> str:
             result[name] = f"[error: {exc}]"
     return json.dumps(result, indent=2, ensure_ascii=False)
 
+
 def _md5(s: str) -> str:
     return hashlib.md5(s.encode()).hexdigest()
+
 
 def _sha1(s: str) -> str:
     return hashlib.sha1(s.encode()).hexdigest()
 
+
 def _sha256(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
+
 
 def _sha512(s: str) -> str:
     return hashlib.sha512(s.encode()).hexdigest()
 
+
 def _gzip_encode(s: str) -> str:
     import gzip
+
     compressed = gzip.compress(s.encode())
     return base64.b64encode(compressed).decode()
 
+
 def _gzip_decode(s: str) -> str:
     import gzip
+
     try:
         padded = s + "=" * (4 - len(s) % 4) if len(s) % 4 else s
         compressed = base64.b64decode(padded)
@@ -126,25 +147,25 @@ def _gzip_decode(s: str) -> str:
 # ── Operations: (label, fn) ────────────────────────────────────────────────────
 
 OPERATIONS: list[tuple[str, Callable[[str], str]]] = [
-    ("URL Encode",       _url_encode),
-    ("URL Decode",       _url_decode),
-    ("Base64 Encode",    _base64_encode),
-    ("Base64 Decode",    _base64_decode),
+    ("URL Encode", _url_encode),
+    ("URL Decode", _url_decode),
+    ("Base64 Encode", _base64_encode),
+    ("Base64 Decode", _base64_decode),
     ("Base64URL Encode", _base64url_encode),
     ("Base64URL Decode", _base64url_decode),
-    ("HTML Encode",      _html_encode),
-    ("HTML Decode",      _html_decode),
-    ("Hex Encode",       _hex_encode),
-    ("Hex Decode",       _hex_decode),
-    ("Unicode Encode",   _unicode_encode),
-    ("Unicode Decode",   _unicode_decode),
-    ("JWT Decode",       _jwt_decode),
-    ("Gzip+B64 Encode",  _gzip_encode),
-    ("Gzip+B64 Decode",  _gzip_decode),
-    ("MD5",              _md5),
-    ("SHA1",             _sha1),
-    ("SHA256",           _sha256),
-    ("SHA512",           _sha512),
+    ("HTML Encode", _html_encode),
+    ("HTML Decode", _html_decode),
+    ("Hex Encode", _hex_encode),
+    ("Hex Decode", _hex_decode),
+    ("Unicode Encode", _unicode_encode),
+    ("Unicode Decode", _unicode_decode),
+    ("JWT Decode", _jwt_decode),
+    ("Gzip+B64 Encode", _gzip_encode),
+    ("Gzip+B64 Decode", _gzip_decode),
+    ("MD5", _md5),
+    ("SHA1", _sha1),
+    ("SHA256", _sha256),
+    ("SHA512", _sha512),
 ]
 
 _OP_MAP: dict[str, Callable[[str], str]] = {label: fn for label, fn in OPERATIONS}

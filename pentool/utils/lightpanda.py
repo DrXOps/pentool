@@ -66,7 +66,7 @@ def is_lightpanda_available() -> bool:
 
 _LIGHTPANDA_VERSION = "0.3.7"
 _LIGHTPANDA_URL_TEMPLATE = (
-    "https://github.com/lightpanda-io/browser/releases/download/" f"{_LIGHTPANDA_VERSION}/" "lightpanda-{arch}-linux"
+    f"https://github.com/lightpanda-io/browser/releases/download/{_LIGHTPANDA_VERSION}/lightpanda-{{arch}}-linux"
 )
 
 

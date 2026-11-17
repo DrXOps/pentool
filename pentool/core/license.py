@@ -291,7 +291,7 @@ class FeatureNotAvailable(Exception):  # noqa: N818 — публичное им�
         self.feature = feature
         self.plan_required = plan_required
         super().__init__(
-            f"Feature '{feature}' requires {plan_required.upper()} plan. " f"Upgrade at https://pentool.pro/upgrade"
+            f"Feature '{feature}' requires {plan_required.upper()} plan. Upgrade at https://pentool.pro/upgrade"
         )
 
 

@@ -21,9 +21,7 @@ def verify_pro_package_signature(archive_bytes: bytes, signature_b64: str) -> bo
         from cryptography.exceptions import InvalidSignature
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-        public_key = Ed25519PublicKey.from_public_bytes(
-            base64.b64decode(PRO_PACKAGE_PUBLIC_KEY_B64)
-        )
+        public_key = Ed25519PublicKey.from_public_bytes(base64.b64decode(PRO_PACKAGE_PUBLIC_KEY_B64))
         signature = base64.b64decode(signature_b64.strip())
         public_key.verify(signature, archive_bytes)
         return True

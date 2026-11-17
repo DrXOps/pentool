@@ -2025,8 +2025,7 @@ class IntruderScreen(
             tab.payload_sources[tab.active_set_idx], _LAZY_SOURCE_TYPES
         ):
             self.app.notify(
-                "This set is generated/loaded from a file — click Clear first "
-                "to switch it to a manually-edited list.",
+                "This set is generated/loaded from a file — click Clear first to switch it to a manually-edited list.",
                 severity="warning",
                 timeout=4,
             )

@@ -39,14 +39,16 @@ logger = logging.getLogger(__name__)
 
 def time_sleep(seconds: float) -> None:
     import time
+
     time.sleep(seconds)
 
 
 class ProxyClient:
     """Spawns and drives the proxy daemon process over two unix sockets."""
 
-    def __init__(self, *, host: str = "127.0.0.1", port: int = 8080,
-                 cert_dir: str = "/tmp/pentool_certs", db_path: str = "") -> None:
+    def __init__(
+        self, *, host: str = "127.0.0.1", port: int = 8080, cert_dir: str = "/tmp/pentool_certs", db_path: str = ""
+    ) -> None:
         self.host = host
         self.port = port
         self.cert_dir = cert_dir
@@ -78,13 +80,21 @@ class ProxyClient:
         cmd_sock = os.path.join(self._tmp_dir, "proxy.sock")
         evt_sock = os.path.join(self._tmp_dir, "events.sock")
         cmd = [
-            sys.executable, "-m", "pentool.proxy.daemon",
-            "--socket", cmd_sock,
-            "--event-socket", evt_sock,
-            "--host", self.host,
-            "--port", str(self.port),
-            "--cert-dir", self.cert_dir,
-            "--db", self.db_path,
+            sys.executable,
+            "-m",
+            "pentool.proxy.daemon",
+            "--socket",
+            cmd_sock,
+            "--event-socket",
+            evt_sock,
+            "--host",
+            self.host,
+            "--port",
+            str(self.port),
+            "--cert-dir",
+            self.cert_dir,
+            "--db",
+            self.db_path,
         ]
         # Kill any leftover proxy daemon holding our port before spawning a
         # new one. This prevents EADDRINUSE when a previous instance crashes
@@ -140,6 +150,7 @@ class ProxyClient:
         *self.port*, if one exists.  Idempotent — does nothing when none found
         or on permission errors."""
         import psutil
+
         try:
             target_pid = None
             for conn in psutil.net_connections(kind="inet"):
@@ -153,10 +164,10 @@ class ProxyClient:
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         continue
             if target_pid is not None:
-                logger.info("Killing stale proxy daemon PID=%s holding port %s",
-                            target_pid, self.port)
+                logger.info("Killing stale proxy daemon PID=%s holding port %s", target_pid, self.port)
                 os.kill(target_pid, signal.SIGTERM)
                 import time as _time
+
                 for _ in range(50):
                     _time.sleep(0.05)
                     try:
@@ -190,9 +201,7 @@ class ProxyClient:
         if self._reader is not None and self._reader.is_alive():
             return
         self._reader_stop.clear()
-        self._reader = threading.Thread(
-            target=self._reader_loop, daemon=True, name="proxy-events"
-        )
+        self._reader = threading.Thread(target=self._reader_loop, daemon=True, name="proxy-events")
         self._reader.start()
 
     def _reader_loop(self) -> None:
@@ -239,6 +248,7 @@ class ProxyClient:
         if req:
             try:
                 from pentool.utils.intercepted_request import InterceptedRequest
+
                 try:
                     request_obj = InterceptedRequest.from_dict(req)
                 except Exception:  # noqa: BLE001
@@ -251,23 +261,28 @@ class ProxyClient:
                 ProxyRequestCaptured,
                 ProxyRequestCompleted,
             )
+
             bus = get_event_bus()
             if name == "captured":
-                bus.emit(ProxyRequestCaptured(
-                    source="proxy",
-                    request_id=data.get("request_id", "") or getattr(request_obj, "id", ""),
-                    method=(data.get("method") or getattr(request_obj, "method", "")),
-                    url=(data.get("url") or getattr(request_obj, "url", "")),
-                    host=(data.get("host") or ""),
-                    request=request_obj,
-                ))
+                bus.emit(
+                    ProxyRequestCaptured(
+                        source="proxy",
+                        request_id=data.get("request_id", "") or getattr(request_obj, "id", ""),
+                        method=(data.get("method") or getattr(request_obj, "method", "")),
+                        url=(data.get("url") or getattr(request_obj, "url", "")),
+                        host=(data.get("host") or ""),
+                        request=request_obj,
+                    )
+                )
             elif name == "completed":
-                bus.emit(ProxyRequestCompleted(
-                    source="proxy",
-                    request_id=(data.get("request_id") or getattr(request_obj, "id", "")),
-                    status_code=int(data.get("status_code") or 0),
-                    request=request_obj,
-                ))
+                bus.emit(
+                    ProxyRequestCompleted(
+                        source="proxy",
+                        request_id=(data.get("request_id") or getattr(request_obj, "id", "")),
+                        status_code=int(data.get("status_code") or 0),
+                        request=request_obj,
+                    )
+                )
         except Exception as exc:  # noqa: BLE001
             logger.debug("proxy event re-emit failed (%s): %s", name, exc)
 
@@ -307,7 +322,7 @@ class ProxyClient:
                 logger.debug("client: proc terminate error: %s", _e)
             try:
                 proc.wait(timeout=2)
-            except Exception as _e:
+            except Exception:
                 try:
                     proc.kill()
                 except Exception:
@@ -394,10 +409,8 @@ class ProxyClient:
         resp = self._command({"cmd": "get_status"})
         return resp.get("status") or {}
 
-    def get_requests(self, limit: int = 100, method: str | None = None,
-                     host: str | None = None) -> list:
-        resp = self._command({"cmd": "get_requests", "limit": limit,
-                              "method": method, "host": host})
+    def get_requests(self, limit: int = 100, method: str | None = None, host: str | None = None) -> list:
+        resp = self._command({"cmd": "get_requests", "limit": limit, "method": method, "host": host})
         return resp.get("requests") or []
 
     def find_request(self, req_id: str):
@@ -408,6 +421,7 @@ class ProxyClient:
             return None
         try:
             from pentool.utils.intercepted_request import InterceptedRequest
+
             return InterceptedRequest.from_dict(data)
         except Exception:  # noqa: BLE001
             return None
@@ -428,6 +442,7 @@ class ProxyClient:
                 logger.debug("client: is_in_scope command failed", exc_info=True)
         # Offline fallback mirrors ProxyServer.is_in_scope (empty scope = all).
         from pentool.utils.scope import host_in_scope
+
         return host_in_scope(host, self.scope)
 
     @property
@@ -461,8 +476,7 @@ class ProxyClient:
     def forward(self, request_id: str, modified: str | None = None) -> None:
         # Tolerate proxy-not-running: mirror ProxyServer.forward which is a
         # silent no-op when the request isn't waiting (it never raises).
-        self._command_tolerant({"cmd": "forward", "request_id": request_id,
-                                "modified": modified})
+        self._command_tolerant({"cmd": "forward", "request_id": request_id, "modified": modified})
 
     def drop(self, request_id: str) -> None:
         self._command_tolerant({"cmd": "drop", "request_id": request_id})

@@ -132,8 +132,7 @@ class BaseExporter(ABC):
     """Every exporter implements ``export(report) → str``."""
 
     @abstractmethod
-    def export(self, report: ReportData) -> str:
-        ...
+    def export(self, report: ReportData) -> str: ...
 
     def extension(self) -> str:
         """File extension without dot, e.g. ``"md"``, ``"html"``."""

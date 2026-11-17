@@ -755,7 +755,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         status_str = f"[{status_color}]{status}[/{status_color}]" if status else "[dim]···[/dim]"
         short_url = url[:60] + "…" if len(url) > 60 else url
         self._feed_write(
-            f"[dim]{ts}[/dim] [{method_color}]{method:<7}[/{method_color}] " f"{status_str} [dim]{esc(short_url)}[/dim]"
+            f"[dim]{ts}[/dim] [{method_color}]{method:<7}[/{method_color}] {status_str} [dim]{esc(short_url)}[/dim]"
         )
 
     def add_finding(self, finding) -> None:

@@ -137,12 +137,12 @@ class ScopeDialog(BaseDialog[list[str] | ScopeConfig | None]):
 
             if self._extended:
                 yield Label(
-                    "Hosts (one per line, wildcards: *.example.com):\n" "Leave empty to match all hosts.",
+                    "Hosts (one per line, wildcards: *.example.com):\nLeave empty to match all hosts.",
                     id="hint",
                 )
             else:
                 yield Label(
-                    "One host per line. Wildcards supported: *.example.com\n" "Leave empty to intercept all hosts.",
+                    "One host per line. Wildcards supported: *.example.com\nLeave empty to intercept all hosts.",
                     id="hint",
                 )
 

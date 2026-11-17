@@ -23,23 +23,24 @@ from pentool.tui.screens import (
 
 # Mapping module_id → widget class
 SCREEN_MAP: dict[str, type] = {
-    "dashboard":  DashboardScreen,
-    "proxy":      ProxyScreen,
-    "repeater":   RepeaterScreen,
-    "intruder":   IntruderScreen,
-    "scanner":    ScannerScreen,
-    "target":     TargetScreen,
-    "decoder":    DecoderScreen,
-    "comparer":   ComparerScreen,
-    "sequencer":  SequencerScreen,
+    "dashboard": DashboardScreen,
+    "proxy": ProxyScreen,
+    "repeater": RepeaterScreen,
+    "intruder": IntruderScreen,
+    "scanner": ScannerScreen,
+    "target": TargetScreen,
+    "decoder": DecoderScreen,
+    "comparer": ComparerScreen,
+    "sequencer": SequencerScreen,
     "extensions": ExtensionsScreen,
-    "settings":   SettingsScreen,
+    "settings": SettingsScreen,
 }
 
 # Recon screen — PRO-only, conditional import (no license gate here —
 # license check happens in _switch_to, same as ScannerScreen).
 try:
     from pro.pentool.tui.screens.recon.screen import ReconScreen  # type: ignore[import-untyped]
+
     SCREEN_MAP["recon"] = ReconScreen
 except (ImportError, ModuleNotFoundError):
     pass

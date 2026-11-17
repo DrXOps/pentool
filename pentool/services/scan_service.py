@@ -30,6 +30,7 @@ logger = get_logger(__name__)
 @dataclass
 class ScanConfig:
     """Configuration for a single scan run."""
+
     targets: list[str]
     seed_requests: list = field(default_factory=list)  # list[ParsedRequest]
     check_names: list[str] | None = None
@@ -112,17 +113,20 @@ class ScanService(BaseService):
 
     async def run(self, config: ScanConfig) -> list[Finding]:
         self._stop_requested = False
-        self._emit(ScanStarted(
-            targets=config.targets,
-            checks=config.check_names or [],
-            source="scanner",
-        ))
+        self._emit(
+            ScanStarted(
+                targets=config.targets,
+                checks=config.check_names or [],
+                source="scanner",
+            )
+        )
 
         # Session baseline: if seed requests carry auth headers (Cookie/
         # Authorization), seed them so the ACTIVE phase can reuse them even
         # before/without a crawl (e.g. resume). _crawl_target() may override
         # this with the headers the crawler actually established.
         from pentool.utils.auth_headers import extract_auth_headers as _extract_auth
+
         self._auth_headers = {}
         if config.seed_requests and config.seed_requests[0].headers:
             self._auth_headers = _extract_auth(dict(config.seed_requests[0].headers))
@@ -150,19 +154,22 @@ class ScanService(BaseService):
             await self._try_auto_login(config)
 
         all_findings = await self._run_active_scan(
-            config, all_scan_targets, self._auth_headers, post_forms=all_forms,
+            config,
+            all_scan_targets,
+            self._auth_headers,
+            post_forms=all_forms,
         )
 
-        self._emit(ScanFinished(
-            total_findings=len(all_findings),
-            stopped_early=self._stop_requested,
-            source="scanner",
-        ))
+        self._emit(
+            ScanFinished(
+                total_findings=len(all_findings),
+                stopped_early=self._stop_requested,
+                source="scanner",
+            )
+        )
         return all_findings
 
-    async def _collect_targets(
-        self, config: ScanConfig
-    ) -> tuple[list[str], list]:
+    async def _collect_targets(self, config: ScanConfig) -> tuple[list[str], list]:
         """Phase 1: collect scan targets via crawl or resume."""
         all_scan_targets: list[str] = []
         all_forms: list = []
@@ -170,21 +177,16 @@ class ScanService(BaseService):
         if config.resume and config.resume_targets:
             all_scan_targets = list(config.resume_targets)
             self._log(
-                f"[yellow]RESUME[/yellow] Skipping crawl — "
-                f"using {len(all_scan_targets)} previously discovered URLs"
+                f"[yellow]RESUME[/yellow] Skipping crawl — using {len(all_scan_targets)} previously discovered URLs"
             )
         else:
             for base_url in config.targets:
                 if self._stop_requested:
                     break
                 # Если Target уже краулил этот хост — используем его результаты
-                from pentool.api.spider_api import SpiderAPI
                 if SpiderAPI.has_cached_result(base_url):
                     cached_pages = SpiderAPI.get_cached_pages(base_url)
-                    self._log(
-                        f"[dim]Spider: using cached pages from Target crawl "
-                        f"({len(cached_pages)} pages)[/dim]"
-                    )
+                    self._log(f"[dim]Spider: using cached pages from Target crawl ({len(cached_pages)} pages)[/dim]")
                     for page_url in cached_pages:
                         if page_url not in all_scan_targets:
                             all_scan_targets.append(page_url)
@@ -204,6 +206,7 @@ class ScanService(BaseService):
         """Phase 2: remove static assets and deduplicate by URL template,
         keeping up to _MAX_VARIANTS_PER_TEMPLATE distinct URLs per template."""
         from pentool.modules.scanner.helpers import is_scannable_url, path_template
+
         seen_templates: dict[str, int] = {}
         seen_exact: set[str] = set()
         unique: list[str] = []
@@ -251,14 +254,14 @@ class ScanService(BaseService):
             username, password = config.login
             base = config.targets[0]
             headers = await build_session_headers(
-                url=base, username=username, password=password, use_cache=True,
+                url=base,
+                username=username,
+                password=password,
+                use_cache=True,
             )
             if headers:
                 self._auth_headers = headers
-                self._log(
-                    f"[dim]AUTH[/dim] auto-login established session for {base} "
-                    f"({len(headers)} header(s))"
-                )
+                self._log(f"[dim]AUTH[/dim] auto-login established session for {base} ({len(headers)} header(s))")
         except Exception as exc:
             self._log(f"[yellow]AUTH[/yellow] auto-login failed: {exc}")
 
@@ -266,8 +269,15 @@ class ScanService(BaseService):
     # endpoint. Auto-submitting these as POST could log the user out, delete
     # data, or hit admin panels — so ScanService skips them (Этап 2.6 safety).
     _RISKY_FORM_MARKERS = (
-        "/logout", "/signout", "/delete", "/remove", "/drop", "/purge",
-        "/reset", "/admin", "/truncate",
+        "/logout",
+        "/signout",
+        "/delete",
+        "/remove",
+        "/drop",
+        "/purge",
+        "/reset",
+        "/admin",
+        "/truncate",
     )
 
     @staticmethod
@@ -276,7 +286,10 @@ class ScanService(BaseService):
         return any(marker in path for marker in ScanService._RISKY_FORM_MARKERS)
 
     async def _run_active_scan(
-        self, config: ScanConfig, all_scan_targets: list[str], auth_headers: dict | None = None,
+        self,
+        config: ScanConfig,
+        all_scan_targets: list[str],
+        auth_headers: dict | None = None,
         post_forms: list | None = None,
     ) -> list[Finding]:
         """Phase 3: run active checks on collected targets, return findings."""
@@ -312,9 +325,8 @@ class ScanService(BaseService):
 
         from pentool.core.config import get_config
         from pentool.utils.http_client import get_shared_http_client
-        http_client = get_shared_http_client(
-            follow_redirects=True, extra_headers=auth_headers, cfg=get_config()
-        )
+
+        http_client = get_shared_http_client(follow_redirects=True, extra_headers=auth_headers, cfg=get_config())
         self._scanner.configure_engine(
             http_client=http_client,
             concurrency=config.threads,
@@ -331,8 +343,7 @@ class ScanService(BaseService):
                 all_reqs = list(config.seed_requests) + crawled_reqs
             else:
                 all_reqs = [
-                    ParsedRequest(method="GET", url=url, headers=auth_headers, body="")
-                    for url in all_scan_targets
+                    ParsedRequest(method="GET", url=url, headers=auth_headers, body="") for url in all_scan_targets
                 ]
 
             # Auto-submit POST forms (Этап 2.6) with default field values so
@@ -350,18 +361,20 @@ class ScanService(BaseService):
                         self._log(f"[dim]FORM[/dim] skip POST {action} (destructive action)")
                         continue
                     body = urlencode([(f.name, f.value or "test") for f in fields])
-                    _form_reqs.append(ParsedRequest(
-                        method="POST", url=action, headers=auth_headers, body=body,
-                    ))
+                    _form_reqs.append(
+                        ParsedRequest(
+                            method="POST",
+                            url=action,
+                            headers=auth_headers,
+                            body=body,
+                        )
+                    )
                 except Exception:
                     continue
             if _form_reqs:
                 all_reqs = all_reqs + _form_reqs
 
-            self._log(
-                f"[bold green]SCAN[/bold green] Running active checks on "
-                f"[bold]{len(all_reqs)}[/bold] requests…"
-            )
+            self._log(f"[bold green]SCAN[/bold green] Running active checks on [bold]{len(all_reqs)}[/bold] requests…")
 
             # ── Fingerprint capture for AIWorker ─────────────────────────────
             # The engine runs TechFingerprinter before the worker pool. We
@@ -376,9 +389,12 @@ class ScanService(BaseService):
 
             logger.info(
                 "ACTIVE_SCAN: targets=%d reqs=%d checks=%s threads=%d delay=%.2fs use_ai=%s resume=%s",
-                len(all_scan_targets), len(all_reqs),
-                config.check_names or "all", config.threads,
-                config.delay_sec, getattr(config, "use_ai", False),
+                len(all_scan_targets),
+                len(all_reqs),
+                config.check_names or "all",
+                config.threads,
+                config.delay_sec,
+                getattr(config, "use_ai", False),
                 config.resume,
             )
 
@@ -391,6 +407,7 @@ class ScanService(BaseService):
             ai_task = None
             if getattr(config, "use_ai", False):
                 from pentool.services.ai.factory import ensure_backend as _ensure_ab
+
                 _backend = await _ensure_ab(_force=True)
                 logger.info("AIWORKER: prepare use_ai=True backend=%s", _backend)
                 if _backend is not None:
@@ -419,14 +436,9 @@ class ScanService(BaseService):
                             try:
                                 extra_targets: list[str] = []
                                 extra_forms: list = []
-                                await self._crawl_target(
-                                    url, config, extra_targets, extra_forms
-                                )
+                                await self._crawl_target(url, config, extra_targets, extra_forms)
                                 if extra_targets:
-                                    self._log(
-                                        f"[green]AI: crawled {len(extra_targets)} page(s)"
-                                        f" from {url}[/green]"
-                                    )
+                                    self._log(f"[green]AI: crawled {len(extra_targets)} page(s) from {url}[/green]")
                             except Exception as exc:
                                 logger.debug("AI endpoint crawl error: %s", exc)
 
@@ -466,9 +478,7 @@ class ScanService(BaseService):
             # После скана — дожидаемся AIWorker (если ещё не finished)
             if ai_task is not None:
                 try:
-                    ai_discovered_urls = await asyncio.wait_for(
-                        ai_task, timeout=30.0
-                    ) or []
+                    ai_discovered_urls = await asyncio.wait_for(ai_task, timeout=30.0) or []
                     logger.info("AIWORKER: done discovered=%d", len(ai_discovered_urls))
                 except asyncio.TimeoutError:
                     ai_task.cancel()
@@ -476,10 +486,7 @@ class ScanService(BaseService):
                 except Exception as exc:
                     logger.warning("AIWORKER: result error: %s", exc)
                 if ai_discovered_urls:
-                    self._log(
-                        f"[green]AI: added {len(ai_discovered_urls)} "
-                        f"discovered URL(s) to scan results[/green]"
-                    )
+                    self._log(f"[green]AI: added {len(ai_discovered_urls)} discovered URL(s) to scan results[/green]")
             for f in active_findings:
                 f.scan_tab_uid = config.scan_tab_uid
                 f.scan_session_id = config.scan_session_id
@@ -519,7 +526,9 @@ class ScanService(BaseService):
                 raw_hdrs = dict(config.seed_requests[0].headers or {})
                 auth_headers = extract_auth_headers(raw_hdrs)
             result = await self._spider.crawl(
-                base_url, extra_headers=auth_headers, db_path=config.db_path,
+                base_url,
+                extra_headers=auth_headers,
+                db_path=config.db_path,
             )
             # Guard against an unexpected return shape (older spiders could
             # return a bare list instead of a SpiderResult). Fail silently but
@@ -553,19 +562,17 @@ class ScanService(BaseService):
 
                     js_spider = SpiderAPI(config=SpiderConfig(js_render=True))
                     js_result = await js_spider.crawl(
-                        base_url, extra_headers=auth_headers, db_path=config.db_path,
+                        base_url,
+                        extra_headers=auth_headers,
+                        db_path=config.db_path,
                     )
                     if js_result and js_result.pages:
                         self._log(
-                            f"[dim]JS[/dim] hybrid crawl recovered "
-                            f"{len(js_result.pages)} extra page(s) from {base_url}"
+                            f"[dim]JS[/dim] hybrid crawl recovered {len(js_result.pages)} extra page(s) from {base_url}"
                         )
-                        result.pages = list(dict.fromkeys(
-                            list(result.pages) + list(js_result.pages)
-                        ))
+                        result.pages = list(dict.fromkeys(list(result.pages) + list(js_result.pages)))
                         result.endpoints = list(result.endpoints) + [
-                            e for e in js_result.endpoints
-                            if not any(x.url == e.url for x in result.endpoints)
+                            e for e in js_result.endpoints if not any(x.url == e.url for x in result.endpoints)
                         ]
                         # JS crawl may have learned a session too.
                         if getattr(js_result, "auth_headers", None):
@@ -584,13 +591,15 @@ class ScanService(BaseService):
             )
 
             # Emit SpiderFinished for subscribers
-            self._emit(SpiderFinished(
-                base_url=base_url,
-                pages_count=len(result.pages),
-                forms_count=len(result.forms),
-                endpoints_count=len(result.endpoints),
-                source="spider",
-            ))
+            self._emit(
+                SpiderFinished(
+                    base_url=base_url,
+                    pages_count=len(result.pages),
+                    forms_count=len(result.forms),
+                    endpoints_count=len(result.endpoints),
+                    source="spider",
+                )
+            )
 
             # Always include base URL
             all_scan_targets.append(base_url)

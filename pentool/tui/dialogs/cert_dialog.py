@@ -61,13 +61,13 @@ class CertInstallDialog(BaseDialog):
 
             yield Static("System-wide (Ubuntu/Debian):", classes="section-title")
             yield Static(
-                f"sudo cp '{p}' /usr/local/share/ca-certificates/pentool-ca.crt\n" "sudo update-ca-certificates",
+                f"sudo cp '{p}' /usr/local/share/ca-certificates/pentool-ca.crt\nsudo update-ca-certificates",
                 classes="code",
             )
 
             yield Static("System-wide (Fedora/RHEL):", classes="section-title")
             yield Static(
-                f"sudo cp '{p}' /etc/pki/ca-trust/source/anchors/pentool-ca.crt\n" "sudo update-ca-trust",
+                f"sudo cp '{p}' /etc/pki/ca-trust/source/anchors/pentool-ca.crt\nsudo update-ca-trust",
                 classes="code",
             )
 

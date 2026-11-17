@@ -65,6 +65,7 @@ def proxy_start(
 
     # Initialize database if needed
     from pentool.core.db_schema import init_db_sync
+
     try:
         init_db_sync(_db_path)
     except Exception as exc:
@@ -81,6 +82,7 @@ def proxy_start(
 def proxy_status(port: int) -> None:
     """Check whether the proxy is listening on the specified port."""
     import socket
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(1.0)
         result = s.connect_ex(("127.0.0.1", port))
@@ -110,6 +112,7 @@ def proxy_history(
 
     async def _fetch() -> list:
         from pentool.storage.http_storage import HttpStorage
+
         storage = HttpStorage()
         await storage.init_db(_db_path)
         filters: dict = {}
@@ -154,6 +157,7 @@ def proxy_ca_info(cert_dir: str | None) -> None:
         click.echo(f"CA certificate: {ca_cert}")
     else:
         from pentool.utils.cert import generate_ca_cert
+
         cert_path, _ = generate_ca_cert(_cert_dir)
         click.echo(f"CA certificate generated: {cert_path}")
 

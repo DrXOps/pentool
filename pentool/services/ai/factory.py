@@ -286,7 +286,7 @@ def _get_model_download_url() -> str:
     Берём near-lossless Q8_0 (~362 MB) — лучшая точность для задач
     instruction-following / структурной генерации payload.
     """
-    return "https://huggingface.co/FadedRedStar/LFM2.5-350M-heretic-GGUF/" "resolve/main/LFM2.5-350M-heretic-Q8_0.gguf"
+    return "https://huggingface.co/FadedRedStar/LFM2.5-350M-heretic-GGUF/resolve/main/LFM2.5-350M-heretic-Q8_0.gguf"
 
 
 async def _download_gguf(dest: Path, progress_cb: Any = None) -> bool:

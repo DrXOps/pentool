@@ -106,6 +106,7 @@ def unicode_unescape(text: str) -> str:
         return text.encode("utf-8").decode("unicode_escape")
     except Exception:
         import codecs
+
         try:
             return codecs.decode(text, "unicode_escape")
         except Exception as exc:

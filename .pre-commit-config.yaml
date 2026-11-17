@@ -1,20 +1,22 @@
 repos:
-  - repo: https://github.com/psf/black
-    rev: 23.12.0
+  # Один форматтер и один линтер — ruff (2026-11-17). black и isort убраны:
+  # они и ruff держали разные настройки, из-за чего `ruff format` из хука
+  # format-on-edit переписывал файлы вопреки black (line-length 100 против 120).
+  # Теперь стандарт один — `[tool.ruff]` в pyproject.toml, 120.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.2
     hooks:
-      - id: black
-        args: [--line-length=120]
-
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        args: [--profile=black, --line-length=120]
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
 
   - repo: https://github.com/PyCQA/flake8
     rev: 7.0.0
     hooks:
       - id: flake8
+        # flake8 остаётся ради того, чего нет в стабильных правилах ruff:
+        # pycodestyle E2xx (пробелы после запятой и т.п.). E501 у ruff
+        # отключён, здесь — включён с тем же лимитом 120.
         # Значение с запятой ОБЯЗАТЕЛЬНО в кавычках: в flow-списке YAML
         # `E203,W503` без кавычек — два элемента, и flake8 получает
         # аргумент 'W503' как путь (E902 FileNotFoundError).

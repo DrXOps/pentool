@@ -39,8 +39,7 @@ async def check_update_async(
     try:
         import aiohttp  # type: ignore[import]
     except ImportError:
-        return UpdateInfo(has_update=False, latest_version=current_version, url="",
-                          error="aiohttp not installed")
+        return UpdateInfo(has_update=False, latest_version=current_version, url="", error="aiohttp not installed")
 
     try:
         aio_timeout = aiohttp.ClientTimeout(total=timeout)
@@ -51,21 +50,19 @@ async def check_update_async(
                 ssl=False,
             ) as resp:
                 if resp.status != 200:
-                    return UpdateInfo(has_update=False, latest_version=current_version,
-                                      url="", error=f"HTTP {resp.status}")
+                    return UpdateInfo(
+                        has_update=False, latest_version=current_version, url="", error=f"HTTP {resp.status}"
+                    )
                 data = await resp.json()
     except asyncio.TimeoutError:
-        return UpdateInfo(has_update=False, latest_version=current_version,
-                          url="", error="timeout")
+        return UpdateInfo(has_update=False, latest_version=current_version, url="", error="timeout")
     except Exception as exc:
-        return UpdateInfo(has_update=False, latest_version=current_version,
-                          url="", error=str(exc))
+        return UpdateInfo(has_update=False, latest_version=current_version, url="", error=str(exc))
 
     latest_tag = data.get("tag_name", "")
-    html_url   = data.get("html_url", "")
+    html_url = data.get("html_url", "")
     if not latest_tag:
-        return UpdateInfo(has_update=False, latest_version=current_version,
-                          url="", error="no tag_name in response")
+        return UpdateInfo(has_update=False, latest_version=current_version, url="", error="no tag_name in response")
 
     has_update = _parse_version(latest_tag) > _parse_version(current_version)
     return UpdateInfo(has_update=has_update, latest_version=latest_tag, url=html_url)
@@ -86,10 +83,13 @@ def do_pip_upgrade() -> bool:
     """Attempt to upgrade via pip. Returns True on success."""
     import subprocess
     import sys
+
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--upgrade", "pentool"],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         return result.returncode == 0
     except Exception:

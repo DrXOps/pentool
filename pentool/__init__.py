@@ -15,10 +15,12 @@ try:
 except importlib.metadata.PackageNotFoundError:
     try:
         import tomllib
+
         with open(_PYPROJECT, "rb") as _f:
             __version__ = tomllib.load(_f)["project"]["version"]
     except Exception:
         import logging
+
         logging.getLogger("pentool").warning(
             "failed to read version from pyproject.toml, falling back to 0.0.0",
             exc_info=True,
@@ -37,13 +39,13 @@ def _bootstrap_pro() -> None:
     import sys
     from pathlib import Path
 
-    _pkg_dir = Path(__file__).resolve().parent   # .../pentool/pentool/
-    _repo_root = _pkg_dir.parent                 # .../pentool/
+    _pkg_dir = Path(__file__).resolve().parent  # .../pentool/pentool/
+    _repo_root = _pkg_dir.parent  # .../pentool/
 
     _installed_pro_pkg = Path.home() / ".pentool" / "pro" / "pentool"
     candidates: list[Path] = [
-        _repo_root / "pro" / "pentool",                 # dev submodule
-        _installed_pro_pkg,                              # installed PRO package
+        _repo_root / "pro" / "pentool",  # dev submodule
+        _installed_pro_pkg,  # installed PRO package
     ]
 
     import pentool as _self
@@ -55,9 +57,11 @@ def _bootstrap_pro() -> None:
         if _pro_pkg == _installed_pro_pkg:
             try:
                 from pentool.core.license import is_pro_package_compatible
+
                 _compatible, _warning = is_pro_package_compatible()
             except Exception:
                 import logging
+
                 logging.getLogger("pentool").debug(
                     "PRO compatibility check in bootstrap failed, assuming compatible",
                     exc_info=True,
@@ -92,6 +96,7 @@ def _bootstrap_pro() -> None:
         #    any screen is instantiated, so it's normally not loaded yet).
         try:
             import pentool.tui.widgets as _tw_mod
+
             _extra = str(_pro_pkg / "tui" / "widgets")
             if _extra not in _tw_mod.__path__:
                 _tw_mod.__path__.append(_extra)
