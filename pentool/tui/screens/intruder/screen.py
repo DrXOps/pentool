@@ -941,8 +941,8 @@ class IntruderScreen(
         """Async: load tabs from DB and create TabPane widgets."""
         try:
             tabs_data = await api.get_tabs()
-        except Exception as exc:
-            logger.debug("_do_load_tabs_from_db: get_tabs: %s", exc)
+        except Exception:
+            logger.error("intruder: tabs not restored from DB", exc_info=True)
             return
         if not tabs_data:
             return
@@ -974,6 +974,7 @@ class IntruderScreen(
             try:
                 state.attack_type = AttackType(at_str)
             except Exception:
+                logger.warning("intruder: saved attack type not restored, using sniper", exc_info=True)
                 state.attack_type = AttackType.SNIPER
             payloads_raw = td.get("payloads", [[]])
             if payloads_raw and isinstance(payloads_raw, list):
@@ -1186,8 +1187,8 @@ class IntruderScreen(
         self._cancel_save_workers()
         try:
             self.workers.cancel_node(self)
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except Exception:
+            logger.error("intruder: in-flight workers not cancelled before project switch", exc_info=True)
 
         # Close all tabs via TabbedContentPanel
         tc = self._tc_panel
@@ -1230,8 +1231,8 @@ class IntruderScreen(
                 order_by=order_by,
                 desc=(order_dir == "desc"),
             )
-        except Exception as exc:
-            logger.debug("_do_load_results: %s", exc)
+        except Exception:
+            logger.error("intruder: results not loaded", exc_info=True)
             return
         if not results:
             tab.all_results = []
@@ -1306,8 +1307,8 @@ class IntruderScreen(
                 self._update_payload_select()
                 self.call_after_refresh(self._refresh_payload_list)
             self._state_loaded = True
-        except Exception as exc:
-            logger.debug("_do_load_state: %s", exc)
+        except Exception:
+            logger.error("intruder: tab state not loaded", exc_info=True)
 
     def _auto_save_state(self, tab: _IntruderTabState | None = None) -> None:
         """Сохранить состояние таба (по умолчанию — активного).
@@ -1330,6 +1331,7 @@ class IntruderScreen(
                 if isinstance(w, TextArea):
                     template = w.text
             except Exception:
+                logger.error("intruder: template text not read for autosave", exc_info=True)
                 template = tab.template_text
             self._start_save_worker(
                 api.save_state(
@@ -1341,8 +1343,8 @@ class IntruderScreen(
                 ),
                 f"intruder-save-state-{time.monotonic_ns()}",
             )
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except Exception:
+            logger.error("intruder: tab state not saved", exc_info=True)
 
     def _auto_save_result(self, result: IntruderResult) -> None:
         api = self._get_api()
@@ -1354,8 +1356,8 @@ class IntruderScreen(
                 api.save_result(result, project_id=project_id),
                 f"intruder-save-result-{time.monotonic_ns()}",
             )
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except Exception:
+            logger.error("intruder: result not saved", exc_info=True)
 
     # ── @on handlers — ToolbarButton.Pressed (только глобальные кнопки) ──
     # Per-tab кнопки с суффиксом -{tab_id} — их ловит @on без селектора,
@@ -1890,6 +1892,7 @@ class IntruderScreen(
             w = editor.content_widget
             template = w.text if isinstance(w, TextArea) else ""
         except Exception:
+            logger.warning("intruder: template not read for payload select", exc_info=True)
             template = ""
         if tab.attack_type in (AttackType.SNIPER, AttackType.BATTERING_RAM):
             n = 1
@@ -1902,8 +1905,8 @@ class IntruderScreen(
         try:
             label = f"Set {idx + 1} ▼" if n <= 1 else f"Set {idx + 1}/{n} ▼"
             self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_PAYLOAD_SET)}", ToolbarButton).label = label
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except Exception:
+            logger.warning("intruder: payload set label not updated", exc_info=True)
         self._refresh_payload_list(tab)
 
     def _tab_id_for_widget(self) -> str | None:
@@ -2064,8 +2067,8 @@ class IntruderScreen(
                     payloads.pop(idx)
                     self._refresh_payload_list()
                     self._auto_save_state()
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except Exception:
+            logger.error("intruder: selected payloads not refreshed/saved", exc_info=True)
 
     def _clear_payloads(self) -> None:
         tab = self._active_tab
@@ -2198,8 +2201,8 @@ class IntruderScreen(
             pct = f" ({bytes_read / total_bytes * 100:.0f}%)" if total_bytes else ""
             if target_idx == tab.active_set_idx:
                 label.update(f"[dim]{count:,} line(s) counted so far{pct}…[/dim]")
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except Exception:
+            logger.warning("intruder: payload count progress not shown", exc_info=True)
 
     @staticmethod
     def _read_file_sync(path: str) -> str:
@@ -2805,16 +2808,16 @@ class IntruderScreen(
         try:
             req_view = self.query_one(f"#{self._wid(tab.tab_id, _TabId.DETAIL_REQUEST)}", HttpView)
             req_view.load_raw_http(req_raw)
-        except Exception as exc:
-            logger.debug("_load_detail_content: req_view error: %s", exc)
+        except Exception:
+            logger.warning("intruder: detail request view not filled", exc_info=True)
         try:
             resp_view = self.query_one(f"#{self._wid(tab.tab_id, _TabId.DETAIL_RESPONSE)}", HttpView)
             if resp_raw:
                 resp_view.load_raw_http(resp_raw)
             else:
                 resp_view.clear()
-        except Exception as exc:
-            logger.debug("_load_detail_content: resp_view error: %s", exc)
+        except Exception:
+            logger.warning("intruder: detail response view not filled", exc_info=True)
 
     def action_hide_detail(self) -> None:
         tab = self._active_tab
@@ -2921,8 +2924,8 @@ class IntruderScreen(
 
                 copy_to_clipboard(payload_str)
                 self.app.notify("Payload copied", timeout=2)
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except Exception:
+            logger.warning("intruder: payload not copied to clipboard", exc_info=True)
 
     def _export_csv(self) -> None:
         tab = self._active_tab
@@ -2994,8 +2997,8 @@ class IntruderScreen(
             return
         try:
             self._clear_results()
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except Exception:
+            logger.warning("intruder: old results not cleared on request load", exc_info=True)
         try:
             editor = self._template_editor()
             w = editor.content_widget
@@ -3003,8 +3006,8 @@ class IntruderScreen(
                 _load_into_textarea(w, raw, ["§"])
                 self._update_payload_select()
                 self._highlight_nth_marker(self._active_set_idx)
-        except Exception as exc:
-            logger.debug("op: %s", exc)
+        except Exception:
+            logger.error("intruder: template not loaded into tab", exc_info=True)
 
     def get_intruder_export(self) -> dict:
         api = getattr(self, "_api", None)
@@ -3013,4 +3016,5 @@ class IntruderScreen(
         try:
             return api.export_project_data()
         except Exception:
+            logger.error("intruder: results not exported", exc_info=True)
             return {"results": []}

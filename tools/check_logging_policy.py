@@ -34,10 +34,12 @@ highlight, …) are out of scope even when their name matches a data verb
 
 Why a ratchet and not a wipe
 ----------------------------
-The debt is 100+ sites across the TUI. They are paid down file by file through
-``.claude/tmp/f009/`` (backup → edit → compile → ruff → module tests → rollback);
-the baseline in ``tools/logging_policy_baseline.json`` makes new debt impossible
-in the meantime and records the remaining work.
+The debt was 149 sites across 29 files. They were paid down file by file through
+``.claude/tmp/f009/`` (backup → edit → compile → ruff → module tests → rollback),
+nine steps in one day. The baseline in ``tools/logging_policy_baseline.json`` is
+now **empty**, so the rule is absolute: any new broad ``except`` in a data path
+that hides the cause fails pre-commit and CI, exactly like the silent-handler
+ratchet. ``--update`` remains for lowering the baseline if it ever creeps back.
 
 Usage::
 

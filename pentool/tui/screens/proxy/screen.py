@@ -464,7 +464,7 @@ class ProxyScreen(
                         col.width = 30
                         col.auto_width = False
                         break
-            except Exception:
+            except Exception:  # logging-ok: косметика — ширина колонки, данные на месте
                 # Колонка Host остаётся автоподобранной — таблица читается хуже,
                 # но данные на месте. След нужен, чтобы не искать причину заново.
                 logger.debug("proxy: Host column width not pinned")
@@ -1834,7 +1834,7 @@ class ProxyScreen(
                 from pentool.core.config import get_config
 
                 hosts = list(get_config().scope)
-            except Exception:
+            except Exception:  # logging-ok: у нового проекта нет scope-настройки — это ожидаемо
                 # Проект ещё без scope-настройки, глобальный конфиг недоступен —
                 # тогда действительно пусто. Запись отличает это от сбоя.
                 logger.debug("proxy: global scope not available")
