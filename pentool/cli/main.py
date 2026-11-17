@@ -38,6 +38,14 @@ from pentool.core.logging import setup_logging
     help="Launch TUI, proxy on, crawl target, detect tech (requires --url). Replaces --real.",
 )
 @click.option(
+    "--real",
+    "cli_real",
+    is_flag=True,
+    default=False,
+    hidden=True,
+    help="Deprecated alias for --smart (kept so existing scripts keep working).",
+)
+@click.option(
     "--ai",
     "cli_ai",
     is_flag=True,
@@ -76,6 +84,7 @@ def cli(
     cli_urls: tuple[str, ...] | None,
     headless: bool,
     cli_smart: bool,
+    cli_real: bool,
     cli_ai: bool,
     cli_last: bool,
     cli_output: str | None,
@@ -126,7 +135,10 @@ def cli(
 
             app = PentoolApp()
             app._pending_start_urls = urls
-            app._pending_start_smart = cli_smart
+            # --real — прежнее имя флага; поддерживаем как алиас, иначе старые
+            # команды молча запускают проект без перехвата (ровно та жалоба,
+            # с которой начался разбор).
+            app._pending_start_smart = cli_smart or cli_real
             app._pending_start_ai = cli_ai
             app.run()
     elif cli_last:

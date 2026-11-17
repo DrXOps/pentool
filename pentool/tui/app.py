@@ -739,10 +739,19 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # the old Chromium/Playwright path, without the Node/browser stack).
         import pentool.utils.lightpanda as _lp
 
+        # Trust our MITM CA so HTTPS captures work (not just HTTP).
+        ca_path = os.path.join(self._cfg.cert_dir, "ca.crt")
+
         binary = _lp.find_lightpanda_binary()
         if binary is None:
-            logger.warning("--real: lightpanda binary not installed — cannot fetch")
-            return False
+            # Lightpanda — сторонний бинарник, в установке его может не быть.
+            # Без него `--real`/`--smart` раньше просто ничего не делал:
+            # проект создавался, прокси поднимался, а история оставалась
+            # пустой — выглядело как «перехват не работает». Теперь падаем в
+            # обычный HTTP-запрос через наш прокси: JS не выполнится, но
+            # запрос попадёт в историю и в дерево Target.
+            logger.warning("--real: lightpanda не найден — перехожу на HTTP-фолбэк (без JS)")
+            return self._do_http_fallback_fetch(urls, proxy_url, ca_path)
 
         cmd = [binary, "fetch"]
         cmd.extend(urls)
@@ -754,8 +763,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             "--wait-ms",
             "3000",
         ]
-        # Trust our MITM CA so HTTPS captures work (not just HTTP).
-        ca_path = os.path.join(self._cfg.cert_dir, "ca.crt")
         if os.path.isfile(ca_path):
             cmd += ["--ca-cert", ca_path]
 
@@ -786,6 +793,38 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         except Exception as exc:
             logger.warning("--real: lightpanda capture error: %s", exc)
             return False
+
+    def _do_http_fallback_fetch(self, urls: list[str], proxy_url: str, ca_path: str) -> bool:
+        """Забрать URL обычным HTTP-запросом через наш прокси (без браузера).
+
+        Нужен, когда Lightpanda не установлена: без него `--real` не создавал
+        ни одного запроса, и перехват выглядел нерабочим. Доверяем нашему CA,
+        чтобы HTTPS тоже попадал в историю.
+        """
+        import ssl
+        import urllib.error
+        import urllib.request
+
+        context = (
+            ssl.create_default_context(cafile=ca_path) if os.path.isfile(ca_path) else ssl.create_default_context()
+        )
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url}),
+            urllib.request.HTTPSHandler(context=context),
+        )
+        opener.addheaders = [("User-Agent", f"pentool/{__version__} (real-fetch fallback)")]
+
+        captured = 0
+        for url in urls:
+            try:
+                with opener.open(url, timeout=25) as response:
+                    response.read(64 * 1024)
+                captured += 1
+                logger.info("--real: HTTP-фолбэк забрал %s (status=%s)", url, response.status)
+            except Exception:
+                # Таймаут/отказ прокси/сертификат — по одной причине на URL.
+                logger.warning("--real: HTTP-фолбэк не смог забрать %s", url, exc_info=True)
+        return captured > 0
 
     def _refresh_target_tree(self) -> None:
         try:
