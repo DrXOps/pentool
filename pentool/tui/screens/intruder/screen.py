@@ -472,12 +472,17 @@ class IntruderScreen(
             Label("Payload set:"),
             ToolbarButton("Set 1 ▼", self._wid(tab_id, _TabId.BTN_PAYLOAD_SET)),
             Toolbar.sep(),
-            ToolbarButton("Add", self._wid(tab_id, _TabId.BTN_PAYLOAD_ADD)),
-            ToolbarButton("Remove", self._wid(tab_id, _TabId.BTN_PAYLOAD_REMOVE)),
-            ToolbarButton("Clear", self._wid(tab_id, _TabId.BTN_PAYLOAD_CLEAR)),
-            ToolbarButton("Load from file…", self._wid(tab_id, _TabId.BTN_PAYLOAD_LOAD)),
-            ToolbarButton("Generate…", self._wid(tab_id, _TabId.BTN_PAYLOAD_GENERATE)),
-            ToolbarButton("🧠 Smart…", self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART), classes="pro-locked"),
+            # Разделители ставит сам Toolbar.grouped: раньше Add/Remove/Clear
+            # шли вплотную, и «нет черты между Add и Clear» повторялось в
+            # каждом новом тулбаре.
+            *Toolbar.grouped(
+                ToolbarButton("Add", self._wid(tab_id, _TabId.BTN_PAYLOAD_ADD)),
+                ToolbarButton("Remove", self._wid(tab_id, _TabId.BTN_PAYLOAD_REMOVE)),
+                ToolbarButton("Clear", self._wid(tab_id, _TabId.BTN_PAYLOAD_CLEAR)),
+                ToolbarButton("Load from file…", self._wid(tab_id, _TabId.BTN_PAYLOAD_LOAD)),
+                ToolbarButton("Generate…", self._wid(tab_id, _TabId.BTN_PAYLOAD_GENERATE)),
+                ToolbarButton("🧠 Smart…", self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART), classes="pro-locked"),
+            ),
             id=self._wid(tab_id, _TabId.PAYLOAD_BUTTONS_TOOLBAR),
         )
 

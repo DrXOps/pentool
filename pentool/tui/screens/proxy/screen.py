@@ -195,8 +195,12 @@ class ProxyScreen(
     def _compose_intercept_tab(self) -> ComposeResult:
         with TabPane("Intercept", id="tab-intercept"):
             with Horizontal(id="intercept-toolbar"):
-                yield ToolbarButton("⏩ Forward", "btn-forward", classes="disabled")
-                yield ToolbarButton("✖ Drop", "btn-drop", classes="disabled")
+                # Forward и Drop — разные решения по одному запросу; без черты
+                # они читались как одна кнопка-переключатель.
+                yield from Toolbar.buttons(
+                    ToolbarButton("⏩ Forward", "btn-forward", classes="disabled"),
+                    ToolbarButton("✖ Drop", "btn-drop", classes="disabled"),
+                )
                 yield Static(" │ ", classes="toolbar-sep")
                 yield ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars")
                 yield Static(" │ ", classes="toolbar-sep")

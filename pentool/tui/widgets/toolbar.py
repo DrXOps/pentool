@@ -59,6 +59,30 @@ class Toolbar(Horizontal):
         return Static(" │ ", classes="toolbar-sep")
 
     @staticmethod
+    def grouped(*buttons) -> list:
+        """Кнопки, между которыми разделитель расставлен сам.
+
+        Разделители ставились вручную, и при добавлении новой кнопки их
+        забывали — отсюда «Add и Clear слиплись», «Drop и Forward без черты».
+        Здесь слипание невозможно по построению: список готов для
+        ``Toolbar(*children)`` и для ``yield from``.
+
+        Example:
+            Toolbar(*Toolbar.grouped(btn_add, btn_remove, btn_clear))
+        """
+        items: list = []
+        for index, button in enumerate(buttons):
+            if index:
+                items.append(Static(" │ ", classes="toolbar-sep"))
+            items.append(button)
+        return items
+
+    @staticmethod
+    def buttons(*buttons):
+        """То же, что ``grouped``, но для ``yield from`` в compose."""
+        yield from Toolbar.grouped(*buttons)
+
+    @staticmethod
     def progress(id: str = "progress", total: int = 100, **kw) -> ProgressBar:
         """Прогресс-бар с предустановками."""
         return ProgressBar(total=total, show_percentage=False, id=id, **kw)

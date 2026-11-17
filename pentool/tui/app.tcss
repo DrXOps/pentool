@@ -118,6 +118,26 @@ Toast.-critical    { border: heavy $error; }
    a `Screen.narrow …` rule written in a screen's own .tcss would be parsed as
    `<ThatScreen> Screen.narrow …` and never match. */
 
+/* ── Общее поле программы (2026-11-17) ─────────────────────────────────────
+   Раньше отступы от краёв задавались внутри конкретных экранов: у дашборда
+   карточки стояли с полями, а proxy/intruder/target прилипали к краям, и
+   «рамка» приложения выглядела по-разному в каждом модуле. Теперь поле задано
+   один раз для всех экранов: диалоги (ModalScreen) остаются без него, а на
+   узком терминале отступ уменьшается, чтобы не отнимать колонки. */
+
+Screen {
+    padding: 0 2;
+}
+
+/* Диалоги — отдельные окна поверх, у них своя рамка. */
+ModalScreen {
+    padding: 0;
+}
+
+Screen.narrow {
+    padding: 0 1;
+}
+
 /* Narrow terminal: the inspector is the first thing to go, but
    `_inspector_visible` is untouched — widening the terminal brings it back. */
 Screen.narrow ProxyScreen InspectorPanel.-visible {
