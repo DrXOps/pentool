@@ -1,7 +1,4 @@
 {
-  "pentool/core/logging.py": 1,
-  "pentool/services/ai/factory.py": 1,
-  "pentool/tui/project_manager.py": 27,
   "pentool/tui/screens/intruder/screen.py": 18,
   "pentool/tui/screens/proxy/screen.py": 25,
   "pentool/tui/screens/settings/screen.py": 19,

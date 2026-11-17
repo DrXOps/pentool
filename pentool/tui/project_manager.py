@@ -123,11 +123,11 @@ class ProjectManager:
                         "ok",
                     )
                     dash._populate_projects()
-                except Exception as exc:
-                    # Файл сохранён (уведомление выше уже показано), но в
-                    # ленте и в списке проектов этого нет — расхождение
-                    # между «Saved» и пустым списком на дашборде.
-                    logger.debug("project: save not reflected on dashboard: %s", exc)
+                except Exception:
+                    # Файл сохранён (уведомление выше уже показано), но в ленте
+                    # и списке проектов этого нет — расхождение между «Saved» и
+                    # пустым списком на дашборде.
+                    logger.warning("project: save not reflected on dashboard", exc_info=True)
             except Exception as e:
                 _err(e, "Save failed")
 
@@ -207,8 +207,10 @@ class ProjectManager:
                         "_do_save_json: exported %d HTTP entries from SQLite",
                         len(http_history),
                     )
-            except Exception as exc:
-                logger.warning("_do_save_json: http_history export failed: %s", exc)
+            except Exception:
+                # История прокси не попала в файл проекта: после загрузки её не
+                # будет. Это потеря при экспорте, а не косметика.
+                logger.warning("_do_save_json: http_history export failed", exc_info=True)
             # Scanner findings
             try:
                 from pentool.tui.screens.scanner.screen import ScannerScreen
@@ -216,6 +218,9 @@ class ProjectManager:
                 scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
                 scanner_export = scanner_screen.get_scanner_export()
             except Exception:
+                # Находки сканера не попали в файл: проект сохранится «пустым»
+                # по этой части, хотя на экране они есть.
+                logger.warning("_do_save_json: scanner findings not exported", exc_info=True)
                 scanner_export = {"findings": []}
             # Target sitemap
             try:
@@ -225,6 +230,9 @@ class ProjectManager:
                 target_api = target_screen._get_api()
                 target_export = target_api.export_project_data()
             except Exception:
+                # Карта сайта не попала в файл проекта — при загрузке Target
+                # будет пуст.
+                logger.warning("_do_save_json: target sitemap not exported", exc_info=True)
                 target_export = {"sitemap": {}}
             # Intruder results
             try:
@@ -233,6 +241,8 @@ class ProjectManager:
                 intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
                 intruder_export = intruder_screen.get_intruder_export()
             except Exception:
+                # Результаты Intruder не попали в файл проекта.
+                logger.warning("_do_save_json: intruder results not exported", exc_info=True)
                 intruder_export = {"results": []}
             # Spider sessions (from EventBus history)
             spider_export = self._collect_spider_sessions()
@@ -274,8 +284,9 @@ class ProjectManager:
                 scanner_count = scanner_api.import_project_data(data.get("scanner", {}))
                 scanner_screen._populate_from_db([])
                 scanner_screen._load_findings_worker()
-            except Exception as exc:
-                logger.warning("import scanner: %s", exc)
+            except Exception:
+                # Находки сканера не импортированы: проект откроется без них.
+                logger.warning("import scanner: findings not imported", exc_info=True)
             # Target sitemap
             target_count = 0
             try:
@@ -285,8 +296,9 @@ class ProjectManager:
                 target_api = target_screen._get_api()
                 target_count = target_api.import_project_data(data.get("target", {}))
                 target_screen._load_sitemap()
-            except Exception as exc:
-                logger.warning("import target: %s", exc)
+            except Exception:
+                # Карта сайта не импортирована — Target откроется пустым.
+                logger.warning("import target: sitemap not imported", exc_info=True)
             # Intruder results
             intruder_count = 0
             try:
@@ -296,8 +308,9 @@ class ProjectManager:
                 intruder_api = getattr(intruder_screen, "_api", None)
                 if intruder_api:
                     intruder_count = intruder_api.import_project_data(data.get("intruder", {}))
-            except Exception as exc:
-                logger.warning("import intruder: %s", exc)
+            except Exception:
+                # Результаты Intruder не импортированы.
+                logger.warning("import intruder: results not imported", exc_info=True)
 
             self._app.post_message(ProxyLoadProject())
             self.update_project_name(path)
@@ -471,8 +484,10 @@ class ProjectManager:
                 else:
                     await repeater.reload_from_project(path)
                 logger.info("_reload_project_screens: repeater %s", "reset" if is_new else "reloaded")
-            except Exception as exc:
-                logger.debug("_reload_project_screens repeater: %s", exc)
+            except Exception:
+                # Repeater остался на прошлом проекте: пользователь увидит и
+                # отправит запросы чужого проекта. error, не debug.
+                logger.error("_reload_project_screens: repeater not switched", exc_info=True)
 
         async def _reload_proxy() -> None:
             try:
@@ -481,8 +496,10 @@ class ProjectManager:
                 # an EMPTY scope (not inherited from the previous project).
                 await screen._reload_from_storage(is_new=is_new)
                 logger.info("_reload_project_screens: proxy reloaded from %s", path)
-            except Exception as exc:
-                logger.debug("_reload_project_screens proxy: %s", exc)
+            except Exception:
+                # Хранилище прокси не переключено: история чужого проекта
+                # останется на экране и будет дополняться новыми запросами.
+                logger.error("_reload_project_screens: proxy storage not switched", exc_info=True)
 
         async def _reload_scanner() -> None:
             try:
@@ -508,8 +525,10 @@ class ProjectManager:
                 # but each tab's RichLog kept its old content).
                 scanner_screen._clear_scan_logs()
                 logger.info("_reload_project_screens: scanner reloaded")
-            except Exception as exc:
-                logger.debug("_reload_project_screens scanner: %s", exc)
+            except Exception:
+                # Находки сканера остались от прошлого проекта — прямой
+                # «артефакт из чужого проекта» на экране.
+                logger.error("_reload_project_screens: scanner not switched", exc_info=True)
 
         async def _reload_target(is_new: bool = False) -> None:
             try:
@@ -531,10 +550,10 @@ class ProjectManager:
                     # FDs/locks across project switches.
                     try:
                         await target_screen._target_api.close()
-                    except Exception as exc:
+                    except Exception:
                         # Соединение остаётся открытым до выхода: дескрипторы и
                         # блокировки копятся с каждым переключением проекта.
-                        logger.debug("project: old site map connection not closed: %s", exc)
+                        logger.warning("project: old site map connection not closed", exc_info=True)
                 target_screen._target_api = None
                 target_screen._get_api()
                 # For a brand-new project the DB is empty, but guard anyway:
@@ -545,15 +564,17 @@ class ProjectManager:
                     try:
                         target_screen._target_api.clear()
                         target_screen._target_api.sitemap._scope_hosts.clear()
-                    except Exception as exc:
+                    except Exception:
                         # Узлы прошлого проекта могут появиться в новом — это
                         # ровно тот «артефакт, протекающий между проектами»,
-                        # ради которого блок и написан.
-                        logger.debug("project: new project's site map not cleared: %s", exc)
+                        # ради которого блок и написан. error.
+                        logger.error("project: new project's site map not cleared", exc_info=True)
                 target_screen._load_sitemap()
                 logger.info("_reload_project_screens: target reloaded from %s", path)
-            except Exception as exc:
-                logger.debug("_reload_project_screens target: %s", exc)
+            except Exception:
+                # Целевой экран не переключён на новый проект — дерево сайта
+                # осталось от прошлого.
+                logger.error("_reload_project_screens: target not switched", exc_info=True)
 
         async def _reload_dashboard() -> None:
             try:
@@ -561,8 +582,10 @@ class ProjectManager:
 
                 dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
                 dash.refresh_stats()
-            except Exception as exc:
-                logger.debug("_reload_project_screens dashboard: %s", exc)
+            except Exception:
+                # Цифры дашборда не обновились — экран покажет статистику
+                # прошлого проекта до следующего refresh.
+                logger.warning("_reload_project_screens: dashboard not refreshed", exc_info=True)
 
         async def _reload_intruder() -> None:
             try:
@@ -571,8 +594,10 @@ class ProjectManager:
                 intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
                 await intruder_screen.reload_from_project(path)
                 logger.info("_reload_project_screens: intruder reloaded from %s", path)
-            except Exception as exc:
-                logger.debug("_reload_project_screens intruder: %s", exc)
+            except Exception:
+                # Intruder остался на прошлом проекте: вкладки и результаты
+                # чужого проекта на экране.
+                logger.error("_reload_project_screens: intruder not switched", exc_info=True)
 
         await asyncio.gather(
             _reload_repeater(),

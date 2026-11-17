@@ -95,6 +95,9 @@ _COSMETIC_WORDS = (
 #: Уровни, которые считаются честным логом (при наличии трейсбека).
 _LOUD = {"warning", "error", "exception", "critical"}
 
+#: Имена модульных логгеров проекта (кроме них принимается любое `*log`/`*logger`).
+_LOGGER_NAMES = {"logger", "log", "root_logger", "_logger", "_log"}
+
 _PRAGMA = "logging-ok"
 
 
@@ -130,11 +133,19 @@ def _handler_logs_loudly(handler: ast.ExceptHandler, source: str) -> bool:
         # traceback и уведомляет пользователя — та же честная форма, что и
         # logger.exception, и гвард слоя 2 её уже признаёт.
         name = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else ""
-        if name == "err" and stmt.args:
+        # `err(exc, ...)` и его алиасы (`_err` — так его импортирует
+        # project_manager): error_guard печатает traceback и уведомляет
+        # пользователя, это честная форма, её признаёт и гвард слоя 2.
+        if name.lstrip("_") == "err" and stmt.args:
             return True
         if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
             continue
-        if func.value.id != "logger" or func.attr not in _LOUD:
+        # Имя логгера в проекте не всегда `logger`: `log` в services/ai/factory.py,
+        # `root_logger` в core/logging.py. Принимаем их и любое `*log`/`*logger`.
+        logger_name = func.value.id.lower()
+        if logger_name not in _LOGGER_NAMES and not logger_name.endswith(("logger", "log")):
+            continue
+        if func.attr not in _LOUD:
             continue
         if func.attr == "exception":
             return True
