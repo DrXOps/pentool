@@ -35,6 +35,18 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # review-new-files: у каждого ДОБАВЛЕННОГО файла должно быть осознанное
+      # решение — в репозиторий или в .gitignore. guard-git-staging проверяет
+      # только каталог, поэтому внутри разрешённых каталогов в origin попадали
+      # черновики (`aaaaaaaaaaaa.png`, `tui-lab/`, ELF-бинарь `bin/xclip`).
+      # Журнал решений — .claude/state/new-file-decisions.tsv (локальный).
+      - id: review-new-files
+        name: "новые файлы: решите — в репозиторий или в .gitignore"
+        entry: python tools/review_new_files.py
+        language: python
+        pass_filenames: false
+        always_run: true
+
       # check-tui-css: каждый .tcss-селектор обязан совпадать с id/классом/типом,
       # которые реально создаёт Python (REPORT.md F-008: 11 мёртвых селекторов).
       # Скрипт импортирует pentool.tui ради словаря типов, поэтому запускается

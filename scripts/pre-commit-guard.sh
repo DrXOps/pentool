@@ -92,14 +92,13 @@ in_whitelist() {
   case "$p" in
     src/* | pentool/* | tests/* | test/* | docs/* | wiki/* | prompts/* | scripts/* | \
     templates/* | ai/* | \
-    tools/* | screens/* | tui-lab/* | \
-    bin/* | config/* | configs/* | assets/* | infra/* | deploy/* | \
+    tools/* | screens/* | config/* | configs/* | assets/* | infra/* | deploy/* | \
     migrations/* | .github/* | .gitlab/* | .devcontainer/* | \
     .claude/hooks/* | .claude/settings.json | .claude/commands/* | .claude/agents/*) return 0 ;;
   esac
   case "$p" in
     */*) return 1 ;;
-    README* | CLAUDE.md | LICENSE* | CHANGELOG* | CONTRIBUTING* | SECURITY.md | \
+    README* | LICENSE* | CHANGELOG* | CONTRIBUTING* | SECURITY.md | \
     CODE_OF_CONDUCT* | AUTHORS | NOTICE | ailog.sh | pro | \
     pyproject.toml | setup.py | setup.cfg | requirements*.txt | tox.ini | pytest.ini | \
     .python-version | .ruff.toml | ruff.toml | mkdocs.yml | \
