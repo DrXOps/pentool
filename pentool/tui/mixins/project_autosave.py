@@ -39,10 +39,11 @@ class ProjectAutoSaveMixin:
             try:
                 self._auto_save_timer.pause()  # type: ignore[attr-defined]
                 self._auto_save_timer.stop()  # type: ignore[attr-defined]
-            except Exception as exc:
+            except Exception:
                 # Старый таймер не остановлен — он продолжит тикать рядом с
                 # новым, и проект будет сохраняться дважды за интервал.
-                logger.debug("auto-save: previous timer not stopped: %s", exc)
+                # Данные не теряются, но поведение не то, что задумано.
+                logger.warning("auto-save: previous timer not stopped", exc_info=True)
             self._auto_save_timer = None  # type: ignore[attr-defined]
 
         if getattr(self._cfg, "auto_save_enabled", False):  # type: ignore[attr-defined]
@@ -68,5 +69,8 @@ class ProjectAutoSaveMixin:
             name = os.path.basename(path)
             self.notify(f"Auto-saved: {name}", timeout=2)  # type: ignore[attr-defined]
             logger.info("APP: auto-saved project %s", path)
-        except Exception as exc:
-            logger.debug("_auto_save_tick: %s", exc)
+        except Exception:
+            # Сохранение уже произошло (БД на месте), но пользователь не увидел
+            # подтверждения, а запись «auto-saved» в журнал не попала — тик
+            # отработал впустую. warning, а не debug: это видимая деградация.
+            logger.warning("_auto_save_tick: notification not shown", exc_info=True)

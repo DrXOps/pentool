@@ -305,6 +305,9 @@ class IntruderAPI(ExportableAPI):
                 if hasattr(self, "_restored_results"):
                     self._restored_results.append(result)
                 loaded += 1
-            except Exception as exc:
-                logger.warning("IntruderAPI.import_project_data: skip result: %s", exc)
+            except Exception:
+                # Результат не восстановлен — в импортированном проекте его не
+                # будет, хотя он был в файле. Трейсбек нужен: без него не
+                # понять, какое поле не сошлось.
+                logger.warning("IntruderAPI.import_project_data: skip result", exc_info=True)
         return loaded

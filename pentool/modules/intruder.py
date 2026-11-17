@@ -6,8 +6,7 @@ import asyncio
 import csv
 import itertools
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Iterator
@@ -157,7 +156,10 @@ def load_payloads_from_file(path: str) -> list[str]:
             if stripped and not stripped.startswith("#"):
                 result.append(stripped)
     except Exception:
-        pass
+        # Файл не прочитан — набор payload'ов останется пустым, и атака пойдёт
+        # «ни с чем». Молчать нельзя: пользователь иначе не отличит пустой файл
+        # от нечитаемого.
+        logger.warning("intruder: payloads from %s not loaded", path, exc_info=True)
     return result
 
 
@@ -387,7 +389,7 @@ def count_lines_with_progress(
     except Exception:
         total_bytes = 0
 
-    _CHUNK_SIZE = 4 * 1024 * 1024  # 4MB
+    _chunk_size = 4 * 1024 * 1024  # 4MB
 
     def _is_qualifying(raw: bytes) -> bool:
         stripped = raw.strip()
@@ -399,7 +401,7 @@ def count_lines_with_progress(
     last_report = time.monotonic()
     with open(path, "rb") as f:
         while True:
-            chunk = f.read(_CHUNK_SIZE)
+            chunk = f.read(_chunk_size)
             if not chunk:
                 break
             bytes_read += len(chunk)
@@ -480,7 +482,9 @@ def process_payload(payload: str, operations: list[str]) -> str:
             try:
                 result = func(result)
             except Exception:
-                pass
+                # Операция преобразования не применилась — набор уйдёт в атаку
+                # частично обработанным. Это искажает результат, поэтому в лог.
+                logger.warning("intruder: payload operation %r failed, kept previous value", op, exc_info=True)
     return result
 
 

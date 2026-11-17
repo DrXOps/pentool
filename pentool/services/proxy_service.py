@@ -16,7 +16,6 @@ logger = get_logger(__name__)
 
 
 class ProxyService(BaseService):
-
     def __init__(
         self,
         proxy_api: ProxyAPI,
@@ -62,10 +61,7 @@ class ProxyService(BaseService):
 
             # Process requests that arrived before storage was ready
             if self._pre_storage_queue:
-                logger.info(
-                    "ProxyService: flushing %d pre-storage requests",
-                    len(self._pre_storage_queue)
-                )
+                logger.info("ProxyService: flushing %d pre-storage requests", len(self._pre_storage_queue))
                 for queued_req in self._pre_storage_queue:
                     await self.store_request(queued_req)
                 self._pre_storage_queue.clear()
@@ -82,7 +78,8 @@ class ProxyService(BaseService):
                 logger.error(
                     "ProxyService: pre_storage_queue full (%d), dropping oldest "
                     "queued request id=%s to bound memory",
-                    self._pre_storage_queue_max, getattr(dropped, "id", "?"),
+                    self._pre_storage_queue_max,
+                    getattr(dropped, "id", "?"),
                 )
             self._pre_storage_queue.append(req)
             return None
@@ -103,7 +100,9 @@ class ProxyService(BaseService):
             # since most failures here are transient (e.g. DB busy/locked).
             logger.error(
                 "ProxyService: store_request failed for req.id=%s, retrying once: %s",
-                req.id, exc, exc_info=True,
+                req.id,
+                exc,
+                exc_info=True,
             )
             try:
                 parsed = req.to_parsed_request()
@@ -117,7 +116,9 @@ class ProxyService(BaseService):
             except Exception as exc2:
                 logger.error(
                     "ProxyService: store_request retry failed for req.id=%s — request LOST from history: %s",
-                    req.id, exc2, exc_info=True,
+                    req.id,
+                    exc2,
+                    exc_info=True,
                 )
                 return None
 
@@ -240,11 +241,9 @@ class ProxyService(BaseService):
             self._storage_ready = True
             logger.info("ProxyService: switched to %s, storage_ready=%s", new_db_path, self._storage_ready)
         except Exception as exc:
-            logger.error("ProxyService: switch_db failed: %s", exc)
+            logger.error("ProxyService: switch_db failed", exc_info=True)
             self._storage_ready = False
-            self._report_storage_error(
-                f"Failed to open project database ({new_db_path})", exc
-            )
+            self._report_storage_error(f"Failed to open project database ({new_db_path})", exc)
 
     async def update_color(self, request_id: int, color: str) -> None:
         """Set color mark (public wrapper, avoids layer violation)."""
@@ -310,8 +309,10 @@ class ProxyService(BaseService):
             return []
         try:
             return await self._storage.export_all_requests(limit=limit)
-        except Exception as exc:
-            logger.warning("ProxyService: export_all_requests failed: %s", exc)
+        except Exception:
+            # История не выгружена — экспорт вернёт пустой список, и это будет
+            # выглядеть как «истории нет». Трейсбек отделяет одно от другого.
+            logger.warning("ProxyService: export_all_requests failed", exc_info=True)
             return []
 
     async def reload_from_proxy(self, proxy_api: "ProxyAPI") -> None:
@@ -324,7 +325,8 @@ class ProxyService(BaseService):
             for req in proxy.get_requests(limit=100_000):
                 parsed = req.to_parsed_request()
                 await self._storage.add_request(
-                    parsed, req.response,
+                    parsed,
+                    req.response,
                     is_websocket=getattr(req, "is_websocket", False),
                 )
 

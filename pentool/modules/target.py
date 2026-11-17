@@ -273,8 +273,10 @@ class SiteMap(BaseSqliteStorage):
                     ("scope_wildcards", wildcards_json),
                 )
             await db.commit()
-        except Exception as exc:
-            logger.error("SiteMap.save error: %s", exc)
+        except Exception:
+            # Карта сайта не сохранена: при следующем запуске проект откроется
+            # без неё. Трейсбек обязателен — без него причину не найти.
+            logger.error("SiteMap.save error", exc_info=True)
 
     async def load(self) -> None:
         try:
@@ -309,8 +311,10 @@ class SiteMap(BaseSqliteStorage):
                 raw = row[0] if row else ""
                 if raw:
                     self._scope_wildcards = [s for s in raw.split(",") if s.strip()]
-        except Exception as exc:
-            logger.error("SiteMap.load error: %s", exc)
+        except Exception:
+            # Карта сайта не прочитана: экран Target будет пуст, хотя данные в
+            # БД есть. Трейсбек обязателен.
+            logger.error("SiteMap.load error", exc_info=True)
 
     def clear(self) -> None:
         self._nodes.clear()

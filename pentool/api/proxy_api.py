@@ -19,7 +19,6 @@ ProxyLike = ProxyServer | ProxyClient | None
 
 
 class ProxyAPI(ExportableAPI):
-
     def __init__(self) -> None:
         self._proxy: ProxyLike = None
 
@@ -100,8 +99,7 @@ class ProxyAPI(ExportableAPI):
             return None
         # In-memory ProxyServer keeps its own _find_request; the daemon-backed
         # ProxyClient resolves it over IPC.
-        find = self._proxy._find_request if isinstance(self._proxy, ProxyServer) \
-            else self._proxy.find_request
+        find = self._proxy._find_request if isinstance(self._proxy, ProxyServer) else self._proxy.find_request
         return find(req_id)
 
     def clear_requests(self) -> None:
@@ -195,7 +193,6 @@ class ProxyAPI(ExportableAPI):
         if self._proxy is None:
             return 0, "Proxy not initialized"
 
-
         # Scope
         self._proxy.scope = data.get("proxy", {}).get("scope", [])
 
@@ -211,8 +208,8 @@ class ProxyAPI(ExportableAPI):
                 req = InterceptedRequest.from_dict(req_data)
                 loaded_requests.append(req)
                 loaded += 1
-            except Exception as e:
-                logger.warning("import_project_data: failed to restore request: %s", e)
+            except Exception:
+                logger.warning("import_project_data: failed to restore request", exc_info=True)
         self._proxy.replace_requests(loaded_requests)
 
         return loaded, ""

@@ -20,7 +20,6 @@ __all__ = ["TargetAPI", "SiteNode", "SiteMap"]
 
 
 class TargetAPI(ExportableAPI):
-
     def __init__(self, db_path: str = "") -> None:
         self._db_path = db_path
         self._sitemap = SiteMap(db_path=db_path)
@@ -86,6 +85,7 @@ class TargetAPI(ExportableAPI):
 
     def import_project_data(self, data: dict) -> int:
         from pentool.modules.target import SiteNode
+
         sitemap_data = data.get("sitemap", {})
         self._sitemap.clear()
         loaded = 0
@@ -106,6 +106,6 @@ class TargetAPI(ExportableAPI):
                     if node.in_scope:
                         self._sitemap._scope_hosts.add(self._sitemap._norm_host(host))
                     loaded += 1
-                except Exception as exc:
-                    logger.warning("TargetAPI.import_project_data: skip node: %s", exc)
+                except Exception:
+                    logger.warning("TargetAPI.import_project_data: skip node", exc_info=True)
         return loaded

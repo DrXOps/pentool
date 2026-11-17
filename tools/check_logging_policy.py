@@ -172,6 +172,30 @@ def scan() -> dict[str, int]:
     return counts
 
 
+def list_violations() -> list[tuple[str, int, str]]:
+    """(файл, строка, имя функции) для каждого нарушения — для пофайловой чистки."""
+    found: list[tuple[str, int, str]] = []
+    for path in sorted(PACKAGE.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:  # pragma: no cover - defensive
+            continue
+        lines = source.splitlines()
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not _is_data_path(node.name):
+                continue
+            for inner in ast.walk(node):
+                if not isinstance(inner, ast.ExceptHandler) or not _is_blind(inner):
+                    continue
+                line = lines[inner.lineno - 1] if inner.lineno <= len(lines) else ""
+                if _PRAGMA in line or _handler_logs_loudly(inner, source):
+                    continue
+                rel = str(path.relative_to(ROOT)).replace("\\", "/")
+                found.append((rel, inner.lineno, node.name))
+    return sorted(found)
+
+
 def load_baseline() -> dict[str, int]:
     if not BASELINE.exists():
         return {}
@@ -181,7 +205,13 @@ def load_baseline() -> dict[str, int]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--update", action="store_true", help="rewrite the baseline (never raises it)")
+    parser.add_argument("--list", action="store_true", help="print every violation with its line and function")
     args = parser.parse_args(argv)
+
+    if args.list:
+        for path, line, func in list_violations():
+            print(f"{path}:{line}  {func}")
+        return 0
 
     current = scan()
     baseline = load_baseline()

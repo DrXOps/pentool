@@ -65,10 +65,11 @@ class AutoSaveMixin:
         """Await a save coroutine, then drop it from the tracked list."""
         try:
             await coro
-        except Exception as exc:
+        except Exception:
             # Состояние модуля не сохранилось: после перезапуска пользователь
-            # увидит более старую версию, чем та, с которой работал.
-            logger.debug("autosave: %s did not save: %s", worker_name, exc)
+            # увидит более старую версию, чем та, с которой работал. Это потеря
+            # данных — error с трейсбеком, а не debug.
+            logger.error("autosave: %s did not save", worker_name, exc_info=True)
         finally:
             self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
 
@@ -77,10 +78,11 @@ class AutoSaveMixin:
         self._init_save_tasks()
         try:
             self.workers.cancel_group(self, self.SAVE_WORKER_GROUP)  # type: ignore[attr-defined]
-        except Exception as exc:
-            # Группа не отменена — сохранение доработает уже после закрытия
-            # БД (ровно тот случай, ради которого миксин и существует).
-            logger.debug("autosave: worker group not cancelled: %s", exc)
+        except Exception:
+            # Группа не отменена — сохранение доработает уже после закрытия БД
+            # (ровно тот случай, ради которого миксин и существует): запись
+            # может упасть или потеряться, поэтому error с трейсбеком.
+            logger.error("autosave: worker group not cancelled", exc_info=True)
         self._running_save_tasks.clear()
 
     # ── Worker-name helper ────────────────────────────────────────────────────

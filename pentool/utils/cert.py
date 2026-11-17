@@ -13,12 +13,13 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-
-from pentool.utils.logging import get_logger
-
-logger = get_logger(__name__)
 from cryptography.x509 import Certificate
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+
+from pentool.utils.logging import get_logger
+from pentool.utils.lru_cache import LRUCache
+
+logger = get_logger(__name__)
 
 
 def _generate_rsa_key(key_size: int = 2048) -> RSAPrivateKey:
@@ -54,11 +55,13 @@ def generate_ca_cert(cert_dir: str) -> tuple[str, str]:
     key = _generate_rsa_key(4096)
     now = datetime.now(timezone.utc)
 
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, "Pentool CA"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Pentool"),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Security Testing"),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, "Pentool CA"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Pentool"),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Security Testing"),
+        ]
+    )
 
     cert = (
         x509.CertificateBuilder()
@@ -116,9 +119,11 @@ def generate_domain_cert(
     key = _generate_rsa_key(2048)
     now = datetime.now(timezone.utc)
 
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, domain),
-    ])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, domain),
+        ]
+    )
 
     # Determine SAN: IP or DNS
     san_list: list[x509.GeneralName] = []
@@ -195,16 +200,16 @@ def create_ssl_context_for_domain(
 
 # ── Helper functions for disk-cache ──────────────────────────────────────────
 
+
 def _domain_cache_path(domain: str, cert_dir: str) -> Path:
     """Path to cache file for a domain: {cert_dir}/domains/{sha256(domain)[:16]}.pem"""
     import hashlib
+
     key = hashlib.sha256(domain.encode()).hexdigest()[:16]
     return Path(cert_dir) / "domains" / f"{key}.pem"
 
 
-def _load_ctx_from_disk(
-    domain: str, ca_cert_path: str, cert_dir: str | None
-) -> ssl.SSLContext | None:
+def _load_ctx_from_disk(domain: str, ca_cert_path: str, cert_dir: str | None) -> ssl.SSLContext | None:
     """Try to load a certificate from disk-cache.
 
     Checks:
@@ -241,17 +246,19 @@ def _load_ctx_from_disk(
 
         return _build_ssl_ctx(cert_pem, key_pem)
     except Exception:
-            # Corrupted cache — delete and regenerate
-            try:
-                path.unlink(missing_ok=True)
-            except Exception:
-                logger.debug("cert: failed to delete corrupted cache file", exc_info=True)
-            return None
+        # Кэш нечитаем или испорчен — сертификат будет пересоздан. Это
+        # ожидаемое восстановление, но причина должна остаться в журнале:
+        # иначе не отличить порчу файла от ошибки в самом разборе.
+        logger.warning("cert: cached certificate unusable, regenerating", exc_info=True)
+        # Corrupted cache — delete and regenerate
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:
+            logger.debug("cert: failed to delete corrupted cache file", exc_info=True)
+        return None
 
 
-def _save_ctx_to_disk(
-    domain: str, cert_pem: bytes, key_pem: bytes, cert_dir: str | None
-) -> None:
+def _save_ctx_to_disk(domain: str, cert_pem: bytes, key_pem: bytes, cert_dir: str | None) -> None:
     if not cert_dir:
         return
     try:
@@ -289,6 +296,4 @@ def _build_ssl_ctx(cert_pem: bytes, key_pem: bytes) -> ssl.SSLContext:
 # ── In-memory LRU cache for SSL contexts (1000 domains) ──────────────────────
 # Shares the generic LRUCache from utils/lru_cache.py (Этап 7.4 consolidation);
 # key is the string "{domain}:{ca_cert_path}".
-from pentool.utils.lru_cache import LRUCache
-
 _ssl_ctx_cache: LRUCache = LRUCache(max_size=1000)
