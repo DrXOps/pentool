@@ -17,17 +17,21 @@ import sys
 import traceback
 from typing import Any
 
+from pentool.core.logging import get_logger
+
 # Same Worker as pentool.core.license — kept as a separate literal here
 # (rather than importing _LICENSE_API_BASE) so crash reporting has no
 # import-time dependency on the licensing module.
 _API_BASE = "https://pentool-license.akashtanov2020.workers.dev"
+
+logger = get_logger(__name__)
 
 
 def _get_metadata() -> dict[str, Any]:
     """Collect anonymous metadata for crash report."""
     try:
         from pentool import __version__ as version
-    except Exception:
+    except ImportError:
         version = "unknown"
     return {
         "version": version,
@@ -101,7 +105,12 @@ async def send_crash_async(exc: BaseException, endpoint: str = f"{_API_BASE}/api
         async with aiohttp.ClientSession(timeout=timeout) as session:
             await session.post(endpoint, json=payload, ssl=False)
     except Exception:
-        # Network failed — save locally so the traceback is not lost
+        # Сеть подвела — сохраняем локально, чтобы трейсбек не потерялся.
+        # Ловится широко осознанно: fire-and-forget телеметрия не должна
+        # ронять приложение ни при каком ответе сервера (это зафиксировано
+        # тестом test_send_crash_async_post_error_swallowed), поэтому причина
+        # не сужается, а пишется в журнал.
+        logger.warning("crash report not sent — saved locally", exc_info=True)
         _save_local_crash(exc, tb_text)
 
 
@@ -114,13 +123,17 @@ def send_crash(exc: BaseException) -> None:
         if not getattr(cfg, "send_crash_reports", True):
             return
     except Exception:
-        pass
+        # Fail-open осознанно и зафиксировано тестами
+        # (test_send_crash_config_exception_still_attempts): сломанный конфиг не
+        # должен молча выключать краш-репорты — они нужны как раз тогда, когда
+        # что-то сломано.
+        logger.debug("crash-telemetry: opt-out setting not read — sending anyway", exc_info=True)
 
     try:
         loop = asyncio.new_event_loop()
         loop.run_until_complete(send_crash_async(exc))
         loop.close()
-    except Exception:
+    except (RuntimeError, OSError):
         pass
 
 
@@ -141,6 +154,7 @@ async def send_first_run_ping_async(endpoint: str = f"{_API_BASE}/api/telemetry/
 
         machine_id = get_machine_id()
     except Exception:
+        logger.warning("first-run ping: machine id not read — not sending", exc_info=True)
         return
 
     try:
@@ -148,7 +162,9 @@ async def send_first_run_ping_async(endpoint: str = f"{_API_BASE}/api/telemetry/
         async with aiohttp.ClientSession(timeout=timeout) as session:
             await session.post(endpoint, json={"machine_id": machine_id}, ssl=False)
     except Exception:
-        pass
+        # Установочный пинг — тоже fire-and-forget: любая ошибка сети не должна
+        # ничего ломать, но и молчать о ней незачем.
+        logger.warning("first-run ping not sent", exc_info=True)
 
 
 def send_first_run_ping() -> None:
@@ -165,11 +181,15 @@ def send_first_run_ping() -> None:
         if not getattr(cfg, "send_crash_reports", True):
             return
     except Exception:
-        pass
+        # Fail-open осознанно и зафиксировано тестами
+        # (test_send_crash_config_exception_still_attempts): сломанный конфиг не
+        # должен молча выключать краш-репорты — они нужны как раз тогда, когда
+        # что-то сломано.
+        logger.debug("crash-telemetry: opt-out setting not read — sending anyway", exc_info=True)
 
     try:
         loop = asyncio.new_event_loop()
         loop.run_until_complete(send_first_run_ping_async())
         loop.close()
-    except Exception:
+    except (RuntimeError, OSError):
         pass

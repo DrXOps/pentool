@@ -89,7 +89,7 @@ def _unicode_encode(s: str) -> str:
 def _unicode_decode(s: str) -> str:
     try:
         return s.encode("raw_unicode_escape").decode("unicode_escape")
-    except Exception:
+    except UnicodeError:
         return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), s)
 
 
@@ -105,7 +105,7 @@ def _jwt_decode(s: str) -> str:
             padded = part + "=" * (4 - len(part) % 4) if len(part) % 4 else part
             decoded = base64.urlsafe_b64decode(padded).decode("utf-8", errors="replace")
             result[name] = json.loads(decoded)
-        except Exception as exc:
+        except (ValueError, TypeError) as exc:
             result[name] = f"[error: {exc}]"
     return json.dumps(result, indent=2, ensure_ascii=False)
 
@@ -140,7 +140,7 @@ def _gzip_decode(s: str) -> str:
         padded = s + "=" * (4 - len(s) % 4) if len(s) % 4 else s
         compressed = base64.b64decode(padded)
         return gzip.decompress(compressed).decode("utf-8", errors="replace")
-    except Exception as exc:
+    except (ValueError, OSError, EOFError) as exc:
         return f"[gzip error: {exc}]"
 
 
@@ -220,7 +220,7 @@ def _detect_encoding(text: str) -> str | None:
             raw = base64.b64decode(text + "=" * (-len(text) % 4))
             if raw[:2] == b"\x1f\x8b":
                 return "Gzip+B64 Decode"
-        except Exception:
+        except ValueError:
             pass
     # Hex
     if re.match(r"^[0-9a-fA-F]+$", text) and len(text) % 2 == 0 and len(text) >= 4:
@@ -228,7 +228,7 @@ def _detect_encoding(text: str) -> str | None:
             decoded = bytes.fromhex(text).decode("utf-8", errors="strict")
             if decoded.isprintable():
                 return "Hex Decode"
-        except Exception:
+        except ValueError:
             pass
     # Base64URL (no +/ chars)
     if re.match(r"^[A-Za-z0-9_-]+=*$", text) and len(text) >= 8:
@@ -236,7 +236,7 @@ def _detect_encoding(text: str) -> str | None:
             decoded = _base64url_decode(text)
             if len(decoded) > 0 and sum(c.isprintable() for c in decoded) / len(decoded) > 0.8:
                 return "Base64URL Decode"
-        except Exception:
+        except ValueError:
             pass
     # Base64 standard
     if re.match(r"^[A-Za-z0-9+/]+=*$", text) and len(text) >= 8 and len(text) % 4 in (0, 2, 3):
@@ -244,7 +244,7 @@ def _detect_encoding(text: str) -> str | None:
             decoded = _base64_decode(text)
             if len(decoded) > 0 and sum(c.isprintable() for c in decoded) / len(decoded) > 0.8:
                 return "Base64 Decode"
-        except Exception:
+        except ValueError:
             pass
     return None
 

@@ -333,7 +333,7 @@ class HttpStorage(BaseSqliteStorage):
                 entry["request_body"] = LargeBodyHandler.load(entry["request_body_ref"]).decode(
                     "utf-8", errors="replace"
                 )
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 logger.warning("get_full_entry: failed to load req body ref=%s: %s", entry["request_body_ref"], e)
                 entry["request_body"] = "(could not load body)"
 
@@ -342,7 +342,7 @@ class HttpStorage(BaseSqliteStorage):
                 entry["response_body"] = LargeBodyHandler.load(entry["response_body_ref"]).decode(
                     "utf-8", errors="replace"
                 )
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 logger.warning("get_full_entry: failed to load resp body ref=%s: %s", entry["response_body_ref"], e)
                 entry["response_body"] = "(could not load body)"
 
@@ -447,7 +447,7 @@ class HttpStorage(BaseSqliteStorage):
             async with self._db.execute(sql, (query, limit)) as cur:
                 rows = await cur.fetchall()
             return [dict(r) for r in rows]
-        except Exception as e:
+        except (OperationalError, ProgrammingError) as e:
             logger.warning("search: FTS query failed for %r: %s", query, e)
             return []
 
@@ -467,12 +467,12 @@ class HttpStorage(BaseSqliteStorage):
             if row["request_body_ref"]:
                 try:
                     LargeBodyHandler.delete(row["request_body_ref"])
-                except Exception as e:
+                except (OSError, ValueError) as e:
                     logger.warning("clear_all: failed to delete req body file %s: %s", row["request_body_ref"], e)
             if row["response_body_ref"]:
                 try:
                     LargeBodyHandler.delete(row["response_body_ref"])
-                except Exception as e:
+                except (OSError, ValueError) as e:
                     logger.warning("clear_all: failed to delete resp body file %s: %s", row["response_body_ref"], e)
         # Now delete records from DB
         await self._db.execute("DELETE FROM requests")
