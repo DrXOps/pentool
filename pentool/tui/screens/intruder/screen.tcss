@@ -215,3 +215,13 @@ _InputDialog #buttons {
 _InputDialog #buttons ToolbarButton {
     margin: 0 0 0 1;
 }
+/* Поле переименования вкладки: тот же вид, что в Repeater. Без этого правила
+   поле появлялось в обычном потоке посреди панели и «переименование не
+   работало» выглядело именно так — поле открывалось, но его не видно. */
+IntruderScreen .tab-rename {
+    display: none;
+    dock: top;
+    width: 20;
+    background: $panel;
+    layer: overlay;
+}

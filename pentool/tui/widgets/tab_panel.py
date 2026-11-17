@@ -163,7 +163,9 @@ class TabbedContentPanel(Widget, Generic[TState]):
 
     def compose(self) -> ComposeResult:
         yield TabbedContent(id=f"{self.id}-content")
-        inp_rename = Input(id=self._rename_input_id, placeholder="Tab name...", compact=True)
+        # Класс помимо id: экраны стилизуют поле одним правилом `.tab-rename`,
+        # а не копией правила на каждый экран с его собственным id.
+        inp_rename = Input(id=self._rename_input_id, classes="tab-rename", placeholder="Tab name...", compact=True)
         inp_rename.display = False
         yield inp_rename
 

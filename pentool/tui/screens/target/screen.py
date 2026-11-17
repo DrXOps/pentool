@@ -8,7 +8,7 @@ from pathlib import Path
 
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Tree
@@ -197,8 +197,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         with Horizontal(id="main-split"):
             yield Tree("Site Map", id="site-tree")
             yield ResizeHandle("site-tree", "detail-panel", id="target-resize-h")
-            with Vertical(id="detail-panel"):
-                yield ContentPanel("Details", widget_type="richlog", wrap=True, buttons=["copy"])
+            # #detail-panel — сам ContentPanel: остальные места ищут его именно
+            # так (clear_content/write_to_log). Раньше здесь был Vertical с
+            # панелью внутри, и `query_one("#detail-panel", ContentPanel)` не
+            # находил ничего, а `on_tree_node_selected` падал на `Vertical.clear`.
+            yield ContentPanel("Details", id="detail-panel", widget_type="richlog", wrap=True, buttons=["copy"])
 
     def on_mount(self) -> None:
         """При старте скрыть AI-секцию если ai_enabled выключен."""
@@ -401,8 +404,8 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         data = event.node.data
         if data is None:
             return
-        log = self.query_one("#detail-panel", Vertical)
-        log.clear()
+        log = self.query_one("#detail-panel", ContentPanel)
+        log.clear_content()
 
         if data.get("type") == "host":
             host = data["host"]
@@ -412,8 +415,8 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             nodes = api.get_paths(host)
             in_scope = api.sitemap.is_in_scope(host)
             scope_str = "[green]YES[/green]" if in_scope else "[red]NO[/red]"
-            log.write(f"[bold]{esc(host)}[/bold]")
-            log.write(f"In scope: {scope_str}")
+            log.write_to_log(f"[bold]{esc(host)}[/bold]")
+            log.write_to_log(f"In scope: {scope_str}")
 
             # TechDetect — читаем из кэша
             try:
@@ -423,31 +426,31 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 if cached:
                     tech_str = _format_tech_profile(cached)
                     if tech_str:
-                        log.write(f"[dim cyan]Tech: {esc(tech_str)}[/dim cyan]")
+                        log.write_to_log(f"[dim cyan]Tech: {esc(tech_str)}[/dim cyan]")
             except Exception:
                 # Профиль технологий просто не появится в деталях. Ожидаемо
                 # при пустом кэше, но не отличимо от сбоя без записи, поэтому
                 # трейсбек: у `get_tech_cache` две ветки — «нет» и «сломалось».
                 logger.exception("target: tech cache not read for %s", host)
 
-            log.write(f"Endpoints: {len(nodes)}")
+            log.write_to_log(f"Endpoints: {len(nodes)}")
             total = sum(n.request_count for n in nodes)
-            log.write(f"Total requests: {total}")
+            log.write_to_log(f"Total requests: {total}")
             if nodes:
-                log.write("")
-                log.write("[dim]Paths:[/dim]")
+                log.write_to_log("")
+                log.write_to_log("[dim]Paths:[/dim]")
                 for n in nodes[:20]:
-                    log.write(f"  {esc(n.path)}  {' '.join(sorted(n.methods))}")
+                    log.write_to_log(f"  {esc(n.path)}  {' '.join(sorted(n.methods))}")
 
         elif data.get("type") == "path":
             node = data["node"]
             self._selected_host = data["host"]
             self._selected_node_data = node
-            log.write(f"[bold]{esc(node.host)}{esc(node.path)}[/bold]")
-            log.write(f"Methods: {', '.join(sorted(node.methods))}")
-            log.write(f"Requests: {node.request_count}")
-            log.write(f"Last seen: {node.last_seen.strftime('%Y-%m-%d %H:%M')}")
-            log.write(f"In scope: {'[green]YES[/green]' if node.in_scope else '[red]NO[/red]'}")
+            log.write_to_log(f"[bold]{esc(node.host)}{esc(node.path)}[/bold]")
+            log.write_to_log(f"Methods: {', '.join(sorted(node.methods))}")
+            log.write_to_log(f"Requests: {node.request_count}")
+            log.write_to_log(f"Last seen: {node.last_seen.strftime('%Y-%m-%d %H:%M')}")
+            log.write_to_log(f"In scope: {'[green]YES[/green]' if node.in_scope else '[red]NO[/red]'}")
 
     def on_key(self, event) -> None:
         if event.key == "m":
@@ -563,7 +566,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
 
         domain = ""
         try:
-            node = self.query_one("#host-tree", Tree).cursor_node
+            node = self.query_one("#site-tree", Tree).cursor_node
             if node and hasattr(node, "label"):
                 node_label = str(node.label)
                 if "://" in node_label:

@@ -53,7 +53,7 @@ RepeaterScreen RequestEditor {
 RepeaterScreen ResponseViewer {
     height: 1fr;
 }
-RepeaterScreen #rename-input {
+RepeaterScreen .tab-rename {
     display: none;
     dock: top;
     width: 20;

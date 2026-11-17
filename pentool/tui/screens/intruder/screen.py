@@ -986,26 +986,19 @@ class IntruderScreen(
     # ── Rename (BaseModuleScreen interface) ───────────────────────────────────
 
     def _start_rename(self, tab_id: str) -> None:
-        """Делегировать в TabbedContentPanel."""
-        state = None
-        for t in self._tc_panel.all_states:
-            if getattr(t, "tab_id", None) == tab_id:
-                state = t
-                break
-        if state is None:
-            return
+        """Переименование вкладки: поле живёт в панели вкладок.
+
+        Раньше экран монтировал СВОЙ `Input` с тем же id, что и панель, — в
+        дереве оказывались два поля с одинаковым идентификатором, `query_one`
+        находил скрытое первое, а видимое оставалось без фокуса. Со стороны это
+        «F2/двойной клик не работает».
+        """
         try:
-            inp = Input(id=self._rename_input_id, placeholder="Tab name...", compact=True)
-            inp.value = getattr(state, "name", "Tab")
-            inp.display = True
-            self.query_one("#intruder-tabs", TabbedContentPanel).parent.mount(inp)
-            inp.focus()
-            inp.action_select_all()
-            inp._rename_tab_id = tab_id
-        except Exception as exc:
-            # F2 по вкладке ничего не делает — вкладка не переименовывается,
-            # и со стороны это «клавиша не работает».
-            logger.debug("intruder: rename not started for %s: %s", tab_id, exc)
+            self._tc_panel._start_rename(tab_id)
+        except Exception:
+            # Вкладка не переименовывается — и это единственное место, где
+            # видно причину: сама панель глотает ошибку в debug.
+            logger.exception("intruder: rename not started for %s", tab_id)
 
     def _rename_tab(self, tab_id: str, new_name: str) -> None:
         state = None
