@@ -1885,10 +1885,21 @@ class IntruderScreen(
         tab = tab if tab is not None else self._active_tab
         if tab is None:
             return
+        if not self._tab_body_mounted(tab.tab_id):
+            # Тело вкладки ещё не собрано (таб создан, pane не смонтирован).
+            # Это порядок вызовов, а не сбой: считать нечего и жаловаться не на
+            # что — иначе журнал заполняется предупреждениями на каждый таб.
+            logger.debug("intruder: payload select skipped — tab %s not mounted yet", tab.tab_id)
+            return
         try:
             editor = self._template_editor(tab)
             w = editor.content_widget
             template = w.text if isinstance(w, TextArea) else ""
+        except NoMatches as exc:
+            # Вкладка смонтирована, а панели шаблона нет — расхождение DOM и
+            # состояния; считаем по пустому шаблону, но след оставляем.
+            logger.debug("intruder: template panel missing for %s: %s", tab.tab_id, exc)
+            template = ""
         except Exception:
             logger.warning("intruder: template not read for payload select", exc_info=True)
             template = ""
@@ -1903,9 +1914,21 @@ class IntruderScreen(
         try:
             label = f"Set {idx + 1} ▼" if n <= 1 else f"Set {idx + 1}/{n} ▼"
             self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_PAYLOAD_SET)}", ToolbarButton).label = label
+        except NoMatches as exc:
+            logger.debug("intruder: payload set button missing for %s: %s", tab.tab_id, exc)
         except Exception:
             logger.warning("intruder: payload set label not updated", exc_info=True)
         self._refresh_payload_list(tab)
+
+    def _tab_body_mounted(self, tab_id: str) -> bool:
+        """Собрано ли тело вкладки (её тулбар и панель шаблона в DOM).
+
+        Нужен, чтобы отличать «ещё не смонтировано» (нормальный порядок при
+        создании таба) от «смонтировано, но виджета нет» (настоящее
+        расхождение). Без этого различия любой вызов до сборки писал warning.
+        """
+        marker = self._wid(tab_id, _TabId.PAYLOAD_BUTTONS_TOOLBAR)
+        return bool(self.query(f"#{marker}"))
 
     def _tab_id_for_widget(self) -> str | None:
         t = self._active_tab

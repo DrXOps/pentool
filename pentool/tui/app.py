@@ -1104,6 +1104,16 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         if module_id == self._active_module:
             return
         if module_id not in SCREEN_MAP:
+            # Экран не зарегистрирован — например Recon, который живёт в
+            # PRO-сабмодуле: без него screen_registry молча пропускает запись,
+            # и раньше вкладка открывалась пустым окном без объяснений.
+            logger.warning("_switch_to: module %r has no screen registered", module_id)
+            self.notify(
+                f"Модуль «{module_id}» недоступен: его экран не найден в этой сборке "
+                "(PRO-подмодуль не установлен или устарел).",
+                severity="warning",
+                timeout=6,
+            )
             return
         if not self._project_loaded and not self._skip_project_guard and module_id not in self._FREE_MODULES:
             self.notify(
