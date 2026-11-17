@@ -266,7 +266,7 @@ def _save_ctx_to_disk(domain: str, cert_pem: bytes, key_pem: bytes, cert_dir: st
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(cert_pem + key_pem)
         path.chmod(0o600)
-    except Exception:
+    except Exception:  # logging-ok: кэш необязателен — сертификат пересоздастся, данные не теряются
         logger.debug("cert: disk cache save failed", exc_info=True)  # non-critical
 
 

@@ -355,8 +355,8 @@ class ProxyScreen(
             payload_text = getattr(event, "payload_text", "")
             payload = getattr(event, "payload", b"")
 
-            _OPCODE_NAMES = {0x1: "TEXT", 0x2: "BIN", 0x8: "CLOSE", 0x9: "PING", 0xA: "PONG"}
-            op_name = _OPCODE_NAMES.get(opcode, f"0x{opcode:X}")
+            _opcode_names = {0x1: "TEXT", 0x2: "BIN", 0x8: "CLOSE", 0x9: "PING", 0xA: "PONG"}
+            op_name = _opcode_names.get(opcode, f"0x{opcode:X}")
 
             if direction.startswith("client"):
                 dir_color = "cyan"
@@ -464,10 +464,10 @@ class ProxyScreen(
                         col.width = 30
                         col.auto_width = False
                         break
-            except Exception as exc:
+            except Exception:
                 # Колонка Host остаётся автоподобранной — таблица читается хуже,
                 # но данные на месте. След нужен, чтобы не искать причину заново.
-                logger.debug("proxy: Host column width not pinned: %s", exc)
+                logger.debug("proxy: Host column width not pinned")
             table._clear_caches()
             table._require_update_dimensions = True
             table.refresh()
@@ -548,16 +548,16 @@ class ProxyScreen(
                 # previously-visible row stays in view instead of jumping
                 # back to the very top.
                 table.scroll_to(y=table.scroll_y + len(older_rows), animate=False)
-            except Exception as exc:
-                logger.debug("PROXY SCREEN: _load_more_history: table update failed: %s", exc)
+            except Exception:
+                logger.warning("proxy: history rows not shown after load", exc_info=True)
             self._update_history_count_label()
             logger.info(
                 "PROXY SCREEN: _load_more_history loaded %d older rows, oldest_offset now %d",
                 len(older_rows),
                 self._history_oldest_offset,
             )
-        except Exception as exc:
-            logger.error("_load_more_history failed: %s", exc)
+        except Exception:
+            logger.error("_load_more_history failed", exc_info=True)
         finally:
             self._history_loading_more = False
 
@@ -612,16 +612,16 @@ class ProxyScreen(
                 table._require_update_dimensions = True
                 table.refresh()
                 table.scroll_to(y=table.scroll_y + len(older_rows), animate=False)
-            except Exception as exc:
-                logger.debug("PROXY SCREEN: _load_more_ws_history: table update failed: %s", exc)
+            except Exception:
+                logger.warning("proxy: WS history rows not shown after load", exc_info=True)
             self._update_ws_history_count_label()
             logger.info(
                 "PROXY SCREEN: _load_more_ws_history loaded %d older rows, oldest_offset now %d",
                 len(older_rows),
                 self._ws_history_oldest_offset,
             )
-        except Exception as exc:
-            logger.error("_load_more_ws_history failed: %s", exc)
+        except Exception:
+            logger.error("_load_more_ws_history failed", exc_info=True)
         finally:
             self._ws_history_loading_more = False
 
@@ -684,15 +684,15 @@ class ProxyScreen(
                         col.width = 30
                         col.auto_width = False
                         break
-            except Exception as exc:
-                logger.debug("proxy: WS Host column width not pinned: %s", exc)
+            except Exception:  # logging-ok: косметика — ширина колонки
+                logger.debug("proxy: WS Host column width not pinned")
             table._clear_caches()
             table._require_update_dimensions = True
             table.refresh()
             if rows:
                 table.move_cursor(row=0)
-        except Exception as exc:
-            logger.error("_reload_ws_table failed: %s", exc)
+        except Exception:
+            logger.error("_reload_ws_table failed", exc_info=True)
 
     def _setup_tooltips(self) -> None:
         tooltips = {
@@ -981,8 +981,8 @@ class ProxyScreen(
             # the cursor's position relative to the OLD tail *before* the
             # append, independent of focus: only follow the stream when the
             # cursor was at (or past) the last row already there.
-        except Exception as exc:
-            logger.debug("PROXY SCREEN: _flush_pending_rows: %s", exc)
+        except Exception:
+            logger.warning("proxy: pending rows not flushed", exc_info=True)
         # Cap unbounded growth of the in-memory cache during very long
         # sessions: drop the oldest rows once we exceed the cap and mark
         # them as available again via _history_oldest_offset so scrolling
@@ -999,8 +999,8 @@ class ProxyScreen(
                 table._clear_caches()
                 table._require_update_dimensions = True
                 table.scroll_end(animate=False)
-            except Exception as exc:
-                logger.debug("PROXY SCREEN: _rows_cache trim rebuild failed: %s", exc)
+            except Exception:
+                logger.warning("proxy: rows cache trim failed", exc_info=True)
         self._update_history_count_label()
 
     def _append_ws_row_to_table(self, req: InterceptedRequest, row_id: int) -> None:
@@ -1053,8 +1053,8 @@ class ProxyScreen(
                 table._require_update_dimensions = True
             if was_at_tail or table.cursor_row >= len(self._ws_rows_cache) - 1:
                 table.scroll_end(animate=False)
-        except Exception as exc:
-            logger.debug("PROXY SCREEN: _flush_pending_ws_rows: %s", exc)
+        except Exception:
+            logger.warning("proxy: pending WS rows not flushed", exc_info=True)
         # Cap unbounded growth of _ws_rows_cache during long sessions — oldest
         # rows become re-fetchable via scroll-up (_ws_history_oldest_offset),
         # same strategy as HTTP's _flush_pending_rows.
@@ -1070,8 +1070,8 @@ class ProxyScreen(
                 table._clear_caches()
                 table._require_update_dimensions = True
                 table.scroll_end(animate=False)
-            except Exception as exc:
-                logger.debug("PROXY SCREEN: _ws_rows_cache trim rebuild failed: %s", exc)
+            except Exception:
+                logger.warning("proxy: WS rows cache trim failed", exc_info=True)
         self._update_ws_history_count_label()
 
     def _select_row(self, row_idx: int) -> None:
@@ -1213,10 +1213,10 @@ class ProxyScreen(
 
             raw_req = build_http_request(parsed_req)
             self.query_one("#ws-req-editor", HttpView).load_raw_http(raw_req)
-        except Exception as exc:
+        except Exception:
             # Панель запроса WS-кадра осталась от предыдущего кадра — то есть
             # показывает чужой запрос под выбранной строкой.
-            logger.debug("proxy: WS request panel not filled: %s", exc)
+            logger.warning("proxy: WS request panel not filled", exc_info=True)
 
         resp_headers = entry.get("response_headers") or {}
         status = entry.get("status_code")
@@ -1231,10 +1231,10 @@ class ProxyScreen(
                 view.load_raw_http(raw)
             else:
                 view.load_raw_http("(no response)")
-        except Exception as exc:
+        except Exception:
             # Та же беда с другой стороны: в панели ответа висит чужой ответ,
             # и разница с выбранным кадром никак не объясняется.
-            logger.debug("proxy: WS response panel not filled: %s", exc)
+            logger.warning("proxy: WS response panel not filled", exc_info=True)
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
         order_by_map = {
@@ -1331,10 +1331,10 @@ class ProxyScreen(
             table.refresh()
             if self._rows_cache:
                 table.scroll_end(animate=False)
-        except Exception as exc:
+        except Exception:
             # Таблица остаётся с прежним содержимым, хотя строки в кэше есть —
             # ровно тот случай, который этот метод и был написан чинить.
-            logger.debug("proxy: HTTP history not rebuilt on tab switch: %s", exc)
+            logger.error("proxy: HTTP history not rebuilt on tab switch", exc_info=True)
 
     def _focus_tab_table(self, tab_id: str) -> None:
         try:
@@ -1565,6 +1565,9 @@ class ProxyScreen(
             save_request_txt(parsed, path)
             self.app.notify(f"Saved to {path}", timeout=3)
         except Exception as exc:
+            # Уведомление показывает причину пользователю, но в журнале её не
+            # было — а именно журнал читают при разборе «куда сохранилось».
+            logger.warning("proxy: request not saved to file", exc_info=True)
             self.app.notify(f"Save failed: {exc}", severity="error", timeout=4)
 
     def _delete_selected_request(self) -> None:
@@ -1602,10 +1605,10 @@ class ProxyScreen(
 
             raw_req = build_http_request(parsed_req)
             self.query_one("#req-editor", HttpView).load_raw_http(raw_req)
-        except Exception as exc:
+        except Exception:
             # В редакторе остаётся предыдущий запрос — то есть под выбранной
             # строкой показывается чужой. Худший из молчаливых исходов здесь.
-            logger.debug("proxy: request panel not filled for entry %s: %s", entry_id, exc)
+            logger.warning("proxy: request panel not filled for entry %s", entry_id, exc_info=True)
 
         # Comment is no longer shown in a persistent field — stash it so the
         # "View/Edit Comment" dialog (opened via context menu or 💬 click)
@@ -1625,9 +1628,9 @@ class ProxyScreen(
                 view.load_raw_http(raw)
             else:
                 view.load_raw_http("(no response)")
-        except Exception as exc:
+        except Exception:
             # Та же асимметрия, что с запросом: в панели ответа висит чужой.
-            logger.debug("proxy: response panel not filled for entry %s: %s", entry_id, exc)
+            logger.warning("proxy: response panel not filled for entry %s", entry_id, exc_info=True)
 
         try:
             panel = self.query_one("#inspector-panel", InspectorPanel)
@@ -1639,10 +1642,10 @@ class ProxyScreen(
                     body=resp_body,
                 )
             panel.load(parsed_req, parsed_resp_for_inspector)
-        except Exception as exc:
+        except Exception:
             # Инспектор показывает разбор прошлой строки — при открытой панели
             # это прямо вводит в заблуждение.
-            logger.debug("proxy: inspector not loaded for entry %s: %s", entry_id, exc)
+            logger.warning("proxy: inspector not loaded for entry %s", entry_id, exc_info=True)
 
     @on(ToolbarButton.Pressed, "#btn-proxy")
     def on_btn_proxy(self, _: ToolbarButton.Pressed) -> None:
@@ -1796,8 +1799,8 @@ class ProxyScreen(
             db_path = self._get_db_path()
             if db_path:
                 await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
-        except Exception as exc:
-            logger.debug("_save_enforce_scope_setting: %s", exc)
+        except Exception:
+            logger.warning("_save_enforce_scope_setting: setting not saved", exc_info=True)
 
     async def _save_scope_setting(self, hosts: list[str]) -> None:
         """Save scope host list per-project."""
@@ -1807,8 +1810,8 @@ class ProxyScreen(
             db_path = self._get_db_path()
             if db_path:
                 await set_project_setting(db_path, "proxy.scope", json.dumps(hosts))
-        except Exception as exc:
-            logger.debug("_save_scope_setting: %s", exc)
+        except Exception:
+            logger.warning("_save_scope_setting: scope not saved", exc_info=True)
 
     async def _load_scope_setting(self, is_new: bool = False) -> None:
         """Load persisted scope for the current project."""
@@ -1823,18 +1826,18 @@ class ProxyScreen(
             raw = await get_project_setting(db_path, "proxy.scope", None) if db_path else None
             if raw is not None:
                 hosts = json.loads(raw)
-        except Exception as exc:
-            logger.debug("_load_scope_setting: %s", exc)
+        except Exception:
+            logger.warning("_load_scope_setting: scope not read", exc_info=True)
             hosts = None
         if hosts is None and not is_new:
             try:
                 from pentool.core.config import get_config
 
                 hosts = list(get_config().scope)
-            except Exception as exc:
+            except Exception:
                 # Проект ещё без scope-настройки, глобальный конфиг недоступен —
                 # тогда действительно пусто. Запись отличает это от сбоя.
-                logger.debug("proxy: global scope not available: %s", exc)
+                logger.debug("proxy: global scope not available")
                 hosts = []
         if hosts is None:
             hosts = []
@@ -1850,10 +1853,10 @@ class ProxyScreen(
                 st.remove_class("disabled")
             else:
                 st.add_class("disabled")
-        except Exception as exc:
+        except Exception:
             # Кнопка Scope покажет неверное состояние (заблокирована при
             # заполненном scope) — самый раздражающий из мелких симптомов.
-            logger.debug("proxy: scope toggle not synced: %s", exc)
+            logger.warning("proxy: scope toggle not synced", exc_info=True)
 
     async def _load_enforce_scope_setting(self) -> None:
         """Load persisted 'skip out-of-scope' flag for the current project."""
@@ -1868,10 +1871,10 @@ class ProxyScreen(
             raw = await get_project_setting(db_path, "proxy.enforce_scope", None) if db_path else None
             if raw is not None:
                 enabled = json.loads(raw)
-        except Exception as exc:
+        except Exception:
             # Флаг остаётся OFF. Это безопасный исход (фильтра нет), но
             # именно поэтому сбой прочтения легко принять за «настройки нет».
-            logger.debug("proxy: enforce_scope setting not read: %s", exc)
+            logger.warning("proxy: enforce_scope setting not read", exc_info=True)
         logger.info("PROXY: load_enforce_scope_setting -> enforce=%s", enabled)
         proxy.set_enforce_scope(enabled)
         if enabled:
@@ -2301,8 +2304,8 @@ class ProxyScreen(
             # right away instead of only after the next reload/restart.
             await self._reload_table(self._current_filters)
             self.app.notify("Comment saved" if comment else "Comment cleared", timeout=2)
-        except Exception as exc:
-            logger.error("PROXY: Failed to save comment: %s", exc)
+        except Exception:
+            logger.error("proxy: comment not saved", exc_info=True)
 
     def on_context_menu_item_selected(self, event: ContextMenu.ItemSelected) -> None:
         self._on_ctx_action(event.action)
