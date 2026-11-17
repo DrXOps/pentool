@@ -52,8 +52,8 @@ repos:
 
       # Трещотка ADR-6 по всему pentool/: число `except Exception`, которые ни
       # логируют, ни пробрасывают (ruff BLE001), в файле не растёт. Базовая
-      # линия — tools/broad_except_baseline.json (551 место на 89 файлов на
-      # 2026-11-16; понижается пофайловым конвейером .claude/tmp/f009/);
+      # линия — tools/broad_except_baseline.json (430 мест на 85 файлов на
+      # 2026-11-17; понижается пофайловым конвейером .claude/tmp/f009/);
       # понижение — `python tools/check_broad_except.py --update`.
       - id: check-broad-except
         name: no new blind except Exception (ADR-6 ratchet)
