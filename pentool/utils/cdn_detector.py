@@ -15,9 +15,8 @@ Usage::
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
-
 
 # ── data ──────────────────────────────────────────────────────────────
 
@@ -26,10 +25,10 @@ from typing import Any
 class CdnMatch:
     """Result of CDN detection for a single host."""
 
-    provider: str           # "Cloudflare", "Akamai", etc.
-    confidence: float       # 0.0 – 1.0
-    evidence: str           # human-readable explanation
-    detected_by: str        # "cname" | "header" | "ip_range"
+    provider: str  # "Cloudflare", "Akamai", etc.
+    confidence: float  # 0.0 – 1.0
+    evidence: str  # human-readable explanation
+    detected_by: str  # "cname" | "header" | "ip_range"
 
 
 # ── CDN signatures ───────────────────────────────────────────────────
@@ -236,15 +235,17 @@ def detect_cdn(
             cname_lower = cname.lower().strip(".")
             for suffix in sig["cname_suffixes"]:
                 if cname_lower.endswith(suffix.strip(".")):
-                    candidates.append((
-                        1.0,
-                        CdnMatch(
-                            provider=sig["provider"],
-                            confidence=1.0,
-                            evidence=f"CNAME: {cname}",
-                            detected_by="cname",
-                        ),
-                    ))
+                    candidates.append(
+                        (
+                            1.0,
+                            CdnMatch(
+                                provider=sig["provider"],
+                                confidence=1.0,
+                                evidence=f"CNAME: {cname}",
+                                detected_by="cname",
+                            ),
+                        )
+                    )
                     break  # one match per signature
 
         # 2. Header match
@@ -260,15 +261,17 @@ def detect_cdn(
                             break
             if matched_headers:
                 confidence = _header_confidence(len(matched_headers))
-                candidates.append((
-                    confidence,
-                    CdnMatch(
-                        provider=sig["provider"],
-                        confidence=confidence,
-                        evidence=f"header:{'; '.join(matched_headers)}",
-                        detected_by="header",
-                    ),
-                ))
+                candidates.append(
+                    (
+                        confidence,
+                        CdnMatch(
+                            provider=sig["provider"],
+                            confidence=confidence,
+                            evidence=f"header:{'; '.join(matched_headers)}",
+                            detected_by="header",
+                        ),
+                    )
+                )
 
         # 3. Host suffix match (weakest)
         if host:
@@ -277,15 +280,17 @@ def detect_cdn(
                 # Remove leading dot for suffix check
                 suffix_clean = suffix.strip(".")
                 if host_lower.endswith(suffix_clean) or f".{suffix_clean}" in f".{host_lower}":
-                    candidates.append((
-                        0.5,
-                        CdnMatch(
-                            provider=sig["provider"],
-                            confidence=0.5,
-                            evidence=f"host suffix: {host}",
-                            detected_by="ip_range",
-                        ),
-                    ))
+                    candidates.append(
+                        (
+                            0.5,
+                            CdnMatch(
+                                provider=sig["provider"],
+                                confidence=0.5,
+                                evidence=f"host suffix: {host}",
+                                detected_by="ip_range",
+                            ),
+                        )
+                    )
                     break
 
     if not candidates:

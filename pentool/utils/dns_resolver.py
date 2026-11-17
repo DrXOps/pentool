@@ -34,10 +34,10 @@ logger = logging.getLogger(__name__)
 class DnsRecord:
     """A single DNS record result."""
 
-    host: str          # queried hostname
-    type_: str         # "A" | "AAAA" | "CNAME" | "MX"
-    value: str         # resolved IP / CNAME target / MX exchange
-    ttl: int = 0       # time-to-live from DNS (0 = unknown)
+    host: str  # queried hostname
+    type_: str  # "A" | "AAAA" | "CNAME" | "MX"
+    value: str  # resolved IP / CNAME target / MX exchange
+    ttl: int = 0  # time-to-live from DNS (0 = unknown)
 
 
 @dataclass
@@ -47,7 +47,7 @@ class DnsResult:
     host: str
     a_records: list[DnsRecord] = field(default_factory=list)
     aaaa_records: list[DnsRecord] = field(default_factory=list)
-    cname: str | None = None   # resolved CNAME (first one, if any)
+    cname: str | None = None  # resolved CNAME (first one, if any)
     mx_records: list[str] = field(default_factory=list)
     error: str | None = None
 
@@ -166,9 +166,7 @@ class DnsResolver:
                 timeout=self.timeout,
             )
             for r in raw:
-                result.a_records.append(
-                    DnsRecord(host=host, type_="A", value=r.host, ttl=getattr(r, "ttl", 0))
-                )
+                result.a_records.append(DnsRecord(host=host, type_="A", value=r.host, ttl=getattr(r, "ttl", 0)))
         except (ImportError, asyncio.TimeoutError, Exception) as exc:
             logger.debug("aiodns A resolve for %s: %s", host, exc)
 
@@ -179,9 +177,7 @@ class DnsResolver:
                 timeout=self.timeout,
             )
             for r in raw:
-                result.aaaa_records.append(
-                    DnsRecord(host=host, type_="AAAA", value=r.host, ttl=getattr(r, "ttl", 0))
-                )
+                result.aaaa_records.append(DnsRecord(host=host, type_="AAAA", value=r.host, ttl=getattr(r, "ttl", 0)))
         except (ImportError, asyncio.TimeoutError, Exception) as exc:
             logger.debug("aiodns AAAA resolve for %s: %s", host, exc)
 
@@ -228,9 +224,7 @@ class DnsResolver:
                 type_ = "A" if family == socket.AF_INET else "AAAA"
                 result.a_records.append(
                     DnsRecord(host=host, type_=type_, value=ip)
-                ) if type_ == "A" else result.aaaa_records.append(
-                    DnsRecord(host=host, type_=type_, value=ip)
-                )
+                ) if type_ == "A" else result.aaaa_records.append(DnsRecord(host=host, type_=type_, value=ip))
         except socket.gaierror as exc:
             result.error = str(exc)
             logger.debug("stdlib resolve for %s: %s", host, exc)

@@ -26,23 +26,33 @@ class BugcrowdExporter(BaseExporter):
     def export(self, report: ReportData) -> str:
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([
-            "Title", "Vulnerability Type", "URL", "Severity",
-            "Description", "Remediation", "Proof of Concept",
-            "Impact", "Reference",
-        ])
+        writer.writerow(
+            [
+                "Title",
+                "Vulnerability Type",
+                "URL",
+                "Severity",
+                "Description",
+                "Remediation",
+                "Proof of Concept",
+                "Impact",
+                "Reference",
+            ]
+        )
         for f in report.findings:
-            writer.writerow([
-                f.title,
-                f.type or f.title,
-                f.url,
-                f.severity,
-                f.description,
-                f.remediation,
-                f.evidence[:500] if f.evidence else "",
-                self._impact(f),
-                f"https://cwe.mitre.org/data/definitions/{f.cwe}.html" if f.cwe else "",
-            ])
+            writer.writerow(
+                [
+                    f.title,
+                    f.type or f.title,
+                    f.url,
+                    f.severity,
+                    f.description,
+                    f.remediation,
+                    f.evidence[:500] if f.evidence else "",
+                    self._impact(f),
+                    f"https://cwe.mitre.org/data/definitions/{f.cwe}.html" if f.cwe else "",
+                ]
+            )
         return buf.getvalue()
 
     def _impact(self, f: FindingData) -> str:

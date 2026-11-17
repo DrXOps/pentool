@@ -8,13 +8,7 @@ from __future__ import annotations
 
 import html as _html
 
-from pentool.export._base import (
-    BaseExporter,
-    FindingData,
-    ReportData,
-    SEVERITY_COLOR,
-    SEVERITY_EMOJI,
-)
+from pentool.export._base import SEVERITY_COLOR, SEVERITY_EMOJI, BaseExporter, ReportData
 
 
 class HtmlExporter(BaseExporter):
@@ -81,7 +75,7 @@ pre { background: #f1f3f5; padding: .75rem; border-radius: 4px; font-size: .8rem
         return "\n".join(lines)
 
     def _write_header(self, lines: list[str], report: ReportData) -> None:
-        lines.append(f"<h1>Pentool Scan Report</h1>")
+        lines.append("<h1>Pentool Scan Report</h1>")
         meta = f"<strong>Target:</strong> {_html.escape(report.target)}"
         if report.end_time or report.start_time:
             meta += f" &middot; {_html.escape(report.end_time or report.start_time)}"
@@ -115,7 +109,9 @@ pre { background: #f1f3f5; padding: .75rem; border-radius: 4px; font-size: .8rem
             if f.parameter:
                 lines.append(f'<div class="field"><strong>Parameter:</strong> {_html.escape(f.parameter)}</div>')
             if f.payload:
-                lines.append(f'<div class="field"><strong>Payload:</strong> <code>{_html.escape(f.payload)}</code></div>')
+                lines.append(
+                    f'<div class="field"><strong>Payload:</strong> <code>{_html.escape(f.payload)}</code></div>'
+                )
             if f.cwe:
                 lines.append(f'<div class="field"><strong>CWE:</strong> {f.cwe}</div>')
             if f.cvss:

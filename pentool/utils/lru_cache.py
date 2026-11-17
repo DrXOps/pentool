@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Any, Generic, Hashable, TypeVar
+from typing import Generic, Hashable, TypeVar
 
 K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")

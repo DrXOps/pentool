@@ -14,10 +14,9 @@ FilterSpec умеет:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
-
 
 # ── Операторы ──────────────────────────────────────────────────────────────
 
@@ -25,21 +24,21 @@ from typing import Any
 class FilterOp(str, Enum):
     """Оператор сравнения для одного предиката."""
 
-    EQ = "eq"               # field = ?
-    NEQ = "neq"             # field != ?
-    GT = "gt"               # field > ?
-    GTE = "gte"             # field >= ?
-    LT = "lt"               # field < ?
-    LTE = "lte"             # field <= ?
-    BETWEEN = "between"     # field BETWEEN ? AND ?
-    LIKE = "like"           # field LIKE '%value%'
-    STARTS = "starts"       # field LIKE 'value%'
-    IN = "in"               # field IN (?, ?, ...)
-    REGEX = "regex"         # field REGEXP ?
-    IS_NULL = "is_null"     # field IS NULL
-    NOT_NULL = "not_null"   # field IS NOT NULL
-    HAS = "has"             # for tags: field CONTAINS value
-    FTS = "fts"             # FTS5 full-text search (спецобработка)
+    EQ = "eq"  # field = ?
+    NEQ = "neq"  # field != ?
+    GT = "gt"  # field > ?
+    GTE = "gte"  # field >= ?
+    LT = "lt"  # field < ?
+    LTE = "lte"  # field <= ?
+    BETWEEN = "between"  # field BETWEEN ? AND ?
+    LIKE = "like"  # field LIKE '%value%'
+    STARTS = "starts"  # field LIKE 'value%'
+    IN = "in"  # field IN (?, ?, ...)
+    REGEX = "regex"  # field REGEXP ?
+    IS_NULL = "is_null"  # field IS NULL
+    NOT_NULL = "not_null"  # field IS NOT NULL
+    HAS = "has"  # for tags: field CONTAINS value
+    FTS = "fts"  # FTS5 full-text search (спецобработка)
 
 
 # ── Предикат ───────────────────────────────────────────────────────────────
@@ -122,8 +121,7 @@ class FilterPredicate:
                 # Tags: match a tag inside comma-separated list
                 tag = self.value
                 return (
-                    f"({self.field} = ? OR {self.field} LIKE ? OR "
-                    f"{self.field} LIKE ? OR {self.field} LIKE ?)",
+                    f"({self.field} = ? OR {self.field} LIKE ? OR " f"{self.field} LIKE ? OR {self.field} LIKE ?)",
                     [tag, f"{tag},%", f"%,{tag},%", f"%,{tag}"],
                 )
 
@@ -169,6 +167,7 @@ class FilterPredicate:
                 return actual in self.value
             case FilterOp.REGEX:
                 import re
+
                 try:
                     return bool(re.search(self.value, str(actual), re.IGNORECASE))
                 except re.error:
@@ -255,10 +254,7 @@ class FilterSpec:
     def to_dict(self) -> dict:
         return {
             "logic": self.logic,
-            "predicates": [
-                {"field": p.field, "operator": p.operator.value, "value": p.value}
-                for p in self.predicates
-            ],
+            "predicates": [{"field": p.field, "operator": p.operator.value, "value": p.value} for p in self.predicates],
         }
 
     @classmethod
@@ -279,12 +275,13 @@ class FilterSpec:
 
 class FilterFieldType(str, Enum):
     """Тип UI-контрола для поля фильтрации."""
-    TEXT = "text"           # Input (text)
-    NUMBER = "number"       # Input (number)
-    SELECT = "select"       # Select/Dropdown
-    CYCLER = "cycler"       # Циклический переключатель (Any → GET → POST → ...)
-    TOGGLE = "toggle"       # Вкл/Выкл
-    RANGE = "range"         # Два Input (from, to)
+
+    TEXT = "text"  # Input (text)
+    NUMBER = "number"  # Input (number)
+    SELECT = "select"  # Select/Dropdown
+    CYCLER = "cycler"  # Циклический переключатель (Any → GET → POST → ...)
+    TOGGLE = "toggle"  # Вкл/Выкл
+    RANGE = "range"  # Два Input (from, to)
 
 
 @dataclass

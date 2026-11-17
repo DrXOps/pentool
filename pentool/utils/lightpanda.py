@@ -66,9 +66,7 @@ def is_lightpanda_available() -> bool:
 
 _LIGHTPANDA_VERSION = "0.3.7"
 _LIGHTPANDA_URL_TEMPLATE = (
-    "https://github.com/lightpanda-io/browser/releases/download/"
-    f"{_LIGHTPANDA_VERSION}/"
-    "lightpanda-{arch}-linux"
+    "https://github.com/lightpanda-io/browser/releases/download/" f"{_LIGHTPANDA_VERSION}/" "lightpanda-{arch}-linux"
 )
 
 
@@ -120,8 +118,7 @@ async def ensure_lightpanda_installed(force: bool = False) -> bool:
     url = _LIGHTPANDA_URL_TEMPLATE.format(arch=arch)
 
     logger.info("Lightpanda not found — downloading %s …", url)
-    print(f"  ↻ Downloading Lightpanda {_LIGHTPANDA_VERSION} ({arch})…",
-          file=sys.stderr, flush=True)
+    print(f"  ↻ Downloading Lightpanda {_LIGHTPANDA_VERSION} ({arch})…", file=sys.stderr, flush=True)
 
     import urllib.request
 
@@ -141,8 +138,7 @@ async def ensure_lightpanda_installed(force: bool = False) -> bool:
                     downloaded += len(chunk)
                     if total:
                         pct = downloaded * 100 // total
-                        print(f"  ↻ {pct}% ({downloaded >> 20} MiB / {total >> 20} MiB)",
-                              file=sys.stderr, flush=True)
+                        print(f"  ↻ {pct}% ({downloaded >> 20} MiB / {total >> 20} MiB)", file=sys.stderr, flush=True)
         # Проверка размера — минимум 5 MiB
         if not tmp.exists() or tmp.stat().st_size < 5_000_000:
             logger.error("Lightpanda download too small — aborting")
@@ -151,8 +147,7 @@ async def ensure_lightpanda_installed(force: bool = False) -> bool:
         tmp.chmod(0o755)
         tmp.replace(dest)
         logger.info("Lightpanda installed → %s (%s bytes)", dest, dest.stat().st_size)
-        print(f"  ✓ Lightpanda {_LIGHTPANDA_VERSION} installed → {dest}",
-              file=sys.stderr, flush=True)
+        print(f"  ✓ Lightpanda {_LIGHTPANDA_VERSION} installed → {dest}", file=sys.stderr, flush=True)
         return True
     except Exception as exc:
         logger.error("Lightpanda download failed: %s", exc)
@@ -178,7 +173,6 @@ async def lightpanda_fetch_html(
         # Executes JS and prints the serialized DOM. Output may be large for
         # heavy pages — cap to a sane bound and run in an executor thread so
         # the asyncio loop isn't blocked.
-        loop = asyncio.get_running_loop()
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,

@@ -58,6 +58,7 @@ def _get_audit_path() -> Path:
     (same LOGS_DIR as pentool.log, see config.py).
     """
     from pentool.core.config import LOGS_DIR
+
     return LOGS_DIR / "ai_audit.jsonl"
 
 
@@ -124,9 +125,7 @@ def log(
         context_json = json.dumps(ctx, ensure_ascii=False) if ctx is not None else ""
 
         request_block = {
-            "system_prompt_preview": _trunc(
-                prompt_data.get("system_prompt", ""), 200
-            ),
+            "system_prompt_preview": _trunc(prompt_data.get("system_prompt", ""), 200),
             "context_preview": _trunc(context_json, 500),
             "context_full_truncated": len(context_json) > 500,
             "max_tokens": prompt_data.get("max_tokens"),

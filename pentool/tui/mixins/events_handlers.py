@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 
-from pentool.api.proxy_api import InterceptedRequest as _IR
+from pentool.api.proxy_api import InterceptedRequest
 from pentool.core.events import ProxyRequestCaptured, ProxyRequestCompleted
 from pentool.tui.messages import ProxyRequestAdded, ProxyRequestDone
 
@@ -48,7 +48,7 @@ class ProxyEventHandlersMixin:
         synchronously in the proxy thread → call_from_thread → Textual Message in TUI thread.
         """
         req = event.request
-        if req is None or not isinstance(req, _IR):
+        if req is None or not isinstance(req, InterceptedRequest):
             return
         if not self._app_still_running():  # type: ignore[attr-defined]
             return
@@ -62,7 +62,7 @@ class ProxyEventHandlersMixin:
         Bridge: proxy emit from its thread → EventBus → call_from_thread → Textual Message.
         """
         req = event.request
-        if req is None or not isinstance(req, _IR):
+        if req is None or not isinstance(req, InterceptedRequest):
             return
         if not self._app_still_running():  # type: ignore[attr-defined]
             return

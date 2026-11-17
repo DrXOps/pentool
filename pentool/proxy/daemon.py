@@ -17,10 +17,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 import socket
-import threading
 
 from pentool.core.logging import get_logger
 
@@ -33,8 +31,9 @@ _MAX_LINE = 1 << 20
 class ProxyDaemon:
     """Serves the ProxyServer over a unix socket command/event channel."""
 
-    def __init__(self, socket_path: str, event_socket_path: str,
-                 *, host: str, port: int, cert_dir: str, db_path: str) -> None:
+    def __init__(
+        self, socket_path: str, event_socket_path: str, *, host: str, port: int, cert_dir: str, db_path: str
+    ) -> None:
         self._socket_path = socket_path
         self._event_socket_path = event_socket_path
         self._host = host
@@ -45,7 +44,7 @@ class ProxyDaemon:
         self._server: asyncio.AbstractServer | None = None
         self._sock: socket.socket | None = None
         self._evt_sock: socket.socket | None = None
-        self._clients: set[socket.socket] = set()       # command connections
+        self._clients: set[socket.socket] = set()  # command connections
         self._event_clients: set[socket.socket] = set()
         # Event connections are buffered: conn -> queue of encoded event lines.
         # A per-conn async writer drains the queue via sock_sendall. This is
@@ -67,8 +66,10 @@ class ProxyDaemon:
 
         self._loop = asyncio.get_running_loop()
         self._proxy = ProxyServer(
-            host=self._host, port=self._port,
-            cert_dir=self._cert_dir, db_path=self._db_path,
+            host=self._host,
+            port=self._port,
+            cert_dir=self._cert_dir,
+            db_path=self._db_path,
         )
         self._start_listener()
         self._start_event_listener()
@@ -86,10 +87,8 @@ class ProxyDaemon:
         """Forward ProxyServer EventBus events to event-socket clients (for TUI ProxyClient)."""
         try:
             from pentool.core.event_bus import get_event_bus
-            from pentool.core.events import (
-                ProxyRequestCaptured,
-                ProxyRequestCompleted,
-            )
+            from pentool.core.events import ProxyRequestCaptured, ProxyRequestCompleted
+
             bus = get_event_bus()
 
             def _on_captured(event) -> None:
@@ -138,8 +137,7 @@ class ProxyDaemon:
         sock = self._bind_listener(self._event_socket_path)
         self._evt_sock = sock
         self._event_listen_task = asyncio.ensure_future(
-            self._accept_loop(sock, self._event_clients, self._handle_evt_client,
-                              register_evt=True)
+            self._accept_loop(sock, self._event_clients, self._handle_evt_client, register_evt=True)
         )
 
     def _bind_listener(self, path: str) -> socket.socket:
@@ -157,9 +155,9 @@ class ProxyDaemon:
         sock.setblocking(False)
         return sock
 
-    async def _accept_loop(self, sock: socket.socket,
-                           clients: set[socket.socket],
-                           handler, *, register_evt: bool = False) -> None:
+    async def _accept_loop(
+        self, sock: socket.socket, clients: set[socket.socket], handler, *, register_evt: bool = False
+    ) -> None:
         loop = asyncio.get_running_loop()
         while True:
             conn, _addr = await loop.sock_accept(sock)
@@ -169,19 +167,15 @@ class ProxyDaemon:
                 # Event connection: give it a bounded buffer + a writer task.
                 q: asyncio.Queue = asyncio.Queue(maxsize=self._event_queue_max)
                 self._event_queues[conn] = q
-                task = asyncio.get_running_loop().create_task(
-                    self._event_writer(conn, q)
-                )
+                task = asyncio.get_running_loop().create_task(self._event_writer(conn, q))
                 # Keep a ref so the writer task isn't GC'd prematurely.
                 wts = getattr(self, "_event_writer_tasks", None)
                 if wts is None:
                     wts = self._event_writer_tasks = []
                 wts.append(task)
-            asyncio.get_running_loop().create_task(handler(conn, *(
-                (q,) if register_evt else ())))
+            asyncio.get_running_loop().create_task(handler(conn, *((q,) if register_evt else ())))
 
-    async def _handle_evt_client(self, conn: socket.socket,
-                                 queue: asyncio.Queue | None = None) -> None:
+    async def _handle_evt_client(self, conn: socket.socket, queue: asyncio.Queue | None = None) -> None:
         """Hold an event connection open until the peer disconnects.
 
         The reader side only detects the peer going away (it is a one-way
@@ -206,8 +200,7 @@ class ProxyDaemon:
             except Exception as _e:
                 logger.debug("daemon: event conn close error: %s", _e)
 
-    async def _event_writer(self, conn: socket.socket,
-                            queue: asyncio.Queue) -> None:
+    async def _event_writer(self, conn: socket.socket, queue: asyncio.Queue) -> None:
         """Drain one event connection's queue, sending lines via sock_sendall.
 
         Runs in the daemon's asyncio loop, so sends never block the loop; the
@@ -276,8 +269,7 @@ class ProxyDaemon:
         if name == "start":
             try:
                 await self._proxy.start()
-                return {"ok": True, "running": self._proxy.is_running,
-                        "port": self._proxy.port}
+                return {"ok": True, "running": self._proxy.is_running, "port": self._proxy.port}
             except Exception as exc:
                 logger.error("daemon start failed: %s", exc, exc_info=True)
                 return {"ok": False, "error": f"proxy.start() failed: {exc}"}
@@ -285,10 +277,14 @@ class ProxyDaemon:
             await self._proxy.stop()
             return {"ok": True, "running": self._proxy.is_running}
         if name == "status":
-            return {"ok": True, "running": self._proxy.is_running,
-                    "port": self._proxy.port, "host": self._proxy.host,
-                    "intercept": self._proxy.intercept_enabled,
-                    "scope": list(self._proxy.scope)}
+            return {
+                "ok": True,
+                "running": self._proxy.is_running,
+                "port": self._proxy.port,
+                "host": self._proxy.host,
+                "intercept": self._proxy.intercept_enabled,
+                "scope": list(self._proxy.scope),
+            }
         if name == "set_intercept":
             self._proxy.set_intercept(bool(cmd.get("enabled", False)))
             return {"ok": True}
@@ -303,6 +299,7 @@ class ProxyDaemon:
             return {"ok": True, "rules": [r.to_dict() for r in rules]}
         if name == "set_rules":
             from pentool.modules.match_replace import MatchReplaceRule
+
             rules = [MatchReplaceRule.from_dict(d) for d in (cmd.get("rules") or [])]
             self._proxy.match_replace_rules = rules
             return {"ok": True}
@@ -334,6 +331,7 @@ class ProxyDaemon:
             return {"ok": True}
         if name == "replace_requests":
             from pentool.utils.intercepted_request import InterceptedRequest
+
             reqs = [InterceptedRequest.from_dict(d) for d in (cmd.get("requests") or [])]
             self._proxy.replace_requests(reqs)
             return {"ok": True}
@@ -384,8 +382,12 @@ def main(argv: list[str] | None = None) -> None:
     a = p.parse_args(argv if argv is not None else sys.argv[1:])
 
     daemon = ProxyDaemon(
-        a.socket, a.event_socket,
-        host=a.host, port=a.port, cert_dir=a.cert_dir, db_path=a.db,
+        a.socket,
+        a.event_socket,
+        host=a.host,
+        port=a.port,
+        cert_dir=a.cert_dir,
+        db_path=a.db,
     )
     asyncio.run(daemon.run_forever())
 

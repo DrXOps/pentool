@@ -26,7 +26,10 @@ def open_context_menu(proxy_screen: ProxyScreen, x: int, y: int) -> None:
     ]
     if req_id:
         screen_items += [
-            ("mark", "🎨 Mark color" if not has_comment else f"💬 Mark color (comment: {proxy_screen._current_comment[:20]})"),
+            (
+                "mark",
+                "🎨 Mark color" if not has_comment else f"💬 Mark color (comment: {proxy_screen._current_comment[:20]})",
+            ),
             ("comment", "💬 Comment" if not has_comment else "✏️ Edit comment"),
         ]
     menu_items = proxy_screen._cm_build_items()

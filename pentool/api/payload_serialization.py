@@ -8,12 +8,7 @@ never materializing the (potentially huge) enumerated file/range contents.
 
 from __future__ import annotations
 
-from pentool.modules.intruder import (
-    CharPayloadSource,
-    ChainedPayloadSource,
-    FilePayloadSource,
-    NumericPayloadSource,
-)
+from pentool.modules.intruder import ChainedPayloadSource, CharPayloadSource, FilePayloadSource, NumericPayloadSource
 
 
 def deserialize_payloads(raw_sets: list) -> list:
@@ -23,17 +18,13 @@ def deserialize_payloads(raw_sets: list) -> list:
         if isinstance(entry, dict) and "__file__" in entry:
             result.append(FilePayloadSource(entry["__file__"], count=entry.get("count")))
         elif isinstance(entry, dict) and "__numeric__" in entry:
-            result.append(NumericPayloadSource(
-                entry.get("start", 0), entry.get("end", 0), entry.get("step", 1)
-            ))
+            result.append(NumericPayloadSource(entry.get("start", 0), entry.get("end", 0), entry.get("step", 1)))
         elif isinstance(entry, dict) and "__charset__" in entry:
-            result.append(CharPayloadSource(
-                entry.get("__charset__", ""), entry.get("min_len", 1), entry.get("max_len", 1)
-            ))
+            result.append(
+                CharPayloadSource(entry.get("__charset__", ""), entry.get("min_len", 1), entry.get("max_len", 1))
+            )
         elif isinstance(entry, dict) and "__chained__" in entry:
-            result.append(ChainedPayloadSource(
-                *deserialize_payloads(entry["__chained__"])
-            ))
+            result.append(ChainedPayloadSource(*deserialize_payloads(entry["__chained__"])))
         elif isinstance(entry, list):
             result.append(entry)
         else:
@@ -48,19 +39,28 @@ def serialize_payloads(sets: list) -> list:
         if isinstance(entry, FilePayloadSource):
             result.append({"__file__": entry.path, "count": entry.cached_count})
         elif isinstance(entry, NumericPayloadSource):
-            result.append({
-                "__numeric__": True,
-                "start": entry.start, "end": entry.end, "step": entry.step,
-            })
+            result.append(
+                {
+                    "__numeric__": True,
+                    "start": entry.start,
+                    "end": entry.end,
+                    "step": entry.step,
+                }
+            )
         elif isinstance(entry, CharPayloadSource):
-            result.append({
-                "__charset__": entry.charset,
-                "min_len": entry.min_len, "max_len": entry.max_len,
-            })
+            result.append(
+                {
+                    "__charset__": entry.charset,
+                    "min_len": entry.min_len,
+                    "max_len": entry.max_len,
+                }
+            )
         elif isinstance(entry, ChainedPayloadSource):
-            result.append({
-                "__chained__": serialize_payloads(list(entry._sources)),
-            })
+            result.append(
+                {
+                    "__chained__": serialize_payloads(list(entry._sources)),
+                }
+            )
         else:
             result.append(list(entry))
     return result

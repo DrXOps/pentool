@@ -7,10 +7,12 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from pentool.api.base_api import ExportableAPI
+from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.core.logging import get_logger
-from pentool.collections.filter_predicate import FilterPredicate, FilterOp, FilterSpec
-from pentool.modules.spider import DEFAULT_CONCURRENCY, DEFAULT_MAX_DEPTH, DEFAULT_MAX_PAGES
 from pentool.modules.spider import (
+    DEFAULT_CONCURRENCY,
+    DEFAULT_MAX_DEPTH,
+    DEFAULT_MAX_PAGES,
     AsyncSpider,
     SpiderEndpoint,
     SpiderForm,
@@ -28,9 +30,14 @@ def shutdown_spider_pool() -> None:
     importing ``pentool.modules`` directly (architecture layer rule)."""
     shutdown_proc_pool()
 
+
 # Re-export types — TUI uses them from here
 __all__ = [
-    "SpiderAPI", "SpiderResult", "SpiderForm", "SpiderEndpoint", "SpiderConfig",
+    "SpiderAPI",
+    "SpiderResult",
+    "SpiderForm",
+    "SpiderEndpoint",
+    "SpiderConfig",
     "is_lightpanda_available",
 ]
 
@@ -38,6 +45,7 @@ __all__ = [
 @dataclass
 class SpiderConfig:
     """Crawler configuration."""
+
     # Defaults come from the single source (pentool.modules.spider) so the
     # crawl depth/pages/concurrency aren't copy-pasted across modules.
     max_depth: int = DEFAULT_MAX_DEPTH
@@ -45,12 +53,11 @@ class SpiderConfig:
     concurrency: int = DEFAULT_CONCURRENCY
     timeout: float = 10.0
     user_agent: str = "pentool/1.0"
-    respect_scope: bool = True   # stay on the target host/subdomains — don't crawl external links
+    respect_scope: bool = True  # stay on the target host/subdomains — don't crawl external links
     js_render: bool = False  # JS rendering via Lightpanda (if installed)
 
 
 class SpiderAPI(ExportableAPI):
-
     # Shared cache: last crawl result per host, populated by any module (Target/Scanner).
     # Scanner checks this cache before re-crawling.
     _last_results: dict[str, SpiderResult] = {}
@@ -70,13 +77,15 @@ class SpiderAPI(ExportableAPI):
         js_render: bool = False,
     ) -> "SpiderAPI":
         """Convenience factory method."""
-        return cls(SpiderConfig(
-            max_depth=max_depth,
-            max_pages=max_pages,
-            concurrency=concurrency,
-            timeout=timeout,
-            js_render=js_render,
-        ))
+        return cls(
+            SpiderConfig(
+                max_depth=max_depth,
+                max_pages=max_pages,
+                concurrency=concurrency,
+                timeout=timeout,
+                js_render=js_render,
+            )
+        )
 
     async def crawl(
         self,
@@ -127,7 +136,10 @@ class SpiderAPI(ExportableAPI):
                 self._last_results[host] = result
             logger.info(
                 "SpiderAPI.crawl: %s -> %d pages, %d forms, %d endpoints",
-                url, len(result.pages), len(result.forms), len(result.endpoints),
+                url,
+                len(result.pages),
+                len(result.forms),
+                len(result.endpoints),
             )
             return result
         except Exception as exc:
@@ -155,14 +167,17 @@ class SpiderAPI(ExportableAPI):
             bare_host = host.split(":")[0]
 
             from pentool.storage.http_storage import HttpStorage
+
             storage = HttpStorage()
             try:
                 await storage.init_db(db_path)
                 rows = await storage.get_metadata_batch(
                     limit=1,
-                    filters=FilterSpec(predicates=[
-                                FilterPredicate("hosts", FilterOp.IN, [bare_host]),
-                            ]),
+                    filters=FilterSpec(
+                        predicates=[
+                            FilterPredicate("hosts", FilterOp.IN, [bare_host]),
+                        ]
+                    ),
                     order_by="id",
                     desc=True,
                 )
@@ -179,7 +194,8 @@ class SpiderAPI(ExportableAPI):
             if found:
                 logger.info(
                     "SpiderAPI: auto-discovered %d auth header(s) for %s from Proxy History",
-                    len(found), bare_host,
+                    len(found),
+                    bare_host,
                 )
             return found
         except Exception as exc:
@@ -198,6 +214,7 @@ class SpiderAPI(ExportableAPI):
         Used by Scanner to skip re-crawling when Target already crawled.
         """
         from urllib.parse import urlparse
+
         host = urlparse(url).netloc.split(":")[0]
         return host in cls._last_results and bool(cls._last_results[host].pages)
 
@@ -205,6 +222,7 @@ class SpiderAPI(ExportableAPI):
     def get_cached_pages(cls, url: str) -> list[str]:
         """Return cached page URLs for this host, or empty list."""
         from urllib.parse import urlparse
+
         host = urlparse(url).netloc.split(":")[0]
         result = cls._last_results.get(host)
         if result:

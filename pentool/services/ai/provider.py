@@ -13,7 +13,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any
 
-from pentool.services.ai.prompts import REGISTRY, AITask
+from pentool.services.ai.prompts import REGISTRY
 
 log = logging.getLogger(__name__)
 
@@ -222,7 +222,7 @@ class MCPBackend(AIBackend):
             audit_log(
                 task=task_name,
                 prompt_data=prompt_data,
-                raw_response=text if 'text' in locals() else "",
+                raw_response=text if "text" in locals() else "",
                 error=str(exc),
             )
             return None

@@ -17,7 +17,9 @@ def scan() -> None:
 @scan.command("active")
 @click.option("--url", "urls", required=True, multiple=True, help="Target URL (can be specified multiple times).")
 @click.option(
-    "--checks", "check_names", default=None,
+    "--checks",
+    "check_names",
+    default=None,
     help="Comma-separated checks: missing_security_headers,info_leak",
 )
 @click.option("--output", "output", default=None, help="Save findings to file (json/csv/html).")
@@ -58,18 +60,20 @@ def scan_passive(scope: str | None) -> None:
 @scan.command("report")
 @click.option("--output", required=True, help="Path to the report file.")
 @click.option(
-    "--format", "fmt", default="html",
+    "--format",
+    "fmt",
+    default="html",
     type=click.Choice(["html", "json", "csv"], case_sensitive=False),
     show_default=True,
     help="Report format.",
 )
 def scan_report(output: str, fmt: str) -> None:
     """Generate a report from existing findings in the database."""
-    ScannerAPI = _import_scanner_api()
+    scanner_api = _import_scanner_api()
     from pentool.core.config import get_config
 
     cfg = get_config()
-    api = ScannerAPI(db_path=cfg.db_path)
+    api = scanner_api(db_path=cfg.db_path)
 
     async def _run() -> None:
         findings = await api.get_findings(limit=10000)

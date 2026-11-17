@@ -33,25 +33,23 @@ Usage (PRO)::
 
 from __future__ import annotations
 
-from pentool.export._base import (
-    BaseExporter,
-    FindingData,
-    ReportData,
-    SEVERITY_COLOR,
-    SEVERITY_EMOJI,
-)
+from pentool.export._base import SEVERITY_COLOR, SEVERITY_EMOJI, BaseExporter, FindingData, ReportData
 
 # ── Concrete exporters (lazy — avoid circular imports) ────────────────────
 
-def MarkdownExporter(*args, **kw):
-    """Lazy-loaded MarkdownExporter."""
-    from pentool.export.markdown import MarkdownExporter as _cls
-    return _cls(*args, **kw)
 
-def HtmlExporter(*args, **kw):
+def MarkdownExporter(*args, **kw):  # noqa: N802 — фабрика сохраняет публичное имя класса
+    """Lazy-loaded MarkdownExporter."""
+    from pentool.export.markdown import MarkdownExporter as _MarkdownExporter
+
+    return _MarkdownExporter(*args, **kw)
+
+
+def HtmlExporter(*args, **kw):  # noqa: N802 — фабрика сохраняет публичное имя класса
     """Lazy-loaded HtmlExporter."""
-    from pentool.export.html import HtmlExporter as _cls
-    return _cls(*args, **kw)
+    from pentool.export.html import HtmlExporter as _HtmlExporter
+
+    return _HtmlExporter(*args, **kw)
 
 
 __all__ = [

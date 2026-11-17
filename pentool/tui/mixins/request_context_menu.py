@@ -205,7 +205,7 @@ class RequestContextMenuMixin:
         except Exception as exc:
             self.err(exc, "Parse error")
             return
-        _MAP = {
+        _map = {
             "copy_curl": (copy_as_curl, "curl"),
             "copy_fetch": (copy_as_fetch, "fetch()"),
             "copy_ffuf": (copy_as_ffuf, "ffuf"),
@@ -213,7 +213,7 @@ class RequestContextMenuMixin:
             "copy_nmap": (copy_as_nmap, "nmap"),
             "copy_jwt": (copy_as_jwt_tool, "jwt_tool"),
         }
-        fn, label = _MAP[action]
+        fn, label = _map[action]
         text = fn(req)
         if copy_to_clipboard(text):
             self.app.notify(f"{label} copied", timeout=2)  # type: ignore[attr-defined]

@@ -42,33 +42,33 @@ class WebSocketHandler:
             return None
         b0, b1 = data[0], data[1]
         is_final = bool(b0 & 0x80)
-        opcode   = b0 & 0x0F
-        masked   = bool(b1 & 0x80)
-        pay_len  = b1 & 0x7F
+        opcode = b0 & 0x0F
+        masked = bool(b1 & 0x80)
+        pay_len = b1 & 0x7F
 
         offset = 2
         if pay_len == 126:
             if len(data) < offset + 2:
                 return None
-            pay_len = int.from_bytes(data[offset:offset + 2], "big")
+            pay_len = int.from_bytes(data[offset : offset + 2], "big")
             offset += 2
         elif pay_len == 127:
             if len(data) < offset + 8:
                 return None
-            pay_len = int.from_bytes(data[offset:offset + 8], "big")
+            pay_len = int.from_bytes(data[offset : offset + 8], "big")
             offset += 8
 
         mask_key = b""
         if masked:
             if len(data) < offset + 4:
                 return None
-            mask_key = data[offset:offset + 4]
+            mask_key = data[offset : offset + 4]
             offset += 4
 
         if len(data) < offset + pay_len:
             return None
 
-        raw_payload = data[offset:offset + pay_len]
+        raw_payload = data[offset : offset + pay_len]
         payload = bytes(b ^ mask_key[i % 4] for i, b in enumerate(raw_payload)) if masked else raw_payload
 
         return opcode, is_final, payload, offset + pay_len
@@ -119,11 +119,12 @@ class WebSocketHandler:
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import WebSocketFrameEvent
+
             bus = get_event_bus()
         except Exception:
             bus = None
 
-        _OPCODES_LOG = {0x1, 0x2, 0x8}  # text, binary, close
+        _opcodes_log = {0x1, 0x2, 0x8}  # text, binary, close
 
         async def _relay(
             src: asyncio.StreamReader,
@@ -144,19 +145,21 @@ class WebSocketHandler:
                         opcode, _fin, payload, consumed = parsed
                         buf = buf[consumed:]
 
-                        if bus and opcode in _OPCODES_LOG:
+                        if bus and opcode in _opcodes_log:
                             try:
                                 payload_text = ""
                                 if opcode == 0x1:
                                     payload_text = payload.decode("utf-8", errors="replace")
-                                bus.emit(WebSocketFrameEvent(
-                                    source="proxy",
-                                    request_id=request_id,
-                                    direction=direction,
-                                    opcode=opcode,
-                                    payload=payload,
-                                    payload_text=payload_text,
-                                ))
+                                bus.emit(
+                                    WebSocketFrameEvent(
+                                        source="proxy",
+                                        request_id=request_id,
+                                        direction=direction,
+                                        opcode=opcode,
+                                        payload=payload,
+                                        payload_text=payload_text,
+                                    )
+                                )
                             except Exception as exc:
                                 logger.debug("WS emit error: %s", exc)
 
@@ -244,7 +247,9 @@ class WebSocketHandler:
                     _SSL_CTX.check_hostname = False
                     _SSL_CTX.verify_mode = ssl.CERT_NONE
                 srv_reader, srv_writer = await asyncio.open_connection(
-                    host, port, ssl=_SSL_CTX,
+                    host,
+                    port,
+                    ssl=_SSL_CTX,
                 )
             else:
                 srv_reader, srv_writer = await asyncio.open_connection(host, port)
@@ -286,12 +291,15 @@ class WebSocketHandler:
             try:
                 from pentool.core.event_bus import get_event_bus
                 from pentool.core.events import ProxyRequestCompleted
-                get_event_bus().emit(ProxyRequestCompleted(
-                    source="proxy",
-                    request_id=ireq.id,
-                    status_code=101,
-                    request=ireq,
-                ))
+
+                get_event_bus().emit(
+                    ProxyRequestCompleted(
+                        source="proxy",
+                        request_id=ireq.id,
+                        status_code=101,
+                        request=ireq,
+                    )
+                )
             except Exception as exc:
                 logger.debug("EventBus emit ProxyRequestCompleted (WS) error: %s", exc)
 

@@ -64,6 +64,7 @@ class ArrowBackendDataTable(DataTable):
             self.refresh()
         except Exception as exc:
             from pentool.core.logging import get_logger as _log
+
             _log().error("ArrowBackendDataTable.set_data failed: %s", exc)
 
     def add_rows(self, records: list[tuple]) -> None:
@@ -74,6 +75,7 @@ class ArrowBackendDataTable(DataTable):
             return result
         except Exception as exc:
             from pentool.core.logging import get_logger as _log
+
             _log().error("ArrowBackendDataTable.add_rows failed: %s", exc)
             if self._columns and records:
                 typed = list(zip(*records)) if records else []
@@ -125,6 +127,7 @@ class ArrowBackendDataTable(DataTable):
             return True
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).warning("safe_sort failed: %s", exc)
             return False
 
@@ -163,6 +166,7 @@ class ArrowBackendDataTable(DataTable):
             self.refresh()
         except Exception as exc:
             from pentool.core.logging import get_logger as _log
+
             _log().error("ArrowBackendDataTable._rebuild_backend failed: %s", exc)
             self.backend = ArrowBackend(_make_empty_arrow(self._columns))
 

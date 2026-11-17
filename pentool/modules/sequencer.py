@@ -10,9 +10,16 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 __all__ = [
-    "Sequencer", "SequencerReport", "token_entropy", "charset_size",
-    "fips140_monobit", "fips140_runs", "fips140_longrun", "fips140_poker",
-    "run_fips_tests", "analyze_position_entropy",
+    "Sequencer",
+    "SequencerReport",
+    "token_entropy",
+    "charset_size",
+    "fips140_monobit",
+    "fips140_runs",
+    "fips140_longrun",
+    "fips140_poker",
+    "run_fips_tests",
+    "analyze_position_entropy",
 ]
 
 
@@ -24,7 +31,7 @@ def charset_size(token: str) -> int:
     has_lower = any(c in string.ascii_lowercase for c in token)
     has_upper = any(c in string.ascii_uppercase for c in token)
     has_digit = any(c in string.digits for c in token)
-    has_spec  = any(c in "+/=_-" for c in token)
+    has_spec = any(c in "+/=_-" for c in token)
 
     # Pure hex string (only 0-9, a-f or 0-9, A-F)
     lower_hex = set("0123456789abcdef")
@@ -69,6 +76,7 @@ def total_entropy_bits(token: str) -> float:
 
 # ── FIPS 140-2 Statistical Tests ─────────────────────────────────────────────
 
+
 def _tokens_to_bitstring(tokens: list[str]) -> str:
     """Convert a list of tokens to a bitstring for FIPS tests."""
     bits = []
@@ -82,6 +90,7 @@ def _tokens_to_bitstring(tokens: list[str]) -> str:
 @dataclass
 class FIPSTestResult:
     """Result of one FIPS 140-2 test."""
+
     name: str
     passed: bool
     value: float | int
@@ -176,7 +185,7 @@ def fips140_poker(bits: str) -> FIPSTestResult:
     # Split into 4-bit groups
     groups: dict[str, int] = {}
     for i in range(0, 20000, 4):
-        nibble = sample[i:i + 4]
+        nibble = sample[i : i + 4]
         groups[nibble] = groups.get(nibble, 0) + 1
     total_groups = 5000
     x = (16.0 / total_groups) * sum(v * v for v in groups.values()) - total_groups
@@ -254,12 +263,12 @@ class SequencerReport:
     min_length: int
     max_length: int
     charset_estimate: int
-    mean_entropy: float         # mean H bits/char
-    mean_total_bits: float      # mean H * len
-    effective_bits: float       # estimate of real strength
-    assessment: str             # WEAK / MODERATE / GOOD / STRONG
-    length_histogram: dict[int, int]     # len -> count
-    char_frequency: dict[str, int]       # char -> count
+    mean_entropy: float  # mean H bits/char
+    mean_total_bits: float  # mean H * len
+    effective_bits: float  # estimate of real strength
+    assessment: str  # WEAK / MODERATE / GOOD / STRONG
+    length_histogram: dict[int, int]  # len -> count
+    char_frequency: dict[str, int]  # char -> count
     duplicates: int
     fips_results: list[FIPSTestResult] = field(default_factory=list)  # FIPS 140-2 tests
     position_anomalies: list[tuple[int, float, int]] = field(default_factory=list)
@@ -418,11 +427,19 @@ class Sequencer:
         tokens = self._tokens
         if not tokens:
             return SequencerReport(
-                tokens=[], token_count=0, avg_length=0.0,
-                min_length=0, max_length=0, charset_estimate=0,
-                mean_entropy=0.0, mean_total_bits=0.0, effective_bits=0.0,
+                tokens=[],
+                token_count=0,
+                avg_length=0.0,
+                min_length=0,
+                max_length=0,
+                charset_estimate=0,
+                mean_entropy=0.0,
+                mean_total_bits=0.0,
+                effective_bits=0.0,
                 assessment="INSUFFICIENT DATA",
-                length_histogram={}, char_frequency={}, duplicates=0,
+                length_histogram={},
+                char_frequency={},
+                duplicates=0,
             )
 
         lengths = [len(t) for t in tokens]
@@ -435,7 +452,7 @@ class Sequencer:
 
         entropies = [token_entropy(t) for t in tokens]
         total_bits_list = [total_entropy_bits(t) for t in tokens]
-        mean_H = sum(entropies) / len(entropies)
+        mean_h = sum(entropies) / len(entropies)
         mean_bits = sum(total_bits_list) / len(total_bits_list)
 
         # Real strength: min of theoretical and actual
@@ -479,7 +496,7 @@ class Sequencer:
             min_length=min_len,
             max_length=max_len,
             charset_estimate=avg_charset,
-            mean_entropy=mean_H,
+            mean_entropy=mean_h,
             mean_total_bits=mean_bits,
             effective_bits=effective,
             assessment=assessment,

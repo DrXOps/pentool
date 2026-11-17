@@ -6,7 +6,6 @@ import asyncio
 import threading
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
 
 from pentool.core.logging import get_logger
 from pentool.modules.match_replace import MatchReplaceEngine, MatchReplaceRule
@@ -14,13 +13,8 @@ from pentool.modules.websocket_handler import WebSocketHandler
 from pentool.utils.cert import create_ssl_context_for_domain, load_or_create_ca
 from pentool.utils.http_client import HTTPClient
 from pentool.utils.intercepted_request import InterceptedRequest, InterceptState
+from pentool.utils.parser import ParsedRequest, ParsedResponse, parse_http_request, parse_http_response
 from pentool.utils.scope import host_in_scope
-from pentool.utils.parser import (
-    ParsedRequest,
-    ParsedResponse,
-    parse_http_request,
-    parse_http_response,
-)
 
 logger = get_logger(__name__)
 
@@ -44,9 +38,6 @@ _STOP_TASK_DRAIN = 2.0
 
 
 _WRITER_CLOSE_GRACE = 0.5
-
-
-InterceptState = Literal["waiting", "forwarded", "dropped"]
 
 
 # Re-export for backward compatibility
@@ -90,7 +81,6 @@ class ProxyServer:
         # Поддерживается в sync при append/evict.
         self._request_cache: dict[str, InterceptedRequest] = {}
 
-
         self._server: asyncio.AbstractServer | None = None
         self._ca_cert_path: str | None = None
         self._ca_key_path: str | None = None
@@ -123,9 +113,7 @@ class ProxyServer:
         if self._server:
             self._server.close()
             try:
-                await asyncio.wait_for(
-                    self._server.wait_closed(), timeout=_STOP_SERVER_GRACE
-                )
+                await asyncio.wait_for(self._server.wait_closed(), timeout=_STOP_SERVER_GRACE)
             except asyncio.TimeoutError:
                 logger.debug("ProxyServer.stop: wait_closed timeout, continuing")
             self._server = None
@@ -188,9 +176,7 @@ class ProxyServer:
         self._match_replace_engine.set_rules(rules)
 
     def is_in_scope(self, host: str) -> bool:
-        """Check if a host is in scope.
-
-        """
+        """Check if a host is in scope."""
         return host_in_scope(host, self.scope)
 
     def forward(self, req_id: str, modified_raw: str | None = None) -> None:
@@ -220,8 +206,7 @@ class ProxyServer:
                 logger.warning("_set_event_threadsafe: failed to set event: %s", e)
 
     def set_intercept(self, enabled: bool) -> None:
-        """Thread-safe setting of intercept_enabled flag from any thread.
-        """
+        """Thread-safe setting of intercept_enabled flag from any thread."""
         loop = self._loop
         if loop is not None and loop.is_running():
             loop.call_soon_threadsafe(setattr, self, "intercept_enabled", enabled)
@@ -229,9 +214,7 @@ class ProxyServer:
             self.intercept_enabled = enabled
 
     def set_enforce_scope(self, enabled: bool) -> None:
-        """Thread-safe setting of enforce_scope flag from any thread.
-
-        """
+        """Thread-safe setting of enforce_scope flag from any thread."""
         loop = self._loop
         if loop is not None and loop.is_running():
             loop.call_soon_threadsafe(setattr, self, "enforce_scope", enabled)
@@ -258,9 +241,7 @@ class ProxyServer:
             try:
                 writer.close()
 
-                await asyncio.wait_for(
-                    writer.wait_closed(), timeout=_WRITER_CLOSE_GRACE
-                )
+                await asyncio.wait_for(writer.wait_closed(), timeout=_WRITER_CLOSE_GRACE)
             except asyncio.TimeoutError:
                 logger.debug("_handle_client: writer.wait_closed() timed out after %.1fs", _WRITER_CLOSE_GRACE)
             except Exception as e:
@@ -319,7 +300,9 @@ class ProxyServer:
         # Generate SSL context for the domain (with disk-cache via cert_dir)
         try:
             ssl_ctx = create_ssl_context_for_domain(
-                domain, self._ca_cert_path, self._ca_key_path,
+                domain,
+                self._ca_cert_path,
+                self._ca_key_path,
                 cert_dir=self.cert_dir,
             )
         except Exception as exc:
@@ -332,12 +315,10 @@ class ProxyServer:
             raw_transport = writer.transport
 
             tls_reader = asyncio.StreamReader()
-            tls_proto  = asyncio.StreamReaderProtocol(tls_reader)
+            tls_proto = asyncio.StreamReaderProtocol(tls_reader)
             tls_proto.connection_made(raw_transport)
 
-            ssl_transport = await loop.start_tls(
-                raw_transport, tls_proto, ssl_ctx, server_side=True
-            )
+            ssl_transport = await loop.start_tls(raw_transport, tls_proto, ssl_ctx, server_side=True)
             tls_writer = asyncio.StreamWriter(ssl_transport, tls_proto, tls_reader, loop)
             logger.debug("TLS: upgrade OK for %s", domain)
         except Exception as exc:
@@ -362,9 +343,7 @@ class ProxyServer:
                         full_url = f"https://{host_port}{path}"
                         raw_req = raw_req.replace(first, f"{method} {full_url} HTTP/1.1", 1)
 
-                response = await self._handle_http(
-                    raw_req, tls_reader, tls_writer, is_https=True
-                )
+                response = await self._handle_http(raw_req, tls_reader, tls_writer, is_https=True)
                 if response is None:
                     break
         except (asyncio.TimeoutError, asyncio.IncompleteReadError):
@@ -401,7 +380,6 @@ class ProxyServer:
             except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
                 pass  # normal TCP tunnel termination
             except asyncio.CancelledError:
-
                 raise
             except Exception as e:
                 logger.debug("_tunnel_raw pipe error: %s", e)
@@ -418,7 +396,6 @@ class ProxyServer:
                 return_exceptions=True,
             )
         finally:
-
             for w in (writer, rem_writer):
                 try:
                     w.close()
@@ -441,9 +418,14 @@ class ProxyServer:
             return None
 
         host = req.host.split(":")[0]
-        logger.debug("PROXY: _handle_http: %s %s (https=%s, intercept=%s, in_scope=%s)",
-                    req.method, req.url, is_https, self.intercept_enabled, self.is_in_scope(host))
-
+        logger.debug(
+            "PROXY: _handle_http: %s %s (https=%s, intercept=%s, in_scope=%s)",
+            req.method,
+            req.url,
+            is_https,
+            self.intercept_enabled,
+            self.is_in_scope(host),
+        )
 
         if self.enforce_scope and not self.is_in_scope(host):
             logger.debug("PROXY: _handle_http: host %s out of scope, forwarding direct", host)
@@ -480,28 +462,34 @@ class ProxyServer:
 
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import ProxyRequestCaptured
+
             _host = _urlparse(ireq.url).hostname or ""
-            get_event_bus().emit(ProxyRequestCaptured(
-                source="proxy",
-                request_id=ireq.id,
-                method=ireq.method,
-                url=ireq.url,
-                host=_host,
-                request=ireq,
-            ))
+            get_event_bus().emit(
+                ProxyRequestCaptured(
+                    source="proxy",
+                    request_id=ireq.id,
+                    method=ireq.method,
+                    url=ireq.url,
+                    host=_host,
+                    request=ireq,
+                )
+            )
         except Exception as exc:
             logger.debug("EventBus emit ProxyRequestCaptured error: %s", exc)
 
         # Interactive interception
         if self.intercept_enabled:
-            logger.debug("INTERCEPT: waiting for decision on %s %s (id=%s, event_set=%s, loop=%s)",
-                        ireq.method, ireq.url, ireq.id,
-                        ireq._decision_event.is_set(), self._loop)
+            logger.debug(
+                "INTERCEPT: waiting for decision on %s %s (id=%s, event_set=%s, loop=%s)",
+                ireq.method,
+                ireq.url,
+                ireq.id,
+                ireq._decision_event.is_set(),
+                self._loop,
+            )
             await self.intercept_queue.put(ireq)
             try:
-                await asyncio.wait_for(
-                    ireq._decision_event.wait(), timeout=_INTERCEPT_TIMEOUT
-                )
+                await asyncio.wait_for(ireq._decision_event.wait(), timeout=_INTERCEPT_TIMEOUT)
             except asyncio.TimeoutError:
                 logger.warning("INTERCEPT: timeout on %s -- request dropped after %.0fs", ireq.id, _INTERCEPT_TIMEOUT)
                 ireq.state = "dropped"
@@ -540,12 +528,15 @@ class ProxyServer:
             try:
                 from pentool.core.event_bus import get_event_bus
                 from pentool.core.events import ProxyRequestCompleted
-                get_event_bus().emit(ProxyRequestCompleted(
-                    source="proxy",
-                    request_id=ireq.id,
-                    status_code=0,
-                    request=ireq,
-                ))
+
+                get_event_bus().emit(
+                    ProxyRequestCompleted(
+                        source="proxy",
+                        request_id=ireq.id,
+                        status_code=0,
+                        request=ireq,
+                    )
+                )
             except Exception as exc:
                 logger.debug("EventBus emit ProxyRequestCompleted (failed request) error: %s", exc)
             return None
@@ -567,13 +558,16 @@ class ProxyServer:
         try:
             from pentool.core.event_bus import get_event_bus
             from pentool.core.events import ProxyRequestCompleted
+
             status = ireq.response.status if ireq.response else 0
-            get_event_bus().emit(ProxyRequestCompleted(
-                source="proxy",
-                request_id=ireq.id,
-                status_code=status,
-                request=ireq,
-            ))
+            get_event_bus().emit(
+                ProxyRequestCompleted(
+                    source="proxy",
+                    request_id=ireq.id,
+                    status_code=status,
+                    request=ireq,
+                )
+            )
         except Exception as exc:
             logger.debug("EventBus emit ProxyRequestCompleted error: %s", exc)
 
@@ -645,6 +639,7 @@ class ProxyServer:
             if self._http_client is None:
                 from pentool.core.config import get_config
                 from pentool.utils.http_client import get_shared_http_client
+
                 self._http_client = get_shared_http_client(follow_redirects=True, cfg=get_config())
             return await self._http_client.send(req)
         except Exception as exc:
@@ -685,9 +680,7 @@ class ProxyServer:
         if content_length > 0:
             to_read = min(content_length, _MAX_BODY)
             try:
-                body = await asyncio.wait_for(
-                    reader.readexactly(to_read), timeout=_READ_TIMEOUT
-                )
+                body = await asyncio.wait_for(reader.readexactly(to_read), timeout=_READ_TIMEOUT)
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 pass
 
@@ -698,14 +691,11 @@ class ProxyServer:
             self.requests.append(req)
             self._request_cache[req.id] = req
             if len(self.requests) > self._requests_max:
-
                 non_waiting = [r for r in self.requests if r.state != "waiting"]
                 waiting = [r for r in self.requests if r.state == "waiting"]
                 to_evict = len(self.requests) - self._requests_max
                 evicted = self.requests[:to_evict]
-                self.requests = (non_waiting[to_evict:]
-                                 if len(non_waiting) >= to_evict
-                                 else []) + waiting
+                self.requests = (non_waiting[to_evict:] if len(non_waiting) >= to_evict else []) + waiting
                 # Удаляем из кэша вытесненные записи
                 for r in evicted:
                     self._request_cache.pop(r.id, None)
@@ -730,8 +720,7 @@ class ProxyServer:
             self._request_cache.clear()
 
     def replace_requests(self, requests: list[InterceptedRequest]) -> None:
-        """Atomically replace the in-memory request history.
-        """
+        """Atomically replace the in-memory request history."""
         with self._requests_lock:
             self.requests = list(requests)
             self._request_cache = {r.id: r for r in requests}
@@ -760,9 +749,7 @@ class ProxyServer:
 
     @staticmethod
     def _response_to_bytes(resp: ParsedResponse) -> bytes:
-        """Serialize ParsedResponse to bytes for sending to the browser.
-
-        """
+        """Serialize ParsedResponse to bytes for sending to the browser."""
         # Body -- raw bytes (already decoded by aiohttp)
         if resp._raw_body is not None:
             body_bytes = resp._raw_body

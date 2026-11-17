@@ -5,14 +5,14 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-
-import aiohttp
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pickle import PicklingError
 from typing import Callable
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
+
+import aiohttp
 
 from pentool.core.logging import get_logger
 from pentool.utils.lightpanda import is_lightpanda_available, lightpanda_fetch_html
@@ -21,7 +21,7 @@ from pentool.utils.scope import domain_in_scope
 # ── Retry settings for page fetching ──────────────────────────────────────────
 _RETRY_MAX_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 1.0  # seconds
-_RETRY_MAX_DELAY = 8.0   # seconds
+_RETRY_MAX_DELAY = 8.0  # seconds
 
 logger = get_logger(__name__)
 
@@ -72,6 +72,7 @@ def _get_proc_pool() -> ProcessPoolExecutor | None:
     if _PROC_POOL is None:
         try:
             import multiprocessing as _mp
+
             # Use spawn context to avoid inheriting parent's file descriptors
             # (notably the proxy's listening socket on 8080). With fork, workers
             # inherit all fds and block the port if they orphan. spawn is safe
@@ -119,8 +120,7 @@ def _normalize_url_cpu(url: str) -> str:
         return url
 
 
-def _link_cpu_work(raw: str, page_url: str, base_domain: str,
-                   respect_scope: bool) -> tuple[bool, str, str]:
+def _link_cpu_work(raw: str, page_url: str, base_domain: str, respect_scope: bool) -> tuple[bool, str, str]:
     """Resolve one link candidate: returns (ok, abs_url, norm_url). Runs in subprocess."""
     if not raw:
         return False, "", ""
@@ -140,14 +140,13 @@ def _link_cpu_work(raw: str, page_url: str, base_domain: str,
     return True, abs_url, norm
 
 
-def _bulk_links_cpu(cands, page_url: str, base_domain: str,
-                    respect_scope: bool) -> list[tuple[bool, str, str]]:
+def _bulk_links_cpu(cands, page_url: str, base_domain: str, respect_scope: bool) -> list[tuple[bool, str, str]]:
     """Batch link processing for ProcessPoolExecutor (avoids per-link IPC overhead)."""
-    return [_link_cpu_work(c, page_url, base_domain, respect_scope)
-            for c in cands]
+    return [_link_cpu_work(c, page_url, base_domain, respect_scope) for c in cands]
 
 
 # ── lxml/bs4 unified parsing interface ──────────────────────────────────────
+
 
 class _LxmlSoup:
     """Thin adaptation of lxml.html.Element → bs4-like find_all/get.
@@ -178,7 +177,6 @@ class _LxmlSoup:
                 out.extend(self._tree.iter(n))
             return out
         return list(self._tree.iter(name))
-
 
     def get_text_strip(self, el) -> str:
         # lxml Element.text_content — full text content (bs4 get_text equivalent)
@@ -278,17 +276,17 @@ _JS_API_PATTERNS = [
 
 # Regex for path parameters (numbers/UUIDs in path)
 _PATH_SEGMENT_RE = re.compile(
-    r'/(\d{1,10}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_\-]{8,36})(?=/|$)'
+    r"/(\d{1,10}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_\-]{8,36})(?=/|$)"
 )
 
 # Attributes with URLs to search in all tags
-_URL_ATTRIBUTES = ["href", "action", "src", "data-url", "data-href", "data-src",
-                   "data-action", "data-link", "content"]
+_URL_ATTRIBUTES = ["href", "action", "src", "data-url", "data-href", "data-src", "data-action", "data-link", "content"]
 
 
 @dataclass
 class FormField:
     """HTML form field."""
+
     name: str
     type: str = "text"
     value: str = ""
@@ -297,6 +295,7 @@ class FormField:
 @dataclass
 class SpiderForm:
     """Found HTML form."""
+
     action: str
     method: str = "GET"
     fields: list[FormField] = field(default_factory=list)
@@ -306,17 +305,19 @@ class SpiderForm:
 @dataclass
 class SpiderEndpoint:
     """Found endpoint (from HTML, JS, URL, or path-segment)."""
+
     url: str
-    source: str = "html"   # html | js | param | path | robots | sitemap | form
+    source: str = "html"  # html | js | param | path | robots | sitemap | form
     method: str = "GET"
     params: list[str] = field(default_factory=list)
-    body: str = ""          # for POST forms — encoded body
+    body: str = ""  # for POST forms — encoded body
     headers: dict = field(default_factory=dict)
 
 
 @dataclass
 class SpiderResult:
     """Site crawl result."""
+
     base_url: str
     pages: list[str] = field(default_factory=list)
     forms: list[SpiderForm] = field(default_factory=list)
@@ -388,9 +389,7 @@ class AsyncSpider:
 
         if self.js_render:
             # JS rendering via Lightpanda.
-            await self._crawl_lightpanda(
-                start_url, base_domain, base_scheme, result, visited, queue, semaphore
-            )
+            await self._crawl_lightpanda(start_url, base_domain, base_scheme, result, visited, queue, semaphore)
         else:
             # Regular aiohttp crawling
             import aiohttp
@@ -410,7 +409,9 @@ class AsyncSpider:
             # and never runs for a URL the caller already gave an explicit
             # scheme for with a working TLS listener.
             base_scheme, start_url = await self._resolve_scheme(
-                start_url, base_scheme, base_domain,
+                start_url,
+                base_scheme,
+                base_domain,
             )
             parsed = urlparse(start_url)
             base_domain = parsed.netloc
@@ -426,9 +427,7 @@ class AsyncSpider:
 
             async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
                 # First parse robots.txt and sitemap.xml
-                await self._fetch_robots_sitemap(
-                    session, base_scheme, base_domain, result, visited, queue
-                )
+                await self._fetch_robots_sitemap(session, base_scheme, base_domain, result, visited, queue)
 
                 while queue and not self._stop and len(visited) < self.max_pages:
                     # Take a batch of URLs for parallel processing
@@ -447,8 +446,7 @@ class AsyncSpider:
                         break
 
                     tasks = [
-                        self._fetch_page(session, url, depth, result, base_domain, semaphore)
-                        for url, depth in batch
+                        self._fetch_page(session, url, depth, result, base_domain, semaphore) for url, depth in batch
                     ]
                     pages_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -473,7 +471,10 @@ class AsyncSpider:
         return result
 
     async def _resolve_scheme(
-        self, start_url: str, scheme: str, domain: str,
+        self,
+        start_url: str,
+        scheme: str,
+        domain: str,
     ) -> tuple[str, str]:
         """Probe https and fall back to http if target doesn't speak SSL."""
         if scheme != "https" or not domain:
@@ -494,9 +495,9 @@ class AsyncSpider:
                 return scheme, start_url
             http_url = start_url.replace("https://", "http://", 1)
             logger.info(
-                "AsyncSpider: %s speaks plain HTTP, not HTTPS (WRONG_VERSION_NUMBER) "
-                "— retrying crawl as %s",
-                domain, http_url,
+                "AsyncSpider: %s speaks plain HTTP, not HTTPS (WRONG_VERSION_NUMBER) " "— retrying crawl as %s",
+                domain,
+                http_url,
             )
             return "http", http_url
         except Exception:
@@ -535,14 +536,16 @@ class AsyncSpider:
                                 norm = self._normalize_url(url)
                                 if norm not in visited and self._in_scope(url, domain):
                                     queue.append((url, 1))
-                                    result.endpoints.append(SpiderEndpoint(
-                                        url=url, source="robots", method="GET",
-                                    ))
+                                    result.endpoints.append(
+                                        SpiderEndpoint(
+                                            url=url,
+                                            source="robots",
+                                            method="GET",
+                                        )
+                                    )
                         elif low.startswith("sitemap:"):
                             sitemap_url = line.split(":", 1)[1].strip()
-                            await self._fetch_sitemap(
-                                session, sitemap_url, result, visited, queue, domain
-                            )
+                            await self._fetch_sitemap(session, sitemap_url, result, visited, queue, domain)
             result.total_requests += 1
         except Exception as exc:
             logger.debug("robots.txt fetch error: %s", exc)
@@ -555,8 +558,13 @@ class AsyncSpider:
             logger.debug("sitemap.xml fetch error: %s", exc)
 
     async def _fetch_sitemap(
-        self, session, sitemap_url: str, result: SpiderResult,
-        visited: set, queue: list, domain: str,
+        self,
+        session,
+        sitemap_url: str,
+        result: SpiderResult,
+        visited: set,
+        queue: list,
+        domain: str,
     ) -> None:
         """Parse sitemap.xml and add URLs to the queue."""
         try:
@@ -566,17 +574,21 @@ class AsyncSpider:
                 text = await resp.text(errors="replace")
                 result.total_requests += 1
                 # Look for <loc>URL</loc>
-                for match in re.finditer(r'<loc>\s*(https?://[^<]+)\s*</loc>', text):
+                for match in re.finditer(r"<loc>\s*(https?://[^<]+)\s*</loc>", text):
                     url = match.group(1).strip()
                     if self._in_scope(url, domain):
                         norm = self._normalize_url(url)
                         if norm not in visited:
                             queue.append((url, 1))
-                            result.endpoints.append(SpiderEndpoint(
-                                url=url, source="sitemap", method="GET",
-                            ))
+                            result.endpoints.append(
+                                SpiderEndpoint(
+                                    url=url,
+                                    source="sitemap",
+                                    method="GET",
+                                )
+                            )
                 # Nested sitemap indexes
-                for match in re.finditer(r'<sitemap>.*?<loc>\s*(https?://[^<]+)\s*</loc>', text, re.DOTALL):
+                for match in re.finditer(r"<sitemap>.*?<loc>\s*(https?://[^<]+)\s*</loc>", text, re.DOTALL):
                     nested = match.group(1).strip()
                     await self._fetch_sitemap(session, nested, result, visited, queue, domain)
         except Exception as exc:
@@ -595,10 +607,7 @@ class AsyncSpider:
         if final_url.rstrip("/") == requested_url.rstrip("/"):
             return False
         low = final_url.lower()
-        return any(
-            marker in low
-            for marker in ("/login", "login.php", "signin", "/auth", "logon")
-        )
+        return any(marker in low for marker in ("/login", "login.php", "signin", "/auth", "logon"))
 
     async def _fetch_page(
         self,
@@ -644,9 +653,9 @@ class AsyncSpider:
                             result.endpoints.extend(endpoints)
                             # Also extract pages from JS endpoints for crawling
                             js_page_links = [
-                                ep.url for ep in endpoints
-                                if ep.url.startswith("http")
-                                and self._in_scope(ep.url, base_domain)
+                                ep.url
+                                for ep in endpoints
+                                if ep.url.startswith("http") and self._in_scope(ep.url, base_domain)
                             ]
                             return js_page_links
 
@@ -672,21 +681,27 @@ class AsyncSpider:
                         # Extract parameters from current page URL
                         params = parse_qs(urlparse(url).query)
                         if params:
-                            result.endpoints.append(SpiderEndpoint(
-                                url=url,
-                                source="param",
-                                method="GET",
-                                params=list(params.keys()),
-                            ))
+                            result.endpoints.append(
+                                SpiderEndpoint(
+                                    url=url,
+                                    source="param",
+                                    method="GET",
+                                    params=list(params.keys()),
+                                )
+                            )
 
                         # Detect path parameters (numbers and UUIDs in path)
                         path_variants = self._extract_path_variants(url, base_domain)
                         _known_urls = {ep.url for ep in result.endpoints}
                         for pv in path_variants:
                             if pv not in _known_urls:
-                                result.endpoints.append(SpiderEndpoint(
-                                    url=pv, source="path", method="GET",
-                                ))
+                                result.endpoints.append(
+                                    SpiderEndpoint(
+                                        url=pv,
+                                        source="path",
+                                        method="GET",
+                                    )
+                                )
 
                         # Return links + JS (JS also goes to crawl queue)
                         return links + js_links
@@ -694,8 +709,13 @@ class AsyncSpider:
                 except asyncio.TimeoutError:
                     if attempt < _RETRY_MAX_ATTEMPTS - 1:
                         delay = min(_RETRY_BASE_DELAY * (2 ** (attempt - 1)), _RETRY_MAX_DELAY)
-                        logger.debug("spider: timeout %s (attempt %d/%d, retry in %.1fs)",
-                                     url, attempt, _RETRY_MAX_ATTEMPTS, delay)
+                        logger.debug(
+                            "spider: timeout %s (attempt %d/%d, retry in %.1fs)",
+                            url,
+                            attempt,
+                            _RETRY_MAX_ATTEMPTS,
+                            delay,
+                        )
                         await asyncio.sleep(delay)
                         last_error = asyncio.TimeoutError(f"Timeout: {url}")
                         continue
@@ -704,8 +724,14 @@ class AsyncSpider:
                 except (aiohttp.ClientError, ConnectionError, OSError) as exc:
                     if attempt < _RETRY_MAX_ATTEMPTS - 1:
                         delay = min(_RETRY_BASE_DELAY * (2 ** (attempt - 1)), _RETRY_MAX_DELAY)
-                        logger.debug("spider: transient error %s (attempt %d/%d, retry in %.1fs): %s",
-                                     url, attempt, _RETRY_MAX_ATTEMPTS, delay, exc)
+                        logger.debug(
+                            "spider: transient error %s (attempt %d/%d, retry in %.1fs): %s",
+                            url,
+                            attempt,
+                            _RETRY_MAX_ATTEMPTS,
+                            delay,
+                            exc,
+                        )
                         await asyncio.sleep(delay)
                         last_error = exc
                         continue
@@ -738,8 +764,7 @@ class AsyncSpider:
         queue: list,
         semaphore: asyncio.Semaphore,
     ) -> None:
-        """Crawl with Lightpanda JS rendering (fetch --dump html, no click-through).
-        """
+        """Crawl with Lightpanda JS rendering (fetch --dump html, no click-through)."""
         while queue and not self._stop and len(visited) < self.max_pages:
             url, depth = queue.pop(0)
             norm = self._normalize_url(url)
@@ -749,9 +774,7 @@ class AsyncSpider:
                 continue
             visited.add(norm)
 
-            html = await lightpanda_fetch_html(
-                url, timeout=self.timeout, user_agent=self.user_agent
-            )
+            html = await lightpanda_fetch_html(url, timeout=self.timeout, user_agent=self.user_agent)
             if html is None:
                 # Can't render via Lightpanda for this URL (timeout/error).
                 continue
@@ -778,9 +801,7 @@ class AsyncSpider:
 
     # ── HTML parsing ─────────────────────────────────────────────────────────
 
-    def _parse_html(
-        self, html: str, page_url: str, base_domain: str
-    ) -> tuple[list[str], list[SpiderForm], list[str]]:
+    def _parse_html(self, html: str, page_url: str, base_domain: str) -> tuple[list[str], list[SpiderForm], list[str]]:
         """Parse HTML for links/forms/JS (lxml + batch ProcessPoolExecutor)."""
         return self._parse_html_internal(html, page_url, base_domain)
 
@@ -827,12 +848,11 @@ class AsyncSpider:
 
         # ── Candidate batch handling (pool or sync) ────────────────────────
         if candidates:
-            links = self._commit_links(
-                candidates, page_url, base_domain, seen_links)
+            links = self._commit_links(candidates, page_url, base_domain, seen_links)
 
         # ── Forms (still bs4/lxml iteration, no pool) ──────────────────────
         for form in _iter_forms(soup):
-            action = (form.get("action") or page_url)
+            action = form.get("action") or page_url
             action = urljoin(page_url, action)
             method = (form.get("method", "GET") or "GET").upper()
             fields: list[FormField] = []
@@ -845,19 +865,23 @@ class AsyncSpider:
                 # Skip buttons and hidden fields without value
                 if input_type in ("submit", "button", "image", "reset"):
                     continue
-                fields.append(FormField(
-                    name=name,
-                    type=input_type,
-                    value=inp.get("value", ""),
-                ))
+                fields.append(
+                    FormField(
+                        name=name,
+                        type=input_type,
+                        value=inp.get("value", ""),
+                    )
+                )
 
             if fields:
-                forms.append(SpiderForm(
-                    action=action,
-                    method=method,
-                    fields=fields,
-                    page_url=page_url,
-                ))
+                forms.append(
+                    SpiderForm(
+                        action=action,
+                        method=method,
+                        fields=fields,
+                        page_url=page_url,
+                    )
+                )
                 # Auto-submit GET forms with their default field values so
                 # pages only reachable through a form (search boxes,
                 # filters, ...) still get crawled. GET-only: submitting POST
@@ -868,8 +892,7 @@ class AsyncSpider:
                         sep = "&" if urlparse(action).query else "?"
                         # treat the form query as a candidate (may reach the pool)
                         candidates2 = [f"{action}{sep}{query}"]
-                        links.extend(self._commit_links(
-                            candidates2, page_url, base_domain, seen_links))
+                        links.extend(self._commit_links(candidates2, page_url, base_domain, seen_links))
 
         return links, forms, js_links
 
@@ -877,11 +900,13 @@ class AsyncSpider:
         """Parser: lxml (fast) or bs4 (fallback), guarded against ImportError."""
         try:
             import lxml.html as lxml_html
+
             return _LxmlSoup(html, lxml_html)
         except ImportError:
             pass
         try:
             from bs4 import BeautifulSoup
+
             return BeautifulSoup(html, "html.parser")
         except ImportError:
             return _EmptySoup()
@@ -905,19 +930,19 @@ class AsyncSpider:
         if pool is not None:
             try:
                 fut = pool.submit(
-                    _bulk_links_cpu, candidates, page_url, base_domain,
+                    _bulk_links_cpu,
+                    candidates,
+                    page_url,
+                    base_domain,
                     respect_scope,
                 )
                 results = fut.result(timeout=60)
-            except (BrokenProcessPool, PicklingError, RuntimeError, OSError,
-                    TimeoutError):
+            except (BrokenProcessPool, PicklingError, RuntimeError, OSError, TimeoutError):
                 # Pool broke/hung — fall back to the synchronous path (same
                 # _link_cpu_work engine, result unchanged)
-                results = [_link_cpu_work(c, page_url, base_domain, respect_scope)
-                           for c in candidates]
+                results = [_link_cpu_work(c, page_url, base_domain, respect_scope) for c in candidates]
         else:
-            results = [_link_cpu_work(c, page_url, base_domain, respect_scope)
-                       for c in candidates]
+            results = [_link_cpu_work(c, page_url, base_domain, respect_scope) for c in candidates]
 
         added: list[str] = []
         for ok, abs_url, norm in results:
@@ -964,12 +989,14 @@ class AsyncSpider:
                 seen.add(full_url)
 
                 params = list(parse_qs(urlparse(full_url).query).keys())
-                endpoints.append(SpiderEndpoint(
-                    url=full_url,
-                    source="js",
-                    method="GET",
-                    params=params,
-                ))
+                endpoints.append(
+                    SpiderEndpoint(
+                        url=full_url,
+                        source="js",
+                        method="GET",
+                        params=params,
+                    )
+                )
 
         return endpoints
 
@@ -1003,11 +1030,11 @@ class AsyncSpider:
             # Never return the original URL itself (existing test contract),
             # only the variant with the segment swapped out. Dedup on the
             # normalized (query-free) form so ?page=2 vs ?page=3 collapse.
-            if norm and norm not in seen and norm != origin and not (
-                any(
-                    self._normalize_url(existing) == norm
-                    for existing in seen
-                )
+            if (
+                norm
+                and norm not in seen
+                and norm != origin
+                and not (any(self._normalize_url(existing) == norm for existing in seen))
             ):
                 seen.add(norm)
                 variants.append(variant_url)
@@ -1038,6 +1065,12 @@ class AsyncSpider:
 
 
 __all__ = [
-    "AsyncSpider", "SpiderResult", "SpiderForm", "FormField", "SpiderEndpoint",
-    "DEFAULT_MAX_DEPTH", "DEFAULT_MAX_PAGES", "DEFAULT_CONCURRENCY",
+    "AsyncSpider",
+    "SpiderResult",
+    "SpiderForm",
+    "FormField",
+    "SpiderEndpoint",
+    "DEFAULT_MAX_DEPTH",
+    "DEFAULT_MAX_PAGES",
+    "DEFAULT_CONCURRENCY",
 ]

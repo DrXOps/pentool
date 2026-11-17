@@ -13,11 +13,9 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 from typing import Callable
 
 import click
-
 
 _SCANNER_UNAVAILABLE_MSG = (
     "Scanner is a PRO feature and isn't installed.\n"
@@ -32,6 +30,7 @@ def _import_scanner_api():
     """Lazy-import ScannerAPI with user-friendly error on missing PRO."""
     try:
         from pentool.api.scanner_api import ScannerAPI
+
         return ScannerAPI
     except ImportError:
         click.echo(_SCANNER_UNAVAILABLE_MSG, err=True)
@@ -83,15 +82,15 @@ class ScanRunner:
         Использует ``ScanService`` для полного жизненного цикла:
         краул → fingerprint → AIWorker → активный скан → сохранение.
         """
-        ScannerAPI = _import_scanner_api()
-        from pentool.core.config import get_config
+        scanner_api = _import_scanner_api()
         from pentool.api.spider_api import SpiderAPI
-        from pentool.services.scan_service import ScanService, ScanConfig
+        from pentool.core.config import get_config
         from pentool.core.event_bus import EventBus
+        from pentool.services.scan_service import ScanConfig, ScanService
         from pentool.utils.lightpanda import is_lightpanda_available
 
         cfg = get_config()
-        api = ScannerAPI(db_path=cfg.db_path)
+        api = scanner_api(db_path=cfg.db_path)
 
         # Коллбэк для логирования в CLI
         _findings: list = []
@@ -130,6 +129,7 @@ class ScanRunner:
 
             # 2. EventBus (для внутренних событий ScanService)
             from pentool.core.events import FindingDiscovered, ScanProgressEvent
+
             bus = EventBus()
             # Подписываемся на события для вывода в CLI
             findings_from_events: list = []

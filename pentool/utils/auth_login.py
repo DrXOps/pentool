@@ -17,12 +17,12 @@ from __future__ import annotations
 
 import re
 import time
+from typing import Optional
+from urllib.parse import quote_plus
 
 from pentool.utils.logging import get_logger
 
 logger = get_logger(__name__)
-from urllib.parse import quote_plus
-from typing import Optional
 
 __all__ = [
     "extract_user_token",
@@ -107,11 +107,18 @@ async def build_session_headers(
     owns_client = http_client is None
     if http_client is None:
         from pentool.utils.http_client import HTTPClient
+
         http_client = HTTPClient(verify_ssl=False)
 
     try:
         final_headers = await _do_login(
-            http_client, url, username, password, login_path, app_path, extra_cookie_fragment,
+            http_client,
+            url,
+            username,
+            password,
+            login_path,
+            app_path,
+            extra_cookie_fragment,
         )
     finally:
         if owns_client:
@@ -155,10 +162,15 @@ async def _do_login(
     if user_token:
         fields["user_token"] = user_token
     body = "&".join(f"{k}={quote_plus(str(v))}" for k, v in fields.items())
-    post_resp = await http_client.send(_req(
-        "POST", login_url, cookie_fragment, body=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    ))
+    post_resp = await http_client.send(
+        _req(
+            "POST",
+            login_url,
+            cookie_fragment,
+            body=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    )
 
     # Session id may rotate after POST -> re-read it.
     new_sid = extract_phpsessid(post_resp.headers.get("Set-Cookie"))
@@ -180,8 +192,7 @@ async def _do_login(
     return final_cookie
 
 
-def _req(method: str, url: str, cookie: str = "", body: str = "",
-         headers: dict[str, str] | None = None) -> object:
+def _req(method: str, url: str, cookie: str = "", body: str = "", headers: dict[str, str] | None = None) -> object:
     from pentool.utils.parser import ParsedRequest
 
     h: dict[str, str] = dict(headers or {})

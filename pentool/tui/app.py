@@ -19,8 +19,7 @@ from textual.css.query import NoMatches
 from textual.widgets import Checkbox, ContentSwitcher
 
 from pentool import __version__
-from pentool.api.proxy_api import InterceptedRequest as _IR
-from pentool.api.proxy_api import ProxyAPI, ProxyServer
+from pentool.api.proxy_api import InterceptedRequest, ProxyAPI, ProxyServer
 from pentool.core.config import get_config
 from pentool.core.db_schema import init_db
 from pentool.core.event_bus import get_event_bus
@@ -1375,7 +1374,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         with self._pending_done_lock:
             self._pending_done_ids.discard(req_id)
         # Guard: msg.req must be InterceptedRequest
-        if not isinstance(msg.req, _IR):
+        if not isinstance(msg.req, InterceptedRequest):
             logger.warning("on_proxy_request_done: msg.req is %s, skipping", type(msg.req))
             return
         try:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import socket
-import time
 from typing import Any, Callable
 
 import aiohttp
@@ -33,6 +32,7 @@ def set_dns_override(host: str, ip: str, ttl: float = 300.0) -> None:
         ttl: time-to-live in seconds (default 5 minutes).
     """
     import time
+
     _DNS_OVERRIDE[host.lower().strip()] = (ip, time.monotonic() + ttl)
 
 
@@ -47,6 +47,7 @@ def clear_dns_override(host: str | None = None) -> None:
 def get_dns_overrides() -> dict[str, str]:
     """Return current active DNS overrides (host -> ip), cleaning expired ones."""
     import time
+
     now = time.monotonic()
     expired = [h for h, (_, exp) in _DNS_OVERRIDE.items() if now > exp]
     for h in expired:
@@ -66,6 +67,7 @@ class _OverrideResolver:
 
     async def resolve(self, host: str, port: int = 0, family: int = 0) -> list[dict]:
         import time as _time_mod
+
         now = _time_mod.monotonic()
         host_lower = host.lower().strip()
         if host_lower in _DNS_OVERRIDE:
@@ -116,8 +118,7 @@ class HTTPClient:
         # scan_marker injected from outside (Config layer) — no direct import of core.config
         if extra_headers is None and scan_marker_enabled and scan_marker_name and scan_marker_value:
             extra_headers = {scan_marker_name: scan_marker_value}
-            logger.debug("HTTPClient: scan_marker injected: %s: %s",
-                         scan_marker_name, scan_marker_value)
+            logger.debug("HTTPClient: scan_marker injected: %s: %s", scan_marker_name, scan_marker_value)
         self._extra_headers = extra_headers or {}
         self._session: aiohttp.ClientSession | None = None
         self._dns_override_enabled: bool = False  # set True to use _OverrideResolver
@@ -141,13 +142,18 @@ class HTTPClient:
         # Strip hop-by-hop headers + replace Accept-Encoding to exclude br
         send_headers = {}
         for k, v in request.headers.items():
-            if k.lower() in ("host", "content-length", "transfer-encoding",
-                             "connection", "keep-alive", "proxy-connection"):
+            if k.lower() in (
+                "host",
+                "content-length",
+                "transfer-encoding",
+                "connection",
+                "keep-alive",
+                "proxy-connection",
+            ):
                 continue
             if k.lower() == "accept-encoding":
                 # Remove brotli — aiohttp cannot decode it
-                encodings = [e.strip() for e in v.split(",")
-                             if e.strip().lower() not in ("br", "zstd")]
+                encodings = [e.strip() for e in v.split(",") if e.strip().lower() not in ("br", "zstd")]
                 v = ", ".join(encodings) if encodings else "gzip, deflate"
             send_headers[k] = v
 
@@ -164,16 +170,13 @@ class HTTPClient:
         if self._proxy_url:
             kwargs["proxy"] = self._proxy_url
 
-        start = time.monotonic()
         async with session.request(request.method, request.url, **kwargs) as resp:
             # Read raw bytes — aiohttp decodes gzip/deflate automatically via read()
             resp_body_bytes: bytes = await resp.read()
 
             # Decode for storage in ParsedResponse (for TUI/reports)
             try:
-                resp_body = resp_body_bytes.decode(
-                    resp.charset or "utf-8", errors="replace"
-                )
+                resp_body = resp_body_bytes.decode(resp.charset or "utf-8", errors="replace")
             except (LookupError, TypeError):
                 resp_body = resp_body_bytes.decode("utf-8", errors="replace")
 
@@ -193,6 +196,7 @@ class HTTPClient:
 
     async def send_raw(self, raw_request: str) -> ParsedResponse:
         from pentool.utils.parser import parse_http_request
+
         req = parse_http_request(raw_request)
         return await self.send(req)
 

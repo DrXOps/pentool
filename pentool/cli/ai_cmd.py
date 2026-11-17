@@ -19,12 +19,7 @@ def ai() -> None:
 @click.option("--force", is_flag=True, default=False, help="Reinstall even if already present.")
 def ai_setup(force: bool) -> None:
     """Install the LLM model and prepare the MCP server."""
-    from pentool.services.ai.factory import (
-        AI_MODELS_DIR,
-        ai_setup_required,
-        get_model_size_mb,
-        install_ai_components,
-    )
+    from pentool.services.ai.factory import AI_MODELS_DIR, ai_setup_required, get_model_size_mb, install_ai_components
 
     if not force and not ai_setup_required():
         click.echo("AI-компоненты уже установлены. Используй --force для переустановки.")
@@ -45,6 +40,7 @@ def ai_setup(force: bool) -> None:
     async def _run() -> bool:
         def progress(msg: str) -> None:
             click.echo(f"  {msg}")
+
         return await install_ai_components(cfg, progress_cb=progress)
 
     try:
@@ -100,8 +96,10 @@ def ai_start() -> None:
         sys.exit(1)
 
     if hasattr(backend, "start"):
+
         async def _start() -> bool:
             return await backend.start()
+
         ok = asyncio.run(_start())
         if ok:
             click.echo("✅ MCP-сервер запущен.")
@@ -126,9 +124,8 @@ def ai_stop() -> None:
 def ai_remove() -> None:
     """Remove the LLM model and MCP-server dependencies."""
     import shutil
-    from pathlib import Path
 
-    from pentool.services.ai.factory import AI_MODELS_DIR, AI_MCP_DIR
+    from pentool.services.ai.factory import AI_MCP_DIR, AI_MODELS_DIR
 
     cfg = get_config()
     cfg.ai_enabled = False

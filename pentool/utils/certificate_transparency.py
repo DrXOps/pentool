@@ -102,16 +102,16 @@ class CertTransparencyClient:
                             subdomains.add(cleaned[2:])  # "*.admin.example.com" → "admin.example.com"
 
                 # Filter: keep only subdomains that actually belong to the domain
-                result.subdomains = {
-                    s for s in subdomains
-                    if s.endswith(f".{domain}") or s == domain
-                }
+                result.subdomains = {s for s in subdomains if s.endswith(f".{domain}") or s == domain}
                 return result
 
             except aiohttp.ClientError as exc:
                 logger.warning(
                     "crt.sh attempt %d/%d for %s: %s",
-                    attempt, self._retries, domain, exc,
+                    attempt,
+                    self._retries,
+                    domain,
+                    exc,
                 )
                 if attempt < self._retries:
                     delay = 2.0 * attempt  # 2, 4, 6 seconds
@@ -167,7 +167,8 @@ class CertTransparencyClient:
             if resp.status != 200:
                 logger.warning(
                     "crt.sh HTTP %d for %s",
-                    resp.status, domain,
+                    resp.status,
+                    domain,
                 )
                 return None
             text = await resp.text()

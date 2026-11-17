@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from pentool.export._base import (
-    BaseExporter,
-    FindingData,
-    ReportData,
-    SEVERITY_EMOJI,
-)
+from pentool.export._base import SEVERITY_EMOJI, BaseExporter, ReportData
 
 
 class MarkdownExporter(BaseExporter):
@@ -31,7 +26,7 @@ class MarkdownExporter(BaseExporter):
     # ── private helpers ─────────────────────────────────────────────────
 
     def _write_header(self, lines: list[str], report: ReportData) -> None:
-        lines.append(f"# Pentool Scan Report")
+        lines.append("# Pentool Scan Report")
         lines.append("")
         lines.append(f"**Target:** {report.target}")
         lines.append(f"**Date:** {report.end_time or report.start_time or 'N/A'}")

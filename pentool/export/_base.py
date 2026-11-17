@@ -100,9 +100,15 @@ class ReportData:
 
     target: str
     findings: list[FindingData] = field(default_factory=list)
-    summary: dict[str, int] = field(default_factory=lambda: {
-        "critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0,
-    })
+    summary: dict[str, int] = field(
+        default_factory=lambda: {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "info": 0,
+        }
+    )
     tool_version: str = ""
     start_time: str = ""
     end_time: str = ""
@@ -136,16 +142,16 @@ class BaseExporter(ABC):
 
 SEVERITY_EMOJI = {
     "critical": "🔴",
-    "high":     "🟠",
-    "medium":   "🟡",
-    "low":      "🔵",
-    "info":     "⚪",
+    "high": "🟠",
+    "medium": "🟡",
+    "low": "🔵",
+    "info": "⚪",
 }
 
 SEVERITY_COLOR = {
     "critical": "#dc3545",
-    "high":     "#fd7e14",
-    "medium":   "#ffc107",
-    "low":      "#0d6efd",
-    "info":     "#6c757d",
+    "high": "#fd7e14",
+    "medium": "#ffc107",
+    "low": "#0d6efd",
+    "info": "#6c757d",
 }

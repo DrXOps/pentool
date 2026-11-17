@@ -43,6 +43,7 @@ def _ensure_lightpanda() -> None:
     Silently falls back if download fails — callers check is_lightpanda_available().
     """
     from pentool.utils.lightpanda import ensure_lightpanda_installed_sync
+
     ensure_lightpanda_installed_sync()
 
 
@@ -62,6 +63,7 @@ def _run_target_mode(argv: list[str]) -> None:
             raise SystemExit(2)
         _ensure_lightpanda()
         from pentool.tui.app import PentoolApp
+
         app = PentoolApp()
         app._pending_start_urls = urls
         app._pending_start_smart = True
@@ -70,6 +72,7 @@ def _run_target_mode(argv: list[str]) -> None:
         return
 
     from pentool.cli.main import cli
+
     old_argv = sys.argv
     try:
         sys.argv = [sys.argv[0]] + remaining
@@ -123,6 +126,7 @@ def _kill_orphaned_pentool() -> None:
                 if os.path.basename(exe_path) != exe_basename:
                     continue
                 import signal
+
                 os.kill(pid, signal.SIGKILL)
                 killed += 1
             except (OSError, ValueError, IndexError, FileNotFoundError):
@@ -137,7 +141,7 @@ def _log_exit_reason(reason: str) -> None:
     """Log exit reason to pentool_exit_dump.log (best-effort, non-fatal)."""
     try:
         from pentool.core.config import DEFAULT_CONFIG_DIR
-        from pathlib import Path
+
         (DEFAULT_CONFIG_DIR / "pentool_exit_dump.log").open("a").write(
             f"--- EXIT: {reason} ({__import__('time').strftime('%Y-%m-%d %H:%M:%S')}) ---\n"
         )
@@ -156,6 +160,7 @@ def _ensure_pro_compatible(
 
     try:
         from pentool.core.license import is_pro_package_compatible
+
         compatible, warning = is_pro_package_compatible()
     except Exception:
         logger.debug("PRO compatibility check failed, assuming compatible", exc_info=True)
@@ -166,7 +171,9 @@ def _ensure_pro_compatible(
             # CI/CD: молча обновляем без диалога
             try:
                 import asyncio
+
                 from pentool.core.license import check_and_update_pro_package
+
                 result = asyncio.run(check_and_update_pro_package())
                 if result.updated:
                     print("[pentool] PRO package was out of sync — auto-updated.", file=sys.stderr)
@@ -179,7 +186,9 @@ def _ensure_pro_compatible(
             # Интерактивный режим: спросить пользователя
             try:
                 import asyncio
+
                 from pentool.core.license import check_and_update_pro_package
+
                 _warn_pro_mismatch(warning)
                 choice = input("> ").strip().lower()
                 if choice in ("y", "yes"):
@@ -202,8 +211,11 @@ def _ensure_pro_compatible(
             print(f"[pentool] {warning}", file=sys.stderr)
             raise SystemExit(1)
         else:
-            print("[pentool] UNSAFE: --unsafe-skip-pro-compat-check set — starting anyway. "
-                  "PRO features stay disabled.", file=sys.stderr)
+            print(
+                "[pentool] UNSAFE: --unsafe-skip-pro-compat-check set — starting anyway. "
+                "PRO features stay disabled.",
+                file=sys.stderr,
+            )
 
 
 def _warn_pro_mismatch(warning: str) -> None:
@@ -231,6 +243,7 @@ def _start_tui(open_last: bool = False) -> None:
     # Anonymous install-counter ping (fire-and-forget)
     try:
         from pentool.core.crash_reporter import send_first_run_ping
+
         threading.Thread(target=send_first_run_ping, daemon=True).start()
     except Exception:
         logger.debug("first-run ping failed", exc_info=True)
@@ -238,6 +251,7 @@ def _start_tui(open_last: bool = False) -> None:
     # AI first-run dialog: prompt to install LLM if not set up yet
     try:
         from pentool.services.ai.factory import ai_setup_required, get_ai_system_requirements, get_model_size_mb
+
         if ai_setup_required():
             ts = get_ai_system_requirements()
             print()
@@ -253,8 +267,10 @@ def _start_tui(open_last: bool = False) -> None:
             if choice == "y":
                 print("\nInstalling AI assistant...")
                 import asyncio
+
                 from pentool.core.config import get_config
                 from pentool.services.ai.factory import install_ai_components
+
                 asyncio.run(install_ai_components(get_config()))
                 print("\n✅ AI assistant installed. MCP server starts from Dashboard.")
             elif choice == "n":
@@ -267,6 +283,7 @@ def _start_tui(open_last: bool = False) -> None:
     _kill_orphaned_pentool()
 
     from pentool.tui.app import PentoolApp
+
     _app: PentoolApp | None = None
     try:
         _app = PentoolApp()
@@ -278,6 +295,7 @@ def _start_tui(open_last: bool = False) -> None:
         _log_exit_reason(f"crash: {type(exc).__name__}: {exc}")
         try:
             from pentool.core.crash_reporter import send_crash
+
             send_crash(exc)
         except Exception:
             logger.error("crash reporter failed", exc_info=True)
@@ -294,21 +312,29 @@ def _start_tui(open_last: bool = False) -> None:
 
 def _dump_threads_and_exit() -> None:
     """Dump all thread stacks to exit dump log, then hard-exit."""
-    import io, time as _time, traceback as _tb
+    import io
+    import time as _time
+    import traceback as _tb
+
     from pentool.core.config import DEFAULT_CONFIG_DIR
+
     log_path = str(DEFAULT_CONFIG_DIR / "pentool_exit_dump.log")
     try:
         buf = io.StringIO()
         buf.write(f"--- run() returned cleanly, {_time.strftime('%Y-%m-%d %H:%M:%S')} pid={os.getpid()} ---\n")
         try:
             import threading as _threading
+
             summaries = []
             for th in _threading.enumerate():
                 try:
                     nm = getattr(th, "name", "?")
                     tg = getattr(th, "_target", None)
                     tg_name = getattr(tg, "__qualname__", None) or getattr(tg, "__name__", None) or repr(tg)
-                    summaries.append(f"  ident={getattr(th,'ident',None)} name={nm!r} daemon={getattr(th,'daemon','?')} target={tg_name}")
+                    summaries.append(
+                        f"  ident={getattr(th, 'ident', None)} name={nm!r} "
+                        f"daemon={getattr(th, 'daemon', '?')} target={tg_name}"
+                    )
                 except Exception:
                     logger.debug("thread desc failed, skipping", exc_info=True)
                     continue
@@ -321,9 +347,10 @@ def _dump_threads_and_exit() -> None:
             _tb.print_stack(frame, file=buf)
         try:
             import faulthandler
+
             fbuf = io.StringIO()
             faulthandler.dump_traceback(file=fbuf, all_threads=True)
-            if (faul := fbuf.getvalue().strip()):
+            if faul := fbuf.getvalue().strip():
                 buf.write(f"\n--- faulthandler ---\n{faul}\n")
         except Exception:
             logger.debug("faulthandler dump failed", exc_info=True)
@@ -354,6 +381,7 @@ def main() -> None:
             _run_target_mode(sys.argv[1:])
             return
         from pentool.cli.main import cli
+
         cli()
     else:
         _ensure_pro_compatible(

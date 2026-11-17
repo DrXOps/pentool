@@ -13,7 +13,7 @@ import traceback
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from textual.widget import Widget
+    pass
 
 logger = logging.getLogger("pentool.error")
 

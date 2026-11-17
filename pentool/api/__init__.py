@@ -1,14 +1,9 @@
 """Pentool API layer — public interface between modules/ and TUI/CLI."""
 import pkgutil
+
 __path__ = pkgutil.extend_path(__path__, __name__)
 
-from pentool.api.comparer_api import (  # noqa: F401
-    CompareStats,
-    DiffLine,
-    DiffResult,
-    compare,
-    compare_lines,
-)
+from pentool.api.comparer_api import CompareStats, DiffLine, DiffResult, compare, compare_lines  # noqa: F401
 
 # Decoder/Comparer/Sequencer — functional APIs without a wrapper class
 from pentool.api.decoder_api import (  # noqa: F401
@@ -23,12 +18,7 @@ from pentool.api.decoder_api import (  # noqa: F401
 from pentool.api.intruder_api import IntruderAPI, IntruderAttack, IntruderConfig
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule, ProxyAPI
 from pentool.api.repeater_api import RepeaterAPI
-from pentool.api.sequencer_api import (  # noqa: F401
-    Sequencer,
-    SequencerReport,
-    charset_size,
-    token_entropy,
-)
+from pentool.api.sequencer_api import Sequencer, SequencerReport, charset_size, token_entropy  # noqa: F401
 from pentool.api.spider_api import SpiderAPI
 from pentool.api.target_api import TargetAPI
 
@@ -40,6 +30,7 @@ from pentool.api.target_api import TargetAPI
 # `ScannerAPI`.
 try:
     from pentool.api.scanner_api import ScannerAPI  # noqa: F401
+
     SCANNER_AVAILABLE = True
 except ImportError:
     ScannerAPI = None  # type: ignore[assignment,misc]
@@ -47,22 +38,39 @@ except ImportError:
 
 __all__ = [
     # Proxy
-    "ProxyAPI", "InterceptedRequest", "MatchReplaceRule",
+    "ProxyAPI",
+    "InterceptedRequest",
+    "MatchReplaceRule",
     # Repeater
     "RepeaterAPI",
     # Scanner (PRO — may be None, see SCANNER_AVAILABLE)
-    "ScannerAPI", "SCANNER_AVAILABLE",
+    "ScannerAPI",
+    "SCANNER_AVAILABLE",
     # Intruder
-    "IntruderAPI", "IntruderConfig", "IntruderAttack",
+    "IntruderAPI",
+    "IntruderConfig",
+    "IntruderAttack",
     # Spider
     "SpiderAPI",
     # Target
     "TargetAPI",
     # Decoder
-    "OPERATIONS", "OP_LABELS", "DecoderChain",
-    "decode_op", "decode_smart", "encode_op", "run_chain",
+    "OPERATIONS",
+    "OP_LABELS",
+    "DecoderChain",
+    "decode_op",
+    "decode_smart",
+    "encode_op",
+    "run_chain",
     # Comparer
-    "compare", "compare_lines", "CompareStats", "DiffLine", "DiffResult",
+    "compare",
+    "compare_lines",
+    "CompareStats",
+    "DiffLine",
+    "DiffResult",
     # Sequencer
-    "Sequencer", "SequencerReport", "token_entropy", "charset_size",
+    "Sequencer",
+    "SequencerReport",
+    "token_entropy",
+    "charset_size",
 ]
