@@ -7,6 +7,8 @@ import threading
 import uuid
 from datetime import datetime, timezone
 
+import aiohttp
+
 from pentool.core.logging import get_logger
 from pentool.modules.match_replace import MatchReplaceEngine, MatchReplaceRule
 from pentool.modules.websocket_handler import WebSocketHandler
@@ -121,7 +123,7 @@ class ProxyServer:
         if self._http_client:
             try:
                 await self._http_client.close()
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.warning("ProxyServer.stop: http_client.close() error: %s", e)
             self._http_client = None
 
@@ -202,7 +204,7 @@ class ProxyServer:
             # Fallback -- direct call (if loop is not running)
             try:
                 event.set()
-            except Exception as e:
+            except RuntimeError as e:
                 logger.warning("_set_event_threadsafe: failed to set event: %s", e)
 
     def set_intercept(self, enabled: bool) -> None:
@@ -244,7 +246,7 @@ class ProxyServer:
                 await asyncio.wait_for(writer.wait_closed(), timeout=_WRITER_CLOSE_GRACE)
             except asyncio.TimeoutError:
                 logger.debug("_handle_client: writer.wait_closed() timed out after %.1fs", _WRITER_CLOSE_GRACE)
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.debug("_handle_client: writer.close() error (connection already reset?): %s", e)
 
     async def _process_connection(
@@ -305,7 +307,7 @@ class ProxyServer:
                 self._ca_key_path,
                 cert_dir=self.cert_dir,
             )
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             logger.warning("SSL context error for %s: %s", domain, exc)
             return
 
@@ -321,7 +323,7 @@ class ProxyServer:
             ssl_transport = await loop.start_tls(raw_transport, tls_proto, ssl_ctx, server_side=True)
             tls_writer = asyncio.StreamWriter(ssl_transport, tls_proto, tls_reader, loop)
             logger.debug("TLS: upgrade OK for %s", domain)
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             logger.warning("TLS upgrade failed for %s: %s", domain, exc)
             return
 
@@ -351,7 +353,7 @@ class ProxyServer:
         finally:
             try:
                 tls_writer.close()
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.debug("_handle_connect: tls_writer.close() error: %s", e)
 
     async def _tunnel_raw(
@@ -365,7 +367,7 @@ class ProxyServer:
         port = int(host_port.split(":")[1]) if ":" in host_port else 443
         try:
             rem_reader, rem_writer = await asyncio.open_connection(domain, port)
-        except Exception as exc:
+        except (OSError, asyncio.TimeoutError) as exc:
             logger.debug("Tunnel connect failed %s: %s", host_port, exc)
             return
 
@@ -381,12 +383,12 @@ class ProxyServer:
                 pass  # normal TCP tunnel termination
             except asyncio.CancelledError:
                 raise
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.debug("_tunnel_raw pipe error: %s", e)
             finally:
                 try:
                     dst.close()
-                except Exception as e:
+                except (OSError, RuntimeError) as e:
                     logger.debug("_tunnel_raw dst.close() error: %s", e)
 
         try:
@@ -400,7 +402,7 @@ class ProxyServer:
                 try:
                     w.close()
                     await asyncio.wait_for(w.wait_closed(), timeout=_WRITER_CLOSE_GRACE)
-                except Exception:
+                except (OSError, RuntimeError, asyncio.TimeoutError):
                     pass
 
     async def _handle_http(
@@ -642,7 +644,7 @@ class ProxyServer:
 
                 self._http_client = get_shared_http_client(follow_redirects=True, cfg=get_config())
             return await self._http_client.send(req)
-        except Exception as exc:
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
             logger.warning("Request failed %s %s: %s", req.method, req.url, exc)
             return None
 

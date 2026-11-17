@@ -16,7 +16,7 @@
   "pentool/core/utils.py": 1,
   "pentool/modules/decoder.py": 2,
   "pentool/modules/intruder.py": 3,
-  "pentool/modules/proxy.py": 14,
+  "pentool/modules/proxy.py": 3,
   "pentool/modules/spider.py": 13,
   "pentool/modules/target.py": 2,
   "pentool/modules/websocket_handler.py": 11,
