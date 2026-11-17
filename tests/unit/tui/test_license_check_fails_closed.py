@@ -20,7 +20,7 @@ import pytest
 from textual.widgets import ContentSwitcher
 
 from pentool.tui.app import PentoolApp
-from pentool.tui.screen_registry import SCREEN_MAP
+from pentool.tui.screen_registry import get_screen_class
 
 
 async def _attempt_switch(module_id: str, app: PentoolApp) -> tuple[str | None, list[str]]:
@@ -45,7 +45,10 @@ async def _attempt_switch(module_id: str, app: PentoolApp) -> tuple[str | None, 
             "recon",
             "screen-recon",
             marks=pytest.mark.skipif(
-                "recon" not in SCREEN_MAP,
+                # Спрашиваем геттер, а не словарь: PRO-экран регистрируется
+                # лениво, и `"recon" in SCREEN_MAP` до первого обращения даёт
+                # False даже когда PRO установлен — тест скипался впустую.
+                get_screen_class("recon") is None,
                 reason="Recon живёт в pro-сабмодуле; без него гейт недостижим (_switch_to выходит раньше)",
             ),
         ),
