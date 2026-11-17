@@ -28,75 +28,93 @@ class TestBuildWhereEmpty:
 
 class TestBuildWhereSingle:
     def test_host_like(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "example"),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "example"),
+            ]
+        )
         clause, params = _build_where(s)
         assert "host LIKE ?" in clause
         assert params == ["%example%"]
 
     def test_method_in(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("method", FilterOp.IN, ["GET", "POST"]),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("method", FilterOp.IN, ["GET", "POST"]),
+            ]
+        )
         clause, params = _build_where(s)
         assert "method IN (?,?)" in clause
         assert params == ["GET", "POST"]
 
     def test_status_between(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
+            ]
+        )
         clause, params = _build_where(s)
         assert "BETWEEN ? AND ?" in clause
         assert params == [200, 299]
 
     def test_color_eq(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("color", FilterOp.EQ, "red"),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("color", FilterOp.EQ, "red"),
+            ]
+        )
         clause, params = _build_where(s)
         assert "color = ?" in clause
         assert params == ["red"]
 
     def test_is_websocket_false(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("is_websocket", FilterOp.EQ, False),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("is_websocket", FilterOp.EQ, False),
+            ]
+        )
         clause, params = _build_where(s)
         assert "is_websocket = ?" in clause
         assert params == [False]
 
     def test_comment_not_null(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("comment", FilterOp.NOT_NULL, None),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("comment", FilterOp.NOT_NULL, None),
+            ]
+        )
         clause, params = _build_where(s)
         assert "COALESCE(comment, '') != ''" in clause
         assert params == []
 
     def test_has_params_true(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("has_params", FilterOp.EQ, True),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("has_params", FilterOp.EQ, True),
+            ]
+        )
         clause, params = _build_where(s)
         assert "has_params = ?" in clause
         assert params == [1]
 
     def test_hosts_in_with_ports(self):
         """scope — разворачивается в OR с портами."""
-        s = FilterSpec(predicates=[
-            FilterPredicate("hosts", FilterOp.IN, ["example.com"]),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("hosts", FilterOp.IN, ["example.com"]),
+            ]
+        )
         clause, params = _build_where(s)
         assert "host = ? OR host LIKE ?" in clause
         assert "example.com" in params
         assert "example.com:%" in params
 
     def test_mime_type_like(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("mime_type", FilterOp.LIKE, "text"),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("mime_type", FilterOp.LIKE, "text"),
+            ]
+        )
         clause, params = _build_where(s)
         assert "mime_type LIKE ?" in clause
         assert params == ["%text%"]
@@ -107,12 +125,14 @@ class TestBuildWhereCombined:
 
     def test_http_history_default(self):
         """Host + Method + Status + Scope — симуляция HTTP History."""
-        s = FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "example"),
-            FilterPredicate("method", FilterOp.IN, ["GET"]),
-            FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
-            FilterPredicate("is_websocket", FilterOp.EQ, False),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "example"),
+                FilterPredicate("method", FilterOp.IN, ["GET"]),
+                FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
+                FilterPredicate("is_websocket", FilterOp.EQ, False),
+            ]
+        )
         clause, params = _build_where(s)
         assert clause.count("?") == 5  # LIKE + IN + BETWEEN(2) + EQ
         assert "host LIKE" in clause
@@ -122,11 +142,13 @@ class TestBuildWhereCombined:
 
     def test_scope_and_comment(self):
         """Scope + Comments — два дополнительных фильтра."""
-        s = FilterSpec(predicates=[
-            FilterPredicate("hosts", FilterOp.IN, ["example.com", "test.org"]),
-            FilterPredicate("comment", FilterOp.NOT_NULL, None),
-            FilterPredicate("is_websocket", FilterOp.EQ, False),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("hosts", FilterOp.IN, ["example.com", "test.org"]),
+                FilterPredicate("comment", FilterOp.NOT_NULL, None),
+                FilterPredicate("is_websocket", FilterOp.EQ, False),
+            ]
+        )
         clause, params = _build_where(s)
         assert "(host = ? OR host LIKE ?)" in clause
         assert "COALESCE(comment, '') != ''" in clause
@@ -136,10 +158,12 @@ class TestBuildWhereCombined:
         assert len(params) == 5
 
     def test_color_and_has_params(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("color", FilterOp.EQ, "red"),
-            FilterPredicate("has_params", FilterOp.EQ, True),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("color", FilterOp.EQ, "red"),
+                FilterPredicate("has_params", FilterOp.EQ, True),
+            ]
+        )
         clause, _ = _build_where(s)
         assert "color = ?" in clause
         assert "has_params = ?" in clause

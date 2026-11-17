@@ -7,25 +7,26 @@ section 2.5) — this check had no dedicated unit tests prior to this file.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # Skip all tests if scanner module not available
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.ssrf import (
-    SSRFCheck,
-    _should_test_ssrf,
-    _get_payloads_for_point,
-    _check_ssrf,
     _CLOUD_METADATA,
-    _SKIP_PARAM_NAMES,
+    SSRFCheck,
+    _check_ssrf,
+    _get_payloads_for_point,
+    _should_test_ssrf,
 )
 from pentool.modules.scanner.mutator import InjectionPoint
+
 from pentool.utils.parser import ParsedRequest
 
-
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_request(url: str, method: str = "GET", body: str = "") -> ParsedRequest:
     return ParsedRequest(method=method, url=url, headers={}, body=body)
@@ -55,6 +56,7 @@ def _make_client(resp_body: str = "", status: int = 200):
 
 # ─── TestMeta ─────────────────────────────────────────────────────────────────
 
+
 class TestMeta:
     def test_name(self):
         assert SSRFCheck.name == "ssrf"
@@ -77,6 +79,7 @@ class TestMeta:
 
 # ─── TestShouldTestSsrf ───────────────────────────────────────────────────────
 
+
 class TestShouldTestSsrf:
     def test_url_param_is_tested(self):
         assert _should_test_ssrf(_make_point("url"))
@@ -90,6 +93,7 @@ class TestShouldTestSsrf:
 
 
 # ─── TestGetPayloadsForPoint ──────────────────────────────────────────────────
+
 
 class TestGetPayloadsForPoint:
     def test_url_keyword_gets_full_set(self):
@@ -108,6 +112,7 @@ class TestGetPayloadsForPoint:
 
 
 # ─── TestCheckSsrf ────────────────────────────────────────────────────────────
+
 
 class TestCheckSsrf:
     def test_ami_id_detected(self):
@@ -129,6 +134,7 @@ class TestCheckSsrf:
 
 # ─── TestScanNoClient ─────────────────────────────────────────────────────────
 
+
 class TestScanNoClient:
     @pytest.mark.asyncio
     async def test_returns_empty_without_client(self):
@@ -139,6 +145,7 @@ class TestScanNoClient:
 
 
 # ─── TestScanGetParams ────────────────────────────────────────────────────────
+
 
 class TestScanGetParams:
     @pytest.mark.asyncio
@@ -190,6 +197,7 @@ class TestScanGetParams:
         # those two GET params are skipped entirely (only their original
         # values ever appear, never one of the SSRF payloads).
         from pentool.modules.scanner.checks.ssrf import _CLOUD_METADATA
+
         probe = _CLOUD_METADATA[0]
         assert not any(f"page={probe}" in u or f"q={probe}" in u for u in seen_urls)
 
@@ -244,17 +252,21 @@ class TestScanGetParams:
 
 # ─── TestRegistration ─────────────────────────────────────────────────────────
 
+
 class TestRegistration:
     def test_importable_from_checks_init(self):
         from pentool.modules.scanner.checks import SSRFCheck as SC
+
         assert SC is SSRFCheck
 
     def test_in_all(self):
         from pentool.modules.scanner import checks
+
         assert "SSRFCheck" in checks.__all__
 
     def test_registered_in_scanner_api(self):
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path=":memory:")
         check_names = [c.name for c in api.get_registered_checks()]
         assert "ssrf" in check_names

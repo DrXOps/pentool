@@ -9,9 +9,7 @@ from __future__ import annotations
 import types
 from unittest.mock import patch
 
-import pytest
 from textual.app import App
-from textual.widgets import Static
 
 from pentool.tui.screens.dashboard.screen import DashboardScreen
 
@@ -43,10 +41,13 @@ async def _ids_with(app):
 
 def test_status_block_has_ai_row_and_no_ai_panel():
     import asyncio
+
     app = _Host()
     # heavy dashboard startup hooks are background/no-op-safe here
-    with patch.object(DashboardScreen, "_load_stats_bg", lambda self: None), \
-         patch.object(DashboardScreen, "_populate_projects", lambda self, *a, **k: None):
+    with (
+        patch.object(DashboardScreen, "_load_stats_bg", lambda self: None),
+        patch.object(DashboardScreen, "_populate_projects", lambda self, *a, **k: None),
+    ):
         ids, texts = asyncio.run(_ids_with(app))
     assert "led-ai-bar" in ids, "expected AI row under MCP in STATUS block"
     assert "led-mcp-bar" in ids

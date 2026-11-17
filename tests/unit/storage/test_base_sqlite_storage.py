@@ -109,9 +109,7 @@ class TestSwitchDb:
         await storage._db.commit()
 
         await storage.switch_db(db2)
-        cur = await storage._db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='t'"
-        )
+        cur = await storage._db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='t'")
         assert await cur.fetchone() is None
         await storage.close()
 

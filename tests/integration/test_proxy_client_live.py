@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pentool.proxy.client import ProxyClient
 
 
@@ -68,12 +66,10 @@ def test_client_scope_and_predicates_over_ipc():
         client.start()
         client.set_scope(["example.com", "*.github.com"])
         assert client.is_in_scope("example.com") is True
-        assert client.is_in_scope("api.github.com") is True       # *.github.com
+        assert client.is_in_scope("api.github.com") is True  # *.github.com
         assert client.is_in_scope("unrelated.io") is False
 
-        client.match_replace_rules = [
-            MatchReplaceRule(match="foo", replace="bar", target="request")
-        ]
+        client.match_replace_rules = [MatchReplaceRule(match="foo", replace="bar", target="request")]
         rules = client.match_replace_rules
         assert len(rules) == 1
         assert rules[0]["match"] == "foo"

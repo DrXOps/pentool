@@ -40,9 +40,7 @@ class TestDiscoverAuthHeaders:
         assert result == {}
 
     async def test_no_matching_host_returns_empty(self, db_path):
-        await _seed_request(
-            db_path, "https://other.com/", {"Cookie": "sid=1", "Host": "other.com"}
-        )
+        await _seed_request(db_path, "https://other.com/", {"Cookie": "sid=1", "Host": "other.com"})
         api = SpiderAPI()
         result = await api._discover_auth_headers("https://example.com/", db_path)
         assert result == {}
@@ -87,9 +85,7 @@ class TestDiscoverAuthHeaders:
 
     async def test_nonexistent_db_path_returns_empty_no_raise(self):
         api = SpiderAPI()
-        result = await api._discover_auth_headers(
-            "https://example.com/", "/nonexistent/path/does/not/exist.db"
-        )
+        result = await api._discover_auth_headers("https://example.com/", "/nonexistent/path/does/not/exist.db")
         assert result == {}
 
     async def test_url_without_host_returns_empty(self, db_path):
@@ -108,9 +104,7 @@ class TestCrawlPassesDiscoveredHeaders:
         api = SpiderAPI(config=SpiderConfig())
         with patch("pentool.api.spider_api.AsyncSpider") as mock_cls:
             mock_instance = mock_cls.return_value
-            mock_instance.crawl = AsyncMock(
-                return_value=SpiderResult(base_url="https://dvwa.local/")
-            )
+            mock_instance.crawl = AsyncMock(return_value=SpiderResult(base_url="https://dvwa.local/"))
             await api.crawl("https://dvwa.local/", db_path=db_path)
             _, kwargs = mock_cls.call_args
             assert kwargs["extra_headers"].get("Cookie") == "PHPSESSID=abc"
@@ -124,9 +118,7 @@ class TestCrawlPassesDiscoveredHeaders:
         api = SpiderAPI(config=SpiderConfig())
         with patch("pentool.api.spider_api.AsyncSpider") as mock_cls:
             mock_instance = mock_cls.return_value
-            mock_instance.crawl = AsyncMock(
-                return_value=SpiderResult(base_url="https://dvwa.local/")
-            )
+            mock_instance.crawl = AsyncMock(return_value=SpiderResult(base_url="https://dvwa.local/"))
             await api.crawl(
                 "https://dvwa.local/",
                 extra_headers={"Cookie": "PHPSESSID=explicit"},
@@ -139,9 +131,7 @@ class TestCrawlPassesDiscoveredHeaders:
         api = SpiderAPI(config=SpiderConfig())
         with patch("pentool.api.spider_api.AsyncSpider") as mock_cls:
             mock_instance = mock_cls.return_value
-            mock_instance.crawl = AsyncMock(
-                return_value=SpiderResult(base_url="https://example.com/")
-            )
+            mock_instance.crawl = AsyncMock(return_value=SpiderResult(base_url="https://example.com/"))
             await api.crawl("https://example.com/")
             _, kwargs = mock_cls.call_args
             assert kwargs["extra_headers"] == {}

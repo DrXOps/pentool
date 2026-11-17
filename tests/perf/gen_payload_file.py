@@ -42,10 +42,10 @@ def _parse_size(text: str) -> int:
     text = text.strip().upper()
     mult = 1
     if text.endswith("G"):
-        mult = 1024 ** 3
+        mult = 1024**3
         text = text[:-1]
     elif text.endswith("M"):
-        mult = 1024 ** 2
+        mult = 1024**2
         text = text[:-1]
     elif text.endswith("K"):
         mult = 1024
@@ -80,9 +80,7 @@ def generate(
     path_p = Path(path)
     path_p.parent.mkdir(parents=True, exist_ok=True)
     if path_p.exists() and not overwrite:
-        raise FileExistsError(
-            f"{path} уже существует. Передайте --overwrite или другой --path."
-        )
+        raise FileExistsError(f"{path} уже существует. Передайте --overwrite или другой --path.")
 
     if (target_size is not None) == (lines is not None):
         raise ValueError("Задайте ровно одно из --target-size / --lines (не оба).")
@@ -115,8 +113,7 @@ def generate(
             f.write(bytes(buf))
     elapsed = time.monotonic() - t0
     mib_per_s = (written / (1024 * 1024)) / elapsed if elapsed > 0 else 0.0
-    return {"lines": i, "bytes": written, "elapsed_s": round(elapsed, 3),
-            "mib_per_s": round(mib_per_s, 1)}
+    return {"lines": i, "bytes": written, "elapsed_s": round(elapsed, 3), "mib_per_s": round(mib_per_s, 1)}
 
 
 def list_generated(data_dir: str) -> list[tuple[str, int, int]]:
@@ -131,8 +128,7 @@ def list_generated(data_dir: str) -> list[tuple[str, int, int]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--path", default=None, help="Путь к файлу (default: tests/perf/_data/payload.txt)")
     ap.add_argument("--target-size", type=_parse_size, default=None, help="Пример: 100M, 1G")
     ap.add_argument("--lines", type=int, default=None, help="Точное число строк")
@@ -143,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list_:
         for name, size, _lines in list_generated(str(Path(__file__).parent / "_data")):
-            print(f"{name:40s} {size/(1024*1024):8.1f} MiB")
+            print(f"{name:40s} {size / (1024 * 1024):8.1f} MiB")
         return 0
 
     base = Path(__file__).parent / "_data"
@@ -154,13 +150,17 @@ def main(argv: list[str] | None = None) -> int:
             pct = 100.0 * written / total
         else:
             pct = 100.0
-        print(f"\r  {pct:6.1f}%  {written/(1024*1024):8.1f} MiB  {n_lines:15,d} строк",
-              end="", flush=True)
+        print(f"\r  {pct:6.1f}%  {written / (1024 * 1024):8.1f} MiB  {n_lines:15,d} строк", end="", flush=True)
 
     try:
-        res = generate(path, target_size=args.target_size, lines=args.lines,
-                       line_len=args.line_len, overwrite=args.overwrite,
-                       on_progress=_progress)
+        res = generate(
+            path,
+            target_size=args.target_size,
+            lines=args.lines,
+            line_len=args.line_len,
+            overwrite=args.overwrite,
+            on_progress=_progress,
+        )
     except (FileExistsError, ValueError) as exc:
         print(f"Ошибка: {exc}", file=sys.stderr)
         return 2
@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print(f"Готово: {path}")
     print(f"  строк: {res['lines']:,}")
-    print(f"  байт : {res['bytes']:,}  ({res['bytes']/(1024*1024):.1f} MiB)")
+    print(f"  байт : {res['bytes']:,}  ({res['bytes'] / (1024 * 1024):.1f} MiB)")
     print(f"  время: {res['elapsed_s']} с  ({res['mib_per_s']} MiB/с)")
     return 0
 

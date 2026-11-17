@@ -5,14 +5,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pentool.collections.filter_predicate import (
     FilterOp,
     FilterPredicate,
     FilterSpec,
 )
-
 
 # ─── FilterOp.EQ ─────────────────────────────────────────────────────────────
 
@@ -184,12 +181,12 @@ class TestIn:
         """field='hosts' + IN разворачивается в OR для портов."""
         p = FilterPredicate("hosts", FilterOp.IN, ["example.com", "test.org"])
         clause, params = p.to_sql()
-        assert clause == (
-            "((host = ? OR host LIKE ?) OR (host = ? OR host LIKE ?))"
-        )
+        assert clause == ("((host = ? OR host LIKE ?) OR (host = ? OR host LIKE ?))")
         assert params == [
-            "example.com", "example.com:%",
-            "test.org", "test.org:%",
+            "example.com",
+            "example.com:%",
+            "test.org",
+            "test.org:%",
         ]
 
     def test_single_value(self):
@@ -291,10 +288,12 @@ class TestFilterSpecSql:
         assert params == []
 
     def test_and_combines_predicates(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "example"),
-            FilterPredicate("method", FilterOp.IN, ["GET"]),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "example"),
+                FilterPredicate("method", FilterOp.IN, ["GET"]),
+            ]
+        )
         clause, params = s.to_sql()
         assert "AND" in clause
         assert "host LIKE ?" in clause
@@ -312,10 +311,12 @@ class TestFilterSpecSql:
         assert "OR" in clause
 
     def test_fts_excluded_from_sql(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "example"),
-            FilterPredicate("fts", FilterOp.FTS, "search term"),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "example"),
+                FilterPredicate("fts", FilterOp.FTS, "search term"),
+            ]
+        )
         clause, _ = s.to_sql()
         assert "fts" not in clause
         assert s.fts_query == "search term"
@@ -325,9 +326,11 @@ class TestFilterSpecSql:
         assert s.is_empty
 
     def test_is_empty(self):
-        assert not FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "x"),
-        ]).is_empty
+        assert not FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "x"),
+            ]
+        ).is_empty
 
 
 class TestFilterSpecApply:
@@ -336,10 +339,12 @@ class TestFilterSpecApply:
         assert FilterSpec().apply(rows) == rows
 
     def test_and_filter(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("method", FilterOp.EQ, "GET"),
-            FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("method", FilterOp.EQ, "GET"),
+                FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
+            ]
+        )
         rows = [
             {"method": "GET", "status_code": 200},
             {"method": "POST", "status_code": 200},
@@ -365,9 +370,11 @@ class TestFilterSpecApply:
         assert len(s.apply(rows)) == 2
 
     def test_unknown_operator(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("x", "unknown_op", "v"),  # type: ignore[arg-type]
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("x", "unknown_op", "v"),  # type: ignore[arg-type]
+            ]
+        )
         assert s.apply([{"x": "v"}]) == []  # apply returns False for unknown op
 
     def test_empty_predicates(self):
@@ -383,11 +390,13 @@ class TestFilterSpecApply:
 
 class TestFilterSpecSerialization:
     def test_roundtrip(self):
-        spec = FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "example"),
-            FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
-            FilterPredicate("method", FilterOp.IN, ["GET", "POST"]),
-        ])
+        spec = FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "example"),
+                FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
+                FilterPredicate("method", FilterOp.IN, ["GET", "POST"]),
+            ]
+        )
         d = spec.to_dict()
         spec2 = FilterSpec.from_dict(d)
         assert len(spec2.predicates) == 3
@@ -437,12 +446,14 @@ class TestFiveFiltersAnd:
     """
 
     def test_all_match(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "example"),
-            FilterPredicate("method", FilterOp.IN, ["GET"]),
-            FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
-            FilterPredicate("is_websocket", FilterOp.EQ, False),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "example"),
+                FilterPredicate("method", FilterOp.IN, ["GET"]),
+                FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
+                FilterPredicate("is_websocket", FilterOp.EQ, False),
+            ]
+        )
         row = {
             "host": "www.example.com",
             "method": "GET",
@@ -452,20 +463,24 @@ class TestFiveFiltersAnd:
         assert all(p.apply(row) for p in s.predicates)
 
     def test_no_match_because_host(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "example"),
-            FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "example"),
+                FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
+            ]
+        )
         row = {"host": "other.com", "status_code": 200}
         assert not all(p.apply(row) for p in s.predicates)
 
     def test_sql_generation_for_five(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "example"),
-            FilterPredicate("method", FilterOp.IN, ["GET"]),
-            FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
-            FilterPredicate("is_websocket", FilterOp.EQ, False),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "example"),
+                FilterPredicate("method", FilterOp.IN, ["GET"]),
+                FilterPredicate("status_code", FilterOp.BETWEEN, (200, 299)),
+                FilterPredicate("is_websocket", FilterOp.EQ, False),
+            ]
+        )
         clause, params = s.to_sql()
         # BETWEEN содержит " AND " внутри — считаем по кол-ву предикатов
         assert clause.startswith("WHERE")
@@ -485,10 +500,12 @@ class TestScopeAndCommentsTogether:
 
     def test_scope_sql(self):
         """scope_only → разворачивается в OR с портами. Проверяем SQL."""
-        s = FilterSpec(predicates=[
-            FilterPredicate("hosts", FilterOp.IN, ["example.com", "test.org"]),
-            FilterPredicate("comment", FilterOp.NOT_NULL, None),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("hosts", FilterOp.IN, ["example.com", "test.org"]),
+                FilterPredicate("comment", FilterOp.NOT_NULL, None),
+            ]
+        )
         clause, params = s.to_sql()
         assert "(host = ? OR host LIKE ?)" in clause
         assert "COALESCE(comment, '') != ''" in clause
@@ -503,12 +520,8 @@ class TestScopeAndCommentsTogether:
         assert not p.apply({"hosts": "other.com"})
 
     def test_comment_not_null_apply(self):
-        assert FilterPredicate("comment", FilterOp.NOT_NULL, None).apply(
-            {"comment": "fixed"}
-        )
-        assert not FilterPredicate("comment", FilterOp.NOT_NULL, None).apply(
-            {"comment": ""}
-        )
+        assert FilterPredicate("comment", FilterOp.NOT_NULL, None).apply({"comment": "fixed"})
+        assert not FilterPredicate("comment", FilterOp.NOT_NULL, None).apply({"comment": ""})
 
 
 # ─── FTS комбинации ─────────────────────────────────────────────────────────
@@ -517,10 +530,12 @@ class TestScopeAndCommentsTogether:
 class TestFtsCombination:
     def test_fts_with_other_predicates(self):
         """FTS исключается из SQL, но доступен через .fts_query."""
-        s = FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.LIKE, "example"),
-            FilterPredicate("fts", FilterOp.FTS, "login admin"),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("host", FilterOp.LIKE, "example"),
+                FilterPredicate("fts", FilterOp.FTS, "login admin"),
+            ]
+        )
         sql_clause, sql_params = s.to_sql()
         assert "host LIKE" in sql_clause
         assert s.fts_query == "login admin"
@@ -528,9 +543,11 @@ class TestFtsCombination:
         assert len(sql_params) == 1
 
     def test_only_fts(self):
-        s = FilterSpec(predicates=[
-            FilterPredicate("fts", FilterOp.FTS, "search term"),
-        ])
+        s = FilterSpec(
+            predicates=[
+                FilterPredicate("fts", FilterOp.FTS, "search term"),
+            ]
+        )
         clause, params = s.to_sql()
         assert clause == ""
         assert params == []

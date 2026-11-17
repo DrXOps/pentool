@@ -1,4 +1,5 @@
 """E2E: PentoolApp lifecycle — mount, compose, basic widgets."""
+
 from __future__ import annotations
 
 import pytest
@@ -12,7 +13,6 @@ from pentool.tui.widgets.statusbar import StatusBar
 
 @pytest.mark.e2e
 class TestAppLifecycle:
-
     async def test_app_mounts(self) -> None:
         """PentoolApp запускается без исключений, pilot.app не None."""
         app = PentoolApp()

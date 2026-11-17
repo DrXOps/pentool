@@ -7,8 +7,6 @@ pentool_exit_dump.log, so it's always visible WHY the app exited
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from pentool import __main__ as m
 
 

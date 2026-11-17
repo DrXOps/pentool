@@ -12,11 +12,7 @@ import asyncio
 
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
-_BODY = (
-    "<html><head><title>Fake</title></head><body>"
-    "<p>Server: nginx/1.18.0</p><p>ok</p>"
-    "</body></html>"
-)
+_BODY = "<html><head><title>Fake</title></head><body><p>Server: nginx/1.18.0</p><p>ok</p></body></html>"
 
 
 class FakeHTTPClient:

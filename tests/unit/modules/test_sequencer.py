@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import math
+
 import pytest
+
 from pentool.modules.sequencer import (
     Sequencer,
     SequencerReport,
@@ -81,7 +83,7 @@ class TestTotalEntropyBits:
 
     def test_scales_with_length(self):
         short = total_entropy_bits("abc")
-        long  = total_entropy_bits("abcabc")
+        long = total_entropy_bits("abcabc")
         # Twice as long → twice as many bits
         assert long == pytest.approx(short * 2, abs=0.1)
 
@@ -177,6 +179,7 @@ class TestSequencerAnalyze:
 
     def test_analyze_strong_token(self):
         import secrets
+
         seq = Sequencer()
         # 32 bytes hex = 64 chars from 16 → ~256 bits theoretical
         tokens = [secrets.token_hex(32) for _ in range(10)]
@@ -273,9 +276,11 @@ class TestAssessmentLevels:
 
 # ── FIPS 140-2 Tests (Block 4.5) ───────────────────────────────────────────────
 
+
 class TestFIPS140Monobit:
     def test_monobit_returns_fips_result(self):
         from pentool.modules.sequencer import fips140_monobit
+
         bits = "01" * 10000
         result = fips140_monobit(bits)
         assert result.name == "Monobit Test"
@@ -284,6 +289,7 @@ class TestFIPS140Monobit:
 
     def test_monobit_balanced_passes(self):
         from pentool.modules.sequencer import fips140_monobit
+
         # Exactly 50% ones — should pass
         bits = ("01" * 10000)[:20000]
         result = fips140_monobit(bits)
@@ -291,6 +297,7 @@ class TestFIPS140Monobit:
 
     def test_monobit_all_zeros_fails(self):
         from pentool.modules.sequencer import fips140_monobit
+
         bits = "0" * 20000
         result = fips140_monobit(bits)
         assert not result.passed
@@ -298,6 +305,7 @@ class TestFIPS140Monobit:
 
     def test_monobit_all_ones_fails(self):
         from pentool.modules.sequencer import fips140_monobit
+
         bits = "1" * 20000
         result = fips140_monobit(bits)
         assert not result.passed
@@ -305,12 +313,14 @@ class TestFIPS140Monobit:
 
     def test_monobit_status_color(self):
         from pentool.modules.sequencer import fips140_monobit
+
         bits = "01" * 10000
         result = fips140_monobit(bits)
         assert result.status_color in ("green", "red")
 
     def test_monobit_status_text(self):
         from pentool.modules.sequencer import fips140_monobit
+
         bits = "01" * 10000
         result = fips140_monobit(bits)
         assert "PASS" in result.status or "FAIL" in result.status
@@ -319,6 +329,7 @@ class TestFIPS140Monobit:
 class TestFIPS140Runs:
     def test_runs_returns_fips_result(self):
         from pentool.modules.sequencer import fips140_runs
+
         bits = "01" * 10000
         result = fips140_runs(bits)
         assert result.name == "Runs Test"
@@ -326,6 +337,7 @@ class TestFIPS140Runs:
 
     def test_runs_alternating_passes(self):
         from pentool.modules.sequencer import fips140_runs
+
         # Alternating bits give 20000 runs — this is ABOVE the range [2267, 2733]
         # Verify value == 20000 (each bit is a separate run)
         bits = "01" * 10000
@@ -334,6 +346,7 @@ class TestFIPS140Runs:
 
     def test_runs_constant_fails(self):
         from pentool.modules.sequencer import fips140_runs
+
         bits = "1" * 20000
         result = fips140_runs(bits)
         assert not result.passed
@@ -343,12 +356,14 @@ class TestFIPS140Runs:
 class TestFIPS140Longrun:
     def test_longrun_returns_fips_result(self):
         from pentool.modules.sequencer import fips140_longrun
+
         bits = "01" * 10000
         result = fips140_longrun(bits)
         assert result.name == "Long Runs Test"
 
     def test_longrun_no_long_run_passes(self):
         from pentool.modules.sequencer import fips140_longrun
+
         bits = "01" * 10000
         result = fips140_longrun(bits)
         assert result.passed
@@ -356,6 +371,7 @@ class TestFIPS140Longrun:
 
     def test_longrun_with_long_run_fails(self):
         from pentool.modules.sequencer import fips140_longrun
+
         bits = "1" * 30 + "0" * 19970
         result = fips140_longrun(bits)
         assert not result.passed
@@ -363,6 +379,7 @@ class TestFIPS140Longrun:
 
     def test_longrun_threshold_is_25(self):
         from pentool.modules.sequencer import fips140_longrun
+
         bits = "01" * 10000
         result = fips140_longrun(bits)
         assert result.threshold_high == 25
@@ -371,6 +388,7 @@ class TestFIPS140Longrun:
 class TestFIPS140Poker:
     def test_poker_returns_fips_result(self):
         from pentool.modules.sequencer import fips140_poker
+
         bits = "0101" * 5000
         result = fips140_poker(bits)
         assert result.name == "Poker Test"
@@ -378,6 +396,7 @@ class TestFIPS140Poker:
 
     def test_poker_thresholds(self):
         from pentool.modules.sequencer import fips140_poker
+
         bits = "0101" * 5000
         result = fips140_poker(bits)
         assert result.threshold_low == pytest.approx(1.03)
@@ -387,19 +406,24 @@ class TestFIPS140Poker:
 class TestRunFIPSTests:
     def test_run_fips_tests_empty(self):
         from pentool.modules.sequencer import run_fips_tests
+
         result = run_fips_tests([])
         assert result == []
 
     def test_run_fips_tests_returns_4_results(self):
-        from pentool.modules.sequencer import run_fips_tests
         import secrets
+
+        from pentool.modules.sequencer import run_fips_tests
+
         tokens = [secrets.token_hex(32) for _ in range(10)]
         results = run_fips_tests(tokens)
         assert len(results) == 4
 
     def test_run_fips_tests_all_have_names(self):
-        from pentool.modules.sequencer import run_fips_tests
         import secrets
+
+        from pentool.modules.sequencer import run_fips_tests
+
         tokens = [secrets.token_hex(32) for _ in range(10)]
         results = run_fips_tests(tokens)
         names = {r.name for r in results}
@@ -411,13 +435,16 @@ class TestRunFIPSTests:
     def test_run_fips_tests_few_tokens_no_crash(self):
         """Few tokens — should be repeated up to 20000 bits."""
         from pentool.modules.sequencer import run_fips_tests
+
         results = run_fips_tests(["abc"])
         assert len(results) == 4
 
     def test_analyze_includes_fips_results(self):
         """SequencerReport contains fips_results."""
-        from pentool.modules.sequencer import Sequencer
         import secrets
+
+        from pentool.modules.sequencer import Sequencer
+
         seq = Sequencer()
         tokens = [secrets.token_hex(32) for _ in range(5)]
         seq.add_tokens_bulk(tokens)
@@ -427,8 +454,10 @@ class TestRunFIPSTests:
 
     def test_report_rich_fips_returns_string(self):
         """rich_fips() returns a string with results."""
-        from pentool.modules.sequencer import Sequencer
         import secrets
+
+        from pentool.modules.sequencer import Sequencer
+
         seq = Sequencer()
         seq.add_tokens_bulk([secrets.token_hex(32) for _ in range(5)])
         report = seq.analyze()
@@ -439,6 +468,7 @@ class TestRunFIPSTests:
     def test_report_rich_fips_empty_has_message(self):
         """rich_fips() without tokens — returns a message."""
         from pentool.modules.sequencer import Sequencer
+
         seq = Sequencer()
         report = seq.analyze()
         text = report.rich_fips()
@@ -452,8 +482,10 @@ class TestAnalyzePositionEntropy:
 
     def test_uniform_tokens_no_anomalies(self) -> None:
         """Random tokens — high entropy at every position."""
-        from pentool.modules.sequencer import analyze_position_entropy
         import secrets
+
+        from pentool.modules.sequencer import analyze_position_entropy
+
         tokens = [secrets.token_hex(8) for _ in range(20)]
         result = analyze_position_entropy(tokens)
         assert len(result) == 16  # token_hex(8) produces 16-char hex strings (8 bytes = 16 hex chars)
@@ -465,6 +497,7 @@ class TestAnalyzePositionEntropy:
     def test_fixed_prefix_tokens(self) -> None:
         """Tokens with fixed prefix — first positions have zero entropy."""
         from pentool.modules.sequencer import analyze_position_entropy
+
         # All tokens start with "FIXED_" — first 6 characters are completely predictable
         tokens = [f"FIXED_{i:04d}" for i in range(20)]
         result = analyze_position_entropy(tokens)
@@ -477,6 +510,7 @@ class TestAnalyzePositionEntropy:
     def test_different_lengths_returns_empty(self) -> None:
         """Tokens of different length — analyze_position_entropy returns []."""
         from pentool.modules.sequencer import analyze_position_entropy
+
         tokens = ["abc", "de", "fghi"]
         result = analyze_position_entropy(tokens)
         assert result == []
@@ -484,18 +518,21 @@ class TestAnalyzePositionEntropy:
     def test_single_token_returns_empty(self) -> None:
         """Single token — insufficient data for analysis."""
         from pentool.modules.sequencer import analyze_position_entropy
+
         result = analyze_position_entropy(["singletoken"])
         assert result == []
 
     def test_empty_tokens_returns_empty(self) -> None:
         """Empty list — returns []."""
         from pentool.modules.sequencer import analyze_position_entropy
+
         result = analyze_position_entropy([])
         assert result == []
 
     def test_position_entropy_values(self) -> None:
         """Verify correctness of entropy calculation."""
         from pentool.modules.sequencer import analyze_position_entropy
+
         # Position 0: all 'A' → H=0. Position 1: 50% 'x', 50% 'y' → H=1. Position 2: all '!'
         tokens = ["Ax!", "Ay!", "Ax!", "Ay!"]
         result = analyze_position_entropy(tokens)
@@ -510,12 +547,13 @@ class TestAnalyzePositionEntropy:
     def test_position_unique_chars(self) -> None:
         """Verify unique_chars count at each position."""
         from pentool.modules.sequencer import analyze_position_entropy
+
         tokens = ["abc", "adc", "aec"]  # pos0=a,a,a; pos1=b,d,e; pos2=c,c,c
         result = analyze_position_entropy(tokens)
         assert len(result) == 3
-        assert result[0][2] == 1   # pos0: only 'a'
-        assert result[1][2] == 3   # pos1: b,d,e
-        assert result[2][2] == 1   # pos2: only 'c'
+        assert result[0][2] == 1  # pos0: only 'a'
+        assert result[1][2] == 3  # pos1: b,d,e
+        assert result[2][2] == 1  # pos2: only 'c'
 
 
 class TestSequencerReportPositionAnomalies:
@@ -524,6 +562,7 @@ class TestSequencerReportPositionAnomalies:
     def test_rich_position_anomalies_no_data(self) -> None:
         """Without data — message about inability to analyze."""
         from pentool.modules.sequencer import Sequencer
+
         seq = Sequencer()
         report = seq.analyze()
         text = report.rich_position_anomalies()
@@ -532,8 +571,10 @@ class TestSequencerReportPositionAnomalies:
 
     def test_rich_position_anomalies_random_tokens(self) -> None:
         """Random tokens — no anomalies."""
-        from pentool.modules.sequencer import Sequencer
         import secrets
+
+        from pentool.modules.sequencer import Sequencer
+
         seq = Sequencer()
         seq.add_tokens_bulk([secrets.token_hex(16) for _ in range(30)])
         report = seq.analyze()
@@ -543,8 +584,10 @@ class TestSequencerReportPositionAnomalies:
     def test_rich_position_anomalies_with_fixed_prefix(self) -> None:
         """Tokens with fixed prefix — anomalous positions are detected."""
         from pentool.modules.sequencer import Sequencer
+
         seq = Sequencer()
         import secrets
+
         # All tokens start with "SESS_" (fixed prefix)
         tokens = [f"SESS_{secrets.token_hex(6)}" for _ in range(20)]
         seq.add_tokens_bulk(tokens)
@@ -562,6 +605,7 @@ class TestSequencerReportIntegration:
     def test_analyze_returns_position_anomalies_field(self) -> None:
         """analyze() returns SequencerReport with position_anomalies field."""
         from pentool.modules.sequencer import Sequencer
+
         seq = Sequencer()
         seq.add_tokens_bulk(["token_1", "token_2", "token_3"])
         report = seq.analyze()
@@ -572,6 +616,7 @@ class TestSequencerReportIntegration:
     def test_analyze_mixed_length_position_anomalies_empty(self) -> None:
         """analyze() with tokens of different lengths → position_anomalies = []."""
         from pentool.modules.sequencer import Sequencer
+
         seq = Sequencer()
         seq.add_tokens_bulk(["short", "longertoken", "med"])
         report = seq.analyze()

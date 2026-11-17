@@ -13,6 +13,7 @@ Textual), этот тест поднимает настоящее приложе
 Запуск:
     python3 tests/perf/tui_deep.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -79,8 +80,9 @@ async def run() -> dict:
 
     results: dict = {"seed_requests": n_seed_requests, "seed_elapsed_s": round(seed_elapsed, 2)}
 
-    from pentool.tui.app import PentoolApp
     from textual.widgets import ContentSwitcher
+
+    from pentool.tui.app import PentoolApp
 
     gc.collect()
     rss_before_app = _rss_mb()
@@ -104,9 +106,19 @@ async def run() -> dict:
 
         # ── Навигация по всем модулям — время переключения + память ──────────
         modules = [
-            "dashboard", "proxy", "repeater", "intruder", "scanner",
-            "target", "decoder", "comparer", "sequencer", "spider",
-            "extensions", "terminal", "settings",
+            "dashboard",
+            "proxy",
+            "repeater",
+            "intruder",
+            "scanner",
+            "target",
+            "decoder",
+            "comparer",
+            "sequencer",
+            "spider",
+            "extensions",
+            "terminal",
+            "settings",
         ]
         nav_results = []
         for mod in modules:
@@ -122,14 +134,16 @@ async def run() -> dict:
                 current = cs.current
             except Exception as exc:
                 current = f"ERROR: {exc}"
-            nav_results.append({
-                "module": mod,
-                "switch_elapsed_s": round(nav_elapsed, 3),
-                "rss_before_mb": round(rss_b, 1),
-                "rss_after_mb": round(rss_a, 1),
-                "delta_mb": round(rss_a - rss_b, 1),
-                "content_switcher_current": current,
-            })
+            nav_results.append(
+                {
+                    "module": mod,
+                    "switch_elapsed_s": round(nav_elapsed, 3),
+                    "rss_before_mb": round(rss_b, 1),
+                    "rss_after_mb": round(rss_a, 1),
+                    "delta_mb": round(rss_a - rss_b, 1),
+                    "content_switcher_current": current,
+                }
+            )
             print(f"[nav:{mod}] {nav_results[-1]}")
         results["navigation"] = nav_results
 
@@ -137,8 +151,8 @@ async def run() -> dict:
         app.action_switch_module("proxy")
         await pilot.pause(0.2)
 
-        from pentool.tui.screens.proxy.screen import ProxyScreen
         from pentool.tui.constants import SCREEN_PROXY
+        from pentool.tui.screens.proxy.screen import ProxyScreen
 
         proxy_screen = app.query_one(SCREEN_PROXY, ProxyScreen)
 
@@ -176,8 +190,9 @@ async def run() -> dict:
         print(f"[proxy_scroll_30_rows] {results['proxy_scroll_30_rows']}")
 
         # ── Debounce-append: имитация живого трафика (100 быстрых вставок) ───
-        from pentool.modules.proxy import InterceptedRequest
         from datetime import datetime, timezone
+
+        from pentool.modules.proxy import InterceptedRequest
 
         gc.collect()
         rss_before_live = _rss_mb()
@@ -221,8 +236,8 @@ def format_report(results: dict) -> str:
         "",
         "## Запуск приложения (mount)",
         "",
-        f"| Время mount (с) | RSS до (MB) | RSS после (MB) | Δ (MB) |",
-        f"|---|---|---|---|",
+        "| Время mount (с) | RSS до (MB) | RSS после (MB) | Δ (MB) |",
+        "|---|---|---|---|",
         f"| {results['startup']['mount_elapsed_s']} | {results['startup']['rss_before_mb']} | "
         f"{results['startup']['rss_after_mount_mb']} | {results['startup']['delta_mb']:+} |",
         "",
@@ -259,7 +274,7 @@ def format_report(results: dict) -> str:
         f"- rows_cache после append: {la['rows_cache_len_after']:,} "
         f"(было {p['rows_loaded']:,} — прирост {la['rows_cache_len_after'] - p['rows_loaded']})",
         "",
-        f"## После выхода из приложения",
+        "## После выхода из приложения",
         "",
         f"- RSS: {results['after_app_exit_rss_mb']} MB",
     ]

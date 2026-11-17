@@ -8,8 +8,6 @@ rows. Now it clears results first — a fresh target starts with an empty table.
 
 from __future__ import annotations
 
-import types
-
 from pentool.tui.screens.intruder.screen import IntruderScreen
 
 
@@ -43,6 +41,7 @@ def _make_screen():
 def test_load_request_clears_previous_results():
     screen, editor = _make_screen()
     from pentool.tui.screens.intruder.screen import _IntruderTabState
+
     state = _IntruderTabState(tab_id="intruder-tab-1", name="Test")
     screen._tabs = [state]
     screen._active_tab_id = "intruder-tab-1"

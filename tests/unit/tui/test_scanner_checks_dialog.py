@@ -11,7 +11,6 @@ import sys
 from unittest.mock import patch
 
 import pytest
-import pytest_asyncio
 from textual.app import App
 from textual.widgets import Static
 
@@ -19,6 +18,7 @@ pro_available = False
 try:
     sys.path.insert(0, "pro")
     from pentool.tui.dialogs.checks_dialog import ChecksDialog
+
     pro_available = True
 except Exception:
     pro_available = False
@@ -29,6 +29,7 @@ pytestmark = pytest.mark.skipif(not pro_available, reason="pro/ submodule not av
 
 def _make_dialog(ai_enabled):
     import types
+
     # Force get_config() -> cfg with ai_enabled for the compose-time read.
     patcher = patch(
         "pentool.core.config.get_config",

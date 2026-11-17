@@ -1,7 +1,7 @@
 """Локальный мок-сервер для perf-тестов (без внешней сети)."""
+
 from __future__ import annotations
 
-import asyncio
 from aiohttp import web
 
 

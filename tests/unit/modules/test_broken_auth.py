@@ -14,26 +14,23 @@ engine-passed point.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.broken_auth import (
     BrokenAuthCheck,
-    _AUTH_HEADERS,
-    _BYPASS_TOKENS,
-    _VERB_OVERRIDES,
     _has_auth,
     _is_response_useful,
     _strip_auth,
 )
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
-def _make_request(
-    url: str, method: str = "GET", headers: dict | None = None, body: str = ""
-) -> ParsedRequest:
+def _make_request(url: str, method: str = "GET", headers: dict | None = None, body: str = "") -> ParsedRequest:
     return ParsedRequest(method=method, url=url, headers=headers or {}, body=body)
 
 
@@ -150,8 +147,9 @@ class TestScanNoFinding:
             headers={"Authorization": "Bearer x"},
         )
         login_body = "please log in to continue" * 4
-        client = _usable_client(get=ParsedResponse(302, "Found", {}, login_body),
-                                post=ParsedResponse(302, "Found", {}, login_body))
+        client = _usable_client(
+            get=ParsedResponse(302, "Found", {}, login_body), post=ParsedResponse(302, "Found", {}, login_body)
+        )
         findings = await check.scan(req, None, client)
         assert findings == []
 
@@ -159,7 +157,6 @@ class TestScanNoFinding:
 class TestEngineIntegration:
     """End-to-end through ScanEngine — scan()-pipeline check actually finds
     the vulnerability (fake client returns a useful body on every probe)."""
-
 
     @pytest.mark.asyncio
     async def test_engine_detects_broken_auth(self):

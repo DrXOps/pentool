@@ -16,7 +16,6 @@ fails the suite instead of silently producing a broken toast.
 
 from __future__ import annotations
 
-import ast
 import re
 from pathlib import Path
 
@@ -25,6 +24,7 @@ from pathlib import Path
 _SEV = r"(information|success|warning|error|critical)"
 # matches: .notify("<literal…>", "<severity>") — second positional arg
 _POSITIONAL_SEV = re.compile(r'notify\(\s*["\'][^"\']*["\']\s*,\s*["\']' + _SEV + r'["\']\s*\)')
+
 
 def _iter_notify_calls():
     # test path: <repo>/pentool/tests/unit/tui/test_notify_severity_arg.py
@@ -51,6 +51,5 @@ def test_no_positional_severity_in_notify_calls():
     offenders = list(_iter_notify_calls())
     assert not offenders, (
         "notify() severity passed POSITIONALLY (keyword-only) → TypeError at "
-        "runtime → 'failed …mixin.notify' toast. Fix to severity='…': "
-        + "; ".join(f"{p}:{ln}" for p, ln in offenders)
+        "runtime → 'failed …mixin.notify' toast. Fix to severity='…': " + "; ".join(f"{p}:{ln}" for p, ln in offenders)
     )

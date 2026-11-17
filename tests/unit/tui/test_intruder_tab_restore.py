@@ -136,7 +136,7 @@ class TestRestoreFromStorage:
             # restored ones are the two the storage just handed over.
             restored = [s for s in panel.all_states if s.tab_uid in {"uid-a", "uid-b"}]
             assert {s.name for s in restored} == {"Pitchfork", "Battering"}, (
-                "restored tabs take their names from the DB's tab_name — " f"got {[s.name for s in restored]}"
+                f"restored tabs take their names from the DB's tab_name — got {[s.name for s in restored]}"
             )
             by_uid = {s.tab_uid: s for s in restored}
             assert by_uid["uid-a"].attack_type == AttackType.BATTERING_RAM
@@ -153,9 +153,9 @@ class TestRestoreFromStorage:
             active = by_uid["uid-b"]
             assert panel.active_tab_id == active.tab_id
             listing = screen.query_one(f"#payload-list-{active.tab_id}")
-            assert (
-                len(listing.children) == 2
-            ), f"the active restored tab painted {len(listing.children)} payload rows, expected 2"
+            assert len(listing.children) == 2, (
+                f"the active restored tab painted {len(listing.children)} payload rows, expected 2"
+            )
             button = screen.query_one(f"#btn-attack-type-{active.tab_id}", ToolbarButton)
             assert "Pitchfork" in button.label
 
@@ -165,7 +165,7 @@ class TestRestoreFromStorage:
                 await pilot.pause()
             listing = screen.query_one(f"#payload-list-{by_uid['uid-a'].tab_id}")
             assert len(listing.children) == 2, (
-                "opening a restored tab must paint its own payloads, " f"got {len(listing.children)} rows"
+                f"opening a restored tab must paint its own payloads, got {len(listing.children)} rows"
             )
             button = screen.query_one(f"#btn-attack-type-{by_uid['uid-a'].tab_id}", ToolbarButton)
             assert "Battering Ram" in button.label

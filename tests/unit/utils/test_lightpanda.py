@@ -18,24 +18,30 @@ from pentool.utils.lightpanda import (
 class TestFindBinary:
     @patch.dict("os.environ", {}, clear=False)
     def test_returns_none_when_not_installed(self):
-        with patch("pentool.utils.lightpanda.shutil.which", return_value=None), \
-             patch.object(Path, "is_file", return_value=False):
+        with (
+            patch("pentool.utils.lightpanda.shutil.which", return_value=None),
+            patch.object(Path, "is_file", return_value=False),
+        ):
             assert find_lightpanda_binary() is None
 
     def test_finds_on_path(self):
-        with patch("pentool.utils.lightpanda.shutil.which", return_value="/usr/local/bin/lightpanda"), \
-             patch.object(Path, "is_file", return_value=True), \
-             patch("os.access", return_value=True):
+        with (
+            patch("pentool.utils.lightpanda.shutil.which", return_value="/usr/local/bin/lightpanda"),
+            patch.object(Path, "is_file", return_value=True),
+            patch("os.access", return_value=True),
+        ):
             assert find_lightpanda_binary() == "/usr/local/bin/lightpanda"
 
     def test_prefers_env_bin(self):
         # env-override is checked first and beats PATH/HINTs (which we stub
         # away so they cannot accidentally match a real system install).
-        with patch.dict("os.environ", {"LIGHTPANDA_BIN": "/custom/lightpanda"}), \
-             patch("pentool.utils.lightpanda.shutil.which", return_value=None), \
-             patch("pentool.utils.lightpanda._INSTALL_HINTS", ()), \
-             patch.object(Path, "is_file", return_value=True), \
-             patch("os.access", return_value=True):
+        with (
+            patch.dict("os.environ", {"LIGHTPANDA_BIN": "/custom/lightpanda"}),
+            patch("pentool.utils.lightpanda.shutil.which", return_value=None),
+            patch("pentool.utils.lightpanda._INSTALL_HINTS", ()),
+            patch.object(Path, "is_file", return_value=True),
+            patch("os.access", return_value=True),
+        ):
             assert find_lightpanda_binary() == "/custom/lightpanda"
 
     def test_home_hint(self, tmp_path: Path):
@@ -45,10 +51,12 @@ class TestFindBinary:
         fake = fake_dir / "lightpanda"
         fake.write_text("")
         fake.chmod(0o755)
-        with patch.dict("os.environ", {}, clear=False), \
-             patch("pentool.utils.lightpanda.shutil.which", return_value=None), \
-             patch("pentool.utils.lightpanda._INSTALL_HINTS", (str(fake),)), \
-             patch("os.access", return_value=True):
+        with (
+            patch.dict("os.environ", {}, clear=False),
+            patch("pentool.utils.lightpanda.shutil.which", return_value=None),
+            patch("pentool.utils.lightpanda._INSTALL_HINTS", (str(fake),)),
+            patch("os.access", return_value=True),
+        ):
             assert find_lightpanda_binary() == str(fake)
 
 
@@ -74,27 +82,30 @@ class TestFetchHtml:
         fake_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
         fake_proc.returncode = 0
         fake_proc.kill = Mock(return_value=None)  # asyncio Process.kill() is sync
-        with patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"), \
-             patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec",
-                   return_value=fake_proc):
+        with (
+            patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"),
+            patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec", return_value=fake_proc),
+        ):
             assert await lightpanda_fetch_html("http://example.com", timeout=1) is None
 
     async def test_returns_none_on_nonzero_exit(self):
         fake_proc = AsyncMock()
         fake_proc.communicate = AsyncMock(return_value=(b"<html></html>", b""))
         fake_proc.returncode = 1
-        with patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"), \
-             patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec",
-                   return_value=fake_proc):
+        with (
+            patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"),
+            patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec", return_value=fake_proc),
+        ):
             assert await lightpanda_fetch_html("http://example.com") is None
 
     async def test_returns_html_on_success(self):
         fake_proc = AsyncMock()
         fake_proc.communicate = AsyncMock(return_value=(b"<html>rendered</html>", b""))
         fake_proc.returncode = 0
-        with patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"), \
-             patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec",
-                   return_value=fake_proc) as exec_mock:
+        with (
+            patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"),
+            patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec", return_value=fake_proc) as exec_mock,
+        ):
             html = await lightpanda_fetch_html("https://example.com")
         assert html == "<html>rendered</html>"
         # команда: lightpanda fetch --dump html <url>
@@ -105,9 +116,10 @@ class TestFetchHtml:
         assert args[4] == "https://example.com"
 
     async def test_returns_none_on_exception(self):
-        with patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"), \
-             patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec",
-                   side_effect=RuntimeError("boom")):
+        with (
+            patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"),
+            patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec", side_effect=RuntimeError("boom")),
+        ):
             assert await lightpanda_fetch_html("http://example.com") is None
 
     async def test_never_raises_on_decode_issue(self):
@@ -115,9 +127,10 @@ class TestFetchHtml:
         # invalid UTF-8 → decode errors="replace" → still returns str
         fake_proc.communicate = AsyncMock(return_value=(b"\xff\xfe bogus", b""))
         fake_proc.returncode = 0
-        with patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"), \
-             patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec",
-                   return_value=fake_proc):
+        with (
+            patch("pentool.utils.lightpanda.find_lightpanda_binary", return_value="/x/lightpanda"),
+            patch("pentool.utils.lightpanda.asyncio.create_subprocess_exec", return_value=fake_proc),
+        ):
             html = await lightpanda_fetch_html("http://example.com")
         assert isinstance(html, str)
 

@@ -7,22 +7,24 @@ section 2.5) — this check had no dedicated unit tests prior to this file.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # Skip all tests if scanner module not available
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.open_redirect import (
-    OpenRedirectCheck,
     _REDIRECT_PAYLOADS,
-    _is_redirect_to_attacker,
+    OpenRedirectCheck,
     _check_redirect,
+    _is_redirect_to_attacker,
 )
+
 from pentool.utils.parser import ParsedRequest
 
-
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_request(url: str, method: str = "GET", body: str = "") -> ParsedRequest:
     return ParsedRequest(method=method, url=url, headers={}, body=body)
@@ -48,6 +50,7 @@ def _make_client(resp_body: str = "", status: int = 200, headers: dict | None = 
 
 # ─── TestMeta ─────────────────────────────────────────────────────────────────
 
+
 class TestMeta:
     def test_name(self):
         assert OpenRedirectCheck.name == "open_redirect"
@@ -70,6 +73,7 @@ class TestMeta:
 
 # ─── TestIsRedirectToAttacker ─────────────────────────────────────────────────
 
+
 class TestIsRedirectToAttacker:
     def test_evil_com_detected(self):
         assert _is_redirect_to_attacker("https://evil.com/path")
@@ -82,6 +86,7 @@ class TestIsRedirectToAttacker:
 
 
 # ─── TestCheckRedirect ────────────────────────────────────────────────────────
+
 
 class TestCheckRedirect:
     def test_http_302_to_attacker(self):
@@ -96,9 +101,7 @@ class TestCheckRedirect:
         assert evidence is None
 
     def test_meta_refresh_redirect(self):
-        resp = _make_resp(
-            '<meta http-equiv="refresh" content="0;url=https://evil.com">'
-        )
+        resp = _make_resp('<meta http-equiv="refresh" content="0;url=https://evil.com">')
         evidence = _check_redirect(resp, "https://evil.com")
         assert evidence
         assert "Meta-refresh" in evidence
@@ -117,6 +120,7 @@ class TestCheckRedirect:
 
 # ─── TestScanNoClient ─────────────────────────────────────────────────────────
 
+
 class TestScanNoClient:
     @pytest.mark.asyncio
     async def test_returns_empty_without_client(self):
@@ -127,6 +131,7 @@ class TestScanNoClient:
 
 
 # ─── TestScanGetParams ────────────────────────────────────────────────────────
+
 
 class TestScanGetParams:
     @pytest.mark.asyncio
@@ -218,6 +223,7 @@ class TestScanGetParams:
         client.send = fake_send
         req = _make_request("https://example.com/?redirect=home")
         from pentool.modules.scanner.mutator import RequestMutator
+
         n_points = len(RequestMutator().extract_points(req))
         findings = await check.scan(req, None, http_client=client)
         assert findings
@@ -225,6 +231,7 @@ class TestScanGetParams:
 
 
 # ─── TestPayloads ─────────────────────────────────────────────────────────────
+
 
 class TestPayloads:
     def test_payloads_not_empty(self):
@@ -236,17 +243,21 @@ class TestPayloads:
 
 # ─── TestRegistration ─────────────────────────────────────────────────────────
 
+
 class TestRegistration:
     def test_importable_from_checks_init(self):
         from pentool.modules.scanner.checks import OpenRedirectCheck as ORC
+
         assert ORC is OpenRedirectCheck
 
     def test_in_all(self):
         from pentool.modules.scanner import checks
+
         assert "OpenRedirectCheck" in checks.__all__
 
     def test_registered_in_scanner_api(self):
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path=":memory:")
         check_names = [c.name for c in api.get_registered_checks()]
         assert "open_redirect" in check_names

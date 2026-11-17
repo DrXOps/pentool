@@ -26,8 +26,8 @@ from pentool.core.events import (
     UrlCrawled,
 )
 
-
 # ── Fixtures ───────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def bus() -> EventBus:
@@ -42,6 +42,7 @@ def reset_global_bus():
 
 
 # ── AppEvent base ──────────────────────────────────────────────────────────────
+
 
 class TestAppEvent:
     def test_timestamp_auto_set(self):
@@ -59,6 +60,7 @@ class TestAppEvent:
 
 
 # ── Events dataclasses ────────────────────────────────────────────────────────
+
 
 class TestEventDataclasses:
     def test_scan_started_defaults(self):
@@ -79,6 +81,7 @@ class TestEventDataclasses:
     def test_finding_discovered(self):
         class FakeFinding:
             pass
+
         f = FakeFinding()
         e = FindingDiscovered(finding=f, scan_source="passive")
         assert e.finding is f
@@ -122,6 +125,7 @@ class TestEventDataclasses:
 
 
 # ── EventBus.subscribe / unsubscribe ──────────────────────────────────────────
+
 
 class TestSubscribeUnsubscribe:
     def test_subscribe_adds_handler(self, bus):
@@ -172,6 +176,7 @@ class TestSubscribeUnsubscribe:
 
 # ── EventBus.emit ─────────────────────────────────────────────────────────────
 
+
 class TestEmit:
     def test_emit_calls_handler(self, bus):
         received = []
@@ -197,8 +202,10 @@ class TestEmit:
 
     def test_emit_handler_exception_does_not_stop_others(self, bus):
         received = []
+
         def bad_handler(e):
             raise RuntimeError("boom")
+
         bus.subscribe(ScanStarted, bad_handler)
         bus.subscribe(ScanStarted, received.append)
         bus.emit(ScanStarted())  # should not raise
@@ -225,6 +232,7 @@ class TestEmit:
 
 
 # ── EventBus.emit_threadsafe ──────────────────────────────────────────────────
+
 
 class TestEmitThreadsafe:
     def test_emit_from_thread_reaches_handler(self, bus):
@@ -301,6 +309,7 @@ class TestEmitThreadsafe:
 
 # ── EventBus.get_history ──────────────────────────────────────────────────────
 
+
 class TestGetHistory:
     def test_empty_history(self, bus):
         assert bus.get_history() == []
@@ -358,6 +367,7 @@ class TestGetHistory:
 
 # ── EventBus.replay ───────────────────────────────────────────────────────────
 
+
 class TestReplay:
     def test_replay_calls_handler_for_existing_events(self, bus):
         bus.emit(FindingDiscovered(finding="a"))
@@ -377,8 +387,10 @@ class TestReplay:
 
     def test_replay_handler_exception_no_crash(self, bus):
         bus.emit(ScanStarted())
+
         def bad(e):
             raise ValueError("oops")
+
         bus.replay(bad, ScanStarted)  # should not raise
 
     def test_replay_empty_history_no_calls(self, bus):
@@ -388,6 +400,7 @@ class TestReplay:
 
 
 # ── EventBus.clear_history ────────────────────────────────────────────────────
+
 
 class TestClearHistory:
     def test_clear_removes_all(self, bus):
@@ -406,6 +419,7 @@ class TestClearHistory:
 
 # ── EventBus.stats ────────────────────────────────────────────────────────────
 
+
 class TestStats:
     def test_stats_empty(self, bus):
         s = bus.stats()
@@ -423,6 +437,7 @@ class TestStats:
 
 
 # ── Global singleton ───────────────────────────────────────────────────────────
+
 
 class TestGlobalSingleton:
     def test_get_event_bus_returns_same_instance(self):

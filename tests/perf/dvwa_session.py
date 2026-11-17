@@ -113,6 +113,7 @@ async def build_session_headers(
     owns_client = http_client is None
     if http_client is None:
         from pentool.utils.http_client import HTTPClient
+
         http_client = HTTPClient(verify_ssl=False)
 
     try:
@@ -126,21 +127,19 @@ async def build_session_headers(
 
     if use_cache:
         _SESSION_CACHE[_make_cache_key(url, username)] = (
-            time.monotonic() + _CACHE_TTL, final_headers,
+            time.monotonic() + _CACHE_TTL,
+            final_headers,
         )
     return final_headers
 
 
-async def _do_login(http_client, url: str, username: str,
-                    password: str) -> dict[str, str]:
+async def _do_login(http_client, url: str, username: str, password: str) -> dict[str, str]:
     """Внутренняя авторизация поверх переданного http_client (без владения им)."""
     login_url = url + "/login.php"
     index_url = url + "/index.php"
 
     # ── 1) GET /login.php: PHPSESSID из Set-Cookie + user_token из HTML ────
-    login_resp = await http_client.send(
-        _req("GET", login_url)
-    )
+    login_resp = await http_client.send(_req("GET", login_url))
     if login_resp.status not in (200, 302):
         raise RuntimeError(f"DVWA login GET: status {login_resp.status}")
 
@@ -163,10 +162,15 @@ async def _do_login(http_client, url: str, username: str,
     if user_token:
         fields["user_token"] = user_token
     body = "&".join(f"{k}={_urlenc(v)}" for k, v in fields.items())
-    post_resp = await http_client.send(_req(
-        "POST", login_url, cookie_header, body=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    ))
+    post_resp = await http_client.send(
+        _req(
+            "POST",
+            login_url,
+            cookie_header,
+            body=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    )
 
     # На случай, если после логина PHPSESSID обновился — перечитаем.
     new_sid = extract_phpsessid(post_resp.headers.get("Set-Cookie"))
@@ -188,9 +192,9 @@ async def _do_login(http_client, url: str, username: str,
     return final_headers
 
 
-def _req(method: str, url: str, cookie: str = "", body: str = "",
-         headers: dict[str, str] | None = None) -> object:
+def _req(method: str, url: str, cookie: str = "", body: str = "", headers: dict[str, str] | None = None) -> object:
     from pentool.utils.parser import ParsedRequest
+
     h: dict[str, str] = dict(headers or {})
     if cookie:
         h["Cookie"] = cookie
@@ -199,4 +203,5 @@ def _req(method: str, url: str, cookie: str = "", body: str = "",
 
 def _urlenc(value: str) -> str:
     from urllib.parse import quote_plus
+
     return quote_plus(value)

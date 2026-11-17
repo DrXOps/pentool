@@ -10,12 +10,14 @@ behavior before any structural migration.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 pytest.importorskip("pentool.modules.scanner")
 
-from pentool.modules.scanner.checks.oauth import OAuthCheck, _EVIL_REDIRECT, _is_oauth
+from pentool.modules.scanner.checks.oauth import _EVIL_REDIRECT, OAuthCheck, _is_oauth
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
@@ -72,9 +74,7 @@ class TestScanOpenRedirect:
         check = OAuthCheck()
         req = _req("http://target/authorize?client_id=id&redirect_uri=https://cb")
         client = MagicMock()
-        client.send = AsyncMock(
-            return_value=ParsedResponse(302, "Found", {"Location": _EVIL_REDIRECT}, "")
-        )
+        client.send = AsyncMock(return_value=ParsedResponse(302, "Found", {"Location": _EVIL_REDIRECT}, ""))
         findings = await check.scan(req, None, client)
         assert any("Open Redirect" in f.name for f in findings)
 
@@ -83,9 +83,7 @@ class TestScanOpenRedirect:
         check = OAuthCheck()
         req = _req("http://target/authorize?client_id=id&redirect_uri=https://cb")
         client = MagicMock()
-        client.send = AsyncMock(
-            return_value=ParsedResponse(302, "Found", {"Location": "https://cb"}, "")
-        )
+        client.send = AsyncMock(return_value=ParsedResponse(302, "Found", {"Location": "https://cb"}, ""))
         findings = await check.scan(req, None, client)
         assert not any("Open Redirect" in f.name for f in findings)
 
@@ -102,7 +100,6 @@ class TestScanNoOauth:
 
 class TestEngineIntegration:
     """End-to-end through ScanEngine — passive missing-state finding surfaced."""
-
 
     @pytest.mark.asyncio
     async def test_engine_detects_missing_state(self):

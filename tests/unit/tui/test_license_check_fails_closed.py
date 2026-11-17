@@ -68,9 +68,9 @@ class TestBrokenLicenseCheckDoesNotGrantAccess:
             f"{module_id} opened although the license check raised — "
             "the handler fails open, and a broken license file becomes a free pass"
         )
-        assert any(
-            "could not verify the license" in n for n in notes
-        ), f"access was denied but the user was not told why; notifications: {notes!r}"
+        assert any("could not verify the license" in n for n in notes), (
+            f"access was denied but the user was not told why; notifications: {notes!r}"
+        )
 
     async def test_an_invalid_license_blocks_the_module(self, module_id: str, screen_id: str) -> None:
         """Контроль: обычный отказ (лицензии нет) по-прежнему закрывает модуль."""

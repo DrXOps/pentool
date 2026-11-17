@@ -12,6 +12,7 @@
 
 Отчёт сохраняется в tests/perf/report_<timestamp>.md
 """
+
 from __future__ import annotations
 
 import argparse
@@ -73,9 +74,7 @@ async def _measure(name: str, coro_factory) -> ScenarioResult:
 
     diff = snap_after.compare_to(snap_before, "lineno")
     result.top_allocations = [
-        f"{stat.size_diff / 1024:+.0f} KiB  {stat.traceback[0]}"
-        for stat in diff[:5]
-        if stat.size_diff > 0
+        f"{stat.size_diff / 1024:+.0f} KiB  {stat.traceback[0]}" for stat in diff[:5] if stat.size_diff > 0
     ]
     tracemalloc.stop()
     return result
@@ -83,8 +82,10 @@ async def _measure(name: str, coro_factory) -> ScenarioResult:
 
 # ── Сценарий 1: Scanner — 60 URL x все active checks ─────────────────────────
 
+
 async def scenario_scanner(base_url: str) -> dict:
     from pentool.api.scanner_api import ScannerAPI
+
     from pentool.utils.http_client import HTTPClient
     from pentool.utils.parser import ParsedRequest
 
@@ -94,8 +95,7 @@ async def scenario_scanner(base_url: str) -> dict:
     engine = api._get_engine()
 
     seed_requests = [
-        ParsedRequest(method="GET", url=f"{base_url}/page{i}?id={i}&q=test", headers={}, body="")
-        for i in range(n_urls)
+        ParsedRequest(method="GET", url=f"{base_url}/page{i}?id={i}&q=test", headers={}, body="") for i in range(n_urls)
     ]
 
     findings_count = 0
@@ -125,6 +125,7 @@ async def scenario_scanner(base_url: str) -> dict:
 
 
 # ── Сценарий 2: Proxy — 5000 запросов через HttpStorage (SQLite) ────────────
+
 
 async def scenario_proxy_storage() -> dict:
     from pentool.storage.http_storage import HttpStorage
@@ -162,14 +163,12 @@ async def scenario_proxy_storage() -> dict:
 
 # ── Сценарий 3: Intruder — Cluster bomb, словарь ~1000 слов ──────────────────
 
+
 async def scenario_intruder(base_url: str) -> dict:
-    from pentool.modules.intruder import IntruderConfig, IntruderAttack, AttackType
+    from pentool.modules.intruder import AttackType, IntruderAttack, IntruderConfig
 
     payloads = [f"payload{i}" for i in range(200)]  # 200 x 2 позиции = 400 combos (cluster_bomb)
-    template = (
-        f"GET /search?q=§q§&id=§id§ HTTP/1.1\r\n"
-        f"Host: 127.0.0.1\r\n\r\n"
-    ).replace("§", "§")
+    template = ("GET /search?q=§q§&id=§id§ HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").replace("§", "§")
     # actual host must match mock server port
     host_port = base_url.replace("http://", "")
     template = template.replace("Host: 127.0.0.1", f"Host: {host_port}")
@@ -202,19 +201,22 @@ async def scenario_intruder(base_url: str) -> dict:
 
 # ── Сценарий 4: DataTable (ArrowBackend) — 50k строк ─────────────────────────
 
+
 async def scenario_datatable() -> dict:
     import pyarrow as pa
     from textual_fastdatatable import ArrowBackend
 
     n_rows = 50_000
     t0 = time.monotonic()
-    table = pa.table({
-        "id": list(range(n_rows)),
-        "method": ["GET"] * n_rows,
-        "url": [f"http://example.com/path/{i}" for i in range(n_rows)],
-        "status": [200] * n_rows,
-        "length": [512] * n_rows,
-    })
+    table = pa.table(
+        {
+            "id": list(range(n_rows)),
+            "method": ["GET"] * n_rows,
+            "url": [f"http://example.com/path/{i}" for i in range(n_rows)],
+            "status": [200] * n_rows,
+            "length": [512] * n_rows,
+        }
+    )
     build_s = time.monotonic() - t0
 
     t1 = time.monotonic()
@@ -236,6 +238,7 @@ async def scenario_datatable() -> dict:
 
 
 # ── Сценарий 5: Dashboard LiveChart — 10k push событий ───────────────────────
+
 
 async def scenario_livechart() -> dict:
     # Импортируем без Textual App context — тестируем чистую логику push/render
@@ -323,7 +326,9 @@ async def main() -> None:
             factory = SCENARIOS[name]
             res = await _measure(name, lambda f=factory: f(server.base_url))
             results.append(res)
-            print(f"[{name}] done: {res.duration_s:.2f}s, ΔRSS={res.rss_peak_delta_mb:+.1f}MB, extra={res.extra}, err={res.error}")
+            print(
+                f"[{name}] done: {res.duration_s:.2f}s, ΔRSS={res.rss_peak_delta_mb:+.1f}MB, extra={res.extra}, err={res.error}"
+            )
 
     report = format_report(results)
     ts = time.strftime("%Y%m%d_%H%M%S")

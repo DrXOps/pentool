@@ -12,18 +12,16 @@ math-probe detection path (phase 2) in isolation.
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.ssti import (
     SSTICheck,
-    _ENGINE_RCE_PROBES,
-    _ERROR_PROBE,
     _fingerprint_engine,
     _make_ssti_probe,
 )
 from pentool.modules.scanner.mutator import InjectionPoint
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
@@ -121,7 +119,6 @@ class TestEngineIntegration:
     """End-to-end through ScanEngine — SSTI math probe surfaced via the
     per-point scan()-pipeline. ssti always passes fingerprint relevance
     (allows_check('ssti') is True for any stack)."""
-
 
     @pytest.mark.asyncio
     async def test_engine_detects_ssti(self):

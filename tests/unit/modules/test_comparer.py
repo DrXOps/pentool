@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
 from pentool.modules.comparer import (
-    CompareStats,
     DiffLine,
     DiffResult,
     compare,

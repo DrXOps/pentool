@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pentool.tui.dialogs.scope_dialog import (
     ScopeConfig,
-    validate_patterns,
     _host_matches,
     _regex_match,
+    validate_patterns,
 )
 
 

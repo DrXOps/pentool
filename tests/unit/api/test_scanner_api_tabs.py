@@ -12,6 +12,7 @@ Covers the fix for two related bugs:
    ScanEngine.get_findings(tab_uid=...) filtering to that tab's own
    findings (plus legacy/unscoped rows, for backward compatibility).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -20,8 +21,9 @@ import pytest
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.api.scanner_api import ScannerAPI
-from pentool.core.db_schema import init_db
 from pentool.modules.scanner.base import Finding
+
+from pentool.core.db_schema import init_db
 
 
 @pytest.fixture
@@ -107,10 +109,8 @@ class TestFindingsScopedToTab:
     @pytest.mark.asyncio
     async def test_findings_scoped_to_own_tab(self, api):
         engine = api._get_engine()
-        f1 = Finding(type="xss", name="XSS in tab1", url="http://a.com/x",
-                     severity="high", scan_tab_uid="tab-1")
-        f2 = Finding(type="sqli", name="SQLi in tab2", url="http://b.com/y",
-                     severity="critical", scan_tab_uid="tab-2")
+        f1 = Finding(type="xss", name="XSS in tab1", url="http://a.com/x", severity="high", scan_tab_uid="tab-1")
+        f2 = Finding(type="sqli", name="SQLi in tab2", url="http://b.com/y", severity="critical", scan_tab_uid="tab-2")
         await engine.save_findings([f1, f2])
 
         tab1_findings = await api.get_findings(tab_uid="tab-1")
@@ -126,10 +126,8 @@ class TestFindingsScopedToTab:
         """Passing tab_uid=None (reports/exports) bypasses scoping —
         matches the pre-fix behavior for callers that want everything."""
         engine = api._get_engine()
-        f1 = Finding(type="xss", name="A", url="http://a.com/x",
-                     severity="high", scan_tab_uid="tab-1")
-        f2 = Finding(type="sqli", name="B", url="http://b.com/y",
-                     severity="critical", scan_tab_uid="tab-2")
+        f1 = Finding(type="xss", name="A", url="http://a.com/x", severity="high", scan_tab_uid="tab-1")
+        f2 = Finding(type="sqli", name="B", url="http://b.com/y", severity="critical", scan_tab_uid="tab-2")
         await engine.save_findings([f1, f2])
 
         all_findings = await api.get_findings()
@@ -141,8 +139,9 @@ class TestFindingsScopedToTab:
         remain visible everywhere — backward compatibility for existing
         project databases."""
         engine = api._get_engine()
-        legacy = Finding(type="xss", name="Legacy finding", url="http://old.com/x",
-                          severity="high")  # scan_tab_uid defaults to ""
+        legacy = Finding(
+            type="xss", name="Legacy finding", url="http://old.com/x", severity="high"
+        )  # scan_tab_uid defaults to ""
         await engine.save_findings([legacy])
 
         tab1_findings = await api.get_findings(tab_uid="brand-new-tab-A")
@@ -155,14 +154,15 @@ class TestFindingsScopedToTab:
     async def test_unscoped_findings_do_not_leak_other_tabs_scoped_data(self, api):
         engine = api._get_engine()
         legacy = Finding(type="xss", name="Legacy", url="http://old.com/x", severity="high")
-        scoped = Finding(type="sqli", name="Scoped to tab-2", url="http://b.com/y",
-                          severity="critical", scan_tab_uid="tab-2")
+        scoped = Finding(
+            type="sqli", name="Scoped to tab-2", url="http://b.com/y", severity="critical", scan_tab_uid="tab-2"
+        )
         await engine.save_findings([legacy, scoped])
 
         tab1_findings = await api.get_findings(tab_uid="tab-1")
         types = {f.type for f in tab1_findings}
 
-        assert "xss" in types    # legacy/unscoped — visible everywhere
+        assert "xss" in types  # legacy/unscoped — visible everywhere
         assert "sqli" not in types  # scoped to a different tab — not visible
 
 
@@ -199,6 +199,7 @@ class TestPersistentConnection:
         """ensure_open()'s no-op contract must still hold for the no-op
         (empty tab_uid) path — mirrors the falsy-db_path no-op contract."""
         from pentool.core.db_schema import init_db
+
         db_path = str(tmp_path / "test2.db")
         await init_db(db_path)
         a = ScannerAPI(db_path=db_path)

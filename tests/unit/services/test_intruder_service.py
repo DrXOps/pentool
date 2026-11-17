@@ -1,12 +1,14 @@
 """Tests for IntruderService."""
 
-import pytest
-from unittest.mock import Mock, AsyncMock
 from datetime import datetime, timezone
-from pentool.services.intruder_service import IntruderService
+from unittest.mock import AsyncMock, Mock
+
+import pytest
+
 from pentool.api.intruder_api import IntruderAPI
-from pentool.modules.intruder import IntruderConfig, IntruderResult, AttackType
 from pentool.core.event_bus import EventBus
+from pentool.modules.intruder import AttackType, IntruderConfig, IntruderResult
+from pentool.services.intruder_service import IntruderService
 
 
 @pytest.fixture
@@ -32,7 +34,7 @@ def intruder_api():
             response_length=100,
             response_time_ms=50,
             error=None,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         ),
         IntruderResult(
             id="result-2",
@@ -44,7 +46,7 @@ def intruder_api():
             response_length=200,
             response_time_ms=75,
             error=None,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         ),
     ]
 
@@ -172,6 +174,7 @@ class TestIntruderServiceEvents:
             events_received.append(event)
 
         from pentool.core.events import IntruderResultAdded
+
         event_bus.subscribe(IntruderResultAdded, on_event)
 
         config = IntruderConfig(
@@ -195,6 +198,7 @@ class TestIntruderServiceEvents:
             events_received.append(event)
 
         from pentool.core.events import IntruderFinished
+
         event_bus.subscribe(IntruderFinished, on_event)
 
         config = IntruderConfig(

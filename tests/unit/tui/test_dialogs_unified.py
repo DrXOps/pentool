@@ -61,9 +61,9 @@ def test_dialog_escape_reaches_an_action(dialog: type[ModalScreen]) -> None:
         # "cancel", "close", "dismiss_dialog", "dismiss(None)" — all valid
         # action syntax; the part before "(" is the method name.
         action = binding.action.split("(", 1)[0]
-        assert hasattr(dialog, f"action_{action}") or action.startswith(
-            "dismiss"
-        ), f"{dialog.__name__}: Escape → {binding.action!r} names no action method"
+        assert hasattr(dialog, f"action_{action}") or action.startswith("dismiss"), (
+            f"{dialog.__name__}: Escape → {binding.action!r} names no action method"
+        )
 
 
 def test_color_pick_now_centres_and_cancels() -> None:

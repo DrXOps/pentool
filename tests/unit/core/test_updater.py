@@ -25,7 +25,6 @@ def _fake_aiohttp(session_mock):
     fake = types.ModuleType("aiohttp")
     fake.ClientSession = lambda *a, **k: session_mock
     fake.ClientTimeout = MagicMock
-    fake__ = types.ModuleType("aiohttp_client_timeout")  # not needed
     real = sys.modules.get("aiohttp")
     sys.modules["aiohttp"] = fake
     try:

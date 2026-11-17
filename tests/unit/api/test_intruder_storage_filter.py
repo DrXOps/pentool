@@ -9,15 +9,14 @@
 from __future__ import annotations
 
 import asyncio
-import aiosqlite
 from datetime import datetime, timezone
 
+import aiosqlite
 import pytest
 
-from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.api.intruder_storage import IntruderStorage
+from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.modules.intruder import IntruderResult
-
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS intruder_results (
@@ -65,26 +64,55 @@ def storage(tmp_path):
     # Добавляем тестовые результаты
     results = [
         IntruderResult(
-            id="1", attack_id="a1", request_number=1, payload_values=["admin"],
-            request_raw="", response_raw="", response_status=200,
-            response_length=100, response_time_ms=10, error="", timestamp=datetime.now(timezone.utc),
-        ),
-        IntruderResult(
-            id="2", attack_id="a1", request_number=2, payload_values=["test"],
-            request_raw="", response_raw="", response_status=404,
-            response_length=50, response_time_ms=5, error="Not Found",
+            id="1",
+            attack_id="a1",
+            request_number=1,
+            payload_values=["admin"],
+            request_raw="",
+            response_raw="",
+            response_status=200,
+            response_length=100,
+            response_time_ms=10,
+            error="",
             timestamp=datetime.now(timezone.utc),
         ),
         IntruderResult(
-            id="3", attack_id="a1", request_number=3, payload_values=["root"],
-            request_raw="", response_raw="", response_status=200,
-            response_length=200, response_time_ms=15, error="",
+            id="2",
+            attack_id="a1",
+            request_number=2,
+            payload_values=["test"],
+            request_raw="",
+            response_raw="",
+            response_status=404,
+            response_length=50,
+            response_time_ms=5,
+            error="Not Found",
             timestamp=datetime.now(timezone.utc),
         ),
         IntruderResult(
-            id="4", attack_id="a2", request_number=1, payload_values=["sql"],
-            request_raw="", response_raw="", response_status=500,
-            response_length=300, response_time_ms=20, error="Server Error",
+            id="3",
+            attack_id="a1",
+            request_number=3,
+            payload_values=["root"],
+            request_raw="",
+            response_raw="",
+            response_status=200,
+            response_length=200,
+            response_time_ms=15,
+            error="",
+            timestamp=datetime.now(timezone.utc),
+        ),
+        IntruderResult(
+            id="4",
+            attack_id="a2",
+            request_number=1,
+            payload_values=["sql"],
+            request_raw="",
+            response_raw="",
+            response_status=500,
+            response_length=300,
+            response_time_ms=20,
+            error="Server Error",
             timestamp=datetime.now(timezone.utc),
         ),
     ]
@@ -107,9 +135,11 @@ async def test_get_results_no_filter(storage):
 @pytest.mark.asyncio
 async def test_get_results_status_eq(storage):
     """status=200 — 2 результата."""
-    spec = FilterSpec(predicates=[
-        FilterPredicate("response_status", FilterOp.EQ, 200),
-    ])
+    spec = FilterSpec(
+        predicates=[
+            FilterPredicate("response_status", FilterOp.EQ, 200),
+        ]
+    )
     results = await storage.get_results(limit=100, filters=spec)
     assert len(results) == 2
     for r in results:
@@ -119,9 +149,11 @@ async def test_get_results_status_eq(storage):
 @pytest.mark.asyncio
 async def test_get_results_status_between(storage):
     """status BETWEEN 200 AND 300 — 2 результата."""
-    spec = FilterSpec(predicates=[
-        FilterPredicate("response_status", FilterOp.BETWEEN, (200, 300)),
-    ])
+    spec = FilterSpec(
+        predicates=[
+            FilterPredicate("response_status", FilterOp.BETWEEN, (200, 300)),
+        ]
+    )
     results = await storage.get_results(limit=100, filters=spec)
     assert len(results) == 2
     for r in results:
@@ -131,9 +163,11 @@ async def test_get_results_status_between(storage):
 @pytest.mark.asyncio
 async def test_get_results_length_gt(storage):
     """length > 100 — 2 результата."""
-    spec = FilterSpec(predicates=[
-        FilterPredicate("response_length", FilterOp.GT, 100),
-    ])
+    spec = FilterSpec(
+        predicates=[
+            FilterPredicate("response_length", FilterOp.GT, 100),
+        ]
+    )
     results = await storage.get_results(limit=100, filters=spec)
     assert len(results) == 2
     for r in results:
@@ -143,9 +177,11 @@ async def test_get_results_length_gt(storage):
 @pytest.mark.asyncio
 async def test_get_results_length_lt(storage):
     """length < 100 — 1 результат."""
-    spec = FilterSpec(predicates=[
-        FilterPredicate("response_length", FilterOp.LT, 100),
-    ])
+    spec = FilterSpec(
+        predicates=[
+            FilterPredicate("response_length", FilterOp.LT, 100),
+        ]
+    )
     results = await storage.get_results(limit=100, filters=spec)
     assert len(results) == 1
     assert results[0].response_length < 100
@@ -154,10 +190,12 @@ async def test_get_results_length_lt(storage):
 @pytest.mark.asyncio
 async def test_get_results_combined_status_and_length(storage):
     """status=200 AND length > 150 — 1 результат."""
-    spec = FilterSpec(predicates=[
-        FilterPredicate("response_status", FilterOp.EQ, 200),
-        FilterPredicate("response_length", FilterOp.GT, 150),
-    ])
+    spec = FilterSpec(
+        predicates=[
+            FilterPredicate("response_status", FilterOp.EQ, 200),
+            FilterPredicate("response_length", FilterOp.GT, 150),
+        ]
+    )
     results = await storage.get_results(limit=100, filters=spec)
     assert len(results) == 1
     assert results[0].response_status == 200
@@ -167,9 +205,11 @@ async def test_get_results_combined_status_and_length(storage):
 @pytest.mark.asyncio
 async def test_get_results_attack_id_and_filter(storage):
     """attack_id + filter — комбинированный WHERE."""
-    spec = FilterSpec(predicates=[
-        FilterPredicate("response_status", FilterOp.EQ, 200),
-    ])
+    spec = FilterSpec(
+        predicates=[
+            FilterPredicate("response_status", FilterOp.EQ, 200),
+        ]
+    )
     results = await storage.get_results(attack_id="a1", limit=100, filters=spec)
     # a1 имеет status=200 для id 1 и 3, но фильтр оставляет только 200
     assert len(results) == 2
@@ -186,18 +226,22 @@ async def test_count_results_no_filter(storage):
 
 @pytest.mark.asyncio
 async def test_count_results_with_filter(storage):
-    spec = FilterSpec(predicates=[
-        FilterPredicate("response_status", FilterOp.EQ, 404),
-    ])
+    spec = FilterSpec(
+        predicates=[
+            FilterPredicate("response_status", FilterOp.EQ, 404),
+        ]
+    )
     total = await storage.count_results(filters=spec)
     assert total == 1
 
 
 @pytest.mark.asyncio
 async def test_count_results_attack_id_and_filter(storage):
-    spec = FilterSpec(predicates=[
-        FilterPredicate("response_length", FilterOp.GT, 100),
-    ])
+    spec = FilterSpec(
+        predicates=[
+            FilterPredicate("response_length", FilterOp.GT, 100),
+        ]
+    )
     total = await storage.count_results(attack_id="a1", filters=spec)
     # a1: length > 100 = id3 (200) — 1 результат
     assert total == 1
@@ -214,8 +258,10 @@ async def test_get_results_empty_filter(storage):
 @pytest.mark.asyncio
 async def test_get_results_no_match(storage):
     """Фильтр не даёт результатов."""
-    spec = FilterSpec(predicates=[
-        FilterPredicate("response_status", FilterOp.EQ, 999),
-    ])
+    spec = FilterSpec(
+        predicates=[
+            FilterPredicate("response_status", FilterOp.EQ, 999),
+        ]
+    )
     results = await storage.get_results(limit=100, filters=spec)
     assert len(results) == 0

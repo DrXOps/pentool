@@ -8,30 +8,32 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 
+from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.utils.parser import ParsedRequest, ParsedResponse
-from pentool.collections.filter_predicate import FilterPredicate, FilterOp, FilterSpec
 
 
 class TestLRUCache:
     def test_put_and_get(self) -> None:
         from pentool.utils.lru_cache import LRUCache
+
         cache = LRUCache(max_size=10)
         cache.put(1, {"data": "value"})
         assert cache.get(1) == {"data": "value"}
 
     def test_miss_returns_none(self) -> None:
         from pentool.utils.lru_cache import LRUCache
+
         cache = LRUCache()
         assert cache.get(999) is None
 
     def test_evicts_least_recently_used(self) -> None:
         from pentool.utils.lru_cache import LRUCache
+
         cache = LRUCache(max_size=2)
         cache.put(1, "a")
         cache.put(2, "b")
-        cache.get(1)       # 1 — most recently used
+        cache.get(1)  # 1 — most recently used
         cache.put(3, "c")  # 2 is evicted
         assert cache.get(1) == "a"
         assert cache.get(2) is None
@@ -39,16 +41,18 @@ class TestLRUCache:
 
     def test_update_moves_to_front(self) -> None:
         from pentool.utils.lru_cache import LRUCache
+
         cache = LRUCache(max_size=2)
         cache.put(1, "old")
         cache.put(2, "b")
         cache.put(1, "new")  # update 1 → 2 is now oldest
-        cache.put(3, "c")    # 2 is evicted
+        cache.put(3, "c")  # 2 is evicted
         assert cache.get(1) == "new"
         assert cache.get(2) is None
 
     def test_capacity_of_one(self) -> None:
         from pentool.utils.lru_cache import LRUCache
+
         cache = LRUCache(max_size=1)
         cache.put(1, "a")
         cache.put(2, "b")
@@ -57,6 +61,7 @@ class TestLRUCache:
 
     def test_invalidate_removes_entry(self) -> None:
         from pentool.utils.lru_cache import LRUCache
+
         cache = LRUCache()
         cache.put(1, "data")
         cache.invalidate(1)
@@ -64,6 +69,7 @@ class TestLRUCache:
 
     def test_clear_empties_cache(self) -> None:
         from pentool.utils.lru_cache import LRUCache
+
         cache = LRUCache()
         cache.put(1, "a")
         cache.put(2, "b")
@@ -73,6 +79,7 @@ class TestLRUCache:
 
     def test_many_items(self) -> None:
         from pentool.utils.lru_cache import LRUCache
+
         cache = LRUCache(max_size=100)
         for i in range(100):
             cache.put(i, f"value_{i}")
@@ -84,6 +91,7 @@ class TestHttpStorage:
     @pytest.mark.asyncio
     async def test_init_creates_tables(self, tmp_path: Path) -> None:
         from pentool.storage.http_storage import HttpStorage
+
         storage = HttpStorage()
         await storage.init_db(str(tmp_path / "test.db"))
         count = await storage.count()
@@ -151,9 +159,13 @@ class TestHttpStorage:
         post_req = ParsedRequest(method="POST", url="http://example.com/login", headers={})
         await http_storage.add_request(get_req)
         await http_storage.add_request(post_req)
-        rows = await http_storage.get_metadata_batch(filters=FilterSpec(predicates=[
-            FilterPredicate("method", FilterOp.EQ, "POST"),
-        ]))
+        rows = await http_storage.get_metadata_batch(
+            filters=FilterSpec(
+                predicates=[
+                    FilterPredicate("method", FilterOp.EQ, "POST"),
+                ]
+            )
+        )
         assert all(r["method"] == "POST" for r in rows)
 
     @pytest.mark.asyncio
@@ -162,9 +174,13 @@ class TestHttpStorage:
         req2 = ParsedRequest(method="GET", url="http://beta.com/", headers={"Host": "beta.com"})
         await http_storage.add_request(req1)
         await http_storage.add_request(req2)
-        rows = await http_storage.get_metadata_batch(filters=FilterSpec(predicates=[
-            FilterPredicate("host", FilterOp.EQ, "alpha.com"),
-        ]))
+        rows = await http_storage.get_metadata_batch(
+            filters=FilterSpec(
+                predicates=[
+                    FilterPredicate("host", FilterOp.EQ, "alpha.com"),
+                ]
+            )
+        )
         assert all("alpha" in r["host"] for r in rows)
 
     @pytest.mark.asyncio
@@ -174,9 +190,13 @@ class TestHttpStorage:
         resp_404 = ParsedResponse(status=404, reason="Not Found")
         await http_storage.add_request(req, resp_200)
         await http_storage.add_request(req, resp_404)
-        rows = await http_storage.get_metadata_batch(filters=FilterSpec(predicates=[
-            FilterPredicate("status_code", FilterOp.EQ, 404),
-        ]))
+        rows = await http_storage.get_metadata_batch(
+            filters=FilterSpec(
+                predicates=[
+                    FilterPredicate("status_code", FilterOp.EQ, 404),
+                ]
+            )
+        )
         assert all(r["status_code"] == 404 for r in rows)
 
     @pytest.mark.asyncio

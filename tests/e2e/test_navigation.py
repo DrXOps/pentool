@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from pentool.tui.screens.scanner.screen import ScannerScreen  # noqa: F401
 from textual.widgets import ContentSwitcher
 
 from pentool.tui.app import PentoolApp
-from pentool.tui.screens.scanner.screen import ScannerScreen  # noqa: F401
 
 
 @pytest.mark.e2e

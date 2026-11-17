@@ -5,10 +5,11 @@ Extracted from ProxyScreen; these helpers are pure and testable in isolation.
 
 from __future__ import annotations
 
-import pyarrow as pa
 from datetime import datetime, timezone
 
-from pentool.tui.widgets.proxy_helpers import COL_NAMES, rows_to_arrow, row_to_record
+import pyarrow as pa
+
+from pentool.tui.widgets.proxy_helpers import COL_NAMES, row_to_record, rows_to_arrow
 
 
 def _row(**overrides):
@@ -30,7 +31,7 @@ class TestRowToRecord:
         r = row_to_record(_row())
         # (id, host, method, url, status, size, time)
         assert r[0] == 1
-        assert r[1] == "example.com"      # host, no dot/comment pretext
+        assert r[1] == "example.com"  # host, no dot/comment pretext
         assert r[2] == "GET"
         assert r[3] == "http://example.com/api"
         assert r[4] == "200"

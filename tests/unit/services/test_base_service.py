@@ -55,6 +55,7 @@ class TestBaseServiceEmit:
 
         # Simply verify emit doesn't raise
         from pentool.core.events import ScanStarted
+
         event = ScanStarted(targets=["http://example.com"], checks=[], source="test")
 
         # Should not raise
@@ -68,6 +69,7 @@ class TestBaseServiceEmit:
 
         # Simply verify emit doesn't raise
         from pentool.core.events import ScanStarted
+
         event = ScanStarted(targets=["http://example.com"], checks=[], source="test")
 
         service._emit(event)
@@ -86,6 +88,7 @@ class TestBaseServiceEmit:
         loop.close()
 
         from pentool.core.events import ScanStarted
+
         event = ScanStarted(targets=["http://example.com"], checks=[], source="test")
 
         # Should not raise (falls back to direct emit)
@@ -104,6 +107,7 @@ class TestBaseServiceEmit:
         bus.emit = raise_error
 
         from pentool.core.events import ScanStarted
+
         event = ScanStarted(targets=["http://example.com"], checks=[], source="test")
 
         # Should not raise
@@ -119,6 +123,7 @@ class TestBaseServiceLog:
     def test_log_with_callback(self):
         """Log calls callback when set."""
         logs = []
+
         def capture_log(msg):
             logs.append(msg)
 
@@ -138,6 +143,7 @@ class TestBaseServiceLog:
 
     def test_log_handles_callback_exception(self):
         """Log handles callback exceptions gracefully."""
+
         def raise_error(msg):
             raise RuntimeError("Test error")
 
@@ -149,6 +155,7 @@ class TestBaseServiceLog:
     def test_log_multiple_messages(self):
         """Log handles multiple messages."""
         logs = []
+
         def capture_log(msg):
             logs.append(msg)
 
@@ -177,6 +184,7 @@ class TestBaseServiceIntegration:
         service = BaseService(event_bus=bus, on_log=capture_log)
 
         from pentool.core.events import ScanStarted
+
         event = ScanStarted(targets=["http://example.com"], checks=[], source="test")
 
         service._emit(event)
@@ -189,10 +197,12 @@ class TestBaseServiceIntegration:
 
     def test_subclass_can_use_base_methods(self):
         """Subclasses can use _emit and _log directly."""
+
         class MyService(BaseService):
             def do_work(self):
                 self._log("Starting work")
                 from pentool.core.events import ScanStarted
+
                 self._emit(ScanStarted(targets=["http://example.com"], checks=[], source="test"))
 
         logs = []

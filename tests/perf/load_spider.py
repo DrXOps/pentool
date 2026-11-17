@@ -34,6 +34,7 @@ from tests.perf.mock_big_site import MockBigSite, MockBigSiteConfig  # noqa: E40
 # Уровень A(parse) — скорость _parse_html без сети
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _synthetic_html(size_bytes: int, n_links: int, with_forms: bool = True) -> str:
     """Синтетическая HTML-страница размера ~size_bytes с n_links ссылок."""
     base = []
@@ -76,14 +77,24 @@ async def run_level_a(args) -> dict:
         dt = time.monotonic() - t0
         gc.collect()
         rss1 = rss_mb()
-        sampler.tick(f"after parse {size // 1024}KB", elapsed=round(dt, 3),
-                     n_links=len(links), n_forms=len(forms), n_js=len(js))
-        rows.append({"size_kb": size // 1024, "dt_s": round(dt, 3),
-                     "links": len(links), "forms": len(forms), "js": len(js),
-                     "rss_delta": round(rss1 - rss0, 1),
-                     "mb_per_s": round(size / (1024 * 1024) / dt if dt else 0, 1)})
-        print(f"  {size // 1024:5}KB  dt={dt:.2f}s links={len(links)} "
-              f"forms={len(forms)} js={len(js)} ({rows[-1]['mb_per_s']}MB/s)")
+        sampler.tick(
+            f"after parse {size // 1024}KB", elapsed=round(dt, 3), n_links=len(links), n_forms=len(forms), n_js=len(js)
+        )
+        rows.append(
+            {
+                "size_kb": size // 1024,
+                "dt_s": round(dt, 3),
+                "links": len(links),
+                "forms": len(forms),
+                "js": len(js),
+                "rss_delta": round(rss1 - rss0, 1),
+                "mb_per_s": round(size / (1024 * 1024) / dt if dt else 0, 1),
+            }
+        )
+        print(
+            f"  {size // 1024:5}KB  dt={dt:.2f}s links={len(links)} "
+            f"forms={len(forms)} js={len(js)} ({rows[-1]['mb_per_s']}MB/s)"
+        )
     return {"rows": rows, "table": sampler.render_report("Spider Level A — парсинг")}
 
 
@@ -91,32 +102,39 @@ async def run_level_a(args) -> dict:
 # Уровень B — обход MockBigSite (реальный HTTP)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 async def run_level_b(args) -> dict:
     print("\n=== УРОВЕНЬ B: обход MockBigSite (реальный HTTP) ===")
     sampler = MemSampler(cpu=True)
-    cfg = MockBigSiteConfig(n_pages=args.n_pages, params_per_page=args.params_per_page,
-                            body_size=args.body_size, port=args.mock_port)
+    cfg = MockBigSiteConfig(
+        n_pages=args.n_pages, params_per_page=args.params_per_page, body_size=args.body_size, port=args.mock_port
+    )
     async with MockBigSite(cfg) as site:
-        spider = AsyncSpider(max_depth=args.max_depth, max_pages=args.max_pages,
-                             concurrency=args.concurrency, timeout=10)
-        sampler.tick(f"crawl start: n_pages={cfg.n_pages} depth={args.max_depth} "
-                     f"max_pages={args.max_pages} conc={args.concurrency}")
+        spider = AsyncSpider(
+            max_depth=args.max_depth, max_pages=args.max_pages, concurrency=args.concurrency, timeout=10
+        )
+        sampler.tick(
+            f"crawl start: n_pages={cfg.n_pages} depth={args.max_depth} "
+            f"max_pages={args.max_pages} conc={args.concurrency}"
+        )
         t0 = time.monotonic()
         result = await spider.crawl(site.base_url)
         dt = time.monotonic() - t0
         gc.collect()
         d = result.to_dict()
         sampler.tick("crawl done", elapsed=round(dt, 3), **d)
-        print(f"  {d['pages_count']} pages, {d['endpoints_count']} endpoints, "
-              f"{d['forms_count']} forms, {d['total_requests']} requests, "
-              f"{d['js_files_count']} js, {d['errors_count']} errors, {dt:.2f}s")
-    return {"dict": d, "dt_s": round(dt, 3),
-            "table": sampler.render_report("Spider Level B — MockBigSite обход")}
+        print(
+            f"  {d['pages_count']} pages, {d['endpoints_count']} endpoints, "
+            f"{d['forms_count']} forms, {d['total_requests']} requests, "
+            f"{d['js_files_count']} js, {d['errors_count']} errors, {dt:.2f}s"
+        )
+    return {"dict": d, "dt_s": round(dt, 3), "table": sampler.render_report("Spider Level B — MockBigSite обход")}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Уровень C — DVWA crawl (малый, сессия)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 async def run_level_c(args) -> dict:
     print("\n=== УРОВЕНЬ C: обход DVWA (реальный сайт, сессия) ===")
@@ -126,9 +144,13 @@ async def run_level_c(args) -> dict:
     print(f"  сессия: {headers['Cookie'][:40]}…")
     sampler = MemSampler(cpu=True)
 
-    spider = AsyncSpider(max_depth=args.max_depth, max_pages=args.max_pages,
-                         concurrency=args.concurrency, timeout=15,
-                         extra_headers=headers)
+    spider = AsyncSpider(
+        max_depth=args.max_depth,
+        max_pages=args.max_pages,
+        concurrency=args.concurrency,
+        timeout=15,
+        extra_headers=headers,
+    )
     sampler.tick("crawl DVWA start")
     t0 = time.monotonic()
     try:
@@ -139,36 +161,30 @@ async def run_level_c(args) -> dict:
     gc.collect()
     d = result.to_dict()
     sampler.tick("crawl DVWA done", elapsed=round(dt, 3), **d)
-    print(f"  {d['pages_count']} pages, {d['endpoints_count']} endpoints, "
-          f"{d['forms_count']} forms, {d['total_requests']} requests, "
-          f"{d['errors_count']} errors, {dt:.2f}s")
-    return {"dict": d, "dt_s": round(dt, 3),
-            "table": sampler.render_report("Spider Level C — DVWA обход")}
+    print(
+        f"  {d['pages_count']} pages, {d['endpoints_count']} endpoints, "
+        f"{d['forms_count']} forms, {d['total_requests']} requests, "
+        f"{d['errors_count']} errors, {dt:.2f}s"
+    )
+    return {"dict": d, "dt_s": round(dt, 3), "table": sampler.render_report("Spider Level C — DVWA обход")}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 async def main(args):
     ts = time.strftime("%Y%m%d_%H%M%S")
-    out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            f"load_spider_{ts}.md")
-    all_report: list[str] = ["# Spider load-test", "",
-                             f"Дата: {time.strftime('%Y-%m-%d %H:%M:%S')}", ""]
+    out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"load_spider_{ts}.md")
+    all_report: list[str] = ["# Spider load-test", "", f"Дата: {time.strftime('%Y-%m-%d %H:%M:%S')}", ""]
     if args.level == "a":
         res = await run_level_a(args)
         all_report += ["## Уровень A — парсинг", "", res["table"]]
     elif args.level == "b":
         res = await run_level_b(args)
-        all_report += ["## Уровень B — MockBigSite", "",
-                       "### Итог обхода",
-                       str(res["dict"]), "",
-                       res["table"]]
+        all_report += ["## Уровень B — MockBigSite", "", "### Итог обхода", str(res["dict"]), "", res["table"]]
     elif args.level == "c":
         res = await run_level_c(args)
-        all_report += ["## Уровень C — DVWA", "",
-                       "### Итог обхода",
-                       str(res["dict"]), "",
-                       res["table"]]
+        all_report += ["## Уровень C — DVWA", "", "### Итог обхода", str(res["dict"]), "", res["table"]]
     else:
         raise SystemExit(f"Неизвестный --level: {args.level}")
     save_report(out_path, "\n".join(all_report))

@@ -1,22 +1,25 @@
 """Integration tests: EventBus — pub/sub, history, threadsafe emit."""
+
 from __future__ import annotations
 
 import asyncio
 import threading
+
 import pytest
 
 from pentool.core.event_bus import EventBus, get_event_bus, reset_event_bus
 from pentool.core.events import (
-    ScanStarted, ScanFinished,
-    ProxyRequestCaptured, IntruderFinished,
+    IntruderFinished,
+    ProxyRequestCaptured,
+    ScanFinished,
+    ScanStarted,
 )
-
 
 # ── TestEventBus ──────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestEventBus:
-
     def test_subscribe_and_emit(self) -> None:
         """subscribe + emit → handler вызван 1 раз."""
         bus = EventBus()
@@ -38,7 +41,10 @@ class TestEventBus:
         """unsubscribe → emit → handler НЕ вызван."""
         bus = EventBus()
         calls = []
-        def handler(e): calls.append(e)
+
+        def handler(e):
+            calls.append(e)
+
         bus.subscribe(ScanStarted, handler)
         bus.unsubscribe(ScanStarted, handler)
         bus.emit(ScanStarted())
@@ -48,7 +54,10 @@ class TestEventBus:
         """подписаться на 2 типа → unsubscribe_all → emit оба → 0 вызовов."""
         bus = EventBus()
         calls = []
-        def handler(e): calls.append(e)
+
+        def handler(e):
+            calls.append(e)
+
         bus.subscribe(ScanStarted, handler)
         bus.subscribe(ScanFinished, handler)
         bus.unsubscribe_all(handler)
@@ -140,9 +149,9 @@ class TestEventBus:
 
 # ── TestEventBusGlobal ────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestEventBusGlobal:
-
     def setup_method(self):
         """Сбрасываем глобальный синглтон перед каждым тестом."""
         reset_event_bus()

@@ -13,7 +13,7 @@ entirely) could recover.
 from __future__ import annotations
 
 import sys
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -24,8 +24,7 @@ def _run_main_with_argv(argv):
     raise KeyboardInterrupt immediately so main() returns/raises cleanly)."""
     import pentool.__main__ as main_mod
 
-    with patch.object(sys, "argv", argv), \
-         patch("pentool.tui.app.PentoolApp") as mock_app_cls:
+    with patch.object(sys, "argv", argv), patch("pentool.tui.app.PentoolApp") as mock_app_cls:
         mock_app_cls.return_value.run.side_effect = KeyboardInterrupt()
         try:
             main_mod.main()
@@ -43,12 +42,13 @@ class TestMainProSelfHeal:
         pro_dir = tmp_path / ".pentool" / "pro"
         pro_dir.mkdir(parents=True)
         meta = {"build_id": "test:123", "free_version": "0.0.0"}
-        (pro_dir / ".build_meta.json").write_text(
-            __import__("json").dumps(meta), encoding="utf-8"
-        )
+        (pro_dir / ".build_meta.json").write_text(__import__("json").dumps(meta), encoding="utf-8")
         import pentool.core.license as lic_mod
-        with patch.object(lic_mod, "PRO_PACKAGE_DIR", pro_dir), \
-             patch.object(lic_mod, "_PRO_META_FILE", pro_dir / ".build_meta.json"):
+
+        with (
+            patch.object(lic_mod, "PRO_PACKAGE_DIR", pro_dir),
+            patch.object(lic_mod, "_PRO_META_FILE", pro_dir / ".build_meta.json"),
+        ):
             yield
 
     def test_incompatible_package_healed_by_redownload_does_not_exit(self, capsys):
@@ -59,10 +59,11 @@ class TestMainProSelfHeal:
         async def _fake_check(*a, **kw):
             return lic_mod.ProSyncResult(updated=True, warning="")
 
-        with patch("pentool.core.license.is_pro_package_compatible",
-                   return_value=(False, "stale metadata")), \
-             patch("pentool.core.license.check_and_update_pro_package", _fake_check), \
-             patch("pentool.core.crash_reporter.send_first_run_ping"):
+        with (
+            patch("pentool.core.license.is_pro_package_compatible", return_value=(False, "stale metadata")),
+            patch("pentool.core.license.check_and_update_pro_package", _fake_check),
+            patch("pentool.core.crash_reporter.send_first_run_ping"),
+        ):
             _run_main_with_argv(["pentool", "--auto-update"])
 
         captured = capsys.readouterr()
@@ -86,9 +87,11 @@ class TestMainProSelfHeal:
             # Second call (after self-heal attempt): now compatible.
             return (False, "stale metadata") if call_count["n"] == 1 else (True, "")
 
-        with patch("pentool.core.license.is_pro_package_compatible", side_effect=_fake_compatible), \
-             patch("pentool.core.license.check_and_update_pro_package", _fake_check), \
-             patch("pentool.core.crash_reporter.send_first_run_ping"):
+        with (
+            patch("pentool.core.license.is_pro_package_compatible", side_effect=_fake_compatible),
+            patch("pentool.core.license.check_and_update_pro_package", _fake_check),
+            patch("pentool.core.crash_reporter.send_first_run_ping"),
+        ):
             _run_main_with_argv(["pentool", "--auto-update"])
 
         # Must not have printed the "doesn't record which version" exit warning.
@@ -99,13 +102,16 @@ class TestMainProSelfHeal:
         """Self-heal attempt runs but the package is still incompatible
         (e.g. offline, download failed) — must still exit with the warning,
         same as before this fix existed."""
+
         async def _fake_check(*a, **kw):
             import pentool.core.license as lic_mod
+
             return lic_mod.ProSyncResult(updated=False, warning="still broken")
 
-        with patch("pentool.core.license.is_pro_package_compatible",
-                   return_value=(False, "still broken")), \
-             patch("pentool.core.license.check_and_update_pro_package", _fake_check):
+        with (
+            patch("pentool.core.license.is_pro_package_compatible", return_value=(False, "still broken")),
+            patch("pentool.core.license.check_and_update_pro_package", _fake_check),
+        ):
             with pytest.raises(SystemExit) as exc_info:
                 _run_main_with_argv(["pentool"])
 
@@ -117,10 +123,10 @@ class TestMainProSelfHeal:
         """If the self-heal attempt itself raises (e.g. asyncio.run fails
         in a nested-loop edge case), main() must not crash — it falls back
         to the original warning/exit behavior."""
-        with patch("pentool.core.license.is_pro_package_compatible",
-                   return_value=(False, "original warning")), \
-             patch("pentool.core.license.check_and_update_pro_package",
-                   side_effect=RuntimeError("boom")):
+        with (
+            patch("pentool.core.license.is_pro_package_compatible", return_value=(False, "original warning")),
+            patch("pentool.core.license.check_and_update_pro_package", side_effect=RuntimeError("boom")),
+        ):
             with pytest.raises(SystemExit) as exc_info:
                 _run_main_with_argv(["pentool"])
 
@@ -131,14 +137,17 @@ class TestMainProSelfHeal:
     def test_unsafe_flag_still_bypasses_after_failed_heal(self, capsys):
         """--unsafe-skip-pro-compat-check must still work as an escape hatch
         even when the self-heal attempt didn't fix anything."""
+
         async def _fake_check(*a, **kw):
             import pentool.core.license as lic_mod
+
             return lic_mod.ProSyncResult(updated=False, warning="still broken")
 
-        with patch("pentool.core.license.is_pro_package_compatible",
-                   return_value=(False, "still broken")), \
-             patch("pentool.core.license.check_and_update_pro_package", _fake_check), \
-             patch("pentool.core.crash_reporter.send_first_run_ping"):
+        with (
+            patch("pentool.core.license.is_pro_package_compatible", return_value=(False, "still broken")),
+            patch("pentool.core.license.check_and_update_pro_package", _fake_check),
+            patch("pentool.core.crash_reporter.send_first_run_ping"),
+        ):
             _run_main_with_argv(["pentool", "--unsafe-skip-pro-compat-check"])
 
         captured = capsys.readouterr()
@@ -147,10 +156,11 @@ class TestMainProSelfHeal:
     def test_compatible_package_never_attempts_heal(self):
         """The common case: package already compatible — no self-heal call
         should even be attempted (nothing to fix)."""
-        with patch("pentool.core.license.is_pro_package_compatible",
-                   return_value=(True, "")), \
-             patch("pentool.core.license.check_and_update_pro_package") as mock_check, \
-             patch("pentool.core.crash_reporter.send_first_run_ping"):
+        with (
+            patch("pentool.core.license.is_pro_package_compatible", return_value=(True, "")),
+            patch("pentool.core.license.check_and_update_pro_package") as mock_check,
+            patch("pentool.core.crash_reporter.send_first_run_ping"),
+        ):
             _run_main_with_argv(["pentool"])
 
         mock_check.assert_not_called()

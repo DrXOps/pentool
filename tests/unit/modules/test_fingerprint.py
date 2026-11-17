@@ -20,6 +20,7 @@ import pytest
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.fingerprint import TechFingerprinter, TechProfile
+
 from pentool.utils.parser import ParsedResponse
 
 
@@ -51,7 +52,8 @@ class TestFingerprint:
     @pytest.mark.asyncio
     async def test_server_header_and_php_detection(self):
         resp = ParsedResponse(
-            status=200, reason="OK",
+            status=200,
+            reason="OK",
             headers={"Server": "Apache", "X-Powered-By": "PHP/8.1"},
             body="",
         )
@@ -63,7 +65,10 @@ class TestFingerprint:
     @pytest.mark.asyncio
     async def test_nodejs_detection_from_powered_by(self):
         resp = ParsedResponse(
-            status=200, reason="OK", headers={"X-Powered-By": "Express"}, body="",
+            status=200,
+            reason="OK",
+            headers={"X-Powered-By": "Express"},
+            body="",
         )
         profile = await TechFingerprinter().fingerprint("http://test/", _FakeClient(resp))
         assert profile.is_nodejs is True
@@ -74,10 +79,9 @@ class TestFingerprint:
         # Body content must be readable via .body (not .text) — this is the
         # second half of the same attribute-name bug.
         resp = ParsedResponse(
-            status=200, reason="OK",
-            headers={"Set-Cookie": "csrftoken=abc123",
-                     "X-Powered-By": "Django",
-                     "Server": "gunicorn"},
+            status=200,
+            reason="OK",
+            headers={"Set-Cookie": "csrftoken=abc123", "X-Powered-By": "Django", "Server": "gunicorn"},
             body="powered by django",
         )
         profile = await TechFingerprinter().fingerprint("http://test/", _FakeClient(resp))

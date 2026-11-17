@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
-from pathlib import Path
 
 from pentool.storage.http_storage import HttpStorage
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_req(
     url: str = "http://example.com/path",
@@ -41,6 +42,7 @@ def _make_resp(
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest_asyncio.fixture
 async def storage(tmp_path: Path) -> HttpStorage:
     s = HttpStorage()
@@ -51,20 +53,19 @@ async def storage(tmp_path: Path) -> HttpStorage:
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestHttpStorageInit:
-
     async def test_init_db_creates_table(self, tmp_path: Path) -> None:
         """init_db создаёт таблицу requests."""
         import aiosqlite
+
         db_path = str(tmp_path / "init_test.db")
         s = HttpStorage()
         await s.init_db(db_path)
 
         async with aiosqlite.connect(db_path) as db:
-            async with db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='requests'"
-            ) as cur:
+            async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='requests'") as cur:
                 row = await cur.fetchone()
         await s.close()
 
@@ -74,7 +75,6 @@ class TestHttpStorageInit:
 
 @pytest.mark.integration
 class TestHttpStorageAddRequest:
-
     async def test_add_request_returns_int(self, storage: HttpStorage) -> None:
         """add_request возвращает int row_id."""
         row_id = await storage.add_request(_make_req())
@@ -128,7 +128,6 @@ class TestHttpStorageAddRequest:
 
 @pytest.mark.integration
 class TestHttpStorageGetMetadataBatch:
-
     async def test_get_metadata_batch_returns_list_of_dicts(self, storage: HttpStorage) -> None:
         """get_metadata_batch возвращает список dict."""
         await storage.add_request(_make_req())
@@ -167,7 +166,6 @@ class TestHttpStorageGetMetadataBatch:
 
 @pytest.mark.integration
 class TestHttpStorageGetFullEntry:
-
     async def test_get_full_entry_returns_dict(self, storage: HttpStorage) -> None:
         """get_full_entry возвращает dict."""
         row_id = await storage.add_request(_make_req())
@@ -196,7 +194,6 @@ class TestHttpStorageGetFullEntry:
 
 @pytest.mark.integration
 class TestHttpStorageDelete:
-
     async def test_delete_removes_record(self, storage: HttpStorage) -> None:
         """delete удаляет запись."""
         row_id = await storage.add_request(_make_req())
@@ -214,7 +211,6 @@ class TestHttpStorageDelete:
 
 @pytest.mark.integration
 class TestHttpStorageCount:
-
     async def test_count_returns_correct_number(self, storage: HttpStorage) -> None:
         """count возвращает правильное число."""
         for _ in range(3):
@@ -240,7 +236,6 @@ class TestHttpStorageCount:
 
 @pytest.mark.integration
 class TestHttpStorageSearch:
-
     async def test_search_fulltext(self, storage: HttpStorage) -> None:
         """search выполняет полнотекстовый поиск."""
         await storage.add_request(_make_req("http://example.com/secretpage"))
@@ -258,7 +253,6 @@ class TestHttpStorageSearch:
 
 @pytest.mark.integration
 class TestHttpStorageClearAll:
-
     async def test_clear_all_empties_table(self, storage: HttpStorage) -> None:
         """clear_all очищает таблицу."""
         for _ in range(5):
@@ -270,7 +264,6 @@ class TestHttpStorageClearAll:
 
 @pytest.mark.integration
 class TestHttpStorageSwitchDb:
-
     async def test_switch_db(self, tmp_path: Path) -> None:
         """switch_db переключает базу данных."""
         s = HttpStorage()
@@ -291,7 +284,6 @@ class TestHttpStorageSwitchDb:
 
 @pytest.mark.integration
 class TestHttpStorageWebsocket:
-
     async def test_is_websocket_filter_false(self, storage: HttpStorage) -> None:
         """is_websocket фильтр возвращает только не-WS записи."""
         await storage.add_request(_make_req(), is_websocket=False)
@@ -316,7 +308,6 @@ class TestHttpStorageWebsocket:
 
 @pytest.mark.integration
 class TestHttpStorageGetRequestById:
-
     async def test_get_request_by_id_alias(self, storage: HttpStorage) -> None:
         """get_request_by_id является алиасом get_full_entry."""
         row_id = await storage.add_request(_make_req())

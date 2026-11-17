@@ -38,9 +38,9 @@ _TUI = Path(__file__).resolve().parents[3] / "pentool" / "tui"
 
 
 def test_cycler_class_is_gone() -> None:
-    assert not hasattr(
-        filter_bar_widget, "Cycler"
-    ), "Cycler must not come back — OptionCycler (allow_empty/suffix) covers it"
+    assert not hasattr(filter_bar_widget, "Cycler"), (
+        "Cycler must not come back — OptionCycler (allow_empty/suffix) covers it"
+    )
 
 
 def test_filter_bar_renders_option_cycler() -> None:

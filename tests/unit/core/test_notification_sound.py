@@ -14,8 +14,6 @@ import types
 from contextlib import contextmanager
 from unittest.mock import patch
 
-import pytest
-
 from pentool.core import notification_sound as ns
 
 
@@ -36,39 +34,38 @@ def _fake_winsound():
 
 
 def test_play_blocking_windows():
-    with _fake_winsound(), patch.object(sys, "platform", "win32"), \
-         patch("winsound.Beep") as beep:
+    with _fake_winsound(), patch.object(sys, "platform", "win32"), patch("winsound.Beep") as beep:
         ns._play_blocking("success")
     assert beep.call_count == 1  # single in-process beep
 
 
 def test_play_blocking_windows_unknown_severity_defaults_info():
-    with _fake_winsound(), patch.object(sys, "platform", "win32"), \
-         patch("winsound.Beep") as beep:
+    with _fake_winsound(), patch.object(sys, "platform", "win32"), patch("winsound.Beep") as beep:
         ns._play_blocking("mystery")
     assert beep.call_count == 1
 
 
 def test_play_blocking_windows_beep_error_falls_back_to_bell():
-    with _fake_winsound(), patch.object(sys, "platform", "win32"), \
-         patch("winsound.Beep", side_effect=RuntimeError("no device")), \
-         patch("pentool.core.notification_sound._terminal_bell") as bell:
+    with (
+        _fake_winsound(),
+        patch.object(sys, "platform", "win32"),
+        patch("winsound.Beep", side_effect=RuntimeError("no device")),
+        patch("pentool.core.notification_sound._terminal_bell") as bell,
+    ):
         ns._play_blocking("information")
     bell.assert_called_once()
 
 
 def test_play_blocking_macos_uses_bell_only():
     # macOS must NOT fork afplay anymore — stability-first product decision.
-    with patch.object(sys, "platform", "darwin"), \
-         patch("pentool.core.notification_sound._terminal_bell") as bell:
+    with patch.object(sys, "platform", "darwin"), patch("pentool.core.notification_sound._terminal_bell") as bell:
         ns._play_blocking("information")
     bell.assert_called_once()
 
 
 def test_play_blocking_linux_uses_bell_only():
     # Linux must NOT fork aplay/paplay — same stability-first decision.
-    with patch.object(sys, "platform", "linux"), \
-         patch("pentool.core.notification_sound._terminal_bell") as bell:
+    with patch.object(sys, "platform", "linux"), patch("pentool.core.notification_sound._terminal_bell") as bell:
         ns._play_blocking("error")
     bell.assert_called_once()
 
@@ -84,23 +81,32 @@ def test_non_windows_never_spawns_subprocess():
 
     src = inspect.getsource(ns)
     tree = ast.parse(src)
-    nodes = [n for n in ast.walk(tree) if isinstance(n, ast.Name, )]
+    nodes = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(
+            n,
+            ast.Name,
+        )
+    ]
     forbidden = {"subprocess", "Popen", "popen", "fork"}
     offending = sorted({n.id for n in nodes if n.id in forbidden})
     assert not offending, f"playback imports subprocess-forks: {offending}"
 
 
 def test_play_blocking_unknown_platform_uses_bell():
-    with patch.object(sys, "platform", "os2"), \
-         patch("pentool.core.notification_sound._terminal_bell") as bell:
+    with patch.object(sys, "platform", "os2"), patch("pentool.core.notification_sound._terminal_bell") as bell:
         ns._play_blocking("info")
     bell.assert_called_once()
 
 
 def test_play_blocking_swallows_exception():
-    with _fake_winsound(), patch.object(sys, "platform", "win32"), \
-         patch("winsound.Beep", side_effect=RuntimeError("device")), \
-         patch("pentool.core.notification_sound._terminal_bell", side_effect=RuntimeError("stdout")):
+    with (
+        _fake_winsound(),
+        patch.object(sys, "platform", "win32"),
+        patch("winsound.Beep", side_effect=RuntimeError("device")),
+        patch("pentool.core.notification_sound._terminal_bell", side_effect=RuntimeError("stdout")),
+    ):
         # both beep and bell fail — still no raise
         ns._play_blocking("info")
 

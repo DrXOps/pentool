@@ -43,7 +43,6 @@ class TestSensitiveDataCheck:
     @pytest.mark.asyncio
     async def test_aws_key_detected(self) -> None:
         from pentool.modules.scanner.checks.sensitive_data import SensitiveDataCheck
-        from pentool.utils.parser import ParsedResponse
 
         check = SensitiveDataCheck()
         resp = ParsedResponse(200, "OK", {}, "AKIA1234567890ABCDEF")
@@ -54,7 +53,6 @@ class TestSensitiveDataCheck:
     @pytest.mark.asyncio
     async def test_private_key_detected(self) -> None:
         from pentool.modules.scanner.checks.sensitive_data import SensitiveDataCheck
-        from pentool.utils.parser import ParsedResponse
 
         check = SensitiveDataCheck()
         body = "-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"
@@ -66,7 +64,6 @@ class TestSensitiveDataCheck:
     @pytest.mark.asyncio
     async def test_no_false_positive_clean_response(self) -> None:
         from pentool.modules.scanner.checks.sensitive_data import SensitiveDataCheck
-        from pentool.utils.parser import ParsedResponse
 
         check = SensitiveDataCheck()
         resp = ParsedResponse(200, "OK", {}, "Hello World")
@@ -76,7 +73,6 @@ class TestSensitiveDataCheck:
     @pytest.mark.asyncio
     async def test_jwt_token_in_body_detected(self) -> None:
         from pentool.modules.scanner.checks.sensitive_data import SensitiveDataCheck
-        from pentool.utils.parser import ParsedResponse
 
         check = SensitiveDataCheck()
         resp = ParsedResponse(200, "OK", {}, f"token: {_JWT}")

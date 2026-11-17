@@ -11,21 +11,23 @@ test module; this file covers SQLiCheck only.)
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.sqli import (
-    SQLiCheck,
     _BOOL_PAIRS,
     _QUOTE_PROBES,
     _TIME_PAYLOADS,
+    SQLiCheck,
     _detect_db,
     _has_db_error,
     _is_waf_blocked,
 )
 from pentool.modules.scanner.mutator import InjectionPoint
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 MYSQL_ERROR = (
@@ -105,6 +107,7 @@ class TestScanErrorBased:
     async def test_error_based_detects_sqli(self):
         check = SQLiCheck()
         req = _req()
+
         # Baseline (unmutated url) -> clean; any mutation -> MySQL error.
         async def send(request):
             if request.url == req.url:
@@ -120,7 +123,6 @@ class TestScanErrorBased:
 
 class TestEngineIntegration:
     """End-to-end through ScanEngine — error-based SQLi surfaced."""
-
 
     @pytest.mark.asyncio
     async def test_engine_detects_sqli(self):

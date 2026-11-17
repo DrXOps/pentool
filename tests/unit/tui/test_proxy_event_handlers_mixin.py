@@ -12,9 +12,8 @@ keeps them there.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import types
+from datetime import datetime, timezone
 
 from pentool.api.proxy_api import InterceptedRequest as _IR
 from pentool.tui.mixins.events_handlers import ProxyEventHandlersMixin

@@ -28,6 +28,7 @@ import gc
 import logging
 import sys
 import time
+from typing import Any
 
 logging.basicConfig(level=logging.WARNING)
 # Отключить шум прокси, чтобы стресс-тест был сосредоточен на нагрузке.
@@ -102,6 +103,7 @@ async def _executor_spammer(loop: asyncio.AbstractEventLoop, stop: asyncio.Futur
 def _make_gen_cycle() -> list[Any]:
     """Генератор-рефцикл: next() держит генератор, который ссылается на фрейм,
     образующий цикл — типовой объект, финализируется в _PyGen_Finalize при GC."""
+
     def gen():
         x = []
         try:
@@ -111,6 +113,7 @@ def _make_gen_cycle() -> list[Any]:
         finally:
             # Держит стек живым — цикл gen frame -> x -> frame.
             del x
+
     g = gen()
     next(g)
     return [g]
@@ -210,8 +213,10 @@ async def main(n_iter: int, batch: int) -> int:
         await origin_server.wait_closed()
 
     dt = time.monotonic() - t0
-    print(f"[stress] iter={n_iter} batch={batch} opened={total_open} closed={total_close} "
-          f"held={len(held)} elapsed={dt:.1f}s — OK (no crash)")
+    print(
+        f"[stress] iter={n_iter} batch={batch} opened={total_open} closed={total_close} "
+        f"held={len(held)} elapsed={dt:.1f}s — OK (no crash)"
+    )
     return 0
 
 

@@ -15,7 +15,6 @@
 import asyncio
 import os
 import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -23,7 +22,6 @@ from pentool.api.proxy_api import InterceptedRequest, ProxyAPI
 from pentool.core.db_schema import init_db
 from pentool.modules.proxy import ProxyServer
 from pentool.services.proxy_service import ProxyService
-from pentool.storage.http_storage import HttpStorage
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
@@ -62,6 +60,7 @@ async def test_user_workflow_full():
         # 3. Симулируем перехват запроса (как будто proxy перехватил)
         print("[USER] Симулирую перехват GET http://example.com/test")
         from datetime import datetime, timezone
+
         req = InterceptedRequest(
             id="test-req-1",
             method="GET",
@@ -87,16 +86,18 @@ async def test_user_workflow_full():
         # 5. Симулируем "Send to Repeater" (Ctrl+R на строке)
         print("[USER] Отправляю в Repeater (Ctrl+R)...")
         from pentool.utils.parser import build_http_request
+
         parsed_req = ParsedRequest(
             method="GET",
             url="http://example.com/test",
             headers={"Host": "example.com", "User-Agent": "Test"},
             body="",
         )
-        raw_request = build_http_request(parsed_req)
+        _raw_request = build_http_request(parsed_req)
 
         # RepeaterScreen.load_request_in_new_tab вызовет save_to_history
         from pentool.api.repeater_api import RepeaterAPI
+
         repeater_api = RepeaterAPI(db_path=db_path)
 
         # Симулируем отправку запроса (Ctrl+Space = ctrl-at в терминале) и получение ответа

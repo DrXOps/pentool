@@ -1,4 +1,5 @@
 """Integration conftest — патч медленных IO и daemon-блокеров для TUI-тестов."""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -82,7 +83,6 @@ async def cleanup_asyncio():
     yield
     import asyncio
     import gc
-    import threading
 
     # Закрыть все незавершённые tasks
     try:
@@ -102,4 +102,5 @@ async def cleanup_asyncio():
 
     # Дать время background threads завершиться
     import time
+
     time.sleep(0.05)

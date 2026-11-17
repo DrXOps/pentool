@@ -19,12 +19,13 @@ import pytest
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.prototype_pollution import (
-    PrototypePollutionCheck,
     _MARKER,
     _PAYLOADS,
+    PrototypePollutionCheck,
 )
 from pentool.modules.scanner.engine import ScanEngine
 from pentool.modules.scanner.mutator import InjectionPoint
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
@@ -45,6 +46,7 @@ class TestMeta:
         # drives get_payloads()/analyze() through the base template cycle —
         # the old path was the engine's analyze() branch on a scan() stub.
         from pentool.modules.scanner.base import BaseActiveCheck
+
         assert issubclass(PrototypePollutionCheck, BaseActiveCheck)
 
     def test_uses_scan_pipeline(self):
@@ -64,7 +66,9 @@ class TestAnalyze:
         mutated = _make_request("http://test/api?id=1", body=_PAYLOADS[0])
         point = _make_point("id")
         resp = ParsedResponse(
-            status=200, reason="OK", headers={},
+            status=200,
+            reason="OK",
+            headers={},
             body=f'{{"{_MARKER}": "1"}}',
         )
         finding = await check.analyze(req, mutated, point, _PAYLOADS[0], resp)
@@ -78,7 +82,9 @@ class TestAnalyze:
         mutated = _make_request("http://test/api?id=1", body=_PAYLOADS[0])
         point = _make_point("id")
         resp = ParsedResponse(
-            status=500, reason="Internal Server Error", headers={},
+            status=500,
+            reason="Internal Server Error",
+            headers={},
             body="TypeError: Cannot set property foo of #<Object>",
         )
         finding = await check.analyze(req, mutated, point, _PAYLOADS[0], resp)
@@ -102,7 +108,9 @@ class TestAnalyze:
         mutated = _make_request("http://test/api?id=1", body=_PAYLOADS[0])
         point = _make_point("id")
         resp = ParsedResponse(
-            status=200, reason="OK", headers={},
+            status=200,
+            reason="OK",
+            headers={},
             body=f'{{"{_MARKER}": "1"}}',
         )
         finding = await check.analyze(req, mutated, point, _PAYLOADS[0], resp)
@@ -112,7 +120,6 @@ class TestAnalyze:
 
 
 class TestEngineIntegration:
-
     @pytest.mark.asyncio
     async def test_engine_detects_prototype_pollution(self):
         class FakeClient:
@@ -130,8 +137,10 @@ class TestEngineIntegration:
                 # TechProfile.allows_check("prototype_pollution")
                 # (applicable_techs=["nodejs"]) doesn't filter this check out.
                 return ParsedResponse(
-                    status=200, reason="OK",
-                    headers={"X-Powered-By": "Express"}, body="",
+                    status=200,
+                    reason="OK",
+                    headers={"X-Powered-By": "Express"},
+                    body="",
                 )
 
         engine = ScanEngine(db_path=":memory:", http_client=FakeClient())

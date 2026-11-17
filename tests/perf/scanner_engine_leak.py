@@ -36,9 +36,6 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from tests.perf.fake_http_client import FakeHTTPClient  # noqa: E402
-from tests.perf.memtrack import MemSampler, TraceSnaps, rss_mb, save_report  # noqa: E402
-
 from pentool.modules.scanner.checks import (  # noqa: E402
     BrokenAuthCheck,
     CORSCheck,
@@ -64,17 +61,37 @@ from pentool.modules.scanner.checks import (  # noqa: E402
 )
 from pentool.modules.scanner.checks.header_injection import HostHeaderInjectionCheck  # noqa: E402
 from pentool.modules.scanner.engine import ScanEngine  # noqa: E402
+
 from pentool.utils.parser import ParsedRequest  # noqa: E402
+from tests.perf.fake_http_client import FakeHTTPClient  # noqa: E402
+from tests.perf.memtrack import TraceSnaps, rss_mb, save_report  # noqa: E402
 
 # All 22 checks that don't require an active PRO feature flag beyond the
 # base "scanner_pro" trial (SQLiUnionCheck needs "scanner_sqli_union" and
 # is unavailable in this dev license — excluded, matches real runtime).
 ALL_CHECKS_FACTORY = [
-    MissingSecurityHeadersCheck, InfoLeakCheck, SQLiCheck, XSSCheck, SSTICheck,
-    LFICheck, PathTraversalCheck, HeaderInjectionCheck, HostHeaderInjectionCheck,
-    RCECheck, OpenRedirectCheck, SSRFCheck, XXECheck, CORSCheck, BrokenAuthCheck,
-    JWTNoneCheck, NoSQLInjectionCheck, GraphQLCheck, PrototypePollutionCheck,
-    DOMXSSCheck, OAuthCheck, SensitiveDataCheck,
+    MissingSecurityHeadersCheck,
+    InfoLeakCheck,
+    SQLiCheck,
+    XSSCheck,
+    SSTICheck,
+    LFICheck,
+    PathTraversalCheck,
+    HeaderInjectionCheck,
+    HostHeaderInjectionCheck,
+    RCECheck,
+    OpenRedirectCheck,
+    SSRFCheck,
+    XXECheck,
+    CORSCheck,
+    BrokenAuthCheck,
+    JWTNoneCheck,
+    NoSQLInjectionCheck,
+    GraphQLCheck,
+    PrototypePollutionCheck,
+    DOMXSSCheck,
+    OAuthCheck,
+    SensitiveDataCheck,
 ]
 
 
@@ -85,15 +102,17 @@ def build_seed_requests(n: int, params_per_req: int = 3) -> list[ParsedRequest]:
     reqs = []
     for i in range(n):
         query = "&".join(f"p{k}=val{i}_{k}" for k in range(params_per_req))
-        reqs.append(ParsedRequest(
-            method="GET",
-            url=f"http://127.0.0.1:9/page/{i}?{query}",
-            headers={
-                "Cookie": f"session=abc{i}; theme=dark",
-                "User-Agent": "pentool-leak-test",
-            },
-            body="",
-        ))
+        reqs.append(
+            ParsedRequest(
+                method="GET",
+                url=f"http://127.0.0.1:9/page/{i}?{query}",
+                headers={
+                    "Cookie": f"session=abc{i}; theme=dark",
+                    "User-Agent": "pentool-leak-test",
+                },
+                body="",
+            )
+        )
     return reqs
 
 
@@ -236,10 +255,9 @@ async def main(max_requests: int) -> None:
         *top,
         "```",
         "",
-        f"## Вердикт H1",
+        "## Вердикт H1",
         "",
-        f"Разброс peak_tasks при разных concurrency (5..100), n_requests={fixed_n}: "
-        f"{task_spread}",
+        f"Разброс peak_tasks при разных concurrency (5..100), n_requests={fixed_n}: {task_spread}",
         "",
         conc_vs_tasks.__repr__(),
     ]
@@ -248,8 +266,12 @@ async def main(max_requests: int) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--max-requests", type=int, default=5000,
-                         help="Максимум seed-запросов для самого крупного сценария "
-                              "(осторожно: peak_tasks ~ max_requests × injection_points × 22 чека)")
+    parser.add_argument(
+        "--max-requests",
+        type=int,
+        default=5000,
+        help="Максимум seed-запросов для самого крупного сценария "
+        "(осторожно: peak_tasks ~ max_requests × injection_points × 22 чека)",
+    )
     args = parser.parse_args()
     asyncio.run(main(args.max_requests))

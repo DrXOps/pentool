@@ -7,8 +7,6 @@ Covers: _get_content_type, _detect_language,
 
 from __future__ import annotations
 
-import pytest
-
 from pentool.tui.widgets.request_editor import (
     _beautify_text,
     _detect_language,
@@ -39,6 +37,7 @@ class TestGetContentType:
 
 
 # ─── _detect_language (by Content-Type) ────────────────────────────────────────
+
 
 class TestDetectLanguageByContentType:
     def test_json(self) -> None:
@@ -86,12 +85,13 @@ class TestDetectLanguageByContentType:
 
 # ─── _detect_language (heuristic by body) ──────────────────────────────────────
 
+
 class TestDetectLanguageByBody:
     def test_json_object(self) -> None:
         assert _detect_language("", '{"key": "value"}') == "json"
 
     def test_json_array(self) -> None:
-        assert _detect_language("", '[1, 2, 3]') == "json"
+        assert _detect_language("", "[1, 2, 3]") == "json"
 
     def test_json_with_whitespace(self) -> None:
         assert _detect_language("", '  \n{"k": 1}') == "json"
@@ -128,6 +128,7 @@ class TestDetectLanguageByBody:
 
 
 # ─── RequestEditor (unit without Textual) ───────────────────────────────────────
+
 
 class TestRequestEditorHelpers:
     """Tests for RequestEditor helper logic without starting Textual."""
@@ -167,6 +168,7 @@ class TestRequestEditorHelpers:
 
 
 # ─── ResponseViewer (unit without Textual) ──────────────────────────────────────
+
 
 class TestResponseViewerHelpers:
     """Tests for ResponseViewer helper logic without starting Textual."""
@@ -252,6 +254,7 @@ class TestResponseViewerHelpers:
 
 # ─── _beautify_text (R-2: Beautify JSON/XML) ────────────────────────────────────
 
+
 class TestBeautifyText:
     """Tests for _beautify_text — used by RequestEditor.beautify_body()."""
 
@@ -262,7 +265,7 @@ class TestBeautifyText:
         assert "\n" in result  # actually pretty-printed, not one line
 
     def test_beautify_json_array(self) -> None:
-        result = _beautify_text('[1,2,3]')
+        result = _beautify_text("[1,2,3]")
         assert result is not None
         parsed_back = result
         assert "1" in parsed_back and "2" in parsed_back and "3" in parsed_back
@@ -301,4 +304,3 @@ class TestBeautifyText:
         result = _beautify_text(pretty)
         assert result is not None
         assert '"a": 1' in result
-

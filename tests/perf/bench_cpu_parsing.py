@@ -35,6 +35,7 @@ from urllib.parse import urljoin, urlparse
 
 # ═══════════ Раздел A — парсинг: bs4 vs lxml (по возможности) ═══════════════
 
+
 def _big_html(n_links: int = 3000) -> str:
     h = "<html><head><title>t</title></head><body>"
     h += "".join(f'<a href="/page/{i}?p=v{i}">l{i}</a>' for i in range(n_links))
@@ -46,11 +47,13 @@ def _try_import():
     have = {"bs4": False, "lxml": False}
     try:
         from bs4 import BeautifulSoup  # noqa: F401
+
         have["bs4"] = True
     except ImportError:
         pass
     try:
         import lxml.html  # noqa: F401
+
         have["lxml"] = True
     except ImportError:
         pass
@@ -62,28 +65,31 @@ def _bench_parsing(html: str, have):
     results = {}
     if have["bs4"]:
         from bs4 import BeautifulSoup
+
         t = time.monotonic()
         for _ in range(20):
             soup = BeautifulSoup(html, "html.parser")
             _ = [a.get("href", "") for a in soup.find_all("a", href=True)]
         wall = time.monotonic() - t
         results["bs4_htmlparser"] = wall
-        print(f"  BeautifulSoup html.parser : {wall:6.2f}s  ({wall/20*1000:4.0f}ms/стр)")
+        print(f"  BeautifulSoup html.parser : {wall:6.2f}s  ({wall / 20 * 1000:4.0f}ms/стр)")
     if have["lxml"]:
         import lxml.html as lh
+
         t = time.monotonic()
         for _ in range(20):
             doc = lh.fromstring(html)
             _ = doc.xpath("//a[@href]/@href")
         wall = time.monotonic() - t
         results["lxml"] = wall
-        print(f"  lxml xpath               : {wall:6.2f}s  ({wall/20*1000:4.0f}ms/стр)")
+        print(f"  lxml xpath               : {wall:6.2f}s  ({wall / 20 * 1000:4.0f}ms/стр)")
         if "bs4_htmlparser" in results:
-            print(f"  ускорение lxml/bs4       : {results['bs4_htmlparser']/wall:6.1f}x")
+            print(f"  ускорение lxml/bs4       : {results['bs4_htmlparser'] / wall:6.1f}x")
     return results
 
 
 # ═══════════ Раздел B — GIL vs multiprocessing на двух классах CPU-задач ═════
+
 
 def _urlparse_work(n: int) -> int:
     """urlparse-подобная CPU-задача: много urllib-парсинга (как _add_link)."""
@@ -100,6 +106,7 @@ def _urlparse_work(n: int) -> int:
 def _strsplit_work(n: int) -> int:
     """Парсинг-подобная CPU-задача: регекс+строки над большим HTML (как bs4)."""
     import re
+
     html = _big_html(3000)
     pat = re.compile(r'href="([^"]+)"')
     cnt = 0
@@ -118,7 +125,7 @@ def _run_tasks(name: str, work, args, n_parallel: int):
     work(total)
     dt_sync = time.monotonic() - t0
     rows["sync"] = dt_sync
-    print(f"  sync    : {dt_sync*1000:7.0f}ms  (вся работа в одном процессе, амбар)")
+    print(f"  sync    : {dt_sync * 1000:7.0f}ms  (вся работа в одном процессе, амбар)")
 
     # Делим одну и ту же работу на n_parallel кусков ↓ суммарный объём тот же,
     # что в sync. Тогда threads/procs показывают честное ускорение от
@@ -134,7 +141,7 @@ def _run_tasks(name: str, work, args, n_parallel: int):
         list(ex.map(work, split))
     dt_thr = time.monotonic() - t0
     rows["threads"] = dt_thr
-    print(f"  threads : {dt_thr*1000:7.0f}ms  ({n_parallel} потоков, GIL блокирует)")
+    print(f"  threads : {dt_thr * 1000:7.0f}ms  ({n_parallel} потоков, GIL блокирует)")
 
     # procs — ProcessPoolExecutor (обходит GIL, платит IPC-перенос аргумента)
     t0 = time.monotonic()
@@ -142,8 +149,8 @@ def _run_tasks(name: str, work, args, n_parallel: int):
         list(ex.map(work, split))
     dt_proc = time.monotonic() - t0
     rows["procs"] = dt_proc
-    print(f"  procs   : {dt_proc*1000:7.0f}ms  ({n_parallel} процессов, GIL обойдён)")
-    print(f"  ускорение procs/sync: {dt_sync/dt_proc:5.2f}x   threads/sync: {dt_sync/dt_thr:5.2f}x")
+    print(f"  procs   : {dt_proc * 1000:7.0f}ms  ({n_parallel} процессов, GIL обойдён)")
+    print(f"  ускорение procs/sync: {dt_sync / dt_proc:5.2f}x   threads/sync: {dt_sync / dt_thr:5.2f}x")
     return rows
 
 

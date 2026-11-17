@@ -48,12 +48,13 @@ def test_get_metadata_has_fields():
 
 
 def test_get_metadata_version_unknown():
-    with patch("pentool.__version__", create=False), \
-         patch("builtins.__import__") as importer:
+    with patch("pentool.__version__", create=False), patch("builtins.__import__") as importer:
+
         def fake_import(name, *a, **k):
             if name == "pentool":
                 raise ImportError
             return __import__(name, *a, **k)
+
         importer.side_effect = fake_import
         md = cr._get_metadata()
     assert md["version"] == "unknown"
@@ -117,8 +118,10 @@ async def test_send_crash_async_post_error_swallowed():
 
 def test_send_crash_honours_opt_out():
     cfg = MagicMock(send_crash_reports=False)
-    with patch("pentool.core.config.get_config", return_value=cfg), \
-         patch("pentool.core.crash_reporter.asyncio.new_event_loop") as nel:
+    with (
+        patch("pentool.core.config.get_config", return_value=cfg),
+        patch("pentool.core.crash_reporter.asyncio.new_event_loop") as nel,
+    ):
         cr.send_crash(ValueError("x"))
     nel.assert_not_called()
 
@@ -127,23 +130,26 @@ def test_send_crash_sends_async():
     cfg = MagicMock(send_crash_reports=True)
     result = MagicMock()
     result.run_until_complete = MagicMock()
-    with patch("pentool.core.config.get_config", return_value=cfg), \
-         patch("pentool.core.crash_reporter.asyncio.new_event_loop", return_value=result):
+    with (
+        patch("pentool.core.config.get_config", return_value=cfg),
+        patch("pentool.core.crash_reporter.asyncio.new_event_loop", return_value=result),
+    ):
         cr.send_crash(ValueError("x"))
     assert result.run_until_complete.called
 
 
 def test_send_crash_config_error_swallowed():
-    with patch("pentool.core.config.get_config", side_effect=ImportError), \
-         patch("pentool.core.crash_reporter.asyncio.new_event_loop", side_effect=RuntimeError("no loop")):
+    with (
+        patch("pentool.core.config.get_config", side_effect=ImportError),
+        patch("pentool.core.crash_reporter.asyncio.new_event_loop", side_effect=RuntimeError("no loop")),
+    ):
         cr.send_crash(ValueError("x"))  # no raise
 
 
 @pytest.mark.asyncio
 async def test_first_run_ping_success():
     post = AsyncMock(return_value=MagicMock())
-    with _fake_aiohttp(post_mock=post), \
-         patch("pentool.core.license.get_machine_id", return_value="mach-123"):
+    with _fake_aiohttp(post_mock=post), patch("pentool.core.license.get_machine_id", return_value="mach-123"):
         await cr.send_first_run_ping_async()
     json_body = post.await_args.kwargs["json"]
     assert json_body == {"machine_id": "mach-123"}
@@ -151,8 +157,7 @@ async def test_first_run_ping_success():
 
 @pytest.mark.asyncio
 async def test_first_run_ping_license_error_returns():
-    with _fake_aiohttp(), \
-         patch("pentool.core.license.get_machine_id", side_effect=Exception("no license")):
+    with _fake_aiohttp(), patch("pentool.core.license.get_machine_id", side_effect=Exception("no license")):
         await cr.send_first_run_ping_async()  # no raise
 
 
@@ -177,8 +182,10 @@ async def test_first_run_ping_missing_aiohttp():
 
 def test_first_run_ping_honours_opt_out():
     cfg = MagicMock(send_crash_reports=False)
-    with patch("pentool.core.config.get_config", return_value=cfg), \
-         patch("pentool.core.crash_reporter.asyncio.new_event_loop") as nel:
+    with (
+        patch("pentool.core.config.get_config", return_value=cfg),
+        patch("pentool.core.crash_reporter.asyncio.new_event_loop") as nel,
+    ):
         cr.send_first_run_ping()
     nel.assert_not_called()
 
@@ -187,16 +194,17 @@ def test_first_run_ping_sends():
     cfg = MagicMock(send_crash_reports=True)
     result = MagicMock()
     result.run_until_complete = MagicMock()
-    with patch("pentool.core.config.get_config", return_value=cfg), \
-         patch("pentool.core.crash_reporter.asyncio.new_event_loop", return_value=result):
+    with (
+        patch("pentool.core.config.get_config", return_value=cfg),
+        patch("pentool.core.crash_reporter.asyncio.new_event_loop", return_value=result),
+    ):
         cr.send_first_run_ping()
     assert result.run_until_complete.called
 
 
 @pytest.mark.asyncio
 async def test_first_run_ping_post_error_swallowed():
-    with _fake_aiohttp(post_exc=RuntimeError("down")), \
-         patch("pentool.core.license.get_machine_id", return_value="m"):
+    with _fake_aiohttp(post_exc=RuntimeError("down")), patch("pentool.core.license.get_machine_id", return_value="m"):
         await cr.send_first_run_ping_async()  # no raise
 
 
@@ -204,8 +212,10 @@ def test_send_crash_config_exception_still_attempts():
     # get_config raises but send_crash should still try (except-pass)
     result = MagicMock()
     result.run_until_complete = MagicMock()
-    with patch("pentool.core.config.get_config", side_effect=Exception("cfg")), \
-         patch("pentool.core.crash_reporter.asyncio.new_event_loop", return_value=result):
+    with (
+        patch("pentool.core.config.get_config", side_effect=Exception("cfg")),
+        patch("pentool.core.crash_reporter.asyncio.new_event_loop", return_value=result),
+    ):
         cr.send_crash(ValueError("x"))
     assert result.run_until_complete.called
 
@@ -213,14 +223,18 @@ def test_send_crash_config_exception_still_attempts():
 def test_first_run_ping_config_exception_still_attempts():
     result = MagicMock()
     result.run_until_complete = MagicMock()
-    with patch("pentool.core.config.get_config", side_effect=Exception("cfg")), \
-         patch("pentool.core.crash_reporter.asyncio.new_event_loop", return_value=result):
+    with (
+        patch("pentool.core.config.get_config", side_effect=Exception("cfg")),
+        patch("pentool.core.crash_reporter.asyncio.new_event_loop", return_value=result),
+    ):
         cr.send_first_run_ping()
     assert result.run_until_complete.called
 
 
 def test_send_first_run_ping_loop_error_swallowed():
     cfg = MagicMock(send_crash_reports=True)
-    with patch("pentool.core.config.get_config", return_value=cfg), \
-         patch("pentool.core.crash_reporter.asyncio.new_event_loop", side_effect=RuntimeError("no loop")):
+    with (
+        patch("pentool.core.config.get_config", return_value=cfg),
+        patch("pentool.core.crash_reporter.asyncio.new_event_loop", side_effect=RuntimeError("no loop")),
+    ):
         cr.send_first_run_ping()  # no raise

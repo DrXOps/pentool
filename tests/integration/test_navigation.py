@@ -6,7 +6,6 @@ Checks tab switching, ContentSwitcher, ModuleTabs via Textual Pilot.
 from __future__ import annotations
 
 import pytest
-import pytest_asyncio
 
 from pentool.core.config import Config, set_config
 
@@ -30,6 +29,7 @@ class TestAppCompose:
     @pytest.mark.usefixtures("patch_tui_io")
     async def test_app_mounts_without_error(self) -> None:
         from pentool.tui.app import PentoolApp
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -39,6 +39,7 @@ class TestAppCompose:
     async def test_module_tabs_in_dom(self) -> None:
         from pentool.tui.app import PentoolApp
         from pentool.tui.widgets.module_tabs import ModuleTabs
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -49,6 +50,7 @@ class TestAppCompose:
     async def test_statusbar_in_dom(self) -> None:
         from pentool.tui.app import PentoolApp
         from pentool.tui.widgets.statusbar import StatusBar
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -60,6 +62,7 @@ class TestAppCompose:
         """MenuBar removed from DOM (R-12) — ModuleTabs is used instead."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.widgets.module_tabs import ModuleTabs
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -72,6 +75,7 @@ class TestAppCompose:
         """Proxy screen is active by default."""
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.proxy.screen import ProxyScreen
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -87,6 +91,7 @@ class TestModuleNavigation:
     async def test_switch_to_repeater(self) -> None:
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.repeater.screen import RepeaterScreen
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -99,6 +104,7 @@ class TestModuleNavigation:
     async def test_switch_to_intruder(self) -> None:
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.intruder.screen import IntruderScreen
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -111,6 +117,7 @@ class TestModuleNavigation:
     async def test_switch_back_to_proxy(self) -> None:
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.proxy.screen import ProxyScreen
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -125,6 +132,7 @@ class TestModuleNavigation:
     async def test_switch_to_decoder(self) -> None:
         from pentool.tui.app import PentoolApp
         from pentool.tui.screens.decoder.screen import DecoderScreen
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -140,6 +148,7 @@ class TestProxyScreenWidgets:
     @pytest.mark.asyncio
     async def test_http_table_in_dom(self) -> None:
         from pentool.tui.app import PentoolApp
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -150,6 +159,7 @@ class TestProxyScreenWidgets:
     @pytest.mark.asyncio
     async def test_intercept_button_in_dom(self) -> None:
         from pentool.tui.app import PentoolApp
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -159,6 +169,7 @@ class TestProxyScreenWidgets:
     @pytest.mark.asyncio
     async def test_forward_button_in_dom(self) -> None:
         from pentool.tui.app import PentoolApp
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -173,6 +184,7 @@ class TestRepeaterScreenWidgets:
     async def test_send_button_always_in_dom(self) -> None:
         """#btn-send is always present in DOM even when tab is inactive."""
         from pentool.tui.app import PentoolApp
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -185,6 +197,7 @@ class TestRepeaterScreenWidgets:
     async def test_request_editor_in_dom(self) -> None:
         from pentool.tui.app import PentoolApp
         from pentool.tui.widgets.request_editor import RequestEditor
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -201,6 +214,7 @@ class TestIntruderScreenWidgets:
     @pytest.mark.asyncio
     async def test_start_button_in_dom(self) -> None:
         from pentool.tui.app import PentoolApp
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -212,6 +226,7 @@ class TestIntruderScreenWidgets:
     @pytest.mark.asyncio
     async def test_results_table_in_dom(self) -> None:
         from pentool.tui.app import PentoolApp
+
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()

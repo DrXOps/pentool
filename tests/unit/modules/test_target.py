@@ -16,8 +16,8 @@ import pytest_asyncio
 from pentool.modules.target import SiteMap, SiteNode
 from pentool.utils.parser import ParsedRequest
 
-
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
+
 
 @pytest_asyncio.fixture
 async def sitemap(test_db: str):
@@ -33,6 +33,7 @@ def make_req(url: str, method: str = "GET") -> ParsedRequest:
 
 
 # ─── TestSiteNode ─────────────────────────────────────────────────────────────
+
 
 class TestSiteNode:
     def test_to_dict_and_from_dict(self) -> None:
@@ -51,14 +52,19 @@ class TestSiteNode:
 
     def test_from_dict_bad_timestamp(self) -> None:
         d = {
-            "id": "x", "host": "h", "path": "/",
-            "methods": [], "request_count": 0, "last_seen": "bad",
+            "id": "x",
+            "host": "h",
+            "path": "/",
+            "methods": [],
+            "request_count": 0,
+            "last_seen": "bad",
         }
         node = SiteNode.from_dict(d)
         assert isinstance(node.last_seen, datetime)
 
 
 # ─── TestSiteMap ──────────────────────────────────────────────────────────────
+
 
 class TestSiteMap:
     def test_add_request_creates_host(self, sitemap: SiteMap) -> None:
@@ -84,7 +90,7 @@ class TestSiteMap:
         """Discovery sources (crawl/AI) pass count=False — re-adding an
         existing path must update meta but not inflate request_count."""
         url = "http://example.com/login"
-        sitemap.add_request(make_req(url, "GET"))            # count=True → 1
+        sitemap.add_request(make_req(url, "GET"))  # count=True → 1
         sitemap.add_request(make_req(url, "GET"), count=False)  # discovery → stays 1
         sitemap.add_request(make_req(url, "GET"), count=False)  # discovery → stays 1
         nodes = sitemap.get_paths("example.com")
@@ -212,9 +218,11 @@ class TestSiteMap:
 
 # ─── TestTargetAPI ────────────────────────────────────────────────────────────
 
+
 class TestTargetAPI:
     def test_get_tree(self, test_db: str) -> None:
         from pentool.api.target_api import TargetAPI
+
         api = TargetAPI(db_path=test_db)
         api.add_request(make_req("http://example.com/test"))
         tree = api.get_tree()
@@ -222,6 +230,7 @@ class TestTargetAPI:
 
     def test_set_in_scope(self, test_db: str) -> None:
         from pentool.api.target_api import TargetAPI
+
         api = TargetAPI(db_path=test_db)
         api.add_request(make_req("http://example.com/"))
         api.set_in_scope("example.com", True)
@@ -230,6 +239,7 @@ class TestTargetAPI:
 
     def test_clear(self, test_db: str) -> None:
         from pentool.api.target_api import TargetAPI
+
         api = TargetAPI(db_path=test_db)
         api.add_request(make_req("http://example.com/"))
         api.clear()
@@ -238,6 +248,7 @@ class TestTargetAPI:
 
     def test_export_json(self, test_db: str, tmp_path: "Path") -> None:
         from pentool.api.target_api import TargetAPI
+
         api = TargetAPI(db_path=test_db)
         api.add_request(make_req("http://example.com/export"))
         path = str(tmp_path / "sitemap.json")
@@ -248,6 +259,7 @@ class TestTargetAPI:
     @pytest.mark.asyncio
     async def test_get_paths(self, test_db: str) -> None:
         from pentool.api.target_api import TargetAPI
+
         api = TargetAPI(db_path=test_db)
         api.add_request(make_req("http://example.com/a"))
         api.add_request(make_req("http://example.com/b"))
@@ -260,6 +272,7 @@ class TestTargetAPI:
     async def test_close_releases_connection(self, test_db: str) -> None:
         """close() is a safe no-op when never opened, then allows re-save."""
         from pentool.api.target_api import TargetAPI
+
         api = TargetAPI(db_path=test_db)
         try:
             await api.close()  # no-op — connection was never opened

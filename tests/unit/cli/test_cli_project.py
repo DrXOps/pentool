@@ -39,7 +39,7 @@ def test_project_init_uses_home_default(tmp_path):
 
 
 def test_project_init_db_error_exits(tmp_path):
-    from pentool.core.db_schema import init_db
+
     with patch("pentool.cli.project.init_db", side_effect=RuntimeError("disk full")):
         r = CliRunner().invoke(project, ["init", "--name", "x", "--path", str(tmp_path)])
     assert r.exit_code == 1

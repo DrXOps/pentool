@@ -7,20 +7,20 @@
 - rename
 - load_from_storage / close_all
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock, patch
-
-from textual.widgets import TabPane
 
 
 @pytest.fixture
 def panel():
     """Create a TabbedContentPanel fixture for testing."""
     from pentool.tui.widgets.tab_panel import TabbedContentPanel
+
     p = TabbedContentPanel(
         id="test-tabs",
         tab_id_prefix="test-tab-",
@@ -46,6 +46,7 @@ class _TestState:
 
 def test_can_instantiate():
     from pentool.tui.widgets.tab_panel import TabbedContentPanel
+
     p = TabbedContentPanel(id="x", tab_id_prefix="x-")
     assert p.tab_count == 0
 
@@ -106,6 +107,7 @@ def test_switch_to(panel):
 
 def test_close_all(panel):
     import asyncio
+
     s1 = _TestState(tab_id="test-tab-1", name="Tab 1")
     s2 = _TestState(tab_id="test-tab-2", name="Tab 2")
     panel.action_new_tab(state=s1)
@@ -127,6 +129,7 @@ def test_all_states(panel):
 
 
 # ── Test signals ──────────────────────────────────────────────────────
+
 
 def test_tab_created_signal(panel):
     state = _TestState(tab_id="test-tab-1", name="Tab 1")
@@ -176,6 +179,7 @@ def test_get_tab_id_by_uid(panel):
     assert panel.get_tab_id_by_uid("xyz") == "test-tab-2"
     assert panel.get_tab_id_by_uid("nonexistent") is None
 
+
 # ── Регрессия: message.control должен возвращать владельца-панель ─────
 # Раньше 4 сообщения возвращали `self._widget`, которого у Message НЕТ в
 # __slots__ → `AttributeError: 'TabActivated' object has no attribute '_widget'`
@@ -184,6 +188,7 @@ def test_get_tab_id_by_uid(panel):
 
 def test_message_control_returns_panel(panel):
     from pentool.tui.widgets.tab_panel import TabbedContentPanel
+
     st = _TestState(tab_id="test-tab-1", name="Tab 1")
     for cls, args in (
         (TabbedContentPanel.TabCreated, (panel, "test-tab-1", st)),
@@ -199,8 +204,9 @@ def test_message_control_returns_panel(panel):
 
 def test_dispatch_via_on_selector_no_attribute_error():
     """Доставка @on(..., '#id') через реальный App не должна падать на '._widget'."""
-    from textual.app import App, ComposeResult
     from textual import on
+    from textual.app import App, ComposeResult
+
     from pentool.tui.widgets.tab_panel import TabbedContentPanel
 
     received = {"created": 0, "activated": 0, "deactivated": 0}
@@ -241,6 +247,7 @@ def test_dispatch_via_on_selector_no_attribute_error():
             await pilot.pause()
 
     import asyncio
+
     asyncio.run(_run())
 
     assert received["created"] >= 2
@@ -258,8 +265,10 @@ def test_dispatch_via_on_selector_no_attribute_error():
 def test_action_new_tab_after_close_all_ok():
     """close_all (await remove_pane) → action_new_tab: новый заголовок создаётся."""
     import asyncio
+
     from textual.app import App, ComposeResult
     from textual.widgets._tabbed_content import ContentTabs
+
     from pentool.tui.widgets.tab_panel import TabbedContentPanel
 
     class _S:

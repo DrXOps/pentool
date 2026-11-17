@@ -1,11 +1,8 @@
-"""Intruder results filter bar — FilterSpec-based filter tests.
-"""
+"""Intruder results filter bar — FilterSpec-based filter tests."""
 
 from __future__ import annotations
 
-import types
-
-from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
+from pentool.collections.filter_predicate import FilterOp, FilterSpec
 from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar
 
 
@@ -18,8 +15,10 @@ def _make_bar(input_values: dict, grep_only_active: bool = False):
         def __init__(self):
             self._active = grep_only_active
             self.label = "○ Only matches"
+
         def has_class(self, cls):
             return self._active
+
         def set_class(self, val, cls):
             self._active = val
 
@@ -41,11 +40,13 @@ def _make_bar(input_values: dict, grep_only_active: bool = False):
 
 class TestApply:
     def test_parses_status_and_lengths(self):
-        bar, posted = _make_bar({
-            "filter-status": "404",
-            "filter-len-gt": "100",
-            "filter-len-lt": "200",
-        })
+        bar, posted = _make_bar(
+            {
+                "filter-status": "404",
+                "filter-len-gt": "100",
+                "filter-len-lt": "200",
+            }
+        )
         bar._apply()
         assert len(posted) == 1
         spec = posted[0].spec
@@ -87,17 +88,13 @@ class TestGrep:
         assert posted[0].spec.is_empty
 
     def test_emit_grep_only_match_toggle(self):
-        bar, posted = _make_bar(
-            {"grep-match-input": "sql"}, grep_only_active=True
-        )
+        bar, posted = _make_bar({"grep-match-input": "sql"}, grep_only_active=True)
         bar._apply()
         spec = posted[0].spec
         assert any(p.field == "grep_only_match" for p in spec.predicates)
 
     def test_emit_grep_toggle_off_omits_flag(self):
-        bar, posted = _make_bar(
-            {"grep-match-input": "sql"}, grep_only_active=False
-        )
+        bar, posted = _make_bar({"grep-match-input": "sql"}, grep_only_active=False)
         bar._apply()
         spec = posted[0].spec
         assert all(p.field != "grep_only_match" for p in spec.predicates)

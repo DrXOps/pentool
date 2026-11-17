@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import pytest
 from textual import on
 from textual.app import App, ComposeResult
 from textual.widgets import RichLog, TextArea
@@ -63,8 +62,8 @@ class ContentPanelTestApp(App):
 # compose
 # =============================================================================
 
-class TestContentPanelCompose:
 
+class TestContentPanelCompose:
     async def test_default_buttons_only_copy(self) -> None:
         """По умолчанию BUTTON_SCOPE = ['copy']."""
         app = ContentPanelTestApp(panel_kwargs={"title": "Test"})
@@ -76,21 +75,24 @@ class TestContentPanelCompose:
 
     async def test_explicit_buttons(self) -> None:
         """Можно задать кастомный список кнопок."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy", "paste", "clear", "format", "wrap"],
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy", "paste", "clear", "format", "wrap"],
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             for bk in ("copy", "paste", "clear", "format", "wrap"):
-                assert len(list(app.panel.query(f"#cp-btn-{bk}"))) == 1, \
-                    f"Missing button '{bk}'"
+                assert len(list(app.panel.query(f"#cp-btn-{bk}"))) == 1, f"Missing button '{bk}'"
 
     async def test_no_buttons(self) -> None:
         """buttons=[] — кнопок нет, только тайтл."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": [],
-            "title": "NoButtons",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": [],
+                "title": "NoButtons",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             for bk in ("copy", "paste", "clear", "format", "wrap"):
@@ -105,9 +107,11 @@ class TestContentPanelCompose:
 
     async def test_widget_type_textarea(self) -> None:
         """Можно явно указать textarea."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "widget_type": "textarea",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "widget_type": "textarea",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             assert isinstance(app.panel.content_widget, TextArea)
@@ -117,34 +121,40 @@ class TestContentPanelCompose:
 # content_widget / get_text
 # =============================================================================
 
-class TestContentPanelContent:
 
+class TestContentPanelContent:
     async def test_textarea_get_text(self) -> None:
         """get_text() возвращает полный текст TextArea."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "widget_type": "textarea",
-            "initial_text": "hello world",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "widget_type": "textarea",
+                "initial_text": "hello world",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             assert app.panel.get_text() == "hello world"
 
     async def test_get_selected_text_no_selection(self) -> None:
         """get_selected_text() возвращает None если ничего не выделено."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "widget_type": "textarea",
-            "initial_text": "abcdef",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "widget_type": "textarea",
+                "initial_text": "abcdef",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             assert app.panel.get_selected_text() is None
 
     async def test_clear_content(self) -> None:
         """clear_content() очищает содержимое."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "widget_type": "textarea",
-            "initial_text": "some text",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "widget_type": "textarea",
+                "initial_text": "some text",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             app.panel.clear_content()
@@ -155,15 +165,17 @@ class TestContentPanelContent:
 # Кнопка Copy
 # =============================================================================
 
-class TestContentPanelCopy:
 
+class TestContentPanelCopy:
     async def test_copy_emits_copy_requested(self) -> None:
         """Нажатие ⎙ → CopyRequested с текстом."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy"],
-            "widget_type": "textarea",
-            "initial_text": "copy this",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy"],
+                "widget_type": "textarea",
+                "initial_text": "copy this",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             # клик по кнопке cp-btn-copy
@@ -175,11 +187,13 @@ class TestContentPanelCopy:
 
     async def test_copy_sends_selection_when_selected(self) -> None:
         """Если есть выделение в TextArea → CopyRequested с selection."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy"],
-            "widget_type": "textarea",
-            "initial_text": "select me",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy"],
+                "widget_type": "textarea",
+                "initial_text": "select me",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             ta = app.panel.content_widget
@@ -197,10 +211,12 @@ class TestContentPanelCopy:
 
     async def test_copy_from_richlog(self) -> None:
         """RichLog → CopyRequested со всем текстом."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy"],
-            "widget_type": "richlog",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy"],
+                "widget_type": "richlog",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             rl = app.panel.content_widget
@@ -218,14 +234,16 @@ class TestContentPanelCopy:
 # Кнопка Paste
 # =============================================================================
 
-class TestContentPanelPaste:
 
+class TestContentPanelPaste:
     async def test_paste_emits_paste_requested(self) -> None:
         """Нажатие ⎘ → PasteRequested."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["paste"],
-            "widget_type": "textarea",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["paste"],
+                "widget_type": "textarea",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cp-btn-paste")
@@ -234,11 +252,13 @@ class TestContentPanelPaste:
 
     async def test_paste_does_not_clear_content(self) -> None:
         """PasteRequested не трогает содержимое — это прерогатива хендлера экрана."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["paste"],
-            "widget_type": "textarea",
-            "initial_text": "existing",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["paste"],
+                "widget_type": "textarea",
+                "initial_text": "existing",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cp-btn-paste")
@@ -251,15 +271,17 @@ class TestContentPanelPaste:
 # Кнопка Clear
 # =============================================================================
 
-class TestContentPanelClear:
 
+class TestContentPanelClear:
     async def test_clear_clears_textarea(self) -> None:
         """✕ очищает TextArea."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["clear"],
-            "widget_type": "textarea",
-            "initial_text": "erase me",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["clear"],
+                "widget_type": "textarea",
+                "initial_text": "erase me",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cp-btn-clear")
@@ -268,10 +290,12 @@ class TestContentPanelClear:
 
     async def test_clear_clears_richlog(self) -> None:
         """✕ очищает RichLog."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["clear"],
-            "widget_type": "richlog",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["clear"],
+                "widget_type": "richlog",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             rl = app.panel.content_widget
@@ -287,13 +311,15 @@ class TestContentPanelClear:
 # Кнопка Format
 # =============================================================================
 
-class TestContentPanelFormat:
 
+class TestContentPanelFormat:
     async def test_format_emits_format_toggle(self) -> None:
         """⇄ → FormatToggleRequested."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["format"],
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["format"],
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cp-btn-format")
@@ -302,10 +328,12 @@ class TestContentPanelFormat:
 
     async def test_format_on_richlog(self) -> None:
         """FormatToggleRequested работает и на RichLog."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["format"],
-            "widget_type": "richlog",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["format"],
+                "widget_type": "richlog",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cp-btn-format")
@@ -317,15 +345,17 @@ class TestContentPanelFormat:
 # Кнопка Wrap (только RichLog)
 # =============================================================================
 
-class TestContentPanelWrap:
 
+class TestContentPanelWrap:
     async def test_wrap_toggles_on_richlog(self) -> None:
         """↩ переключает wrap на RichLog."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["wrap"],
-            "widget_type": "richlog",
-            "wrap": True,
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["wrap"],
+                "widget_type": "richlog",
+                "wrap": True,
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             rl = app.panel.content_widget
@@ -342,10 +372,12 @@ class TestContentPanelWrap:
 
     async def test_wrap_does_not_appear_on_textarea(self) -> None:
         """wrap кнопка не влияет на TextArea (но клик не падает)."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["wrap"],
-            "widget_type": "textarea",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["wrap"],
+                "widget_type": "textarea",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cp-btn-wrap")
@@ -357,15 +389,17 @@ class TestContentPanelWrap:
 # Комбинации
 # =============================================================================
 
-class TestContentPanelMultiButton:
 
+class TestContentPanelMultiButton:
     async def test_all_buttons_work_together(self) -> None:
         """Все кнопки в одном панеле: copy + paste + clear + format + wrap."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy", "paste", "clear", "format", "wrap"],
-            "widget_type": "textarea",
-            "initial_text": "multi",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy", "paste", "clear", "format", "wrap"],
+                "widget_type": "textarea",
+                "initial_text": "multi",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             # copy
@@ -391,11 +425,13 @@ class TestContentPanelMultiButton:
     async def test_copy_paste_clear_with_textarea(self) -> None:
         """copy + paste + clear — типичный набор для редактора."""
         txt = "initial content"
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy", "paste", "clear"],
-            "widget_type": "textarea",
-            "initial_text": txt,
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy", "paste", "clear"],
+                "widget_type": "textarea",
+                "initial_text": txt,
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cp-btn-copy")
@@ -416,14 +452,16 @@ class TestContentPanelMultiButton:
 # отсутствующие кнопки не падают
 # =============================================================================
 
-class TestContentPanelEdgeCases:
 
+class TestContentPanelEdgeCases:
     async def test_unknown_button_in_list_ignored(self) -> None:
         """Если в buttons[] есть неизвестная кнопка — просто игнорируется."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy", "nonexistent", "clear"],
-            "widget_type": "textarea",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy", "nonexistent", "clear"],
+                "widget_type": "textarea",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             assert len(list(app.panel.query("#cp-btn-copy"))) == 1
@@ -432,10 +470,12 @@ class TestContentPanelEdgeCases:
 
     async def test_copy_on_empty_textarea(self) -> None:
         """Копирование пустого TextArea не падает."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy"],
-            "widget_type": "textarea",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy"],
+                "widget_type": "textarea",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#cp-btn-copy")
@@ -448,14 +488,16 @@ class TestContentPanelEdgeCases:
 # Widget id
 # =============================================================================
 
-class TestContentPanelWidgetId:
 
+class TestContentPanelWidgetId:
     async def test_custom_widget_id(self) -> None:
         """Можно передать id, как у любого Widget."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "title": "WithId",
-            "id": "my-panel",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "title": "WithId",
+                "id": "my-panel",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             panel = app.panel
@@ -463,19 +505,22 @@ class TestContentPanelWidgetId:
             # сам ContentPanel можно найти по id
             assert app.query_one("#my-panel") is panel
 
+
 # =============================================================================
 # ContentPanel migration — TargetScreen (detail-panel, buttons=["copy"])
 # =============================================================================
 
-class TestTargetDetailPanel:
 
+class TestTargetDetailPanel:
     async def test_target_detail_renders(self) -> None:
         """ContentPanel с copy кнопкой + RichLog."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy"],
-            "widget_type": "richlog",
-            "wrap": True,
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy"],
+                "widget_type": "richlog",
+                "wrap": True,
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             panel = app.panel
@@ -485,10 +530,12 @@ class TestTargetDetailPanel:
 
     async def test_target_detail_copy(self) -> None:
         """Copy из detail-log."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy"],
-            "widget_type": "richlog",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy"],
+                "widget_type": "richlog",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             w = app.panel.content_widget
@@ -503,14 +550,16 @@ class TestTargetDetailPanel:
 # ContentPanel migration — DashboardScreen (feed-panel, buttons=[])
 # =============================================================================
 
-class TestDashboardFeedPanel:
 
+class TestDashboardFeedPanel:
     async def test_dashboard_feed_no_buttons(self) -> None:
         """Dashboard feed — без кнопок."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": [],
-            "widget_type": "richlog",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": [],
+                "widget_type": "richlog",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             panel = app.panel
@@ -519,10 +568,12 @@ class TestDashboardFeedPanel:
 
     async def test_dashboard_feed_write_to_log(self) -> None:
         """write_to_log() не падает на панели без кнопок."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": [],
-            "widget_type": "richlog",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": [],
+                "widget_type": "richlog",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             app.panel.write_to_log("feed message")
@@ -530,10 +581,12 @@ class TestDashboardFeedPanel:
 
     async def test_dashboard_feed_clear(self) -> None:
         """clear_content() без кнопок."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": [],
-            "widget_type": "richlog",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": [],
+                "widget_type": "richlog",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             app.panel.write_to_log("data")
@@ -545,15 +598,17 @@ class TestDashboardFeedPanel:
 # ContentPanel migration — ComparerScreen (cmp-diff-area, buttons=["copy"])
 # =============================================================================
 
-class TestComparerDiffPanel:
 
+class TestComparerDiffPanel:
     async def test_comparer_diff_renders(self) -> None:
         """Diff-панель с wrap=False + copy."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy"],
-            "widget_type": "richlog",
-            "wrap": False,
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy"],
+                "widget_type": "richlog",
+                "wrap": False,
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             assert isinstance(app.panel.content_widget, RichLog)
@@ -561,10 +616,12 @@ class TestComparerDiffPanel:
 
     async def test_comparer_diff_copy(self) -> None:
         """Copy из diff."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy"],
-            "widget_type": "richlog",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy"],
+                "widget_type": "richlog",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             w = app.panel.content_widget
@@ -577,10 +634,12 @@ class TestComparerDiffPanel:
 
     async def test_comparer_diff_clear(self) -> None:
         """Очистка diff через clear_content()."""
-        app = ContentPanelTestApp(panel_kwargs={
-            "buttons": ["copy"],
-            "widget_type": "richlog",
-        })
+        app = ContentPanelTestApp(
+            panel_kwargs={
+                "buttons": ["copy"],
+                "widget_type": "richlog",
+            }
+        )
         async with app.run_test() as pilot:
             await pilot.pause()
             w = app.panel.content_widget

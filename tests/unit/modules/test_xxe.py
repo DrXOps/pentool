@@ -10,22 +10,22 @@ structural migration.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.xxe import (
-    XXECheck,
     _CLASSIC_PAYLOADS,
-    _SVG_PAYLOADS,
-    _XINCLUDE_PAYLOADS,
+    XXECheck,
     _check_xxe_response,
     _is_json_request,
     _is_xml_request,
     _json_to_xml_simple,
 )
 from pentool.modules.scanner.mutator import InjectionPoint
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 # Linux /etc/passwd-style root line — matches _XXE_SIGNATURES[0]
@@ -66,7 +66,7 @@ class TestHelpers:
         assert _is_xml_request(_post_request("x", "image/svg+xml"))
 
     def test_is_xml_request_body(self):
-        assert _is_xml_request(_post_request("<?xml version=\"1.0\"?><root/>"))
+        assert _is_xml_request(_post_request('<?xml version="1.0"?><root/>'))
 
     def test_is_json_request(self):
         assert _is_json_request(_post_request('{"k": "v"}', "application/json"))
@@ -104,7 +104,7 @@ class TestScanCase1XmlBody:
     @pytest.mark.asyncio
     async def test_xml_body_detects_xxe(self):
         check = XXECheck()
-        req = _post_request("<?xml version=\"1.0\"?><root/>")  # XML-shaped body
+        req = _post_request('<?xml version="1.0"?><root/>')  # XML-shaped body
         client = _send_client()  # returns PASSWD_BODY on every send
         findings = await check.scan(req, None, client)
         assert any(f.type == "xxe" for f in findings)
@@ -133,7 +133,7 @@ class TestScanNoFinding:
     @pytest.mark.asyncio
     async def test_clean_response_no_finding(self):
         check = XXECheck()
-        req = _post_request("<?xml version=\"1.0\"?><root/>")
+        req = _post_request('<?xml version="1.0"?><root/>')
         client = MagicMock()
         client.send = AsyncMock(return_value=ParsedResponse(200, "OK", {}, "<html>ok</html>"))
         findings = await check.scan(req, None, client)
@@ -142,7 +142,6 @@ class TestScanNoFinding:
 
 class TestEngineIntegration:
     """End-to-end through ScanEngine — XXE found via the scan()-pipeline."""
-
 
     @pytest.mark.asyncio
     async def test_engine_detects_xxe_from_xml_body(self):
@@ -161,6 +160,6 @@ class TestEngineIntegration:
 
         engine = ScanEngine(db_path=":memory:", http_client=FakeClient())
         engine.register_check(XXECheck())
-        req = _post_request("<?xml version=\"1.0\"?><root/>")
+        req = _post_request('<?xml version="1.0"?><root/>')
         findings = await engine.run_active_on_requests([req])
         assert any(f.type == "xxe" for f in findings)

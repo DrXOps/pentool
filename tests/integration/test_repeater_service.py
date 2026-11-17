@@ -1,4 +1,5 @@
 """Integration tests: RepeaterService — HTTP sending with mocked aiohttp."""
+
 from __future__ import annotations
 
 import pytest
@@ -7,8 +8,8 @@ from aioresponses import aioresponses
 from pentool.services.repeater_service import RepeaterService
 from pentool.utils.parser import ParsedResponse
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def service():
@@ -17,9 +18,9 @@ def service():
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 class TestRepeaterService:
-
     async def test_send_request_success(self, service: RepeaterService) -> None:
         """Мокнуть GET → status=200; send_request → (ParsedResponse, elapsed_ms >= 0, None)."""
         raw = "GET http://example.com/api HTTP/1.1\r\nHost: example.com\r\n\r\n"

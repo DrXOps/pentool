@@ -1,10 +1,12 @@
 """Unit tests for AsyncSpider and SpiderResult."""
+
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
-from pentool.modules.spider import AsyncSpider, SpiderResult, SpiderForm, SpiderEndpoint, FormField
+import pytest
+
+from pentool.modules.spider import AsyncSpider, FormField, SpiderEndpoint, SpiderForm, SpiderResult
 
 
 class TestSpiderResult:
@@ -289,10 +291,7 @@ class TestSpiderInternals:
         </body></html>"""
         links, forms, js = spider._parse_html(html, "https://example.com/", "example.com")
         assert len(forms) == 1
-        assert any(
-            "/search?" in u and "q=test" in u and "category=books" in u
-            for u in links
-        )
+        assert any("/search?" in u and "q=test" in u and "category=books" in u for u in links)
 
     def test_parse_html_get_form_without_values_not_auto_submitted(self):
         """GET form whose fields all have empty default values produces an
@@ -374,69 +373,81 @@ class TestSpiderInternals:
 class TestPayloadsLoader:
     def test_load_payloads_sqli(self):
         from pentool.modules.scanner.payloads import load_payloads
+
         payloads = load_payloads("sqli")
         assert len(payloads) > 5
         assert any("'" in p for p in payloads)
 
     def test_load_payloads_xss(self):
         from pentool.modules.scanner.payloads import load_payloads
+
         payloads = load_payloads("xss")
         assert len(payloads) > 5
         assert any("script" in p.lower() or "onerror" in p.lower() for p in payloads)
 
     def test_load_payloads_ssti(self):
         from pentool.modules.scanner.payloads import load_payloads
+
         payloads = load_payloads("ssti")
         assert len(payloads) > 5
         assert any("{{" in p or "${" in p for p in payloads)
 
     def test_load_payloads_lfi(self):
         from pentool.modules.scanner.payloads import load_payloads
+
         payloads = load_payloads("lfi")
         assert len(payloads) > 5
         assert any("etc/passwd" in p or "win.ini" in p for p in payloads)
 
     def test_load_payloads_rce(self):
         from pentool.modules.scanner.payloads import load_payloads
+
         payloads = load_payloads("rce")
         assert len(payloads) > 5
         assert any("id" in p for p in payloads)
 
     def test_load_payloads_ssrf(self):
         from pentool.modules.scanner.payloads import load_payloads
+
         payloads = load_payloads("ssrf")
         assert len(payloads) > 0
         assert any("169.254" in p or "localhost" in p or "127.0.0.1" in p for p in payloads)
 
     def test_load_payloads_open_redirect(self):
         from pentool.modules.scanner.payloads import load_payloads
+
         payloads = load_payloads("open_redirect")
         assert len(payloads) > 0
         assert any("evil.com" in p or "//" in p for p in payloads)
 
     def test_generate_payloads_fallback(self):
         from pentool.modules.scanner.payloads import generate_payloads
+
         payloads = generate_payloads("sqli")
         assert len(payloads) > 0
 
     def test_generate_payloads_xss_fallback(self):
         from pentool.modules.scanner.payloads import generate_payloads
+
         payloads = generate_payloads("xss")
         assert len(payloads) > 0
         assert any("script" in p.lower() or "onerror" in p.lower() for p in payloads)
 
     def test_generate_payloads_unknown_returns_empty(self):
         from pentool.modules.scanner.payloads import generate_payloads
+
         payloads = generate_payloads("nonexistent_type_xyz")
         assert payloads == []
 
     def test_load_signatures_sqli(self):
         from pentool.modules.scanner.payloads import load_signatures
+
         sigs = load_signatures("sqli")
         assert len(sigs) > 0
 
     def test_load_signatures_returns_list(self):
         from pentool.modules.scanner.payloads import load_signatures
+
         sigs = load_signatures("sqli")
         assert isinstance(sigs, list)
         assert all(isinstance(s, str) for s in sigs)
@@ -445,6 +456,7 @@ class TestPayloadsLoader:
 class TestActiveChecksInit:
     def test_sqli_check_attrs(self):
         from pentool.modules.scanner.checks.sqli import SQLiCheck
+
         check = SQLiCheck()
         assert check.passive is False
         assert check.severity == "high"
@@ -452,11 +464,13 @@ class TestActiveChecksInit:
 
     def test_sqli_check_name(self):
         from pentool.modules.scanner.checks.sqli import SQLiCheck
+
         check = SQLiCheck()
         assert check.name == "sqli"
 
     def test_xss_check_attrs(self):
         from pentool.modules.scanner.checks.xss import XSSCheck
+
         check = XSSCheck()
         assert check.passive is False
         assert check.severity in ("medium", "high")
@@ -464,11 +478,13 @@ class TestActiveChecksInit:
 
     def test_xss_check_name(self):
         from pentool.modules.scanner.checks.xss import XSSCheck
+
         check = XSSCheck()
         assert check.name == "xss"
 
     def test_ssti_check_attrs(self):
         from pentool.modules.scanner.checks.ssti import SSTICheck
+
         check = SSTICheck()
         assert check.passive is False
         assert check.severity == "critical"
@@ -477,11 +493,13 @@ class TestActiveChecksInit:
 
     def test_ssti_check_name(self):
         from pentool.modules.scanner.checks.ssti import SSTICheck
+
         check = SSTICheck()
         assert check.name == "ssti"
 
     def test_lfi_check_attrs(self):
         from pentool.modules.scanner.checks.lfi import LFICheck
+
         check = LFICheck()
         assert check.passive is False
         assert check.severity == "high"
@@ -489,11 +507,13 @@ class TestActiveChecksInit:
 
     def test_lfi_check_name(self):
         from pentool.modules.scanner.checks.lfi import LFICheck
+
         check = LFICheck()
         assert check.name == "lfi"
 
     def test_rce_check_attrs(self):
         from pentool.modules.scanner.checks.rce import RCECheck
+
         check = RCECheck()
         assert check.passive is False
         assert check.severity == "critical"
@@ -501,33 +521,39 @@ class TestActiveChecksInit:
 
     def test_rce_check_name(self):
         from pentool.modules.scanner.checks.rce import RCECheck
+
         check = RCECheck()
         assert check.name == "rce"
 
     def test_open_redirect_check_attrs(self):
         from pentool.modules.scanner.checks.open_redirect import OpenRedirectCheck
+
         check = OpenRedirectCheck()
         assert check.passive is False
         assert "601" in check.cwe
 
     def test_open_redirect_check_name(self):
         from pentool.modules.scanner.checks.open_redirect import OpenRedirectCheck
+
         check = OpenRedirectCheck()
         assert check.name == "open_redirect"
 
     def test_ssrf_check_attrs(self):
         from pentool.modules.scanner.checks.ssrf import SSRFCheck
+
         check = SSRFCheck()
         assert check.passive is False
         assert "918" in check.cwe
 
     def test_ssrf_check_name(self):
         from pentool.modules.scanner.checks.ssrf import SSRFCheck
+
         check = SSRFCheck()
         assert check.name == "ssrf"
 
     def test_all_checks_registered_in_api(self):
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path="")
         checks = api.get_registered_checks()
         names = [c.name for c in checks]
@@ -543,9 +569,15 @@ class TestActiveChecksInit:
     def test_all_checks_are_active(self):
         """All active checks have passive=False."""
         from pentool.modules.scanner.checks import (
-            SQLiCheck, XSSCheck, SSTICheck, LFICheck,
-            RCECheck, OpenRedirectCheck, SSRFCheck,
+            LFICheck,
+            OpenRedirectCheck,
+            RCECheck,
+            SQLiCheck,
+            SSRFCheck,
+            SSTICheck,
+            XSSCheck,
         )
+
         for cls in (SQLiCheck, XSSCheck, SSTICheck, LFICheck, RCECheck, OpenRedirectCheck, SSRFCheck):
             check = cls()
             assert check.passive is False, f"{cls.__name__} should be active (passive=False)"
@@ -553,9 +585,15 @@ class TestActiveChecksInit:
     def test_checks_have_description(self):
         """All checks should have a non-empty description."""
         from pentool.modules.scanner.checks import (
-            SQLiCheck, XSSCheck, SSTICheck, LFICheck,
-            RCECheck, OpenRedirectCheck, SSRFCheck,
+            LFICheck,
+            OpenRedirectCheck,
+            RCECheck,
+            SQLiCheck,
+            SSRFCheck,
+            SSTICheck,
+            XSSCheck,
         )
+
         for cls in (SQLiCheck, XSSCheck, SSTICheck, LFICheck, RCECheck, OpenRedirectCheck, SSRFCheck):
             check = cls()
             assert check.description, f"{cls.__name__} should have description"
@@ -563,9 +601,15 @@ class TestActiveChecksInit:
     def test_checks_have_mitre_attack(self):
         """All active checks have mitre_attack."""
         from pentool.modules.scanner.checks import (
-            SQLiCheck, XSSCheck, SSTICheck, LFICheck,
-            RCECheck, OpenRedirectCheck, SSRFCheck,
+            LFICheck,
+            OpenRedirectCheck,
+            RCECheck,
+            SQLiCheck,
+            SSRFCheck,
+            SSTICheck,
+            XSSCheck,
         )
+
         for cls in (SQLiCheck, XSSCheck, SSTICheck, LFICheck, RCECheck, OpenRedirectCheck, SSRFCheck):
             check = cls()
             assert check.mitre_attack, f"{cls.__name__} should have mitre_attack"
@@ -573,26 +617,31 @@ class TestActiveChecksInit:
 
 # ── JS engine availability ────────────────────────────────────────────────────
 
+
 class TestLightpandaAvailable:
     def test_is_lightpanda_available_returns_bool(self):
         from pentool.modules.spider import is_lightpanda_available
+
         result = is_lightpanda_available()
         assert isinstance(result, bool)
 
     def test_spider_api_has_is_lightpanda_available(self):
         from pentool.api.spider_api import is_lightpanda_available
+
         assert callable(is_lightpanda_available)
 
 
 class TestSpiderJsRenderConfig:
     def test_spider_config_has_js_render(self):
         from pentool.api.spider_api import SpiderConfig
+
         cfg = SpiderConfig()
         assert hasattr(cfg, "js_render")
         assert cfg.js_render is False
 
     def test_spider_config_js_render_true(self):
         from pentool.api.spider_api import SpiderConfig
+
         cfg = SpiderConfig(js_render=True)
         assert cfg.js_render is True
 
@@ -603,6 +652,7 @@ class TestSpiderJsRenderConfig:
     def test_async_spider_js_render_false_without_lightpanda(self):
         """js_render=True without lightpanda binary should become False (fallback)."""
         from pentool.modules.spider import is_lightpanda_available
+
         spider = AsyncSpider(js_render=True)
         # If lightpanda is not installed — js_render should be False
         if not is_lightpanda_available():
@@ -617,6 +667,7 @@ class TestSpiderJsRenderConfig:
     def test_spider_api_passes_js_render_to_spider(self):
         """SpiderAPI passes js_render from SpiderConfig to AsyncSpider."""
         from pentool.api.spider_api import SpiderAPI, SpiderConfig
+
         cfg = SpiderConfig(js_render=False, max_depth=1, max_pages=1)
         api = SpiderAPI(config=cfg)
         assert api.config.js_render is False
@@ -624,15 +675,16 @@ class TestSpiderJsRenderConfig:
     def test_spider_api_from_params_no_js_render(self):
         """from_params creates config with js_render=False by default."""
         from pentool.api.spider_api import SpiderAPI
+
         api = SpiderAPI.from_params(max_depth=1, max_pages=1)
         assert api.config.js_render is False
 
     def test_spider_api_from_params_js_render_true(self):
         """N2: from_params(js_render=True) propagates to the config."""
         from pentool.api.spider_api import SpiderAPI
+
         api = SpiderAPI.from_params(max_depth=1, max_pages=1, js_render=True)
         assert api.config.js_render is True
-
 
 
 class TestSpiderAPIStop:
@@ -699,7 +751,8 @@ class TestResolveScheme:
 
     @staticmethod
     def _fake_aiohttp(session_get_exc=None):
-        import sys, types
+        import sys
+        import types
         from contextlib import contextmanager
 
         @contextmanager
@@ -723,6 +776,7 @@ class TestResolveScheme:
             fake.ClientTimeout = MagicMock
 
             if session_get_exc is None:
+
                 class FakeSession:
                     def __init__(self, *a, **k):
                         pass
@@ -738,6 +792,7 @@ class TestResolveScheme:
 
                 fake.ClientSession = FakeSession
             else:
+
                 class FakeSessionErr:
                     def __init__(self, *a, **k):
                         pass
@@ -789,6 +844,7 @@ class TestResolveScheme:
     @pytest.mark.asyncio
     async def test_wrong_version_falls_back_to_http(self):
         import ssl
+
         spider = AsyncSpider()
         with self._fake_aiohttp(session_get_exc=ssl.SSLError("WRONG_VERSION_NUMBER")):
             scheme, url = await spider._resolve_scheme("https://x.com/", "https", "x.com")
@@ -798,6 +854,7 @@ class TestResolveScheme:
     @pytest.mark.asyncio
     async def test_ssl_error_not_wrong_version_keeps_https(self):
         import ssl
+
         spider = AsyncSpider()
         with self._fake_aiohttp(session_get_exc=ssl.SSLError("some other cert error")):
             scheme, url = await spider._resolve_scheme("https://x.com/", "https", "x.com")
@@ -813,15 +870,16 @@ class TestResolveScheme:
     @pytest.mark.asyncio
     async def test_client_connector_ssl_error_wrong_version(self):
         spider = AsyncSpider()
-        exc = Exception("WRONG_VERSION_NUMBER")
+        _exc = Exception("WRONG_VERSION_NUMBER")
+
         # ClientConnectorSSLError path — construct a stand-in
         class ConnErr(Exception):
             pass
+
         with self._fake_aiohttp(session_get_exc=ConnErr("WRONG_VERSION_NUMBER")):
             # ConnErr is not aiohttp.ClientConnectorSSLError → generic path → keep https
             scheme, url = await spider._resolve_scheme("https://x.com/", "https", "x.com")
         assert scheme == "https"
-
 
 
 class TestAuthRedirectDetection:
@@ -830,39 +888,35 @@ class TestAuthRedirectDetection:
 
     def _spider(self):
         from pentool.modules.spider import AsyncSpider
+
         return AsyncSpider()  # no crawl yet; only static methods used
 
     def test_redirect_to_login_detected(self):
         from pentool.modules.spider import AsyncSpider
-        assert AsyncSpider._is_auth_redirect(
-            "http://x.com/login.php", "http://x.com/vulnerabilities/sqli/"
-        ) is True
+
+        assert AsyncSpider._is_auth_redirect("http://x.com/login.php", "http://x.com/vulnerabilities/sqli/") is True
 
     def test_redirect_to_signin_detected(self):
         from pentool.modules.spider import AsyncSpider
-        assert AsyncSpider._is_auth_redirect(
-            "https://x.com/signin", "https://x.com/dashboard"
-        ) is True
+
+        assert AsyncSpider._is_auth_redirect("https://x.com/signin", "https://x.com/dashboard") is True
 
     def test_benign_redirect_not_flagged(self):
         from pentool.modules.spider import AsyncSpider
+
         # "/" -> "/index.html" is not an auth page.
-        assert AsyncSpider._is_auth_redirect(
-            "http://x.com/index.html", "http://x.com/"
-        ) is False
+        assert AsyncSpider._is_auth_redirect("http://x.com/index.html", "http://x.com/") is False
 
     def test_no_redirect_not_flagged(self):
         from pentool.modules.spider import AsyncSpider
-        assert AsyncSpider._is_auth_redirect(
-            "http://x.com/page", "http://x.com/page"
-        ) is False
+
+        assert AsyncSpider._is_auth_redirect("http://x.com/page", "http://x.com/page") is False
 
     def test_hostname_matches_login_no_redirect_false(self):
         from pentool.modules.spider import AsyncSpider
+
         # Same URL, even containing 'auth', is NOT a redirect.
-        assert AsyncSpider._is_auth_redirect(
-            "http://x.com/auth/me", "http://x.com/auth/me"
-        ) is False
+        assert AsyncSpider._is_auth_redirect("http://x.com/auth/me", "http://x.com/auth/me") is False
 
 
 class TestFetchPageAuthErrorRecorded:
@@ -889,6 +943,7 @@ class TestFetchPageAuthErrorRecorded:
         class FakeAC:
             async def __aenter__(self):
                 return FakeResp()
+
             async def __aexit__(self, *a):
                 return False
 
@@ -900,7 +955,12 @@ class TestFetchPageAuthErrorRecorded:
         sem = _AsyncMock()
 
         links = await spider._fetch_page(
-            FakeSession(), "http://x.com/vulnerabilities/sqli/", 0, result, "x.com", sem,
+            FakeSession(),
+            "http://x.com/vulnerabilities/sqli/",
+            0,
+            result,
+            "x.com",
+            sem,
         )
 
         assert links == []

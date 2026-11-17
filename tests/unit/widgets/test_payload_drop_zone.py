@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from pentool.tui.widgets.payload_drop_zone import PayloadDropZone
@@ -72,8 +71,10 @@ class TestLoadFromPath:
     def test_load_from_path_calls_api(self) -> None:
         z = _make_zone()
 
-        with patch("pentool.api.intruder_api.load_payloads_from_file", return_value=["p1", "p2"]), \
-             patch.object(PayloadDropZone, "post_message") as pm:
+        with (
+            patch("pentool.api.intruder_api.load_payloads_from_file", return_value=["p1", "p2"]),
+            patch.object(PayloadDropZone, "post_message") as pm,
+        ):
             z.load_from_path("/fake/file.txt")
 
         pm.assert_called_once()
@@ -85,8 +86,10 @@ class TestLoadFromPath:
     def test_load_from_path_empty_payloads_no_message(self) -> None:
         z = _make_zone()
 
-        with patch("pentool.api.intruder_api.load_payloads_from_file", return_value=[]), \
-             patch.object(PayloadDropZone, "post_message") as pm:
+        with (
+            patch("pentool.api.intruder_api.load_payloads_from_file", return_value=[]),
+            patch.object(PayloadDropZone, "post_message") as pm,
+        ):
             z.load_from_path("/fake/empty.txt")
 
         pm.assert_not_called()
@@ -97,8 +100,10 @@ class TestOnClick:
         z = _make_zone()
         mock_app = MagicMock()
 
-        with patch("pentool.tui.dialogs.file_selector.FileSelectorDialog"), \
-             patch("textual.widget.Widget.app", new=mock_app, create=True):
+        with (
+            patch("pentool.tui.dialogs.file_selector.FileSelectorDialog"),
+            patch("textual.widget.Widget.app", new=mock_app, create=True),
+        ):
             z.on_click()
 
         mock_app.push_screen.assert_called_once()
@@ -108,6 +113,8 @@ class TestOnClick:
         mock_app = MagicMock()
         mock_app.push_screen.side_effect = RuntimeError("boom")
 
-        with patch("pentool.tui.dialogs.file_selector.FileSelectorDialog"), \
-             patch("textual.widget.Widget.app", new=mock_app, create=True):
+        with (
+            patch("pentool.tui.dialogs.file_selector.FileSelectorDialog"),
+            patch("textual.widget.Widget.app", new=mock_app, create=True),
+        ):
             z.on_click()

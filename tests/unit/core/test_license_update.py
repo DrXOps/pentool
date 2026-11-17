@@ -54,12 +54,15 @@ class TestSafeExtractTar:
 
 
 class TestCurrentPlatform:
-    @pytest.mark.parametrize("sys,expected", [
-        ("Linux", "linux"), ("Darwin", "macos"), ("Windows", "windows"),
-        ("FreeBSD", "linux"),
-    ])
+    @pytest.mark.parametrize(
+        "sys,expected",
+        [
+            ("Linux", "linux"),
+            ("Darwin", "macos"),
+            ("Windows", "windows"),
+            ("FreeBSD", "linux"),
+        ],
+    )
     def test_mapping(self, monkeypatch, sys, expected):
-        monkeypatch.setattr(
-            "pentool.core.license_update.platform.system", lambda: sys
-        )
+        monkeypatch.setattr("pentool.core.license_update.platform.system", lambda: sys)
         assert current_platform() == expected

@@ -5,11 +5,11 @@ widget), so they render bottom-right without reserving a zone — i.e. no dark
 band. These tests assert the toast actually appears (mounted + laid out with
 height) and carries the severity class.
 """
+
 from __future__ import annotations
 
 import pytest
 from pytest import MonkeyPatch
-
 from textual.widgets._toast import Toast
 
 from pentool.tui.app import PentoolApp
@@ -19,9 +19,7 @@ def _no_terminal_warning(monkeypatch: MonkeyPatch) -> None:
     """Stop the app from firing an auto-notify on startup (headless terms
     can emit a warning that would route through notify() too, adding a
     spurious pre-existing toast to these checks)."""
-    monkeypatch.setattr(
-        "pentool.utils.terminal_check.get_terminal_warning", lambda: None
-    )
+    monkeypatch.setattr("pentool.utils.terminal_check.get_terminal_warning", lambda: None)
 
 
 async def _assert_toast_visible(pilot, toast: Toast) -> None:
@@ -35,7 +33,6 @@ async def _assert_toast_visible(pilot, toast: Toast) -> None:
 
 @pytest.mark.e2e
 class TestBuiltinToast:
-
     async def test_notify_shows_toast(self, monkeypatch) -> None:
         """app.notify(...) mounts a Textual Toast."""
         _no_terminal_warning(monkeypatch)

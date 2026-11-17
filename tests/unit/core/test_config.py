@@ -74,6 +74,7 @@ class TestConfigSaveLoad:
     def test_load_ignores_unknown_keys(self, tmp_path: Path) -> None:
         """Unknown keys in YAML do not cause errors."""
         import yaml
+
         path = tmp_path / "config.yaml"
         path.write_text(yaml.dump({"proxy_port": 7777, "unknown_key": "ignored"}))
         cfg = Config.load(path)
@@ -90,8 +91,15 @@ class TestConfigSaveLoad:
         cfg = Config()
         d = cfg.to_dict()
         expected_keys = {
-            "proxy_host", "proxy_port", "cert_dir", "db_path",
-            "log_file", "log_level", "plugins_dir", "scope", "intercept_enabled",
+            "proxy_host",
+            "proxy_port",
+            "cert_dir",
+            "db_path",
+            "log_file",
+            "log_level",
+            "plugins_dir",
+            "scope",
+            "intercept_enabled",
         }
         assert expected_keys.issubset(d.keys())
 
@@ -259,11 +267,13 @@ class TestConfigNetworkFields:
 class TestConfigObserversExtra:
     def test_remove_observer_nonexistent_noop(self, tmp_path) -> None:
         from pentool.core.config import Config
+
         cfg = Config()
         cfg.remove_observer(lambda f: None)  # not subscribed — no error
 
     def test_notify_observers_catches_exception(self, tmp_path) -> None:
         from pentool.core.config import Config
+
         cfg = Config()
         calls = []
 
@@ -282,6 +292,7 @@ class TestConfigObserversExtra:
 
     def test_notify_observers_no_observers(self, tmp_path) -> None:
         from pentool.core.config import Config
+
         cfg = Config()
         cfg.notify_observers({})  # no-op
 
@@ -289,6 +300,7 @@ class TestConfigObserversExtra:
 class TestConfigRecentProjects:
     def test_add_recent_inserts_dedup_and_trims(self, tmp_path, monkeypatch) -> None:
         from pentool.core.config import Config
+
         cfg = Config()
         monkeypatch.setattr(cfg, "save", lambda *a, **k: None)
         cfg.add_recent_project("/a")
@@ -299,12 +311,13 @@ class TestConfigRecentProjects:
 
     def test_add_recent_save_failure_swallowed(self, tmp_path) -> None:
         from pentool.core.config import Config
+
         cfg = Config()
         cfg.recent_projects = []
-        monkeypatch = __import__("pytest").MonkeyPatch() if False else None
+        _monkeypatch = __import__("pytest").MonkeyPatch() if False else None
         # side_effect instead — save raises, add_recent should not propagate
-        import builtins
-        real_save = cfg.save if hasattr(cfg, "save") else None
+
+        _real_save = cfg.save if hasattr(cfg, "save") else None
         try:
             cfg.save = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no disk"))
             cfg.add_recent_project("/x")
@@ -313,6 +326,7 @@ class TestConfigRecentProjects:
 
     def test_recent_projects_dedups(self) -> None:
         from pentool.core.config import Config
+
         cfg = Config()
         cfg.recent_projects = ["a", "b"]
         cfg.add_recent_project("b")
@@ -322,6 +336,7 @@ class TestConfigRecentProjects:
 class TestConfigLoadExtra:
     def test_load_prunes_missing_paths(self, tmp_path) -> None:
         from pentool.core.config import Config
+
         cfg_file = tmp_path / "c.yaml"
         cfg_file.write_text("recent_projects:\n  - /definitely/missing/path\n  - /also/missing\n")
         cfg = Config.load(str(cfg_file))
@@ -330,6 +345,7 @@ class TestConfigLoadExtra:
 
     def test_load_prune_save_failure_swallowed(self, tmp_path, monkeypatch) -> None:
         from pentool.core.config import Config
+
         cfg_file = tmp_path / "c.yaml"
         cfg_file.write_text("recent_projects:\n  - /definitely/missing\n")
         # Force cfg.save() to raise — load must not propagate
@@ -339,6 +355,7 @@ class TestConfigLoadExtra:
 
     def test_get_config_initializes_on_demand(self, monkeypatch) -> None:
         from pentool.core.config import get_config, set_config
+
         set_config(None)  # reset singleton
         cfg = get_config()
         assert cfg is not None

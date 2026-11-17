@@ -12,9 +12,10 @@ direct PentoolApp class, so the regression cannot return unnoticed.
 
 from __future__ import annotations
 
-import pytest
 import types
 from datetime import datetime, timezone
+
+import pytest
 
 from pentool.api.proxy_api import InterceptedRequest as _IR
 from pentool.tui.app import PentoolApp
@@ -125,10 +126,10 @@ class TestFullCapturePath:
 
     @pytest.mark.asyncio
     async def test_capture_posts_to_history_and_storage(self, tmp_path):
-        import asyncio
-        from pentool.services.proxy_service import ProxyService
-        from pentool.api.proxy_api import ProxyAPI
         from unittest.mock import MagicMock
+
+        from pentool.api.proxy_api import ProxyAPI
+        from pentool.services.proxy_service import ProxyService
 
         # Real storage (tmp sqlite).
         mock_api = MagicMock(spec=ProxyAPI)
@@ -144,7 +145,7 @@ class TestFullCapturePath:
             def add_request_row(self, req):
                 self.rows.append(req)
 
-        rows = []
+        _rows = []
         screen = _S()
 
         # --- 1. record the request into storage (what the proxy module does) ---
@@ -184,9 +185,10 @@ class TestFullCapturePath:
     async def test_switch_project_history_does_not_show_old_rows(self, tmp_path):
         """After switch_db to a new (empty) project DB, history has 0 rows —
         so a stale UI can't render the previous project's requests."""
-        from pentool.services.proxy_service import ProxyService
-        from pentool.api.proxy_api import ProxyAPI
         from unittest.mock import MagicMock
+
+        from pentool.api.proxy_api import ProxyAPI
+        from pentool.services.proxy_service import ProxyService
 
         mock_api = MagicMock(spec=ProxyAPI)
         mock_api.get_proxy.return_value = None

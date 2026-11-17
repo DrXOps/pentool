@@ -11,9 +11,11 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from pentool.core.license import (
-    LicenseInfo,
     _GRACE_PERIOD_DAYS,
+    LicenseInfo,
     _canonical_license_payload,
+    _load_cached,
+    _save_cached,
     activate_license,
     check_and_update_pro_package,
     deactivate_license,
@@ -22,9 +24,6 @@ from pentool.core.license import (
     get_machine_id,
     get_session_license,
     refresh_session_license,
-    _load_cached,
-    _read_pro_meta,
-    _save_cached,
 )
 
 # A test-only ed25519 keypair used to sign fixtures in these tests. The real
@@ -32,14 +31,18 @@ from pentool.core.license import (
 # (_LICENSE_SIGNING_PUBLIC_KEY_B64), so every test that needs a *valid*
 # signature patches that constant to this test key's public half instead.
 _TEST_PRIVATE_KEY = Ed25519PrivateKey.generate()
-_TEST_PUBLIC_KEY_B64 = base64.b64encode(
-    _TEST_PRIVATE_KEY.public_key().public_bytes_raw()
-).decode("ascii") if hasattr(_TEST_PRIVATE_KEY.public_key(), "public_bytes_raw") else base64.b64encode(
-    _TEST_PRIVATE_KEY.public_key().public_bytes(
-        encoding=__import__("cryptography.hazmat.primitives.serialization", fromlist=["Encoding"]).Encoding.Raw,
-        format=__import__("cryptography.hazmat.primitives.serialization", fromlist=["PublicFormat"]).PublicFormat.Raw,
-    )
-).decode("ascii")
+_TEST_PUBLIC_KEY_B64 = (
+    base64.b64encode(_TEST_PRIVATE_KEY.public_key().public_bytes_raw()).decode("ascii")
+    if hasattr(_TEST_PRIVATE_KEY.public_key(), "public_bytes_raw")
+    else base64.b64encode(
+        _TEST_PRIVATE_KEY.public_key().public_bytes(
+            encoding=__import__("cryptography.hazmat.primitives.serialization", fromlist=["Encoding"]).Encoding.Raw,
+            format=__import__(
+                "cryptography.hazmat.primitives.serialization", fromlist=["PublicFormat"]
+            ).PublicFormat.Raw,
+        )
+    ).decode("ascii")
+)
 
 
 def _sign(valid: bool, plan: str, features: list[str], expires, machine_id: str, ts: int) -> str:
@@ -49,19 +52,31 @@ def _sign(valid: bool, plan: str, features: list[str], expires, machine_id: str,
 
 
 def _signed_cache_entry(
-    valid=True, plan="pro", features=None, expires=None,
-    machine_id="abc123", ts=None, license_key="PTOOL-AAAA-BBBB-CCCC",
+    valid=True,
+    plan="pro",
+    features=None,
+    expires=None,
+    machine_id="abc123",
+    ts=None,
+    license_key="PTOOL-AAAA-BBBB-CCCC",
 ) -> dict:
     features = features if features is not None else ["scanner_pro"]
     ts = ts if ts is not None else int(time.time() * 1000)
     sig = _sign(valid, plan, features, expires, machine_id, ts)
     return {
-        "valid": valid, "plan": plan, "features": features, "expires": expires,
-        "machine_id": machine_id, "license_key": license_key, "sig": sig, "ts": ts,
+        "valid": valid,
+        "plan": plan,
+        "features": features,
+        "expires": expires,
+        "machine_id": machine_id,
+        "license_key": license_key,
+        "sig": sig,
+        "ts": ts,
     }
 
 
 # ── LicenseInfo ────────────────────────────────────────────────────────────────
+
 
 class TestLicenseInfo:
     def test_defaults(self):
@@ -124,6 +139,7 @@ class TestLicenseInfo:
 
 # ── get_machine_id ─────────────────────────────────────────────────────────────
 
+
 class TestGetMachineId:
     def test_returns_32_hex_chars(self):
         mid = get_machine_id()
@@ -144,6 +160,7 @@ class TestGetMachineId:
 
 
 # ── Cache read/write ───────────────────────────────────────────────────────────
+
 
 class TestCache:
     def test_load_cached_returns_none_when_no_file(self, tmp_path):
@@ -178,6 +195,7 @@ class TestCache:
 # exercises the exact same verification code path as production, just
 # against a throwaway key instead of the real one.
 
+
 class TestGetLicense:
     def test_returns_free_when_no_cache(self, tmp_path):
         lic_file = tmp_path / "missing.dat"
@@ -192,8 +210,10 @@ class TestGetLicense:
         data = _signed_cache_entry(machine_id=my_machine_id)
         lic_file.parent.mkdir(parents=True)
         lic_file.write_text(json.dumps(data), encoding="utf-8")
-        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
-             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
+        with (
+            patch("pentool.core.license._LICENSE_FILE", lic_file),
+            patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+        ):
             info = get_license()
         assert info.valid is True
         assert info.plan == "pro"
@@ -203,8 +223,12 @@ class TestGetLicense:
         """Cache entries without sig/ts (old format, or stripped) are untrusted."""
         lic_file = tmp_path / ".pentool" / "license.dat"
         data = {
-            "valid": True, "plan": "pro", "features": ["scanner_pro"],
-            "expires": None, "machine_id": "abc123", "license_key": "X",
+            "valid": True,
+            "plan": "pro",
+            "features": ["scanner_pro"],
+            "expires": None,
+            "machine_id": "abc123",
+            "license_key": "X",
             "last_check": time.time(),
         }
         lic_file.parent.mkdir(parents=True)
@@ -225,8 +249,10 @@ class TestGetLicense:
         data["features"] = ["scanner_pro", "reports_pro", "payloads_pro"]
         lic_file.parent.mkdir(parents=True)
         lic_file.write_text(json.dumps(data), encoding="utf-8")
-        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
-             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
+        with (
+            patch("pentool.core.license._LICENSE_FILE", lic_file),
+            patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+        ):
             info = get_license()
         assert info.valid is False
         assert "signature" in info.error.lower()
@@ -251,8 +277,10 @@ class TestGetLicense:
         data = _signed_cache_entry(machine_id="some-other-machine-id")
         lic_file.parent.mkdir(parents=True)
         lic_file.write_text(json.dumps(data), encoding="utf-8")
-        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
-             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
+        with (
+            patch("pentool.core.license._LICENSE_FILE", lic_file),
+            patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+        ):
             info = get_license()
         assert info.valid is False
         assert "different machine" in info.error.lower()
@@ -264,8 +292,10 @@ class TestGetLicense:
         data = _signed_cache_entry(machine_id=my_machine_id, ts=expired_ts_ms)
         lic_file.parent.mkdir(parents=True)
         lic_file.write_text(json.dumps(data), encoding="utf-8")
-        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
-             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
+        with (
+            patch("pentool.core.license._LICENSE_FILE", lic_file),
+            patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+        ):
             info = get_license()
         assert info.valid is False
         assert info.plan == "free"
@@ -279,13 +309,16 @@ class TestGetLicense:
         data = _signed_cache_entry(machine_id=my_machine_id, ts=almost_expired_ms, features=[])
         lic_file.parent.mkdir(parents=True)
         lic_file.write_text(json.dumps(data), encoding="utf-8")
-        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
-             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64):
+        with (
+            patch("pentool.core.license._LICENSE_FILE", lic_file),
+            patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+        ):
             info = get_license()
         assert info.valid is True
 
 
 # ── activate_license ───────────────────────────────────────────────────────────
+
 
 class TestActivateLicense:
     @pytest.mark.asyncio
@@ -349,15 +382,21 @@ class TestActivateLicense:
         features = ["scanner_pro"]
         sig = _sign(True, "pro", features, "2028-01-01", machine_id, ts)
         server_resp = {
-            "valid": True, "plan": "pro", "features": features,
-            "expires_at": "2028-01-01", "sig": sig, "ts": ts,
+            "valid": True,
+            "plan": "pro",
+            "features": features,
+            "expires_at": "2028-01-01",
+            "sig": sig,
+            "ts": ts,
         }
         mock_aiohttp = self._mock_aiohttp_returning(200, server_resp)
 
-        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
-             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
-             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}), \
-             patch("pentool.core.license.download_pro_package", AsyncMock(return_value=True)):
+        with (
+            patch("pentool.core.license._LICENSE_FILE", lic_file),
+            patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+            patch("pentool.core.license.download_pro_package", AsyncMock(return_value=True)),
+        ):
             info = await activate_license("PROD-AAAA-BBBB-CCCC")
 
         assert info.valid is True
@@ -376,8 +415,10 @@ class TestActivateLicense:
         server_resp = {"valid": True, "plan": "pro", "features": ["scanner_pro"]}
         mock_aiohttp = self._mock_aiohttp_returning(200, server_resp)
 
-        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
-             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+        with (
+            patch("pentool.core.license._LICENSE_FILE", lic_file),
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+        ):
             info = await activate_license("PROD-AAAA-BBBB-CCCC")
 
         assert info.valid is False
@@ -389,17 +430,23 @@ class TestActivateLicense:
         """Signature present but doesn't verify (tampered in transit, or
         signed with an unexpected key) → refused."""
         lic_file = tmp_path / "license.dat"
-        machine_id = get_machine_id()
+        _machine_id = get_machine_id()
         ts = int(time.time() * 1000)
         server_resp = {
-            "valid": True, "plan": "pro", "features": ["scanner_pro"],
-            "expires_at": None, "sig": base64.b64encode(b"\x00" * 64).decode(), "ts": ts,
+            "valid": True,
+            "plan": "pro",
+            "features": ["scanner_pro"],
+            "expires_at": None,
+            "sig": base64.b64encode(b"\x00" * 64).decode(),
+            "ts": ts,
         }
         mock_aiohttp = self._mock_aiohttp_returning(200, server_resp)
 
-        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
-             patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
-             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+        with (
+            patch("pentool.core.license._LICENSE_FILE", lic_file),
+            patch("pentool.core.license._LICENSE_SIGNING_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+        ):
             info = await activate_license("PROD-AAAA-BBBB-CCCC")
 
         assert info.valid is False
@@ -414,8 +461,10 @@ class TestActivateLicense:
         server_resp = {"valid": False, "plan": "free", "features": []}
         mock_aiohttp = self._mock_aiohttp_returning(200, server_resp)
 
-        with patch("pentool.core.license._LICENSE_FILE", lic_file), \
-             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+        with (
+            patch("pentool.core.license._LICENSE_FILE", lic_file),
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+        ):
             info = await activate_license("XXXX-YYYY-ZZZZ-0000")
 
         assert info.valid is False
@@ -423,6 +472,7 @@ class TestActivateLicense:
 
 
 # ── download_pro_package ────────────────────────────────────────────────────────
+
 
 class TestDownloadProPackage:
     """Regression tests for the .build_meta.json race that could leave a
@@ -434,6 +484,7 @@ class TestDownloadProPackage:
     def _make_tar_bytes() -> bytes:
         import io
         import tarfile
+
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w:gz") as tar:
             info = tarfile.TarInfo(name="pentool/__init__.py")
@@ -447,9 +498,7 @@ class TestDownloadProPackage:
         """Build a mock aiohttp module for two sequential session.post() calls:
         1) the archive (with optional response headers), 2) the signature."""
         archive_bytes = cls._make_tar_bytes()
-        signature = base64.b64encode(
-            _TEST_PRIVATE_KEY.sign(archive_bytes)
-        ).decode("ascii")
+        signature = base64.b64encode(_TEST_PRIVATE_KEY.sign(archive_bytes)).decode("ascii")
 
         archive_resp = AsyncMock()
         archive_resp.status = 200
@@ -480,9 +529,7 @@ class TestDownloadProPackage:
         directly, with NO follow-up call to _fetch_pro_build_id (the removed
         third request that used to race with network hiccups)."""
         pro_dir = tmp_path / "pro"
-        mock_aiohttp = self._mock_aiohttp_for_download(
-            archive_headers={"X-Pro-Build-Id": "12345:2026-08-09T00:00:00Z"}
-        )
+        mock_aiohttp = self._mock_aiohttp_for_download(archive_headers={"X-Pro-Build-Id": "12345:2026-08-09T00:00:00Z"})
         fetch_build_id_called = False
 
         async def _fail_if_called(plat):
@@ -490,11 +537,13 @@ class TestDownloadProPackage:
             fetch_build_id_called = True
             return "should-not-be-used"
 
-        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
-             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
-             patch("pentool.core.license._fetch_pro_build_id", _fail_if_called), \
-             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+        with (
+            patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir),
+            patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"),
+            patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+            patch("pentool.core.license._fetch_pro_build_id", _fail_if_called),
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+        ):
             ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
 
         assert ok is True
@@ -513,11 +562,13 @@ class TestDownloadProPackage:
         async def _fake_fetch(plat):
             return "fallback-build-id"
 
-        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
-             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
-             patch("pentool.core.license._fetch_pro_build_id", _fake_fetch), \
-             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+        with (
+            patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir),
+            patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"),
+            patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+            patch("pentool.core.license._fetch_pro_build_id", _fake_fetch),
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+        ):
             ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
 
         assert ok is True
@@ -540,11 +591,13 @@ class TestDownloadProPackage:
         async def _fake_fetch_fails(plat):
             raise RuntimeError("network down")
 
-        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
-             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
-             patch("pentool.core.license._fetch_pro_build_id", _fake_fetch_fails), \
-             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+        with (
+            patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir),
+            patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"),
+            patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+            patch("pentool.core.license._fetch_pro_build_id", _fake_fetch_fails),
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+        ):
             ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
 
         assert ok is True  # install succeeded — must not be reported as failed
@@ -582,10 +635,12 @@ class TestDownloadProPackage:
         mock_aiohttp.ClientSession = MagicMock(return_value=mock_session)
         mock_aiohttp.ClientTimeout = MagicMock(return_value=MagicMock())
 
-        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
-             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64), \
-             patch.dict("sys.modules", {"aiohttp": mock_aiohttp}):
+        with (
+            patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir),
+            patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"),
+            patch("pentool.core.license_update.PRO_PACKAGE_PUBLIC_KEY_B64", _TEST_PUBLIC_KEY_B64),
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+        ):
             ok = await download_pro_package("PTOOL-AAAA-BBBB-CCCC", "machine-1")
 
         assert ok is False
@@ -601,6 +656,7 @@ def _read_pro_meta_from(pro_dir) -> dict:
 
 # ── check_and_update_pro_package ────────────────────────────────────────────────
 
+
 class TestCheckAndUpdateProPackage:
     """Regression tests for the second half of the .build_meta.json bug: even
     after download_pro_package() started recording free_version reliably (see
@@ -614,8 +670,11 @@ class TestCheckAndUpdateProPackage:
     @staticmethod
     def _valid_license_info():
         return LicenseInfo(
-            valid=True, plan="pro", features=["scanner_pro"],
-            license_key="PTOOL-AAAA-BBBB-CCCC", machine_id="machine-1",
+            valid=True,
+            plan="pro",
+            features=["scanner_pro"],
+            license_key="PTOOL-AAAA-BBBB-CCCC",
+            machine_id="machine-1",
         )
 
     @pytest.mark.asyncio
@@ -634,12 +693,14 @@ class TestCheckAndUpdateProPackage:
             redownload_called = True
             return True
 
-        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
-             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license._PRO_BUILD_MARKER", pro_dir / ".build_id"), \
-             patch("pentool.core.license.get_license", return_value=self._valid_license_info()), \
-             patch("pentool.core.license._fetch_pro_build_id", AsyncMock(return_value="same-build-id")), \
-             patch("pentool.core.license.download_pro_package", _fake_download):
+        with (
+            patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir),
+            patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"),
+            patch("pentool.core.license._PRO_BUILD_MARKER", pro_dir / ".build_id"),
+            patch("pentool.core.license.get_license", return_value=self._valid_license_info()),
+            patch("pentool.core.license._fetch_pro_build_id", AsyncMock(return_value="same-build-id")),
+            patch("pentool.core.license.download_pro_package", _fake_download),
+        ):
             result = await check_and_update_pro_package()
 
         assert redownload_called is True, (
@@ -668,17 +729,20 @@ class TestCheckAndUpdateProPackage:
             redownload_called = True
             return True
 
-        with patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir), \
-             patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"), \
-             patch("pentool.core.license._PRO_BUILD_MARKER", pro_dir / ".build_id"), \
-             patch("pentool.core.license.get_license", return_value=self._valid_license_info()), \
-             patch("pentool.core.license._fetch_pro_build_id", AsyncMock(return_value="same-build-id")), \
-             patch("pentool.core.license.download_pro_package", _fake_download), \
-             patch("pentool.core.plugin_manager.PRO_PACKAGE_DIR", pro_dir, create=True):
+        with (
+            patch("pentool.core.license.PRO_PACKAGE_DIR", pro_dir),
+            patch("pentool.core.license._PRO_META_FILE", pro_dir / ".build_meta.json"),
+            patch("pentool.core.license._PRO_BUILD_MARKER", pro_dir / ".build_id"),
+            patch("pentool.core.license.get_license", return_value=self._valid_license_info()),
+            patch("pentool.core.license._fetch_pro_build_id", AsyncMock(return_value="same-build-id")),
+            patch("pentool.core.license.download_pro_package", _fake_download),
+            patch("pentool.core.plugin_manager.PRO_PACKAGE_DIR", pro_dir, create=True),
+        ):
             # is_pro_package_compatible() compares against pentool's own
             # __version__, which in this test environment is whatever the
             # dev checkout reports — patch it directly for a deterministic match.
             import pentool
+
             with patch.object(pentool, "__version__", "0.2.6", create=True):
                 result = await check_and_update_pro_package()
 
@@ -688,6 +752,7 @@ class TestCheckAndUpdateProPackage:
 
 
 # ── deactivate_license ─────────────────────────────────────────────────────────
+
 
 class TestDeactivateLicense:
     @pytest.mark.asyncio
@@ -709,9 +774,11 @@ class TestDeactivateLicense:
 
 # ── Session cache ──────────────────────────────────────────────────────────────
 
+
 class TestSessionCache:
     def test_get_session_license_caches(self, tmp_path):
         import pentool.core.license as lic_mod
+
         lic_mod._session_license = None  # reset
         with patch("pentool.core.license._LICENSE_FILE", tmp_path / "missing.dat"):
             info1 = get_session_license()
@@ -720,6 +787,7 @@ class TestSessionCache:
 
     def test_refresh_session_license_with_info(self):
         import pentool.core.license as lic_mod
+
         custom = LicenseInfo(valid=True, plan="pro")
         result = refresh_session_license(custom)
         assert result is custom
@@ -727,6 +795,7 @@ class TestSessionCache:
 
     def test_refresh_session_license_none_reloads(self, tmp_path):
         import pentool.core.license as lic_mod
+
         lic_mod._session_license = None
         with patch("pentool.core.license._LICENSE_FILE", tmp_path / "missing.dat"):
             result = refresh_session_license(None)

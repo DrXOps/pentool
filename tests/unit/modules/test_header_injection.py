@@ -3,27 +3,27 @@
 from __future__ import annotations
 
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # Skip all tests if scanner module not available
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.header_injection import (
-    HeaderInjectionCheck,
     _CRLF_PAYLOADS,
     _INJECTABLE_HEADERS,
-    _INJECTION_SIGNATURES,
+    HeaderInjectionCheck,
     _detect_injection,
     _get_response_headers_str,
 )
-from pentool.utils.parser import ParsedRequest
 
+from pentool.utils.parser import ParsedRequest
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _make_request(url: str, method: str = "GET", body: str = "",
-                  headers: dict | None = None) -> ParsedRequest:
+
+def _make_request(url: str, method: str = "GET", body: str = "", headers: dict | None = None) -> ParsedRequest:
     return ParsedRequest(
         method=method,
         url=url,
@@ -32,8 +32,7 @@ def _make_request(url: str, method: str = "GET", body: str = "",
     )
 
 
-def _make_resp(body: str = "", status: int = 200,
-               headers: dict | None = None):
+def _make_resp(body: str = "", status: int = 200, headers: dict | None = None):
     resp = MagicMock()
     resp.body = body
     resp.text = None
@@ -44,8 +43,7 @@ def _make_resp(body: str = "", status: int = 200,
     return resp
 
 
-def _make_client(resp_body: str = "", status: int = 200,
-                 resp_headers: dict | None = None):
+def _make_client(resp_body: str = "", status: int = 200, resp_headers: dict | None = None):
     client = MagicMock()
     resp = _make_resp(resp_body, status, resp_headers)
     client.get = AsyncMock(return_value=resp)
@@ -59,6 +57,7 @@ def _make_injected_client():
 
 
 # ─── TestMeta ─────────────────────────────────────────────────────────────────
+
 
 class TestMeta:
     def test_name(self):
@@ -81,6 +80,7 @@ class TestMeta:
 
 
 # ─── TestPayloads ─────────────────────────────────────────────────────────────
+
 
 class TestPayloads:
     def test_payloads_not_empty(self):
@@ -109,6 +109,7 @@ class TestPayloads:
 
 
 # ─── TestDetectInjection ──────────────────────────────────────────────────────
+
 
 class TestDetectInjection:
     def test_x_injected_in_body_is_NOT_injection(self):
@@ -157,6 +158,7 @@ class TestDetectInjection:
 
 # ─── TestGetResponseHeadersStr ────────────────────────────────────────────────
 
+
 class TestGetResponseHeadersStr:
     def test_headers_in_output(self):
         resp = _make_resp(headers={"Content-Type": "text/html", "Server": "nginx"})
@@ -176,6 +178,7 @@ class TestGetResponseHeadersStr:
 
 # ─── TestScanNoClient ─────────────────────────────────────────────────────────
 
+
 class TestScanNoClient:
     @pytest.mark.asyncio
     async def test_returns_empty_without_client(self):
@@ -186,6 +189,7 @@ class TestScanNoClient:
 
 
 # ─── TestScanGetParams ────────────────────────────────────────────────────────
+
 
 class TestScanGetParams:
     @pytest.mark.asyncio
@@ -261,6 +265,7 @@ class TestScanGetParams:
 
 # ─── TestScanInjectableHeaders ────────────────────────────────────────────────
 
+
 class TestScanInjectableHeaders:
     @pytest.mark.asyncio
     async def test_header_injection_via_x_forwarded_for(self):
@@ -275,8 +280,7 @@ class TestScanInjectableHeaders:
             nonlocal call_count
             call_count += 1
             h = headers or {}
-            if any("\r\n" in str(v) or "%0d%0a" in str(v).lower()
-                   for v in h.values()):
+            if any("\r\n" in str(v) or "%0d%0a" in str(v).lower() for v in h.values()):
                 return injected_resp
             return clean_resp
 
@@ -299,6 +303,7 @@ class TestScanInjectableHeaders:
 
 
 # ─── TestScanPost ─────────────────────────────────────────────────────────────
+
 
 class TestScanPost:
     @pytest.mark.asyncio
@@ -331,11 +336,12 @@ class TestScanPost:
         client.get = AsyncMock(return_value=_make_resp("clean"))
         client.post = fake_post
         req = _make_request("https://example.com/page", method="GET", body="a=1")
-        findings = await check.scan(req, None, http_client=client)
+        _findings = await check.scan(req, None, http_client=client)
         assert not post_called
 
 
 # ─── TestScanJson ─────────────────────────────────────────────────────────────
+
 
 class TestScanJson:
     @pytest.mark.asyncio
@@ -370,6 +376,7 @@ class TestScanJson:
 
 
 # ─── TestFindingFields ────────────────────────────────────────────────────────
+
 
 class TestFindingFields:
     @pytest.mark.asyncio
@@ -422,17 +429,21 @@ class TestFindingFields:
 
 # ─── TestRegistration ─────────────────────────────────────────────────────────
 
+
 class TestRegistration:
     def test_importable_from_checks_init(self):
         from pentool.modules.scanner.checks import HeaderInjectionCheck as HIC
+
         assert HIC is HeaderInjectionCheck
 
     def test_in_all(self):
         from pentool.modules.scanner import checks
+
         assert "HeaderInjectionCheck" in checks.__all__
 
     def test_registered_in_scanner_api(self):
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path=":memory:")
         check_names = [c.name for c in api.get_registered_checks()]
         assert "header_injection" in check_names

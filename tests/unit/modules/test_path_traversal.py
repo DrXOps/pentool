@@ -2,25 +2,27 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # Skip all tests if scanner module not available
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.path_traversal import (
-    PathTraversalCheck,
-    _classify_evidence,
-    _UNIX_SIGNATURES,
-    _WIN_SIGNATURES,
+    _MAX_PAYLOADS,
     _PATH_PARAM_NAMES,
     _TRAVERSAL_PAYLOADS,
-    _MAX_PAYLOADS,
+    _UNIX_SIGNATURES,
+    _WIN_SIGNATURES,
+    PathTraversalCheck,
+    _classify_evidence,
 )
+
 from pentool.utils.parser import ParsedRequest
 
-
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_request(url: str, method: str = "GET", body: str = "") -> ParsedRequest:
     return ParsedRequest(method=method, url=url, headers={}, body=body)
@@ -47,6 +49,7 @@ def _make_client(resp_body: str = "", status: int = 200):
 
 # ─── TestClassifyEvidence ─────────────────────────────────────────────────────
 
+
 class TestClassifyEvidence:
     def test_unix_signature_detected(self):
         evidence = _classify_evidence("root:x:0:0:root:/root:/bin/bash")
@@ -72,6 +75,7 @@ class TestClassifyEvidence:
 
 # ─── TestPathTraversalCheckMeta ───────────────────────────────────────────────
 
+
 class TestPathTraversalCheckMeta:
     def test_name(self):
         assert PathTraversalCheck.name == "path_traversal"
@@ -93,6 +97,7 @@ class TestPathTraversalCheckMeta:
 
 
 # ─── TestPayloads ─────────────────────────────────────────────────────────────
+
 
 class TestPayloads:
     def test_payloads_not_empty(self):
@@ -116,6 +121,7 @@ class TestPayloads:
         # payloads.py by aliasing it to the LFI generator). PathTraversalCheck
         # shares the traversal family with LFI, so the built-ins must be present.
         from pentool.modules.scanner.payloads import load_payloads
+
         assert len(load_payloads("path_traversal")) > 0
 
     def test_get_payloads_includes_builtins(self):
@@ -123,6 +129,7 @@ class TestPayloads:
         # before the fix the second term was always empty.
         check = PathTraversalCheck()
         from pentool.modules.scanner.payloads import load_payloads
+
         builtins = load_payloads("path_traversal")
         for p in builtins:
             assert p in check.get_payloads()
@@ -141,6 +148,7 @@ class TestPayloads:
 
 # ─── TestScanNoClient ─────────────────────────────────────────────────────────
 
+
 class TestScanNoClient:
     @pytest.mark.asyncio
     async def test_returns_empty_without_client(self):
@@ -151,6 +159,7 @@ class TestScanNoClient:
 
 
 # ─── TestScanGetParams ────────────────────────────────────────────────────────
+
 
 class TestScanGetParams:
     @pytest.mark.asyncio
@@ -248,6 +257,7 @@ class TestScanGetParams:
 
 # ─── TestScanPathSegments ─────────────────────────────────────────────────────
 
+
 class TestScanPathSegments:
     @pytest.mark.asyncio
     async def test_path_segment_injection(self):
@@ -301,6 +311,7 @@ class TestScanPathSegments:
 
 # ─── TestScanPostUrlencoded ───────────────────────────────────────────────────
 
+
 class TestScanPostUrlencoded:
     @pytest.mark.asyncio
     async def test_post_body_injection(self):
@@ -329,6 +340,7 @@ class TestScanPostUrlencoded:
 
 # ─── TestScanJsonBody ─────────────────────────────────────────────────────────
 
+
 class TestScanJsonBody:
     @pytest.mark.asyncio
     async def test_json_body_injection(self):
@@ -337,6 +349,7 @@ class TestScanJsonBody:
         client.post = AsyncMock(return_value=_make_resp("root:x:0:0:root:/root:/bin/bash"))
 
         import json
+
         body = json.dumps({"file": "document.pdf", "action": "read"})
         req = ParsedRequest(
             method="POST",
@@ -364,6 +377,7 @@ class TestScanJsonBody:
 
 
 # ─── TestFindingFields ────────────────────────────────────────────────────────
+
 
 class TestFindingFields:
     @pytest.mark.asyncio
@@ -415,17 +429,21 @@ class TestFindingFields:
 
 # ─── TestRegistration ─────────────────────────────────────────────────────────
 
+
 class TestRegistration:
     def test_importable_from_checks_init(self):
         from pentool.modules.scanner.checks import PathTraversalCheck as PTC
+
         assert PTC is PathTraversalCheck
 
     def test_in_all(self):
         from pentool.modules.scanner import checks
+
         assert "PathTraversalCheck" in checks.__all__
 
     def test_registered_in_scanner_api(self):
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path=":memory:")
         check_names = [c.name for c in api.get_registered_checks()]
         assert "path_traversal" in check_names

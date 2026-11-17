@@ -38,9 +38,9 @@ def _seeds(n: int) -> list[ParsedRequest]:
 
 def _peak_during(concurrency: int, seeds: list[ParsedRequest]) -> int:
     """Запустить активный скан и вернуть пик живых задач."""
+
     async def _monitor():
-        engine = ScanEngine(db_path=":memory:", concurrency=concurrency,
-                            http_client=FakeHTTPClient())
+        engine = ScanEngine(db_path=":memory:", concurrency=concurrency, http_client=FakeHTTPClient())
         engine.register_checks([SQLiCheck()])
         peak = 0
         stop = {"go": True}

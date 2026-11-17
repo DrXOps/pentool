@@ -21,6 +21,7 @@ from pentool.modules.intruder import IntruderResult
 @pytest_asyncio.fixture
 async def db_path(tmp_path: Path) -> str:
     from pentool.core.db_schema import init_db
+
     path = str(tmp_path / "test.db")
     await init_db(path)
     return path
@@ -29,6 +30,7 @@ async def db_path(tmp_path: Path) -> str:
 @pytest_asyncio.fixture
 async def repo(db_path):
     from pentool.api.intruder_storage import IntruderStorage
+
     r = IntruderStorage(db_path=db_path)
     yield r
     # IntruderStorage now holds a persistent aiosqlite connection (see
@@ -62,24 +64,28 @@ class TestNoDbPath:
     @pytest.mark.asyncio
     async def test_save_state_noop(self):
         from pentool.api.intruder_storage import IntruderStorage
+
         repo = IntruderStorage(db_path=None)
         await repo.save_state("tab", "template", "sniper", [["a"]])  # should not raise
 
     @pytest.mark.asyncio
     async def test_load_state_returns_none(self):
         from pentool.api.intruder_storage import IntruderStorage
+
         repo = IntruderStorage(db_path=None)
         assert await repo.load_state("tab") is None
 
     @pytest.mark.asyncio
     async def test_save_result_noop(self):
         from pentool.api.intruder_storage import IntruderStorage
+
         repo = IntruderStorage(db_path=None)
         await repo.save_result(_make_result())  # should not raise
 
     @pytest.mark.asyncio
     async def test_get_results_returns_empty(self):
         from pentool.api.intruder_storage import IntruderStorage
+
         repo = IntruderStorage(db_path=None)
         assert await repo.get_results() == []
 
@@ -253,12 +259,14 @@ class TestNoDbPathGetTabsAndResults:
     @pytest.mark.asyncio
     async def test_get_tabs_no_db_returns_empty(self):
         from pentool.api.intruder_storage import IntruderStorage
+
         repo = IntruderStorage(db_path=None)
         assert await repo.get_tabs() == []
 
     @pytest.mark.asyncio
     async def test_get_results_no_db_returns_empty(self):
         from pentool.api.intruder_storage import IntruderStorage
+
         repo = IntruderStorage(db_path=None)
         assert await repo.get_results() == []
 
@@ -291,4 +299,5 @@ class TestGetBatchAlias:
     async def test_get_batch_aliases_get_results(self, repo):
         """get_results is an alias for get_batch on the class."""
         from pentool.storage.intruder_storage import IntruderStorage as IS
+
         assert IS.get_results is IS.get_batch

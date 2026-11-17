@@ -10,17 +10,17 @@ migration.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.graphql import (
     GraphQLCheck,
-    _FIELD_SUGGEST_QUERY,
-    _INTROSPECTION_QUERY,
     _is_graphql,
 )
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
@@ -117,7 +117,6 @@ class TestScanNoFinding:
 
 class TestEngineIntegration:
     """End-to-end through ScanEngine — GraphQL introspection surfaced."""
-
 
     @pytest.mark.asyncio
     async def test_engine_detects_graphql_introspection(self):

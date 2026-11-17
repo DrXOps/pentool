@@ -93,9 +93,9 @@ class TestToolbarValuesSurviveTabSwitch:
 
             panel.switch_to(second)
             await _settle(pilot)
-            assert (
-                screen.query_one("#intruder-threads", Input).value == "10"
-            ), "the second tab must keep its own thread count, not inherit 77"
+            assert screen.query_one("#intruder-threads", Input).value == "10", (
+                "the second tab must keep its own thread count, not inherit 77"
+            )
 
     async def test_delay_and_turbo_travel_with_their_tab_too(self) -> None:
         app = _App()
@@ -111,9 +111,9 @@ class TestToolbarValuesSurviveTabSwitch:
             panel.switch_to(first)
             await _settle(pilot)
 
-            assert (
-                screen.query_one("#intruder-delay", Input).value == "250"
-            ), "delay typed on the first tab was lost on the round trip"
+            assert screen.query_one("#intruder-delay", Input).value == "250", (
+                "delay typed on the first tab was lost on the round trip"
+            )
 
     async def test_an_emptied_field_does_not_become_zero(self) -> None:
         """An empty input means "default", not "no threads".
@@ -133,9 +133,9 @@ class TestToolbarValuesSurviveTabSwitch:
             await _settle(pilot)
             panel.switch_to(first)
             await _settle(pilot)
-            assert (
-                screen.query_one("#intruder-threads", Input).value == "42"
-            ), "precondition: 42 must have been committed to the tab"
+            assert screen.query_one("#intruder-threads", Input).value == "42", (
+                "precondition: 42 must have been committed to the tab"
+            )
 
             screen.query_one("#intruder-threads", Input).value = ""
             panel.action_new_tab()
@@ -144,7 +144,7 @@ class TestToolbarValuesSurviveTabSwitch:
             await _settle(pilot)
 
             assert screen.query_one("#intruder-threads", Input).value == "42", (
-                "clearing the field erased the tab's thread count instead of " "leaving the last real value in place"
+                "clearing the field erased the tab's thread count instead of leaving the last real value in place"
             )
 
     async def test_a_batch_restore_keeps_the_values_that_came_from_the_db(self) -> None:
@@ -178,9 +178,9 @@ class TestToolbarValuesSurviveTabSwitch:
             await _settle(pilot)
             assert screen.query_one("#intruder-threads", Input).value == "55"
             assert screen.query_one("#intruder-delay", Input).value == "300"
-            assert (
-                panel.get_state(second.tab_id).thread_count == 7
-            ), "leaving the second tab stamped the first tab's values onto it"
+            assert panel.get_state(second.tab_id).thread_count == 7, (
+                "leaving the second tab stamped the first tab's values onto it"
+            )
 
 
 class TestTooltipsReachTheirButtons:
@@ -193,9 +193,9 @@ class TestTooltipsReachTheirButtons:
             tab_id = panel.active_tab_id
 
             # StartStopWidget lives in compose(), so its ids carry no suffix.
-            assert not len(
-                screen.query(f"#btn-start-{tab_id}")
-            ), "btn-start took a tab suffix — the tooltip table would miss it again"
+            assert not len(screen.query(f"#btn-start-{tab_id}")), (
+                "btn-start took a tab suffix — the tooltip table would miss it again"
+            )
             start = screen.query_one("#btn-start", ToolbarButton)
             stop = screen.query_one("#btn-stop", ToolbarButton)
             assert start.tooltip, "Start/Pause has no tooltip"

@@ -62,7 +62,7 @@ def test_numeric_len_and_head_o1():
 def test_char_len_head_no_materialize():
     """CharPayloadSource 26^1..4 ≈ 475k — len()/head() должны быть мгновенны."""
     src = CharPayloadSource("abcdefghijklmnopqrstuvwxyz", 1, 4)
-    expected = 26 + 26 ** 2 + 26 ** 3 + 26 ** 4
+    expected = 26 + 26**2 + 26**3 + 26**4
     assert len(src) == expected  # O(1), closed-form, без перебора
     assert bool(src) is True
     assert src.head(4) == ["a", "b", "c", "d"]
@@ -116,11 +116,10 @@ def test_file_source_reiterates(small_payload_file):
 
 def test_processed_does_not_materialize(small_payload_file):
     """ProcessedPayloads применяет ops, но не строит полный новый list."""
-    src = ProcessedPayloads(
-        FilePayloadSource(small_payload_file), ["upper"], lambda p, ops: p.upper()
-    )
+    src = ProcessedPayloads(FilePayloadSource(small_payload_file), ["upper"], lambda p, ops: p.upper())
     # head() через итерацию первых 5 — не материализует остальные
     import itertools
+
     first5 = list(itertools.islice(src, 5))
     assert len(first5) == 5
     assert all(s.isupper() for s in first5)

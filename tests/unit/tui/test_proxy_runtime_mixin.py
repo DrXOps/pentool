@@ -7,7 +7,6 @@ are prevented from actually running asyncio loops.
 
 from __future__ import annotations
 
-import asyncio
 import threading
 import types
 
@@ -65,6 +64,7 @@ class _FakeApp(ProxyRuntimeMixin):
 def _mk_proxy(running=False):
     async def _noop():
         return None
+
     p = types.SimpleNamespace(
         is_running=running,
         host="127.0.0.1",
@@ -138,6 +138,7 @@ class TestStopProxy:
 
     def test_stop_joins_thread(self):
         import threading as th
+
         app = _FakeApp()
         # running=False skips the run_coroutine_threadsafe branch (which needs
         # a live loop); the thread join below is unconditional and is what

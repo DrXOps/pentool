@@ -131,6 +131,17 @@ target-version = "py310"
 select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# В тестах часть приёмов — норма, а не долг:
+#   E731 — лямбда в parametrize читается лучше, чем def-обёртка;
+#   N802/N814/N817/N818 — имена классов под тестом (CamelCase) переносятся в
+#     тесты как есть, включая исключения без суффикса Error;
+#   E741 — `l` в тестовых данных встречается как данные, а не как имя.
+"tests/**" = ["E731", "N802", "N806", "N814", "N817", "N818", "E741"]
+# Скрипты, которые правят sys.path перед импортом проекта: E402 тут неизбежен.
+"tests/perf/run_spider_timed.py" = ["E402"]
+"tests/unit/modules/test_intruder_http_client_reuse.py" = ["E402"]
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true

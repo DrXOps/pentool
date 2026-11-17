@@ -66,7 +66,9 @@ class TestAddSection:
 
 
 class TestBuildWidgets:
-    def _make_req(self, url: str = "http://example.com/", method: str = "GET", body: str = "", headers: dict | None = None) -> MagicMock:
+    def _make_req(
+        self, url: str = "http://example.com/", method: str = "GET", body: str = "", headers: dict | None = None
+    ) -> MagicMock:
         req = MagicMock()
         req.url = url
         req.method = method
@@ -90,7 +92,9 @@ class TestBuildWidgets:
 
         result = p._build_widgets(req, resp)
         titles = [w for w in result if w.has_class("section-title")]
-        assert len(titles) >= 6  # Request Attributes, Request Headers, Query Params, Body Params, Cookies, Response Headers
+        assert (
+            len(titles) >= 6
+        )  # Request Attributes, Request Headers, Query Params, Body Params, Cookies, Response Headers
 
     def test_url_reconstruction_from_path(self) -> None:
         p = _make_panel()
@@ -107,15 +111,19 @@ class TestBuildWidgets:
 
     def test_parse_json_body(self) -> None:
         p = _make_panel()
-        req = self._make_req(method="POST", body='{"user": "alice", "role": "admin"}',
-                              headers={"Content-Type": "application/json"})
+        req = self._make_req(
+            method="POST", body='{"user": "alice", "role": "admin"}', headers={"Content-Type": "application/json"}
+        )
         result = p._build_widgets(req, resp=None)
         assert any(w.has_class("section-title") for w in result)
 
     def test_parse_form_body(self) -> None:
         p = _make_panel()
-        req = self._make_req(method="POST", body="username=alice&password=secret",
-                              headers={"Content-Type": "application/x-www-form-urlencoded"})
+        req = self._make_req(
+            method="POST",
+            body="username=alice&password=secret",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
         result = p._build_widgets(req, resp=None)
         assert any(w.has_class("section-title") for w in result)
 

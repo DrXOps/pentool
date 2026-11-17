@@ -18,6 +18,7 @@ pytest.importorskip("pentool.modules.scanner")
 
 def _mk_check():
     from pentool.modules.scanner.checks.headers import MissingSecurityHeadersCheck
+
     return MissingSecurityHeadersCheck()
 
 
@@ -41,8 +42,13 @@ class TestMissingSecurityHeaders:
         findings = await _scan(req, resp)
         missing = [f for f in findings if f.type == "missing_security_header"]
         assert len(missing) >= 1
-        assert {"X-Content-Type-Options", "X-Frame-Options", "Content-Security-Policy",
-                "Strict-Transport-Security", "Referrer-Policy"} <= {f.parameter for f in missing}
+        assert {
+            "X-Content-Type-Options",
+            "X-Frame-Options",
+            "Content-Security-Policy",
+            "Strict-Transport-Security",
+            "Referrer-Policy",
+        } <= {f.parameter for f in missing}
 
     @pytest.mark.asyncio
     async def test_flags_only_missing_one(self) -> None:

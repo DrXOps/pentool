@@ -64,6 +64,6 @@ def test_stylesheet_actually_applies() -> None:
 
 
 def test_screen_is_registered_under_its_module_id() -> None:
-    assert (
-        SCREEN_MAP["extensions"] is ExtensionsScreen
-    ), "app switches to '#screen-' + module_id; the id and the registry entry must stay in sync"
+    assert SCREEN_MAP["extensions"] is ExtensionsScreen, (
+        "app switches to '#screen-' + module_id; the id and the registry entry must stay in sync"
+    )

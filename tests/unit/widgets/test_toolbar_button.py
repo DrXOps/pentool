@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-from textual.widgets import Static
-
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 
@@ -125,9 +122,11 @@ class TestToolbarButtonOnClick:
 
         # Mock post_message
         original_post = btn.post_message
+
         def capture_post(msg):
             messages.append(msg)
             return original_post(msg)
+
         btn.post_message = capture_post
 
         btn.on_click()
@@ -143,9 +142,11 @@ class TestToolbarButtonOnClick:
 
         # Mock post_message
         original_post = btn.post_message
+
         def capture_post(msg):
             messages.append(msg)
             return original_post(msg)
+
         btn.post_message = capture_post
 
         btn.on_click()
@@ -175,9 +176,11 @@ class TestToolbarButtonClasses:
 
         messages = []
         original_post = btn.post_message
+
         def capture_post(msg):
             messages.append(msg)
             return original_post(msg)
+
         btn.post_message = capture_post
 
         btn.on_click()

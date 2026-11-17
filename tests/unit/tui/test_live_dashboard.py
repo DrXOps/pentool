@@ -8,6 +8,7 @@ class TestHbarHelper:
 
     def _hbar(self, value, max_val=100.0, width=10):
         from pentool.tui.screens.dashboard.live_dashboard import _hbar
+
         return _hbar(value, max_val=max_val, width=width)
 
     def test_zero_value_returns_empty_bar(self):
@@ -39,6 +40,7 @@ class TestColorByPercent:
 
     def _color(self, pct):
         from pentool.tui.screens.dashboard.live_dashboard import _color_by_percent
+
         return _color_by_percent(pct)
 
     def test_low_percent_green(self):

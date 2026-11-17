@@ -180,14 +180,12 @@ def test_bindings():
         duplicated = {pair: n for pair, n in pairs.items() if n > 1}
         if duplicated:
             pytest.fail(
-                f"{name} binds the same key to the same action more than once — "
-                f"the second copy is dead: {duplicated}"
+                f"{name} binds the same key to the same action more than once — the second copy is dead: {duplicated}"
             )
 
         shown = Counter(b.key for b in bindings if b.show)
         clashing = {key: n for key, n in shown.items() if n > 1}
         if clashing:
             pytest.fail(
-                f"{name} shows the same key twice in the footer — one of the two "
-                f"bindings is unreachable: {clashing}"
+                f"{name} shows the same key twice in the footer — one of the two bindings is unreachable: {clashing}"
             )

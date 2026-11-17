@@ -24,6 +24,7 @@ def isolated_config(tmp_path):
 
 # ── Sequencer ─────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("patch_tui_io")
 class TestSequencerScreen:
@@ -98,6 +99,7 @@ class TestSequencerScreen:
 
 # ── Target ────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("patch_tui_io")
 class TestTargetScreen:
@@ -144,6 +146,7 @@ class TestTargetScreen:
 
 # ── Decoder ───────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("patch_tui_io")
 class TestDecoderScreen:
@@ -163,6 +166,7 @@ class TestDecoderScreen:
 
 
 # ── Dashboard Live Tab ────────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patch_tui_io")
@@ -196,6 +200,7 @@ class TestDashboardLiveTab:
 
 
 # ── Settings Network Tab ──────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patch_tui_io")
@@ -241,6 +246,7 @@ class TestSettingsNetworkTab:
 
 
 # ── Grep Match/Extract (Intruder Block 4.4) ────────────────────────────────────
+
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patch_tui_io")

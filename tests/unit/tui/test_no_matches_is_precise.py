@@ -72,9 +72,9 @@ def _broad_handlers_without_reason() -> list[str]:
 
 def test_query_one_handlers_catch_nomatches() -> None:
     offenders = _broad_handlers_without_reason()
-    assert (
-        not offenders
-    ), "опциональный query_one ловится широким except без записи в журнал (ADR-6 п.4):\n  " + "\n  ".join(offenders)
+    assert not offenders, (
+        "опциональный query_one ловится широким except без записи в журнал (ADR-6 п.4):\n  " + "\n  ".join(offenders)
+    )
 
 
 def _guard_module():

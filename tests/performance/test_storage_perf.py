@@ -1,4 +1,5 @@
 """Performance: HttpStorage insert/query throughput."""
+
 from __future__ import annotations
 
 import asyncio
@@ -61,9 +62,7 @@ async def test_insert_500_requests(storage):
 async def test_query_after_1000_inserts(storage):
     # Insert 1000 records in batches of 100
     for batch_start in range(0, 1000, 100):
-        await asyncio.gather(
-            *(storage.add_request(*_make_pair(i)) for i in range(batch_start, batch_start + 100))
-        )
+        await asyncio.gather(*(storage.add_request(*_make_pair(i)) for i in range(batch_start, batch_start + 100)))
 
     start = time.monotonic()
     rows = await storage.get_metadata_batch(limit=500)

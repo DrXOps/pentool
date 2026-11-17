@@ -1,4 +1,5 @@
 """E2E: DecoderScreen — widgets present."""
+
 from __future__ import annotations
 
 import pytest
@@ -9,7 +10,6 @@ from pentool.tui.screens.decoder.screen import DecoderScreen
 
 @pytest.mark.e2e
 class TestDecoderScreen:
-
     async def test_decoder_screen_mounts(self) -> None:
         """press D → DecoderScreen присутствует в DOM."""
         app = PentoolApp()

@@ -1,4 +1,5 @@
 """Performance: EventBus throughput."""
+
 from __future__ import annotations
 
 import time
@@ -6,7 +7,7 @@ import time
 import pytest
 
 from pentool.core.event_bus import EventBus
-from pentool.core.events import ScanStarted, ScanFinished, FindingDiscovered
+from pentool.core.events import FindingDiscovered, ScanFinished, ScanStarted
 
 
 @pytest.mark.performance
@@ -27,10 +28,13 @@ def test_1000_subscribers():
     # Subscribe 100 handlers
     handlers = []
     for _ in range(100):
+
         def make_handler(lst):
             def h(e):
                 lst.append(1)
+
             return h
+
         h = make_handler(received)
         handlers.append(h)
         bus.subscribe(ScanStarted, h)

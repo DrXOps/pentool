@@ -294,9 +294,9 @@ class TestIntruderPanelBinding:
                 await pilot.pause()
                 screen = app.query_one(IntruderScreen)
                 panel = screen._tc_panel
-                assert isinstance(
-                    panel, TabbedContentPanel
-                ), f"_tc_panel должен быть панелью, получил {type(panel).__name__}"
+                assert isinstance(panel, TabbedContentPanel), (
+                    f"_tc_panel должен быть панелью, получил {type(panel).__name__}"
+                )
                 # не bound-method (не callable прямо)
                 assert not isinstance(panel, str)
                 # action_new_tab через экран не падает

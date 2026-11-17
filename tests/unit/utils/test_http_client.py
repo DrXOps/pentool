@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from pentool.utils.http_client import HTTPClient
 from pentool.utils.parser import ParsedRequest
@@ -49,10 +50,15 @@ async def test_send_strips_hop_by_hop_headers():
     client = HTTPClient()
     client._session = session
     req = ParsedRequest(
-        method="GET", url="http://x/",
-        headers={"Host": "x", "Connection": "close",
-                 "Transfer-Encoding": "chunked",
-                 "Keep-Alive": "timeout=5", "Accept": "text/html"},
+        method="GET",
+        url="http://x/",
+        headers={
+            "Host": "x",
+            "Connection": "close",
+            "Transfer-Encoding": "chunked",
+            "Keep-Alive": "timeout=5",
+            "Accept": "text/html",
+        },
     )
     await client.send(req)
     kwargs = session.request.call_args.kwargs
@@ -70,7 +76,8 @@ async def test_send_strips_brotli_from_accept_encoding():
     client = HTTPClient()
     client._session = session
     req = ParsedRequest(
-        method="GET", url="http://x/",
+        method="GET",
+        url="http://x/",
         headers={"Accept-Encoding": "gzip, br, zstd, deflate"},
     )
     await client.send(req)
@@ -203,7 +210,7 @@ class TestGetSharedHttpClient:
     """4.2: factory builds HTTPClient from the current Config."""
 
     def test_uses_config_values(self):
-        from pentool.core.config import Config, set_config, get_config
+        from pentool.core.config import Config, get_config, set_config
         from pentool.utils.http_client import get_shared_http_client
 
         saved = get_config()
@@ -221,7 +228,7 @@ class TestGetSharedHttpClient:
             set_config(saved)
 
     def test_extra_headers_and_redirect_passed(self):
-        from pentool.core.config import Config, set_config, get_config
+        from pentool.core.config import Config, get_config, set_config
         from pentool.utils.http_client import get_shared_http_client
 
         saved = get_config()

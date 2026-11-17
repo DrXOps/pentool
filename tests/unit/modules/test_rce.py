@@ -12,18 +12,17 @@ by issuing real sleep() calls in tests.
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.rce import (
-    RCECheck,
     _TIME_PAYLOADS,
-    _WAF_STATUS,
+    RCECheck,
     _check_rce_response,
     _waf_variants,
 )
 from pentool.modules.scanner.mutator import InjectionPoint
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 ID_BODY = "root@host:~# id\nuid=1000(user) gid=1000(group)\n"
@@ -99,6 +98,7 @@ class TestScanErrorBased:
     async def test_error_based_detects_rce(self):
         check = RCECheck()
         req = _req()
+
         # Fake server executes `id` -> returns uid/gid output; everything else
         # returns clean. Phase 1 stops as soon as the first command fires.
         class Fake:
@@ -113,6 +113,7 @@ class TestScanErrorBased:
     async def test_waf_status_triggers_bypass_path(self):
         check = RCECheck()
         req = _req()
+
         # Any id-bearing payload first returns a WAF status (403); the WAF
         # bypass variant (e.g. `${IFS}` space substitution, which mutator
         # URL-encodes as %7BIFS%7D but the "IFS" letters remain) then returns
@@ -133,7 +134,6 @@ class TestScanErrorBased:
 class TestEngineIntegration:
     """End-to-end through ScanEngine — error-based RCE surfaced via the
     per-point scan()-pipeline."""
-
 
     @pytest.mark.asyncio
     async def test_engine_detects_rce(self):

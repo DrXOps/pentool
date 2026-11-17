@@ -223,12 +223,14 @@ class TestBuildHttpHighlights:
 class TestMethodColors:
     def test_all_methods_covered(self) -> None:
         from pentool.tui.widgets.request_editor import _METHOD_COLORS
+
         assert _METHOD_COLORS["GET"] == "keyword"
         assert _METHOD_COLORS["POST"] == "string"
         assert "DELETE" in _METHOD_COLORS
 
     def test_method_colors_keys_upper(self) -> None:
         from pentool.tui.widgets.request_editor import _METHOD_COLORS
+
         for key in _METHOD_COLORS:
             assert key == key.upper()
 
@@ -239,6 +241,7 @@ class TestMethodColors:
 class TestHeaderToken:
     def test_common_headers_covered(self) -> None:
         from pentool.tui.widgets.request_editor import _HEADER_TOKEN
+
         assert "host" in _HEADER_TOKEN
         assert "content-type" in _HEADER_TOKEN
         assert "authorization" in _HEADER_TOKEN
@@ -251,6 +254,7 @@ class TestHeaderToken:
 class TestSupportedLangs:
     def test_common_languages(self) -> None:
         from pentool.tui.widgets.request_editor import _SUPPORTED_LANGS
+
         assert "json" in _SUPPORTED_LANGS
         assert "html" in _SUPPORTED_LANGS
         assert "python" in _SUPPORTED_LANGS
@@ -262,6 +266,7 @@ class TestSupportedLangs:
 class TestHeaderColors:
     def test_common_header_colors(self) -> None:
         from pentool.tui.widgets.request_editor import _HEADER_COLORS
+
         assert "host" in _HEADER_COLORS
         assert "content-type" in _HEADER_COLORS
         assert "authorization" in _HEADER_COLORS
@@ -273,6 +278,7 @@ class TestHeaderColors:
 class TestMethodRich:
     def test_all_methods(self) -> None:
         from pentool.tui.widgets.request_editor import _METHOD_RICH
+
         assert "GET" in _METHOD_RICH
         assert "POST" in _METHOD_RICH
         assert "DELETE" in _METHOD_RICH

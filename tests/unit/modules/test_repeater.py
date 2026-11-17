@@ -19,6 +19,7 @@ class TestRepeaterHistory:
     async def repeater(self, tmp_path: Path):
         from pentool.core.db_schema import init_db
         from pentool.modules.repeater import Repeater
+
         db_path = str(tmp_path / "test.db")
         await init_db(db_path)
         rp = Repeater(db_path=db_path)
@@ -30,6 +31,7 @@ class TestRepeaterHistory:
     @pytest.mark.asyncio
     async def test_init(self, repeater) -> None:
         from pentool.modules.repeater import Repeater
+
         assert isinstance(repeater, Repeater)
 
     @pytest.mark.asyncio
@@ -133,6 +135,7 @@ class TestRepeaterSend:
     async def repeater(self, tmp_path: Path):
         from pentool.core.db_schema import init_db
         from pentool.modules.repeater import Repeater
+
         db_path = str(tmp_path / "test.db")
         await init_db(db_path)
         rp = Repeater(db_path=db_path, timeout=5.0, verify_ssl=False)

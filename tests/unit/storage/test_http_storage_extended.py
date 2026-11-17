@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 
 import pytest
 
+from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.storage.http_storage import HttpStorage
 from pentool.utils.parser import ParsedRequest, ParsedResponse
-from pentool.collections.filter_predicate import FilterPredicate, FilterOp, FilterSpec
 
 
 @pytest.fixture
@@ -181,13 +180,10 @@ class TestHttpStorageGetRequestById:
             method="POST",
             url="http://example.com/api",
             headers={"Content-Type": "application/json"},
-            body='{"test": "data"}'
+            body='{"test": "data"}',
         )
         resp = ParsedResponse(
-            status=200,
-            reason="OK",
-            headers={"Content-Type": "application/json"},
-            body='{"result": "ok"}'
+            status=200, reason="OK", headers={"Content-Type": "application/json"}, body='{"result": "ok"}'
         )
 
         row_id = await storage.add_request(req, resp)
@@ -214,17 +210,9 @@ class TestHttpStorageExportAllRequests:
     async def test_export_all_requests_includes_bodies(self, storage):
         """Export includes request and response bodies."""
         req = ParsedRequest(
-            method="POST",
-            url="http://example.com/api",
-            headers={"Content-Type": "text/plain"},
-            body="request data"
+            method="POST", url="http://example.com/api", headers={"Content-Type": "text/plain"}, body="request data"
         )
-        resp = ParsedResponse(
-            status=200,
-            reason="OK",
-            headers={"Content-Type": "text/plain"},
-            body="response data"
-        )
+        resp = ParsedResponse(status=200, reason="OK", headers={"Content-Type": "text/plain"}, body="response data")
 
         await storage.add_request(req, resp)
 
@@ -247,10 +235,7 @@ class TestHttpStorageExportAllRequests:
     async def test_export_all_requests_headers_parsed(self, storage):
         """Export parses JSON headers."""
         req = ParsedRequest(
-            method="GET",
-            url="http://example.com/",
-            headers={"User-Agent": "TestAgent", "Accept": "*/*"},
-            body=""
+            method="GET", url="http://example.com/", headers={"User-Agent": "TestAgent", "Accept": "*/*"}, body=""
         )
 
         await storage.add_request(req)
@@ -287,7 +272,9 @@ class TestHttpStorageCountWithFilters:
         await storage.add_request(req1)
         await storage.add_request(req2)
 
-        count = await storage.count(filters=FilterSpec(predicates=[FilterPredicate("host", FilterOp.EQ, "example.com")]))
+        count = await storage.count(
+            filters=FilterSpec(predicates=[FilterPredicate("host", FilterOp.EQ, "example.com")])
+        )
 
         assert count == 1
 
@@ -301,10 +288,14 @@ class TestHttpStorageCountWithFilters:
         await storage.add_request(req2)
         await storage.add_request(req3)
 
-        count = await storage.count(filters=FilterSpec(predicates=[
-            FilterPredicate("method", FilterOp.EQ, "GET"),
-            FilterPredicate("host", FilterOp.EQ, "example.com"),
-        ]))
+        count = await storage.count(
+            filters=FilterSpec(
+                predicates=[
+                    FilterPredicate("method", FilterOp.EQ, "GET"),
+                    FilterPredicate("host", FilterOp.EQ, "example.com"),
+                ]
+            )
+        )
 
         assert count == 1
 
@@ -337,9 +328,15 @@ class TestHttpStorageGetMetadataBatch:
         await storage.add_request(req2)
         await storage.add_request(req3)
 
-        batch = await storage.get_metadata_batch(filters=FilterSpec(predicates=[
-            FilterPredicate("extension", FilterOp.EQ, "json"),
-        ]), limit=10, offset=0)
+        batch = await storage.get_metadata_batch(
+            filters=FilterSpec(
+                predicates=[
+                    FilterPredicate("extension", FilterOp.EQ, "json"),
+                ]
+            ),
+            limit=10,
+            offset=0,
+        )
 
         assert len(batch) == 1
         assert batch[0]["url"].endswith(".json")

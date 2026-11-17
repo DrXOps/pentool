@@ -1,7 +1,5 @@
 """Unit tests for EventBus Subscription context manager."""
 
-import pytest
-
 from pentool.core.event_bus import EventBus, Subscription
 from pentool.core.events import ScanFinished
 

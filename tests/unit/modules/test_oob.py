@@ -124,6 +124,7 @@ class TestOOBHelperCheckInteractions:
 class TestGetOOBHelper:
     def test_get_oob_helper_returns_oob_helper(self):
         from pentool.core.config import Config, set_config
+
         cfg = Config(collaborator_url="https://test.oastify.com")
         set_config(cfg)
         oob = get_oob_helper()
@@ -132,6 +133,7 @@ class TestGetOOBHelper:
 
     def test_get_oob_helper_disabled_when_no_url(self):
         from pentool.core.config import Config, set_config
+
         cfg = Config(collaborator_url="")
         set_config(cfg)
         oob = get_oob_helper()

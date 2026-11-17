@@ -45,10 +45,9 @@ def _work_decorators() -> list[tuple[str, int, str]]:
 
 def test_every_work_worker_has_a_group() -> None:
     missing = _work_decorators()
-    assert (
-        missing == []
-    ), "воркеры без group= нельзя снять точечно (ADR-11 п.3); " "добавь group= по назначению:\n" + "\n".join(
-        f"  {f}:{line}: {fn}()" for f, line, fn in missing
+    assert missing == [], (
+        "воркеры без group= нельзя снять точечно (ADR-11 п.3); "
+        "добавь group= по назначению:\n" + "\n".join(f"  {f}:{line}: {fn}()" for f, line, fn in missing)
     )
 
 
@@ -57,10 +56,7 @@ def test_the_guard_would_notice_a_new_ungrouped_worker(tmp_path: Path, monkeypat
     fake_tui = tmp_path / "tui"
     fake_tui.mkdir()
     (fake_tui / "screen.py").write_text(
-        "from textual import work\n\n\nclass S:\n"
-        "    @work\n"
-        "    async def _load(self) -> None:\n"
-        "        return None\n",
+        "from textual import work\n\n\nclass S:\n    @work\n    async def _load(self) -> None:\n        return None\n",
         encoding="utf-8",
     )
     monkeypatch.setattr("tests.unit.tui.test_worker_groups._TUI", fake_tui)
@@ -74,9 +70,9 @@ def test_the_crawl_worker_is_cancelled_when_the_target_screen_goes_away() -> Non
     from pentool.tui.screens.target.screen import TargetScreen
 
     source = (_TUI / "screens" / "target" / "screen.py").read_text(encoding="utf-8")
-    assert (
-        "@work(group=CRAWL_GROUP, exclusive=True)" in source
-    ), "the crawl worker is not in TargetScreen.CRAWL_GROUP — on_unmount cannot cancel it"
+    assert "@work(group=CRAWL_GROUP, exclusive=True)" in source, (
+        "the crawl worker is not in TargetScreen.CRAWL_GROUP — on_unmount cannot cancel it"
+    )
     unmount = TargetScreen.on_unmount.__code__
     assert "cancel_group" in unmount.co_names, (
         "TargetScreen.on_unmount does not cancel the crawl — a minutes-long crawl "

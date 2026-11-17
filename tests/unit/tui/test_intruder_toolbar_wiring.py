@@ -112,9 +112,9 @@ class TestLayoutPiecesSurviveTheTabPort:
         async with app.run_test(size=(200, 60)) as pilot:
             _, tid, pane = await _mounted(pilot)
             handles = list(pane.query(ResizeHandle))
-            assert (
-                len(handles) == 3
-            ), f"expected Positions|Payloads, top|results and request|response handles, got {len(handles)}"
+            assert len(handles) == 3, (
+                f"expected Positions|Payloads, top|results and request|response handles, got {len(handles)}"
+            )
             # The horizontal one is the Positions|Payloads split.
             assert any(not h.has_class("-vertical") for h in handles), "the Positions|Payloads handle is gone"
 
@@ -167,9 +167,9 @@ class TestRestoredTabShowsItsData:
             await _settle(pilot, lambda: _row_count(screen, state.tab_id) > 0)
 
             listing = screen.query_one(f"#payload-list-{state.tab_id}")
-            assert (
-                len(listing.children) == 39
-            ), f"restored tab painted {len(listing.children)} payload rows, expected 39"
+            assert len(listing.children) == 39, (
+                f"restored tab painted {len(listing.children)} payload rows, expected 39"
+            )
             counter = screen.query_one(f"#payload-count-label-{state.tab_id}")
             assert "39 value(s)" in str(counter.render())
 

@@ -1,10 +1,11 @@
 """Unit tests: utils/terminal_check.py — terminal type detection."""
+
 from __future__ import annotations
 
 import os
 from unittest.mock import patch
 
-from pentool.utils.terminal_check import check_terminal, get_terminal_warning, MODERN_TERMINALS
+from pentool.utils.terminal_check import MODERN_TERMINALS, check_terminal, get_terminal_warning
 
 
 def test_modern_kitty():

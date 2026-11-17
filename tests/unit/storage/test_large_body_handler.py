@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from pentool.storage.large_body_handler import LargeBodyHandler, THRESHOLD
+from pentool.storage.large_body_handler import THRESHOLD, LargeBodyHandler
 
 
 def test_is_large_none_false():
@@ -52,8 +52,10 @@ def test_delete_missing_no_error(tmp_path):
 
 
 def test_delete_logs_on_error(tmp_path):
-    with patch("pentool.storage.large_body_handler.logger.warning") as warn, \
-         patch("pathlib.Path.unlink", side_effect=OSError("locked")):
+    with (
+        patch("pentool.storage.large_body_handler.logger.warning") as warn,
+        patch("pathlib.Path.unlink", side_effect=OSError("locked")),
+    ):
         LargeBodyHandler.delete(str(tmp_path / "x.bin"))
     # unlink raises → warning logged, no re-raise
     warn.assert_called()

@@ -155,7 +155,7 @@ class TestTheGuardItself:
         """ContentPanel builds ``cp-btn-{key}`` in a loop; the literal must match."""
         probe = tmp_path / "probe.py"
         probe.write_text(
-            "def compose(keys):\n" "    for k in keys:\n" '        yield ToolbarButton("lbl", f"cp-btn-{k}")\n',
+            'def compose(keys):\n    for k in keys:\n        yield ToolbarButton("lbl", f"cp-btn-{k}")\n',
             encoding="utf-8",
         )
         _, prefixes = _created_ids([probe])

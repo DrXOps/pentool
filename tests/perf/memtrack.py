@@ -194,12 +194,8 @@ class MemSampler:
             if self._cpu:
                 vsw, isw = s.ctx_switches or (0, 0)
                 user, sys = s.cpu_user_sys or (0.0, 0.0)
-                row += (
-                    f" {s.cpu_pct:>6.1f} {s.perfcore_max:>6.1f} "
-                    f"{vsw:>6} {isw:>6} {user:>6.2f} {sys:>6.2f}"
-                )
-            print(row + "  " + s.label
-                  + (f"  {s.extra}" if s.extra else ""))
+                row += f" {s.cpu_pct:>6.1f} {s.perfcore_max:>6.1f} {vsw:>6} {isw:>6} {user:>6.2f} {sys:>6.2f}"
+            print(row + "  " + s.label + (f"  {s.extra}" if s.extra else ""))
 
     def render_report(self, title: str, notes: str = "") -> str:
         lines = [f"# {title}", "", f"Дата: {time.strftime('%Y-%m-%d %H:%M:%S')}", ""]
@@ -224,8 +220,7 @@ class MemSampler:
                 "|---|---|---|---|---|---|---|---|---|---|---|",
             ]
         else:
-            lines += ["| t(s) | RSS(MB) | tasks | label | extra |",
-                      "|---|---|---|---|---|"]
+            lines += ["| t(s) | RSS(MB) | tasks | label | extra |", "|---|---|---|---|---|"]
         for s in self.samples:
             if self._cpu:
                 vsw, isw = s.ctx_switches or (0, 0)
@@ -236,10 +231,7 @@ class MemSampler:
                     f"{s.extra if s.extra else ''} |"
                 )
             else:
-                lines.append(
-                    f"| {s.t_s} | {s.rss_mb} | {s.tasks} | {s.label} | "
-                    f"{s.extra if s.extra else ''} |"
-                )
+                lines.append(f"| {s.t_s} | {s.rss_mb} | {s.tasks} | {s.label} | {s.extra if s.extra else ''} |")
         return "\n".join(lines)
 
 
@@ -257,9 +249,7 @@ class TraceSnaps:
     def diff(self, label_from: str, label_to: str, top: int = 15) -> list[str]:
         if label_from not in self._snaps or label_to not in self._snaps:
             return []
-        stats = self._snaps[label_to].compare_to(
-            self._snaps[label_from], "lineno"
-        )
+        stats = self._snaps[label_to].compare_to(self._snaps[label_from], "lineno")
         out = []
         for stat in stats[:top]:
             out.append(str(stat))

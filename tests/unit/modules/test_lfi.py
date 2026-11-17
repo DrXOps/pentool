@@ -7,30 +7,30 @@ section 2.5) — this check had no dedicated unit tests prior to this file.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # Skip all tests if scanner module not available
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.lfi import (
+    _PHP_WRAPPER_PAYLOADS,
+    _SIGNATURES,
+    _TARGET_FILES,
     LFICheck,
     _build_all_payloads,
     _build_traversal_payloads,
     _check_lfi,
     _is_php,
-    _PHP_WRAPPER_PAYLOADS,
-    _SIGNATURES,
-    _TARGET_FILES,
-    _ENCODINGS,
 )
-from pentool.utils.parser import ParsedRequest
 
+from pentool.utils.parser import ParsedRequest
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _make_request(url: str, method: str = "GET", body: str = "",
-                  headers: dict | None = None) -> ParsedRequest:
+
+def _make_request(url: str, method: str = "GET", body: str = "", headers: dict | None = None) -> ParsedRequest:
     return ParsedRequest(method=method, url=url, headers=headers or {}, body=body)
 
 
@@ -56,6 +56,7 @@ def _make_client(resp_body: str = "", status: int = 200):
 
 # ─── TestMeta ─────────────────────────────────────────────────────────────────
 
+
 class TestMeta:
     def test_name(self):
         assert LFICheck.name == "lfi"
@@ -78,6 +79,7 @@ class TestMeta:
 
 # ─── TestSignatures ───────────────────────────────────────────────────────────
 
+
 class TestSignatures:
     def test_signatures_not_empty(self):
         assert len(_SIGNATURES) > 0
@@ -98,6 +100,7 @@ class TestSignatures:
 
 
 # ─── TestIsPhp ────────────────────────────────────────────────────────────────
+
 
 class TestIsPhp:
     def test_php_extension_in_url(self):
@@ -128,6 +131,7 @@ class TestIsPhp:
 
 
 # ─── TestBuildPayloads ────────────────────────────────────────────────────────
+
 
 class TestBuildPayloads:
     def test_traversal_payloads_include_absolute_path(self):
@@ -168,6 +172,7 @@ class TestBuildPayloads:
 
 # ─── TestScanNoClient ─────────────────────────────────────────────────────────
 
+
 class TestScanNoClient:
     @pytest.mark.asyncio
     async def test_returns_empty_without_client(self):
@@ -178,6 +183,7 @@ class TestScanNoClient:
 
 
 # ─── TestScanGetParams ────────────────────────────────────────────────────────
+
 
 class TestScanGetParams:
     @pytest.mark.asyncio
@@ -249,6 +255,7 @@ class TestScanGetParams:
 
 # ─── TestScanPhpWrappers ──────────────────────────────────────────────────────
 
+
 class TestScanPhpWrappers:
     @pytest.mark.asyncio
     async def test_php_url_tests_wrapper_payloads(self):
@@ -273,17 +280,21 @@ class TestScanPhpWrappers:
 
 # ─── TestRegistration ─────────────────────────────────────────────────────────
 
+
 class TestRegistration:
     def test_importable_from_checks_init(self):
         from pentool.modules.scanner.checks import LFICheck as LC
+
         assert LC is LFICheck
 
     def test_in_all(self):
         from pentool.modules.scanner import checks
+
         assert "LFICheck" in checks.__all__
 
     def test_registered_in_scanner_api(self):
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path=":memory:")
         check_names = [c.name for c in api.get_registered_checks()]
         assert "lfi" in check_names

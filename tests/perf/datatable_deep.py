@@ -11,13 +11,13 @@
 Запуск:
     python3 tests/perf/datatable_deep.py
 """
+
 from __future__ import annotations
 
 import gc
 import os
 import sys
 import time
-import tracemalloc
 
 import psutil
 
@@ -32,15 +32,18 @@ def _rss_mb() -> float:
 
 def _build_table(n_rows: int):
     import pyarrow as pa
-    return pa.table({
-        "ID":     pa.array(list(range(n_rows)), type=pa.int64()),
-        "Host":   pa.array(["example.com"] * n_rows, type=pa.string()),
-        "Method": pa.array(["GET"] * n_rows, type=pa.string()),
-        "URL":    pa.array([f"http://example.com/path/resource/{i}?p={i}" for i in range(n_rows)], type=pa.string()),
-        "Status": pa.array(["200"] * n_rows, type=pa.string()),
-        "Size":   pa.array([str(512 + (i % 2000)) for i in range(n_rows)], type=pa.string()),
-        "Time":   pa.array(["12:00:00"] * n_rows, type=pa.string()),
-    })
+
+    return pa.table(
+        {
+            "ID": pa.array(list(range(n_rows)), type=pa.int64()),
+            "Host": pa.array(["example.com"] * n_rows, type=pa.string()),
+            "Method": pa.array(["GET"] * n_rows, type=pa.string()),
+            "URL": pa.array([f"http://example.com/path/resource/{i}?p={i}" for i in range(n_rows)], type=pa.string()),
+            "Status": pa.array(["200"] * n_rows, type=pa.string()),
+            "Size": pa.array([str(512 + (i % 2000)) for i in range(n_rows)], type=pa.string()),
+            "Time": pa.array(["12:00:00"] * n_rows, type=pa.string()),
+        }
+    )
 
 
 def step1_import_cost() -> dict:
@@ -50,6 +53,7 @@ def step1_import_cost() -> dict:
     t0 = time.monotonic()
     import pyarrow  # noqa: F401
     from textual_fastdatatable import ArrowBackend  # noqa: F401
+
     elapsed = time.monotonic() - t0
     rss_after = _rss_mb()
     return {
@@ -83,15 +87,17 @@ def step2_scaling() -> list[dict]:
         scan_s = time.monotonic() - t2
 
         rss_after = _rss_mb()
-        results.append({
-            "rows": n,
-            "table_build_s": round(build_s, 3),
-            "backend_build_s": round(backend_s, 3),
-            "sample_scan_s": round(scan_s, 4),
-            "rss_before_mb": round(rss_before, 1),
-            "rss_after_mb": round(rss_after, 1),
-            "delta_mb": round(rss_after - rss_before, 1),
-        })
+        results.append(
+            {
+                "rows": n,
+                "table_build_s": round(build_s, 3),
+                "backend_build_s": round(backend_s, 3),
+                "sample_scan_s": round(scan_s, 4),
+                "rss_before_mb": round(rss_before, 1),
+                "rss_after_mb": round(rss_after, 1),
+                "delta_mb": round(rss_after - rss_before, 1),
+            }
+        )
         # Не удаляем table/backend намеренно — следующий шаг видит кумулятивный рост
     return results
 
@@ -107,10 +113,11 @@ def step3_rebuild_churn(n_rebuilds: int = 30, rows_per_rebuild: int = 2000) -> d
     gc.collect()
     rss_start = _rss_mb()
     rss_samples = []
-    backend = None  # держим ссылку только на последний — как в реальном коде
     for i in range(n_rebuilds):
         table = _build_table(rows_per_rebuild)
-        backend = ArrowBackend(table)  # старый backend теряет последнюю ссылку здесь
+        # держим ссылку только на последний backend — как в реальном коде:
+        # старый теряет последнюю ссылку здесь
+        _backend = ArrowBackend(table)
         if i % 5 == 0:
             gc.collect()
             rss_samples.append(round(_rss_mb(), 1))

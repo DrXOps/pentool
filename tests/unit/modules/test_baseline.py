@@ -20,6 +20,7 @@ import pytest
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.baseline import BaselineCache, BaselineEntry, _make_entry
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
@@ -42,8 +43,10 @@ class TestMakeEntry:
 
     def test_content_type_extracted(self):
         resp = ParsedResponse(
-            status=200, reason="OK",
-            headers={"Content-Type": "text/html"}, body="",
+            status=200,
+            reason="OK",
+            headers={"Content-Type": "text/html"},
+            body="",
         )
         entry = _make_entry(resp, timing_ms=1.0)
         assert entry.content_type == "text/html"
@@ -92,7 +95,9 @@ class TestIsIdentical:
         entry = _make_entry(resp, timing_ms=1.0)
         cache = BaselineCache()
         different = ParsedResponse(
-            status=200, reason="OK", headers={},
+            status=200,
+            reason="OK",
+            headers={},
             body="a completely different response body here",
         )
         assert cache.is_identical(entry, different) is False

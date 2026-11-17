@@ -1,4 +1,5 @@
 """E2E conftest — изолированный Config + патч медленных IO-операций."""
+
 from __future__ import annotations
 
 from unittest.mock import patch

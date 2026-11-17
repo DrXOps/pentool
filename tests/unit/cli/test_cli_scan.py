@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import types
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from click.testing import CliRunner
 
-from pentool.cli.scan import scan, _import_scanner_api
-
+from pentool.cli.scan import _import_scanner_api, scan
 
 
 def test_import_scanner_api_unavailable_when_module_missing():
@@ -22,7 +19,6 @@ def test_import_scanner_api_unavailable_when_module_missing():
         return real_import(name, *a, **k)
 
     with patch("builtins.__import__", side_effect=fake_import):
-        from click.testing import CliRunner as CR
         try:
             _import_scanner_api()
             assert False, "expected SystemExit"
@@ -53,6 +49,7 @@ def test_import_scanner_api_returns_class():
 
 # ── passive ─────────────────────────────────────────────────────────────────
 
+
 def test_scan_passive_no_scope():
     r = CliRunner().invoke(scan, ["passive"])
     assert r.exit_code == 0
@@ -67,6 +64,7 @@ def test_scan_passive_with_scope():
 
 # ── report ──────────────────────────────────────────────────────────────────
 
+
 def _fake_scanner_api():
     api = MagicMock()
     api.db_path = "x"
@@ -78,7 +76,7 @@ def _fake_scanner_api():
 
 def test_scan_report_no_findings(tmp_path):
     api = _fake_scanner_api()
-    with patch("pentool.cli.scan._import_scanner_api", return_value=MagicMock(return_value=api)) as SA:
+    with patch("pentool.cli.scan._import_scanner_api", return_value=MagicMock(return_value=api)) as _SA:
         r = CliRunner().invoke(scan, ["report", "--output", str(tmp_path / "r.html")])
     assert r.exit_code == 0
     assert "No findings in database." in r.output
@@ -95,6 +93,7 @@ def test_scan_report_with_findings(tmp_path):
 
 
 # ── active ──────────────────────────────────────────────────────────────────
+
 
 def test_scan_active_basic(tmp_path):
     """ScanRunner запускает ScanService.run() с правильными target."""
@@ -127,8 +126,11 @@ def test_scan_active_with_checks_and_output(tmp_path):
         patch("pentool.cli.scan._import_scanner_api", return_value=fake_scanner_api),
         patch("pentool.services.scan_service.ScanService", return_value=fake_service),
     ):
-        r = CliRunner().invoke(scan, ["active", "--url", "http://a/", "--url", "http://b/",
-                                      "--checks", "xss,sqli", "--output", str(out)], input="")
+        r = CliRunner().invoke(
+            scan,
+            ["active", "--url", "http://a/", "--url", "http://b/", "--checks", "xss,sqli", "--output", str(out)],
+            input="",
+        )
     assert r.exit_code == 0
     # Проверяем что ScanService.run() был вызван
     fake_service.run.assert_awaited_once()

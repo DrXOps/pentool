@@ -26,9 +26,10 @@ import pytest
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.base import BaseActiveCheck
-from pentool.modules.scanner.checks.sqli import SQLiUnionCheck, _UNION_PAYLOADS
+from pentool.modules.scanner.checks.sqli import _UNION_PAYLOADS, SQLiUnionCheck
 from pentool.modules.scanner.engine import ScanEngine
 from pentool.modules.scanner.mutator import InjectionPoint
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 _MYSQL_ERROR = "You have an error in your SQL syntax; check the manual"
@@ -71,8 +72,7 @@ class TestAnalyze:
         req = _make_request("http://test/api?id=1")
         mutated = _make_request("http://test/api?id=1' UNION SELECT NULL--")
         point = _make_point("id")
-        resp = ParsedResponse(status=500, reason="Internal Server Error",
-                               headers={}, body=_MYSQL_ERROR)
+        resp = ParsedResponse(status=500, reason="Internal Server Error", headers={}, body=_MYSQL_ERROR)
         finding = await check.analyze(req, mutated, point, "' UNION SELECT NULL--", resp)
         assert finding is not None
         assert finding.type == "sqli_union"
@@ -101,6 +101,7 @@ class TestEngineIntegration:
         # the license gate, not the check. Save/restore the global cache so
         # suite order doesn't leak state into other tests.
         import pentool.core.license as lic_mod
+
         saved = lic_mod._session_license
         lic_mod._session_license = lic_mod.LicenseInfo(
             valid=True, plan="pro", features=["scanner_pro", "scanner_sqli_union"]
@@ -114,8 +115,7 @@ class TestEngineIntegration:
             async def send(self, request):
                 decoded = unquote(request.url) + (request.body or "")
                 body = _MYSQL_ERROR if "SELECT" in decoded else "ok"
-                return ParsedResponse(status=500, reason="Internal Server Error",
-                                       headers={}, body=body)
+                return ParsedResponse(status=500, reason="Internal Server Error", headers={}, body=body)
 
             async def get(self, url, headers=None):
                 return ParsedResponse(status=200, reason="OK", headers={}, body="")

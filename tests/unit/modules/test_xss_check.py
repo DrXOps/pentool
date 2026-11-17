@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 # Skip all tests if scanner module not available
 pytest.importorskip("pentool.modules.scanner")
@@ -11,9 +12,11 @@ pytest.importorskip("pentool.modules.scanner")
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 class TestMakeMarker:
     def setup_method(self):
-        from pentool.modules.scanner.checks.xss import _make_marker, _extract_marker
+        from pentool.modules.scanner.checks.xss import _extract_marker, _make_marker
+
         self.make = _make_marker
         self.extract = _extract_marker
 
@@ -32,12 +35,14 @@ class TestMakeMarker:
 
     def test_extract_none_when_no_marker(self):
         from pentool.modules.scanner.checks.xss import _extract_marker
+
         assert _extract_marker("no marker here") is None
 
 
 class TestMarkerInBody:
     def setup_method(self):
-        from pentool.modules.scanner.checks.xss import _marker_in_body, _make_marker
+        from pentool.modules.scanner.checks.xss import _make_marker, _marker_in_body
+
         self.check = _marker_in_body
         self.make = _make_marker
 
@@ -53,6 +58,7 @@ class TestMarkerInBody:
 class TestNormalizeHtmlEntities:
     def setup_method(self):
         from pentool.modules.scanner.checks.xss import _normalize_html_entities
+
         self.fn = _normalize_html_entities
 
     def test_apos(self):
@@ -72,6 +78,7 @@ class TestNormalizeHtmlEntities:
 class TestDetectContext:
     def setup_method(self):
         from pentool.modules.scanner.checks.xss import _detect_context
+
         self.fn = _detect_context
 
     def test_html_body(self):
@@ -107,6 +114,7 @@ class TestDetectContext:
 class TestFingerprintFilters:
     def setup_method(self):
         from pentool.modules.scanner.checks.xss import _fingerprint_filters
+
         self.fn = _fingerprint_filters
 
     def test_no_filters(self):
@@ -126,6 +134,7 @@ class TestFingerprintFilters:
 class TestPayloadsForContext:
     def setup_method(self):
         from pentool.modules.scanner.checks.xss import _payloads_for_context
+
         self.fn = _payloads_for_context
 
     def test_html_body_returns_list(self):
@@ -152,6 +161,7 @@ class TestPayloadsForContext:
 class TestApplyBypassTransforms:
     def setup_method(self):
         from pentool.modules.scanner.checks.xss import _apply_bypass_transforms
+
         self.fn = _apply_bypass_transforms
 
     def test_returns_variants(self):
@@ -174,6 +184,7 @@ class TestApplyBypassTransforms:
 class TestAnalyzeCsp:
     def setup_method(self):
         from pentool.modules.scanner.checks.xss import _analyze_csp
+
         self.fn = _analyze_csp
 
     def test_no_csp_returns_empty(self):
@@ -199,6 +210,7 @@ class TestAnalyzeCsp:
 class TestXSSCheckClass:
     def setup_method(self):
         from pentool.modules.scanner.checks.xss import XSSCheck
+
         self.check = XSSCheck()
 
     def test_name(self):
@@ -213,8 +225,9 @@ class TestXSSCheckClass:
 
     @pytest.mark.asyncio
     async def test_analyze_no_reflection(self):
-        from pentool.utils.parser import ParsedRequest, ParsedResponse
         from pentool.modules.scanner.checks.xss import _make_marker
+
+        from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         marker, tagged = _make_marker("<img src=x onerror=alert(1)>")
         req = ParsedRequest(method="GET", url="http://x.com/", headers={}, body="")
@@ -228,8 +241,9 @@ class TestXSSCheckClass:
 
     @pytest.mark.asyncio
     async def test_analyze_with_reflection(self):
-        from pentool.utils.parser import ParsedRequest, ParsedResponse
         from pentool.modules.scanner.checks.xss import _make_marker
+
+        from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         marker, tagged = _make_marker("<img src=x onerror=alert(1)>")
         req = ParsedRequest(method="GET", url="http://x.com/", headers={}, body="")
@@ -277,7 +291,7 @@ class TestXSSCheckScan:
 
     def _echo_client(self):
         from urllib.parse import unquote
-        import asyncio
+
         from pentool.utils.parser import ParsedResponse
 
         class Echo:
@@ -291,20 +305,20 @@ class TestXSSCheckScan:
     async def test_scan_per_point_detects_reflected_xss(self):
         from pentool.modules.scanner.checks.xss import XSSCheck
         from pentool.modules.scanner.mutator import InjectionPoint, RequestMutator
+
         from pentool.utils.parser import ParsedRequest
 
         check = XSSCheck()
         req = ParsedRequest(method="GET", url="http://x.com/search?q=1", headers={}, body="")
         point = InjectionPoint(kind="get", name="q", original_value="1")
-        findings = await check.scan(
-            req, None, self._echo_client(), point=point, mutator=RequestMutator()
-        )
+        findings = await check.scan(req, None, self._echo_client(), point=point, mutator=RequestMutator())
         assert any(f.type == "xss" for f in findings)
         assert any("Reflected XSS" in f.name for f in findings)
 
     @pytest.mark.asyncio
     async def test_scan_global_mode(self):
         from pentool.modules.scanner.checks.xss import XSSCheck
+
         from pentool.utils.parser import ParsedRequest
 
         check = XSSCheck()
@@ -317,12 +331,13 @@ class TestXSSEngineIntegration:
     """End-to-end through ScanEngine — reflected XSS surfaced via the
     per-point scan()-pipeline."""
 
-
     @pytest.mark.asyncio
     async def test_engine_detects_reflected_xss(self):
         from urllib.parse import unquote
+
         from pentool.modules.scanner.checks.xss import XSSCheck
         from pentool.modules.scanner.engine import ScanEngine
+
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         class FakeClient:

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.fixture
@@ -21,6 +22,7 @@ def event_bus():
 @pytest.fixture
 def service(proxy_api, event_bus, tmp_path):
     from pentool.services.proxy_service import ProxyService
+
     svc = ProxyService(
         proxy_api=proxy_api,
         db_path=str(tmp_path / "test.db"),
@@ -117,10 +119,13 @@ class TestProxyServiceGetHistory:
         proxy.scope = ["example.com"]
         proxy_api.get_proxy.return_value = proxy
         service._storage.get_metadata_batch = AsyncMock(return_value=[])
-        from pentool.collections.filter_predicate import FilterPredicate, FilterOp, FilterSpec
-        spec = FilterSpec(predicates=[
-            FilterPredicate("scope_only", FilterOp.EQ, True),
-        ])
+        from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
+
+        spec = FilterSpec(
+            predicates=[
+                FilterPredicate("scope_only", FilterOp.EQ, True),
+            ]
+        )
         await service.get_history(filters=spec)
         call_kwargs = service._storage.get_metadata_batch.call_args[1]
         stored_filters = call_kwargs["filters"]

@@ -6,7 +6,6 @@ orchestrated over a fake http_client (no real HTTP).
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -18,6 +17,7 @@ from pentool.utils.auth_login import (
 )
 
 # ── pure parsers ─────────────────────────────────────────────────────────────
+
 
 class TestExtractUserToken:
     def test_normal_attribute_order(self) -> None:
@@ -41,9 +41,15 @@ class TestExtractPhpsessid:
         assert extract_phpsessid("PHPSESSID=abc123; path=/; httponly") == "abc123"
 
     def test_from_list(self) -> None:
-        assert extract_phpsessid([
-            "lang=en; path=/", "PHPSESSID=xyz789; path=/",
-        ]) == "xyz789"
+        assert (
+            extract_phpsessid(
+                [
+                    "lang=en; path=/",
+                    "PHPSESSID=xyz789; path=/",
+                ]
+            )
+            == "xyz789"
+        )
 
     def test_missing_returns_none(self) -> None:
         assert extract_phpsessid("lang=en; path=/") is None
@@ -82,14 +88,16 @@ class _FakeClient:
 class TestBuildSessionHeaders:
     @pytest.mark.asyncio
     async def test_successful_login_returns_cookie(self) -> None:
-        client = _FakeClient([
-            # GET /login.php -> 200 + Set-Cookie + CSRF token in body
-            _ok_response(200, _LICENSE_BODY, {"Set-Cookie": "PHPSESSID=sess1; path=/"}),
-            # POST /login.php -> 200 (accepted)
-            _ok_response(200, "", {"Set-Cookie": "PHPSESSID=sess2; path=/"}),
-            # GET /index.php -> 200 (logged in)
-            _ok_response(200, "<html>index</html>"),
-        ])
+        client = _FakeClient(
+            [
+                # GET /login.php -> 200 + Set-Cookie + CSRF token in body
+                _ok_response(200, _LICENSE_BODY, {"Set-Cookie": "PHPSESSID=sess1; path=/"}),
+                # POST /login.php -> 200 (accepted)
+                _ok_response(200, "", {"Set-Cookie": "PHPSESSID=sess2; path=/"}),
+                # GET /index.php -> 200 (logged in)
+                _ok_response(200, "<html>index</html>"),
+            ]
+        )
         import pentool.utils.auth_login as al
 
         # Patch the CSRF parser so we don't depend on DVWA HTML shape; the real
@@ -98,8 +106,11 @@ class TestBuildSessionHeaders:
         al.extract_user_token = lambda html: "0123456789abcdef0123456789abcdef"
         try:
             headers = await build_session_headers(
-                url="http://dvwa.local:7474", username="admin", password="password",
-                use_cache=False, http_client=client,
+                url="http://dvwa.local:7474",
+                username="admin",
+                password="password",
+                use_cache=False,
+                http_client=client,
             )
         finally:
             al.extract_user_token = orig_token
@@ -113,18 +124,23 @@ class TestBuildSessionHeaders:
     async def test_redirect_to_login_raises(self) -> None:
         import pentool.utils.auth_login as al
 
-        client = _FakeClient([
-            _ok_response(200, _LICENSE_BODY, {"Set-Cookie": "PHPSESSID=badsess; path=/"}),
-            _ok_response(302, "", {"Location": "/login.php"}),
-            _ok_response(302, "", {"Location": "/login.php"}),
-        ])
+        client = _FakeClient(
+            [
+                _ok_response(200, _LICENSE_BODY, {"Set-Cookie": "PHPSESSID=badsess; path=/"}),
+                _ok_response(302, "", {"Location": "/login.php"}),
+                _ok_response(302, "", {"Location": "/login.php"}),
+            ]
+        )
         orig = al.extract_user_token
         al.extract_user_token = lambda html: "0123456789abcdef0123456789abcdef"
         try:
             with pytest.raises(RuntimeError, match="login.php"):
                 await build_session_headers(
-                    url="http://x.local", username="u", password="p",
-                    use_cache=False, http_client=client,
+                    url="http://x.local",
+                    username="u",
+                    password="p",
+                    use_cache=False,
+                    http_client=client,
                 )
         finally:
             al.extract_user_token = orig
@@ -156,7 +172,10 @@ class TestBuildSessionHeaders:
             al._SESSION_CACHE.clear()
             with patch("pentool.utils.http_client.HTTPClient", _OwnedClient):
                 await build_session_headers(
-                    url="http://own.local", username="u", password="p", use_cache=False,
+                    url="http://own.local",
+                    username="u",
+                    password="p",
+                    use_cache=False,
                 )
         finally:
             al.extract_user_token = orig_token

@@ -88,9 +88,9 @@ class TestNarrowLayout:
 
             await pilot.resize_terminal(60, 20)
             await pilot.pause()
-            assert (
-                screen._inspector_visible is True
-            ), "resizing must not flip the user's preference — that is the F-027 bug"
+            assert screen._inspector_visible is True, (
+                "resizing must not flip the user's preference — that is the F-027 bug"
+            )
             assert panel.styles.display == "none", "a narrow terminal should hide the inspector"
 
             await pilot.resize_terminal(120, 30)

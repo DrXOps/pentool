@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
-
-import pytest
 
 from pentool.core.project import load_project, save_project
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
 # ── save_project ───────────────────────────────────────────────────────────────
+
 
 class TestSaveProject:
     def test_creates_file(self, tmp_path: Path) -> None:
@@ -52,6 +50,7 @@ class TestSaveProject:
 
 # ── load_project ───────────────────────────────────────────────────────────────
 
+
 class TestLoadProject:
     def test_load_valid(self, tmp_path: Path) -> None:
         p = tmp_path / "proj.json"
@@ -77,8 +76,9 @@ class TestLoadProject:
         original = {
             "proxy": {"scope": ["a.com"], "match_replace": []},
             "http_history": [],
-            "scanner": {"findings": [{"id": "x", "type": "sqli", "name": "N",
-                                       "url": "http://a.com", "severity": "high"}]},
+            "scanner": {
+                "findings": [{"id": "x", "type": "sqli", "name": "N", "url": "http://a.com", "severity": "high"}]
+            },
             "intruder": {"results": []},
             "spider": {"sessions": []},
             "target": {"sitemap": {}},
@@ -92,9 +92,11 @@ class TestLoadProject:
 
 # ── ScannerAPI.export_project_data / import_project_data ──────────────────────
 
+
 class TestScannerAPIProjectData:
     def test_export_empty(self) -> None:
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path="")
         data = api.export_project_data()
         assert "findings" in data
@@ -102,6 +104,7 @@ class TestScannerAPIProjectData:
 
     def test_import_restores_findings(self) -> None:
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path="")
         blob = {
             "findings": [
@@ -119,6 +122,7 @@ class TestScannerAPIProjectData:
 
     def test_import_skips_invalid(self) -> None:
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path="")
         blob = {
             "findings": [
@@ -131,6 +135,7 @@ class TestScannerAPIProjectData:
 
     def test_import_empty_blob(self) -> None:
         from pentool.api.scanner_api import ScannerAPI
+
         api = ScannerAPI(db_path="")
         count = api.import_project_data({})
         assert count == 0
@@ -138,9 +143,11 @@ class TestScannerAPIProjectData:
 
 # ── TargetAPI.export_project_data / import_project_data ───────────────────────
 
+
 class TestTargetAPIProjectData:
     def test_export_empty(self) -> None:
         from pentool.api.target_api import TargetAPI
+
         api = TargetAPI(db_path="")
         data = api.export_project_data()
         assert "sitemap" in data
@@ -148,12 +155,14 @@ class TestTargetAPIProjectData:
 
     def test_import_empty(self) -> None:
         from pentool.api.target_api import TargetAPI
+
         api = TargetAPI(db_path="")
         count = api.import_project_data({})
         assert count == 0
 
     def test_import_restores_nodes(self) -> None:
         from pentool.api.target_api import TargetAPI
+
         api = TargetAPI(db_path="")
         blob = {
             "sitemap": {
@@ -180,6 +189,7 @@ class TestTargetAPIProjectData:
     def test_roundtrip(self) -> None:
         from pentool.api.target_api import TargetAPI
         from pentool.utils.parser import ParsedRequest
+
         api = TargetAPI(db_path="")
         req = ParsedRequest(
             method="GET",
@@ -198,9 +208,11 @@ class TestTargetAPIProjectData:
 
 # ── IntruderAPI.export_project_data / import_project_data ─────────────────────
 
+
 class TestIntruderAPIProjectData:
     def test_export_no_attack(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         data = api.export_project_data()
         assert "results" in data
@@ -208,12 +220,14 @@ class TestIntruderAPIProjectData:
 
     def test_import_empty(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         count = api.import_project_data({})
         assert count == 0
 
     def test_import_restores_results(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         blob = {
             "results": [
@@ -236,6 +250,7 @@ class TestIntruderAPIProjectData:
 
     def test_import_handles_missing_timestamp(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         blob = {
             "results": [

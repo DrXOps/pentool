@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pentool.api.payload_serialization import serialize_payloads, deserialize_payloads
+from pentool.api.payload_serialization import deserialize_payloads, serialize_payloads
 from pentool.modules.intruder import (
-    CharPayloadSource,
     ChainedPayloadSource,
+    CharPayloadSource,
     NumericPayloadSource,
 )
 
@@ -30,6 +30,7 @@ class TestSerialize:
         p = tmp_path / "list.txt"
         p.write_text("a\nb\nc\n")
         from pentool.modules.intruder import FilePayloadSource
+
         src = FilePayloadSource(str(p))
         src.set_count(3)
         out = serialize_payloads([src])

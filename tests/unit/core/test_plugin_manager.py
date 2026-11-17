@@ -6,8 +6,6 @@ import textwrap
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from pentool.core.license import LicenseInfo
 from pentool.core.plugin_manager import (
     CURRENT_API_VERSION,
@@ -19,8 +17,8 @@ from pentool.core.plugin_manager import (
     PluginMeta,
 )
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _write_plugin(path: Path, code: str) -> None:
     path.write_text(textwrap.dedent(code), encoding="utf-8")
@@ -101,9 +99,11 @@ def _screen_plugin_code(name: str = "screen_plugin") -> str:
 
 # ── PluginHook ─────────────────────────────────────────────────────────────────
 
+
 class TestPluginHook:
     def test_register_screen(self):
         from textual.widget import Widget
+
         hook = PluginHook("test_plugin")
         hook.register_screen("My Screen", Widget)
         assert len(hook._screens) == 1
@@ -132,12 +132,14 @@ class TestPluginHook:
 
     def test_register_screen_with_hotkey(self):
         from textual.widget import Widget
+
         hook = PluginHook("p")
         hook.register_screen("Screen", Widget, hotkey="S+0")
         assert hook._screens[0].hotkey == "S+0"
 
 
 # ── PluginManager — free plugins ───────────────────────────────────────────────
+
 
 class TestPluginManagerFree:
     def test_loads_free_plugin(self, tmp_path):
@@ -204,13 +206,16 @@ class TestPluginManagerFree:
 
 # ── PluginManager — PRO plugins with license ──────────────────────────────────
 
+
 class TestPluginManagerProLicense:
     def _make_pro_pm(self, tmp_path, info: LicenseInfo) -> PluginManager:
         plugin_file = tmp_path / "pro_plugin.py"
         _write_plugin(plugin_file, _pro_plugin_code())
         pm = PluginManager()
-        with patch("pentool.core.plugin_manager.PluginManager._check_license_feature",
-                   return_value=info.has_feature("scanner_pro")):
+        with patch(
+            "pentool.core.plugin_manager.PluginManager._check_license_feature",
+            return_value=info.has_feature("scanner_pro"),
+        ):
             pm.load_plugins([str(tmp_path)])
         return pm
 
@@ -236,8 +241,7 @@ class TestPluginManagerProLicense:
         _write_plugin(plugin_file, _pro_plugin_code(feature="reports_pro"))
         pm = PluginManager()
         # PRO license but only with scanner_pro, without reports_pro
-        with patch("pentool.core.plugin_manager.PluginManager._check_license_feature",
-                   return_value=False):
+        with patch("pentool.core.plugin_manager.PluginManager._check_license_feature", return_value=False):
             pm.load_plugins([str(tmp_path)])
         assert len(pm.loaded_plugins()) == 0
 
@@ -246,6 +250,7 @@ class TestPluginManagerProLicense:
         _write_plugin(tmp_path / "free_plugin.py", _free_plugin_code())
         _write_plugin(tmp_path / "pro_plugin.py", _pro_plugin_code())
         pm = PluginManager()
+
         # free → OK, pro → blocked
         def check_feature(feature):
             return False  # no license
@@ -265,11 +270,9 @@ class TestPluginManagerProLicense:
 
     def test_is_feature_available_delegates_to_license(self):
         pm = PluginManager()
-        with patch("pentool.core.plugin_manager.PluginManager._check_license_feature",
-                   return_value=True):
+        with patch("pentool.core.plugin_manager.PluginManager._check_license_feature", return_value=True):
             assert pm.is_feature_available("scanner_pro") is True
-        with patch("pentool.core.plugin_manager.PluginManager._check_license_feature",
-                   return_value=False):
+        with patch("pentool.core.plugin_manager.PluginManager._check_license_feature", return_value=False):
             assert pm.is_feature_available("scanner_pro") is False
 
     def test_check_license_feature_no_license_module(self):
@@ -282,12 +285,15 @@ class TestPluginManagerProLicense:
 
 # ── PluginManager — load_user_plugins ─────────────────────────────────────────
 
+
 class TestPluginManagerUserPlugins:
     def test_load_user_plugins_nonexistent_dir(self):
         """No ~/.pentool/plugins — no crash."""
         pm = PluginManager()
-        with patch("pentool.core.plugin_manager.USER_PLUGINS_DIR", Path("/nonexistent/path")), \
-             patch("pentool.core.license.PRO_PACKAGE_DIR", Path("/nonexistent/pro")):
+        with (
+            patch("pentool.core.plugin_manager.USER_PLUGINS_DIR", Path("/nonexistent/path")),
+            patch("pentool.core.license.PRO_PACKAGE_DIR", Path("/nonexistent/pro")),
+        ):
             pm.load_user_plugins()  # no exception
         assert len(pm.loaded_plugins()) == 0
 
@@ -295,13 +301,16 @@ class TestPluginManagerUserPlugins:
         plugin_file = tmp_path / "my_plugin.py"
         _write_plugin(plugin_file, _free_plugin_code("user_plugin"))
         pm = PluginManager()
-        with patch("pentool.core.plugin_manager.USER_PLUGINS_DIR", tmp_path), \
-             patch("pentool.core.license.PRO_PACKAGE_DIR", Path("/nonexistent/pro")):
+        with (
+            patch("pentool.core.plugin_manager.USER_PLUGINS_DIR", tmp_path),
+            patch("pentool.core.license.PRO_PACKAGE_DIR", Path("/nonexistent/pro")),
+        ):
             pm.load_user_plugins()
         assert len(pm.loaded_plugins()) == 1
 
 
 # ── BasePlugin / BaseCheck / BaseScanner ──────────────────────────────────────
+
 
 class TestBaseClasses:
     def test_base_plugin_defaults(self):
@@ -331,6 +340,7 @@ class TestBaseClasses:
 
         class MyCheck(BaseCheck):
             name = "check"
+
             async def scan(self, target, http_client, **kwargs):
                 calls.append("called")
                 return ["finding"]
@@ -349,6 +359,7 @@ class TestBaseClasses:
 
         class BadCheck(BaseCheck):
             name = "bad"
+
             async def scan(self, target, http_client, **kwargs):
                 raise RuntimeError("explosion")
 
@@ -362,6 +373,7 @@ class TestBaseClasses:
 
 
 # ── PluginMeta ─────────────────────────────────────────────────────────────────
+
 
 class TestPluginMeta:
     def test_defaults(self):

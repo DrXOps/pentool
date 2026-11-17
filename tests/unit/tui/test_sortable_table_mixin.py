@@ -17,7 +17,6 @@ from textual_fastdatatable import DataTable
 
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -33,6 +32,7 @@ class _MinimalHost:
     def run_worker(self, coro) -> None:
         """Заглушка run_worker — выполняет корутину синхронно."""
         import asyncio
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -53,6 +53,7 @@ class _MinimalHost:
 
 class _Host(_MinimalHost, SortableTableMixin):
     """Полноценный host: миксин + минимальная заглушка."""
+
     pass
 
 
@@ -72,14 +73,20 @@ def _make_event(column_index: int, table_id: str = "request-list") -> MagicMock:
 class TestSortTableSql:
     COL_NAMES = ["ID", "Host", "Method", "Status", "Size", "Time"]
     ORDER_BY_MAP = {
-        "ID": "id", "Host": "host", "Method": "method",
-        "Status": "status_code", "Size": "length", "Time": "timestamp",
+        "ID": "id",
+        "Host": "host",
+        "Method": "method",
+        "Status": "status_code",
+        "Size": "length",
+        "Time": "timestamp",
     }
 
     def _reload_cb(self, order_by: str, order_dir: str):
         """Возвращает корутину, которая сохранит параметры в _last_reload."""
+
         async def _inner(host: _Host):
             host._last_reload = (order_by, order_dir)
+
         return _inner(self._host)
 
     def _call_sort(self, host: _Host, col_idx: int) -> None:

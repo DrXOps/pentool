@@ -22,18 +22,21 @@ def _write_payload_file(tmp_path: Path, lines: list[str], name: str = "payloads.
 class TestFilePayloadSource:
     def test_iterates_lines(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, ["admin", "root", "guest"])
         source = FilePayloadSource(path)
         assert list(source) == ["admin", "root", "guest"]
 
     def test_skips_blank_and_comment_lines(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, ["admin", "", "# comment", "  ", "root"])
         source = FilePayloadSource(path)
         assert list(source) == ["admin", "root"]
 
     def test_strips_whitespace(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, ["  admin  ", "root\t"])
         source = FilePayloadSource(path)
         assert list(source) == ["admin", "root"]
@@ -41,6 +44,7 @@ class TestFilePayloadSource:
     def test_repeated_iteration_reopens_file(self, tmp_path: Path) -> None:
         """Needed by Pitchfork's zip() and cartesian product re-iteration."""
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, ["a", "b", "c"])
         source = FilePayloadSource(path)
         assert list(source) == ["a", "b", "c"]
@@ -48,6 +52,7 @@ class TestFilePayloadSource:
 
     def test_len_counts_lazily_and_caches(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, ["a", "b", "c", "d"])
         source = FilePayloadSource(path)
         assert source.cached_count is None
@@ -58,6 +63,7 @@ class TestFilePayloadSource:
 
     def test_set_count_avoids_rescan(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, ["a", "b"])
         source = FilePayloadSource(path)
         source.set_count(999)  # deliberately wrong, to prove no rescan happens
@@ -66,16 +72,19 @@ class TestFilePayloadSource:
 
     def test_bool_true_for_nonempty(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, ["a"])
         assert bool(FilePayloadSource(path)) is True
 
     def test_bool_false_for_empty_file(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, [])
         assert bool(FilePayloadSource(path)) is False
 
     def test_head_returns_first_n_only(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, [f"p{i}" for i in range(100)])
         source = FilePayloadSource(path)
         head = source.head(5)
@@ -83,6 +92,7 @@ class TestFilePayloadSource:
 
     def test_head_does_not_force_count(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         path = _write_payload_file(tmp_path, [f"p{i}" for i in range(50)])
         source = FilePayloadSource(path)
         source.head(3)
@@ -90,6 +100,7 @@ class TestFilePayloadSource:
 
     def test_missing_file_iteration_raises(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource
+
         source = FilePayloadSource(str(tmp_path / "nonexistent.txt"))
         with pytest.raises(OSError):
             list(source)
@@ -98,11 +109,13 @@ class TestFilePayloadSource:
 class TestCountLinesWithProgress:
     def test_counts_qualifying_lines(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import count_lines_with_progress
+
         path = _write_payload_file(tmp_path, ["a", "", "# skip", "b", "c"])
         assert count_lines_with_progress(path) == 3
 
     def test_progress_callback_fires_with_final_totals(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import count_lines_with_progress
+
         path = _write_payload_file(tmp_path, [f"p{i}" for i in range(10)])
         calls = []
         count_lines_with_progress(path, on_progress=lambda c, b, t: calls.append((c, b, t)))
@@ -115,28 +128,35 @@ class TestCountLinesWithProgress:
 class TestLazyCartesianProduct:
     def test_matches_itertools_product_two_sets(self) -> None:
         import itertools
+
         from pentool.modules.intruder import _lazy_cartesian_product
+
         a, b = ["x", "y"], ["1", "2"]
         assert list(_lazy_cartesian_product(a, b)) == list(itertools.product(a, b))
 
     def test_matches_itertools_product_three_sets(self) -> None:
         import itertools
+
         from pentool.modules.intruder import _lazy_cartesian_product
+
         sets = [["a", "b"], ["x", "y"], ["1", "2", "3"]]
         assert list(_lazy_cartesian_product(*sets)) == list(itertools.product(*sets))
 
     def test_single_set(self) -> None:
         from pentool.modules.intruder import _lazy_cartesian_product
+
         assert list(_lazy_cartesian_product(["a", "b", "c"])) == [("a",), ("b",), ("c",)]
 
     def test_empty_input_yields_nothing(self) -> None:
         from pentool.modules.intruder import _lazy_cartesian_product
+
         assert list(_lazy_cartesian_product()) == []
 
     def test_works_with_file_backed_sets(self, tmp_path: Path) -> None:
         """The whole point — a FilePayloadSource set must not need to be
         materialized to compute a cartesian product over it."""
         from pentool.modules.intruder import FilePayloadSource, _lazy_cartesian_product
+
         path_a = _write_payload_file(tmp_path, ["a", "b"], name="a.txt")
         path_b = _write_payload_file(tmp_path, ["1", "2"], name="b.txt")
         source_a = FilePayloadSource(path_a)
@@ -148,6 +168,7 @@ class TestLazyCartesianProduct:
 class TestProcessedPayloads:
     def test_applies_function_lazily(self) -> None:
         from pentool.modules.intruder import ProcessedPayloads
+
         calls = []
 
         def apply(p, ops):
@@ -162,6 +183,7 @@ class TestProcessedPayloads:
 
     def test_len_delegates_to_source(self, tmp_path: Path) -> None:
         from pentool.modules.intruder import FilePayloadSource, ProcessedPayloads
+
         path = _write_payload_file(tmp_path, ["a", "b", "c"])
         source = FilePayloadSource(path)
         wrapped = ProcessedPayloads(source, [], lambda p, ops: p)
@@ -169,10 +191,12 @@ class TestProcessedPayloads:
 
     def test_bool_true_for_nonempty_source(self) -> None:
         from pentool.modules.intruder import ProcessedPayloads
+
         assert bool(ProcessedPayloads(["a"], [], lambda p, ops: p)) is True
 
     def test_bool_false_for_empty_source(self) -> None:
         from pentool.modules.intruder import ProcessedPayloads
+
         assert bool(ProcessedPayloads([], [], lambda p, ops: p)) is False
 
 
@@ -181,7 +205,8 @@ class TestCountTotalDoesNotMaterialize:
     (potentially enormous) combination iterator."""
 
     def test_sniper_count_total(self) -> None:
-        from pentool.modules.intruder import IntruderAttack, IntruderConfig, AttackType
+        from pentool.modules.intruder import AttackType, IntruderAttack, IntruderConfig
+
         config = IntruderConfig(
             template="§a§ §b§ §c§",
             attack_type=AttackType.SNIPER,
@@ -196,8 +221,12 @@ class TestCountTotalDoesNotMaterialize:
         attack over a FilePayloadSource must use its cached/streamed len(),
         not iterate the (potentially huge) cartesian product."""
         from pentool.modules.intruder import (
-            AttackType, FilePayloadSource, IntruderAttack, IntruderConfig,
+            AttackType,
+            FilePayloadSource,
+            IntruderAttack,
+            IntruderConfig,
         )
+
         path = _write_payload_file(tmp_path, ["a", "b", "c"])
         source = FilePayloadSource(path)
         config = IntruderConfig(
@@ -209,7 +238,8 @@ class TestCountTotalDoesNotMaterialize:
         assert attack._count_total() == 6  # 2 * 3
 
     def test_empty_payload_sets_count_total_zero(self) -> None:
-        from pentool.modules.intruder import IntruderAttack, IntruderConfig, AttackType
+        from pentool.modules.intruder import AttackType, IntruderAttack, IntruderConfig
+
         config = IntruderConfig(
             template="§a§",
             attack_type=AttackType.SNIPER,
@@ -228,7 +258,11 @@ class TestRunDoesNotMaterializeCombinations:
     @pytest.mark.asyncio
     async def test_run_completes_with_file_backed_payload_set(self, tmp_path: Path, monkeypatch) -> None:
         from pentool.modules.intruder import (
-            AttackType, FilePayloadSource, IntruderAttack, IntruderConfig, IntruderResult,
+            AttackType,
+            FilePayloadSource,
+            IntruderAttack,
+            IntruderConfig,
+            IntruderResult,
         )
 
         path = _write_payload_file(tmp_path, ["p1", "p2", "p3"])
@@ -243,9 +277,14 @@ class TestRunDoesNotMaterializeCombinations:
 
         async def _fake_send_request(req_num, payload_values, request_raw, client=None):
             return IntruderResult(
-                id=str(req_num), attack_id=attack.attack_id, request_number=req_num,
-                payload_values=payload_values, request_raw=request_raw,
-                response_status=200, response_length=2, response_time_ms=1,
+                id=str(req_num),
+                attack_id=attack.attack_id,
+                request_number=req_num,
+                payload_values=payload_values,
+                request_raw=request_raw,
+                response_status=200,
+                response_length=2,
+                response_time_ms=1,
             )
 
         monkeypatch.setattr(attack, "_send_request", _fake_send_request)
@@ -273,16 +312,19 @@ class TestNumericPayloadSource:
 
     def test_iterates_range(self) -> None:
         from pentool.modules.intruder import NumericPayloadSource
+
         source = NumericPayloadSource(1, 6)
         assert list(source) == ["1", "2", "3", "4", "5"]
 
     def test_step(self) -> None:
         from pentool.modules.intruder import NumericPayloadSource
+
         source = NumericPayloadSource(0, 10, 2)
         assert list(source) == ["0", "2", "4", "6", "8"]
 
     def test_empty_range(self) -> None:
         from pentool.modules.intruder import NumericPayloadSource
+
         source = NumericPayloadSource(5, 5)
         assert list(source) == []
         assert bool(source) is False
@@ -291,20 +333,24 @@ class TestNumericPayloadSource:
         """The whole point: len() must not enumerate — a 10M-value range
         must answer instantly."""
         from pentool.modules.intruder import NumericPayloadSource
+
         source = NumericPayloadSource(0, 10_000_000)
         assert len(source) == 10_000_000
 
     def test_bool_true_for_nonempty(self) -> None:
         from pentool.modules.intruder import NumericPayloadSource
+
         assert bool(NumericPayloadSource(0, 1)) is True
 
     def test_head_returns_first_n_only(self) -> None:
         from pentool.modules.intruder import NumericPayloadSource
+
         source = NumericPayloadSource(0, 10_000_000)
         assert source.head(5) == ["0", "1", "2", "3", "4"]
 
     def test_repeated_iteration(self) -> None:
         from pentool.modules.intruder import NumericPayloadSource
+
         source = NumericPayloadSource(0, 3)
         assert list(source) == ["0", "1", "2"]
         assert list(source) == ["0", "1", "2"]
@@ -313,6 +359,7 @@ class TestNumericPayloadSource:
         """step=0 would raise ValueError from range() — defends against a
         bad/empty Input field defaulting to 0 in the TUI dialog."""
         from pentool.modules.intruder import NumericPayloadSource
+
         source = NumericPayloadSource(0, 3, step=0)
         assert list(source) == ["0", "1", "2"]
 
@@ -327,11 +374,13 @@ class TestCharPayloadSource:
 
     def test_single_length(self) -> None:
         from pentool.modules.intruder import CharPayloadSource
+
         source = CharPayloadSource("ab", 1, 1)
         assert sorted(source) == ["a", "b"]
 
     def test_length_range(self) -> None:
         from pentool.modules.intruder import CharPayloadSource
+
         source = CharPayloadSource("ab", 1, 2)
         assert sorted(source) == ["a", "aa", "ab", "b", "ba", "bb"]
 
@@ -339,21 +388,25 @@ class TestCharPayloadSource:
         """The whole point: len() for a combinatorially huge charset/length
         must answer instantly via arithmetic, not iteration."""
         from pentool.modules.intruder import CharPayloadSource
+
         source = CharPayloadSource("abcdefghijklmnopqrstuvwxyz", 1, 5)
-        expected = sum(26 ** n for n in range(1, 6))
+        expected = sum(26**n for n in range(1, 6))
         assert len(source) == expected
         assert expected > 10_000_000  # confirms this really is a huge set
 
     def test_bool_false_for_empty_charset(self) -> None:
         from pentool.modules.intruder import CharPayloadSource
+
         assert bool(CharPayloadSource("", 1, 1)) is False
 
     def test_bool_false_for_min_gt_max(self) -> None:
         from pentool.modules.intruder import CharPayloadSource
+
         assert bool(CharPayloadSource("ab", 3, 1)) is False
 
     def test_head_returns_first_n_only(self) -> None:
         from pentool.modules.intruder import CharPayloadSource
+
         source = CharPayloadSource("abcdefghijklmnopqrstuvwxyz", 1, 5)
         head = source.head(3)
         assert len(head) == 3
@@ -361,6 +414,7 @@ class TestCharPayloadSource:
 
     def test_repeated_iteration(self) -> None:
         from pentool.modules.intruder import CharPayloadSource
+
         source = CharPayloadSource("ab", 1, 1)
         assert sorted(source) == sorted(list(source))
 
@@ -373,12 +427,14 @@ class TestChainedPayloadSource:
 
     def test_chains_two_lists(self) -> None:
         from pentool.modules.intruder import ChainedPayloadSource
+
         chained = ChainedPayloadSource(["a", "b"], ["c", "d"])
         assert list(chained) == ["a", "b", "c", "d"]
         assert len(chained) == 4
 
     def test_chains_lazy_and_list(self) -> None:
         from pentool.modules.intruder import ChainedPayloadSource, NumericPayloadSource
+
         chained = ChainedPayloadSource(NumericPayloadSource(0, 3), ["x"])
         assert list(chained) == ["0", "1", "2", "x"]
         assert len(chained) == 4
@@ -388,6 +444,7 @@ class TestChainedPayloadSource:
         wrapper chain — nested ChainedPayloadSource instances are flattened
         into one flat tuple of sources."""
         from pentool.modules.intruder import ChainedPayloadSource
+
         inner = ChainedPayloadSource(["a"], ["b"])
         outer = ChainedPayloadSource(inner, ["c"])
         assert len(outer._sources) == 3
@@ -395,16 +452,18 @@ class TestChainedPayloadSource:
 
     def test_bool_true_if_any_source_nonempty(self) -> None:
         from pentool.modules.intruder import ChainedPayloadSource
+
         assert bool(ChainedPayloadSource([], ["a"])) is True
         assert bool(ChainedPayloadSource([], [])) is False
 
     def test_head_spans_multiple_sources(self) -> None:
         from pentool.modules.intruder import ChainedPayloadSource
+
         chained = ChainedPayloadSource(["a", "b"], ["c", "d", "e"])
         assert chained.head(4) == ["a", "b", "c", "d"]
 
     def test_len_never_enumerates_huge_source(self) -> None:
         from pentool.modules.intruder import ChainedPayloadSource, NumericPayloadSource
+
         chained = ChainedPayloadSource(NumericPayloadSource(0, 10_000_000), ["x"])
         assert len(chained) == 10_000_001
-

@@ -59,8 +59,8 @@ class TestCleanupPendingReqIds:
         now = time.time()
         screen._pending_req_ids = {"old": -1, "new": 7}
         screen._pending_req_ids_ts = {
-            "old": now - 900,   # 15 min ago — stale
-            "new": now - 30,    # 30 sec ago — fresh
+            "old": now - 900,  # 15 min ago — stale
+            "new": now - 30,  # 30 sec ago — fresh
         }
 
         screen._cleanup_pending_req_ids()

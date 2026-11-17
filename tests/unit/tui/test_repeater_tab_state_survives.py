@@ -227,7 +227,7 @@ async def test_tabs_are_restored_from_the_registry(tmp_path, monkeypatch) -> Non
             await pilot.pause()
 
     assert [t.tab_uid for t in screen._tabs] == ["uid-one", "uid-two"], (
-        "вкладки восстановлены не из repeater_tabs или потеряли свои uid — " "второй перезапуск создал бы дубли строк"
+        "вкладки восстановлены не из repeater_tabs или потеряли свои uid — второй перезапуск создал бы дубли строк"
     )
     assert screen._tabs[0].name == "Login"
     assert "PUT /login" in screen._tabs[0].request_text
@@ -272,6 +272,6 @@ async def test_a_closed_tab_is_forgotten_in_the_registry(tmp_path, monkeypatch) 
         screen.action_close_tab()
         tabs = await _wait_tabs(db_path, 1, pilot)
 
-    assert closed_uid not in [
-        t["tab_uid"] for t in tabs
-    ], "закрытая вкладка осталась в реестре — после перезапуска она вернётся"
+    assert closed_uid not in [t["tab_uid"] for t in tabs], (
+        "закрытая вкладка осталась в реестре — после перезапуска она вернётся"
+    )

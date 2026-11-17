@@ -18,6 +18,7 @@ class TestInfoLeakCheck:
     @pytest.mark.asyncio
     async def test_flags_server_header(self) -> None:
         from pentool.modules.scanner.checks.info_leak import InfoLeakCheck
+
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req = ParsedRequest(method="GET", url="http://x.com/", headers={}, body="")
@@ -29,6 +30,7 @@ class TestInfoLeakCheck:
     @pytest.mark.asyncio
     async def test_flags_x_powered_by(self) -> None:
         from pentool.modules.scanner.checks.info_leak import InfoLeakCheck
+
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req = ParsedRequest(method="GET", url="http://x.com/", headers={}, body="")
@@ -39,6 +41,7 @@ class TestInfoLeakCheck:
     @pytest.mark.asyncio
     async def test_flags_multiple_leaky_headers(self) -> None:
         from pentool.modules.scanner.checks.info_leak import InfoLeakCheck
+
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req = ParsedRequest(method="GET", url="http://x.com/", headers={}, body="")
@@ -54,6 +57,7 @@ class TestInfoLeakCheck:
     @pytest.mark.asyncio
     async def test_no_leaky_headers_returns_none(self) -> None:
         from pentool.modules.scanner.checks.info_leak import InfoLeakCheck
+
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req = ParsedRequest(method="GET", url="http://x.com/", headers={}, body="")
@@ -68,6 +72,7 @@ class TestInfoLeakCheck:
     @pytest.mark.asyncio
     async def test_header_matching_is_case_insensitive(self) -> None:
         from pentool.modules.scanner.checks.info_leak import InfoLeakCheck
+
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req = ParsedRequest(method="GET", url="http://x.com/", headers={}, body="")
@@ -78,6 +83,7 @@ class TestInfoLeakCheck:
     @pytest.mark.asyncio
     async def test_response_none_returns_none(self) -> None:
         from pentool.modules.scanner.checks.info_leak import InfoLeakCheck
+
         from pentool.utils.parser import ParsedRequest
 
         req = ParsedRequest(method="GET", url="http://x.com/", headers={}, body="")
@@ -87,6 +93,7 @@ class TestInfoLeakCheck:
     @pytest.mark.asyncio
     async def test_evidence_contains_value(self) -> None:
         from pentool.modules.scanner.checks.info_leak import InfoLeakCheck
+
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req = ParsedRequest(method="GET", url="http://x.com/", headers={}, body="")

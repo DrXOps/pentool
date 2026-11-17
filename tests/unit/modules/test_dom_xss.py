@@ -11,6 +11,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from pentool.utils.parser import ParsedRequest
+
 pytest.importorskip("pentool.modules.scanner")
 
 
@@ -57,13 +59,14 @@ class TestDOMXSSCheckScan:
     @pytest.mark.asyncio
     async def test_finds_dom_xss_in_response(self) -> None:
         from pentool.modules.scanner.checks.dom_xss import DOMXSSCheck
+
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         req = ParsedRequest(method="GET", url="http://x.com/page", headers={}, body="")
         resp = ParsedResponse(
             status=200,
             headers={"content-type": "text/html"},
-            body='<html><script>var q = location.search; document.write(q)</script></html>',
+            body="<html><script>var q = location.search; document.write(q)</script></html>",
         )
         findings = await DOMXSSCheck().scan(req, resp, MagicMock())
         assert any(f.type == "dom_xss" for f in findings)
@@ -72,6 +75,7 @@ class TestDOMXSSCheckScan:
     @pytest.mark.asyncio
     async def test_no_script_returns_none(self) -> None:
         from pentool.modules.scanner.checks.dom_xss import DOMXSSCheck
+
         from pentool.utils.parser import ParsedResponse
 
         req = _mk_request()
@@ -82,6 +86,7 @@ class TestDOMXSSCheckScan:
     @pytest.mark.asyncio
     async def test_sink_without_source_returns_none(self) -> None:
         from pentool.modules.scanner.checks.dom_xss import DOMXSSCheck
+
         from pentool.utils.parser import ParsedResponse
 
         req = _mk_request()
@@ -114,6 +119,7 @@ class TestDOMXSSEngineIntegration:
 
         from pentool.modules.scanner.checks.dom_xss import DOMXSSCheck
         from pentool.modules.scanner.engine import ScanEngine
+
         from pentool.utils.parser import ParsedRequest, ParsedResponse
 
         engine = ScanEngine(db_path=":memory:", http_client=MagicMock())
@@ -122,7 +128,7 @@ class TestDOMXSSEngineIntegration:
         resp = ParsedResponse(
             status=200,
             headers={},
-            body='<script>eval(location.hash.substring(1))</script>',
+            body="<script>eval(location.hash.substring(1))</script>",
         )
         findings = await engine.run_passive(req, resp)
         assert any(f.type == "dom_xss" for f in findings)

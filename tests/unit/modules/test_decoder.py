@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from pentool.modules.decoder import (
     OP_LABELS,
     DecoderChain,
@@ -141,6 +142,7 @@ class TestJWTDecode:
 
     def test_jwt_decode_returns_json(self):
         import json
+
         result = encode_op("JWT Decode", self._JWT)
         data = json.loads(result)
         assert "header" in data
@@ -148,12 +150,14 @@ class TestJWTDecode:
 
     def test_jwt_decode_header(self):
         import json
+
         result = encode_op("JWT Decode", self._JWT)
         data = json.loads(result)
         assert data["header"]["alg"] == "HS256"
 
     def test_jwt_decode_payload(self):
         import json
+
         result = encode_op("JWT Decode", self._JWT)
         data = json.loads(result)
         assert data["payload"]["name"] == "John Doe"

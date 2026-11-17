@@ -51,16 +51,13 @@ def _page_html(cfg: MockBigSiteConfig, i: int) -> str:
             f'<input name="username" value="user{form_id}">'
             f'<input name="comment" value="hello">'
             f'<input name="token" value="tok{form_id}">'
-            f'</form>'
+            f"</form>"
         )
 
     padding = "x" * max(cfg.body_size - 400, 0)
     return (
         "<html><head><title>Mock Big Site</title></head><body>"
-        f"<p>Server: nginx/1.18.0</p><p>page={i}</p>"
-        + "".join(links)
-        + forms
-        + f"<!-- {padding} -->"
+        f"<p>Server: nginx/1.18.0</p><p>page={i}</p>" + "".join(links) + forms + f"<!-- {padding} -->"
         "</body></html>"
     )
 

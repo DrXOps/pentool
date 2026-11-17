@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import socket
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -62,8 +61,7 @@ class TestApi:
 
     def test_apply_status_updates_fields(self):
         c = _make_client()
-        c._apply_status({"running": True, "port": 9999, "host": "h",
-                         "intercept": True, "scope": ["a.com"]})
+        c._apply_status({"running": True, "port": 9999, "host": "h", "intercept": True, "scope": ["a.com"]})
         assert c._running is True
         assert c.port == 9999
         assert c.intercept_enabled is True
@@ -127,8 +125,9 @@ class TestReadCommands:
     def test_drop_and_clear(self):
         drop_cmds, clear_cmds = [], []
         c = _make_client()
-        c._command = lambda cmd: (drop_cmds.append(cmd) if cmd["cmd"] == "drop"
-                                  else (clear_cmds.append(cmd), {"ok": True})[1])
+        c._command = lambda cmd: (
+            drop_cmds.append(cmd) if cmd["cmd"] == "drop" else (clear_cmds.append(cmd), {"ok": True})[1]
+        )
         c.drop("r2")
         c.clear_requests()
         assert drop_cmds[0]["request_id"] == "r2"

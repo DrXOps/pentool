@@ -9,6 +9,7 @@ Covers three fixes made after the scan_pipeline dispatch fix:
    to their scan() method even when a specific injection point is
    passed, instead of the analyze()-only branch.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -16,8 +17,9 @@ import pytest
 # Skip all tests if scanner module not available
 pytest.importorskip("pentool.modules.scanner")
 
-from pentool.modules.scanner.engine import ScanEngine
 from pentool.modules.scanner.checks.sqli import SQLiCheck
+from pentool.modules.scanner.engine import ScanEngine
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 
@@ -36,6 +38,7 @@ def _pro_license():
     whatever the previous test file left behind.
     """
     from pentool.core.license import LicenseInfo, refresh_session_license
+
     pro = LicenseInfo(valid=True, plan="pro", features=["scanner_pro"])
     refresh_session_license(pro)
     yield
@@ -68,11 +71,7 @@ def _make_engine(client: FakeHTTPClient, concurrency: int = 5) -> ScanEngine:
 
 
 def _reqs(n: int) -> list[ParsedRequest]:
-    return [
-        ParsedRequest(method="GET", url=f"http://example.com/page{i}?id=1",
-                      headers={}, body="")
-        for i in range(n)
-    ]
+    return [ParsedRequest(method="GET", url=f"http://example.com/page{i}?id=1", headers={}, body="") for i in range(n)]
 
 
 class TestResumeDedup:
@@ -141,7 +140,9 @@ class TestResumeDedup:
             engine.request_stop()
 
         await engine.run_active_on_requests(
-            seed_requests=reqs, resume=False, on_request=_on_request,
+            seed_requests=reqs,
+            resume=False,
+            on_request=_on_request,
         )
         # Stop fired on the very first real network call, before any task
         # could run to completion — none should be recorded as done.
@@ -160,7 +161,8 @@ class TestTotalEstimate:
 
         estimates = []
         await engine.run_active_on_requests(
-            seed_requests=reqs, on_total_estimate=estimates.append,
+            seed_requests=reqs,
+            on_total_estimate=estimates.append,
         )
         assert len(estimates) == 1
         assert estimates[0] > 0
@@ -171,14 +173,16 @@ class TestTotalEstimate:
         estimates_small: list[int] = []
         engine_small = _make_engine(client)
         await engine_small.run_active_on_requests(
-            seed_requests=_reqs(1), on_total_estimate=estimates_small.append,
+            seed_requests=_reqs(1),
+            on_total_estimate=estimates_small.append,
         )
 
         client2 = FakeHTTPClient()
         estimates_large: list[int] = []
         engine_large = _make_engine(client2)
         await engine_large.run_active_on_requests(
-            seed_requests=_reqs(5), on_total_estimate=estimates_large.append,
+            seed_requests=_reqs(5),
+            on_total_estimate=estimates_large.append,
         )
 
         assert estimates_large[0] > estimates_small[0]
@@ -216,8 +220,9 @@ class TestScanPipelineDispatch:
 
         SQLiCheck.scan = traced_scan
         try:
-            req = ParsedRequest(method="GET", url="http://example.com/page?id=1",
-                                 headers={"Cookie": "session=abc"}, body="")
+            req = ParsedRequest(
+                method="GET", url="http://example.com/page?id=1", headers={"Cookie": "session=abc"}, body=""
+            )
             await engine.run_active_on_requests(seed_requests=[req])
         finally:
             SQLiCheck.scan = orig_scan
@@ -241,8 +246,9 @@ class TestScanPipelineDispatch:
         client1 = FakeHTTPClient()
         engine1 = _make_engine(client1)
         await engine1.run_active_on_requests(
-            seed_requests=[ParsedRequest(method="GET", url=req_template.format(i=0),
-                                          headers={"Cookie": "s=1"}, body="")]
+            seed_requests=[
+                ParsedRequest(method="GET", url=req_template.format(i=0), headers={"Cookie": "s=1"}, body="")
+            ]
         )
         calls_for_one = client1.calls
 
@@ -250,8 +256,7 @@ class TestScanPipelineDispatch:
         engine5 = _make_engine(client5)
         await engine5.run_active_on_requests(
             seed_requests=[
-                ParsedRequest(method="GET", url=req_template.format(i=i),
-                              headers={"Cookie": "s=1"}, body="")
+                ParsedRequest(method="GET", url=req_template.format(i=i), headers={"Cookie": "s=1"}, body="")
                 for i in range(5)
             ]
         )
@@ -282,8 +287,9 @@ class TestPersistentConnection:
 
     @pytest.mark.asyncio
     async def test_repeated_save_findings_reuses_same_connection(self, tmp_path):
-        from pentool.core.db_schema import init_db
         from pentool.modules.scanner.base import Finding
+
+        from pentool.core.db_schema import init_db
 
         db_path = str(tmp_path / "test.db")
         await init_db(db_path)
@@ -291,10 +297,19 @@ class TestPersistentConnection:
 
         def _finding(i: int) -> Finding:
             return Finding(
-                type="sqli", name="SQLi", url=f"http://example.com/p{i}",
-                severity="high", parameter="id", payload="' OR 1=1",
-                evidence="", description="", cwe="", remediation="",
-                mitre_attack="", request_raw="", response_raw="",
+                type="sqli",
+                name="SQLi",
+                url=f"http://example.com/p{i}",
+                severity="high",
+                parameter="id",
+                payload="' OR 1=1",
+                evidence="",
+                description="",
+                cwe="",
+                remediation="",
+                mitre_attack="",
+                request_raw="",
+                response_raw="",
             )
 
         await engine.save_findings([_finding(1)])

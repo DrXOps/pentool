@@ -27,9 +27,7 @@ class TestParsedRequest:
         assert req.host == "example.com:8080"
 
     def test_host_from_header_fallback(self) -> None:
-        req = ParsedRequest(
-            method="GET", url="/path", headers={"Host": "fallback.com"}
-        )
+        req = ParsedRequest(method="GET", url="/path", headers={"Host": "fallback.com"})
         assert req.host == "fallback.com"
 
     def test_path_simple(self) -> None:
@@ -128,25 +126,13 @@ class TestParseHttpRequest:
         assert req.headers.get("Host") == "example.com"
 
     def test_post_with_body(self) -> None:
-        raw = (
-            "POST /login HTTP/1.1\r\n"
-            "Host: example.com\r\n"
-            "Content-Type: application/json\r\n"
-            "\r\n"
-            '{"user":"admin"}'
-        )
+        raw = 'POST /login HTTP/1.1\r\nHost: example.com\r\nContent-Type: application/json\r\n\r\n{"user":"admin"}'
         req = parse_http_request(raw)
         assert req.method == "POST"
         assert req.body == '{"user":"admin"}'
 
     def test_headers_parsed(self) -> None:
-        raw = (
-            "GET / HTTP/1.1\r\n"
-            "Host: example.com\r\n"
-            "User-Agent: TestAgent\r\n"
-            "Accept: */*\r\n"
-            "\r\n"
-        )
+        raw = "GET / HTTP/1.1\r\nHost: example.com\r\nUser-Agent: TestAgent\r\nAccept: */*\r\n\r\n"
         req = parse_http_request(raw)
         assert req.headers["User-Agent"] == "TestAgent"
         assert req.headers["Accept"] == "*/*"
@@ -172,12 +158,7 @@ class TestParseHttpRequest:
         assert req.method == "GET"
 
     def test_multiline_body(self) -> None:
-        raw = (
-            "POST /data HTTP/1.1\r\n"
-            "Host: example.com\r\n"
-            "\r\n"
-            "line1\r\nline2\r\nline3"
-        )
+        raw = "POST /data HTTP/1.1\r\nHost: example.com\r\n\r\nline1\r\nline2\r\nline3"
         req = parse_http_request(raw)
         assert "line1" in req.body
         assert "line3" in req.body
@@ -197,13 +178,7 @@ class TestParseHttpResponse:
         assert resp.status == 404
 
     def test_headers_parsed(self) -> None:
-        raw = (
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: application/json\r\n"
-            "X-Custom: value\r\n"
-            "\r\n"
-            "{}"
-        )
+        raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nX-Custom: value\r\n\r\n{}"
         resp = parse_http_response(raw)
         assert resp.headers.get("Content-Type") == "application/json"
         assert resp.headers.get("X-Custom") == "value"

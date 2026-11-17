@@ -93,7 +93,7 @@ class TestMixinDispatchesByConvention:
         for name in dir(ContentClipboardMixin):
             attr = getattr(ContentClipboardMixin, name)
             assert not getattr(attr, "_textual_on", None), (
-                f"ContentClipboardMixin.{name} uses @on(); " "declare handlers by name instead (see ADR-3)"
+                f"ContentClipboardMixin.{name} uses @on(); declare handlers by name instead (see ADR-3)"
             )
 
 

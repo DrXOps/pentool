@@ -15,25 +15,26 @@ never found anything in a real scan.
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 pytest.importorskip("pentool.modules.scanner")
 
 from pentool.modules.scanner.checks.nosql_injection import (
     NoSQLInjectionCheck,
-    _URL_PAYLOADS,
-    _JSON_PAYLOADS,
     _has_nosql_error,
 )
 from pentool.modules.scanner.engine import ScanEngine
 from pentool.modules.scanner.mutator import InjectionPoint
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
+
 
 def _make_request(url: str, method: str = "GET", body: str = "") -> ParsedRequest:
     return ParsedRequest(method=method, url=url, headers={}, body=body)
 
+
 def _make_point(name: str, value: str = "1", kind: str = "get") -> InjectionPoint:
     return InjectionPoint(kind=kind, name=name, original_value=value)
+
 
 class TestMeta:
     def test_name(self):
@@ -44,6 +45,7 @@ class TestMeta:
         # drives get_payloads()/analyze() through the base template cycle —
         # the old path was the engine's analyze() branch on a scan() stub.
         from pentool.modules.scanner.base import BaseActiveCheck
+
         assert issubclass(NoSQLInjectionCheck, BaseActiveCheck)
 
     def test_uses_scan_pipeline(self):
@@ -53,6 +55,7 @@ class TestMeta:
         # Keeps the response-diff-skip the engine's analyze() branch used
         # to give this check for throughput.
         assert NoSQLInjectionCheck.use_baseline_diff_skip is True
+
 
 class TestHasNosqlError:
     def test_detects_mongo_error(self):
@@ -64,6 +67,7 @@ class TestHasNosqlError:
         found, evidence = _has_nosql_error("<html>ok</html>")
         assert not found
 
+
 class TestAnalyze:
     @pytest.mark.asyncio
     async def test_finding_on_mongo_error(self):
@@ -71,8 +75,7 @@ class TestAnalyze:
         req = _make_request("http://test/api?id=1")
         mutated = _make_request("http://test/api?id=1[$ne]=x")
         point = _make_point("id")
-        resp = ParsedResponse(status=500, reason="Internal Server Error",
-                               headers={}, body="MongoError: bad query")
+        resp = ParsedResponse(status=500, reason="Internal Server Error", headers={}, body="MongoError: bad query")
         finding = await check.analyze(req, mutated, point, "[$ne]=x", resp)
         assert finding is not None
         assert finding.type == "nosql_injection"
@@ -97,12 +100,12 @@ class TestAnalyze:
         req = _make_request("http://test/api?id=1")
         mutated = _make_request("http://test/api?id=1[$ne]=x")
         point = _make_point("id")
-        resp = ParsedResponse(status=500, reason="Internal Server Error",
-                               headers={}, body="MongoError: bad query")
+        resp = ParsedResponse(status=500, reason="Internal Server Error", headers={}, body="MongoError: bad query")
         finding = await check.analyze(req, mutated, point, "[$ne]=x", resp)
         assert finding is not None
         assert finding.request_raw.startswith("GET ")
         assert "HTTP/1.1 0" not in finding.request_raw
+
 
 class TestEngineIntegration:
     """End-to-end through ScanEngine — this is what was actually broken:

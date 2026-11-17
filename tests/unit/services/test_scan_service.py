@@ -1,16 +1,18 @@
 """Tests for ScanService."""
 
+from unittest.mock import AsyncMock, Mock
+
 import pytest
-from unittest.mock import Mock, AsyncMock
 
 # Skip all tests if scanner module not available
 pytest.importorskip("pentool.modules.scanner")
 
-from pentool.services.scan_service import ScanService, ScanConfig
 from pentool.api.scanner_api import ScannerAPI
-from pentool.api.spider_api import SpiderAPI
 from pentool.modules.scanner.base import Finding
+
+from pentool.api.spider_api import SpiderAPI
 from pentool.core.event_bus import EventBus
+from pentool.services.scan_service import ScanConfig, ScanService
 
 
 @pytest.fixture
@@ -25,17 +27,19 @@ def scanner_api():
     api = Mock(spec=ScannerAPI)
     api.start_scan = AsyncMock()
     api.stop_scan = Mock()
-    api.get_findings = Mock(return_value=[
-        Finding(
-            type="xss",
-            name="Reflected XSS",
-            url="https://example.com/search?q=test",
-            severity="high",
-            parameter="q",
-            payload="<script>alert(1)</script>",
-            evidence="Reflected in response body",
-        )
-    ])
+    api.get_findings = Mock(
+        return_value=[
+            Finding(
+                type="xss",
+                name="Reflected XSS",
+                url="https://example.com/search?q=test",
+                severity="high",
+                parameter="q",
+                payload="<script>alert(1)</script>",
+                evidence="Reflected in response body",
+            )
+        ]
+    )
     return api
 
 
@@ -88,7 +92,10 @@ class TestScanServiceRun:
 
     @pytest.mark.asyncio
     async def test_auth_headers_flow_from_crawl_into_active_scan(
-        self, scanner_api, spider_api, event_bus,
+        self,
+        scanner_api,
+        spider_api,
+        event_bus,
     ):
         """Reuse (2.1): if the crawler establishes auth headers, they must be
         carried into the ACTIVE scan, not dropped (DVWA would otherwise
@@ -96,11 +103,13 @@ class TestScanServiceRun:
         from pentool.modules.spider import SpiderResult
         from pentool.services.scan_service import ScanService
 
-        spider_api.crawl = AsyncMock(return_value=SpiderResult(
-            base_url="https://example.com",
-            pages=["https://example.com/page"],
-            auth_headers={"Cookie": "PHPSESSID=abc123"},
-        ))
+        spider_api.crawl = AsyncMock(
+            return_value=SpiderResult(
+                base_url="https://example.com",
+                pages=["https://example.com/page"],
+                auth_headers={"Cookie": "PHPSESSID=abc123"},
+            )
+        )
 
         scanner_api.run_active_on_requests = AsyncMock(return_value=[])
         scanner_api.save_findings = AsyncMock(return_value=None)
@@ -117,9 +126,7 @@ class TestScanServiceRun:
         # The active scan must receive requests carrying the crawl's auth.
         assert scanner_api.run_active_on_requests.called, "active scan was never run"
         _, kwargs = scanner_api.run_active_on_requests.call_args
-        seed = kwargs.get("seed_requests") or (
-            scanner_api.run_active_on_requests.call_args.args[0]
-        )
+        seed = kwargs.get("seed_requests") or (scanner_api.run_active_on_requests.call_args.args[0])
         assert seed, "no seed_requests passed to active scan"
         auth_by_url = {req.url: dict(req.headers or {}) for req in seed}
         # The base target + crawled page should carry the session cookie.
@@ -129,21 +136,25 @@ class TestScanServiceRun:
 
     @pytest.mark.asyncio
     async def test_auth_headers_forwarded_to_engine_http_client(
-        self, scanner_api, spider_api, event_bus,
+        self,
+        scanner_api,
+        spider_api,
+        event_bus,
     ):
         """2.1: the HTTPClient handed to configure_engine must carry the
         auth headers, so the TechFingerprinter baseline also stays
         authenticated."""
-        from unittest.mock import ANY
 
         from pentool.modules.spider import SpiderResult
         from pentool.services.scan_service import ScanService
 
-        spider_api.crawl = AsyncMock(return_value=SpiderResult(
-            base_url="https://example.com",
-            pages=[],
-            auth_headers={"Authorization": "Bearer tok"},
-        ))
+        spider_api.crawl = AsyncMock(
+            return_value=SpiderResult(
+                base_url="https://example.com",
+                pages=[],
+                auth_headers={"Authorization": "Bearer tok"},
+            )
+        )
         scanner_api.run_active_on_requests = AsyncMock(return_value=[])
         scanner_api.save_findings = AsyncMock(return_value=None)
         scanner_api.configure_engine = Mock(return_value=None)  # synchronous API
@@ -159,15 +170,15 @@ class TestScanServiceRun:
         assert http_client is not None
         # HTTPClient stores extra_headers privately — verify indirectly via
         # the requests it would send being seeded with auth.
-        assert getattr(http_client, "_extra_headers", None), (
-            "engine HTTPClient did not receive extra_headers"
-        )
+        assert getattr(http_client, "_extra_headers", None), "engine HTTPClient did not receive extra_headers"
         assert http_client._extra_headers.get("Authorization") == "Bearer tok"
-
 
     @pytest.mark.asyncio
     async def test_auto_login_populates_auth_headers(
-        self, scanner_api, spider_api, event_bus,
+        self,
+        scanner_api,
+        spider_api,
+        event_bus,
     ):
         """2.3: when auto_login is enabled and the crawl learned no session,
         ScanService calls build_session_headers and stores the cookie in
@@ -180,9 +191,13 @@ class TestScanServiceRun:
         async def _auto_ok(**kwargs):
             return {"Cookie": "PHPSESSID=autologin1"}
 
-        spider_api.crawl = AsyncMock(return_value=SpiderResult(
-            base_url="https://example.com", pages=[], auth_headers={},
-        ))
+        spider_api.crawl = AsyncMock(
+            return_value=SpiderResult(
+                base_url="https://example.com",
+                pages=[],
+                auth_headers={},
+            )
+        )
         scanner_api.run_active_on_requests = AsyncMock(return_value=[])
         scanner_api.save_findings = AsyncMock(return_value=None)
 
@@ -196,8 +211,7 @@ class TestScanServiceRun:
 
         # _try_auto_login does `from pentool.utils.auth_login import
         # build_session_headers` lazily, so patch it at its source module.
-        with patch("pentool.utils.auth_login.build_session_headers",
-                   side_effect=_auto_ok):
+        with patch("pentool.utils.auth_login.build_session_headers", side_effect=_auto_ok):
             await service.run(config)
 
         assert "Cookie" in service._auth_headers
@@ -266,6 +280,7 @@ class TestFilterTargets:
 
     def _service(self, scanner_api, spider_api, event_bus):
         from pentool.services.scan_service import ScanService
+
         return ScanService(scanner_api, spider_api, event_bus)
 
     def test_different_param_values_preserved(self, scanner_api, spider_api, event_bus):
@@ -289,9 +304,7 @@ class TestFilterTargets:
         svc = self._service(scanner_api, spider_api, event_bus)
         targets = [f"http://x.com/search?q={i}" for i in range(20)]
         out = svc._filter_targets(targets)
-        assert len(out) <= svc._MAX_VARIANTS_PER_TEMPLATE, (
-            "variant bundle must be capped, not unbounded"
-        )
+        assert len(out) <= svc._MAX_VARIANTS_PER_TEMPLATE, "variant bundle must be capped, not unbounded"
 
     def test_static_assets_skipped(self, scanner_api, spider_api, event_bus):
         svc = self._service(scanner_api, spider_api, event_bus)
@@ -311,7 +324,7 @@ class TestPostFormSubmission:
     action is destructive (/logout, /delete, /admin, ...)."""
 
     def _form(self, action: str, fields=None):
-        from pentool.modules.spider import SpiderForm, FormField
+        from pentool.modules.spider import FormField, SpiderForm
 
         fields = fields or [FormField(name="username", type="text", value="admin")]
         return SpiderForm(action=action, method="POST", fields=fields)
@@ -320,7 +333,9 @@ class TestPostFormSubmission:
         from pentool.services.scan_service import ScanService
 
         for risky in (
-            "http://x.com/logout", "http://x.com/user/delete", "http://x.com/admin/config",
+            "http://x.com/logout",
+            "http://x.com/user/delete",
+            "http://x.com/admin/config",
         ):
             assert ScanService._is_risky_form_action(risky) is True, risky
 
@@ -331,17 +346,28 @@ class TestPostFormSubmission:
 
     @pytest.mark.asyncio
     async def test_safe_post_form_added_to_active_scan(
-        self, scanner_api, spider_api, event_bus,
+        self,
+        scanner_api,
+        spider_api,
+        event_bus,
     ):
         from pentool.modules.spider import SpiderResult
         from pentool.services.scan_service import ScanService
 
-        spider_api.crawl = AsyncMock(return_value=SpiderResult(
-            base_url="http://x.com/", pages=["http://x.com/vulnerabilities/"],
-            forms=[self._form("http://x.com/vulnerabilities/sqli_blind/id", fields=[
-                type("F", (), {"name": "id", "value": "1", "type": "text"})(),
-            ])],
-        ))
+        spider_api.crawl = AsyncMock(
+            return_value=SpiderResult(
+                base_url="http://x.com/",
+                pages=["http://x.com/vulnerabilities/"],
+                forms=[
+                    self._form(
+                        "http://x.com/vulnerabilities/sqli_blind/id",
+                        fields=[
+                            type("F", (), {"name": "id", "value": "1", "type": "text"})(),
+                        ],
+                    )
+                ],
+            )
+        )
         scanner_api.run_active_on_requests = AsyncMock(return_value=[])
         scanner_api.save_findings = AsyncMock(return_value=None)
 
@@ -360,15 +386,21 @@ class TestPostFormSubmission:
 
     @pytest.mark.asyncio
     async def test_risky_post_form_skipped(
-        self, scanner_api, spider_api, event_bus,
+        self,
+        scanner_api,
+        spider_api,
+        event_bus,
     ):
         from pentool.modules.spider import SpiderResult
         from pentool.services.scan_service import ScanService
 
-        spider_api.crawl = AsyncMock(return_value=SpiderResult(
-            base_url="http://x.com/", pages=[],
-            forms=[self._form("http://x.com/user/delete/me")],
-        ))
+        spider_api.crawl = AsyncMock(
+            return_value=SpiderResult(
+                base_url="http://x.com/",
+                pages=[],
+                forms=[self._form("http://x.com/user/delete/me")],
+            )
+        )
         scanner_api.run_active_on_requests = AsyncMock(return_value=[])
         scanner_api.save_findings = AsyncMock(return_value=None)
 
@@ -399,7 +431,9 @@ class TestHybridJsCrawl:
         from pentool.services.scan_service import ScanService
 
         static_result = SpiderResult(
-            base_url="http://x.com/", pages=["http://x.com/"], auth_headers={},
+            base_url="http://x.com/",
+            pages=["http://x.com/"],
+            auth_headers={},
         )
 
         # The JS SpiderAPI is constructed *locally* inside _crawl_target via
@@ -407,9 +441,12 @@ class TestHybridJsCrawl:
         # the source module where that import resolves.
         js_spider_cls = Mock()
         js_spider_cls.return_value = Mock()
-        js_spider_cls.return_value.crawl = AsyncMock(return_value=SpiderResult(
-            base_url="http://x.com/", pages=["http://x.com/app", "http://x.com/route"],
-        ))
+        js_spider_cls.return_value.crawl = AsyncMock(
+            return_value=SpiderResult(
+                base_url="http://x.com/",
+                pages=["http://x.com/app", "http://x.com/route"],
+            )
+        )
 
         spider_api = Mock(spec=__import__("pentool.api.spider_api", fromlist=["SpiderAPI"]).SpiderAPI)
         spider_api.has_cached_result = Mock(return_value=False)
@@ -422,16 +459,17 @@ class TestHybridJsCrawl:
 
         # Pretend Lightpanda is installed so the flag (not binary presence)
         # is what decides.
-        monkeypatch.setattr(
-            "pentool.services.scan_service.is_lightpanda_available", lambda: True
-        )
+        monkeypatch.setattr("pentool.services.scan_service.is_lightpanda_available", lambda: True)
 
         service = ScanService(scanner_api, spider_api, None)
         config = ScanConfig(targets=["http://x.com/"], resume=False, hybrid_js=True)
 
         with patch("pentool.api.spider_api.SpiderAPI", js_spider_cls):
             # также мокаем статические методы SpiderAPI
-            with patch("pentool.api.spider_api.SpiderAPI.has_cached_result", return_value=False),                  patch("pentool.api.spider_api.SpiderAPI.get_cached_pages", return_value=[]):
+            with (
+                patch("pentool.api.spider_api.SpiderAPI.has_cached_result", return_value=False),
+                patch("pentool.api.spider_api.SpiderAPI.get_cached_pages", return_value=[]),
+            ):
                 await service.run(config)
 
         # hybrid_js fired a JS re-crawl.
@@ -448,13 +486,18 @@ class TestHybridJsCrawl:
         from pentool.services.scan_service import ScanService
 
         static_result = SpiderResult(
-            base_url="http://x.com/", pages=["http://x.com/"], auth_headers={},
+            base_url="http://x.com/",
+            pages=["http://x.com/"],
+            auth_headers={},
         )
         js_spider_cls = Mock()
         js_spider_cls.return_value = Mock()
-        js_spider_cls.return_value.crawl = AsyncMock(return_value=SpiderResult(
-            base_url="http://x.com/", pages=["http://x.com/app"],
-        ))
+        js_spider_cls.return_value.crawl = AsyncMock(
+            return_value=SpiderResult(
+                base_url="http://x.com/",
+                pages=["http://x.com/app"],
+            )
+        )
 
         spider_api = Mock(spec=__import__("pentool.api.spider_api", fromlist=["SpiderAPI"]).SpiderAPI)
         spider_api.has_cached_result = Mock(return_value=False)
@@ -466,9 +509,7 @@ class TestHybridJsCrawl:
         scanner_api.configure_engine = Mock(return_value=None)
 
         # Even with Lightpanda present, hybrid_js=False must stay off.
-        monkeypatch.setattr(
-            "pentool.services.scan_service.is_lightpanda_available", lambda: True
-        )
+        monkeypatch.setattr("pentool.services.scan_service.is_lightpanda_available", lambda: True)
 
         service = ScanService(scanner_api, spider_api, None)
         config = ScanConfig(targets=["http://x.com/"], resume=False, hybrid_js=False)

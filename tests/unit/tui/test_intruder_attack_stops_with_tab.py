@@ -118,8 +118,7 @@ class TestClosingATabStopsItsAttack:
                 "cancelled only by name, and closing a tab never asked it to stop"
             )
             assert tab.tab_id not in screen._live_attacks, (
-                "a closed tab's attack stayed registered — on_unmount would try to "
-                "stop an attack that no longer exists"
+                "a closed tab's attack stayed registered — on_unmount would try to stop an attack that no longer exists"
             )
             assert tab.running is False
 
@@ -138,9 +137,9 @@ class TestClosingATabStopsItsAttack:
             await _settle(pilot)
 
             groups = {w.group for w in screen.workers._workers if w.group}
-            assert (
-                screen._attack_group(tab.tab_id) not in groups
-            ), "the attack worker is still registered: cancel_group never reached it"
+            assert screen._attack_group(tab.tab_id) not in groups, (
+                "the attack worker is still registered: cancel_group never reached it"
+            )
 
 
 class TestLeavingTheScreenStopsAttacks:

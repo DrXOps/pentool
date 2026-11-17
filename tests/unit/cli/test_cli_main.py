@@ -20,6 +20,7 @@ from pentool.cli.main import cli
 def test_cli_imports() -> None:
     """cli — click Group, корректно импортируется."""
     from pentool.cli.main import cli as _cli
+
     assert _cli is not None
     assert callable(_cli)
 
@@ -56,10 +57,13 @@ def test_cli_url_headless_runs() -> None:
 def test_cli_verbose_flag() -> None:
     """--verbose устанавливает DEBUG логирование."""
     from pentool.core.config import Config
+
     cfg = Config()
-    with patch("pentool.cli.main.get_config", return_value=cfg), \
-         patch("pentool.cli.main.setup_logging") as set_log, \
-         patch("pentool.cli.headless.run_headless_scan"):
+    with (
+        patch("pentool.cli.main.get_config", return_value=cfg),
+        patch("pentool.cli.main.setup_logging") as set_log,
+        patch("pentool.cli.headless.run_headless_scan"),
+    ):
         CliRunner().invoke(cli, ["--verbose", "--url", "https://x.test", "--headless"])
     assert set_log.call_args[0][1] == "DEBUG"
 
@@ -67,9 +71,12 @@ def test_cli_verbose_flag() -> None:
 def test_cli_default_log_level() -> None:
     """Без --verbose уровень из конфига."""
     from pentool.core.config import Config
+
     cfg = Config(log_level="INFO")
-    with patch("pentool.cli.main.get_config", return_value=cfg), \
-         patch("pentool.cli.main.setup_logging") as set_log, \
-         patch("pentool.cli.headless.run_headless_scan"):
+    with (
+        patch("pentool.cli.main.get_config", return_value=cfg),
+        patch("pentool.cli.main.setup_logging") as set_log,
+        patch("pentool.cli.headless.run_headless_scan"),
+    ):
         CliRunner().invoke(cli, ["--url", "https://x.test", "--headless"])
     assert set_log.call_args[0][1] == "INFO"

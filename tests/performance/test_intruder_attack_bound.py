@@ -27,11 +27,7 @@ pytestmark = pytest.mark.perf
 
 
 def _template() -> str:
-    return (
-        "GET /page/§100§?p=§01§ HTTP/1.1\r\n"
-        "Host: 127.0.0.1:9\r\n"
-        "User-Agent: pentool-perf-test/1.0\r\n\r\n"
-    )
+    return "GET /page/§100§?p=§01§ HTTP/1.1\r\nHost: 127.0.0.1:9\r\nUser-Agent: pentool-perf-test/1.0\r\n\r\n"
 
 
 def _peak_tasks_while(coro_factory, interval: float = 0.005) -> tuple[int, int]:
@@ -39,6 +35,7 @@ def _peak_tasks_while(coro_factory, interval: float = 0.005) -> tuple[int, int]:
 
     Возвращает (peak, результаты-всего). interval 5ms — достаточно плотно.
     """
+
     async def _runner():
         peak = 0
         stop = {"go": True}
@@ -69,15 +66,13 @@ def test_sniper_bounded_tasks():
     threads = 5
     # Шаблон с ОДНИМ маркером: Sniper даёт ровно n_payloads комбинаций
     # (n_positions × M), чтобы не путать с 2-позиционной версией.
-    template = (
-        "GET /page/§1§ HTTP/1.1\r\n"
-        "Host: 127.0.0.1:9\r\n"
-        "User-Agent: pentool-perf-test/1.0\r\n\r\n"
-    )
+    template = "GET /page/§1§ HTTP/1.1\r\nHost: 127.0.0.1:9\r\nUser-Agent: pentool-perf-test/1.0\r\n\r\n"
     cfg = IntruderConfig(
-        template=template, attack_type=AttackType.SNIPER,
+        template=template,
+        attack_type=AttackType.SNIPER,
         payload_sets=[[f"p{i}" for i in range(n_payloads)]],
-        threads=threads, timeout=5,
+        threads=threads,
+        timeout=5,
     )
     attack = IntruderAttack(cfg, db_path=":memory:", http_client=FakeHTTPClient())
 
@@ -104,10 +99,11 @@ def test_cluster_bomb_peak_tasks_bounded():
     total = a * b
     threads = 8
     cfg = IntruderConfig(
-        template=_template(), attack_type=AttackType.CLUSTER_BOMB,
-        payload_sets=[[f"p{i}" for i in range(a)],
-                      [f"q{i}" for i in range(b)]],
-        threads=threads, timeout=5,
+        template=_template(),
+        attack_type=AttackType.CLUSTER_BOMB,
+        payload_sets=[[f"p{i}" for i in range(a)], [f"q{i}" for i in range(b)]],
+        threads=threads,
+        timeout=5,
     )
     attack = IntruderAttack(cfg, db_path=":memory:", http_client=FakeHTTPClient())
 
@@ -143,17 +139,18 @@ def test_cluster_bomb_peak_tasks_bounded():
     # main + peeker (2). Задач-«все сразу» в 90k быть не должно.
     assert results["n"] == total, "Cluster Bomb обработал не все комбинации"
     assert peak <= threads + 3, (
-        f"Пик одновременно живых задач {peak} при threads={threads} — "
-        f"ожидали bounded (eager fan-out был бы ~90k)"
+        f"Пик одновременно живых задач {peak} при threads={threads} — ожидали bounded (eager fan-out был бы ~90k)"
     )
 
 
 def test_stop_and_pause_release_tasks():
     """stop() перед стартом не оставляет висящих воркеров."""
     cfg = IntruderConfig(
-        template=_template(), attack_type=AttackType.CLUSTER_BOMB,
+        template=_template(),
+        attack_type=AttackType.CLUSTER_BOMB,
         payload_sets=[[f"p{i}" for i in range(100)], [f"q{i}" for i in range(100)]],
-        threads=4, timeout=5,
+        threads=4,
+        timeout=5,
     )
     attack = IntruderAttack(cfg, db_path=":memory:", http_client=FakeHTTPClient())
 

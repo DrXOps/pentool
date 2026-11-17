@@ -14,8 +14,9 @@ from pentool.utils.parser import ParsedRequest, ParsedResponse
 class TestRepeaterAPI:
     @pytest_asyncio.fixture
     async def api(self, tmp_path: Path):
-        from pentool.core.db_schema import init_db
         from pentool.api.repeater_api import RepeaterAPI
+        from pentool.core.db_schema import init_db
+
         db_path = str(tmp_path / "test.db")
         await init_db(db_path)
         rp_api = RepeaterAPI(db_path=db_path, timeout=5.0, verify_ssl=False)
@@ -27,6 +28,7 @@ class TestRepeaterAPI:
     @pytest.mark.asyncio
     async def test_import(self) -> None:
         from pentool.api.repeater_api import RepeaterAPI, RepeaterEntry
+
         assert RepeaterAPI is not None
         assert RepeaterEntry is not None
 
@@ -97,8 +99,9 @@ class TestRepeaterAPI:
     @pytest.mark.asyncio
     async def test_switch_db_points_at_new_file(self, tmp_path: Path) -> None:
         """switch_db must close the old connection and open the new project DB."""
-        from pentool.core.db_schema import init_db
         from pentool.api.repeater_api import RepeaterAPI
+        from pentool.core.db_schema import init_db
+
         db1 = str(tmp_path / "project1.db")
         db2 = str(tmp_path / "project2.db")
         await init_db(db1)
@@ -124,8 +127,9 @@ class TestRepeaterAPI:
     @pytest.mark.asyncio
     async def test_close_releases_connection(self, tmp_path: Path) -> None:
         """close() must not raise and must allow a clean re-open via switch_db."""
-        from pentool.core.db_schema import init_db
         from pentool.api.repeater_api import RepeaterAPI
+        from pentool.core.db_schema import init_db
+
         db = str(tmp_path / "close.db")
         await init_db(db)
 
@@ -143,11 +147,13 @@ class TestRepeaterAPI:
 
 class TestIntruderAPI:
     def test_import(self) -> None:
-        from pentool.api.intruder_api import IntruderAPI, IntruderConfig, IntruderResult, AttackType
+        from pentool.api.intruder_api import IntruderAPI
+
         assert IntruderAPI is not None
 
     def test_initial_state(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         assert api.is_running is False
         assert api.get_results() == []
@@ -156,6 +162,7 @@ class TestIntruderAPI:
     @pytest.mark.asyncio
     async def test_load_payloads(self, tmp_path: Path) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         f = tmp_path / "payloads.txt"
         f.write_text("admin\nroot\ntest\n")
         api = IntruderAPI()
@@ -166,6 +173,7 @@ class TestIntruderAPI:
     @pytest.mark.asyncio
     async def test_generate_numeric(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         result = await api.generate_numeric(1, 4)
         assert result == ["1", "2", "3"]
@@ -173,6 +181,7 @@ class TestIntruderAPI:
     @pytest.mark.asyncio
     async def test_generate_chars(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         result = await api.generate_chars("ab", 1, 1)
         assert "a" in result
@@ -181,19 +190,23 @@ class TestIntruderAPI:
     @pytest.mark.asyncio
     async def test_stop_without_attack_no_error(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         await api.stop()  # no error if not running
 
     @pytest.mark.asyncio
     async def test_pause_without_attack_no_error(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         await api.pause()  # no error if not running
 
     @pytest.mark.asyncio
     async def test_pause_with_attack(self) -> None:
-        from pentool.api.intruder_api import IntruderAPI
         from unittest.mock import MagicMock
+
+        from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         attack = MagicMock()
         attack.pause = AsyncMock()
@@ -205,14 +218,17 @@ class TestIntruderAPI:
     async def test_pause_attack_without_pause_support(self) -> None:
         # Turbo attack has no pause() attribute — must not crash
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         api._attack = object()  # no pause attr
         await api.pause()  # no-op, no crash
 
     @pytest.mark.asyncio
     async def test_resume_with_attack(self) -> None:
-        from pentool.api.intruder_api import IntruderAPI
         from unittest.mock import MagicMock
+
+        from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         attack = MagicMock()
         attack.resume = AsyncMock()
@@ -222,8 +238,10 @@ class TestIntruderAPI:
 
     @pytest.mark.asyncio
     async def test_stop_with_attack(self) -> None:
-        from pentool.api.intruder_api import IntruderAPI
         from unittest.mock import MagicMock
+
+        from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         attack = MagicMock()
         attack.stop = AsyncMock()
@@ -233,6 +251,7 @@ class TestIntruderAPI:
 
     def test_get_results_from_attack(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         attack = MagicMock()
         attack.get_results.return_value = ["r"]
@@ -241,23 +260,28 @@ class TestIntruderAPI:
 
     def test_get_results_fallback_restored(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         api._restored_results = ["old"]
         assert api.get_results() == ["old"]
 
     def test_get_progress_no_attack(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         assert api.get_progress() == (0, 0)
 
     def test_is_running_no_attack(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         assert api.is_running is False
 
     def test_export_csv_calls_attack(self, tmp_path) -> None:
-        from pentool.api.intruder_api import IntruderAPI
         from unittest.mock import MagicMock
+
+        from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         attack = MagicMock()
         api._attack = attack
@@ -268,14 +292,17 @@ class TestIntruderAPI:
     async def test_start_attack_standard_mode(self) -> None:
         import asyncio
         from unittest.mock import AsyncMock, MagicMock, patch
+
         from pentool.api import intruder_api as m
+
         api = m.IntruderAPI()
         attack = MagicMock()
         attack.run = AsyncMock()
         attack.attack_id = "aid-1"
-        with patch.object(m, "IntruderAttack", return_value=attack), \
-             patch.object(m.asyncio, "create_task",
-                          side_effect=lambda coro: asyncio.ensure_future(coro)):
+        with (
+            patch.object(m, "IntruderAttack", return_value=attack),
+            patch.object(m.asyncio, "create_task", side_effect=lambda coro: asyncio.ensure_future(coro)),
+        ):
             aid = await api.start_attack(MagicMock(), on_result=None, on_progress=None, turbo_mode=False)
         assert aid == "aid-1"
 
@@ -285,8 +312,9 @@ class TestIntruderAPI:
         import sys
         import types
         from unittest.mock import AsyncMock, MagicMock
-        from pentool.api import intruder_api as m
+
         import pentool.modules as _mods
+        from pentool.api import intruder_api as m
 
         # intruder_turbo is a PRO module not present in CI. Synthesize a fake
         # module so this test runs regardless of whether PRO is installed.
@@ -304,10 +332,8 @@ class TestIntruderAPI:
         turbo.attack_id = "turbo-1"
         fake_mod.TurboIntruderAttack = lambda *a, **k: turbo
         try:
-            with patch.object(m.asyncio, "create_task",
-                              side_effect=lambda coro: asyncio.ensure_future(coro)):
-                aid = await api.start_attack(MagicMock(), on_result=None,
-                                             on_progress=None, turbo_mode=True)
+            with patch.object(m.asyncio, "create_task", side_effect=lambda coro: asyncio.ensure_future(coro)):
+                aid = await api.start_attack(MagicMock(), on_result=None, on_progress=None, turbo_mode=True)
             assert aid == "turbo-1"
         finally:
             if saved is not None:
@@ -319,8 +345,10 @@ class TestIntruderAPI:
 
     @pytest.mark.asyncio
     async def test_state_proxy_methods(self) -> None:
-        from pentool.api.intruder_api import IntruderAPI
         from unittest.mock import AsyncMock, MagicMock
+
+        from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         repo = MagicMock()
         repo.save_state = AsyncMock(return_value=None)
@@ -352,11 +380,20 @@ class TestIntruderAPI:
         repo.close.assert_awaited_once()
 
         from datetime import datetime, timezone
+
         from pentool.modules.intruder import IntruderResult
+
         res = IntruderResult(
-            id="1", attack_id="a", request_number=0, payload_values=[],
-            request_raw="", response_raw="", response_status=0,
-            response_length=0, response_time_ms=0, error=None,
+            id="1",
+            attack_id="a",
+            request_number=0,
+            payload_values=[],
+            request_raw="",
+            response_raw="",
+            response_status=0,
+            response_length=0,
+            response_time_ms=0,
+            error=None,
             timestamp=datetime.now(timezone.utc),
         )
         await api.save_result(res, project_id=1, tab_uid="u")
@@ -367,16 +404,26 @@ class TestIntruderAPI:
 
     def test_export_project_data(self) -> None:
         from datetime import datetime, timezone
+
         from pentool.api.intruder_api import IntruderAPI
         from pentool.modules.intruder import IntruderResult
+
         api = IntruderAPI()
         res = IntruderResult(
-            id="x", attack_id="a", request_number=1, payload_values=["p"],
-            request_raw="R", response_raw="S", response_status=200,
-            response_length=5, response_time_ms=7, error=None,
+            id="x",
+            attack_id="a",
+            request_number=1,
+            payload_values=["p"],
+            request_raw="R",
+            response_raw="S",
+            response_status=200,
+            response_length=5,
+            response_time_ms=7,
+            error=None,
             timestamp=datetime(2020, 1, 1, tzinfo=timezone.utc),
         )
         from unittest.mock import MagicMock
+
         attack = MagicMock()
         attack.get_results.return_value = [res]
         api._attack = attack
@@ -385,18 +432,31 @@ class TestIntruderAPI:
 
     def test_import_project_data(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
-        data = {"results": [{
-            "id": "r", "attack_id": "a", "request_number": 0,
-            "payload_values": ["x"], "request_raw": "", "response_raw": "",
-            "response_status": 200, "response_length": 0, "response_time_ms": 0,
-            "error": None, "timestamp": "2020-01-01T00:00:00+00:00",
-        }]}
+        data = {
+            "results": [
+                {
+                    "id": "r",
+                    "attack_id": "a",
+                    "request_number": 0,
+                    "payload_values": ["x"],
+                    "request_raw": "",
+                    "response_raw": "",
+                    "response_status": 200,
+                    "response_length": 0,
+                    "response_time_ms": 0,
+                    "error": None,
+                    "timestamp": "2020-01-01T00:00:00+00:00",
+                }
+            ]
+        }
         n = api.import_project_data(data)
         assert n == 1
 
     def test_import_project_data_bad_timestamp(self) -> None:
         from pentool.api.intruder_api import IntruderAPI
+
         api = IntruderAPI()
         data = {"results": [{"id": "r", "attack_id": "a", "timestamp": "not-a-date"}]}
         n = api.import_project_data(data)

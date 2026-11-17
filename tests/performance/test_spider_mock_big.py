@@ -29,8 +29,7 @@ def test_mock_site_crawl_completes_and_dedups():
     async def _run():
         cfg = MockBigSiteConfig(n_pages=200, params_per_page=3)
         async with MockBigSite(cfg) as site:
-            spider = AsyncSpider(max_depth=2, max_pages=50, concurrency=5,
-                                 timeout=10)
+            spider = AsyncSpider(max_depth=2, max_pages=50, concurrency=5, timeout=10)
             return await spider.crawl(site.base_url)
 
     import asyncio
@@ -48,18 +47,16 @@ def test_mock_site_crawl_completes_and_dedups():
     # RSS не должен скачком улететь на мелком прогоне (smoke; самплинг шумный)
     gc.collect()
     rss_after = rss_mb()
-    assert rss_after - rss_before < 25, (
-        f"RSS изменился на {rss_after - rss_before:.1f}MB на малом обходе"
-    )
+    assert rss_after - rss_before < 25, f"RSS изменился на {rss_after - rss_before:.1f}MB на малом обходе"
 
 
 def test_spider_scope_respected():
     """Спайдер не уходит за пределы домена (scope)."""
+
     async def _run():
         cfg = MockBigSiteConfig(n_pages=50, params_per_page=2)
         async with MockBigSite(cfg) as site:
-            spider = AsyncSpider(max_depth=3, max_pages=100, concurrency=5,
-                                 timeout=10)
+            spider = AsyncSpider(max_depth=3, max_pages=100, concurrency=5, timeout=10)
             r = await spider.crawl(site.base_url)
             # Все найденные ссылки/форм — того же домена (127.0.0.1:port)
             for p in r.pages:

@@ -1,6 +1,6 @@
 """Test that PRO plan features return True (not broken by missing plan_order entry)."""
-import pytest
-from pentool.core.features import has_feature, get_limit
+
+from pentool.core.features import get_limit, has_feature
 
 
 def test_pro_plan_has_payloads_pro():

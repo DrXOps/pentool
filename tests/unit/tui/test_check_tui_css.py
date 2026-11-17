@@ -102,7 +102,7 @@ def test_duplicate_id_on_one_path_is_reported(
     tui = tmp_path / "tui"
     tui.mkdir()
     (tui / "screen.py").write_text(
-        "def compose():\n" "    with Vertical(id='dup'):\n" "        yield ContentPanel(id='dup')\n",
+        "def compose():\n    with Vertical(id='dup'):\n        yield ContentPanel(id='dup')\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(tool, "TUI", tui)

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -16,12 +17,14 @@ def repeater_api():
 @pytest.fixture
 def service(repeater_api):
     from pentool.services.repeater_service import RepeaterService
+
     return RepeaterService(repeater_api=repeater_api)
 
 
 @pytest.fixture
 def service_no_api():
     from pentool.services.repeater_service import RepeaterService
+
     return RepeaterService(repeater_api=None)
 
 
@@ -29,6 +32,7 @@ class TestRepeaterServiceSendRequest:
     @pytest.mark.asyncio
     async def test_send_via_api(self, service, repeater_api):
         from pentool.utils.parser import ParsedResponse
+
         resp = ParsedResponse(status=200, headers={}, body="OK")
         repeater_api.send.return_value = resp
 
@@ -56,11 +60,11 @@ class TestRepeaterServiceSendRequest:
     @pytest.mark.asyncio
     async def test_send_without_api_spins_up_own_api(self, service_no_api):
         from pentool.utils.parser import ParsedResponse
+
         resp = ParsedResponse(status=200, headers={}, body="OK")
 
         # 4.3: when no RepeaterAPI was injected, the service creates its own
         # (single route through the API layer) rather than a raw HTTPClient.
-        from pentool.api.repeater_api import RepeaterAPI
 
         with patch("pentool.services.repeater_service.RepeaterAPI") as mock_api_cls:
             mock_api = AsyncMock()
@@ -78,6 +82,7 @@ class TestRepeaterServiceSendRequest:
     @pytest.mark.asyncio
     async def test_elapsed_ms_returned(self, service, repeater_api):
         from pentool.utils.parser import ParsedResponse
+
         resp = ParsedResponse(status=200, headers={}, body="OK")
         repeater_api.send.return_value = resp
 

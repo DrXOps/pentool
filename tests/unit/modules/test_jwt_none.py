@@ -11,8 +11,9 @@ any structural migration.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 pytest.importorskip("pentool.modules.scanner")
 
@@ -21,13 +22,12 @@ from pentool.modules.scanner.checks.jwt_none import (
     _b64_decode,
     _b64_encode,
     _build_expire_jwt,
-    _build_kid_jwts,
     _build_none_jwt,
-    _build_role_escalation_jwts,
     _find_jwt,
     _is_accepted,
     _set_bearer,
 )
+
 from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 ACCEPTED_BODY = "Welcome, user. Here is your dashboard data." * 2
@@ -41,17 +41,13 @@ def _make_jwt(header: dict, payload: dict) -> str:
 JWT_HEADER = {"alg": "HS256", "typ": "JWT"}
 
 
-def _make_request(
-    url: str, method: str = "GET", headers: dict | None = None, body: str = ""
-) -> ParsedRequest:
+def _make_request(url: str, method: str = "GET", headers: dict | None = None, body: str = "") -> ParsedRequest:
     return ParsedRequest(method=method, url=url, headers=headers or {}, body=body)
 
 
 def _bearer_request(payload: dict, header: dict | None = None) -> ParsedRequest:
     token = _make_jwt(header or JWT_HEADER, payload)
-    return _make_request(
-        "http://target/api", headers={"Authorization": f"Bearer {token}"}
-    )
+    return _make_request("http://target/api", headers={"Authorization": f"Bearer {token}"})
 
 
 def _accepted_client(**kwargs) -> MagicMock:
@@ -143,7 +139,6 @@ class TestScanNoJwt:
 class TestEngineIntegration:
     """End-to-end through ScanEngine — the check actually finds a bypass
     when the server accepts every reconstructed JWT."""
-
 
     @pytest.mark.asyncio
     async def test_engine_detects_jwt_bypass(self):

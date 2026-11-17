@@ -6,9 +6,8 @@ security-class that also had to be removed; consolidated here so the utility
 has its own behavioral tests, including the case-insensitivity + port-strip
 semantics that only this module exercises.
 """
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from pentool.utils.scope import host_in_scope
 

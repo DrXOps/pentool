@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import pytest
-from pentool.utils.parser import ParsedRequest
+
 from pentool.utils.copy_as import (
     copy_as_curl,
-    copy_as_ffuf,
-    copy_as_sqlmap,
-    copy_as_nmap,
-    copy_as_jwt_tool,
     copy_as_fetch,
+    copy_as_ffuf,
+    copy_as_jwt_tool,
+    copy_as_nmap,
+    copy_as_sqlmap,
     save_request_txt,
 )
+from pentool.utils.parser import ParsedRequest
 
 
 @pytest.fixture

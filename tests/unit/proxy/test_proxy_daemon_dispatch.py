@@ -10,6 +10,7 @@ from pentool.proxy.daemon import ProxyDaemon
 def _make_daemon() -> ProxyDaemon:
     """Build a bare daemon with mocked internals so dispatch runs without sockets."""
     import types
+
     d = ProxyDaemon.__new__(ProxyDaemon)
     proxy = types.SimpleNamespace(
         is_running=False,
@@ -18,8 +19,8 @@ def _make_daemon() -> ProxyDaemon:
         intercept_enabled=False,
         scope=[],
     )
-    proxy.set_intercept = lambda enabled: setattr(proxy, 'intercept_enabled', bool(enabled))
-    proxy.set_scope = lambda hosts: setattr(proxy, 'scope', list(hosts))
+    proxy.set_intercept = lambda enabled: setattr(proxy, "intercept_enabled", bool(enabled))
+    proxy.set_scope = lambda hosts: setattr(proxy, "scope", list(hosts))
     proxy.is_in_scope = lambda host: host in proxy.scope
     d._proxy = proxy
     return d
@@ -32,6 +33,7 @@ class TestDispatchStart:
 
         async def _start():
             d._proxy.is_running = True
+
         d._proxy.start = _start
 
         resp = await d._dispatch({"cmd": "start"})
@@ -47,6 +49,7 @@ class TestDispatchStart:
 
         async def _boom():
             raise RuntimeError("Address already in use")
+
         d._proxy.start = _boom
 
         resp = await d._dispatch({"cmd": "start"})
@@ -59,6 +62,7 @@ class TestDispatchStart:
 
         async def _boom():
             raise OSError(98, "Address already in use")
+
         d._proxy.start = _boom
 
         resp = await d._dispatch({"cmd": "start"})

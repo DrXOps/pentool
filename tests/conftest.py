@@ -6,15 +6,12 @@ Async fixtures are declared with @pytest_asyncio.fixture.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-from typing import AsyncIterator
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 # PRO package paths are now extended automatically by pentool/__init__.py
 # (_bootstrap_pro) for both dev checkout (pro/ submodule) and the installed
 # end-user package (~/.pentool/pro/). No manual __path__ manipulation needed here.
-
 import pytest
 import pytest_asyncio
 
@@ -27,15 +24,13 @@ def has_scanner_module():
     """Check if scanner module (PRO) is available."""
     try:
         import pentool.modules.scanner  # noqa: F401
+
         return True
     except ImportError:
         return False
 
 
-pytest_skip_if_no_scanner = pytest.mark.skipif(
-    not has_scanner_module(),
-    reason="Scanner module (PRO) not available"
-)
+pytest_skip_if_no_scanner = pytest.mark.skipif(not has_scanner_module(), reason="Scanner module (PRO) not available")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -49,9 +44,7 @@ def pytest_collection_modifyitems(config, items):
         # Skip if test file imports from pentool.modules.scanner
         if "test_spider.py" in str(item.fspath):
             # test_spider has scanner-dependent tests
-            if any(name in item.nodeid for name in [
-                "TestPayloadsLoader", "TestActiveChecksInit"
-            ]):
+            if any(name in item.nodeid for name in ["TestPayloadsLoader", "TestActiveChecksInit"]):
                 item.add_marker(skip_scanner)
 
         # Skip tests that import scanner APIs
@@ -60,9 +53,7 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(skip_scanner)
 
         # Skip TUI tests that try to load scanner screen.tcss
-        if any(name in str(item.fspath) for name in [
-            "test_live_dashboard.py", "test_message_storm.py"
-        ]):
+        if any(name in str(item.fspath) for name in ["test_live_dashboard.py", "test_message_storm.py"]):
             item.add_marker(skip_scanner)
 
 
@@ -128,6 +119,7 @@ async def test_db(test_config: Config) -> str:
 async def http_storage(tmp_path: Path):
     """Ready HttpStorage with a temporary database."""
     from pentool.storage.http_storage import HttpStorage
+
     storage = HttpStorage()
     db_path = str(tmp_path / "history.db")
     await storage.init_db(db_path)

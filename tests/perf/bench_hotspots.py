@@ -40,6 +40,7 @@ def _bench_mutator_inject(n: int) -> float:
     # Используем РЕАЛЬНЫЙ RequestMutator._inject_get (не собственный parse_qs):
     # только так бенчмарк отражает оптимизацию кэша в классе.
     from pro.pentool.modules.scanner.mutator import RequestMutator
+
     url = "http://127.0.0.1:7474/page/42?q=val&r=1"
     mut = RequestMutator()
     t0 = time.monotonic()
@@ -69,6 +70,7 @@ def _bench_has_db_error(n: int) -> float:
     # РЕАЛЬНАЯ функция имеет early-return на первом совпадении — замеряем
     # её как есть. Test-кейс: body с сигнатурой ошибки БД, совпадает рано.
     from pro.pentool.modules.scanner.checks.sqli import _has_db_error
+
     body = _db_signature_body()
     t0 = time.monotonic()
     for _ in range(n):
@@ -80,6 +82,7 @@ def _bench_has_db_error_worst(n: int) -> float:
     # Худший случай: ответы БЕЗ сигнатуры — функция должна обойти ВСЕ паттерны
     # всех БД до конца. Показывает «потолок» стоимости на защичавшийся сайт.
     from pro.pentool.modules.scanner.checks.sqli import _has_db_error
+
     body = "<html><body>OK — page rendered, 200 OK, no DB error</body></html>"
     t0 = time.monotonic()
     for _ in range(n):
@@ -98,6 +101,7 @@ def _cpu_load_sweep(fn, run_s: float = 0.5, n_batch: int = 1000) -> tuple[float,
       per_batch_us   — стоимость одного fn(n_batch) вызова.
     """
     import psutil
+
     proc = psutil.Process()
     proc.cpu_percent(interval=None)  # разогрев (первый вызов ноу-тро → 0)
     t = proc.cpu_times()
@@ -119,8 +123,7 @@ def _cpu_load_sweep(fn, run_s: float = 0.5, n_batch: int = 1000) -> tuple[float,
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--n", type=int, default=50_000)
-    ap.add_argument("--cpu-sweep", type=float, default=0.5,
-                    help="Секунд плотной петли для CPU-секции (0 = выкл)")
+    ap.add_argument("--cpu-sweep", type=float, default=0.5, help="Секунд плотной петли для CPU-секции (0 = выкл)")
     args = ap.parse_args()
     if args.n < 1:
         raise SystemExit("--n должен быть ≥ 1")
@@ -139,27 +142,27 @@ def main() -> None:
     d = _bench_mutator_inject(n)
     us = d / n * 1e6
     results["mutator_inject"] = (d, us)
-    print(f"1) mutator._inject_get   : {d*1000:8.1f}ms  ({us:6.1f}µs/payload)")
+    print(f"1) mutator._inject_get   : {d * 1000:8.1f}ms  ({us:6.1f}µs/payload)")
 
     d = _bench_parse_http_request(n)
     us = d / n * 1e6
     results["parse_http_request"] = (d, us)
-    print(f"2) parse_http_request    : {d*1000:8.1f}ms  ({us:6.1f}µs/запрос)")
+    print(f"2) parse_http_request    : {d * 1000:8.1f}ms  ({us:6.1f}µs/запрос)")
 
     d = _bench_has_db_error(n)
     us = d / n * 1e6
     results["has_db_error"] = (d, us)
-    print(f"3) sqli._has_db_error    : {d*1000:8.1f}ms  ({us:6.1f}µs/ответ, early-hit)")
+    print(f"3) sqli._has_db_error    : {d * 1000:8.1f}ms  ({us:6.1f}µs/ответ, early-hit)")
 
     d = _bench_has_db_error_worst(n)
     us = d / n * 1e6
     results["has_db_error_worst"] = (d, us)
-    print(f"3b) _has_db_error worst  : {d*1000:8.1f}ms  ({us:6.1f}µs/ответ, no-hit scan-all)")
+    print(f"3b) _has_db_error worst  : {d * 1000:8.1f}ms  ({us:6.1f}µs/ответ, no-hit scan-all)")
 
     print("\nФормула для смета на прогон (при K активных payload):")
     for k, (total, us) in results.items():
         est_k = 60_000  # ~60k HTTP в типичном активном скане/интрудере
-        print(f"   {k:20s} ~{us/1e6*est_k:6.2f}с при {est_k:,} вызовах")
+        print(f"   {k:20s} ~{us / 1e6 * est_k:6.2f}с при {est_k:,} вызовах")
 
     # ── CPU-секция: как КАЖДАЯ функция грузит ядро при плотной работе ──────
     print("\n=== CPU-нагрузка каждой функции (плотная петля, без сети) ===")
@@ -176,8 +179,10 @@ def main() -> None:
             # батчей → CPU-замер стабилен. Для дешёвого parse_http_request
             # batch покрупнее.
             pct, tot, per_batch = _cpu_load_sweep(fn, args.cpu_sweep, n_batch=2000)
-            print(f"  {label}: cpu% ≈ {pct:5.1f}  ({tot:.3f}c user+sys за "
-                  f"{args.cpu_sweep:.1f}s)  ~{per_batch:7.0f}µs/batch(2000)")
+            print(
+                f"  {label}: cpu% ≈ {pct:5.1f}  ({tot:.3f}c user+sys за "
+                f"{args.cpu_sweep:.1f}s)  ~{per_batch:7.0f}µs/batch(2000)"
+            )
     else:
         print("  (CPU-секция выключена: --cpu-sweep 0)")
 

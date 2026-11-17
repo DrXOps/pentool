@@ -129,10 +129,7 @@ def test_guard_detects_a_planted_handler_without_traceback(tmp_path, monkeypatch
         "        raise\n",
     ):
         planted.write_text(
-            "def on_action(self, event):\n"
-            "    try:\n"
-            "        self.do_work()\n"
-            "    except Exception as exc:\n" + body,
+            "def on_action(self, event):\n    try:\n        self.do_work()\n    except Exception as exc:\n" + body,
             encoding="utf-8",
         )
         assert _offenders() == [], body

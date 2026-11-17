@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pentool.api.proxy_api import ProxyAPI, InterceptedRequest, MatchReplaceRule
+from pentool.api.proxy_api import MatchReplaceRule, ProxyAPI
 
 
 class TestProxyAPIWithoutProxy:
@@ -139,9 +139,7 @@ class TestProxyAPIWithMockProxy:
     def test_forward_with_modified_raw(self, mock_proxy_server) -> None:
         api = self._make_api(mock_proxy_server)
         api.forward("req-123", "GET / HTTP/1.1\r\n\r\n")
-        mock_proxy_server.forward.assert_called_once_with(
-            "req-123", "GET / HTTP/1.1\r\n\r\n"
-        )
+        mock_proxy_server.forward.assert_called_once_with("req-123", "GET / HTTP/1.1\r\n\r\n")
 
     def test_drop_delegates(self, mock_proxy_server) -> None:
         api = self._make_api(mock_proxy_server)
@@ -163,6 +161,7 @@ class TestProxyAPIWithMockProxy:
 class TestProxyAPIExtra:
     def test_create_proxy_sets_internal(self) -> None:
         from unittest.mock import patch
+
         api = ProxyAPI()
         with patch("pentool.api.proxy_api.ProxyServer") as PS:
             api.create_proxy(host="h", port=9999, cert_dir="/c", db_path="/d")
@@ -186,7 +185,7 @@ class TestProxyAPIExtra:
 
 class TestProxyAPIExportImport:
     def test_export_with_requests(self, mock_proxy_server) -> None:
-        from pentool.api.proxy_api import InterceptedRequest
+
         api = ProxyAPI()
         api.set_proxy(mock_proxy_server)
         req = MagicMock()
@@ -210,10 +209,20 @@ class TestProxyAPIExportImport:
         api.set_proxy(mock_proxy_server)
         data = {
             "proxy": {"scope": ["a.com"], "match_replace": []},
-            "http_history": [{"id": "x", "method": "GET", "url": "http://h/",
-                              "headers": {}, "body": "", "timestamp": "",
-                              "state": "forwarded", "is_https": False,
-                              "is_websocket": False, "response": None}],
+            "http_history": [
+                {
+                    "id": "x",
+                    "method": "GET",
+                    "url": "http://h/",
+                    "headers": {},
+                    "body": "",
+                    "timestamp": "",
+                    "state": "forwarded",
+                    "is_https": False,
+                    "is_websocket": False,
+                    "response": None,
+                }
+            ],
         }
         loaded, msg = api.import_project_data(data)
         assert loaded == 1
