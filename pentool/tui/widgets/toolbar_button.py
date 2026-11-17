@@ -37,12 +37,34 @@ class ToolbarButton(Static):
             """Allows @on(ToolbarButton.Pressed, "#btn-id") CSS selector."""
             return self.button
 
-    def __init__(self, label: str, btn_id: str, classes: str = "", tooltip: str | None = None) -> None:
+    def __init__(
+        self,
+        label: str,
+        btn_id: str,
+        classes: str = "",
+        tooltip: str | None = None,
+        variant: str = "default",
+    ) -> None:
         super().__init__(label, id=btn_id, classes=classes)
         self._label = label
         self._disabled = "disabled" in classes.split()
+        self._apply_variant(variant)
         if tooltip:
             self.tooltip = tooltip
+
+    def _apply_variant(self, variant: str) -> None:
+        """Семантический окрас кнопки (PRO-модули передают `variant=`).
+
+        Классы прописаны литералами, а не собраны из f-строки: гейт
+        `check_tui_css.py` проверяет каждый `.tcss`-класс по литералам в
+        Python, и собранное имя он справедливо считает «неиспользуемым».
+        """
+        if variant == "success":
+            self.add_class("variant-success")
+        elif variant == "warning":
+            self.add_class("variant-warning")
+        elif variant == "error":
+            self.add_class("variant-error")
 
     @property
     def label(self) -> str:

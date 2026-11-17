@@ -39,7 +39,7 @@ _PAYLOAD = "<script>alert('xss_1')</script>"  # и SQLi-вид ниже чере
 def _bench_mutator_inject(n: int) -> float:
     # Используем РЕАЛЬНЫЙ RequestMutator._inject_get (не собственный parse_qs):
     # только так бенчмарк отражает оптимизацию кэша в классе.
-    from pro.pentool.modules.scanner.mutator import RequestMutator
+    from pentool.modules.scanner.mutator import RequestMutator
 
     url = "http://127.0.0.1:7474/page/42?q=val&r=1"
     mut = RequestMutator()
@@ -69,7 +69,7 @@ def _db_signature_body() -> str:
 def _bench_has_db_error(n: int) -> float:
     # РЕАЛЬНАЯ функция имеет early-return на первом совпадении — замеряем
     # её как есть. Test-кейс: body с сигнатурой ошибки БД, совпадает рано.
-    from pro.pentool.modules.scanner.checks.sqli import _has_db_error
+    from pentool.modules.scanner.checks.sqli import _has_db_error
 
     body = _db_signature_body()
     t0 = time.monotonic()
@@ -81,7 +81,7 @@ def _bench_has_db_error(n: int) -> float:
 def _bench_has_db_error_worst(n: int) -> float:
     # Худший случай: ответы БЕЗ сигнатуры — функция должна обойти ВСЕ паттерны
     # всех БД до конца. Показывает «потолок» стоимости на защичавшийся сайт.
-    from pro.pentool.modules.scanner.checks.sqli import _has_db_error
+    from pentool.modules.scanner.checks.sqli import _has_db_error
 
     body = "<html><body>OK — page rendered, 200 OK, no DB error</body></html>"
     t0 = time.monotonic()

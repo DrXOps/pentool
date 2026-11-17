@@ -65,7 +65,7 @@ from pentool.tui.mixins.events_handlers import ProxyEventHandlersMixin
 from pentool.tui.mixins.notifications import NotificationsMixin
 from pentool.tui.mixins.project_autosave import ProjectAutoSaveMixin
 from pentool.tui.mixins.proxy_runtime import ProxyRuntimeMixin
-from pentool.tui.screen_registry import SCREEN_MAP
+from pentool.tui.screen_registry import get_screen_class
 from pentool.tui.screens import (
     ComparerScreen,
     DashboardScreen,
@@ -391,8 +391,9 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             yield SequencerScreen(id="screen-sequencer")
             yield ExtensionsScreen(id="screen-extensions")
             yield SettingsScreen(id="screen-settings")
-            # ReconScreen — PRO-only, conditional
-            recon_cls = SCREEN_MAP.get("recon")
+            # ReconScreen — PRO-only, грузится по требованию: импорт на уровне
+            # модуля давал цикл app → registry → recon → app и терял модуль.
+            recon_cls = get_screen_class("recon")
             if recon_cls is not None:
                 yield recon_cls(id="screen-recon")
         # Footer and StatusBar both used to `dock: bottom` independently —
@@ -1103,7 +1104,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def _switch_to(self, module_id: str) -> None:
         if module_id == self._active_module:
             return
-        if module_id not in SCREEN_MAP:
+        if get_screen_class(module_id) is None:
             # Экран не зарегистрирован — например Recon, который живёт в
             # PRO-сабмодуле: без него screen_registry молча пропускает запись,
             # и раньше вкладка открывалась пустым окном без объяснений.
