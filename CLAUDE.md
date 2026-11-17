@@ -53,6 +53,11 @@ Single source of truth: `MYPLANS/` — любой файл `*plan*` или `*aud
 - Широкие исключения: `uv run python tools/check_broad_except.py`
   (вторая трещотка ADR-6 по всему `pentool/` — считает `ruff BLE001`,
   потолок на файл в `tools/broad_except_baseline.json`, `--update` понижает)
+- Логирование в путях данных: `uv run python tools/check_logging_policy.py`
+  (третья трещотка ADR-6: широкий `except` внутри save/load/restore/apply
+  обязан пробрасывать или писать `warning`+ с трейсбеком; потолок —
+  `tools/logging_policy_baseline.json`, `--update` понижает). Как выбирать
+  уровень и чем слои отличаются — `wiki/tui.md` §8a
 - Хуки pre-commit: `uvx pre-commit run --files $(git diff --name-only HEAD)`.
   **Не `--all-files`**: репозиторий исторически накопил расхождение с
   форматтерами (на 2026-11-16 `ruff format` при 120 хотел бы переписать 84

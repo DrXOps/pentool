@@ -62,6 +62,18 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Трещотка ADR-6 по путям данных: широкий `except` внутри функции
+      # сохранения/загрузки/восстановления обязан пробрасывать или писать
+      # warning+ с трейсбеком (иначе «сохранил», а не сохранилось). Базовая
+      # линия — tools/logging_policy_baseline.json (149 мест на 29 файлов);
+      # понижение — `python tools/check_logging_policy.py --update`.
+      - id: check-logging-policy
+        name: data-path failures are logged with a traceback
+        entry: uv run python tools/check_logging_policy.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       # guard-git-staging: в коммит попадают только файлы проекта.
       # Проверяет ИНДЕКС, а не команду — работает и для `git commit` из IDE,
       # и в CI (через --files-from). Логика и списки продублированы из

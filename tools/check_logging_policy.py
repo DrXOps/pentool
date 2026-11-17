@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""Ratchet: a failure in a data path must not disappear from the log.
+
+Why this rule exists
+--------------------
+ADR-6 closed two shapes of invisible failure: ``except Exception: pass``
+(``tools/check_silent_except.py``, now at zero) and handlers that log a string
+instead of a traceback (``tests/unit/tui/test_handler_exceptions_logged.py``).
+What is left is a broad catch that *does something sensible* and takes the
+cause with it: 551 sites, of which 472 wrote nothing or only ``debug``.
+
+For most of them that is fine — a tooltip that failed to update is a cosmetic
+miss, and ``debug`` is the right level. For a **data path** it is not: when the
+code that saves, loads, restores or applies state swallows the cause, the user
+sees "saved" while nothing was saved, and the log is silent. Those are the sites
+this ratchet cares about.
+
+The rule
+--------
+Inside a function whose name marks a data path (``_DATA_VERBS``), a blind
+``except`` (``Exception`` / ``BaseException`` / bare) must satisfy one of:
+
+* re-raise (``raise`` in the handler body);
+* ``logger.exception(...)``;
+* ``logger.warning/error/critical(..., exc_info=True)``.
+
+Anything else is a violation. A handler that has a reason to stay quiet says so
+explicitly with ``# logging-ok: <reason>`` on the ``except`` line — the same
+shape as ``pragma: allowlist secret`` for detect-secrets.
+
+Cosmetic functions (``_COSMETIC_WORDS``: theme, layout, tooltip, label, hint,
+highlight, …) are out of scope even when their name matches a data verb
+(``_apply_theme`` is not a data path).
+
+Why a ratchet and not a wipe
+----------------------------
+The debt is 100+ sites across the TUI. They are paid down file by file through
+``.claude/tmp/f009/`` (backup → edit → compile → ruff → module tests → rollback);
+the baseline in ``tools/logging_policy_baseline.json`` makes new debt impossible
+in the meantime and records the remaining work.
+
+Usage::
+
+    python tools/check_logging_policy.py            # exit 1 on growth
+    python tools/check_logging_policy.py --update   # lower the baseline
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+PACKAGE = ROOT / "pentool"
+BASELINE = ROOT / "tools" / "logging_policy_baseline.json"
+
+#: Имена функций, работающих с состоянием: тут молчание = потеря данных.
+_DATA_VERBS = (
+    "save",
+    "store",
+    "persist",
+    "commit",
+    "restore",
+    "load",
+    "write",
+    "export",
+    "import",
+    "flush",
+    "switch_db",
+)
+
+#: Косметика: даже если имя задело глагол (`_apply_theme`), логирование данных тут ни при чём.
+_COSMETIC_WORDS = (
+    "theme",
+    "layout",
+    "tooltip",
+    "label",
+    "hint",
+    "highlight",
+    "color",
+    "colour",
+    "cursor",
+    "focus",
+    "glyph",
+    "blink",
+    "render",
+    "paint",
+    "refresh",
+    "style",
+)
+
+#: Уровни, которые считаются честным логом (при наличии трейсбека).
+_LOUD = {"warning", "error", "exception", "critical"}
+
+_PRAGMA = "logging-ok"
+
+
+def _is_blind(handler: ast.ExceptHandler) -> bool:
+    if handler.type is None:
+        return True
+    types = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
+    names: list[str] = []
+    for node in types:
+        if isinstance(node, ast.Name):
+            names.append(node.id)
+        elif isinstance(node, ast.Attribute):
+            names.append(node.attr)
+    return any(name in {"Exception", "BaseException"} for name in names)
+
+
+def _is_data_path(name: str) -> bool:
+    lowered = name.lower()
+    if any(word in lowered for word in _COSMETIC_WORDS):
+        return False
+    return any(verb in lowered for verb in _DATA_VERBS)
+
+
+def _handler_logs_loudly(handler: ast.ExceptHandler, source: str) -> bool:
+    """Пробрасывает, или logger.*(… exc_info=True), или logger.exception(…)."""
+    for stmt in ast.walk(ast.Module(body=handler.body, type_ignores=[])):
+        if isinstance(stmt, ast.Raise):
+            return True
+        if not isinstance(stmt, ast.Call):
+            continue
+        func = stmt.func
+        if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
+            continue
+        if func.value.id != "logger" or func.attr not in _LOUD:
+            continue
+        if func.attr == "exception":
+            return True
+        if any(kw.arg == "exc_info" for kw in stmt.keywords):
+            return True
+    return False
+
+
+def count_violations(tree: ast.AST, source: str) -> int:
+    """Сколько широких `except` в путях данных молчат о причине."""
+    lineno_to_line = source.splitlines()
+    count = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not _is_data_path(node.name):
+            continue
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.ExceptHandler) or not _is_blind(inner):
+                continue
+            line = lineno_to_line[inner.lineno - 1] if inner.lineno <= len(lineno_to_line) else ""
+            if _PRAGMA in line:
+                continue
+            if not _handler_logs_loudly(inner, source):
+                count += 1
+    return count
+
+
+def scan() -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for path in sorted(PACKAGE.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(source)
+        except SyntaxError as exc:  # pragma: no cover - defensive
+            print(f"ERROR: cannot parse {path}: {exc}", file=sys.stderr)
+            continue
+        count = count_violations(tree, source)
+        if count:
+            counts[str(path.relative_to(ROOT)).replace("\\", "/")] = count
+    return counts
+
+
+def load_baseline() -> dict[str, int]:
+    if not BASELINE.exists():
+        return {}
+    return json.loads(BASELINE.read_text(encoding="utf-8"))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--update", action="store_true", help="rewrite the baseline (never raises it)")
+    args = parser.parse_args(argv)
+
+    current = scan()
+    baseline = load_baseline()
+
+    if args.update:
+        merged = {
+            path: min(current.get(path, 0), baseline.get(path, current.get(path, 0)))
+            for path in set(current) | set(baseline)
+        }
+        merged = {path: n for path, n in merged.items() if n}
+        BASELINE.write_text(json.dumps(dict(sorted(merged.items())), indent=2) + "\n", encoding="utf-8")
+        print(f"check_logging_policy: baseline updated — {sum(merged.values())} sites in {len(merged)} files")
+        return 0
+
+    grown = {path: (baseline.get(path, 0), count) for path, count in current.items() if count > baseline.get(path, 0)}
+    if grown:
+        print("check_logging_policy: широкий `except` в пути данных молчит о причине:", file=sys.stderr)
+        for path, (was, now) in sorted(grown.items()):
+            print(f"  {path}: {was} -> {now}", file=sys.stderr)
+        print(
+            "Логируйте причину: `logger.warning/error(..., exc_info=True)` или `logger.exception(...)`, "
+            "либо пробросьте исключение. Если молчание осознанно — `# logging-ok: <причина>` на строке except.",
+            file=sys.stderr,
+        )
+        return 1
+
+    total_now, total_base = sum(current.values()), sum(baseline.values())
+    print(
+        f"check_logging_policy: OK — {total_now} sites "
+        f"(baseline {total_base}, {'down' if total_now <= total_base else 'up'})"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
