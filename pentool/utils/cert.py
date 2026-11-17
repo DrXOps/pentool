@@ -253,7 +253,7 @@ def _load_ctx_from_disk(domain: str, ca_cert_path: str, cert_dir: str | None) ->
         # Corrupted cache — delete and regenerate
         try:
             path.unlink(missing_ok=True)
-        except Exception:
+        except Exception:  # logging-ok: остаточный файл кэша не мешает — он будет перезаписан
             logger.debug("cert: failed to delete corrupted cache file", exc_info=True)
         return None
 

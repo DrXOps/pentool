@@ -76,5 +76,8 @@ def _load_logging_rules(root_logger: logging.Logger) -> None:
         cfg = get_config()
         rules_section = getattr(cfg, "logging_rules", None) or {}
         _NamedLogger.configure(rules_section)
-    except Exception as exc:
-        root_logger.debug("No logging.rules in config: %s", exc)
+    except Exception:
+        # Секция [logging.rules] не прочиталась — правила остались прежними.
+        # Это не потеря данных, но и не норма: warning с трейсбеком, иначе
+        # сломанный конфиг логирования выглядит как его отсутствие.
+        root_logger.warning("logging.rules not applied", exc_info=True)

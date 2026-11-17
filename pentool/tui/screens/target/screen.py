@@ -1094,8 +1094,10 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         try:
             api = self._get_api()
             await api.save()
-        except Exception as exc:
-            logger.debug("_do_save_sitemap: %s", exc)
+        except Exception:
+            # Карта сайта не сохранена: при следующем запуске проект откроется
+            # без неё. Это потеря — error с трейсбеком.
+            logger.error("_do_save_sitemap: site map not saved", exc_info=True)
 
     def _update_tech_node(self, host: str, profile: dict) -> None:
         """Update or add a tech-info leaf under the host node in the tree.

@@ -44,33 +44,33 @@ class Config:
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/122.0.0.0 Safari/537.36"
     )
-    request_timeout: int = 15         # seconds
-    connect_timeout: int = 10         # seconds
-    collaborator_url: str = ""        # Burp Collaborator / interactsh URL
+    request_timeout: int = 15  # seconds
+    connect_timeout: int = 10  # seconds
+    collaborator_url: str = ""  # Burp Collaborator / interactsh URL
     max_redirects: int = 10
-    verify_ssl: bool = False          # verify SSL certificates in scanner
+    verify_ssl: bool = False  # verify SSL certificates in scanner
     # ── Scanner request marking ─────────────────────────────────────────────────
     scan_marker_enabled: bool = False
     scan_marker_name: str = "X-Scanner"
     scan_marker_value: str = "pentool/1.0"
     # ── Crash Reporting / Update Checker ────────────────────────────────────────
-    send_crash_reports: bool = True   # send anonymous crash reports
-    check_updates: bool = True        # check for updates on startup
+    send_crash_reports: bool = True  # send anonymous crash reports
+    check_updates: bool = True  # check for updates on startup
     # ── UI ────────────────────────────────────────────────────────────────────────
-    theme: str = "textual-dark"       # Textual theme name
+    theme: str = "textual-dark"  # Textual theme name
     notifications_sound_enabled: bool = True  # play a short sound with customnotify() toasts
 
     # ── AI ────────────────────────────────────────────────────────────────────────
-    ai_enabled: bool = False           # master switch for the AI assistant
-    ai_model: str = ""                 # LLM model name / path (GGUF)
-    ai_mcp_host: str = "127.0.0.1"    # MCP server host
-    ai_mcp_port: int = 0              # 0 = stdio, >0 = TCP
-    ai_mcp_model_path: str = ""       # path to the GGUF file
-    ai_mcp_auto_start: bool = False   # auto-start the MCP server when pentool launches
+    ai_enabled: bool = False  # master switch for the AI assistant
+    ai_model: str = ""  # LLM model name / path (GGUF)
+    ai_mcp_host: str = "127.0.0.1"  # MCP server host
+    ai_mcp_port: int = 0  # 0 = stdio, >0 = TCP
+    ai_mcp_model_path: str = ""  # path to the GGUF file
+    ai_mcp_auto_start: bool = False  # auto-start the MCP server when pentool launches
     # Debug — подробное логирование процесса скана и AI-воркера
-    scan_debug: bool = False           # показать/скрыть детальный вывод скана
+    scan_debug: bool = False  # показать/скрыть детальный вывод скана
     # Auto-Scope — автоматически добавлять хост в Scope при отправке в модуль
-    auto_scope: bool = False           # если True — хост из контекстного меню → в Scope
+    auto_scope: bool = False  # если True — хост из контекстного меню → в Scope
 
     # ── Per-module logging rules (NamedLogger) ──────────────────────────────────
     logging_rules: dict[str, str] = field(default_factory=dict)
@@ -125,10 +125,8 @@ class Config:
         Excludes _observers (not serializable — contains weakrefs/callbacks).
         """
         import dataclasses as _dc
-        return {
-            f.name: getattr(self, f.name) for f in _dc.fields(self)
-            if not f.name.startswith("_")
-        }
+
+        return {f.name: getattr(self, f.name) for f in _dc.fields(self) if not f.name.startswith("_")}
 
     def add_recent_project(self, path: str) -> None:
         path = str(path)
@@ -167,7 +165,7 @@ class Config:
         if len(cfg.recent_projects) != before:
             try:
                 cfg.save()
-            except Exception:
+            except Exception:  # logging-ok: необязательная чистка списка, повторится при следующей загрузке
                 pass
         return cfg
 

@@ -45,8 +45,10 @@ def _save_local_crash(exc: BaseException, tb_text: str | None = None) -> None:
     the crash information is never silently lost.
     """
     try:
-        from pentool.core.config import DEFAULT_CONFIG_DIR
         from datetime import datetime
+
+        from pentool.core.config import DEFAULT_CONFIG_DIR
+
         crash_log = DEFAULT_CONFIG_DIR / "crash_last.log"
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(crash_log, "a", encoding="utf-8") as f:
@@ -56,19 +58,21 @@ def _save_local_crash(exc: BaseException, tb_text: str | None = None) -> None:
                 f.write(tb_text)
             else:
                 import traceback as _tb
+
                 _tb.print_exc(file=f)
             f.write(f"=== END CRASH {ts} ===\n")
-    except Exception:
+    except Exception:  # logging-ok: дамп уже не записать, а рекурсия в логгере хуже молчания
         pass  # last resort — nothing we can do
 
 
 def _anonymize(text: str) -> str:
     """Remove paths and potential tokens from traceback text."""
     import re
+
     # Remove absolute paths — keep only filename
     text = re.sub(r'  File "([^"]+)"', lambda m: f'  File "{os.path.basename(m.group(1))}"', text)
     # Remove anything that looks like a token/key (long hex strings)
-    text = re.sub(r'\b[A-Fa-f0-9]{32,}\b', '<TOKEN>', text)
+    text = re.sub(r"\b[A-Fa-f0-9]{32,}\b", "<TOKEN>", text)
     return text
 
 
@@ -105,6 +109,7 @@ def send_crash(exc: BaseException) -> None:
     """Fire-and-forget crash report from sync context."""
     try:
         from pentool.core.config import get_config
+
         cfg = get_config()
         if not getattr(cfg, "send_crash_reports", True):
             return
@@ -133,6 +138,7 @@ async def send_first_run_ping_async(endpoint: str = f"{_API_BASE}/api/telemetry/
 
     try:
         from pentool.core.license import get_machine_id
+
         machine_id = get_machine_id()
     except Exception:
         return
@@ -154,6 +160,7 @@ def send_first_run_ping() -> None:
     """
     try:
         from pentool.core.config import get_config
+
         cfg = get_config()
         if not getattr(cfg, "send_crash_reports", True):
             return

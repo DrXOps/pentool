@@ -411,6 +411,9 @@ class TabbedContentPanel(Widget, Generic[TState]):
         try:
             states = await self._load_tabs_fn()
         except Exception:
+            # Вкладки из хранилища не пришли — панель останется пустой, хотя
+            # данные в БД есть. Молчание здесь = «вкладки пропали».
+            logger.warning("tab_panel: tabs not loaded from storage", exc_info=True)
             return
         if not states:
             return

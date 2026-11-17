@@ -22,14 +22,18 @@ USER_PLUGINS_DIR = Path.home() / ".pentool" / "plugins"
 
 
 class BasePlugin:
-    """Base for Pentool plugins. Subclasses declare name, version, author, description, api_version, required_feature."""
+    """Base for Pentool plugins.
+
+    Subclasses declare name, version, author, description, api_version,
+    required_feature.
+    """
 
     name: str = ""
     version: str = "0.1"
     author: str = ""
     description: str = ""
     api_version: int = CURRENT_API_VERSION
-    required_feature: str = ""   # "" = free; "scanner_pro" / "reports_pro" / ...
+    required_feature: str = ""  # "" = free; "scanner_pro" / "reports_pro" / ...
 
 
 class BaseCheck:
@@ -40,8 +44,8 @@ class BaseCheck:
 
     name: str = ""
     description: str = ""
-    severity: str = "info"      # critical | high | medium | low | info
-    passive: bool = False       # True -> runs on every proxy request
+    severity: str = "info"  # critical | high | medium | low | info
+    passive: bool = False  # True -> runs on every proxy request
 
     async def scan(self, target: Any, http_client: Any, **kwargs) -> list:
         return []
@@ -71,6 +75,7 @@ class BaseScanner(BasePlugin):
 @dataclass
 class PluginScreen:
     """Screen registered by a plugin."""
+
     name: str
     widget_class: type
     hotkey: str | None = None
@@ -80,8 +85,9 @@ class PluginScreen:
 @dataclass
 class PluginCommand:
     """CLI command registered by a plugin."""
+
     group_name: str
-    command: Any               # click.Command
+    command: Any  # click.Command
     plugin_name: str = ""
 
 
@@ -105,40 +111,36 @@ class PluginHook:
         hotkey: str | None = None,
     ) -> None:
         self._screens.append(
-            PluginScreen(name=name, widget_class=widget_class,
-                         hotkey=hotkey, plugin_name=self._plugin_name)
+            PluginScreen(name=name, widget_class=widget_class, hotkey=hotkey, plugin_name=self._plugin_name)
         )
         logger.debug("Plugin '%s': registered screen '%s'", self._plugin_name, name)
 
     def register_cli_command(self, group_name: str, command: Any) -> None:
-        self._commands.append(
-            PluginCommand(group_name=group_name, command=command,
-                          plugin_name=self._plugin_name)
+        self._commands.append(PluginCommand(group_name=group_name, command=command, plugin_name=self._plugin_name))
+        logger.debug(
+            "Plugin '%s': registered CLI command '%s' -> group '%s'", self._plugin_name, command.name, group_name
         )
-        logger.debug("Plugin '%s': registered CLI command '%s' -> group '%s'",
-                     self._plugin_name, command.name, group_name)
 
     def register_scanner(self, scanner_class: type[BaseScanner]) -> None:
         self._scanners.append(scanner_class)
-        logger.debug("Plugin '%s': registered scanner '%s'",
-                     self._plugin_name, scanner_class.name)
+        logger.debug("Plugin '%s': registered scanner '%s'", self._plugin_name, scanner_class.name)
 
     def register_passive_check(self, check_class: type[BaseCheck]) -> None:
         self._passive_checks.append(check_class)
-        logger.debug("Plugin '%s': registered passive check '%s'",
-                     self._plugin_name, check_class.name)
+        logger.debug("Plugin '%s': registered passive check '%s'", self._plugin_name, check_class.name)
 
 
 @dataclass
 class PluginMeta:
     """Metadata about a loaded plugin."""
+
     name: str
     path: str
     version: str = "?"
     author: str = ""
     description: str = ""
     required_feature: str = ""  # "" = free
-    loaded: bool = True         # False = blocked by license
+    loaded: bool = True  # False = blocked by license
 
 
 class PluginManager:
@@ -170,18 +172,14 @@ class PluginManager:
             dirs:           List of paths to plugin directories.
             warn_untrusted: Log a warning for non-standard paths.
         """
-        builtin_dir = str(
-            Path(__file__).parent.parent / "plugins" / "builtin"
-        )
+        builtin_dir = str(Path(__file__).parent.parent / "plugins" / "builtin")
         for dir_path in dirs:
             is_builtin = Path(dir_path).resolve() == Path(builtin_dir).resolve()
             for py_file in sorted(Path(dir_path).glob("*.py")):
                 if py_file.name.startswith("_"):
                     continue
                 if warn_untrusted and not is_builtin:
-                    logger.warning(
-                        "Loading plugin from untrusted source: %s", py_file
-                    )
+                    logger.warning("Loading plugin from untrusted source: %s", py_file)
                 self._load_file(py_file)
 
     def load_user_plugins(self) -> None:
@@ -202,6 +200,7 @@ class PluginManager:
         # whole process instead of raising a catchable Python exception. See
         # pentool.core.license.is_pro_package_compatible().
         from pentool.core.license import PRO_PACKAGE_DIR, is_pro_package_compatible
+
         compatible, warning = is_pro_package_compatible()
         if not compatible:
             logger.warning("PRO package skipped — %s", warning)
@@ -243,14 +242,21 @@ class PluginManager:
                 if api_ver > CURRENT_API_VERSION:
                     logger.warning(
                         "Plugin '%s' requires api_version=%d, current=%d — skipped",
-                        plugin_name, api_ver, CURRENT_API_VERSION,
+                        plugin_name,
+                        api_ver,
+                        CURRENT_API_VERSION,
                     )
-                    self._meta.append(PluginMeta(
-                        name=plugin_name, path=str(path),
-                        version=version, author=author,
-                        description=f"Requires Plugin API v{api_ver}",
-                        required_feature=required_feature, loaded=False,
-                    ))
+                    self._meta.append(
+                        PluginMeta(
+                            name=plugin_name,
+                            path=str(path),
+                            version=version,
+                            author=author,
+                            description=f"Requires Plugin API v{api_ver}",
+                            required_feature=required_feature,
+                            loaded=False,
+                        )
+                    )
                     return
 
             # License check for PRO plugins
@@ -258,14 +264,20 @@ class PluginManager:
                 if not self._check_license_feature(required_feature):
                     logger.warning(
                         "Plugin '%s' requires license feature '%s' — skipped (license not active)",
-                        plugin_name, required_feature,
+                        plugin_name,
+                        required_feature,
                     )
-                    self._meta.append(PluginMeta(
-                        name=plugin_name, path=str(path),
-                        version=version, author=author,
-                        description=description,
-                        required_feature=required_feature, loaded=False,
-                    ))
+                    self._meta.append(
+                        PluginMeta(
+                            name=plugin_name,
+                            path=str(path),
+                            version=version,
+                            author=author,
+                            description=description,
+                            required_feature=required_feature,
+                            loaded=False,
+                        )
+                    )
                     return
 
             hook = PluginHook(plugin_name)
@@ -276,25 +288,34 @@ class PluginManager:
             self._scanners.extend(hook._scanners)
             self._passive_checks.extend(hook._passive_checks)
             self._loaded.append(str(path))
-            self._meta.append(PluginMeta(
-                name=plugin_name, path=str(path),
-                version=version, author=author, description=description,
-                required_feature=required_feature, loaded=True,
-            ))
+            self._meta.append(
+                PluginMeta(
+                    name=plugin_name,
+                    path=str(path),
+                    version=version,
+                    author=author,
+                    description=description,
+                    required_feature=required_feature,
+                    loaded=True,
+                )
+            )
             logger.info("Loaded plugin: %s", path.name)
 
-        except Exception as exc:
-            logger.error("Failed to load plugin %s: %s", path, exc)
+        except Exception:
+            # Плагин не загружен — его возможностей в приложении не будет.
+            logger.error("Failed to load plugin %s", path, exc_info=True)
 
     @staticmethod
     def _find_plugin_class(module: Any) -> type | None:
         """Find the first BasePlugin subclass in a module."""
         for cls_name in dir(module):
             cls = getattr(module, cls_name)
-            if (isinstance(cls, type)
-                    and issubclass(cls, BasePlugin)
-                    and cls is not BasePlugin
-                    and cls is not BaseScanner):
+            if (
+                isinstance(cls, type)
+                and issubclass(cls, BasePlugin)
+                and cls is not BasePlugin
+                and cls is not BaseScanner
+            ):
                 return cls
         return None
 
@@ -302,6 +323,7 @@ class PluginManager:
     def _check_license_feature(feature: str) -> bool:
         try:
             from pentool.core.license import get_session_license
+
             info = get_session_license()
             return info.has_feature(feature)
         except Exception:
@@ -337,6 +359,7 @@ def _candidate_pro_builtin_dirs() -> list[Path]:
     dirs: list[Path] = []
     try:
         from pentool.core.license import PRO_PACKAGE_DIR
+
         dirs.append(PRO_PACKAGE_DIR / "pentool" / "plugins" / "builtin")
     except Exception:
         pass
@@ -355,7 +378,8 @@ def load_pro_module(module_stem: str):
     if module_name in sys.modules:
         return sys.modules[module_name]
 
-    from pentool.core.license import PRO_PACKAGE_DIR, is_pro_package_compatible
+    from pentool.core.license import is_pro_package_compatible
+
     compatible, warning = is_pro_package_compatible()
     if not compatible:
         raise RuntimeError(warning)

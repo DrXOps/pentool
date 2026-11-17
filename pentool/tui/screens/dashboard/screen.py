@@ -637,9 +637,9 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         try:
             log = self.query_one("#feed-log", RichLog)
             log.write(f"[dim green]{ts}[/dim green] {color}{esc(line)}[/]")
-        except Exception as exc:
+        except Exception:  # logging-ok: косметика приветственной ленты, данные не касается
             # Приветствие не дописано — лента выглядит пустой при старте.
-            logger.debug("dashboard: boot line not written: %s", exc)
+            logger.debug("dashboard: boot line not written")
 
     def _tick(self) -> None:
         try:

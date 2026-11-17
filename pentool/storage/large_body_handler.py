@@ -49,8 +49,10 @@ class LargeBodyHandler:
                 continue
             try:
                 result[p] = Path(p).read_bytes()
-            except Exception as _e:
-                logger.debug("LargeBodyHandler: batch load failed for %s: %s", p, _e)
+            except Exception:
+                # Одно тело не прочиталось — вызывающий получит словарь без него
+                # и покажет запрос с пустым телом. Это потеря, не косметика.
+                logger.warning("LargeBodyHandler: batch load failed for %s", p, exc_info=True)
         return result
 
     @classmethod

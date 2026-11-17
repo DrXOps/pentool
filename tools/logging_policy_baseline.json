@@ -1,17 +1,9 @@
 {
-  "pentool/core/config.py": 1,
-  "pentool/core/crash_reporter.py": 1,
   "pentool/core/logging.py": 1,
-  "pentool/core/plugin_manager.py": 1,
   "pentool/services/ai/factory.py": 1,
-  "pentool/storage/http_storage.py": 1,
-  "pentool/storage/large_body_handler.py": 1,
   "pentool/tui/project_manager.py": 27,
-  "pentool/tui/screens/dashboard/screen.py": 1,
   "pentool/tui/screens/intruder/screen.py": 18,
   "pentool/tui/screens/proxy/screen.py": 25,
   "pentool/tui/screens/settings/screen.py": 19,
-  "pentool/tui/screens/target/screen.py": 1,
-  "pentool/tui/widgets/tab_panel.py": 1,
-  "pentool/utils/cert.py": 2
+  "pentool/utils/cert.py": 1
 }

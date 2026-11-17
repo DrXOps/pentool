@@ -120,8 +120,10 @@ class HttpStorage(BaseSqliteStorage):
             row = await count.fetchone()
             total = row[0] if row else 0
             logger.info("HttpStorage: switched to %s, found %d existing records", path, total)
-        except Exception as exc:
-            logger.warning("HttpStorage: could not count records after switch: %s", exc)
+        except Exception:
+            # Не удалось посчитать записи после переключения: сама БД открыта,
+            # но цифра в журнале будет отсутствовать — это деградация.
+            logger.warning("HttpStorage: could not count records after switch", exc_info=True)
 
     async def add_request(self, req: Any, resp: Any = None, is_websocket: bool = False) -> int:
         assert self._db, "init_db() not called"

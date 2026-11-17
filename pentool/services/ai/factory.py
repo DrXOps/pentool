@@ -64,6 +64,7 @@ def is_ai_running() -> bool:
         return False
     try:
         from pentool.services.ai.provider import is_mcp_running
+
         return is_mcp_running()
     except Exception:  # noqa: BLE001
         return False
@@ -108,6 +109,7 @@ async def stop_ai() -> None:
     # Close the audit log FD as well.
     try:
         from pentool.services.ai.audit_log import close as audit_close
+
         audit_close()
     except Exception:
         pass
@@ -136,6 +138,7 @@ async def ensure_backend(
     if _ACTIVE_BACKEND is not None:
         # Already started — verify the subprocess is alive
         from pentool.services.ai.provider import is_mcp_running
+
         if is_mcp_running():
             return _ACTIVE_BACKEND
         log.warning("AI: backend subprocess died — restarting")
@@ -143,6 +146,7 @@ async def ensure_backend(
 
     if config is None:
         from pentool.core.config import get_config
+
         config = get_config()
 
     ok = await start_ai(config, _force=_force)
@@ -258,6 +262,7 @@ def _try_pip_install_mcp_server() -> bool:
     """
     import subprocess
     import sys
+
     try:
         installer = [sys.executable, "-m", "pip", "install", "pentool-mcp-server>=0.1.0"]
         proc = subprocess.run(
@@ -281,10 +286,7 @@ def _get_model_download_url() -> str:
     Берём near-lossless Q8_0 (~362 MB) — лучшая точность для задач
     instruction-following / структурной генерации payload.
     """
-    return (
-        "https://huggingface.co/FadedRedStar/LFM2.5-350M-heretic-GGUF/"
-        "resolve/main/LFM2.5-350M-heretic-Q8_0.gguf"
-    )
+    return "https://huggingface.co/FadedRedStar/LFM2.5-350M-heretic-GGUF/" "resolve/main/LFM2.5-350M-heretic-Q8_0.gguf"
 
 
 async def _download_gguf(dest: Path, progress_cb: Any = None) -> bool:
@@ -323,8 +325,8 @@ async def _download_gguf(dest: Path, progress_cb: Any = None) -> bool:
             return False
         tmp.replace(dest)
         return True
-    except Exception as exc:  # noqa: BLE001
-        log.error("AI: не удалось скачать модель %s: %s", url, exc)
+    except Exception:  # noqa: BLE001
+        log.error("AI: не удалось скачать модель %s", url, exc_info=True)
         tmp.unlink(missing_ok=True)
         return False
 
@@ -335,7 +337,8 @@ def _ensure_mcp_server_stub() -> None:
     if server_py.exists():
         return
 
-    server_py.write_text("""\
+    server_py.write_text(
+        """\
 #!/usr/bin/env python3
 \"\"\"MCP-сервер для Pentool AI. Заглушка для разработки.\"\"\"
 
@@ -368,5 +371,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-""")
+"""
+    )
     log.info("MCP-сервер-заглушка создана: %s", server_py)
