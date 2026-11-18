@@ -1,5 +1,7 @@
 ResizeHandle {
-    width: 1;
+    /* 2 колонки, а не 1: ручка между колонками мышью ловилась с трудом
+       (вертикальная при этом во всю ширину и проблем не вызывала). */
+    width: 2;
     height: 100%;
     background: $primary-darken-2;
     pointer: ew-resize;  /* horizontal divider — bidirectional horizontal arrow */

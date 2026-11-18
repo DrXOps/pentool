@@ -38,8 +38,4 @@ ToolbarButton.variant-error {
     color: $error;
 }
 
-/* Common toolbar separator — used across all screens */
-.toolbar-sep {
-    width: auto;
-    color: $primary-darken-2;
-}
+/* .toolbar-sep — единое правило в app.tcss (не дублировать). */

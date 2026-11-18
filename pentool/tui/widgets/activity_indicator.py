@@ -181,12 +181,16 @@ class ActivityIndicator(Widget):
                 return None
 
         return [
-            _Tracked("proxy", "🌐", "Proxy", _proxy_active),
-            _Tracked("spider", "🕷️", "Spider", _spider_active),
-            _Tracked("scanner", "🔍", "Scanner", _scanner_active),
-            _Tracked("intruder", "💥", "Intruder", _intruder_active),
-            _Tracked("recon", "🔎", "Recon", _recon_active),
-            _Tracked("ai", "🤖", "AI MCP", _ai_active),
+            # Глифы — из базовых блоков Unicode (стрелки, геометрия, звёзды):
+            # они есть в DejaVu, JetBrains Mono, Consolas и Cascadia. Эмодзи
+            # (🌐 🕷️ 🔍 🔎) в Kitty под WSL не рисуются частью шрифтов, а 🔍 и
+            # 🔎 к тому же почти неразличимы — вместо двух луп теперь ◎ и ◇.
+            _Tracked("proxy", "↔", "Proxy", _proxy_active),
+            _Tracked("spider", "◆", "Spider", _spider_active),
+            _Tracked("scanner", "◎", "Scanner", _scanner_active),
+            _Tracked("intruder", "▲", "Intruder", _intruder_active),
+            _Tracked("recon", "◇", "Recon", _recon_active),
+            _Tracked("ai", "★", "AI MCP", _ai_active),
         ]
 
     # ── compose / refresh ────────────────────────────────────────────────────

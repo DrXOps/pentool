@@ -118,6 +118,19 @@ Toast.-critical    { border: heavy $error; }
    a `Screen.narrow …` rule written in a screen's own .tcss would be parsed as
    `<ThatScreen> Screen.narrow …` and never match. */
 
+/* ── Разделитель в тулбарах: один владелец ────────────────────────────────
+   Раньше правило лежало в DEFAULT_CSS ToolbarButton, а Textual префиксует
+   первый селектор типом виджета — выходило `ToolbarButton .toolbar-sep`,
+   что не совпадает с соседним Static. Цвет применялся только внутри
+   `Toolbar .toolbar-sep`, поэтому в экранах, где разделитель лежит прямо
+   в Horizontal (сканер), он рисовался цветом текста — отсюда «другой
+   цвет» в сканере. */
+.toolbar-sep {
+    width: auto;
+    min-width: 1;
+    color: $primary-darken-2;
+}
+
 /* ── Общее поле программы (2026-11-17) ─────────────────────────────────────
    Раньше отступы от краёв задавались внутри конкретных экранов: у дашборда
    карточки стояли с полями, а proxy/intruder/target прилипали к краям, и

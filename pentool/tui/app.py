@@ -1156,10 +1156,15 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
                 lic = get_session_license()
                 if not (lic.valid and lic.has_feature("ai_discovery")):
+                    # Ключ может быть валидным, но БЕЗ фичи ai_discovery —
+                    # именно это и происходило: планы воркера (`pro`/`team`)
+                    # фичу не выдавали, и Recon был недоступен при активной
+                    # лицензии. Сообщение обязано называть причину.
                     self.notify(
-                        "🔒 Recon — paid feature. Activate: pentool license trial",
+                        "Recon недоступен: ключ не содержит фичу ai_discovery "
+                        "(перевыпустите ключ плана pro/team или `pentool license trial`)",
                         severity="warning",
-                        timeout=5,
+                        timeout=7,
                     )
                     return
             except Exception as exc:

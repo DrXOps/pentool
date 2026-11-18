@@ -77,13 +77,13 @@ class ContentPanel(Widget):
     DEFAULT_CSS = (Path(__file__).parent / "content_panel.tcss").read_text(encoding="utf-8")
 
     # ── Иконки (минималистичные unicode) ──────────────────────────────
-    BUTTONS_COPY: ClassVar[str] = "⎙"
-    BUTTONS_PASTE: ClassVar[str] = "⎘"
+    BUTTONS_COPY: ClassVar[str] = "cp"
+    BUTTONS_PASTE: ClassVar[str] = "pst"
     BUTTONS_CLEAR: ClassVar[str] = "✕"
-    BUTTONS_FORMAT: ClassVar[str] = "⇄"
+    BUTTONS_FORMAT: ClassVar[str] = "fmt"
     BUTTONS_SPECIAL: ClassVar[str] = "⏎"
-    BUTTONS_WRAP: ClassVar[str] = "↩"
-    BUTTONS_AUTOSCROLL: ClassVar[str] = "⬇"
+    BUTTONS_WRAP: ClassVar[str] = "wrp"
+    BUTTONS_AUTOSCROLL: ClassVar[str] = "end"
 
     BUTTON_SCOPE: ClassVar[list[str]] = ["copy"]
     BUTTON_LABELS: ClassVar[dict[str, str]] = {

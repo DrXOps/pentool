@@ -555,7 +555,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 # Поля ещё нет — ниже создаём его сами. Ожидаемый ход; запись
                 # отличает его от опечатки в id.
                 logger.debug("repeater: rename input not found, creating: %s", exc)
-                inp = Input(id="rename-input", placeholder="Tab name...", compact=True)
+                # classes="tab-rename" обязателен: без него поле попадает в обычный поток
+                # и выпадает внизу экрана вместо наложения на строку вкладок.
+                inp = Input(id="rename-input", classes="tab-rename", placeholder="Tab name...", compact=True)
                 self.query_one("#tabs-area").mount(inp)
             inp.value = state.name
             inp.display = True
@@ -885,6 +887,12 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             return
         self._sending = True
         self._set_status("Sending...")
+        try:
+            # Пока запрос в полёте, повторная отправка бессмысленна: второй
+            # клик уходил в тот же таб и ждал ответа в очереди.
+            self._send_btn.disabled = True
+        except NoMatches as exc:
+            logger.debug("repeater: send button not disabled: %s", exc)
         try:
             self._cancel_btn.disabled = False
         except NoMatches as exc:
