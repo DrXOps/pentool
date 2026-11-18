@@ -86,7 +86,7 @@ pentool --url https://example.com
 
 # Same, but actually load the target in a headless browser THROUGH the proxy,
 # so real traffic lands in HTTP History + Target (requires Lightpanda)
-pentool --url https://example.com --real
+pentool --url https://example.com --smart
 
 # Headless scan — perfect for CI/CD (GitLab CI, GitHub Actions, Jenkins)
 pentool --url https://example.com --headless --output result.json

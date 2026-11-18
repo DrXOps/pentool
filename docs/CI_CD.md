@@ -30,7 +30,8 @@ pentool --url https://example.com --headless \\
 | `--threads N` | 10 | Parallel scan threads |
 | `--delay SEC` | 0.0 | Delay between requests |
 | `--ai` | — | Enable AI-assisted scanning (endpoint discovery, WAF bypass, payload gen). Launches MCP server. |
-| `--smart` | — | Launch TUI, proxy on, crawl target, detect tech (replaces `--real`). |
+| `--smart` | — | Launch TUI, proxy on, crawl target, detect tech. |
+| `--install-browser` | — | Download the Lightpanda JS browser (~150 MiB, one time) without asking. |
 | `--crawl` | — | Crawl the target before scanning |
 | `--crawl --js` | — | Crawl with JS rendering (Lightpanda) |
 | `--crawl --ai` | — | Crawl + AI endpoint discovery |

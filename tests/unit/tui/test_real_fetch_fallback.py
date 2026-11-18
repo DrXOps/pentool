@@ -19,13 +19,14 @@ import pytest
 from pentool.tui.app import PentoolApp
 
 
-def test_real_is_still_accepted_as_a_cli_alias() -> None:
-    """Старые команды с `--real` обязаны продолжать работать."""
+def test_real_flag_is_gone_and_smart_is_the_only_way() -> None:
+    """`--real` убран: он расходился с `--smart` (не включал установку браузера)."""
     from pentool.cli.main import cli
 
     names = {param.name for param in cli.params}
-    assert "cli_real" in names, "--real исчез из CLI: скрипты пользователя начнут молча запускать проект без перехвата"
+    assert "cli_real" not in names, "--real вернулся: он снова начнёт расходиться с --smart"
     assert "cli_smart" in names
+    assert "cli_install_browser" in names
 
 
 @pytest.mark.asyncio

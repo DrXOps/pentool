@@ -64,6 +64,9 @@ def is_lightpanda_available() -> bool:
 
 # ── Auto-install ──────────────────────────────────────────────────────────
 
+# Размер артефакта v0.3.7 (замер HEAD-запросом 2026-11-18): 157 502 440 байт.
+# Показываем пользователю до загрузки, чтобы согласие было осознанным.
+_LIGHTPANDA_DOWNLOAD_MIB = 150
 _LIGHTPANDA_VERSION = "0.3.7"
 _LIGHTPANDA_URL_TEMPLATE = (
     f"https://github.com/lightpanda-io/browser/releases/download/{_LIGHTPANDA_VERSION}/lightpanda-{{arch}}-linux"
@@ -77,6 +80,78 @@ def _detect_arch() -> str:
     if machine in ("aarch64", "arm64"):
         arch = "aarch64"
     return arch
+
+
+def _decline_marker() -> Path:
+    """Файл-маркер «пользователь уже отказался от загрузки»."""
+    return Path.home() / ".config" / "pentool" / "lightpanda-declined"
+
+
+def _remember_decline() -> None:
+    try:
+        marker = _decline_marker()
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("declined\n", encoding="utf-8")
+    except OSError as exc:
+        # Маркер не записан — спросим ещё раз в следующий раз. Это лучше, чем
+        # молча качать 150 МиБ без согласия.
+        logger.debug("lightpanda: decline marker not written: %s", exc)
+
+
+def install_declined() -> bool:
+    """Пользователь уже отказался от загрузки на этом устройстве."""
+    return _decline_marker().is_file()
+
+
+def ensure_lightpanda_with_consent(auto_yes: bool = False) -> bool:
+    """Скачать Lightpanda только с согласия пользователя.
+
+    Загрузка одноразовая и крупная (~150 МиБ), поэтому:
+      - уже стоит → True без вопросов;
+      - отказ был запомнен → False без вопросов;
+      - `auto_yes` (флаг `--install-browser`) → качаем молча;
+      - нет TTY (CI, пайп) → не качаем, печатаем как поставить руками;
+      - TTY → спрашиваем «скачать ~150 МиБ? [y/N]», отказ запоминаем.
+
+    Возвращает True, если бинарник доступен в итоге.
+    """
+    if find_lightpanda_binary() is not None:
+        return True
+
+    if not auto_yes and install_declined():
+        logger.info("lightpanda: download previously declined — using HTTP fallback")
+        return False
+
+    manual_hint = (
+        "Lightpanda not installed — JS rendering disabled (plain HTTP fallback).\n"
+        "  Install later:  pentool --url <target> --smart --install-browser\n"
+        "  (binaries: https://github.com/lightpanda-io/browser/releases)"
+    )
+
+    if not auto_yes:
+        if not sys.stdin.isatty():
+            print(f"  ! {manual_hint}", file=sys.stderr, flush=True)
+            return False
+        print(
+            f"\n  Lightpanda (JS-браузер) не установлена.\n"
+            f"  Будет скачано ~{_LIGHTPANDA_DOWNLOAD_MIB} МиБ однократно в "
+            f"{Path.home() / '.local' / 'bin' / 'lightpanda'}.\n"
+            f"  Загрузка нужна для страниц с JS; без неё перехват пойдёт через "
+            f"обычный HTTP-запрос.\n",
+            file=sys.stderr,
+            flush=True,
+        )
+        try:
+            answer = input("  Скачать сейчас? [y/N]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            answer = ""
+        if answer not in ("y", "yes", "д", "да"):
+            _remember_decline()
+            logger.info("lightpanda: user declined download")
+            print("  → пропускаю загрузку, работаю без JS", file=sys.stderr, flush=True)
+            return False
+
+    return ensure_lightpanda_installed_sync()
 
 
 def ensure_lightpanda_installed_sync() -> bool:

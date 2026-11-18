@@ -35,15 +35,14 @@ from pentool.core.logging import setup_logging
     "cli_smart",
     is_flag=True,
     default=False,
-    help="Launch TUI, proxy on, crawl target, detect tech (requires --url). Replaces --real.",
+    help="Launch TUI, proxy on, crawl target, detect tech (requires --url).",
 )
 @click.option(
-    "--real",
-    "cli_real",
+    "--install-browser",
+    "cli_install_browser",
     is_flag=True,
     default=False,
-    hidden=True,
-    help="Deprecated alias for --smart (kept so existing scripts keep working).",
+    help="Download the Lightpanda JS browser (~150 MiB, one time) without asking.",
 )
 @click.option(
     "--ai",
@@ -84,7 +83,7 @@ def cli(
     cli_urls: tuple[str, ...] | None,
     headless: bool,
     cli_smart: bool,
-    cli_real: bool,
+    cli_install_browser: bool,
     cli_ai: bool,
     cli_last: bool,
     cli_output: str | None,
@@ -133,12 +132,16 @@ def cli(
         else:
             from pentool.tui.app import PentoolApp
 
+            # JS-браузер нужен только для фетча при --smart. Загрузка идёт
+            # ТОЛЬКО с согласия: одноразово ~150 МиБ (см. ensure_lightpanda_with_consent).
+            if cli_smart:
+                from pentool.utils.lightpanda import ensure_lightpanda_with_consent
+
+                ensure_lightpanda_with_consent(auto_yes=cli_install_browser)
+
             app = PentoolApp()
             app._pending_start_urls = urls
-            # --real — прежнее имя флага; поддерживаем как алиас, иначе старые
-            # команды молча запускают проект без перехвата (ровно та жалоба,
-            # с которой начался разбор).
-            app._pending_start_smart = cli_smart or cli_real
+            app._pending_start_smart = cli_smart
             app._pending_start_ai = cli_ai
             app.run()
     elif cli_last:

@@ -30,74 +30,10 @@ _UNSAFE_SKIP_PRO_CHECK_FLAG = "--unsafe-skip-pro-compat-check"
 _NO_CHECK_UPDATES_FLAG = "--no-check-updates"
 _AUTO_UPDATE_FLAG = "--auto-update"
 
+
 # Top-level one-shot mode: handled by cli/main.py click group,
 # not by a separate parser here. _run_target_mode was removed in
 # the audit (P1.3) — it duplicated click's argument parsing.
-_URL_FLAGS = ("--url",)
-
-
-def _ensure_lightpanda() -> None:
-    """Auto-install Lightpanda binary if not present.
-
-    Runs synchronously before the event loop starts. Prints progress to stderr.
-    Silently falls back if download fails — callers check is_lightpanda_available().
-    """
-    from pentool.utils.lightpanda import ensure_lightpanda_installed_sync
-
-    ensure_lightpanda_installed_sync()
-
-
-def _run_target_mode(argv: list[str]) -> None:
-    """Handle ``pentool --url <url> [options]`` — thin compatibility shim delegating to click."""
-    smart = "--smart" in argv
-    use_ai = "--ai" in argv
-    remaining = [a for a in argv if a not in ("--smart", "--real", "--ai")]
-
-    if smart:
-        _ensure_lightpanda()
-
-    if smart and not any(a.startswith("--headless") for a in remaining):
-        urls = _extract_urls(remaining)
-        if not urls:
-            print("Error: --url requires at least one URL.", file=sys.stderr)
-            raise SystemExit(2)
-        _ensure_lightpanda()
-        from pentool.tui.app import PentoolApp
-
-        app = PentoolApp()
-        app._pending_start_urls = urls
-        app._pending_start_smart = True
-        app._pending_start_ai = use_ai
-        app.run()
-        return
-
-    from pentool.cli.main import cli
-
-    old_argv = sys.argv
-    try:
-        sys.argv = [sys.argv[0]] + remaining
-        cli()
-    finally:
-        sys.argv = old_argv
-
-
-def _extract_urls(argv: list[str]) -> list[str]:
-    """Extract URL values from argv (--url <url> pairs)."""
-    urls: list[str] = []
-    i = 0
-    while i < len(argv):
-        a = argv[i]
-        if a in ("--url",):
-            if i + 1 < len(argv):
-                urls.append(argv[i + 1])
-                i += 2
-            else:
-                i += 1
-        else:
-            i += 1
-    return [u for u in urls if u]
-
-
 def _kill_orphaned_pentool() -> None:
     """Kill orphaned pentool processes (PPID=1) so next launch doesn't hit 'address already in use'."""
     try:
@@ -376,9 +312,10 @@ def main() -> None:
             sys.argv.remove(_flag)
 
     if len(sys.argv) > 1:
-        if "--url" in sys.argv and ("--smart" in sys.argv or "--real" in sys.argv):
-            _run_target_mode(sys.argv[1:])
-            return
+        # Один путь запуска: click — единственный парсер. Раньше здесь стоял шим
+        # `_run_target_mode`, искавший в argv буквальный `--smart`, поэтому
+        # установка JS-браузера то запускалась, то нет (флаг `--real` её не
+        # включал). Теперь установка живёт в cli/main.py рядом с `--smart`.
         from pentool.cli.main import cli
 
         cli()
