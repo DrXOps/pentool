@@ -40,6 +40,17 @@ repos:
       # только каталог, поэтому внутри разрешённых каталогов в origin попадали
       # черновики (`aaaaaaaaaaaa.png`, `tui-lab/`, ELF-бинарь `bin/xclip`).
       # Журнал решений — .claude/state/new-file-decisions.tsv (локальный).
+      # check-english-comments: код пишем на английском. Долг (3466 строк на
+      # 2026-11-19) закрывается пофайлово, гвард держит потолок — новый русский
+      # комментарий в .py роняет коммит. Данные (тексты UI, тестовые строки) не
+      # считаются; осознанная кириллица помечается `# i18n-ok: <причина>`.
+      - id: check-english-comments
+        name: "комментарии и докстринги — на английском"
+        entry: python tools/check_english_comments.py
+        language: python
+        pass_filenames: false
+        always_run: true
+
       - id: review-new-files
         name: "новые файлы: решите — в репозиторий или в .gitignore"
         entry: python tools/review_new_files.py
