@@ -24,7 +24,8 @@ ProxyScreen #table-area {
     min-height: 5;
 }
 ProxyScreen #filter-bar {
-    height: 1;
+    /* Было 1; карточка с рамкой требует auto (рамка = +2 строки). */
+    height: auto;
 }
 ProxyScreen #request-list {
     height: 1fr;

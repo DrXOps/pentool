@@ -52,10 +52,10 @@ _METHODS: list[tuple[str, str]] = [
     ("OPTIONS", "OPTIONS"),
 ]
 
-_SCOPE_LABEL = "★ Scope"
-_SCOPE_ON_LABEL = "★ In Scope"
-_COMMENTS_LABEL = "📝 Comments"
-_COMMENTS_ON_LABEL = "📝 Comments: ON"
+_SCOPE_LABEL = "★"
+_SCOPE_ON_LABEL = "★"
+_COMMENTS_LABEL = "¶"
+_COMMENTS_ON_LABEL = "¶"
 
 
 class HistoryFilterBar(FilterBarWidget):
@@ -68,9 +68,22 @@ class HistoryFilterBar(FilterBarWidget):
     DEFAULT_CSS = _CSS
 
     def compose(self) -> ComposeResult:
+        # One row: this is a horizontal block. The bottleneck was not the
+        # number of controls but `Search: width: 1fr` — the field stretched
+        # over the whole remainder ("a mile wide"). The search field now has a
+        # fixed width, and the toggles are glyphs with tooltips: spelled out,
+        # "★ Scope" and "📝 Comments" do not fit 100–110 columns.
         yield from self._compose_fields()
-        yield ToolbarButton(_SCOPE_LABEL, "fb-scope")
-        yield ToolbarButton(_COMMENTS_LABEL, "fb-comments")
+        yield ToolbarButton(
+            _SCOPE_LABEL,
+            "fb-scope",
+            tooltip="Show only requests that fall inside Scope",
+        )
+        yield ToolbarButton(
+            _COMMENTS_LABEL,
+            "fb-comments",
+            tooltip="Show only requests with a comment (¶)",
+        )
         yield Label(" ", classes="fb-sep")
         yield from self._compose_actions()
 
@@ -151,7 +164,7 @@ class ProxyFilterBar(HistoryFilterBar):
             ),
             FilterField(
                 "fb-method",
-                "Method:",
+                "M:",
                 FilterFieldType.CYCLER,
                 "method",
                 FilterOp.IN,
@@ -159,20 +172,20 @@ class ProxyFilterBar(HistoryFilterBar):
             ),
             FilterField(
                 "fb-status",
-                "Status:",
+                "St:",
                 FilterFieldType.TEXT,
                 "status_code",
                 FilterOp.BETWEEN,
                 placeholder="200-299",
             ),
-            FilterField("fb-color", "Mark:", FilterFieldType.CYCLER, "color", FilterOp.EQ, options=_COLORS),
+            FilterField("fb-color", "Mk:", FilterFieldType.CYCLER, "color", FilterOp.EQ, options=_COLORS),
             FilterField(
                 "fb-search",
-                "Search:",
+                "Q:",
                 FilterFieldType.TEXT,
                 "fts",
                 FilterOp.FTS,
-                placeholder="FTS5 query...",
+                placeholder="FTS5...",
             ),
         ]
 

@@ -24,6 +24,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from textual.app import App
 from textual.css.query import NoMatches
 from textual.widgets import Static
 
@@ -124,11 +125,25 @@ def test_dead_filter_bar_stylesheet_is_deleted() -> None:
     assert not (_TUI / "widgets" / "filter_bar.tcss").exists()
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("bar", [ProxyFilterBar, WsFilterBar], ids=lambda c: c.__name__)
-def test_bar_renders_scope_and_comments_toggles(bar: type[HistoryFilterBar]) -> None:
-    instance = object.__new__(bar)
-    rendered = list(instance.compose())
-    ids = {getattr(w, "id", None) for w in rendered}
+async def test_bar_renders_scope_and_comments_toggles(bar: type[HistoryFilterBar]) -> None:
+    """Toggles and buttons must be in the tree after a real mount.
+
+    The bar composes fields, toggles and actions, and as soon as any container
+    appears a "flat list of compose() output" proves nothing — it only sees the
+    containers. The test mounts the bar into an empty app and checks ids across
+    the whole tree.
+    """
+
+    class _Host(App):
+        def compose(self):
+            yield bar(id="filter-bar")
+
+    app = _Host()
+    async with app.run_test(size=(120, 20)) as pilot:
+        await pilot.pause()
+        ids = {widget.id for widget in app.query("*") if widget.id}
     assert {"fb-scope", "fb-comments", "fb-apply", "fb-reset"} <= ids
 
 

@@ -238,7 +238,7 @@ class ProxyScreen(
             with Horizontal(id="body"):
                 with Vertical(id="main-panel"):
                     with Vertical(id="table-area"):
-                        yield FilterBar(id="filter-bar")
+                        yield FilterBar(id="filter-bar", classes="card-host")
                         yield DataTable(
                             columns=_COL_NAMES,
                             initial_table=_make_empty_table(),
@@ -272,7 +272,7 @@ class ProxyScreen(
             with Horizontal(id="ws-body"):
                 with Vertical(id="ws-main-panel"):
                     with Vertical(id="ws-table-area"):
-                        yield WsFilterBar(id="ws-filter-bar")
+                        yield WsFilterBar(id="ws-filter-bar", classes="card-host")
                         yield DataTable(
                             columns=_COL_NAMES,
                             initial_table=_make_empty_table(),

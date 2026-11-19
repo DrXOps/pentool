@@ -94,6 +94,23 @@ Checkbox:focus > .toggle--label {
     padding: 0 1;
 }
 
+/* ── Карточки (ветка feature/tui-cards-proxy) ─────────────────────────────
+   Один владелец скруглений. Правила лежат здесь, потому что Textual
+   префиксует первый селектор DEFAULT_CSS типом виджета
+   (textual/css/parse.py:174) — класс, написанный в tcss экрана или виджета,
+   не совпадёт ни с чем.
+   Пока добавлен только «хост-блок» (полоса фильтров). `.card` появится в
+   шаге, где панели действительно начнут его использовать: гвард
+   `tools/check_tui_css.py` не пропускает класс, которого нет в Python. */
+/* Полоса с адресом/фильтрами: белая рамка, скруглённые края.
+   Цвет именно $foreground: `$text` в палитре Textual нет (есть
+   $text-muted/$text-disabled), а на несуществующей переменной парсер падает
+   с «Invalid value for border property» и роняет всё приложение. */
+.card-host {
+    background: transparent;
+    border: round $foreground;
+}
+
 /* Override Textual's built-in toast: replace the default vertical
    severity stripe on the left edge with a full border all the way round,
    and force every toast onto a single line — long text is truncated with
