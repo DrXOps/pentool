@@ -154,7 +154,99 @@ uv tool install pentool
 pentool
 ```
 
+> **TUI в Windows требует WSL2.** Команд выше достаточно для CLI и headless-сканов
+> (`--headless`). Для интерактивного интерфейса — прокси, ANSI-рамок, хуков —
+> используйте WSL2: см. [Запуск в Windows через WSL2](#запуск-в-windows-через-wsl2).
+
 ---
+
+## Запуск в Windows через WSL2
+
+TUI рассчитывает на POSIX-терминал: прокси, хуки и ANSI-рамки опираются на
+UTF-8 локаль. Внутри WSL2 (Ubuntu) всё работает так же, как в Linux. Команды
+выполняйте в **оболочке WSL**, а не в PowerShell.
+
+### 1. Установить WSL2 (PowerShell от администратора)
+
+```powershell
+wsl --install -d Ubuntu-24.04
+wsl --set-default-version 2
+wsl --update
+wsl --status
+```
+
+### 2. Локаль и UTF-8 — от этого зависят ANSI-символы рамок
+
+```bash
+sudo apt update
+sudo apt install -y locales
+sudo locale-gen en_US.UTF-8 ru_RU.UTF-8
+sudo update-locale LANG=en_US.UTF-8
+exec bash
+echo $LANG    # должно быть en_US.UTF-8, а не C и не POSIX
+```
+
+`LANG=C`, `POSIX` или пустое значение — обычная причина `?` вместо рамок и
+«кракозябр» в кириллице.
+
+### 3. Шрифт, в котором есть нужные глифы
+
+**Сторона Windows** (для Windows Terminal): установите **JetBrains Mono Nerd
+Font** или **Cascadia Code NF** и выберите его в профиле терминала. Эмодзи
+(`▶ ✖ 💥 🧭`) берутся из **Segoe UI Emoji** как fallback.
+
+**Сторона WSL** (для Kitty):
+
+```bash
+sudo apt install -y unzip curl fonts-noto-color-emoji
+mkdir -p ~/.local/share/fonts && cd ~/.local/share/fonts
+curl -LO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+unzip -o JetBrainsMono.zip && fc-cache -fv
+```
+
+### 4. Kitty (необязательно — Windows Terminal тоже подходит)
+
+```bash
+sudo apt install -y kitty
+```
+
+`~/.config/kitty/kitty.conf`:
+
+```conf
+font_family JetBrainsMono Nerd Font
+font_size 12.0
+# рамки и блоки
+symbol_map U+2500-U+257F JetBrainsMono Nerd Font
+# эмодзи
+symbol_map U+1F300-U+1FAFF Noto Color Emoji
+# более плавная отрисовка через WSLg
+sync_to_monitor no
+repaint_delay 8
+```
+
+Запуск: `kitty pentool`, либо из Windows: `wsl.exe -e kitty pentool`.
+
+Если часть иконок панелей не рисуется — переключите набор в
+**Settings → Interface → Panel icons** (`unicode` / `ascii` / `emoji`).
+
+### 5. Проверка, что символы на месте
+
+```bash
+python3 -c "print('┌────┬────┐\n│ OK │ 42 │\n└────┴────┘')"
+printf '█ ▓ ▒ ░  →  ✔ ✖ ⚠\n'
+infocmp -1 | head -3    # TERM должен быть *-256color, не dumb
+```
+
+### 6. Если что-то всё равно не так
+
+| Симптом | Причина | Лечение |
+|---|---|---|
+| Рамки из `?` или `+---+` | нет UTF-8 локали | шаг 2, `export LANG=en_US.UTF-8` |
+| «Кракозябры» в кириллице | `LANG=C` / `POSIX` | шаг 2 |
+| Рамки двойной ширины, вёрстка едет | в шрифте нет глифов рамок | шаг 3 |
+| Иконки квадратами | нет emoji/Nerd шрифта | шаг 3 или набор `ascii` |
+| TUI не стартует | `TERM=dumb` | `export TERM=xterm-256color` |
+| Нет цветов | 8-цветный терминал | Windows Terminal или Kitty |
 
 ## Установка для разработки
 

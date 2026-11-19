@@ -126,6 +126,11 @@ uv tool install pentool
 pentool
 ```
 
+> **Windows users: the TUI requires WSL2.** Install and run Pentool inside WSL2
+> (Ubuntu). The step-by-step guide (WSL, UTF-8 locale, fonts, Kitty) is in the
+> [English installation guide](../en/INSTALLATION.md#running-on-windows-via-wsl2).
+> A translation of this section is pending.
+
 ---
 
 ## 开发者安装

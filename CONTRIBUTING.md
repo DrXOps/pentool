@@ -14,25 +14,40 @@ Thank you for your interest in contributing to Pentool! This document provides g
 
 ### Development Setup
 
+The project uses [`uv`](https://docs.astral.sh/uv/) for dependency management —
+a plain `pip install -e` does not reproduce the environment (Python version,
+locked dependencies, ruff version used by the hooks).
+
 ```bash
 # Fork and clone
 git clone https://github.com/YOUR_USERNAME/pentool.git
 cd pentool
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
+# Install uv (once per machine)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install with dev dependencies
-pip install -e ".[dev]"
+# Create .venv from uv.lock and install dev dependencies
+uv sync
 
-# Install pre-commit hooks
-pip install pre-commit
-pre-commit install
+# PRO modules (Scanner, Recon) live in a submodule — optional for FREE work
+git submodule update --init --recursive
 
-# Run tests to verify setup
-pytest tests/unit/ -v
+# Pre-commit hooks (format, lint, guards)
+uvx pre-commit install
+
+# Verify: the same gate CI runs
+bash scripts/run-tests.sh
 ```
+
+**Windows:** run everything inside WSL2 (Ubuntu), not in PowerShell — the hooks,
+proxy tests and the TUI expect a POSIX environment. Setup steps (WSL, UTF-8
+locale, fonts, Kitty) are in
+[`docs/i18n/en/INSTALLATION.md`](docs/i18n/en/INSTALLATION.md#running-on-windows-via-wsl2).
+
+`scripts/run-tests.sh` is the only supported way to run the suite: it runs the
+same command as CI **and** writes a marker file that the local hook gate reads.
+Calling `pytest` directly is fine while iterating, but a commit is only accepted
+after the scripted run.
 
 ---
 
@@ -150,18 +165,23 @@ class TestYourClass:
 ### 4. Run Tests
 
 ```bash
-# All unit tests
-pytest tests/unit/ -v
+# The project gate (unit suite + quality marker) — use this before a commit
+bash scripts/run-tests.sh
 
-# Specific test file
-pytest tests/unit/modules/test_proxy.py -v
+# A single file while iterating
+uv run pytest tests/unit/modules/test_proxy.py -v
 
 # With coverage
-pytest tests/unit/ --cov=pentool --cov-report=html
+uv run pytest tests/unit/ --cov=pentool --cov-report=html
 
-# Integration tests (if applicable)
-pytest tests/integration/ -v
+# Snapshot baselines are NOT part of the unit gate — run them explicitly
+uv run pytest tests/snapshot
 ```
+
+`tests/snapshot` is a separate suite on purpose: it compares rendered TUI
+screens (`pytest-textual-snapshot`). If a UI change is intentional, refresh the
+baselines with `uv run pytest tests/snapshot --snapshot-update` and mention it in
+the commit message.
 
 ### 5. Commit Changes
 
@@ -207,6 +227,37 @@ Then create Pull Request on GitHub.
 ---
 
 ## Code Guidelines
+
+### Automated guards (do not bypass)
+
+Five checks run in pre-commit and CI. Each one exists because the same defect
+came back more than once; each keeps a ratchet baseline that may only go down.
+
+| Guard | Command | What it rejects |
+|---|---|---|
+| Silent handlers | `uv run python tools/check_silent_except.py` | `except ...: pass` with no record |
+| Blind exception handling | `uv run python tools/check_broad_except.py` | new broad `except` that neither logs nor re-raises |
+| Logging in data paths | `uv run python tools/check_logging_policy.py` | a broad `except` in `save/load/restore/...` that hides the cause |
+| TUI CSS ↔ DOM | `uv run python tools/check_tui_css.py` | a `.tcss` selector with no widget behind it |
+| Comment language | `uv run python tools/check_english_comments.py` | new Russian comments/docstrings in `.py` |
+
+Two more hooks are about the repository itself:
+
+- `tools/review_new_files.py` — every **added** file needs a decision in
+  `.claude/state/new-file-decisions.tsv` (`keep` or `ignore`); `ignore` requires
+  a matching `.gitignore` rule.
+- `tests/unit/tui/test_toolbar_separators.py` — separators in toolbars are built
+  with `Toolbar.row(...)` / `Toolbar.grouped(...)`, never with a hand-written
+  `Static(" │ ", classes="toolbar-sep")`.
+
+If a check fires on a line that is deliberately different, use the escape hatch
+documented in that guard (`# logging-ok:`, `# i18n-ok:`), not `--no-verify`.
+
+### Where the logs live
+
+`~/.config/pentool/logs/pentool.log` (real runs) — the file is not rotated yet,
+so it can grow large; delete it while the app is closed if it becomes unwieldy
+(issue: `MYPLANS/tasks-pentool.md`, T-021).
 
 ### Python Style
 

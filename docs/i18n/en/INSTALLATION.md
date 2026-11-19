@@ -155,7 +155,99 @@ uv tool install pentool
 pentool
 ```
 
+> **The TUI needs WSL2 on Windows.** The PowerShell commands above are enough for
+> the CLI and headless scans (`--headless`). For the interactive interface — proxy,
+> ANSI frames, hooks — use WSL2: see [Running on Windows via WSL2](#running-on-windows-via-wsl2).
+
 ---
+
+## Running on Windows via WSL2
+
+The TUI expects a POSIX terminal: the proxy, the hooks and the ANSI box-drawing
+UI all rely on a UTF-8 locale. Inside WSL2 (Ubuntu) everything works as on Linux.
+Run the commands from the **WSL shell**, not from PowerShell.
+
+### 1. Install WSL2 (PowerShell, as Administrator)
+
+```powershell
+wsl --install -d Ubuntu-24.04
+wsl --set-default-version 2
+wsl --update
+wsl --status
+```
+
+### 2. Locale and UTF-8 — this is what makes box-drawing characters work
+
+```bash
+sudo apt update
+sudo apt install -y locales
+sudo locale-gen en_US.UTF-8 ru_RU.UTF-8
+sudo update-locale LANG=en_US.UTF-8
+exec bash
+echo $LANG    # must print en_US.UTF-8, not C and not POSIX
+```
+
+`LANG=C`, `POSIX` or an empty value is the usual reason for `?` instead of
+frames and for mojibake in Cyrillic.
+
+### 3. A font that actually has the glyphs
+
+**Windows side** (for Windows Terminal): install **JetBrains Mono Nerd Font** or
+**Cascadia Code NF**, then select it in the terminal profile. Emoji glyphs
+(`▶ ✖ 💥 🧭`) are taken from **Segoe UI Emoji** as a fallback.
+
+**WSL side** (for Kitty):
+
+```bash
+sudo apt install -y unzip curl fonts-noto-color-emoji
+mkdir -p ~/.local/share/fonts && cd ~/.local/share/fonts
+curl -LO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+unzip -o JetBrainsMono.zip && fc-cache -fv
+```
+
+### 4. Kitty (optional — Windows Terminal also works)
+
+```bash
+sudo apt install -y kitty
+```
+
+`~/.config/kitty/kitty.conf`:
+
+```conf
+font_family JetBrainsMono Nerd Font
+font_size 12.0
+# box drawing
+symbol_map U+2500-U+257F JetBrainsMono Nerd Font
+# emoji
+symbol_map U+1F300-U+1FAFF Noto Color Emoji
+# WSLg smoother defaults
+sync_to_monitor no
+repaint_delay 8
+```
+
+Start it with `kitty pentool`, or from Windows: `wsl.exe -e kitty pentool`.
+
+If some panel icons are missing in your font, switch the icon set in
+**Settings → Interface → Panel icons** (`unicode` / `ascii` / `emoji`).
+
+### 5. Verify that the symbols are in place
+
+```bash
+python3 -c "print('┌────┬────┐\n│ OK │ 42 │\n└────┴────┘')"
+printf '█ ▓ ▒ ░  →  ✔ ✖ ⚠\n'
+infocmp -1 | head -3    # TERM must be *-256color, not dumb
+```
+
+### 6. If something still looks wrong
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Frames of `?` or `+---+` | no UTF-8 locale | step 2, `export LANG=en_US.UTF-8` |
+| Mojibake in Cyrillic | `LANG=C` / `POSIX` | step 2 |
+| Wide frames, layout drifts | font lacks box-drawing glyphs | step 3 |
+| Icons as squares | no emoji / Nerd font | step 3, or `ascii` icon set |
+| TUI refuses to start | `TERM=dumb` | `export TERM=xterm-256color` |
+| No colours | 8-colour terminal | Windows Terminal or Kitty |
 
 ## Development Installation
 

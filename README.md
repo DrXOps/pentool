@@ -91,6 +91,8 @@ pentool --url https://example.com --smart
 # Headless scan — perfect for CI/CD (GitLab CI, GitHub Actions, Jenkins)
 pentool --url https://example.com --headless --output result.json
 
+> **Windows:** the TUI runs inside WSL2 — see [Running on Windows via WSL2](docs/i18n/en/INSTALLATION.md#running-on-windows-via-wsl2) (WSL, UTF-8 locale, fonts, Kitty).
+
 # Start proxy on custom port
 pentool proxy start --port 8080
 
