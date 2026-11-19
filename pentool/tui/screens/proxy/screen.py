@@ -197,13 +197,15 @@ class ProxyScreen(
             with Horizontal(id="intercept-toolbar"):
                 # Forward и Drop — разные решения по одному запросу; без черты
                 # они читались как одна кнопка-переключатель.
-                yield from Toolbar.buttons(
-                    ToolbarButton("⏩ Forward", "btn-forward", classes="disabled"),
-                    ToolbarButton("✖ Drop", "btn-drop", classes="disabled"),
+                yield from Toolbar.row(
+                    Toolbar.group_buttons(
+                        ToolbarButton("⏩ Forward", "btn-forward", classes="disabled"),
+                        ToolbarButton("✖ Drop", "btn-drop", classes="disabled"),
+                    ),
+                    Toolbar.group_buttons(
+                        ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars"),
+                    ),
                 )
-                yield Static(" │ ", classes="toolbar-sep")
-                yield ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars")
-                yield Static(" │ ", classes="toolbar-sep")
                 yield Label("(enable Intercept to capture requests)", id="intercept-hint")
             with Vertical(id="intercept-req-area"):
                 yield ContentPanel(

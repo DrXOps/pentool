@@ -45,6 +45,25 @@ class ResizeHandle(Widget):
         if vertical:
             self.add_class("-vertical")
 
+        # Толщина задаётся настройкой и применяется к ОБЕИМ ориентациям:
+        # раньше отличалась по определению (ширина в колонках против высоты в
+        # строках), и выглядело как «разные по толщине» — что и было замечено.
+        try:
+            from pentool.core.config import get_config
+
+            thickness = int(getattr(get_config(), "resize_handle_thickness", 1) or 1)
+        except Exception:
+            logger.debug("resize handle: thickness not read, using 1", exc_info=True)
+            thickness = 1
+        thickness = max(1, min(3, thickness))
+        try:
+            if vertical:
+                self.styles.height = thickness
+            else:
+                self.styles.width = thickness
+        except Exception:
+            logger.debug("resize handle: thickness not applied", exc_info=True)
+
     def render(self) -> str:
         """Render the divider character instead of default text."""
         if self._vertical:

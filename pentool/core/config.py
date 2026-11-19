@@ -62,6 +62,15 @@ class Config:
 
     # ── AI ────────────────────────────────────────────────────────────────────────
     ai_enabled: bool = False  # master switch for the AI assistant
+
+    # Интерфейс: подсказки при наведении и набор иконок в панелях.
+    # Иконки: unicode (по умолчанию) | ascii | emoji — покрытие шрифтов
+    # различается, поэтому набор выбирается в Settings → Interface.
+    tooltips_enabled: bool = True
+    panel_icons: str = "unicode"
+    # Толщина ручек ресайза в клетках — одна и та же для обеих ориентаций,
+    # иначе вертикальная и горизонтальная выглядят по-разному.
+    resize_handle_thickness: int = 1
     ai_model: str = ""  # LLM model name / path (GGUF)
     ai_mcp_host: str = "127.0.0.1"  # MCP server host
     ai_mcp_port: int = 0  # 0 = stdio, >0 = TCP

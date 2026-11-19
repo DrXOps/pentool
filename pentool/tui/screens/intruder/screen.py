@@ -467,21 +467,27 @@ class IntruderScreen(
         )
 
         # ── Payloads panel ──────────────────────────────────────────────
+        # Разделители строятся группами (`Toolbar.row`): между группами — да,
+        # внутри группы — нет. Ведущей черты перед подписью быть не должно —
+        # она делила пустоту (замечание из тестирования).
+        # Подписи укорочены: длинные («Load from file…», «Generate…») выносили
+        # тулбар за край экрана вместе с «Smart…».
         payloads_toolbar = Toolbar(
-            Toolbar.sep(),
-            Label("Payload set:"),
-            ToolbarButton("Set 1 ▼", self._wid(tab_id, _TabId.BTN_PAYLOAD_SET)),
-            Toolbar.sep(),
-            # Разделители ставит сам Toolbar.grouped: раньше Add/Remove/Clear
-            # шли вплотную, и «нет черты между Add и Clear» повторялось в
-            # каждом новом тулбаре.
-            *Toolbar.grouped(
-                ToolbarButton("Add", self._wid(tab_id, _TabId.BTN_PAYLOAD_ADD)),
-                ToolbarButton("Remove", self._wid(tab_id, _TabId.BTN_PAYLOAD_REMOVE)),
-                ToolbarButton("Clear", self._wid(tab_id, _TabId.BTN_PAYLOAD_CLEAR)),
-                ToolbarButton("Load from file…", self._wid(tab_id, _TabId.BTN_PAYLOAD_LOAD)),
-                ToolbarButton("Generate…", self._wid(tab_id, _TabId.BTN_PAYLOAD_GENERATE)),
-                ToolbarButton("🧠 Smart…", self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART), classes="pro-locked"),
+            *Toolbar.row(
+                Toolbar.group_buttons(
+                    Label("Payload set:"),
+                    ToolbarButton("Set 1 ▼", self._wid(tab_id, _TabId.BTN_PAYLOAD_SET)),
+                ),
+                Toolbar.group_buttons(
+                    ToolbarButton("Add", self._wid(tab_id, _TabId.BTN_PAYLOAD_ADD)),
+                    ToolbarButton("Remove", self._wid(tab_id, _TabId.BTN_PAYLOAD_REMOVE)),
+                    ToolbarButton("Clear", self._wid(tab_id, _TabId.BTN_PAYLOAD_CLEAR)),
+                ),
+                Toolbar.group_buttons(
+                    ToolbarButton("Load…", self._wid(tab_id, _TabId.BTN_PAYLOAD_LOAD)),
+                    ToolbarButton("Gen…", self._wid(tab_id, _TabId.BTN_PAYLOAD_GENERATE)),
+                    ToolbarButton("Smart…", self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART), classes="pro-locked"),
+                ),
             ),
             id=self._wid(tab_id, _TabId.PAYLOAD_BUTTONS_TOOLBAR),
         )

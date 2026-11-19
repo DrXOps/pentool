@@ -76,25 +76,75 @@ class ContentPanel(Widget):
 
     DEFAULT_CSS = (Path(__file__).parent / "content_panel.tcss").read_text(encoding="utf-8")
 
-    # ── Иконки (минималистичные unicode) ──────────────────────────────
-    BUTTONS_COPY: ClassVar[str] = "cp"
-    BUTTONS_PASTE: ClassVar[str] = "pst"
-    BUTTONS_CLEAR: ClassVar[str] = "✕"
-    BUTTONS_FORMAT: ClassVar[str] = "fmt"
-    BUTTONS_SPECIAL: ClassVar[str] = "⏎"
-    BUTTONS_WRAP: ClassVar[str] = "wrp"
-    BUTTONS_AUTOSCROLL: ClassVar[str] = "end"
+    # ── Иконки панели ────────────────────────────────────────────────────
+    # Наборы различаются покрытием шрифтов: в Kitty под WSL часть глифов
+    # (`⎙ ⎘ ⇄ ↩ ⬇`) не рисуется вовсе, а `✕` есть почти везде. Поэтому набор
+    # выбирается в Settings → Interface, а не зашит одной строкой.
+    ICON_SETS: ClassVar[dict[str, dict[str, str]]] = {
+        "unicode": {
+            "copy": "❐",
+            "paste": "➔",
+            "clear": "✕",
+            "format": "✎",
+            "special": "⏎",
+            "wrap": "↔",
+            "autoscroll": "⬇",
+        },
+        "ascii": {
+            "copy": "[c]",
+            "paste": "[p]",
+            "clear": "[x]",
+            "format": "[f]",
+            "special": "[sp]",
+            "wrap": "[w]",
+            "autoscroll": "[end]",
+        },
+        "emoji": {
+            "copy": "📋",
+            "paste": "📥",
+            "clear": "🗑",
+            "format": "✨",
+            "special": "⏎",
+            "wrap": "↔",
+            "autoscroll": "⬇",
+        },
+    }
+
+    BUTTON_TOOLTIPS: ClassVar[dict[str, str]] = {
+        "copy": "Copy to clipboard",
+        "paste": "Paste from clipboard",
+        "clear": "Clear this panel",
+        "format": "Format / beautify",
+        "special": "Insert special characters",
+        "wrap": "Toggle line wrap",
+        "autoscroll": "Scroll to the end",
+    }
 
     BUTTON_SCOPE: ClassVar[list[str]] = ["copy"]
-    BUTTON_LABELS: ClassVar[dict[str, str]] = {
-        "copy": BUTTONS_COPY,
-        "paste": BUTTONS_PASTE,
-        "clear": BUTTONS_CLEAR,
-        "format": BUTTONS_FORMAT,
-        "special": BUTTONS_SPECIAL,
-        "wrap": BUTTONS_WRAP,
-        "autoscroll": BUTTONS_AUTOSCROLL,
-    }
+
+    @classmethod
+    def button_label(cls, key: str) -> str:
+        """Иконка кнопки для текущего набора из настроек."""
+        icon_set = "unicode"
+        try:
+            from pentool.core.config import get_config
+
+            icon_set = getattr(get_config(), "panel_icons", "unicode") or "unicode"
+        except Exception:
+            logger.debug("content_panel: icon set not read, using unicode", exc_info=True)
+            icon_set = "unicode"
+        labels = cls.ICON_SETS.get(icon_set) or cls.ICON_SETS["unicode"]
+        return labels.get(key, key)
+
+    @classmethod
+    def tooltips_enabled(cls) -> bool:
+        try:
+            from pentool.core.config import get_config
+
+            return bool(getattr(get_config(), "tooltips_enabled", True))
+        except Exception:
+            logger.debug("content_panel: tooltips setting not read, default on", exc_info=True)
+            return True
 
     _wrap_state: reactive[bool] = reactive(True)
 
@@ -127,16 +177,19 @@ class ContentPanel(Widget):
     def compose(self) -> ComposeResult:
         with Horizontal(classes="cp-title panel-title"):
             yield Static(self._panel_title)
+            tip_on = self.tooltips_enabled()
             for bk in self._buttons:
-                lbl = self.BUTTON_LABELS.get(bk, bk)
+                lbl = self.button_label(bk)
+                tip = self.BUTTON_TOOLTIPS.get(bk) if tip_on else None
                 if bk == "wrap":
                     yield ToolbarButton(
-                        lbl if self._wrap_state else "╌",
+                        lbl if self._wrap_state else self.button_label("wrap"),
                         f"cp-btn-{bk}",
                         classes="variant-success" if self._wrap_state else "variant-warning",
+                        tooltip=tip,
                     )
                 else:
-                    yield ToolbarButton(lbl, f"cp-btn-{bk}")
+                    yield ToolbarButton(lbl, f"cp-btn-{bk}", tooltip=tip)
         with Vertical(id="cp-body"):
             if self._widget_type == "textarea":
                 yield TextArea(
@@ -256,6 +309,6 @@ class ContentPanel(Widget):
             if isinstance(w, RichLog):
                 self._wrap_state = not self._wrap_state
                 w.wrap = self._wrap_state
-                btn.label = self.BUTTONS_WRAP if self._wrap_state else "╌"
+                btn.label = self.button_label("wrap") if self._wrap_state else "╌"
                 btn.add_class(f"variant-{'success' if self._wrap_state else 'warning'}")
                 btn.remove_class(f"variant-{'warning' if self._wrap_state else 'success'}")

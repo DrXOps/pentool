@@ -6,6 +6,9 @@ Toolbar {
     layout: horizontal;
     padding: 0 1;
     align: left middle;
+    /* Широкий тулбар прокручивается, а не обрезает правые кнопки
+       (именно из-за обрезки «Smart…» уезжала за край). */
+    overflow-x: auto;
     border-bottom: solid $primary-darken-2;
 }
 

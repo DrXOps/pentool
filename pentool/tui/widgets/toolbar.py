@@ -83,6 +83,32 @@ class Toolbar(Horizontal):
         yield from Toolbar.grouped(*buttons)
 
     @staticmethod
+    def group_buttons(*buttons) -> list:
+        """Кнопки БЕЗ разделителей внутри — одна логическая группа."""
+        return list(buttons)
+
+    @staticmethod
+    def row(*groups) -> list:
+        """Строка тулбара из групп: разделители только МЕЖДУ группами.
+
+        Это и есть «правильный базовый класс» для разделителей:
+          Toolbar.row(
+              Toolbar.group_buttons(label, first),      # подпись + первая кнопка
+              Toolbar.group_buttons(add, remove, clear),  # действия над списком
+              Toolbar.group_buttons(load, generate),    # импорт/генерация
+          )
+        Внутри группы черта не нужна (это одно действие с разными кнопками),
+        между группами — нужна. ``grouped`` ставит черту между каждой парой и
+        подходит для плоского списка равнозначных действий.
+        """
+        items: list = []
+        for index, group in enumerate(groups):
+            if index:
+                items.append(Static(" │ ", classes="toolbar-sep"))
+            items.extend(group)
+        return items
+
+    @staticmethod
     def progress(id: str = "progress", total: int = 100, **kw) -> ProgressBar:
         """Прогресс-бар с предустановками."""
         return ProgressBar(total=total, show_percentage=False, id=id, **kw)

@@ -55,6 +55,8 @@ class SettingsScreen(AppMixin, Widget):
         ("Monokai", "monokai"),
     ]
     _MODES = [("Advanced", "advanced"), ("Basic", "basic")]
+    # Набор иконок панелей: покрытие шрифтов различается (см. ContentPanel.ICON_SETS)
+    _PANEL_ICONS = [("Unicode", "unicode"), ("ASCII", "ascii"), ("Emoji", "emoji")]
 
     def compose(self) -> ComposeResult:
         with TabbedContent(id="settings-tabs"):
@@ -67,6 +69,12 @@ class SettingsScreen(AppMixin, Widget):
                     with Horizontal(classes="row"):
                         yield Static("UI Mode:", classes="row-label")
                         yield OptionCycler(self._MODES, initial="advanced", id="set-ui-mode")
+                    with Horizontal(classes="row"):
+                        yield Static("Hints on hover:", classes="row-label")
+                        yield Checkbox("Show tooltips", id="set-tooltips", value=True)
+                    with Horizontal(classes="row"):
+                        yield Static("Panel icons:", classes="row-label")
+                        yield OptionCycler(self._PANEL_ICONS, initial="unicode", id="set-panel-icons")
                     yield ToolbarButton("Save", "settings-save")
 
             with TabPane("Proxy", id="tab-proxy"):
@@ -317,6 +325,13 @@ class SettingsScreen(AppMixin, Widget):
             for label, val in self._THEMES:
                 if val == saved_theme:
                     cycler.set_value(val)
+                    break
+            self.query_one("#set-tooltips", Checkbox).value = getattr(cfg, "tooltips_enabled", True)
+            icons_val = getattr(cfg, "panel_icons", "unicode") or "unicode"
+            icons_cycler = self.query_one("#set-panel-icons", OptionCycler)
+            for _label, val in self._PANEL_ICONS:
+                if val == icons_val:
+                    icons_cycler.set_value(val)
                     break
         except Exception:
             # Циклер останется на первой теме списка, а сохранённая тема —
@@ -701,6 +716,22 @@ class SettingsScreen(AppMixin, Widget):
                     changes["verify_ssl"] = ssl_v
             except NoMatches:
                 logger.warning("settings: verify_ssl not collected", exc_info=True)
+
+            # Интерфейс: подсказки и набор иконок. Собираются здесь же, чтобы
+            # уходить общим путём сохранения (свой `cfg.save()` в тестах писал
+            # в реальный config.yaml и ломал изоляцию).
+            try:
+                hints_v = self.query_one("#set-tooltips", Checkbox).value
+                if hints_v != getattr(cfg, "tooltips_enabled", True):
+                    changes["tooltips_enabled"] = bool(hints_v)
+            except NoMatches:
+                logger.warning("settings: tooltips field not collected", exc_info=True)
+            try:
+                icons_v = self.query_one("#set-panel-icons", OptionCycler).value
+                if icons_v != getattr(cfg, "panel_icons", "unicode"):
+                    changes["panel_icons"] = str(icons_v)
+            except NoMatches:
+                logger.warning("settings: panel icons field not collected", exc_info=True)
 
             try:
                 collab = self.query_one("#set-collaborator-url", Input).value.strip()

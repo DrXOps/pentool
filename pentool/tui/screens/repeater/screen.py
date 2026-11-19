@@ -952,16 +952,18 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         if getattr(event.worker, "name", None) != "repeater-send":
             return
         if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
-            if self._sending:
-                self._sending = False
-                try:
-                    self._send_btn.disabled = False
-                    self._cancel_btn.disabled = True
-                except NoMatches as exc:
-                    # Воркер закончился (успешно или нет), а кнопки остались в
-                    # положении «идёт отправка» — экран залипает. Причина —
-                    # кнопок нет в дереве, то есть экран уже разбирают.
-                    logger.debug("repeater: send/cancel buttons not reset: %s", exc)
+            # Без условия `if self._sending`: успешный путь `_do_send` сам
+            # сбрасывает флаг ДО этого события, и кнопка Send оставалась серой
+            # навсегда (ровно то, что видно в тестировании).
+            self._sending = False
+            try:
+                self._send_btn.disabled = False
+                self._cancel_btn.disabled = True
+            except NoMatches as exc:
+                # Воркер закончился, а кнопки остались в положении «идёт
+                # отправка» — экран залипает. Кнопок нет в дереве, то есть
+                # экран уже разбирают.
+                logger.debug("repeater: send/cancel buttons not reset: %s", exc)
 
     def action_clear(self) -> None:
         tab_id = self._active_tab_id

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from textual.app import App, ComposeResult
 
 from pentool.tui.screens.settings.screen import SettingsScreen
@@ -33,6 +34,20 @@ class _App(App):
     def __init__(self) -> None:
         super().__init__()
         self._cfg = object()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_config(tmp_path, monkeypatch):
+    """Конфиг на время теста — свой, а не ~/.config/pentool/config.yaml.
+
+    Иначе prefill читает реальный файл: если там ai_enabled=true, переключатель
+    уже включён, установка True не даёт события Changed, и тест падает по
+    причине, не связанной с кодом.
+    """
+    from pentool.core.config import Config, set_config
+
+    set_config(Config(db_path=str(tmp_path / "t.db"), cert_dir=str(tmp_path / "certs")))
+    yield
 
 
 async def _open_settings(pilot):
