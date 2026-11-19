@@ -35,6 +35,7 @@ from pentool.tui.widgets.proxy_data_table import ProxyDataTable
 from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar as FilterBar
 from pentool.tui.widgets.proxy_filter_bar import WsFilterBar
 from pentool.tui.widgets.proxy_helpers import COL_NAMES as _COL_NAMES
+from pentool.tui.widgets.proxy_helpers import make_empty_table as _make_empty_table
 from pentool.tui.widgets.proxy_helpers import row_to_record as _row_to_record
 from pentool.tui.widgets.proxy_helpers import rows_to_arrow as _rows_to_arrow
 from pentool.tui.widgets.request_editor import HttpView
@@ -240,6 +241,7 @@ class ProxyScreen(
                         yield FilterBar(id="filter-bar")
                         yield DataTable(
                             columns=_COL_NAMES,
+                            initial_table=_make_empty_table(),
                             id="request-list",
                             cursor_type="row",
                             zebra_stripes=True,
@@ -273,6 +275,7 @@ class ProxyScreen(
                         yield WsFilterBar(id="ws-filter-bar")
                         yield DataTable(
                             columns=_COL_NAMES,
+                            initial_table=_make_empty_table(),
                             id="ws-request-list",
                             cursor_type="row",
                             zebra_stripes=True,

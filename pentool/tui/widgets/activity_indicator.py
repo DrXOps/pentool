@@ -43,6 +43,7 @@ almost immediately at startup, before Start was ever pressed.
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -181,13 +182,13 @@ class ActivityIndicator(Widget):
                 return None
 
         return [
-            # Набор — как был (эмодзи в вашем терминале рисуются). Заменены
-            # только две лупы: 🔍 и 🔎 почти неразличимы, поэтому Scanner —
-            # микроскоп 🔬 (пассивный анализ трафика), Recon — компас 🧭
-            # (исследование местности). Смысл разный и с одного взгляда видно.
+            # Glyph set as it was (emoji render in the reporter's terminal).
+            # Only the two magnifiers were an issue: 🔍 and 🔎 are hard to tell
+            # apart, and the microscope 🔬 was missing from the font, so Scanner
+            # is back to 🔍 and Recon is a compass 🧭 (exploring terrain).
             _Tracked("proxy", "🌐", "Proxy", _proxy_active),
             _Tracked("spider", "🕷️", "Spider", _spider_active),
-            _Tracked("scanner", "🔬", "Scanner", _scanner_active),
+            _Tracked("scanner", "🔍", "Scanner", _scanner_active),
             _Tracked("intruder", "💥", "Intruder", _intruder_active),
             _Tracked("recon", "🧭", "Recon", _recon_active),
             _Tracked("ai", "🤖", "AI MCP", _ai_active),
@@ -207,6 +208,12 @@ class ActivityIndicator(Widget):
 
     def on_mount(self) -> None:
         self._poll_state()
+        if os.environ.get("PENTOOL_SNAPSHOT") == "1":
+            # Snapshots must not depend on the blink phase: `_apply_blink`
+            # derives it from time.monotonic(), so two runs produced different
+            # baselines (same class of problem as a blinking cursor).
+            self._apply_blink(blink_on=True)
+            return
         self.set_interval(_STATE_POLL_INTERVAL, self._poll_state)
         self.set_interval(_BLINK_TICK_INTERVAL, self._apply_blink)
 
@@ -253,11 +260,16 @@ class ActivityIndicator(Widget):
                 else:
                     widget.remove_class("ai-disabled")
 
-    def _apply_blink(self) -> None:
-        """Toggle blink phase and (re)apply CSS classes (~%.2gHz tick)."""
-        # int(now * _BLINK_HZ) alternates 0/1 every half-cycle — same pattern
-        # used by the Dashboard's finding-blink (see live_dashboard.py).
-        blink_on = int(time.monotonic() * _BLINK_HZ * 2) % 2 == 0
+    def _apply_blink(self, blink_on: bool | None = None) -> None:
+        """Toggle blink phase and (re)apply CSS classes (~%.2gHz tick).
+
+        ``blink_on`` is passed explicitly in snapshot mode: a phase derived
+        from the clock makes the baseline nondeterministic.
+        """
+        if blink_on is None:
+            # int(now * _BLINK_HZ) alternates 0/1 every half-cycle — same
+            # pattern used by the Dashboard's finding-blink.
+            blink_on = int(time.monotonic() * _BLINK_HZ * 2) % 2 == 0
         for t in self._checkers:
             try:
                 widget = self.query_one(f"#activity-{t.key}", Static)

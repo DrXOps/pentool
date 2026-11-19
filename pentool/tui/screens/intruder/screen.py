@@ -472,22 +472,19 @@ class IntruderScreen(
         # она делила пустоту (замечание из тестирования).
         # Подписи укорочены: длинные («Load from file…», «Generate…») выносили
         # тулбар за край экрана вместе с «Smart…».
+        # A separator between EVERY pair of actions (reported: "no divider
+        # between Add and Clear"). Labels are short: the long ones
+        # ("Load from file…", "Generate…") pushed "Smart" off screen.
         payloads_toolbar = Toolbar(
-            *Toolbar.row(
-                Toolbar.group_buttons(
-                    Label("Payload set:"),
-                    ToolbarButton("Set 1 ▼", self._wid(tab_id, _TabId.BTN_PAYLOAD_SET)),
-                ),
-                Toolbar.group_buttons(
-                    ToolbarButton("Add", self._wid(tab_id, _TabId.BTN_PAYLOAD_ADD)),
-                    ToolbarButton("Remove", self._wid(tab_id, _TabId.BTN_PAYLOAD_REMOVE)),
-                    ToolbarButton("Clear", self._wid(tab_id, _TabId.BTN_PAYLOAD_CLEAR)),
-                ),
-                Toolbar.group_buttons(
-                    ToolbarButton("Load…", self._wid(tab_id, _TabId.BTN_PAYLOAD_LOAD)),
-                    ToolbarButton("Gen…", self._wid(tab_id, _TabId.BTN_PAYLOAD_GENERATE)),
-                    ToolbarButton("Smart…", self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART), classes="pro-locked"),
-                ),
+            Label("Payload set:"),
+            *Toolbar.grouped(
+                ToolbarButton("Set 1 ▼", self._wid(tab_id, _TabId.BTN_PAYLOAD_SET)),
+                ToolbarButton("Add", self._wid(tab_id, _TabId.BTN_PAYLOAD_ADD)),
+                ToolbarButton("Rem", self._wid(tab_id, _TabId.BTN_PAYLOAD_REMOVE)),
+                ToolbarButton("Clr", self._wid(tab_id, _TabId.BTN_PAYLOAD_CLEAR)),
+                ToolbarButton("Load", self._wid(tab_id, _TabId.BTN_PAYLOAD_LOAD)),
+                ToolbarButton("Gen", self._wid(tab_id, _TabId.BTN_PAYLOAD_GENERATE)),
+                ToolbarButton("Smart", self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART), classes="pro-locked"),
             ),
             id=self._wid(tab_id, _TabId.PAYLOAD_BUTTONS_TOOLBAR),
         )
@@ -1350,14 +1347,22 @@ class IntruderScreen(
         except Exception:
             logger.error("intruder: tab state not saved", exc_info=True)
 
-    def _auto_save_result(self, result: IntruderResult) -> None:
+    def _auto_save_result(self, result: IntruderResult, tab: "_IntruderTabState | None" = None) -> None:
+        """Save one result; ``tab`` keeps it attached to its own tab.
+
+        The call site passed a second argument while the method accepted only
+        ``result`` — every finished result raised ``TypeError`` ("takes 2
+        positional arguments but 3 were given"), so an attack died on its
+        first response.
+        """
         api = self._get_api()
         if api is None:
             return
         try:
             project_id = getattr(self.app, "project_id", None)
+            tab_uid = getattr(tab, "tab_uid", "") if tab is not None else ""
             self._start_save_worker(
-                api.save_result(result, project_id=project_id),
+                api.save_result(result, project_id=project_id, tab_uid=tab_uid),
                 f"intruder-save-result-{time.monotonic_ns()}",
             )
         except Exception:

@@ -84,9 +84,9 @@ async def test_ai_controls_hidden_when_ai_disabled():
 async def test_ai_controls_shown_when_ai_enabled():
     ids = await _mounted_ids(ai_enabled=True)
     assert "btn-ai-select" in ids
-    # Галочка "AI bypass" удалена: её никто не читал (ни сканер, ни конфиг),
-    # то есть она была декоративной. Фича — задача T-017 в MYPLANS.
-    assert "chk-ai-bypass" not in ids
+    # Галочка "AI bypass" возвращена по просьбе (появляется только при
+    # включённом AI). Сам WAF-обход пока не подключён — задача T-017.
+    assert "chk-ai-bypass" in ids
     # Явное применение выбора: раньше кнопки Apply не было вовсе.
     assert "btn-apply" in ids
     assert "btn-close" in ids

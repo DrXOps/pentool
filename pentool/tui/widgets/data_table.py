@@ -18,6 +18,37 @@ import pyarrow as pa
 from rich.text import Text as RichText
 from textual_fastdatatable import ArrowBackend, DataTable
 
+from pentool.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+def _coerce_value(value: Any, target: pa.DataType) -> Any:
+    """Coerce a value to the target column type; None stays None."""
+    if value is None:
+        return None
+    if pa.types.is_integer(target):
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped in ("", "-"):
+                return None
+            try:
+                return int(stripped)
+            except ValueError:
+                return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+    if pa.types.is_floating(target):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+    if pa.types.is_string(target) or pa.types.is_large_string(target):
+        return str(value)
+    return value
+
 
 def _make_empty_arrow(columns: list[str]) -> pa.Table:
     """Build an empty Arrow table with the given string columns."""
@@ -40,6 +71,7 @@ class ArrowBackendDataTable(DataTable):
         self,
         columns: list[str] | None = None,
         *args: Any,
+        initial_table: pa.Table | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -47,7 +79,15 @@ class ArrowBackendDataTable(DataTable):
         # Seed backend with empty Arrow so DataTable knows column names
         # and renders headers immediately (column_widths in kwargs sets
         # min column width via DataTable.__init__).
-        if self._columns:
+        #
+        # `initial_table` matters: every column used to be declared `string`,
+        # so the first `add_rows` carrying numbers (ID, Size) failed with
+        # "Expected bytes, got a 'int' object" and proxy rows never appeared.
+        # The caller passes an empty table with real types
+        # (see proxy_helpers.make_empty_table).
+        if initial_table is not None:
+            self.backend = ArrowBackend(initial_table)
+        elif self._columns:
             self.backend = ArrowBackend(_make_empty_arrow(self._columns))
 
     def set_data(self, arrow: pa.Table) -> None:
@@ -68,21 +108,78 @@ class ArrowBackendDataTable(DataTable):
             _log().error("ArrowBackendDataTable.set_data failed: %s", exc)
 
     def add_rows(self, records: list[tuple]) -> None:
-        """Add rows via the parent DataTable.add_rows."""
+        """Append rows, coercing values to the schema types BEFORE inserting.
+
+        Why not "try first, repair later": when pyarrow fails on a type
+        mismatch, the backend is left half-broken — `row_count` is 1 while
+        `source_data` is empty, i.e. the previous rows are gone. So coercion
+        happens up front.
+        """
         try:
-            result = super().add_rows(records)
+            prepared = self._coerce_records(records)
+        except Exception:
+            logger.error("table: rows not prepared for append", exc_info=True)
+            prepared = records
+
+        try:
+            result = super().add_rows(prepared)
             self.refresh()
             return result
         except Exception as exc:
-            from pentool.core.logging import get_logger as _log
+            logger.error("table: add_rows failed, retrying with schema coercion", exc_info=True)
+            self._append_coerced(prepared, reason=exc)
 
-            _log().error("ArrowBackendDataTable.add_rows failed: %s", exc)
-            if self._columns and records:
-                typed = list(zip(*records)) if records else []
-                data = {}
-                for i, col in enumerate(self._columns):
-                    data[col] = pa.array(typed[i] if i < len(typed) else [], type=pa.string())
-                self.backend = ArrowBackend(pa.table(data))
+    def _coerce_records(self, records: list[tuple]) -> list[tuple]:
+        """Coerce every value to the current schema column type."""
+        if not records:
+            return records
+        try:
+            schema = self.backend.source_data.schema
+        except Exception:
+            logger.debug("table: schema unavailable, appending as-is", exc_info=True)
+            return records
+
+        types = [schema.field(index).type for index in range(len(schema))]
+        prepared: list[tuple] = []
+        for record in records:
+            row = []
+            for index, target in enumerate(types):
+                value = record[index] if index < len(record) else None
+                row.append(_coerce_value(value, target))
+            prepared.append(tuple(row))
+        return prepared
+
+    def _append_coerced(self, records: list[tuple], *, reason: Exception | None = None) -> None:
+        """Append rows, coercing values to the current schema types.
+
+        The previous fallback declared EVERY column as string — numeric ID and
+        Size became text, the table lost its types, and the next append failed
+        again. Here the schema comes from the already loaded table and only
+        mismatched values are coerced.
+        """
+        if not records:
+            return
+        try:
+            current = self.backend.source_data
+            schema = current.schema
+        except Exception:
+            logger.error("table: schema not available for coercion", exc_info=True)
+            return
+
+        columns: dict[str, list] = {name: [] for name in schema.names}
+        for record in records:
+            for index, name in enumerate(schema.names):
+                value = record[index] if index < len(record) else None
+                columns[name].append(_coerce_value(value, schema.field(index).type))
+
+        try:
+            addition = pa.table(
+                {name: pa.array(values, type=schema.field(name).type) for name, values in columns.items()}
+            )
+            self.set_data(pa.concat_tables([current, addition]))
+            logger.warning("table: rows appended after coercion (reason: %s)", reason)
+        except Exception:
+            logger.error("table: coercion failed — rows lost", exc_info=True)
 
     def clear_data(self) -> None:
         """Reset to an empty table (columns preserved)."""
