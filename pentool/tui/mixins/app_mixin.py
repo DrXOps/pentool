@@ -30,30 +30,41 @@ class AppMixin:
         except Exception:
             return ""
 
-    def _send_to_decoder(self, text: str) -> None:
+    async def _send_to_decoder(self, text: str) -> None:
+        """Get-or-mount the Decoder screen and drop *text* into it.
+
+        Async because the target screen may not be mounted at all (lazy screens):
+        `ensure_module_screen` mounts it on demand, which is exactly the case "send to
+        Decoder from the Proxy context menu without ever opening Decoder".
+        """
         try:
-            from pentool.tui.constants import SCREEN_DECODER
             from pentool.tui.screens.decoder.screen import DecoderScreen
 
             if not text:
                 self.app.notify("No text to send", severity="warning")  # type: ignore[attr-defined]
                 return
-            decoder = self.app.query_one(SCREEN_DECODER, DecoderScreen)  # type: ignore[attr-defined]
+            decoder = await self.app.ensure_module_screen("decoder", DecoderScreen)  # type: ignore[attr-defined]
+            if decoder is None:
+                self.app.notify("Decoder is unavailable", severity="error")  # type: ignore[attr-defined]
+                return
             decoder.load_text(text)
             self.app.action_switch_module("decoder")  # type: ignore[attr-defined]
             self.app.notify("Sent to Decoder", timeout=2)  # type: ignore[attr-defined]
         except Exception as exc:
             self.err(exc, "Could not send to Decoder")
 
-    def _send_to_comparer(self, text: str, label: str = "") -> None:
+    async def _send_to_comparer(self, text: str, label: str = "") -> None:
+        """Get-or-mount the Comparer screen and load *text* on the free side."""
         try:
-            from pentool.tui.constants import SCREEN_COMPARER
             from pentool.tui.screens.comparer.screen import ComparerScreen
 
             if not text:
                 self.app.notify("No text to send", severity="warning")  # type: ignore[attr-defined]
                 return
-            comparer = self.app.query_one(SCREEN_COMPARER, ComparerScreen)  # type: ignore[attr-defined]
+            comparer = await self.app.ensure_module_screen("comparer", ComparerScreen)  # type: ignore[attr-defined]
+            if comparer is None:
+                self.app.notify("Comparer is unavailable", severity="error")  # type: ignore[attr-defined]
+                return
             left_text = comparer.query_one("#cmp-left").text  # type: ignore[attr-defined]
             if left_text.strip():
                 comparer.load_right(text, label=label or "Request")

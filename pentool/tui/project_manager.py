@@ -17,7 +17,6 @@ from textual.css.query import NoMatches
 from pentool.core.db_schema import init_db
 from pentool.core.error_guard import err as _err
 from pentool.core.logging import get_logger
-from pentool.tui.constants import SCREEN_DASHBOARD, SCREEN_INTRUDER, SCREEN_PROXY, SCREEN_SCANNER, SCREEN_TARGET
 from pentool.tui.messages import ProxyLoadProject
 
 if TYPE_CHECKING:
@@ -25,12 +24,21 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+#: Modules whose screens hold project data and must be refreshed on a switch.
+#: Ordered as in ``MODULES`` so logs and the deferred-reload queue read the same.
+_RELOADABLE_MODULES: tuple[str, ...] = ("dashboard", "proxy", "repeater", "intruder", "scanner", "target")
+
 
 class ProjectManager:
     """Manages project open/save/switch operations on behalf of PentoolApp."""
 
     def __init__(self, app: "PentoolApp") -> None:
         self._app = app
+        #: Project the app is currently switching to / working with. ``reload_screen``
+        #: reads these because it is called from two places: the switch itself and
+        #: the deferred reload after a lazy screen mount.
+        self._current_path: str = ""
+        self._current_is_new: bool = False
 
     # ── Shortcuts to app state ────────────────────────────────────────────────
 
@@ -117,7 +125,7 @@ class ProjectManager:
                 try:
                     from pentool.tui.screens.dashboard.screen import DashboardScreen
 
-                    dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
+                    dash = self._app.require_module_screen("dashboard", DashboardScreen)
                     dash.log_activity(
                         f'Project "{os.path.splitext(os.path.basename(path))[0]}" saved to {path}',
                         "ok",
@@ -215,7 +223,7 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.scanner.screen import ScannerScreen
 
-                scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
+                scanner_screen = self._app.require_module_screen("scanner", ScannerScreen)
                 scanner_export = scanner_screen.get_scanner_export()
             except Exception:
                 # Находки сканера не попали в файл: проект сохранится «пустым»
@@ -226,7 +234,7 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.target.screen import TargetScreen
 
-                target_screen = self._app.query_one(SCREEN_TARGET, TargetScreen)
+                target_screen = self._app.require_module_screen("target", TargetScreen)
                 target_api = target_screen._get_api()
                 target_export = target_api.export_project_data()
             except Exception:
@@ -238,7 +246,7 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
 
-                intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
+                intruder_screen = self._app.require_module_screen("intruder", IntruderScreen)
                 intruder_export = intruder_screen.get_intruder_export()
             except Exception:
                 # Результаты Intruder не попали в файл проекта.
@@ -278,7 +286,7 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.scanner.screen import ScannerScreen
 
-                scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
+                scanner_screen = self._app.require_module_screen("scanner", ScannerScreen)
                 db_path = self._cfg.db_path
                 scanner_api = scanner_screen._get_or_create_api(db_path)
                 scanner_count = scanner_api.import_project_data(data.get("scanner", {}))
@@ -292,7 +300,7 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.target.screen import TargetScreen
 
-                target_screen = self._app.query_one(SCREEN_TARGET, TargetScreen)
+                target_screen = self._app.require_module_screen("target", TargetScreen)
                 target_api = target_screen._get_api()
                 target_count = target_api.import_project_data(data.get("target", {}))
                 target_screen._load_sitemap()
@@ -304,7 +312,7 @@ class ProjectManager:
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
 
-                intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
+                intruder_screen = self._app.require_module_screen("intruder", IntruderScreen)
                 intruder_api = getattr(intruder_screen, "_api", None)
                 if intruder_api:
                     intruder_count = intruder_api.import_project_data(data.get("intruder", {}))
@@ -405,7 +413,6 @@ class ProjectManager:
                 # пятью независимыми сеттерами.
                 logger.exception("project: new-project proxy state not reset")
 
-        # Single exclusive worker — no two switches can run in parallel.
         self.update_project_name(path)
         action = "Created" if is_new else "Opened"
         # Single-line toast: no separate title (Textual's toast would render
@@ -416,7 +423,7 @@ class ProjectManager:
         try:
             from pentool.tui.screens.dashboard.screen import DashboardScreen
 
-            dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
+            dash = self._app.require_module_screen("dashboard", DashboardScreen)
             dash._populate_projects()
             verb = "created" if is_new else "opened"
             dash.log_activity(f'Project "{os.path.splitext(os.path.basename(path))[0]}" {verb} from {path}', "ok")
@@ -433,6 +440,10 @@ class ProjectManager:
 
     async def _do_switch(self, path: str, is_new: bool) -> None:
         """Switch project DB: stop proxy → init schema → switch storage → reload screens."""
+        # Remember what the app is switching to: `reload_screen` (which is also
+        # called later, when a lazily mounted screen comes up) reads it from here.
+        self._current_path = path
+        self._current_is_new = is_new
         # 0. Stop the proxy (async) and wait for its thread to die before
         # touching the DB. Runs in this async worker, so the TUI thread is
         # NOT blocked — this is what previously froze the UI for ~10s on
@@ -453,26 +464,30 @@ class ProjectManager:
 
         # 3. Clear in-memory proxy requests for a new project
         if is_new:
-            try:
-                from pentool.tui.screens.proxy.screen import ProxyScreen
-
-                screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
-                # Await directly — do NOT use action_clear_list() here because it
-                # spawns a run_worker that races with _reload_from_storage below.
-                proxy = self._proxy
-                if proxy:
-                    proxy.clear_requests()
-                await screen._do_clear_table()
+            screen = self._app.module_screen("proxy")
+            if screen is None:
+                # Not mounted: there is nothing to clear on screen, and the rows
+                # live in the old storage. `reload_screen` on its next mount
+                # starts it empty, so the new project cannot inherit anything.
+                logger.debug("_do_switch: proxy not mounted, table clear skipped")
+            else:
                 try:
-                    screen.query_one("#req-editor").clear()
-                    screen.query_one("#resp-viewer").clear()
-                except NoMatches as exc:
-                    # Таблица очищена, а панели показывают запрос прошлого
-                    # проекта — данные нового проекта выглядят уже открытыми.
-                    logger.debug("_do_switch: detail panels not cleared: %s", exc)
-                screen._selected_req_id = None
-            except Exception as exc:
-                logger.debug("_do_switch: clear for new project: %s", exc)
+                    # Await directly — do NOT use action_clear_list() here because it
+                    # spawns a run_worker that races with _reload_from_storage below.
+                    proxy = self._proxy
+                    if proxy:
+                        proxy.clear_requests()
+                    await screen._do_clear_table()  # type: ignore[attr-defined]
+                    try:
+                        screen.query_one("#req-editor").clear()  # type: ignore[attr-defined]
+                        screen.query_one("#resp-viewer").clear()  # type: ignore[attr-defined]
+                    except NoMatches as exc:
+                        # Таблица очищена, а панели показывают запрос прошлого
+                        # проекта — данные нового проекта выглядят уже открытыми.
+                        logger.debug("_do_switch: detail panels not cleared: %s", exc)
+                    screen._selected_req_id = None  # type: ignore[attr-defined]
+                except Exception as exc:
+                    logger.debug("_do_switch: clear for new project: %s", exc)
 
         # 4. Set flag as soon as the DB itself is ready — Start Proxy only
         # needs HttpStorage (step 2) done, not the other screens below.
@@ -485,147 +500,122 @@ class ProjectManager:
         logger.info("_do_switch: all screens reloaded")
 
     async def _reload_project_screens(self, path: str, is_new: bool = False) -> None:
-        """Reload data from DB into all screens. Called from _do_switch only.
+        """Bring every module screen up to date with the project that is now open.
 
-        Each screen's reload is independent (different tables/state), so they
-        run concurrently via asyncio.gather instead of one after another —
-        total time is bounded by the slowest single reload, not the sum.
+        Only *mounted* screens can be reloaded — with lazy mounting the rest live
+        nowhere. Those are marked stale instead and reloaded by
+        :meth:`LazyScreenManager.activate` the next time the module is opened, so
+        a screen can never show the previous project's data.
+
+        Each screen's reload is independent (different tables/state), so the
+        mounted ones run concurrently via `asyncio.gather`: total time is bounded
+        by the slowest single reload, not the sum.
         """
 
-        async def _reload_repeater() -> None:
+        async def _safe_reload(module_id: str, screen: object) -> None:
             try:
-                from pentool.tui.constants import SCREEN_REPEATER
-                from pentool.tui.screens.repeater.screen import RepeaterScreen
+                await self.reload_screen(module_id, screen)
+            except Exception:
+                # The screen is mounted, so this is not deferrable: it stays on
+                # the previous project's data. Loud on purpose.
+                logger.error("_reload_project_screens: %s not switched", module_id, exc_info=True)
 
-                repeater = self._app.query_one(SCREEN_REPEATER, RepeaterScreen)
+        tasks = []
+        for module_id in _RELOADABLE_MODULES:
+            screen = self._app.module_screen(module_id)
+            if screen is None:
+                self._app.mark_screen_stale(module_id)
+                logger.debug("_reload_project_screens: %s not mounted — reload deferred", module_id)
+                continue
+            tasks.append(_safe_reload(module_id, screen))
+        if tasks:
+            await asyncio.gather(*tasks)
+
+    async def reload_screen(self, module_id: str, screen: object) -> None:
+        """Reload one screen from the project that is currently open.
+
+        Raises when the reload fails: the caller decides whether that is fatal
+        (a mounted screen showing another project's rows) or retryable (the
+        deferred reload after a lazy mount, which keeps the screen stale).
+
+        One method instead of six nested closures because it is now called from
+        two places — the project switch and the lazy-mount replay.
+        """
+        path = self._current_path
+        is_new = self._current_is_new
+        match module_id:
+            case "proxy":
+                # is_new lets the proxy screen start a brand-new project with an
+                # EMPTY scope (not inherited from the previous project).
+                await screen._reload_from_storage(is_new=is_new)  # type: ignore[attr-defined]
+                logger.info("reload_screen: proxy reloaded from %s", path)
+            case "repeater":
                 if is_new:
-                    await repeater.reset_for_new_project()
+                    await screen.reset_for_new_project()  # type: ignore[attr-defined]
                 else:
-                    await repeater.reload_from_project(path)
-                logger.info("_reload_project_screens: repeater %s", "reset" if is_new else "reloaded")
-            except Exception:
-                # Repeater остался на прошлом проекте: пользователь увидит и
-                # отправит запросы чужого проекта. error, не debug.
-                logger.error("_reload_project_screens: repeater not switched", exc_info=True)
-
-        async def _reload_proxy() -> None:
-            try:
-                screen = self._app.query_one(SCREEN_PROXY, ProxyScreen)
-                # is_new lets the proxy screen start a brand-new project with
-                # an EMPTY scope (not inherited from the previous project).
-                await screen._reload_from_storage(is_new=is_new)
-                logger.info("_reload_project_screens: proxy reloaded from %s", path)
-            except Exception:
-                # Хранилище прокси не переключено: история чужого проекта
-                # останется на экране и будет дополняться новыми запросами.
-                logger.error("_reload_project_screens: proxy storage not switched", exc_info=True)
-
-        async def _reload_scanner() -> None:
-            try:
-                # Use SCANNER_SCREEN_AVAILABLE from screens/__init__.py —
-                # it already wraps the import in a try/except and falls back
-                # to ScannerUnavailableScreen when the PRO package is absent.
-                # Importing scanner.screen directly here (without the guard)
-                # raised ImportError when PRO wasn't installed, which surfaced
-                # as an ugly "No module named 'pentool.tui.screens.scanner'"
-                # DEBUG log and silently left the scanner screen stale.
-                from pentool.tui.screens import SCANNER_SCREEN_AVAILABLE, ScannerScreen
+                    await screen.reload_from_project(path)  # type: ignore[attr-defined]
+                logger.info("reload_screen: repeater %s", "reset" if is_new else "reloaded")
+            case "scanner":
+                # SCANNER_SCREEN_AVAILABLE from screens/__init__.py already wraps
+                # the import in a try/except and falls back to
+                # ScannerUnavailableScreen when the PRO package is absent —
+                # importing scanner.screen directly raised ImportError there.
+                from pentool.tui.screens import SCANNER_SCREEN_AVAILABLE
 
                 if not SCANNER_SCREEN_AVAILABLE:
-                    logger.debug("_reload_project_screens scanner: PRO not available — skip")
+                    logger.debug("reload_screen: scanner unavailable (PRO not installed)")
                     return
-                scanner_screen = self._app.query_one(SCREEN_SCANNER, ScannerScreen)
-                scanner_screen._scanner_api = None
-                scanner_screen._scanner_api = scanner_screen._get_or_create_api(path)
-                scanner_screen._populate_from_db([])
-                scanner_screen._load_findings_worker()
-                # Clear the tab scan logs so the new project doesn't inherit the
-                # previous project's log lines (the scanner screen was reloaded,
-                # but each tab's RichLog kept its old content).
-                scanner_screen._clear_scan_logs()
-                logger.info("_reload_project_screens: scanner reloaded")
-            except Exception:
-                # Находки сканера остались от прошлого проекта — прямой
-                # «артефакт из чужого проекта» на экране.
-                logger.error("_reload_project_screens: scanner not switched", exc_info=True)
+                screen._scanner_api = None  # type: ignore[attr-defined]
+                screen._scanner_api = screen._get_or_create_api(path)  # type: ignore[attr-defined]
+                screen._populate_from_db([])  # type: ignore[attr-defined]
+                screen._load_findings_worker()  # type: ignore[attr-defined]
+                screen._clear_scan_logs()  # type: ignore[attr-defined]
+                logger.info("reload_screen: scanner reloaded")
+            case "target":
+                await self._reload_target_screen(screen, is_new=is_new)
+                logger.info("reload_screen: target reloaded from %s", path)
+            case "dashboard":
+                screen.refresh_stats()  # type: ignore[attr-defined]
+            case "intruder":
+                await screen.reload_from_project(path)  # type: ignore[attr-defined]
+                logger.info("reload_screen: intruder reloaded from %s", path)
+            case _:
+                logger.debug("reload_screen: %s has nothing to reload", module_id)
 
-        async def _reload_target(is_new: bool = False) -> None:
+    async def _reload_target_screen(self, target_screen: object, *, is_new: bool) -> None:
+        """Target owns a SiteMap with its own SQLite connection — close it first."""
+        if target_screen._target_api is not None:  # type: ignore[attr-defined]
             try:
-                from pentool.tui.screens.target.screen import TargetScreen
-
-                target_screen = self._app.query_one(SCREEN_TARGET, TargetScreen)
-                if target_screen._target_api is not None:
-                    try:
-                        await target_screen._target_api.save()
-                    except Exception:
-                        # Несохранённые изменения карты сайта прошлого проекта
-                        # теряются при переключении — молча. Это потеря данных
-                        # пользователя, поэтому warning с трейсбеком.
-                        logger.warning("project: old site map not saved before switch", exc_info=True)
-                    # SiteMap now holds one persistent SQLite connection
-                    # (BaseSqliteStorage) — close it before dropping the
-                    # instance, otherwise a leaked connection to the old
-                    # project's DB file lingers until quit and accumulates
-                    # FDs/locks across project switches.
-                    try:
-                        await target_screen._target_api.close()
-                    except Exception:
-                        # Соединение остаётся открытым до выхода: дескрипторы и
-                        # блокировки копятся с каждым переключением проекта.
-                        logger.warning("project: old site map connection not closed", exc_info=True)
-                target_screen._target_api = None
-                target_screen._get_api()
-                # For a brand-new project the DB is empty, but guard anyway:
-                # clear the new SiteMap explicitly so no node from a previous
-                # project can appear in the tree (defence in depth — the new
-                # TargetAPI already points at the new db_path).
-                if is_new:
-                    try:
-                        target_screen._target_api.clear()
-                        target_screen._target_api.sitemap._scope_hosts.clear()
-                    except Exception:
-                        # Узлы прошлого проекта могут появиться в новом — это
-                        # ровно тот «артефакт, протекающий между проектами»,
-                        # ради которого блок и написан. error.
-                        logger.error("project: new project's site map not cleared", exc_info=True)
-                target_screen._load_sitemap()
-                logger.info("_reload_project_screens: target reloaded from %s", path)
+                await target_screen._target_api.save()  # type: ignore[attr-defined]
             except Exception:
-                # Целевой экран не переключён на новый проект — дерево сайта
-                # осталось от прошлого.
-                logger.error("_reload_project_screens: target not switched", exc_info=True)
-
-        async def _reload_dashboard() -> None:
+                # Несохранённые изменения карты сайта прошлого проекта
+                # теряются при переключении — молча. Это потеря данных
+                # пользователя, поэтому warning с трейсбеком.
+                logger.warning("project: old site map not saved before switch", exc_info=True)
+            # SiteMap holds one persistent SQLite connection: close it before
+            # dropping the instance, otherwise a connection to the old project's
+            # DB file lingers until quit and accumulates FDs/locks.
             try:
-                from pentool.tui.screens.dashboard.screen import DashboardScreen
-
-                dash = self._app.query_one(SCREEN_DASHBOARD, DashboardScreen)
-                dash.refresh_stats()
+                await target_screen._target_api.close()  # type: ignore[attr-defined]
             except Exception:
-                # Цифры дашборда не обновились — экран покажет статистику
-                # прошлого проекта до следующего refresh.
-                logger.warning("_reload_project_screens: dashboard not refreshed", exc_info=True)
-
-        async def _reload_intruder() -> None:
+                # Соединение остаётся открытым до выхода: дескрипторы и
+                # блокировки копятся с каждым переключением проекта.
+                logger.warning("project: old site map connection not closed", exc_info=True)
+        target_screen._target_api = None  # type: ignore[attr-defined]
+        target_screen._get_api()  # type: ignore[attr-defined]
+        # For a brand-new project the DB is empty, but clear the new SiteMap
+        # explicitly so no node from a previous project can appear in the tree
+        # (defence in depth — the new TargetAPI already points at the new DB).
+        if is_new:
             try:
-                from pentool.tui.screens.intruder.screen import IntruderScreen
-
-                intruder_screen = self._app.query_one(SCREEN_INTRUDER, IntruderScreen)
-                await intruder_screen.reload_from_project(path)
-                logger.info("_reload_project_screens: intruder reloaded from %s", path)
+                target_screen._target_api.clear()  # type: ignore[attr-defined]
+                target_screen._target_api.sitemap._scope_hosts.clear()  # type: ignore[attr-defined]
             except Exception:
-                # Intruder остался на прошлом проекте: вкладки и результаты
-                # чужого проекта на экране.
-                logger.error("_reload_project_screens: intruder not switched", exc_info=True)
-
-        await asyncio.gather(
-            _reload_repeater(),
-            _reload_proxy(),
-            _reload_scanner(),
-            _reload_target(is_new=is_new),
-            _reload_dashboard(),
-            _reload_intruder(),
-        )
+                # Узлы прошлого проекта могут появиться в новом — это ровно тот
+                # «артефакт, протекающий между проектами», ради которого блок и
+                # написан. error.
+                logger.error("project: new project's site map not cleared", exc_info=True)
+        target_screen._load_sitemap()  # type: ignore[attr-defined]
 
     async def _init_new_db(self, path: str) -> None:
         try:
@@ -693,7 +683,3 @@ class ProjectManager:
                 # Проект открыт, но в списке «недавних» на дашборде его не
                 # будет — следующий раз его придётся искать вручную.
                 logger.debug("project: %s not added to recent projects: %s", path, exc)
-
-
-# Lazy import to avoid circular reference at module load
-from pentool.tui.screens.proxy.screen import ProxyScreen  # noqa: E402

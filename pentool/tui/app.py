@@ -16,6 +16,7 @@ from textual import on
 from textual.app import App, ComposeResult, InvalidThemeError
 from textual.containers import Vertical
 from textual.css.query import NoMatches
+from textual.widget import Widget
 from textual.widgets import Checkbox, ContentSwitcher
 
 from pentool import __version__
@@ -36,11 +37,8 @@ from pentool.core.logging import get_logger, setup_logging
 from pentool.proxy.client import ProxyClient
 from pentool.services.proxy_service import ProxyService
 from pentool.tui.constants import (
-    SCREEN_DASHBOARD,
     SCREEN_INTRUDER,
-    SCREEN_PROXY,
     SCREEN_REPEATER,
-    SCREEN_SCANNER,
     SCREEN_TARGET,
 )
 from pentool.tui.hotkeys.defaults import build_global_bindings
@@ -65,20 +63,9 @@ from pentool.tui.mixins.events_handlers import ProxyEventHandlersMixin
 from pentool.tui.mixins.notifications import NotificationsMixin
 from pentool.tui.mixins.project_autosave import ProjectAutoSaveMixin
 from pentool.tui.mixins.proxy_runtime import ProxyRuntimeMixin
+from pentool.tui.screen_lifecycle import SCREEN_ID_PREFIX, LazyScreenManager, ScreenNotMounted
 from pentool.tui.screen_registry import get_screen_class
-from pentool.tui.screens import (
-    ComparerScreen,
-    DashboardScreen,
-    DecoderScreen,
-    ExtensionsScreen,
-    IntruderScreen,
-    ProxyScreen,
-    RepeaterScreen,
-    ScannerScreen,
-    SequencerScreen,
-    SettingsScreen,
-    TargetScreen,
-)
+from pentool.tui.screens import DashboardScreen, IntruderScreen, ProxyScreen, RepeaterScreen, TargetScreen
 from pentool.tui.widgets.keyhintbar import GlobalHintBar, ModuleHintBar
 from pentool.tui.widgets.module_tabs import ModuleTabs
 from pentool.tui.widgets.statusbar import StatusBar
@@ -238,6 +225,22 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         from pentool.tui.project_manager import ProjectManager
 
         self._pm = ProjectManager(self)
+        # Module screens are mounted on demand and dropped when left behind; the
+        # manager owns that policy, this app owns the DOM side (ScreenHost below).
+        # The reload callback is the project manager: a screen that went stale
+        # while it lived nowhere is refreshed by the same code the project switch
+        # uses. `keep_alive` is empty on purpose — every extra mounted screen
+        # costs about five message dispatches per interaction.
+        self._screens = LazyScreenManager(
+            self,
+            registry=get_screen_class,
+            keep_alive=frozenset(),
+            # One spare screen: coming back to where you were is instant instead
+            # of a ~600-1100 ms re-mount, at the price of ~50-110 ms on every
+            # action *while* two screens are mounted (measured 2026-11-20).
+            keep_recent=1,
+            reload=self._reload_mounted_screen,
+        )
         # Shared "is a crawl in progress" state. There is no dedicated
         # SpiderScreen/module-tab anymore — crawling runs only from
         # TargetScreen's "Crawl scope"/"Crawl selected host" triggers
@@ -379,23 +382,13 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     def compose(self) -> ComposeResult:
         yield ModuleTabs(id="module-tabs")
+        # Only the start screen is mounted. The other module screens are created
+        # on first use and dropped when the user leaves them — see
+        # `tui/screen_lifecycle.py`: with all thirteen mounted (~1600 widgets) the
+        # idle/refresh sweep Textual runs on every action cost about a second per
+        # click; with one mounted it is ~0.3 s (measured 2026-11-20).
         with ContentSwitcher(initial="screen-dashboard"):
             yield DashboardScreen(id="screen-dashboard")
-            yield ProxyScreen(id="screen-proxy", proxy_service=self._proxy_service)
-            yield RepeaterScreen(id="screen-repeater")
-            yield IntruderScreen(id="screen-intruder")
-            yield ScannerScreen(id="screen-scanner")
-            yield TargetScreen(id="screen-target")
-            yield DecoderScreen(id="screen-decoder")
-            yield ComparerScreen(id="screen-comparer")
-            yield SequencerScreen(id="screen-sequencer")
-            yield ExtensionsScreen(id="screen-extensions")
-            yield SettingsScreen(id="screen-settings")
-            # ReconScreen — PRO-only, грузится по требованию: импорт на уровне
-            # модуля давал цикл app → registry → recon → app и терял модуль.
-            recon_cls = get_screen_class("recon")
-            if recon_cls is not None:
-                yield recon_cls(id="screen-recon")
         # Footer and StatusBar both used to `dock: bottom` independently —
         # in Textual, multiple independently-docked widgets at the same
         # edge don't stack, they all pin to the same row and overlap each
@@ -605,19 +598,31 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         """Seed targets from --url flag into Target/SiteMap."""
         await asyncio.sleep(0.6)  # let the TUI render first
 
+        # Create a NEW project for this target (do not reuse the last project).
         # Awaited on purpose: everything below (proxy start, Lightpanda fetch)
         # captures traffic into whatever DB is open at that moment. Fired and
         # forgotten, the switch landed *after* the fetch, so the requests were
         # written into the previously open DB and the new project's history
         # stayed empty — "with --smart I don't see any request in the history".
-        # Create a NEW project for this target (do not reuse the last project).
         try:
             new_path = self._project_path_for_target(urls[0])
             await self._pm.switch_project_db_awaited(new_path, is_new=True)
         except Exception:
-            # Проект не создан — и весь остальной seed пойдёт в предыдущий
-            # проект, то есть данные для нового хоста окажутся в чужой базе.
-            logger.exception("seed: new project create failed")
+            # No project — no capture: an empty start with a reason in the log
+            # is better than the target's traffic landing in another project's
+            # history, which is what the racing switch used to produce.
+            logger.exception("seed: new project create failed — seed aborted")
+            return
+
+        # The seed writes into Target (the URL itself and, right below, the
+        # host's scope), so the screen has to exist even though the user has not
+        # opened it: with lazy screens it is not in the DOM until asked for.
+        try:
+            await self.ensure_module_screen("target")
+        except Exception:
+            # Without Target the seed still gives a running proxy and a project;
+            # say so instead of dropping the flag's effect silently.
+            logger.exception("seed: Target screen not mounted")
 
         for url in urls:
             try:
@@ -834,7 +839,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     def _refresh_target_tree(self) -> None:
         try:
-            target = self.query_one(SCREEN_TARGET, TargetScreen)
+            target = self.require_module_screen("target", TargetScreen)
             target._refresh_tree()
         except Exception as exc:
             # Экран Target строится лениво: при --url прогоне его может ещё не
@@ -1001,7 +1006,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # No preventDefault — Binding with "P" will fire first (switch to proxy),
             # then if the user presses h/i/w — it will switch to the sub-tab
 
-    def action_proxy_tab(self, tab: str) -> None:
+    async def action_proxy_tab(self, tab: str) -> None:
         self.action_switch_module("proxy")
         tab_ids = {
             "http": "tab-http-history",
@@ -1012,7 +1017,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         if not tab_id:
             return
         try:
-            proxy_screen = self.query_one("#screen-proxy", ProxyScreen)
+            # Get-or-mount: the hotkey may be the first thing the user presses,
+            # so the Proxy screen can legitimately not exist yet.
+            proxy_screen = await self.ensure_module_screen("proxy", ProxyScreen)
+            if proxy_screen is None:
+                logger.debug("proxy_tab %s: proxy screen unavailable", tab_id)
+                return
             from textual.widgets import TabbedContent
 
             tabs = proxy_screen.query_one("#proxy-subtabs", TabbedContent)
@@ -1020,8 +1030,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             self.call_after_refresh(lambda tid=tab_id: self._focus_proxy_table(proxy_screen, tid))
         except NoMatches as exc:
             # Пользователь нажал горячую клавишу вкладки — и остался на старой.
-            # Экран Proxy или панель вкладок ещё не смонтированы; именно это
-            # и значит `NoMatches`, других причин тут нет.
+            # Панель вкладок ещё не смонтирована; других причин тут нет.
             logger.debug("proxy_tab %s: switch failed: %s", tab_id, exc)
 
     def _focus_proxy_table(self, proxy_screen: object, tab_id: str) -> None:
@@ -1070,7 +1079,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         if self._active_module != "repeater":
             return
         try:
-            repeater = self.query_one(SCREEN_REPEATER, RepeaterScreen)
+            repeater = self.require_module_screen("repeater", RepeaterScreen)
             repeater.action_send()
         except NoMatches as exc:
             # Экрана Repeater нет в дереве — активный модуль и DOM разошлись
@@ -1107,7 +1116,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             logger.debug("scanner tab lock not applied: %s", exc)
 
     def _switch_to(self, module_id: str) -> None:
-        if module_id == self._active_module:
+        if module_id == self._active_module and self._screens.is_mounted(module_id):
+            # Already here *and* the screen exists. If a previous mount failed
+            # (lazy screens mount asynchronously), a repeated click must retry
+            # instead of silently doing nothing.
             return
         if get_screen_class(module_id) is None:
             # Экран не зарегистрирован — например Recon, который живёт в
@@ -1182,9 +1194,37 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                     timeout=5,
                 )
                 return
-        screen_id = f"screen-{module_id}"
-        self.query_one(ContentSwitcher).current = screen_id
         self._active_module = module_id
+        self._after_module_switch(module_id)
+        if self._screens.is_mounted(module_id):
+            # Coming back to a screen that is already in the DOM: instant, no
+            # mount and no reload — that is what makes repeated switches cheap.
+            self._screens.show(module_id)
+            return
+        # First visit to this module: build it off the message loop and show it
+        # when it is ready. The guards above already told the user something is
+        # happening (hint bar / labels are updated by _after_module_switch).
+        self.run_worker(
+            self._activate_module(module_id),
+            group="screen-mount",
+            exclusive=True,
+            thread=False,
+        )
+
+    async def _activate_module(self, module_id: str) -> None:
+        """Mount-and-show the module screen, then repeat the switch bookkeeping.
+
+        `_after_module_switch` already ran when the switch started, but the screen
+        did not exist yet then — anything it does *to the screen* (Proxy's labels,
+        for instance) was skipped. Repeat it once the widget is there.
+        """
+        screen = await self._screens.activate(module_id)
+        if screen is None:
+            return
+        self.call_after_refresh(self._after_module_switch, module_id)
+
+    def _after_module_switch(self, module_id: str) -> None:
+        """Everything a module switch does *outside* the screen itself."""
         # Update ModuleHintBar to show the new module's keybindings
         try:
             self.query_one(ModuleHintBar).set_module(module_id)
@@ -1211,6 +1251,120 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # start/stop toggle. Refresh it explicitly on every switch into Proxy.
         if module_id == "proxy":
             self._update_proxy_screen_labels()
+
+    # ── Module screens: lazy lifecycle (the ScreenHost the manager talks to) ──
+
+    def mounted_modules(self) -> frozenset[str]:
+        """ScreenHost: module ids whose screens are in the DOM right now."""
+        try:
+            switcher = self.query_one(ContentSwitcher)
+        except NoMatches:
+            return frozenset()
+        return frozenset(
+            child.id[len(SCREEN_ID_PREFIX) :]
+            for child in switcher.children
+            if child.id is not None and child.id.startswith(SCREEN_ID_PREFIX)
+        )
+
+    def get_module(self, module_id: str) -> Widget | None:
+        """ScreenHost: the mounted screen widget for *module_id*, or None."""
+        try:
+            return self.query_one(f"#{SCREEN_ID_PREFIX}{module_id}")
+        except NoMatches:
+            return None
+
+    async def mount_module(self, module_id: str, screen_class: type) -> Widget:
+        """ScreenHost: build one module screen and mount it into the switcher."""
+        switcher = self.query_one(ContentSwitcher)
+        kwargs: dict[str, Any] = {}
+        if module_id == "proxy":
+            # ProxyScreen renders the shared service; other screens build their
+            # API themselves in on_mount.
+            kwargs["proxy_service"] = self._proxy_service
+        screen = screen_class(id=f"{SCREEN_ID_PREFIX}{module_id}", **kwargs)
+        await switcher.mount(screen)
+        if switcher.current != screen.id:
+            # Mounted to be filled with data, not to be looked at (the user is in
+            # another module). ContentSwitcher only hides children it knows about
+            # when `current` changes, so hide the newcomer explicitly — otherwise
+            # it would be drawn on top of the current screen.
+            screen.display = False
+        logger.info("screens: mounted %s", module_id)
+        return screen
+
+    async def unmount_module(self, module_id: str) -> None:
+        """ScreenHost: take a module screen off the DOM."""
+        screen = self.get_module(module_id)
+        if screen is None:
+            return
+        await screen.remove()
+        # Drop the cached reference too: otherwise a proxy/target event handler
+        # would be handed a widget that is no longer in the tree.
+        if module_id == "proxy":
+            self._proxy_screen = None
+        elif module_id == "target":
+            self._target_screen = None
+        logger.info("screens: unmounted %s", module_id)
+
+    def show_module(self, module_id: str) -> None:
+        """ScreenHost: make the module's screen the visible one."""
+        self.query_one(ContentSwitcher).current = f"{SCREEN_ID_PREFIX}{module_id}"
+
+    def module_screen(self, module_id: str, expect: type | None = None) -> Any | None:
+        """The mounted screen for *module_id*, or None. Never mounts, never raises.
+
+        The read-only half of the lazy-screen API: handlers that used to call
+        `query_one(SCREEN_X, X)` ask for the screen and get None when the user is
+        in another module. That is a no-op, not an error — the screen reloads
+        from storage when it is mounted again.
+        """
+        screen = self._screens.screen(module_id)
+        if screen is not None and expect is not None and not isinstance(screen, expect):
+            logger.debug(
+                "screens: #%s%s is %s, expected %s",
+                SCREEN_ID_PREFIX,
+                module_id,
+                type(screen).__name__,
+                expect.__name__,
+            )
+            return None
+        return screen
+
+    async def ensure_module_screen(self, module_id: str, expect: type | None = None) -> Any | None:
+        """Get-or-mount the module screen — the one helper for lazy screens.
+
+        Use it from actions and hotkeys that must work no matter which module is
+        open ("send to Repeater" needs the Repeater screen to exist, even if the
+        user never opened it in this session).
+        """
+        screen = self.module_screen(module_id, expect)
+        if screen is not None:
+            return screen
+        mounted = await self._screens.activate(module_id)
+        if mounted is not None and expect is not None and not isinstance(mounted, expect):
+            return None
+        return mounted
+
+    def mark_screen_stale(self, module_id: str) -> None:
+        """A project switched while this module was not mounted: reload on mount."""
+        self._screens.mark_stale(module_id)
+
+    def require_module_screen(self, module_id: str, expect: type | None = None) -> Any:
+        """Like :meth:`module_screen`, but raises :class:`ScreenNotMounted`.
+
+        The drop-in replacement for the old ``query_one(SCREEN_X, X)`` calls:
+        every handler around them already reads "the screen may be absent" via
+        ``except NoMatches``, and `ScreenNotMounted` is a `NoMatches`. New code
+        should prefer :meth:`module_screen` and check for None.
+        """
+        screen = self.module_screen(module_id, expect)
+        if screen is None:
+            raise ScreenNotMounted(f"module screen {module_id!r} is not mounted")
+        return screen
+
+    async def _reload_mounted_screen(self, module_id: str, screen: Widget) -> None:
+        """LazyScreenManager callback: refresh a screen that came back stale."""
+        await self._pm.reload_screen(module_id, screen)
 
     def get_proxy(self) -> ProxyServer | None:
         return self._proxy
@@ -1371,15 +1525,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     _SCREEN_RESOLVE_INTERVAL = 2.0
 
     def _get_proxy_screen(self):
-        """Cached #screen-proxy; re-resolves every interval. Returns None when
-        the screen isn't mounted — callers treat None as a quiet no-op."""
-        return self._get_cached_screen(SCREEN_PROXY, ProxyScreen, "_proxy_screen")
+        """Cached Proxy screen; re-resolves every interval. None = not mounted."""
+        return self._get_cached_screen("proxy", ProxyScreen, "_proxy_screen")
 
     def _get_target_screen(self):
-        """Cached #screen-target; re-resolves every interval. None = not mounted."""
-        return self._get_cached_screen(SCREEN_TARGET, TargetScreen, "_target_screen")
+        """Cached Target screen; re-resolves every interval. None = not mounted."""
+        return self._get_cached_screen("target", TargetScreen, "_target_screen")
 
-    def _get_cached_screen(self, selector: str, cls, cache_attr: str):
+    def _get_cached_screen(self, module_id: str, cls, cache_attr: str):
         _ts_attr = f"_screen_resolve_{cache_attr}"
         _last = getattr(self, _ts_attr, 0.0)
         now = time.monotonic()
@@ -1387,14 +1540,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         if now - _last < self._SCREEN_RESOLVE_INTERVAL:
             return getattr(self, cache_attr)
         setattr(self, _ts_attr, now)
-        try:
-            screen = self.query_one(selector, cls)
-        except NoMatches:
-            # Screen not mounted (other tab / being torn down). Cache None so we
-            # DON'T re-hunt on every request — this is the anti-spam that stops
-            # the per-request query_one→NoMatches→log loop under load.
-            setattr(self, cache_attr, None)
-            return None
+        # Lazy screens: the module is usually not mounted, and `module_screen`
+        # answers None without raising. Cache that None so we DON'T re-hunt on
+        # every request — this is the anti-spam that stops the
+        # query_one→NoMatches→log loop under load.
+        screen = self.module_screen(module_id, cls)
         setattr(self, cache_attr, screen)
         return screen
 
@@ -1487,9 +1637,15 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             logger.exception("_add_raw_to_target: raw request not added")
 
     @on(SendToRepeater)
-    def on_send_to_repeater(self, msg: SendToRepeater) -> None:
+    async def on_send_to_repeater(self, msg: SendToRepeater) -> None:
         try:
-            repeater = self.query_one(SCREEN_REPEATER, RepeaterScreen)
+            # Get-or-mount: the user may never have opened Repeater in this run,
+            # and "Send to Repeater" must still work — that is what the helper is
+            # for. The switch right after only reveals it.
+            repeater = await self.ensure_module_screen("repeater", RepeaterScreen)
+            if repeater is None:
+                self.notify("Repeater is unavailable", severity="error")
+                return
             repeater.load_request_in_new_tab(msg.raw)
             self.action_switch_module("repeater")
             self.call_after_refresh(self._focus_repeater_editor, repeater)
@@ -1501,9 +1657,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             err(exc, "Send to Repeater", self, severity="error")
 
     @on(SendToIntruder)
-    def on_send_to_intruder(self, msg: SendToIntruder) -> None:
+    async def on_send_to_intruder(self, msg: SendToIntruder) -> None:
         try:
-            intruder = self.query_one(SCREEN_INTRUDER, IntruderScreen)
+            intruder = await self.ensure_module_screen("intruder", IntruderScreen)
+            if intruder is None:
+                self.notify("Intruder is unavailable", severity="error")
+                return
             intruder.load_request(msg.raw)
             self.action_switch_module("intruder")
             self.notify("Sent to Intruder", severity="information", timeout=2)
@@ -1516,7 +1675,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     @on(SyncScopeToTarget)
     def on_sync_scope_to_target(self, msg: SyncScopeToTarget) -> None:
         try:
-            target = self.query_one(SCREEN_TARGET, TargetScreen)
+            target = self.require_module_screen("target", TargetScreen)
             api = target._get_api()
             api.sitemap.set_in_scope(msg.host, msg.in_scope)
             # Rebuild the tree from the in-memory sitemap only — NOT
@@ -1578,7 +1737,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # project's own project_settings row said on the next project
             # switch (see ProxyScreen._load_scope_setting).
             try:
-                proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+                proxy_screen = self.require_module_screen("proxy", ProxyScreen)
                 self.run_worker(proxy_screen._save_scope_setting(list(proxy.scope)))
             except NoMatches as e:
                 # Экрана Proxy нет в дереве — сохранение в проект пропущено;
@@ -1589,7 +1748,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 from pentool.tui.widgets.proxy_filter_bar import ProxyFilterBar
                 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
-                proxy_screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+                proxy_screen = self.require_module_screen("proxy", ProxyScreen)
                 st = proxy_screen.query_one("#filter-bar", ProxyFilterBar).query_one("#fb-scope", ToolbarButton)
                 if not bool(proxy.scope):
                     st.add_class("disabled")
@@ -1612,11 +1771,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             logger.exception("on_sync_scope_to_proxy: scope not mirrored")
 
     @on(SendHostToScanner)
-    def on_send_host_to_scanner(self, msg: SendHostToScanner) -> None:
+    async def on_send_host_to_scanner(self, msg: SendHostToScanner) -> None:
         try:
             from pentool.tui.screens.scanner.screen import ScannerScreen
 
-            scanner = self.query_one(SCREEN_SCANNER, ScannerScreen)
+            scanner = await self.ensure_module_screen("scanner", ScannerScreen)
+            if scanner is None:
+                self.notify("Scanner is unavailable", severity="error")
+                return
             host = msg.host
             url = f"https://{host}" if not host.startswith("http") else host
             # Pass url directly to action_new_tab — it will store in state.pending_target
@@ -1631,11 +1793,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             err(exc, "SendHostToScanner", self, severity="error")
 
     @on(SendToScanner)
-    def on_send_to_scanner(self, msg: SendToScanner) -> None:
+    async def on_send_to_scanner(self, msg: SendToScanner) -> None:
         try:
             from pentool.tui.screens.scanner.screen import ScannerScreen
 
-            scanner = self.query_one(SCREEN_SCANNER, ScannerScreen)
+            scanner = await self.ensure_module_screen("scanner", ScannerScreen)
+            if scanner is None:
+                self.notify("Scanner is unavailable", severity="error")
+                return
             # Each "Send to Scanner" opens a new tab so as not to overwrite
             # data from an already running scan (bug: old findings were loaded).
             first_url = msg.urls.splitlines()[0].strip() if msg.urls.strip() else msg.urls
@@ -1649,11 +1814,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             err(exc, "Send to Scanner", self, severity="error")
 
     @on(SendRequestToScanner)
-    def on_send_request_to_scanner(self, msg: SendRequestToScanner) -> None:
+    async def on_send_request_to_scanner(self, msg: SendRequestToScanner) -> None:
         try:
             from pentool.tui.screens.scanner.screen import ScannerScreen
 
-            scanner = self.query_one(SCREEN_SCANNER, ScannerScreen)
+            scanner = await self.ensure_module_screen("scanner", ScannerScreen)
+            if scanner is None:
+                self.notify("Scanner is unavailable", severity="error")
+                return
             scanner.action_new_tab(seed_request=msg.request)
             self.action_switch_module("scanner")
             url = getattr(msg.request, "url", "?")
@@ -1664,14 +1832,15 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             err(exc, "SendRequestToScanner", self, severity="error")
 
     @on(SendUrlToTarget)
-    def on_send_url_to_target(self, msg: SendUrlToTarget) -> None:
+    async def on_send_url_to_target(self, msg: SendUrlToTarget) -> None:
         try:
-            target = self.query_one(SCREEN_TARGET, TargetScreen)
+            # The `--url` seed lands here; Target must exist even though the user
+            # has not opened it, or the URL would be silently dropped.
+            target = await self.ensure_module_screen("target", TargetScreen)
+            if target is None:
+                logger.warning("on_send_url_to_target: Target screen unavailable")
+                return
             target.add_request_from_proxy(msg.req)
-        except NoMatches as e:
-            # Экрана Target нет в дереве: URL из --url не виден, но проект и
-            # прокси уже созданы — при монтировании дерево соберётся из БД.
-            logger.debug("on_send_url_to_target: screen not mounted: %s", e)
         except Exception:
             # URL из --url не попал в дерево сайта вовсе.
             logger.exception("on_send_url_to_target: url not added")
@@ -1679,7 +1848,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     @on(ProxyClearHistory)
     def on_proxy_clear_history(self, msg: ProxyClearHistory) -> None:
         try:
-            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+            screen = self.require_module_screen("proxy", ProxyScreen)
             screen.action_clear_list()
         except NoMatches as e:
             # Экрана Proxy нет в дереве — чистить нечего.
@@ -1693,7 +1862,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def on_proxy_load_project(self, msg: ProxyLoadProject) -> None:
         """Reload the ProxyScreen table after loading a project."""
         try:
-            screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+            screen = self.require_module_screen("proxy", ProxyScreen)
             screen.load_from_project()
         except NoMatches as e:
             # Экрана Proxy нет в дереве — загружать нечего, таблица соберётся
@@ -1764,7 +1933,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     def _update_dashboard_proxy_status(self, running: bool) -> None:
         try:
-            dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
+            dashboard = self.require_module_screen("dashboard", DashboardScreen)
             dashboard.update_proxy_status(running)
         except Exception as exc:
             # Прокси уже запущен/остановлен; на дашборде об этом останется
@@ -1804,7 +1973,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def _update_proxy_screen_labels(self) -> None:
         try:
             if self._active_module == "proxy":
-                screen = self.query_one(SCREEN_PROXY, ProxyScreen)
+                screen = self.require_module_screen("proxy", ProxyScreen)
                 running = bool(self._proxy and self._proxy.is_running)
                 port = self._proxy.port if self._proxy else self._cfg.proxy_port
                 screen.update_proxy_label(running, port)
@@ -1874,7 +2043,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def _on_bus_finding_discovered(self, event: FindingDiscovered) -> None:
         """Finding from active or passive scanner → Dashboard."""
         try:
-            dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
+            dashboard = self.require_module_screen("dashboard", DashboardScreen)
             dashboard.add_finding(event.finding)
         except Exception as exc:
             # Dashboard есть всегда, поэтому отказ здесь — не «ещё не собран»,
@@ -1884,7 +2053,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def _on_bus_scan_started(self, event: ScanStarted) -> None:
         """Scan started → update status on Dashboard."""
         try:
-            dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
+            dashboard = self.require_module_screen("dashboard", DashboardScreen)
             dashboard.update_scan_status(True, 0)
         except Exception as exc:
             logger.debug("bus: scan-started status not shown: %s", exc)
@@ -1892,7 +2061,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def _on_bus_scan_finished(self, event: ScanFinished) -> None:
         """Scan finished → reset status on Dashboard."""
         try:
-            dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
+            dashboard = self.require_module_screen("dashboard", DashboardScreen)
             dashboard.update_scan_status(False, 100)
         except Exception as exc:
             # Скан кончился, а индикатор продолжает идти — самый заметный из
@@ -1906,7 +2075,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     def _on_bus_passive_toggled(self, event: PassiveScanToggled) -> None:
         """Passive scan enabled/disabled — update LED on Dashboard."""
         try:
-            dashboard = self.query_one(SCREEN_DASHBOARD, DashboardScreen)
+            dashboard = self.require_module_screen("dashboard", DashboardScreen)
             dashboard.update_passive_status(event.enabled)
         except Exception as exc:
             logger.debug("bus: passive LED not updated: %s", exc)
