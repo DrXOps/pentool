@@ -83,6 +83,13 @@ jobs:
     - name: Check TUI CSS selectors
       run: uv run python tools/check_tui_css.py
 
+    # Экраны модулей монтируются лениво (tui/screen_lifecycle.py, MYPLANS T-002):
+    # гвард ловит прямой query_one(SCREEN_X), сборку экранов в compose() и
+    # результат get_screen() без проверки на None. Блокирующий — именно эти три
+    # ошибки незаметно ломают экраны и возвращают секунду на действие.
+    - name: Check lazy screen mounting
+      run: uv run python tools/check_lazy_screens.py
+
     # Трещотка ADR-6: новые `except Exception: pass` запрещены, исторические
     # 284 места зафиксированы в tools/silent_except_baseline.json.
     - name: Check silent except ratchet
