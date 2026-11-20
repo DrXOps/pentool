@@ -605,10 +605,15 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         """Seed targets from --url flag into Target/SiteMap."""
         await asyncio.sleep(0.6)  # let the TUI render first
 
+        # Awaited on purpose: everything below (proxy start, Lightpanda fetch)
+        # captures traffic into whatever DB is open at that moment. Fired and
+        # forgotten, the switch landed *after* the fetch, so the requests were
+        # written into the previously open DB and the new project's history
+        # stayed empty — "with --smart I don't see any request in the history".
         # Create a NEW project for this target (do not reuse the last project).
         try:
             new_path = self._project_path_for_target(urls[0])
-            self._pm.switch_project_db(new_path, is_new=True)
+            await self._pm.switch_project_db_awaited(new_path, is_new=True)
         except Exception:
             # Проект не создан — и весь остальной seed пойдёт в предыдущий
             # проект, то есть данные для нового хоста окажутся в чужой базе.

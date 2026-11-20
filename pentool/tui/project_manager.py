@@ -334,6 +334,31 @@ class ProjectManager:
         If the proxy is running it is stopped first (with a notification),
         then the DB switch happens in a single exclusive worker so concurrent
         switch calls cannot race each other.
+
+        Callers that must not continue until the storage is really switched
+        (the `--url` seed starts capturing right away) use
+        :meth:`switch_project_db_awaited` instead.
+        """
+        self._prepare_switch(path, is_new)
+        self._app.run_worker(self._do_switch(path, is_new), exclusive=True, thread=False)
+
+    async def switch_project_db_awaited(self, path: str, is_new: bool = False) -> None:
+        """Switch projects and wait until the storage really points at the new DB.
+
+        Why this exists: `--url/--smart` starts the proxy and fetches the target
+        immediately after creating the project. With the fired-and-forget
+        version the switch finished *after* the fetch, so every captured request
+        was written into the previously open DB and the new project's history
+        stayed empty — the bug the user saw as "no requests with --smart".
+        """
+        self._prepare_switch(path, is_new)
+        await self._do_switch(path, is_new)
+
+    def _prepare_switch(self, path: str, is_new: bool) -> None:
+        """Synchronous part of a project switch: state, flags and user feedback.
+
+        Kept apart from `_do_switch` so both the worker path and the awaited
+        path do exactly the same bookkeeping before touching any storage.
         """
         if is_new:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -381,12 +406,6 @@ class ProjectManager:
                 logger.exception("project: new-project proxy state not reset")
 
         # Single exclusive worker — no two switches can run in parallel.
-        self._app.run_worker(
-            self._do_switch(path, is_new),
-            exclusive=True,
-            thread=False,
-        )
-
         self.update_project_name(path)
         action = "Created" if is_new else "Opened"
         # Single-line toast: no separate title (Textual's toast would render
