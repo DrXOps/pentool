@@ -79,6 +79,12 @@ class ResourceMonitor(Widget):
         self.set_interval(2.0, self._update)
 
     def _update(self) -> None:
+        # Hidden screens stay mounted (`ContentSwitcher`), so without this guard
+        # the resource panel kept polling psutil and repainting itself while the
+        # user worked in another module (measured: ~240 ms of work per idle
+        # second with the dashboard hidden behind Proxy).
+        if not self.display:
+            return
         try:
             cpu = psutil.cpu_percent(interval=None)
             mem = psutil.virtual_memory()

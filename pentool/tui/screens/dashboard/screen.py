@@ -642,6 +642,14 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             logger.debug("dashboard: boot line not written")
 
     def _tick(self) -> None:
+        # Only while the dashboard is actually on screen. Textual keeps hidden
+        # screens mounted, so this tick used to drive the charts (and a repaint)
+        # in a subtree nobody was looking at — measured with Proxy open: ~1590
+        # idle messages per second, i.e. ~240 ms of work per idle second. The
+        # packet counters are not lost: they accumulate in the attributes below
+        # and are flushed by the first visible tick.
+        if not self.display:
+            return
         try:
             rps = self._req_bucket
             self._req_bucket = 0
