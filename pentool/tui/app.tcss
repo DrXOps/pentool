@@ -134,7 +134,10 @@ Checkbox:focus > .toggle--label {
    конкретных виджетов; класс добавляется к виджету в Python. */
 .panel-title {
     height: 1;
-    background: $primary-darken-3;
+    /* Transparent: the header row of a panel sits inside its card, so a filled
+       strip read as a second, older design language ("blue band over Request /
+       Response"). The accent colour of the title text carries the emphasis. */
+    background: transparent;
     padding: 0 1;
 }
 
@@ -210,9 +213,9 @@ Tabs:focus Tab.-active {
     border: round $foreground;
     padding: 0 1;
 }
-.card:hover {
-    border: round $accent;
-}
+/* No hover recolour: a card frame is a frame, not a control. Highlighting it on
+   hover made the layout flicker while the pointer crossed the screen and
+   suggested the whole block was clickable. */
 
 /* Override Textual's built-in toast: replace the default vertical
    severity stripe on the left edge with a full border all the way round,

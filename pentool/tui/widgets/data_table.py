@@ -91,6 +91,14 @@ class ArrowBackendDataTable(DataTable):
             self.backend = ArrowBackend(initial_table)
         elif self._columns:
             self.backend = ArrowBackend(_make_empty_arrow(self._columns))
+        # `DataTable.__init__` builds *and caches* the column list before we
+        # install the backend above, so the cache holds an empty list and the
+        # header row never renders until the first `set_data` (which drops the
+        # cache). On an empty project — or on a screen mounted without a data
+        # reload — that meant a table with no visible column names at all.
+        if initial_table is not None or self._columns:
+            self._ordered_columns = None
+            self._require_update_dimensions = True
 
     def set_data(self, arrow: pa.Table) -> None:
         """Replace the entire table content with an Arrow table.
