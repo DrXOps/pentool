@@ -163,7 +163,7 @@ class TestProxyScreenWidgets:
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            btn = app.query("#btn-intercept")
+            btn = app.query("#hdr-state-1, #hdr-state-2")
             assert len(btn) > 0
 
     @pytest.mark.asyncio
@@ -173,7 +173,7 @@ class TestProxyScreenWidgets:
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            btn = app.query("#btn-forward")
+            btn = app.query(".hdr-act")
             assert len(btn) > 0
 
 

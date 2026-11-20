@@ -184,7 +184,7 @@ class TestInterceptTiming:
 
             from pentool.tui.widgets.toolbar_button import ToolbarButton
 
-            fwd_btn = app.query_one("#btn-forward", ToolbarButton)
+            fwd_btn = next(b for b in app.query(".hdr-act") if b.data_action == "forward")
             drop_btn = app.query_one("#btn-drop", ToolbarButton)
             assert fwd_btn.disabled, "Forward should be disabled after Drop"
             assert drop_btn.disabled, "Drop should be disabled after Drop"
