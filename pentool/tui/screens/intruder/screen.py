@@ -854,7 +854,10 @@ class IntruderScreen(
                 HeaderAction("export", "⤓ Export CSV", enabled=bool(done)),
                 HeaderAction("clear", "⌫ Clear results", enabled=bool(done)),
             ),
-            more=(HeaderAction("mark_params", "✨ Mark params"),),
+            # No `⋯` menu: every control Intruder has fits in the row, and the
+            # only thing that used to hide there (Mark params) is available from
+            # the panel toolbar ("Auto §§").
+            more=(),
         )
 
     def header_action(self, action_id: str) -> None:
@@ -876,8 +879,6 @@ class IntruderScreen(
             self.action_close_tab()
         elif action_id == "beautify":
             self._beautify_active_template()
-        elif action_id == "mark_params":
-            self._prompt_auto_mark()
         self._refresh_header_now()
 
     def _beautify_active_template(self) -> None:

@@ -2,7 +2,7 @@ InspectorPanel {
     width: 30%;
     overflow-y: auto;
     padding: 0;
-    background: $surface;
+    background: transparent;
 }
 InspectorPanel .section-title {
     /* height/background/padding — из общего .panel-title (F-038). */

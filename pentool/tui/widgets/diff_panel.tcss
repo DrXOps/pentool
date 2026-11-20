@@ -2,7 +2,7 @@ DiffPanel {
     width: 30%;
     height: 100%;
     display: none;
-    background: $panel;
+    background: transparent;
     border-left: solid $primary-darken-2;
     layout: vertical;
 }

@@ -2,7 +2,7 @@ IntruderFilterBar #filter-row {
     height: 1;
     layout: horizontal;
     padding: 0 1;
-    background: $surface;
+    background: transparent;
 }
 IntruderFilterBar .fb-label {
     width: auto;
@@ -14,20 +14,20 @@ IntruderFilterBar Input {
     width: 8;
     border-left: solid $primary-darken-1;
     border-right: solid $primary-darken-1;
-    background: $surface-lighten-1;
+    background: transparent;
     padding: 0 1;
     color: $text;
 }
 IntruderFilterBar Input:focus {
     border-left: solid $primary;
     border-right: solid $primary;
-    background: $surface-lighten-2;
+    background: transparent;
 }
 IntruderFilterBar ToolbarButton {
     height: 1;
     width: 14;
     padding: 0 1;
-    background: $panel;
+    background: transparent;
     color: $text;
     pointer: pointer;
 }

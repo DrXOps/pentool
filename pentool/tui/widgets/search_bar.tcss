@@ -2,7 +2,7 @@ SearchBar {
     display: none;
     dock: bottom;
     height: 1;
-    background: $surface;
+    background: transparent;
     border-top: solid $primary;
     layout: horizontal;
     padding: 0 1;
@@ -15,14 +15,14 @@ SearchBar Label {
 }
 SearchBar Input {
     width: 20;
-    background: $panel;
+    background: transparent;
 }
 SearchBar Button {
     width: 3;
     height: 1;
     min-width: 3;
     border: none;
-    background: $panel;
+    background: transparent;
     padding: 0;
 }
 SearchBar #search-regex-toggle {
