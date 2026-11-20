@@ -183,6 +183,32 @@ class LazyScreenManager:
 
     # ── Transitions ───────────────────────────────────────────────────────
 
+    async def ensure(self, module_id: str) -> Any | None:
+        """Mount *module_id* if it is not mounted — **without showing it**.
+
+        This is the "get-or-mount" half of `activate()`, for background callers:
+        the `--url` seed has to create the Target screen to pre-fill it, and
+        sending a request from a context menu has to reach a screen the user has
+        not opened. Showing the screen from those paths was a real bug: at
+        startup the Target module appeared on top of the Dashboard (T-031).
+
+        Deliberately does not touch the visible module, the visit history or the
+        unmount plan: a background mount must not evict what the user is looking
+        at.
+        """
+        async with self._lock:
+            if self._registry(module_id) is None:
+                logger.warning("screens: %s has no registered screen class", module_id)
+                return None
+            screen = self._host.get_module(module_id)
+            if screen is not None:
+                return screen
+            screen = await self._host.mount_module(module_id, self._registry(module_id))  # type: ignore[arg-type]
+            self._mounted.add(module_id)
+            logger.debug("screens: mounted %s in the background (not shown)", module_id)
+            await self._replay_reload(module_id, screen)
+            return self._host.get_module(module_id)
+
     async def activate(self, module_id: str) -> Any | None:
         """Make *module_id* visible, mounting it first if needed.
 

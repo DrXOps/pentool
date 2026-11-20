@@ -260,6 +260,51 @@ async def test_mounted_screen_is_not_reloaded_on_activate() -> None:
     assert reloaded == []
 
 
+# ── `ensure`: mount without showing (T-031) ─────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_ensure_mounts_without_showing() -> None:
+    """A background mount must not steal the screen the user is looking at.
+
+    This is the bug the user saw at startup: the `--url` seed asked for the
+    Target screen, `ensure_module_screen()` called `activate()`, and Target was
+    *shown* on top of the Dashboard (T-031).
+    """
+    host = FakeHost(mounted=("dashboard",))
+    manager = LazyScreenManager(host, registry=_registry)
+
+    screen = await manager.ensure("target")
+
+    assert screen is not None
+    assert host.calls == [("mount", "target")], "ensure must mount and nothing else"
+    assert host.visible is None, "ensure must not change the visible module"
+    assert "target" in host.mounted_modules()
+
+
+@pytest.mark.asyncio
+async def test_ensure_is_a_no_op_for_a_mounted_screen() -> None:
+    host = FakeHost(mounted=("dashboard", "target"))
+    manager = LazyScreenManager(host, registry=_registry)
+
+    await manager.ensure("target")
+
+    assert host.calls == []
+    assert host.visible is None
+
+
+@pytest.mark.asyncio
+async def test_ensure_does_not_evict_the_visible_screen() -> None:
+    """keep_recent must not turn a background mount into an unmount of the UI."""
+    host = FakeHost(mounted=("dashboard",))
+    manager = LazyScreenManager(host, registry=_registry, keep_recent=1)
+
+    await manager.ensure("target")
+
+    assert ("unmount", "dashboard") not in host.calls
+    assert "dashboard" in host.mounted_modules()
+
+
 # ── The app's screen API must not shadow Textual's ──────────────────────────
 
 

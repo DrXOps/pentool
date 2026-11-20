@@ -1535,16 +1535,21 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         return screen
 
     async def ensure_module_screen(self, module_id: str, expect: type | None = None) -> Any | None:
-        """Get-or-mount the module screen — the one helper for lazy screens.
+        """Get-or-mount the module screen — **without changing what is on screen**.
 
         Use it from actions and hotkeys that must work no matter which module is
         open ("send to Repeater" needs the Repeater screen to exist, even if the
-        user never opened it in this session).
+        user never opened it in this session), and from background work (the
+        `--url` seed pre-fills Target).
+
+        It used to call `activate()`, which also *shows* the screen — that is why
+        at startup the Target module appeared on top of the Dashboard (T-031).
+        Switching modules is `_switch_to()`'s job, not this helper's.
         """
         screen = self.module_screen(module_id, expect)
         if screen is not None:
             return screen
-        mounted = await self._screens.activate(module_id)
+        mounted = await self._screens.ensure(module_id)
         if mounted is not None and expect is not None and not isinstance(mounted, expect):
             return None
         return mounted
