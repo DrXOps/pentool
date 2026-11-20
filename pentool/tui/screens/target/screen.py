@@ -560,7 +560,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         self.action_export_json()
 
     @on(ToolbarButton.Pressed, "#btn-recon")
-    def on_btn_recon(self, _: ToolbarButton.Pressed) -> None:
+    async def on_btn_recon(self, _: ToolbarButton.Pressed) -> None:
         """Open Recon screen and pre-fill domain from selected host."""
         from urllib.parse import urlparse
 
@@ -581,11 +581,13 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         if not domain:
             domain = self._selected_host
 
-        self.app.action_switch_module("recon")
+        # Get-or-mount: Recon is lazy, so `action_switch_module` alone only
+        # *starts* mounting it — pre-filling afterwards needs the widget.
         if domain:
-            self.app.call_after_refresh(lambda d=domain: self._prefill_recon_domain(d))
+            await self._prefill_recon_domain(domain)
+        self.app.action_switch_module("recon")
 
-    def _prefill_recon_domain(self, domain: str) -> None:
+    async def _prefill_recon_domain(self, domain: str) -> None:
         """Pre-fill ReconScreen domain input."""
         from urllib.parse import urlparse
 
@@ -597,7 +599,9 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         try:
             from pentool.tui.screens.recon.screen import ReconScreen
 
-            recon = self.app.query_one(ReconScreen)
+            recon = await self.app.ensure_module_screen("recon", ReconScreen)
+            if recon is None:
+                return
             domain_input = recon.query_one("#recon-domain")
             if hasattr(domain_input, "value"):
                 domain_input.value = domain

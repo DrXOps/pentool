@@ -45,11 +45,16 @@ def open_context_menu(proxy_screen: ProxyScreen, x: int, y: int) -> None:
     proxy_screen.app.show_context_menu(full_items, x, y, callback=lambda a: _cm_dispatch(proxy_screen, a))
 
 
-def _cm_dispatch(proxy_screen: ProxyScreen, action: str) -> None:
-    """Route context-menu actions."""
+async def _cm_dispatch(proxy_screen: ProxyScreen, action: str) -> None:
+    """Route context-menu actions.
+
+    Async because `_cm_handle` is: sending to Decoder/Comparer mounts the target
+    screen first (lazy screens), which only works in a coroutine. The menu calls
+    this through `call_later`, which awaits awaitable results.
+    """
     if action == "mark":
         proxy_screen._mark_dialog()
     elif action == "comment":
         proxy_screen._comment_dialog()
     else:
-        proxy_screen._cm_handle(action)
+        await proxy_screen._cm_handle(action)

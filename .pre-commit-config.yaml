@@ -35,6 +35,19 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # check-lazy-screens: экраны модулей монтируются лениво
+      # (pentool/tui/screen_lifecycle.py). Гвард запрещает три ошибки, которые
+      # ломают TUI незаметно: прямой query_one(SCREEN_X)/query_one(SomeScreen),
+      # сборку экранов в PentoolApp.compose() (именно она стоила ~1.4 с на
+      # действие, см. MYPLANS T-002) и использование результата get_screen()
+      # без проверки на None. Разбор — AST, без импорта Textual.
+      - id: check-lazy-screens
+        name: module screens are lazy and None-checked
+        entry: python tools/check_lazy_screens.py
+        language: python
+        pass_filenames: false
+        always_run: true
+
       # review-new-files: у каждого ДОБАВЛЕННОГО файла должно быть осознанное
       # решение — в репозиторий или в .gitignore. guard-git-staging проверяет
       # только каталог, поэтому внутри разрешённых каталогов в origin попадали

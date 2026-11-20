@@ -51,10 +51,9 @@ def _get_sitemap(app):
     or None if the screen isn't mounted yet.
     """
     try:
-        from pentool.tui.constants import SCREEN_TARGET
         from pentool.tui.screens.target.screen import TargetScreen
 
-        target = app.query_one(SCREEN_TARGET, TargetScreen)
+        target = app.require_module_screen("target", TargetScreen)
         api = target._get_api()
         if api is not None:
             return api.sitemap
@@ -238,8 +237,12 @@ async def _tech_detect_and_cache(host: str, app) -> None:
 async def _update_target_tree_tech(host: str, profile: dict, app) -> None:
     """Update Target tree with technology info under the host node."""
     try:
-        screen = app.query_one("TargetScreen")  # type: ignore[attr-defined]
-        if hasattr(screen, "_update_tech_node"):
+        # Lazy screens: Target is usually not mounted while tech detection runs in
+        # the background, and `query_one` would then raise for every host. The
+        # tree is rebuilt from the DB when the screen is mounted, so a missing
+        # screen is a quiet no-op rather than an error.
+        screen = app.module_screen("target")  # type: ignore[attr-defined]
+        if screen is not None and hasattr(screen, "_update_tech_node"):
             screen._update_tech_node(host, profile)  # type: ignore[attr-defined]
     except Exception as exc:
         log.debug("TECH_DETECT: _update_target_tree_tech error: %s", exc)

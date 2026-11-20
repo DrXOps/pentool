@@ -100,9 +100,15 @@ def cli(
 
     cfg = get_config()
     if config_path:
-        from pentool.core.config import Config
+        from pentool.core.config import Config, set_config
 
         cfg = Config.load(config_path)
+        # Also install it as the process-wide config: `PentoolApp()` (and every
+        # screen, service and dialog behind it) reads `get_config()`, so without
+        # this the file given by `--config` only affected the log setup — a run
+        # with `proxy_port: 8099` still started on the default 8080 and killed
+        # the daemon of an already running instance (T-024).
+        set_config(cfg)
 
     log_level = "DEBUG" if verbose else cfg.log_level
     setup_logging(cfg.log_file, log_level)

@@ -661,10 +661,9 @@ class SettingsScreen(AppMixin, Widget):
 
     def _open_ca_cert(self) -> None:
         try:
-            from pentool.tui.constants import SCREEN_PROXY
             from pentool.tui.screens.proxy.screen import ProxyScreen
 
-            proxy_screen = self.app.query_one(SCREEN_PROXY, ProxyScreen)
+            proxy_screen = self.app.require_module_screen("proxy", ProxyScreen)
             proxy_screen.action_open_ca_cert()
         except Exception as e:
             err(e, "Install CA cert failed", self)

@@ -80,3 +80,27 @@ def test_cli_default_log_level() -> None:
     ):
         CliRunner().invoke(cli, ["--url", "https://x.test", "--headless"])
     assert set_log.call_args[0][1] == "INFO"
+
+
+def test_config_flag_becomes_the_process_config(tmp_path) -> None:
+    """--config must reach PentoolApp, not just the log setup (T-024).
+
+    `PentoolApp()` and everything behind it read `get_config()`. Before this the
+    file passed with --config was loaded, used for the log level and then thrown
+    away: a run configured for port 8099 still started on 8080 and killed the
+    proxy daemon of an already running instance.
+    """
+    from pentool.core.config import get_config, set_config
+
+    previous = get_config()
+    path = tmp_path / "custom.yaml"
+    path.write_text("proxy_port: 8099\nproxy_host: 127.0.0.1\n", encoding="utf-8")
+    try:
+        with patch("pentool.cli.main.setup_logging"):
+            # No --url: the group prints help and never starts a scan, so this
+            # stays a unit test (a headless run would go to the network).
+            r = CliRunner().invoke(cli, ["--config", str(path)])
+        assert r.exit_code == 0
+        assert get_config().proxy_port == 8099, "the --config file did not become the process config"
+    finally:
+        set_config(previous)

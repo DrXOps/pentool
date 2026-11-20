@@ -106,7 +106,7 @@ class RequestContextMenuMixin:
 
     # ── Dispatcher ────────────────────────────────────────────────────────────
 
-    def _cm_handle(self, action: str) -> None:
+    async def _cm_handle(self, action: str) -> None:
         if self._cm_on_custom_action(action):
             return
         if action == "text_copy":
@@ -138,9 +138,9 @@ class RequestContextMenuMixin:
         elif action == "send_scanner":
             self._cm_do_send_scanner(raw)
         elif action == "send_decoder":
-            self._cm_do_send_decoder(raw)
+            await self._cm_do_send_decoder(raw)
         elif action == "send_comparer":
-            self._cm_do_send_comparer(raw)
+            await self._cm_do_send_comparer(raw)
         elif action == "export_md":
             self._cm_do_export_md(raw)
         elif action == "export_html":
@@ -289,19 +289,19 @@ class RequestContextMenuMixin:
         except Exception as exc:
             self.err(exc, "Send to Scanner failed")
 
-    def _cm_do_send_decoder(self, raw: str) -> None:
+    async def _cm_do_send_decoder(self, raw: str) -> None:
         """Requires AppMixin in the inheritance chain."""
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
 
         _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
-        self._send_to_decoder(raw)  # type: ignore[attr-defined]
+        await self._send_to_decoder(raw)  # type: ignore[attr-defined]
 
-    def _cm_do_send_comparer(self, raw: str) -> None:
+    async def _cm_do_send_comparer(self, raw: str) -> None:
         """Requires AppMixin in the inheritance chain."""
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
 
         _maybe_auto_scope_request(raw, self.app)  # type: ignore[attr-defined]
-        self._send_to_comparer(raw, label="Request")  # type: ignore[attr-defined]
+        await self._send_to_comparer(raw, label="Request")  # type: ignore[attr-defined]
 
     # ── Export helpers ──────────────────────────────────────────────────────────
 

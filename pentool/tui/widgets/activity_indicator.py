@@ -113,7 +113,6 @@ class ActivityIndicator(Widget):
     # ── checker construction ────────────────────────────────────────────────
 
     def _build_checkers(self, app_ref) -> list[_Tracked]:
-        from pentool.tui.constants import SCREEN_INTRUDER, SCREEN_SCANNER
 
         def _proxy_active() -> bool | None:
             try:
@@ -144,7 +143,7 @@ class ActivityIndicator(Widget):
                     return False
                 from pentool.tui.screens.scanner.screen import ScannerScreen
 
-                screen = app_ref.query_one(SCREEN_SCANNER, ScannerScreen)
+                screen = app_ref.require_module_screen("scanner", ScannerScreen)
                 tabs = getattr(screen, "_tabs", None)
                 if not tabs:
                     return False
@@ -156,7 +155,7 @@ class ActivityIndicator(Widget):
             try:
                 from pentool.tui.screens.intruder.screen import IntruderScreen
 
-                screen = app_ref.query_one(SCREEN_INTRUDER, IntruderScreen)
+                screen = app_ref.require_module_screen("intruder", IntruderScreen)
                 return bool(getattr(screen, "_attack_running", False))
             except Exception:
                 return None
@@ -173,12 +172,18 @@ class ActivityIndicator(Widget):
             try:
                 from pentool.tui.screens.recon.screen import ReconScreen
 
-                screen = app_ref.query_one("#screen-recon", ReconScreen)
+                # Lazy screens: Recon is usually not mounted at all, and the
+                # helper answers None for "no such screen" instead of raising.
+                screen = app_ref.module_screen("recon", ReconScreen)
+                if screen is None:
+                    return None
                 # _running коллизирует с MessagePump._running (всегда True),
                 # используем _runner — он None когда простаивает и объект
                 # DiscoveryRunner когда запущен.
                 return screen._runner is not None
-            except NoMatches:
+            except (ImportError, AttributeError):
+                # PRO not installed (import) or the screen lost `_runner`
+                # (attribute) — either way Recon cannot be running.
                 return None
 
         return [
