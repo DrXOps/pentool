@@ -29,7 +29,7 @@ SequencerScreen #seq-param-input {
     margin: 0 2 0 0;
 }
 SequencerScreen #seq-param-input:focus {
-    background: $surface-lighten-1;
+    background: transparent;
 }
 SequencerScreen #seq-counter {
     width: auto;

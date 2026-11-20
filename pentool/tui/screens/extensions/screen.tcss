@@ -8,7 +8,7 @@ ExtensionsScreen #box {
     height: auto;
     border: double $primary;
     padding: 2 4;
-    background: $panel;
+    background: transparent;
 }
 ExtensionsScreen .title {
     text-align: center;

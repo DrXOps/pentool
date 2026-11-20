@@ -16,10 +16,10 @@ RepeaterScreen TabbedContent ContentSwitcher {
     height: 1fr;
 }
 RepeaterScreen TabbedContent ContentTabs {
-    background: $panel;
+    background: transparent;
 }
 RepeaterScreen TabbedContent ContentTabs Tabs {
-    background: $panel;
+    background: transparent;
 }
 RepeaterScreen .tab-body {
     layout: vertical;
@@ -57,6 +57,6 @@ RepeaterScreen .tab-rename {
     display: none;
     dock: top;
     width: 20;
-    background: $panel;
+    background: transparent;
     layer: overlay;
 }

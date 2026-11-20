@@ -47,7 +47,7 @@ ProxyScreen #request-list {
 }
 ProxyScreen .history-count {
     height: 1;
-    background: $panel;
+    background: transparent;
     color: $text-muted;
     padding: 0 1;
     text-align: right;
