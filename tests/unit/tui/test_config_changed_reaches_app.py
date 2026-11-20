@@ -54,7 +54,10 @@ class TestSavingSettingsPublishesConfigChanged:
         try:
             async with app.run_test(size=(120, 40)) as pilot:
                 await pilot.pause()
-                settings = app.query_one(SettingsScreen)
+                # Settings is lazy like every module screen: mount it on demand
+                # instead of assuming every screen is already in the DOM.
+                settings = await app.ensure_module_screen("settings", SettingsScreen)
+                assert settings is not None
 
                 cfg.proxy_port = 8080  # исходное значение для сравнения
                 app._proxy.port = 8080

@@ -20,8 +20,11 @@ async def test_app_switches_db_without_crash():
             from pentool.tui.screens.intruder.screen import IntruderScreen
             from pentool.tui.screens.repeater.screen import RepeaterScreen
 
-            repeater = app.query_one(RepeaterScreen)
-            intruder = app.query_one(IntruderScreen)
+            # Module screens are lazy (tui/screen_lifecycle): get-or-mount, the
+            # documented way to reach a screen the user has not opened yet.
+            repeater = await app.ensure_module_screen("repeater", RepeaterScreen)
+            intruder = await app.ensure_module_screen("intruder", IntruderScreen)
+            assert repeater is not None and intruder is not None
             # Trigger switching to a project db (whatever exists)
             import tempfile
 
