@@ -1382,7 +1382,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         more_button.display = has_more
         more_button.disabled = not has_more
 
-        header.display = bool(spec and not spec.is_empty() and (spec.tabs or spec.actions or spec.more))
+        # Row 2 is shown when the module has anything to put there: sub-tabs,
+        # sub-tab actions, a `⋯` menu — or just state and counters (Dashboard:
+        # proxy state + live request rate, no tabs of its own).
+        header.display = bool(
+            spec and not spec.is_empty() and (spec.tabs or spec.actions or spec.more or spec.state or spec.counters)
+        )
 
     @on(ToolbarButton.Pressed, ".hdr-state")
     def _on_hdr_state(self, event: ToolbarButton.Pressed) -> None:

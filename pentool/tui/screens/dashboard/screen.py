@@ -16,6 +16,7 @@ from textual.widget import Widget
 from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
+from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import DASHBOARD_BINDINGS
 from pentool.tui.markup import esc
 from pentool.tui.mixins.ai_sync import AiModeSyncMixin
@@ -394,6 +395,10 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         }
         self._top_finding = "—"
         self._req_history: list[int] = []
+        #: What the module header shows: proxy state and scan progress. Updated
+        #: by `update_proxy_status`/`update_scan_status`, read by `header_spec()`.
+        self._header_proxy: tuple[bool, int] = (False, 8080)
+        self._header_scan: tuple[bool, int] = (False, 0)
         self._find_history: list[int] = []
         self._req_bucket = 0  # requests in the current second
         self._find_bucket = 0  # findings in the current second
@@ -478,6 +483,44 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
                 with Vertical(id="matrix-col"):
                     yield SeverityMatrix(id="vuln-matrix")
 
+    # ── Module header (see pentool/tui/header.py) ─────────────────────────
+    def header_spec(self) -> HeaderSpec:
+        """Dashboard header: what runs right now, and the live request rate.
+
+        No sub-tabs and no actions of its own — the dashboard is a read-only
+        overview, so the second row carries only state and counters.
+        """
+        running, port = self._header_proxy
+        scanning, progress = self._header_scan
+        state = (
+            HeaderAction(
+                "proxy",
+                f"● Proxy:{port}" if running else "○ Proxy",
+                enabled=running,
+            ),
+        )
+        counters: list[str] = []
+        rate = self._req_history[-1] if self._req_history else 0
+        if rate:
+            counters.append(f"{rate} req/s")
+        if scanning:
+            counters.append(f"scan {progress}%")
+        return HeaderSpec(state=state, counters=tuple(counters))
+
+    def header_action(self, action_id: str) -> None:
+        """The only state button on the dashboard is the proxy toggle."""
+        if action_id == "proxy":
+            self.app.action_toggle_proxy()  # type: ignore[attr-defined]
+
+    def header_tab_selected(self, tab_id: str) -> None:
+        """No sub-tabs on the dashboard."""
+        return None
+
+    def _refresh_header_now(self) -> None:
+        refresh = getattr(self.app, "refresh_header", None)
+        if refresh is not None:
+            refresh()
+
     def on_mount(self) -> None:
         # Textual stops node timers on unmount (CONVENTIONS §3.3), so the
         # return value is not kept: nothing else ever reads it.
@@ -495,10 +538,36 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         self._update_ai_status()
         self._init_ai_sync()
         self._boot_animate()
+        # Layout of the blocks above is not final yet at mount; decide about the
+        # matrix once the first layout pass is done.
+        self.call_after_refresh(self._fit_matrix)
+
+    def on_resize(self) -> None:
+        """Re-decide whether the vulnerability matrix fits."""
+        self._fit_matrix()
 
     def on_show(self) -> None:
         """При показе — синхронизировать AI статус."""
         self._update_ai_status()
+        self._fit_matrix()
+
+    def _fit_matrix(self) -> None:
+        """Hide the vulnerability matrix when the window has no room for it.
+
+        The matrix needs ~8 content rows (header + column row + findings). On a
+        40-row terminal the top blocks (logo, three charts, feed) already take the
+        height, and the card collapsed to an empty frame — an empty card reads as
+        a bug, so it is hidden instead of drawn empty.
+
+        Measured against the *screen* size: the widget's own size is 0 while it is
+        hidden, so re-fitting from it could never bring the card back.
+        """
+        try:
+            column = self.query_one("#matrix-col")
+        except NoMatches as exc:
+            logger.debug("dashboard: matrix column not found: %s", exc)
+            return
+        column.display = self.app.size.height >= 46
 
     def _sync_ai_ui(self) -> None:
         """Re-render the AI status row (called by AiModeSyncMixin)."""
@@ -655,6 +724,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             self._req_bucket = 0
             self._find_bucket = 0
             self.query_one("#chart-requests", LiveChart).push(rps)
+            self._refresh_header_now()
         except Exception as exc:
             # Тик раз в секунду: молча сломанный тик — это «график не идёт»,
             # и он же навсегда обнуляет счётчик пакетов.
@@ -806,12 +876,14 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         self._feed_write(f"[dim]{ts}[/dim] [{color}]{prefix} {esc(message)}[/{color}]")
 
     def update_proxy_status(self, running: bool, port: int = 8080) -> None:
+        self._header_proxy = (running, port)
         if running:
             self._set_led_bar("led-proxy-bar", "bold green", f"Proxy: [bold green]:{port}[/bold green]")
         else:
             self._set_led_bar("led-proxy-bar", "dim", "Proxy: [dim]STOPPED[/dim]")
         msg = f"Proxy {'started' if running else 'stopped'} on :{port}"
         self.log_activity(msg, "ok" if running else "warning")
+        self._refresh_header_now()
 
     def update_passive_status(self, enabled: bool) -> None:
         if enabled:
@@ -821,6 +893,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         self.log_activity(f"Passive scanner {'armed' if enabled else 'disabled'}", "ok" if enabled else "warning")
 
     def update_scan_status(self, scanning: bool, progress: int = 0, threads: int = 0) -> None:
+        self._header_scan = (scanning, progress)
         if scanning:
             self._set_led_bar(
                 "led-scan-bar",
@@ -832,6 +905,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         else:
             self._set_led_bar("led-scan-bar", "dim", "Active: [dim]IDLE[/dim]")
             self._set_led_bar("led-threads-bar", "dim", "Scan workers: [dim]—[/dim]")
+        self._refresh_header_now()
 
     def update_spider_status(self, running: bool, pages: int = 0) -> None:
         if running:
