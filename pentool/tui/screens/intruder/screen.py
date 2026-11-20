@@ -41,6 +41,7 @@ from pentool.core.logging import get_logger
 from pentool.tui.dialogs.intruder_generate import GenerateDialog
 from pentool.tui.dialogs.intruder_input import InputDialog
 from pentool.tui.dialogs.intruder_smart_payloads import SmartPayloadsDialog
+from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import INTRUDER_BINDINGS
 from pentool.tui.markup import esc
 from pentool.tui.messages import SendToRepeater
@@ -57,7 +58,6 @@ from pentool.tui.widgets.intruder_results_table import IntruderResultsTable
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.start_stop_widget import StartStopWidget
 from pentool.tui.widgets.tab_panel import TabbedContentPanel
 from pentool.tui.widgets.toolbar import Toolbar
 from pentool.tui.widgets.toolbar_button import ToolbarButton
@@ -362,29 +362,6 @@ class IntruderScreen(
         t = self._active_tab
         if t:
             t.payload_load_in_progress = v
-
-    @property
-    def _ssw(self) -> StartStopWidget:
-        """Глобальный StartStopWidget в toolbar атаки (управляет активной вкладкой)."""
-        return self.query_one("#intruder-start-stop", StartStopWidget)
-
-    # ── StartStopWidget handlers ───────────────────────────────────────────
-
-    @on(StartStopWidget.StartRequested)
-    def _on_start_requested(self, _: StartStopWidget.StartRequested) -> None:
-        self.action_start_attack()
-
-    @on(StartStopWidget.StopRequested)
-    def _on_stop_requested(self, _: StartStopWidget.StopRequested) -> None:
-        self.action_stop()
-
-    @on(StartStopWidget.PauseRequested)
-    def _on_pause_requested(self, _: StartStopWidget.PauseRequested) -> None:
-        self.action_toggle_pause()
-
-    @on(StartStopWidget.ResumeRequested)
-    def _on_resume_requested(self, _: StartStopWidget.ResumeRequested) -> None:
-        self.action_resume()
 
     # ── Per-tab widget helpers ────────────────────────────────────────────
 
@@ -721,8 +698,6 @@ class IntruderScreen(
         показывает именно активную.
         """
         try:
-            self._ssw.set_running(tab.running)
-            self._ssw.set_paused(tab.paused)
             self.query_one("#intruder-threads", Input).value = str(tab.thread_count if tab.thread_count else 10)
             self.query_one("#intruder-delay", Input).value = str(tab.delay_ms if tab.delay_ms else 0)
             cb = self.query_one("#intruder-turbo", Checkbox)
@@ -740,6 +715,8 @@ class IntruderScreen(
             self._toolbar_tab_id = tab.tab_id
         except Exception as exc:
             logger.debug("_sync_toolbar_from_tab: %s", exc)
+        # Start/Pause/Stop and the counters live in the module header now.
+        self._refresh_header_now()
 
     @on(TabbedContentPanel.TabCreated, "#intruder-tabs")
     def _on_tab_created(self, event: TabbedContentPanel.TabCreated) -> None:
@@ -772,8 +749,7 @@ class IntruderScreen(
         if isinstance(closed, _IntruderTabState) and (closed.running or closed.attack is not None):
             self._stop_tab_attack(closed)
             if self._active_tab is None:
-                self._ssw.set_running(False)
-                self._ssw.set_paused(False)
+                self._refresh_header_now()
         state = self._active_tab
         if state:
             self._rebuild_table_data()
@@ -822,22 +798,11 @@ class IntruderScreen(
     # ── Compose ──────────────────────────────────────────────────────────
 
     def compose(self) -> ComposeResult:
-        # ── Глобальный toolbar: табы + управление атакой активной вкладки ────
+        # ── Attack parameters live here; the actions moved to the module header ──
+        # Start / Pause / Stop, Clear results, Export CSV and tab add/remove are
+        # header buttons now (`header_spec()`), so only the per-attack inputs stay
+        # in the panel — no duplicated controls.
         yield Toolbar(
-            ToolbarButton("➕ Tab", "btn-new-tab"),
-            Toolbar.sep(),
-            ToolbarButton("➖ Tab", "btn-close-tab"),
-            Toolbar.sep(),
-            StartStopWidget(id="intruder-start-stop"),
-            Toolbar.sep(),
-            # Результаты живут в активной вкладке, поэтому _clear_results /
-            # _export_csv в _on_toolbar_pressed берут её же. Кнопки были
-            # потеряны в cb11bfd — тот коммит переписал этот Toolbar целиком
-            # и выронил их, оставив обработчики без создателя.
-            ToolbarButton("Clear results", "btn-clear-results"),
-            Toolbar.sep(),
-            ToolbarButton("Export CSV", "btn-export-csv"),
-            Toolbar.sep(),
             Label("Threads:", classes="toolbar-label"),
             Input("10", id="intruder-threads", placeholder="10", compact=True, type="integer"),
             Toolbar.sep(),
@@ -857,6 +822,67 @@ class IntruderScreen(
             load_tabs=None,
             rename_input_id="intruder-rename-input",
         )
+
+    # ── Module header (see pentool/tui/header.py) ─────────────────────────
+    def header_spec(self) -> HeaderSpec:
+        """Attack controls of the *active* tab, shown in the module header."""
+        tab = self._active_tab
+        running = bool(tab and tab.running)
+        paused = bool(tab and tab.paused)
+        done = tab.result_count if tab else 0
+        state = (
+            HeaderAction(
+                "start",
+                "▶ Start" if not running else "▶ Resume",
+                enabled=not running or paused,
+            ),
+            HeaderAction("pause", "⏸ Pause", enabled=running and not paused),
+            HeaderAction("stop", "■ Stop", enabled=running),
+        )
+        counters: tuple[str, ...] = (f"{done} req",) if done else ()
+        return HeaderSpec(
+            state=state,
+            counters=counters,
+            actions=(
+                HeaderAction("export", "⤓ Export CSV", enabled=bool(tab and tab.result_count)),
+                HeaderAction("clear", "⌫ Clear results", enabled=bool(tab and tab.result_count)),
+            ),
+            more=(
+                HeaderAction("new_tab", "➕ New tab"),
+                HeaderAction("close_tab", "➖ Close tab"),
+                HeaderAction("mark_params", "✨ Mark params"),
+            ),
+        )
+
+    def header_action(self, action_id: str) -> None:
+        """A header button was pressed — route to the existing screen actions."""
+        if action_id == "start":
+            tab = self._active_tab
+            self.action_resume() if (tab and tab.paused) else self.action_start_attack()
+        elif action_id == "pause":
+            self.action_toggle_pause()
+        elif action_id == "stop":
+            self.action_stop()
+        elif action_id == "export":
+            self._export_csv()
+        elif action_id == "clear":
+            self._clear_results()
+        elif action_id == "new_tab":
+            self.action_new_tab()
+        elif action_id == "close_tab":
+            self.action_close_tab()
+        elif action_id == "mark_params":
+            self._prompt_auto_mark()
+        self._refresh_header_now()
+
+    def header_tab_selected(self, tab_id: str) -> None:
+        """Sub-tabs belong to the tab body (Positions/Payloads/…), not the header."""
+        return None
+
+    def _refresh_header_now(self) -> None:
+        refresh = getattr(self.app, "refresh_header", None)
+        if refresh is not None:
+            refresh()
 
     # ── Tab lifecycle (action_*) — делегируют в TabbedContentPanel ─────
 
@@ -1124,17 +1150,9 @@ class IntruderScreen(
         except NoMatches:
             logger.debug("_sync_attack_type_ui: description not mounted for %s", tab.tab_id)
 
-    #: Tooltips для кнопок глобального toolbar. Их id — без суффикса таба:
-    #: StartStopWidget один на экран и лежит в compose(), а не в теле таба.
-    #: Раньше обе группы шли через ``_wid(tab_id, …)``, и эти три запроса
-    #: промахивались молча — подсказки на Start/Stop пропали при переходе на
-    #: мультитаб. ``btn-pause`` не существует вовсе: пауза — это та же
-    #: ``btn-start``, перекрашенная StartStopWidget, поэтому подсказка у неё
-    #: общая.
-    _GLOBAL_TOOLTIPS: dict[str, str] = {
-        StartStopWidget.ID_START: "Start / Pause attack (Ctrl+Enter)",
-        StartStopWidget.ID_STOP: "Stop attack",
-    }
+    #: Tooltips for the tab-body buttons. Start/Stop/Pause moved to the module
+    #: header (see `header_spec`), so there are no global toolbar tooltips left.
+    _GLOBAL_TOOLTIPS: dict[str, str] = {}  # noqa: RUF012 - intentionally empty class table
 
     #: Tooltips для кнопок, живущих внутри таба — id собирается ``_wid``.
     _TAB_TOOLTIPS: dict[str, str] = {
@@ -1526,7 +1544,8 @@ class IntruderScreen(
                 # Колонка осталась прежней: фильтр с извлечением применён, а
                 # данные из ответов на экране не показать.
                 logger.exception("intruder: Extract column toggle failed")
-        if not self._ssw.running:
+        tab = self._active_tab
+        if not (tab and tab.running):
             api = self._get_api()
             if api:
                 self.run_worker(self._do_load_results(api), exclusive=False, exit_on_error=False)
@@ -2289,8 +2308,10 @@ class IntruderScreen(
         tab = self._active_tab
         if tab is None:
             return
-        logger.info("INTRUDER: action_start_attack called, running=%s", self._ssw.running)
-        if self._ssw.running:
+        running_tab = self._active_tab
+        running = bool(running_tab and running_tab.running)
+        logger.info("INTRUDER: action_start_attack called, running=%s", running)
+        if running:
             return
         if tab.payload_load_in_progress:
             self.app.notify(
@@ -2396,8 +2417,7 @@ class IntruderScreen(
         tab.attack = attack
 
         # Захватываем таб: результаты пишут в него, а не в активный
-        self._ssw.set_running(True)
-        self._ssw.set_paused(False)
+        self._refresh_header_now()
         tab.running = True
         tab.paused = False
         tab.all_results = []
@@ -2488,8 +2508,7 @@ class IntruderScreen(
             # Статус toolbar обновляем, только если это активная вкладка.
             # Для фоновых вкладок статус подтянется при переключении (_sync_toolbar).
             if _tab is self._active_tab:
-                self._ssw.set_running(False)
-                self._ssw.set_paused(False)
+                self._refresh_header_now()
                 self.app.notify(
                     f"Attack finished: {len(_tab.all_results)} requests",
                     severity="information",
@@ -2554,19 +2573,19 @@ class IntruderScreen(
         else:
             self.run_worker(tab.attack.resume(), exit_on_error=False)
         tab.paused = should_pause
-        self._ssw.set_paused(tab.paused)
+        self._refresh_header_now()
         self.app.notify("Paused" if should_pause else "Resumed", timeout=2)
 
     def action_resume(self) -> None:
         logger.info("INTRUDER: action_resume tab=%s", self._active_tab.tab_id if self._active_tab else None)
-        self._ssw.set_paused(False)
+        self._refresh_header_now()
         self.action_start_attack()
 
     def action_stop(self) -> None:
         tab = self._active_tab
         if tab is not None:
             self._stop_tab_attack(tab)
-        self._ssw.set_running(False)
+        self._refresh_header_now()
         self.app.notify("Attack stopped", severity="warning")
 
     def on_worker_state_changed(self, event) -> None:
@@ -2583,8 +2602,8 @@ class IntruderScreen(
                 tab.paused = False
                 # Если это активная вкладка — синхронизировать toolbar
                 if tab is self._active_tab:
-                    self._ssw.set_running(False)
-                    self._ssw.set_paused(False)
+                    self._refresh_header_now()
+                    self._refresh_header_now()
 
     @staticmethod
     def _row_from_result(result: IntruderResult) -> list[str]:

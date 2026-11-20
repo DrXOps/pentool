@@ -47,16 +47,8 @@ IntruderScreen #intruder-global-toolbar Input {
 IntruderScreen #intruder-global-toolbar #intruder-turbo {
     width: auto;
 }
-/* StartStopWidget не должен растягиваться на всю строку toolbar */
-IntruderScreen #intruder-start-stop {
-    width: auto;
-}
-IntruderScreen #intruder-start-stop Toolbar {
-    width: auto;
-}
-IntruderScreen #intruder-start-stop ToolbarButton {
-    width: auto;
-}
+/* Start / Pause / Stop moved to the module header (see `header_spec()`), so the
+   StartStopWidget rules that used to live here are gone with the widget. */
 
 /* ── Per-tab attack description ─────────────────────────────────────── */
 /* Per-tab widget: id is ``attack-type-desc-<tab_id>`` (IntruderScreen._wid)

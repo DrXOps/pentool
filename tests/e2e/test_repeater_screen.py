@@ -14,15 +14,16 @@ from pentool.utils.parser import ParsedRequest
 @pytest.mark.e2e
 class TestRepeaterScreen:
     async def test_send_button_present(self) -> None:
-        """После press R → #btn-send присутствует в DOM."""
+        """Send is a module-header state button (module screens are lazy)."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
             await pilot.press("R")
-            await pilot.pause()
-            btn = app.query("#btn-send")
-            assert len(btn) > 0
+            for _ in range(6):
+                await pilot.pause()
+            buttons = [b for b in app.query(".hdr-state") if b.display and b.data_action == "send"]
+            assert buttons, "Send is missing from the module header"
 
     async def test_request_editor_present(self) -> None:
         """RequestEditor присутствует в DOM после перехода на Repeater."""

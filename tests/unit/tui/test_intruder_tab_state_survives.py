@@ -186,20 +186,24 @@ class TestToolbarValuesSurviveTabSwitch:
 class TestTooltipsReachTheirButtons:
     """Every id in the tooltip tables must exist when the tooltip is applied."""
 
-    async def test_global_start_and_stop_are_not_addressed_with_a_tab_suffix(self) -> None:
+    async def test_start_and_stop_are_header_controls_not_tab_widgets(self) -> None:
+        """Start/Pause/Stop moved to the module header — no per-tab copies.
+
+        They used to be a single `StartStopWidget` in the screen's toolbar; now
+        they are header state buttons driven by `header_spec()`, so the failure
+        mode this test guards against (a per-tab suffixed id that no tooltip
+        table can predict) is structurally impossible.
+        """
         app = _App()
         async with app.run_test(size=(200, 60)) as pilot:
             screen, panel = await _mounted(pilot)
             tab_id = panel.active_tab_id
 
-            # StartStopWidget lives in compose(), so its ids carry no suffix.
-            assert not len(screen.query(f"#btn-start-{tab_id}")), (
-                "btn-start took a tab suffix — the tooltip table would miss it again"
-            )
-            start = screen.query_one("#btn-start", ToolbarButton)
-            stop = screen.query_one("#btn-stop", ToolbarButton)
-            assert start.tooltip, "Start/Pause has no tooltip"
-            assert stop.tooltip, "Stop has no tooltip"
+            assert not len(screen.query(f"#btn-start-{tab_id}")), "Start must not be a per-tab widget"
+            assert not len(screen.query("#btn-start")), "Start is a header button now, not a screen widget"
+            spec = screen.header_spec()
+            offered = {item.action for item in spec.state}
+            assert {"start", "stop"} <= offered, f"header lost the attack controls: {sorted(offered)}"
 
     async def test_first_tab_gets_its_tooltips(self) -> None:
         """Applied after the body mounts, not from on_mount where it is empty."""

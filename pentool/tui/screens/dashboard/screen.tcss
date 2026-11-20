@@ -139,6 +139,9 @@ DashboardScreen #pp-title {
 DashboardScreen #project-tree {
     height: 1fr;
     min-height: 5;
+    /* Tree paints its own surface by default; inside a transparent card that
+       read as a lighter rectangle — the card looked broken. */
+    background: transparent;
 }
 DashboardScreen #pp-actions {
     height: 3;
@@ -183,6 +186,9 @@ DashboardScreen #feed-panel-title {
 }
 DashboardScreen #feed-log {
     height: 1fr;
+    /* Same as the project tree: RichLog's own surface made the LIVE FEED card
+       look filled while its neighbours are transparent. */
+    background: transparent;
 }
 DashboardScreen #status-panel {
     width: 22;

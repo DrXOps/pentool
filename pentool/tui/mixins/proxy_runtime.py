@@ -190,7 +190,12 @@ class ProxyRuntimeMixin:
         """
         logger.info("APP: _stop_proxy_async called")
         if self._engine() == "daemon":
-            return self._stop_proxy_daemon_async()
+            # `await`, not `return`: the daemon stop is itself a coroutine, and
+            # returning it un-awaited meant the stop never ran. The project switch
+            # then continued to the next DB while the proxy was still writing
+            # into the previous one — which is exactly "history is empty again".
+            await self._stop_proxy_daemon_async()
+            return
         if self._proxy and self._proxy.is_running and self._proxy_loop:  # type: ignore[attr-defined]
             future = asyncio.run_coroutine_threadsafe(
                 self._proxy.stop(),

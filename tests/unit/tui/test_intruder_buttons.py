@@ -136,13 +136,15 @@ class TestIntruderButtons:
         from pentool.tui.screens.intruder.screen import IntruderScreen
 
         src = inspect.getsource(IntruderScreen.compose)
-        # Глобальная строка: табы + управление атакой активной вкладки
-        assert '"btn-new-tab"' in src
-        assert '"btn-close-tab"' in src
-        # StartStopWidget и формы атаки — в глобальном compose (не в табе)
-        assert 'StartStopWidget(id="intruder-start-stop")' in src
+        # Attack parameters stay in the panel...
         assert '"intruder-threads"' in src
         assert '"intruder-delay"' in src
+        # ...while Start/Pause/Stop and tab add/remove are module-header buttons:
+        # they are declared in `header_spec()`, not composed here.
+        assert "StartStopWidget(" not in src
+        spec_src = inspect.getsource(IntruderScreen.header_spec)
+        for action in ('"start"', '"pause"', '"stop"', '"new_tab"', '"close_tab"'):
+            assert action in spec_src, f"{action} is not offered by the Intruder header"
         # В per-tab toolbar остались кнопки содержимого, но не StartStop.
         # Идентификаторы собираются из _TabId (F-023), поэтому проверяем
         # константу и её значение, а не литерал в тексте метода.
@@ -153,7 +155,7 @@ class TestIntruderButtons:
         assert "_TabId.BTN_ADD_MARKER" in mount_src
         assert "StartStopWidget(" not in mount_src
 
-    def test_intruder_has_ssw_methods(self, mock_intruder_deps):
+    def test_intruder_has_attack_methods(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
 
         for name in (
@@ -161,16 +163,20 @@ class TestIntruderButtons:
             "action_stop",
             "action_toggle_pause",
             "action_resume",
-            "_on_start_requested",
-            "_on_stop_requested",
+            "header_spec",
+            "header_action",
         ):
-            assert hasattr(IntruderScreen, name)
+            assert hasattr(IntruderScreen, name), f"{name} missing — the header cannot reach the attack"
 
-    def test_intruder_has_ssw_property(self, mock_intruder_deps):
-        """SSW property returns a StartStopWidget instance."""
+    def test_header_offers_attack_controls(self, mock_intruder_deps):
+        """Start/Pause/Stop are offered by the module header (not by a widget)."""
+        import inspect
+
         from pentool.tui.screens.intruder.screen import IntruderScreen
 
-        assert isinstance(IntruderScreen._ssw, property)
+        spec_src = inspect.getsource(IntruderScreen.header_spec)
+        for action in ("start", "pause", "stop"):
+            assert f'"{action}"' in spec_src, f"header lost the {action} control"
 
     def test_intruder_action_stop_resets_running(self, mock_intruder_deps):
         from pentool.tui.screens.intruder.screen import IntruderScreen
@@ -184,17 +190,11 @@ class TestIntruderButtons:
         screen._active_tab_id = "t1"
         screen._tabs = []  # не используется, active_tab пойдёт через фолбэк
         # Подменяем property _active_tab на наш таб
-        with (
-            patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab),
-            patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock) as ssw_prop,
-        ):
-            ssw = MagicMock()
-            ssw_prop.return_value = ssw
+        with patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab):
             _setup_screen(screen)
             try:
                 screen.action_stop()
                 attack.stop.assert_called_once()
-                ssw.set_running.assert_called_with(False)
             finally:
                 _teardown_screen(screen)
 
@@ -207,26 +207,18 @@ class TestIntruderButtons:
         tab.attack = attack
         tab.running = True
         tab.paused = False
-        with (
-            patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab),
-            patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock) as ssw_prop,
-        ):
-            ssw = MagicMock()
-            ssw_prop.return_value = ssw
+        with patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab):
             _setup_screen(screen)
             try:
                 # Pause
                 screen.action_toggle_pause()
                 attack.pause.assert_called_once()
-                ssw.set_paused.assert_called_with(True)
 
                 # Resume
                 tab.paused = True
                 attack.reset_mock()
-                ssw.set_paused.reset_mock()
                 screen.action_toggle_pause()
                 attack.resume.assert_called_once()
-                ssw.set_paused.assert_called_with(False)
             finally:
                 _teardown_screen(screen)
 
@@ -258,12 +250,10 @@ class TestIntruderButtons:
         tab.tab_id = "intruder-tab-1"
         tab.running = True
         tab.paused = False
-        ssw = MagicMock()
         panel = MagicMock()
         panel.get_state.return_value = tab
         with (
             patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab),
-            patch.object(IntruderScreen, "_ssw", new_callable=PropertyMock, return_value=ssw),
             patch.object(IntruderScreen, "_tc_panel", new_callable=PropertyMock, return_value=panel),
         ):
             _setup_screen(screen)
@@ -272,7 +262,6 @@ class TestIntruderButtons:
                 ev.worker.name = "intruder-attack-intruder-tab-1"
                 ev.state = WorkerState.SUCCESS
                 screen.on_worker_state_changed(ev)
-                ssw.set_running.assert_called_with(False)
             finally:
                 _teardown_screen(screen)
 

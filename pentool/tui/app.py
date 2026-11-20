@@ -408,14 +408,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # state moves up to row 1, exactly as in the approved mockup.
             with Horizontal(id="module-header"):
                 with Horizontal(id="hdr-actions"):
-                    for slot in range(1, 5):
+                    for slot in range(1, 7):
                         yield ToolbarButton("", f"hdr-act-{slot}", classes="hdr-act disabled")
                 with Horizontal(id="hdr-tabs"):
                     for slot in range(1, 6):
                         yield ToolbarButton("", f"hdr-tab-{slot}", classes="hdr-tab disabled")
                 with Horizontal(id="hdr-state"):
-                    yield ToolbarButton("", "hdr-state-1", classes="hdr-state disabled")
-                    yield ToolbarButton("", "hdr-state-2", classes="hdr-state disabled")
+                    for slot in range(1, 4):
+                        yield ToolbarButton("", f"hdr-state-{slot}", classes="hdr-state disabled")
                     yield Static("", id="hdr-counters")
                 with Horizontal(id="hdr-more-zone"):
                     yield ToolbarButton("⋯", "hdr-more", classes="hdr-more disabled")
@@ -1328,8 +1328,8 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         spec = provider.header_spec() if provider is not None else None
         self._header_provider = provider
 
-        state_buttons = [self.query_one(f"#hdr-state-{slot}", ToolbarButton) for slot in (1, 2)]
-        action_buttons = [self.query_one(f"#hdr-act-{slot}", ToolbarButton) for slot in range(1, 5)]
+        state_buttons = [self.query_one(f"#hdr-state-{slot}", ToolbarButton) for slot in (1, 2, 3)]
+        action_buttons = [self.query_one(f"#hdr-act-{slot}", ToolbarButton) for slot in range(1, 7)]
         tab_buttons = [self.query_one(f"#hdr-tab-{slot}", ToolbarButton) for slot in range(1, 6)]
         more_button = self.query_one("#hdr-more", ToolbarButton)
         counters = self.query_one("#hdr-counters", Static)
