@@ -1340,10 +1340,16 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             button.data_action = item.action
             button.label = item.label
             button.display = True
-            button.set_class(True, "hdr-state-on" if item.enabled else "hdr-state-off")
-            button.set_class(False, "hdr-state-off" if item.enabled else "hdr-state-on")
+            # State buttons are ALWAYS clickable (a stopped proxy must be
+            # startable from the header); `enabled` only drives the colour.
+            # `button.disabled` (not the CSS class) is what gates the click in
+            # ToolbarButton.on_click.
+            button.disabled = False
+            button.set_class(item.enabled, "hdr-state-on")
+            button.set_class(not item.enabled, "hdr-state-off")
         for button in state_buttons[len(state_items) :]:
             button.display = False
+            button.disabled = True
             button.data_action = ""
 
         counters.update("  ".join(spec.counters) if spec and spec.counters else "")
@@ -1354,9 +1360,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             button.data_action = item.action
             button.label = item.label
             button.display = True
-            button.set_class(not item.enabled, "disabled")
+            button.disabled = not item.enabled
         for button in action_buttons[len(action_items) :]:
             button.display = False
+            button.disabled = True
             button.data_action = ""
 
         tab_items = spec.tabs if spec else ()
@@ -1364,14 +1371,16 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             button.data_tab = item.id
             button.label = item.label
             button.display = True
+            button.disabled = False
             button.set_class(item.id == (spec.active_tab if spec else ""), "hdr-tab-on")
         for button in tab_buttons[len(tab_items) :]:
             button.display = False
+            button.disabled = True
             button.data_tab = ""
 
         has_more = bool(spec and spec.more)
         more_button.display = has_more
-        more_button.set_class(not has_more, "disabled")
+        more_button.disabled = not has_more
 
         header.display = bool(spec and not spec.is_empty() and (spec.tabs or spec.actions or spec.more))
 

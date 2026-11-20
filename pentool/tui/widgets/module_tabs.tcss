@@ -3,7 +3,10 @@ ModuleTabs {
        строка уходила под `Underline`, который теперь скрыт (см. app.tcss). */
     height: 2;
     width: 100%;
-    background: $panel;
+    /* No panel colour: the chrome (module strip, header row, footer) sits on the
+       window background and is separated by lines, not by shifting shades —
+       cards below stay the only filled blocks. */
+    background: transparent;
     /* Тот же цвет, что у рамки карточек: верх приложения больше не спорит
        с блоками под ним. */
     border-bottom: solid $primary 35%;
