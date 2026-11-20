@@ -14,10 +14,10 @@ from typing import Any
 
 from textual import on
 from textual.app import App, ComposeResult, InvalidThemeError
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.widget import Widget
-from textual.widgets import Checkbox, ContentSwitcher
+from textual.widgets import Checkbox, ContentSwitcher, Static
 
 from pentool import __version__
 from pentool.api.proxy_api import InterceptedRequest, ProxyAPI, ProxyServer
@@ -41,6 +41,8 @@ from pentool.tui.constants import (
     SCREEN_REPEATER,
     SCREEN_TARGET,
 )
+from pentool.tui.header import HeaderProvider
+from pentool.tui.hotkeys import build_status_bar_markup, registry
 from pentool.tui.hotkeys.defaults import build_global_bindings
 from pentool.tui.messages import (
     ConfigChanged,
@@ -66,9 +68,10 @@ from pentool.tui.mixins.proxy_runtime import ProxyRuntimeMixin
 from pentool.tui.screen_lifecycle import SCREEN_ID_PREFIX, LazyScreenManager, ScreenNotMounted
 from pentool.tui.screen_registry import get_screen_class
 from pentool.tui.screens import DashboardScreen, IntruderScreen, ProxyScreen, RepeaterScreen, TargetScreen
-from pentool.tui.widgets.keyhintbar import GlobalHintBar, ModuleHintBar
+from pentool.tui.widgets.keyhintbar import SCOPE_GLOBAL, SCOPE_MODULE, module_label, render_global_entry
 from pentool.tui.widgets.module_tabs import ModuleTabs
 from pentool.tui.widgets.statusbar import StatusBar
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
@@ -182,6 +185,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self._proxy_thread: threading.Thread | None = None
         self._proxy_loop: asyncio.AbstractEventLoop | None = None
         self._active_module = "dashboard"
+        # Hints row state: which scope is shown and which module's keys they are.
+        # One row with a switch instead of two fixed rows (see `_render_hints`).
+        self._hints_scope: str = SCOPE_MODULE
+        self._hints_module: str = "dashboard"
+        #: Screen that currently owns the module header (row 2 + row-1 state).
+        self._header_provider: HeaderProvider | None = None
         self._project_path: str | None = None
         self._project_loaded: bool = False  # Flag: project created or opened
         self._skip_project_guard: bool = False  # True in tests to bypass the guard
@@ -387,7 +396,29 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # strip on top and a differently shaded strip at the bottom. Cost: two
         # rows and two columns — see `#app-shell` in app.tcss.
         with Vertical(id="app-shell"):
-            yield ModuleTabs(id="module-tabs")
+            # Row 1 of the module header: the module tabs and, on the right, the
+            # active module's state (`○ Proxy on`, `⏸ 2`) — see `pentool/tui/header.py`.
+            with Horizontal(id="module-bar"):
+                yield ModuleTabs(id="module-tabs")
+            # Row 2: actions of the active sub-tab, sub-tab chips, then the
+            # module state (`○ Proxy`), rare actions and the `⋯` menu on the
+            # right. State sits here rather than on row 1 because with twelve
+            # module tabs there is no room left on 120 columns; when Decoder /
+            # Comparer / Sequencer merge into `Utils` (plan-redesign этап 4) the
+            # state moves up to row 1, exactly as in the approved mockup.
+            with Horizontal(id="module-header"):
+                with Horizontal(id="hdr-actions"):
+                    for slot in range(1, 5):
+                        yield ToolbarButton("", f"hdr-act-{slot}", classes="hdr-act disabled")
+                with Horizontal(id="hdr-tabs"):
+                    for slot in range(1, 6):
+                        yield ToolbarButton("", f"hdr-tab-{slot}", classes="hdr-tab disabled")
+                with Horizontal(id="hdr-state"):
+                    yield ToolbarButton("", "hdr-state-1", classes="hdr-state disabled")
+                    yield ToolbarButton("", "hdr-state-2", classes="hdr-state disabled")
+                    yield Static("", id="hdr-counters")
+                with Horizontal(id="hdr-more-zone"):
+                    yield ToolbarButton("⋯", "hdr-more", classes="hdr-more disabled")
             # Only the start screen is mounted. The other module screens are
             # created on first use and dropped when the user leaves them — see
             # `tui/screen_lifecycle.py`: with all thirteen mounted (~1600 widgets)
@@ -404,22 +435,25 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # covered it completely. Wrapping both in one docked container
             # lets them lay out normally (one above the other) inside it.
             with Vertical(id="bottom-dock"):
-                yield ModuleHintBar(id="module-hints")
-                yield GlobalHintBar(id="global-hints")
+                # Hints row: a Global/Module switch followed by the keys of the
+                # selected scope. One row instead of the former two fixed rows —
+                # the switch changes the content, so the footer keeps its height.
+                with Horizontal(id="hints-row"):
+                    yield ToolbarButton("Global", "hints-global")
+                    yield ToolbarButton("Module", "hints-module")
+                    yield Static("", id="hints-text")
                 yield StatusBar(id="statusbar", now=self._now)
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
         _setup_faulthandler(self._cfg.log_file)
         self._guard_forward_event()
-        # Init ModuleHintBar with the starting module (dashboard)
-        try:
-            self.query_one(ModuleHintBar).set_module("dashboard")
-        except NoMatches as exc:
-            # Подсказки клавиш при старте — единственное, что скажет
-            # пользователю, как тут что-то делать; их пропажа должна быть
-            # видна в журнале.
-            logger.debug("starting hint bar not initialised: %s", exc)
+        # Point the hints row at the starting module (dashboard).
+        self._hints_module = "dashboard"
+        self._render_hints()
+        # And draw the header for the start screen (Dashboard has no spec, so the
+        # second row stays hidden until a module that describes one is opened).
+        self._refresh_header()
 
         # _exit_caller_stack removed — dead code (was always empty, see __init__).
 
@@ -1239,15 +1273,160 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             return
         self.call_after_refresh(self._after_module_switch, module_id)
 
+    # ── Bottom hints row: one line, Global/Module switch ──────────────────
+    @on(ToolbarButton.Pressed, "#hints-global")
+    def _hints_pick_global(self, _: ToolbarButton.Pressed) -> None:
+        self._set_hints_scope(SCOPE_GLOBAL)
+
+    @on(ToolbarButton.Pressed, "#hints-module")
+    def _hints_pick_module(self, _: ToolbarButton.Pressed) -> None:
+        self._set_hints_scope(SCOPE_MODULE)
+
+    def action_hints_toggle_scope(self) -> None:
+        """F2: flip between the module keys and the global keys."""
+        self._set_hints_scope(SCOPE_GLOBAL if self._hints_scope == SCOPE_MODULE else SCOPE_MODULE)
+
+    def _set_hints_scope(self, scope: str) -> None:
+        if scope == self._hints_scope:
+            return
+        self._hints_scope = scope
+        self._render_hints()
+
+    def _render_hints(self) -> None:
+        """Draw the one hints row: switch state + keys of the selected scope."""
+        try:
+            global_btn = self.query_one("#hints-global", ToolbarButton)
+            module_btn = self.query_one("#hints-module", ToolbarButton)
+            text = self.query_one("#hints-text", Static)
+        except NoMatches as exc:
+            # Keys would keep describing the previous module — i.e. teach keys
+            # this screen does not have. Not fatal, but not worth silence.
+            logger.debug("hints row not ready: %s", exc)
+            return
+
+        module_btn.label = module_label(self._hints_module)
+        global_btn.set_class(self._hints_scope == SCOPE_GLOBAL, "hints-chip-on")
+        module_btn.set_class(self._hints_scope == SCOPE_MODULE, "hints-chip-on")
+
+        if self._hints_scope == SCOPE_GLOBAL:
+            entries = [entry for entry in registry.get_entries(SCOPE_GLOBAL) if entry.show and entry.description]
+            entries.sort(key=lambda entry: (-len(entry.keys), entry.keys))
+            markup = " │ ".join(render_global_entry(entry.keys, entry.description) for entry in entries)
+        else:
+            markup = build_status_bar_markup(registry.get_entries(self._hints_module))
+        text.update(markup or "[dim]—[/]")
+
+    # ── Module header: row 1 state + row 2 actions/tabs/more ──────────────
+    def refresh_header(self) -> None:
+        """Public: the active screen asks for its header to be redrawn."""
+        self._refresh_header()
+
+    def _refresh_header(self) -> None:
+        """Draw the header from the active screen's `HeaderSpec` (or hide it)."""
+        screen = self.module_screen(self._active_module)
+        provider = screen if isinstance(screen, HeaderProvider) else None
+        spec = provider.header_spec() if provider is not None else None
+        self._header_provider = provider
+
+        state_buttons = [self.query_one(f"#hdr-state-{slot}", ToolbarButton) for slot in (1, 2)]
+        action_buttons = [self.query_one(f"#hdr-act-{slot}", ToolbarButton) for slot in range(1, 5)]
+        tab_buttons = [self.query_one(f"#hdr-tab-{slot}", ToolbarButton) for slot in range(1, 6)]
+        more_button = self.query_one("#hdr-more", ToolbarButton)
+        counters = self.query_one("#hdr-counters", Static)
+        header = self.query_one("#module-header", Horizontal)
+
+        state_items = spec.state if spec else ()
+        for button, item in zip(state_buttons, state_items, strict=False):
+            button.data_action = item.action
+            button.label = item.label
+            button.display = True
+            button.set_class(True, "hdr-state-on" if item.enabled else "hdr-state-off")
+            button.set_class(False, "hdr-state-off" if item.enabled else "hdr-state-on")
+        for button in state_buttons[len(state_items) :]:
+            button.display = False
+            button.data_action = ""
+
+        counters.update("  ".join(spec.counters) if spec and spec.counters else "")
+        counters.display = bool(spec and spec.counters)
+
+        action_items = spec.actions if spec else ()
+        for button, item in zip(action_buttons, action_items, strict=False):
+            button.data_action = item.action
+            button.label = item.label
+            button.display = True
+            button.set_class(not item.enabled, "disabled")
+        for button in action_buttons[len(action_items) :]:
+            button.display = False
+            button.data_action = ""
+
+        tab_items = spec.tabs if spec else ()
+        for button, item in zip(tab_buttons, tab_items, strict=False):
+            button.data_tab = item.id
+            button.label = item.label
+            button.display = True
+            button.set_class(item.id == (spec.active_tab if spec else ""), "hdr-tab-on")
+        for button in tab_buttons[len(tab_items) :]:
+            button.display = False
+            button.data_tab = ""
+
+        has_more = bool(spec and spec.more)
+        more_button.display = has_more
+        more_button.set_class(not has_more, "disabled")
+
+        header.display = bool(spec and not spec.is_empty() and (spec.tabs or spec.actions or spec.more))
+
+    @on(ToolbarButton.Pressed, ".hdr-state")
+    def _on_hdr_state(self, event: ToolbarButton.Pressed) -> None:
+        self._dispatch_header_action(getattr(event.button, "data_action", ""))
+
+    @on(ToolbarButton.Pressed, ".hdr-act")
+    def _on_hdr_action(self, event: ToolbarButton.Pressed) -> None:
+        self._dispatch_header_action(getattr(event.button, "data_action", ""))
+
+    @on(ToolbarButton.Pressed, ".hdr-tab")
+    def _on_hdr_tab(self, event: ToolbarButton.Pressed) -> None:
+        tab_id = getattr(event.button, "data_tab", "")
+        provider = self._header_provider
+        if tab_id and provider is not None:
+            provider.header_tab_selected(tab_id)
+
+    @on(ToolbarButton.Pressed, "#hdr-more")
+    def _on_hdr_more(self, _: ToolbarButton.Pressed) -> None:
+        self._open_header_more()
+
+    def _dispatch_header_action(self, action_id: str) -> None:
+        provider = self._header_provider
+        if action_id and provider is not None:
+            provider.header_action(action_id)
+
+    def _open_header_more(self) -> None:
+        """Show the rare header actions as a small menu under the ring button."""
+        provider = self._header_provider
+        screen = self.module_screen(self._active_module)
+        spec = provider.header_spec() if isinstance(screen, HeaderProvider) else None
+        if not spec or not spec.more:
+            return
+        # Reuse the existing context menu: one implementation of "list of actions
+        # under the cursor" instead of a second ad-hoc popup.
+
+        items = [(item.action, item.label) for item in spec.more if item.enabled]
+        if not items:
+            return
+        button = self.query_one("#hdr-more", ToolbarButton)
+        area = button.region
+        self.show_context_menu(items, area.x, area.y + area.height, callback=self._on_header_more_choice)
+
+    def _on_header_more_choice(self, action_id: str | None) -> None:
+        self._dispatch_header_action(action_id or "")
+
     def _after_module_switch(self, module_id: str) -> None:
         """Everything a module switch does *outside* the screen itself."""
-        # Update ModuleHintBar to show the new module's keybindings
-        try:
-            self.query_one(ModuleHintBar).set_module(module_id)
-        except NoMatches as exc:
-            # Подсказки клавиш останутся от прошлого модуля — то есть будут
-            # врать. Не критично, но и не то, о чём стоит молчать.
-            logger.debug("hint bar not updated for %s: %s", module_id, exc)
+        # Point the hints row at the new module (its keys and its name).
+        self._hints_module = module_id
+        self._render_hints()
+        # Row 2 of the header belongs to the active screen: rebuild it from the
+        # new module's spec (or hide it when the module has none).
+        self._refresh_header()
         # Refresh AI-dependent UI whenever we switch to Target: the "🤖 Use AI"
         # checkbox visibility tracks the global ai_enabled, and this must be
         # re-applied when the Target screen is (re)shown — otherwise a checkbox

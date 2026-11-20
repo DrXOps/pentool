@@ -86,6 +86,10 @@ _GLOBAL_ENTRIES = [
     _e("ctrl+@", "repeater_send", "Send", show=False, priority=True),
     _e("ctrl+space", "repeater_send", "Send", show=False, priority=True),
     _e("ctrl+a", "select_all", "Select All", show=False, priority=True),
+    # Bottom hints row: one line, switch between the module keys and the global
+    # keys (the switch is also clickable). Shown in the global list so the key
+    # that reveals the global list is discoverable from the module list.
+    _e("f2", "hints_toggle_scope", "Hints: Global/Module", show=True, priority=True),
     *_MODULE_ENTRIES,
 ]
 

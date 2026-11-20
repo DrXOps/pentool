@@ -4,11 +4,11 @@ ProxyScreen {
 ProxyScreen #proxy-subtabs {
     height: 1fr;
 }
+/* The sub-tab strip is drawn in the module header (chips) — see
+   `pentool/tui/header.py`. Keeping it here too would show the tabs twice and
+   cost a row of content for nothing. */
 ProxyScreen #proxy-subtabs > ContentTabs {
-    background: $panel;
-}
-ProxyScreen #proxy-subtabs > ContentTabs Tabs {
-    background: $panel;
+    display: none;
 }
 ProxyScreen #body {
     height: 1fr;
@@ -110,14 +110,13 @@ ProxyScreen #intercept-resp-viewer {
     height: 1fr;
     border: none;
 }
-ProxyScreen #intercept-toolbar {
-    height: 2;
-    background: $panel;
+/* Forward / Drop / Special moved to the module header (see
+   `pentool/tui/header.py`), so the panel toolbar is gone; the hint keeps its
+   own row. */
+ProxyScreen #intercept-hint {
+    height: 1;
     padding: 0 1;
-    align: left middle;
-    layout: horizontal;
-    /* Same colour as the card frame — see widgets/toolbar.tcss. */
-    border-bottom: solid $primary 35%;
+    color: $text-muted;
 }
 ProxyScreen #intercept-hint {
     color: $text-muted;

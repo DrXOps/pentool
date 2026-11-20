@@ -34,13 +34,45 @@ TabbedContent {
    here with `dock: none` so they stack vertically. */
 #bottom-dock {
     dock: bottom;
-    height: 3;
+    height: 2;
     layout: vertical;
 }
 
-#bottom-dock GlobalHintBar { dock: none; height: 1; }
-#bottom-dock ModuleHintBar { dock: none; height: 1; }
+/* Two rows now: the hints row (with its Global/Module switch) and the status
+   bar. The former second hints row was merged into the switch. */
+#bottom-dock #hints-row { dock: none; height: 1; }
 #bottom-dock StatusBar { dock: none; height: 1; }
+
+/* ── Hints row: [ Global ][ Module ]  keys… ────────────────────────────────
+   One row instead of two: the switch changes the content of the same row, so
+   the footer keeps its height while the user works. Scope defaults to the
+   active module — those are the keys needed right now; the global keys are one
+   click (or F2) away. */
+#hints-row {
+    height: 1;
+    width: 100%;
+}
+
+#hints-row ToolbarButton {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    background: $panel;
+    color: $text-muted;
+}
+
+#hints-row ToolbarButton.hints-chip-on {
+    background: $primary 35%;
+    color: $text;
+    text-style: bold;
+}
+
+#hints-row #hints-text {
+    width: 1fr;
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
 
 /* Global checkbox style — compact, height 1, no border.
    Glyph itself ("[ ]" / "[✓]") is set once in Checkbox.BUTTON_LEFT/
@@ -207,6 +239,93 @@ Toast.-critical    { border: heavy $error; }
     width: auto;
     min-width: 1;
     color: $primary-darken-2;
+}
+
+/* ── Module header (row 1 state, row 2 actions/tabs/more) ──────────────────
+   Row 1 lives inside #module-bar, next to the module tabs; row 2 is
+   #module-header, hidden for modules that describe no header (Dashboard).
+   Screens describe it via `HeaderSpec` (pentool/tui/header.py) and never
+   compose their own toolbar. */
+#module-bar {
+    height: 2;
+    width: 100%;
+}
+
+#module-bar ModuleTabs {
+    width: 1fr;
+}
+
+#hdr-state {
+    height: 1;
+    width: auto;
+    align-vertical: top;
+    padding: 0 1;
+}
+
+#hdr-counters {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    color: $accent;
+}
+
+#module-header {
+    height: 1;
+    width: 100%;
+    background: $panel;
+}
+
+#hdr-actions {
+    height: 1;
+    width: auto;
+}
+
+#hdr-tabs {
+    height: 1;
+    width: 1fr;
+    padding: 0 1;
+}
+
+#hdr-more-zone {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+}
+
+#module-header ToolbarButton {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    background: $panel;
+    color: $text;
+}
+
+#module-header ToolbarButton.hdr-tab {
+    color: $text-muted;
+}
+
+#module-header ToolbarButton.hdr-tab.hdr-tab-on {
+    background: $primary 55%;
+    color: $text;
+    text-style: bold;
+}
+
+#module-header ToolbarButton.hdr-state-on {
+    color: $success;
+    text-style: bold;
+}
+
+#hdr-state ToolbarButton {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    background: transparent;
+    color: $text-muted;
+}
+
+#hdr-state ToolbarButton.hdr-state-on {
+    color: $success;
+    text-style: bold;
 }
 
 /* ── Общее поле программы (2026-11-17, рамка окна — 2026-11-20) ────────────
