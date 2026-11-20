@@ -168,31 +168,29 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     # ── Module header (see pentool/tui/header.py) ─────────────────────────
     def header_spec(self) -> HeaderSpec:
-        """Send / Cancel / Follow as state; sub-tab actions next to them.
+        """One row of actions, in the order they are used.
 
-        Repeater's own tabs are *documents* (one per request), not module
-        sub-sections, so they stay in the TabbedContent — moving them into the
-        header would turn a document strip into a mode switch.
+        Send / Cancel / Follow first, then the tab pair, then the "send to
+        another module" group — no `⋯` menu, everything is one click. Repeater's
+        own tabs are *documents* (one per request), not module sub-sections, so
+        they stay in the TabbedContent.
         """
         sending = self._sending
-        state = (
-            HeaderAction("send", "⚡ Send", enabled=not sending),
-            HeaderAction("cancel", "✖ Cancel", enabled=sending),
-            HeaderAction(
-                "follow", "↪ Follow: ON" if self._follow_redirects else "↪ Follow: OFF", enabled=self._follow_redirects
-            ),
-        )
         return HeaderSpec(
-            state=state,
             actions=(
+                HeaderAction("send", "⚡ Send", enabled=not sending),
+                HeaderAction("cancel", "✖ Cancel", enabled=sending),
+                HeaderAction(
+                    "follow",
+                    "↪ Follow: ON" if self._follow_redirects else "↪ Follow: OFF",
+                    enabled=self._follow_redirects,
+                ),
+                HeaderAction("new_tab", "➕ Tab"),
+                HeaderAction("close_tab", "➖ Tab"),
                 HeaderAction("beautify", "✨ Beautify"),
                 HeaderAction("decoder", "→ Decoder"),
                 HeaderAction("comparer", "→ Comparer"),
                 HeaderAction("intruder", "→ Intruder"),
-            ),
-            more=(
-                HeaderAction("new_tab", "➕ New tab"),
-                HeaderAction("close_tab", "➖ Close tab"),
             ),
         )
 
@@ -420,8 +418,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     def _fill_req_resp(self, tab_id: str, state: _TabState, row: Horizontal) -> None:
         try:
-            req_panel = Vertical(classes="req-panel", id=f"req-panel-{tab_id}")
-            resp_panel = Vertical(classes="resp-panel", id=f"resp-panel-{tab_id}")
+            req_panel = Vertical(classes="req-panel card", id=f"req-panel-{tab_id}")
+            resp_panel = Vertical(classes="resp-panel card", id=f"resp-panel-{tab_id}")
             row.mount(req_panel)
             row.mount(
                 ResizeHandle(

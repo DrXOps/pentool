@@ -32,7 +32,7 @@ RepeaterScreen .req-resp-row {
 }
 RepeaterScreen .log-area {
     height: 1;
-    background: $surface;
+    background: transparent;
     padding: 0 1;
     color: $text-muted;
     overflow-y: auto;

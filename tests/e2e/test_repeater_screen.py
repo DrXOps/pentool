@@ -22,7 +22,7 @@ class TestRepeaterScreen:
             await pilot.press("R")
             for _ in range(6):
                 await pilot.pause()
-            buttons = [b for b in app.query(".hdr-state") if b.display and b.data_action == "send"]
+            buttons = [b for b in app.query(".hdr-act") if b.display and b.data_action == "send"]
             assert buttons, "Send is missing from the module header"
 
     async def test_request_editor_present(self) -> None:

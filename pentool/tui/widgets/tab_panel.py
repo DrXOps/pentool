@@ -265,13 +265,18 @@ class TabbedContentPanel(Widget, Generic[TState]):
 
         try:
             tc = self.tabs_content
-            # Ровно как Repeater: add_pane() синхронно (discard AwaitComplete),
-            # затем активный таб сразу. Textual mount() вставляет заголовок в DOM
-            # синхронно, поэтому tc.active уже находит его, и ContentTabs
-            # корректно скроллит активный таб во вьюпорт своим штатным
-            # _scroll_active_tab. Никаких отложенных call_after_refresh активаций.
-            tc.add_pane(pane)
-            tc.active = tab_id
+            # `add_pane()` builds a ContentTab and asks the inner `Tabs` for its
+            # `#tabs-list`; that widget appears only after a mount pass. With lazy
+            # screens the panel is mounted on demand, so the first `add_pane` can
+            # arrive before `Tabs` finished mounting — which crashed the whole app
+            # with `No nodes match '#tabs-list'` (2026-11-20, "Intruder падает
+            # при переходе"). Add immediately when the strip is ready, otherwise
+            # retry on the next frame.
+            if tc.query("#tabs-list"):
+                tc.add_pane(pane)
+                tc.active = tab_id
+            else:
+                self._defer_add_pane(tc, pane, tab_id)
         except Exception:
             # Новая вкладка добавлена в `_states`, но панели в DOM нет:
             # переключение на неё покажет пустоту, а вкладка не закроется.
@@ -282,6 +287,32 @@ class TabbedContentPanel(Widget, Generic[TState]):
         # Build per-tab UI and notify the owner once the widget is in the DOM.
         self.call_after_refresh(self._post_tab_messages, tab_id, state)
         return tab_id
+
+    def _defer_add_pane(self, tc: TabbedContent, pane: TabPane, tab_id: str, attempts: int = 5) -> None:
+        """Retry `add_pane` on the next frame until the tab strip exists.
+
+        `TabbedContent.add_pane()` asks the inner `Tabs` for `#tabs-list`, which
+        is mounted one pass after the panel itself. On a lazily mounted screen the
+        first tab can be created earlier than that, and Textual raised
+        `NoMatches` as a fatal exception — the whole TUI went down.
+        """
+
+        def attempt() -> None:
+            if tab_id not in self._states:
+                return  # closed meanwhile
+            if not tc.query("#tabs-list"):
+                if attempts > 0:
+                    self.call_after_refresh(lambda: self._defer_add_pane(tc, pane, tab_id, attempts=attempts - 1))
+                else:
+                    logger.error("tab panel: #tabs-list never appeared for %s", tab_id)
+                return
+            try:
+                tc.add_pane(pane)
+                tc.active = tab_id
+            except Exception:
+                logger.exception("action_new_tab setup failed for %s", tab_id)
+
+        self.call_after_refresh(attempt)
 
     def _post_tab_messages(self, tab_id: str, state: TState) -> None:
         """Post messages after widget is ready."""

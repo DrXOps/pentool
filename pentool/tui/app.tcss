@@ -169,6 +169,15 @@ Underline {
 Tabs {
     height: 1;
 }
+/* Полоса вкладок без собственной заливки: `ContentTabs` по умолчанию красит
+   себя в `$panel`, и над карточками это читалось как «старый фон» (видно на
+   `Tab 1` в Repeater/Intruder). Хром везде прозрачный, разделён линиями. */
+ContentTabs {
+    background: transparent;
+}
+TabbedContent {
+    background: transparent;
+}
 Tab {
     color: $text-muted;
 }

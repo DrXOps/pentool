@@ -408,7 +408,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # state moves up to row 1, exactly as in the approved mockup.
             with Horizontal(id="module-header"):
                 with Horizontal(id="hdr-actions"):
-                    for slot in range(1, 7):
+                    for slot in range(1, 10):
                         yield ToolbarButton("", f"hdr-act-{slot}", classes="hdr-act disabled")
                 with Horizontal(id="hdr-tabs"):
                     for slot in range(1, 6):
@@ -1329,7 +1329,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self._header_provider = provider
 
         state_buttons = [self.query_one(f"#hdr-state-{slot}", ToolbarButton) for slot in (1, 2, 3)]
-        action_buttons = [self.query_one(f"#hdr-act-{slot}", ToolbarButton) for slot in range(1, 7)]
+        action_buttons = [self.query_one(f"#hdr-act-{slot}", ToolbarButton) for slot in range(1, 10)]
         tab_buttons = [self.query_one(f"#hdr-tab-{slot}", ToolbarButton) for slot in range(1, 6)]
         more_button = self.query_one("#hdr-more", ToolbarButton)
         counters = self.query_one("#hdr-counters", Static)

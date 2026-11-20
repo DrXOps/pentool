@@ -13,7 +13,9 @@ HttpView TextArea {
 
 RequestEditor {
     height: 1fr;
-    border: solid $primary-darken-2;
+    /* No frame of its own: the panel around it is a card (`.card`) and the
+       editor sat inside it as a second, older-looking box. */
+    border: none;
     layout: vertical;
 }
 RequestEditor TextArea {
@@ -25,7 +27,8 @@ RequestEditor TextArea {
 
 ResponseViewer {
     height: 1fr;
-    border: solid $primary-darken-2;
+    /* Same as RequestEditor: the card provides the frame. */
+    border: none;
     layout: vertical;
 }
 ResponseViewer TextArea {
