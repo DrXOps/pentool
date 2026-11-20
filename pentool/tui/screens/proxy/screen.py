@@ -757,7 +757,10 @@ class ProxyScreen(
         if req.id in self._pending_req_ids:
             logger.debug("PROXY SCREEN: add_request_row: duplicate req.id=%s, skipping", req.id)
             return
-        logger.info(
+        # Hot path: one line per captured request. `DEBUG` on purpose — INFO here
+        # means the journal grows linearly with traffic (T-026/T-021: 4.7 GB in a
+        # week), and a write plus a flush per packet is I/O on every capture.
+        logger.debug(
             "PROXY SCREEN: add_request_row: %s %s (id=%s, ws=%s)",
             req.method,
             req.url,
@@ -783,7 +786,8 @@ class ProxyScreen(
         if not isinstance(req, InterceptedRequest):
             return
         status = req.get_response().status if req.get_response() else None
-        logger.info(
+        # One line per completed request — same rule as add_request_row above.
+        logger.debug(
             "PROXY SCREEN: update_request_row: %s %s → %s (id=%s)",
             req.method,
             req.url,
@@ -797,7 +801,8 @@ class ProxyScreen(
             return
         row_id = await self._proxy_service.store_request(req)
         if row_id is not None:
-            logger.info("PROXY SCREEN: _store_request: saved req.id=%s as row_id=%d", req.id, row_id)
+            # Per-request line: DEBUG, otherwise the journal grows with traffic.
+            logger.debug("PROXY SCREEN: _store_request: saved req.id=%s as row_id=%d", req.id, row_id)
             self._pending_req_ids[req.id] = row_id
 
     async def _wait_for_row_id(self, req: InterceptedRequest) -> int | None:

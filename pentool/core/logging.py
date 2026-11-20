@@ -29,6 +29,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import os
 import sys
 from pathlib import Path
@@ -36,6 +37,24 @@ from pathlib import Path
 from pentool.utils.logging import _NamedLogger, get_logger
 
 __all__ = ["get_logger", "setup_logging", "_NamedLogger", "_load_logging_rules"]
+
+#: Journal rotation (T-021). Without it the file grew linearly: a week of work
+#: with traffic brought it to 4.7 GB, after which `grep` over it stopped being
+#: usable and every write became I/O on the capture path. 50 MB × 10 archives
+#: caps the directory at roughly 550 MB.
+DEFAULT_LOG_MAX_BYTES = 50 * 1024 * 1024
+DEFAULT_LOG_BACKUP_COUNT = 10
+
+
+def _rotation_limits() -> tuple[int, int]:
+    """File size ceiling and archive count; overridable for tests and CI.
+
+    ``PENTOOL_LOG_MAX_BYTES=0`` disables rotation — tests care that a record is
+    written, not how the files are laid out on disk.
+    """
+    max_bytes = int(os.environ.get("PENTOOL_LOG_MAX_BYTES", DEFAULT_LOG_MAX_BYTES))
+    backup_count = int(os.environ.get("PENTOOL_LOG_BACKUP_COUNT", DEFAULT_LOG_BACKUP_COUNT))
+    return max_bytes, max(1, backup_count)
 
 
 def setup_logging(log_file: str, level: str = "INFO") -> logging.Logger:
@@ -63,7 +82,20 @@ def setup_logging(log_file: str, level: str = "INFO") -> logging.Logger:
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    file_handler = logging.FileHandler(log_file, encoding="utf-8", mode="a")
+    max_bytes, backup_count = _rotation_limits()
+    if max_bytes > 0:
+        # Rotation instead of one ever-growing file (T-021): 50 MB per file,
+        # 10 archives, the oldest is dropped. The journal stays greppable and
+        # cannot fill the disk on its own.
+        file_handler: logging.Handler = logging.handlers.RotatingFileHandler(
+            log_file,
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
+            mode="a",
+        )
+    else:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8", mode="a")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(fmt)
 
