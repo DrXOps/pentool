@@ -1170,8 +1170,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 # Раньше здесь стоял `pass`, и любой сбой чтения лицензии
                 # открывал платный экран — то есть ошибка работала на
                 # пользователя, а не против него. Теперь наоборот: не смогли
-                # проверить — не пускаем, и пишем почему.
-                logger.warning("scanner license check failed, access denied: %s", exc)
+                # проверить — не пускаем, и пишем почему. `_switch_to` — точка
+                # входа воркера (монтирование экрана), поэтому по правилу
+                # ADR-6 широкий `except` здесь обязан нести трейсбек.
+                logger.warning("scanner license check failed, access denied: %s", exc, exc_info=True)
                 self.notify(
                     "🔒 Scanner — could not verify the license. Try `pentool license status`.",
                     severity="warning",
@@ -1199,8 +1201,9 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                     return
             except Exception as exc:
                 # Тот же fail-open, что и у Scanner: не смогли проверить
-                # лицензию — значит, не пускаем (и пишем почему).
-                logger.warning("recon license check failed, access denied: %s", exc)
+                # лицензию — значит, не пускаем (и пишем почему). Трейсбек —
+                # по тому же правилу ADR-6 (воркер-точка входа).
+                logger.warning("recon license check failed, access denied: %s", exc, exc_info=True)
                 self.notify(
                     "🔒 Recon — could not verify the license. Try `pentool license status`.",
                     severity="warning",
