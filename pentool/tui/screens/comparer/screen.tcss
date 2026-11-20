@@ -7,9 +7,9 @@ ComparerScreen {
 /* ── Stat bar ────────────────────────────────────────────────────────────── */
 ComparerScreen #cmp-stat-bar {
     height: 1;
-    background: $panel;
+    background: transparent;
     padding: 0 1;
-    border-bottom: solid $primary-darken-3;
+    border-bottom: solid $primary 35%;
 }
 ComparerScreen #cmp-stats {
     width: 1fr;

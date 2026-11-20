@@ -1,0 +1,27 @@
+/* Utils screen styles.
+ *
+ * The module is a thin shell around three tool screens: it must not paint
+ * anything of its own, so the sub-tabs and their bodies inherit the app chrome
+ * (transparent fills, card frames inside each tool). The sub-tab strip is drawn
+ * in the module header as chips, so the local one stays hidden.
+ */
+
+UtilsScreen {
+    width: 1fr;
+    height: 1fr;
+    background: transparent;
+}
+
+UtilsScreen #utils-tabs {
+    width: 1fr;
+    height: 1fr;
+    background: transparent;
+}
+
+UtilsScreen #utils-tabs > ContentTabs {
+    display: none;
+}
+
+UtilsScreen TabPane {
+    background: transparent;
+}

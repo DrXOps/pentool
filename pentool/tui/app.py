@@ -1080,6 +1080,25 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # Панель вкладок ещё не смонтирована; других причин тут нет.
             logger.debug("proxy_tab %s: switch failed: %s", tab_id, exc)
 
+    async def action_utils_tab(self, kind: str) -> None:
+        """Open Utils on one of its sub-tabs (D / C / Q hotkeys).
+
+        The three tools merged into one module, so the old keys now switch the
+        module *and* the sub-tab — one keystroke still lands on the tool.
+        """
+        self.action_switch_module("utils")
+        try:
+            # Get-or-mount: the hotkey may be the first thing the user presses.
+            utils_screen = await self.ensure_module_screen("utils")
+            if utils_screen is None:
+                logger.debug("utils_tab %s: utils screen unavailable", kind)
+                return
+            utils_screen.select_subtab(kind)  # type: ignore[attr-defined]
+        except NoMatches as exc:
+            # The sub-tab strip is not mounted yet — the module switch still
+            # happened, so the user is on Utils, just on its first sub-tab.
+            logger.debug("utils_tab %s: switch failed: %s", kind, exc)
+
     def _focus_proxy_table(self, proxy_screen: object, tab_id: str) -> None:
         """Focus the DataTable in the specified Proxy tab."""
         try:

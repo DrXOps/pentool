@@ -48,9 +48,12 @@ _MODULE_ENTRIES = [
     _e("I", "switch_module('intruder')", "Intrud", show=True, priority=True),
     _e("S", "switch_module('scanner')", "Scan", show=True, priority=True),
     _e("T", "switch_module('target')", "Target", show=True, priority=True),
-    _e("D", "switch_module('decoder')", "Decode", show=True, priority=True),
-    _e("C", "switch_module('comparer')", "Comp", show=True, priority=True),
-    _e("Q", "switch_module('sequencer')", "Seq", show=True, priority=True),
+    _e("U", "switch_module('utils')", "Utils", show=True, priority=True),
+    # The three tools are sub-tabs of Utils: the old keys still take the user
+    # straight to the tool, they just land inside the merged module.
+    _e("D", "utils_tab('decoder')", "Decoder", show=True, priority=True),
+    _e("C", "utils_tab('comparer')", "Comparer", show=True, priority=True),
+    _e("Q", "utils_tab('sequencer')", "Sequencer", show=True, priority=True),
     _e("E", "switch_module('extensions')", "Ext", show=True, priority=True),
     _e("N", "switch_module('recon')", "Recon", show=True, priority=True),
     # Shift+digit aliases (hidden — for terminals where Shift+letter fails)
@@ -58,9 +61,9 @@ _MODULE_ENTRIES = [
     _e("@", "switch_module('repeater')", "", show=False),
     _e("#", "switch_module('intruder')", "", show=False),
     _e("$", "switch_module('scanner')", "", show=False),
-    _e("%", "switch_module('decoder')", "", show=False),
-    _e("^", "switch_module('comparer')", "", show=False),
-    _e("&", "switch_module('sequencer')", "", show=False),
+    _e("%", "utils_tab('decoder')", "", show=False),
+    _e("^", "utils_tab('comparer')", "", show=False),
+    _e("&", "utils_tab('sequencer')", "", show=False),
     _e("(", "switch_module('extensions')", "", show=False),
 ]
 

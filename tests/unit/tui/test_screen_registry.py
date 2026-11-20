@@ -13,9 +13,8 @@ CORE_MODULES = {
     "intruder",
     "scanner",
     "target",
-    "decoder",
-    "comparer",
-    "sequencer",
+    # Decoder / Comparer / Sequencer merged into Utils (sub-tabs, not modules).
+    "utils",
     "extensions",
     "settings",
 }

@@ -440,7 +440,7 @@ class IntruderScreen(
                 classes="intruder-template-panel",
             ),
             id=self._wid(tab_id, _TabId.POSITIONS_PANEL),
-            classes="intruder-positions-panel",
+            classes="intruder-positions-panel card",
         )
 
         # ── Payloads panel ──────────────────────────────────────────────
@@ -474,7 +474,7 @@ class IntruderScreen(
             # потоковом чтении растёт на глазах — под списком этого не видно.
             Static("", id=self._wid(tab_id, _TabId.PAYLOAD_COUNT_LABEL), classes="payload-count-label"),
             ListView(id=self._wid(tab_id, _TabId.PAYLOAD_LIST), classes="intruder-payload-list"),
-            classes="intruder-payloads-panel",
+            classes="intruder-payloads-panel card",
             id=self._wid(tab_id, _TabId.PAYLOADS_PANEL),
         )
 
@@ -825,33 +825,36 @@ class IntruderScreen(
 
     # ── Module header (see pentool/tui/header.py) ─────────────────────────
     def header_spec(self) -> HeaderSpec:
-        """Attack controls of the *active* tab, shown in the module header."""
+        """Attack controls of the *active* tab, shown in the module header.
+
+        Two state buttons, as in the standard: Start (which turns into Pause
+        while the attack runs, and into Resume when it is paused) and Stop. Tab
+        add/remove and Beautify sit on the left next to Export/Clear.
+        """
         tab = self._active_tab
         running = bool(tab and tab.running)
         paused = bool(tab and tab.paused)
         done = tab.result_count if tab else 0
-        state = (
-            HeaderAction(
-                "start",
-                "▶ Start" if not running else "▶ Resume",
-                enabled=not running or paused,
-            ),
-            HeaderAction("pause", "⏸ Pause", enabled=running and not paused),
-            HeaderAction("stop", "■ Stop", enabled=running),
-        )
+
+        if running and not paused:
+            primary = HeaderAction("pause", "⏸ Pause", enabled=True)
+        elif paused:
+            primary = HeaderAction("start", "▶ Resume", enabled=True)
+        else:
+            primary = HeaderAction("start", "▶ Start", enabled=True)
+
         counters: tuple[str, ...] = (f"{done} req",) if done else ()
         return HeaderSpec(
-            state=state,
+            state=(primary, HeaderAction("stop", "■ Stop", enabled=running)),
             counters=counters,
             actions=(
-                HeaderAction("export", "⤓ Export CSV", enabled=bool(tab and tab.result_count)),
-                HeaderAction("clear", "⌫ Clear results", enabled=bool(tab and tab.result_count)),
+                HeaderAction("new_tab", "➕ Tab"),
+                HeaderAction("close_tab", "➖ Tab"),
+                HeaderAction("beautify", "✨ Beautify"),
+                HeaderAction("export", "⤓ Export CSV", enabled=bool(done)),
+                HeaderAction("clear", "⌫ Clear results", enabled=bool(done)),
             ),
-            more=(
-                HeaderAction("new_tab", "➕ New tab"),
-                HeaderAction("close_tab", "➖ Close tab"),
-                HeaderAction("mark_params", "✨ Mark params"),
-            ),
+            more=(HeaderAction("mark_params", "✨ Mark params"),),
         )
 
     def header_action(self, action_id: str) -> None:
@@ -871,9 +874,31 @@ class IntruderScreen(
             self.action_new_tab()
         elif action_id == "close_tab":
             self.action_close_tab()
+        elif action_id == "beautify":
+            self._beautify_active_template()
         elif action_id == "mark_params":
             self._prompt_auto_mark()
         self._refresh_header_now()
+
+    def _beautify_active_template(self) -> None:
+        """Beautify the template of the active tab (header button).
+
+        Delegates to the editor widget that already knows how to split headers
+        from the body and pretty-print JSON/XML — no second implementation here.
+        """
+        tab = self._active_tab
+        if tab is None:
+            return
+        try:
+            panel = self._template_editor(tab)
+            changed = panel.content_widget.beautify_body()  # type: ignore[attr-defined]
+        except Exception:
+            logger.warning("intruder: template beautify failed for %s", tab.tab_id, exc_info=True)
+            return
+        if changed:
+            self.notify("Template beautified", timeout=2)
+        else:
+            self.notify("Nothing to beautify — no valid JSON/XML body found", severity="warning", timeout=3)
 
     def header_tab_selected(self, tab_id: str) -> None:
         """Sub-tabs belong to the tab body (Positions/Payloads/…), not the header."""

@@ -9,17 +9,15 @@ from __future__ import annotations
 
 from pentool.core.logging import get_logger
 from pentool.tui.screens import (
-    ComparerScreen,
     DashboardScreen,
-    DecoderScreen,
     ExtensionsScreen,
     IntruderScreen,
     ProxyScreen,
     RepeaterScreen,
     ScannerScreen,
-    SequencerScreen,
     SettingsScreen,
     TargetScreen,
+    UtilsScreen,
 )
 
 logger = get_logger(__name__)
@@ -32,9 +30,8 @@ SCREEN_MAP: dict[str, type] = {
     "intruder": IntruderScreen,
     "scanner": ScannerScreen,
     "target": TargetScreen,
-    "decoder": DecoderScreen,
-    "comparer": ComparerScreen,
-    "sequencer": SequencerScreen,
+    # Decoder / Comparer / Sequencer are sub-tabs of one module now.
+    "utils": UtilsScreen,
     "extensions": ExtensionsScreen,
     "settings": SettingsScreen,
 }
