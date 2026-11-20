@@ -25,14 +25,18 @@ from pathlib import Path
 
 import pytest
 from textual.app import App
+from textual.containers import Vertical
 from textual.css.query import NoMatches
-from textual.widgets import Static
+from textual.widgets import Button, Static
 
+from pentool.tui.app import PentoolApp
 from pentool.tui.widgets import filter_bar_widget
 from pentool.tui.widgets.option_cycler import OptionCycler
 from pentool.tui.widgets.proxy_filter_bar import HistoryFilterBar, ProxyFilterBar, WsFilterBar
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _TUI = Path(__file__).resolve().parents[3] / "pentool" / "tui"
+_APP_CSS = (_TUI / "app.tcss").read_text(encoding="utf-8")
 
 
 # ── F-020: OptionCycler absorbed Cycler ─────────────────────────────────────
@@ -145,6 +149,167 @@ async def test_bar_renders_scope_and_comments_toggles(bar: type[HistoryFilterBar
         await pilot.pause()
         ids = {widget.id for widget in app.query("*") if widget.id}
     assert {"fb-scope", "fb-comments", "fb-apply", "fb-reset"} <= ids
+
+
+async def _clipped_controls(
+    bar: type[HistoryFilterBar],
+    width: int,
+    *,
+    shrink: bool = False,
+) -> dict[str, object]:
+    """Render the bar at ``width`` and report the controls past the card edge.
+
+    ``shrink=True`` emulates the real path: mount wide, then shrink the terminal
+    so the bar gets a genuine Resize (hand-setting the screen class is *not*
+    enough — the width change then arrives without any resize event).
+
+    Everything is read inside the running app — the widgets are unmounted by the
+    time the ``async with`` block ends.
+    """
+    breakpoint = PentoolApp.NARROW_BREAKPOINT
+
+    class _Host(App):
+        # The real app.tcss is loaded so `.card-host` (the border that eats two
+        # columns) and the window frame apply as they do in the app: `#app-shell`
+        # spends two columns on its border (+ two more of padding when the
+        # terminal is not narrow).
+        CSS = (
+            _APP_CSS
+            + """
+        #table-area { height: 1fr; width: 1fr; }
+        #filter-bar { height: auto; }
+        """
+        )
+
+        def compose(self):
+            with Vertical(id="app-shell"):
+                with Vertical(id="table-area"):
+                    yield bar(id="filter-bar", classes="card-host")
+
+        def on_resize(self, event) -> None:
+            self.screen.set_class(event.size.width < breakpoint, "narrow")
+
+    app = _Host()
+    start = max(width, breakpoint) if shrink else width
+    async with app.run_test(size=(start, 20)) as pilot:
+        await pilot.pause()
+        if shrink:
+            await pilot.resize_terminal(width, 20)
+            await pilot.pause()
+        mounted = app.query_one("#filter-bar")
+        avail = mounted.content_region.width
+        # Controls live in the two `.fb-row` containers; clipping is decided per
+        # row, because a row is what overflows.
+        clipped: list[str] = []
+        need = 0
+        for row in mounted.children:
+            row_need = max((child.region.right for child in row.children), default=0)
+            need = max(need, row_need)
+            clipped += [child.id or child.__class__.__name__ for child in row.children if child.region.right > avail]
+        apply_button = mounted.query_one("#fb-apply", Button)
+        reset_button = mounted.query_one("#fb-reset", Button)
+        result: dict[str, object] = {
+            "clipped": clipped,
+            "need": need,
+            "avail": avail,
+            "two_rows": mounted.is_two_rows,
+            "apply_label": str(apply_button.label),
+            "reset_label": str(reset_button.label),
+            "scope_label": str(mounted.query_one("#fb-scope", ToolbarButton).label),
+            "comments_label": str(mounted.query_one("#fb-comments", ToolbarButton).label),
+        }
+    # Screen margin is two cells per side, one below the app's narrow breakpoint;
+    # the card border takes one more per side.
+    margin = 4 if width < breakpoint else 6
+    assert avail == width - margin, "card border / screen margin not applied — the guard would measure wrong room"
+    return result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bar", [ProxyFilterBar, WsFilterBar], ids=lambda c: c.__name__)
+async def test_bar_controls_fit_120_columns(bar: type[HistoryFilterBar]) -> None:
+    """Every control has to stay inside the card, not be clipped by it.
+
+    The bar is one horizontal row, so a field that is a few cells too wide
+    silently pushes Filter/Clear past the right border — the buttons are still
+    in the tree and still "clickable" for a flat assertion, they are just not
+    drawn. The guard renders the bar at the width the app is used at and
+    compares the right edge of the last control with the content area inside
+    the card border.
+    """
+    result = await _clipped_controls(bar, 120)
+    assert not result["clipped"], f"at 120 columns these controls are clipped: {result}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bar", [ProxyFilterBar, WsFilterBar], ids=lambda c: c.__name__)
+@pytest.mark.parametrize("width", [100, 90])
+async def test_bar_controls_fit_after_shrinking_the_terminal(bar: type[HistoryFilterBar], width: int) -> None:
+    """Shrinking the terminal must not cut the controls off.
+
+    A single row cannot hold five labelled fields plus two spelled-out toggles
+    and Filter/Clear below ~113 cells (measured), so the bar stacks its two
+    logical rows instead of abbreviating anything. This is the case the user hit
+    while reviewing the cards UI: Filter/Clear were cut off at 100 and 90.
+    """
+    result = await _clipped_controls(bar, width, shrink=True)
+    assert not result["clipped"], f"bar clipped at {width} columns: {result}"
+
+
+@pytest.mark.asyncio
+async def test_narrow_bar_stacks_its_rows() -> None:
+    """Two rows, but nothing abbreviated: the words stay."""
+    result = await _clipped_controls(ProxyFilterBar, 90, shrink=True)
+    assert result["two_rows"] is True
+    assert result["scope_label"] == "Scope"
+    assert result["comments_label"] == "Comments"
+    assert result["apply_label"] == "Filter"
+    assert result["reset_label"] == "Clear"
+
+
+@pytest.mark.asyncio
+async def test_wide_bar_keeps_a_single_row() -> None:
+    """At 120 columns the two rows sit side by side again."""
+    result = await _clipped_controls(ProxyFilterBar, 120)
+    assert result["two_rows"] is False
+    assert result["scope_label"] == "Scope"
+    assert result["apply_label"] == "Filter"
+
+
+@pytest.mark.asyncio
+async def test_toggle_label_spells_the_state_it_is_in() -> None:
+    """Clicking a toggle rewrites its label — that is why words cost only one word.
+
+    `Scope` → `In scope`, `Comments` → `Commented`: the button always reads like
+    the filter it applies, so the glyph-and-tooltip trick is not needed.
+    """
+
+    class _Host(App):
+        CSS = (
+            _APP_CSS
+            + """
+        #table-area { height: 1fr; width: 1fr; }
+        #filter-bar { height: auto; }
+        """
+        )
+
+        def compose(self):
+            with Vertical(id="table-area"):
+                yield ProxyFilterBar(id="filter-bar", classes="card-host")
+
+    app = _Host()
+    async with app.run_test(size=(120, 20)) as pilot:
+        await pilot.pause()
+        bar = app.query_one("#filter-bar", ProxyFilterBar)
+        await pilot.click("#fb-scope")
+        await pilot.click("#fb-comments")
+        await pilot.pause()
+        scope = str(bar.query_one("#fb-scope", ToolbarButton).label)
+        comments = str(bar.query_one("#fb-comments", ToolbarButton).label)
+        predicates = {p.field for p in bar.collect()}
+    assert scope == "In scope"
+    assert comments == "Commented"
+    assert {"scope_only", "comment"} <= predicates
 
 
 def test_ws_bar_still_pins_websocket_only() -> None:

@@ -176,7 +176,7 @@ class ContentPanel(Widget):
 
     def compose(self) -> ComposeResult:
         with Horizontal(classes="cp-title panel-title"):
-            yield Static(self._panel_title)
+            yield Static(esc(self.display_title))
             tip_on = self.tooltips_enabled()
             for bk in self._buttons:
                 lbl = self.button_label(bk)
@@ -268,6 +268,17 @@ class ContentPanel(Widget):
         else:
             w.clear()
 
+    @property
+    def display_title(self) -> str:
+        """Title as drawn in the header: ``┌─ Request ─`` (cards plan, step 4).
+
+        The frame is added here rather than by every caller so a dynamic title
+        keeps working: `set_title` stores the bare text and only the rendering
+        gets the brackets, e.g. ``┌─ Response · 200 OK · 1.2 KB ─``. The title
+        itself is not re-cased — the Comparer puts file names in it.
+        """
+        return f"┌─ {self._panel_title} ─" if self._panel_title else ""
+
     def set_title(self, title: str) -> None:
         """Обновить заголовок панели (Static в .cp-title).
 
@@ -277,7 +288,7 @@ class ContentPanel(Widget):
         """
         self._panel_title = title
         try:
-            self.query_one(".cp-title > Static", Static).update(esc(title))
+            self.query_one(".cp-title > Static", Static).update(esc(self.display_title))
         except NoMatches as exc:
             # Заголовок на экране отстаёт от того, что реально загружено в
             # панель: две панели рядом выглядят одинаково.

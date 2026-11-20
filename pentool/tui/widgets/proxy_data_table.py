@@ -96,6 +96,14 @@ class ProxyDataTable(ArrowBackendDataTable):
         else:
             await super().on_event(event)
 
+    # ── Column widths: Host and URL share the leftover width ─────────────
+
+    #: The cards plan's "URL → 1fr": Host is clamped so a long hostname cannot
+    #: push the URL out of view, URL absorbs the rest. The mechanism itself
+    #: lives in the shared base (`ArrowBackendDataTable.fit_columns`) — another
+    #: module opts in by declaring its own spec, no maths copied around.
+    SPARE_COLUMNS = {"Host": (14, 26), "URL": (20, None)}
+
     # ── Infinite scroll ───────────────────────────────────────────────────
 
     def watch_scroll_y(self, old_value: float, new_value: float) -> None:

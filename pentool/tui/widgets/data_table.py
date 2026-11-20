@@ -16,7 +16,9 @@ from typing import Any
 
 import pyarrow as pa
 from rich.text import Text as RichText
+from textual import events as _events
 from textual_fastdatatable import ArrowBackend, DataTable
+from textual_fastdatatable.column import CELL_X_PADDING
 
 from pentool.core.logging import get_logger
 
@@ -102,10 +104,39 @@ class ArrowBackendDataTable(DataTable):
             self._clear_caches()
             self._require_update_dimensions = True
             self.refresh()
+            self._schedule_fit()
         except Exception as exc:
             from pentool.core.logging import get_logger as _log
 
             _log().error("ArrowBackendDataTable.set_data failed: %s", exc)
+
+    # ── Header affordance: sortable columns must look clickable ───────────
+
+    #: Column under the mouse while it is over the header row, else None.
+    _header_hover_column: int | None = None
+
+    def watch_hover_coordinate(self, old_value: Any, new_value: Any) -> None:
+        """Keep the mouse cursor honest over the header row.
+
+        Sorting is bound to clicking a header (`HeaderSelected`), but nothing on
+        screen said so: the cursor stayed an arrow everywhere, so a sortable
+        header was indistinguishable from a label. Textual picks the cursor
+        shape from the *widget* under the pointer (it walks `styles.pointer` up
+        the DOM), so a per-cell pointer has to be switched here rather than in
+        CSS. Row `-1` is the header row — that is also how the base class tells
+        "hover over header" when it builds the cell tooltip.
+
+        Lives in the shared table base on purpose: every module's table gets it,
+        not just Proxy.
+        """
+        super().watch_hover_coordinate(old_value, new_value)
+        over_header = getattr(new_value, "row", 0) == -1
+        if over_header == (self._header_hover_column is not None):
+            return  # nothing changed — don't touch styles on every pixel
+        self._header_hover_column = getattr(new_value, "column", None) if over_header else None
+        self.styles.pointer = "pointer" if over_header else "default"
+        if self.is_mounted:
+            self.screen.update_pointer_shape()
 
     def add_rows(self, records: list[tuple]) -> None:
         """Append rows, coercing values to the schema types BEFORE inserting.
@@ -124,6 +155,9 @@ class ArrowBackendDataTable(DataTable):
         try:
             result = super().add_rows(prepared)
             self.refresh()
+            # Rows change whether the vertical scrollbar is drawn, and that
+            # takes two cells away from the columns.
+            self._schedule_fit()
             return result
         except Exception as exc:
             logger.error("table: add_rows failed, retrying with schema coercion", exc_info=True)
@@ -210,6 +244,108 @@ class ArrowBackendDataTable(DataTable):
             return region.width > 0 and region.height > 0
         except Exception:
             return False
+
+    # ── Column widths: flexible columns that share the leftover space ─────
+    #
+    # DataTable has no `fr` column widths (`Column.width` is a cell count), so
+    # "let URL take the rest" has to be measured and pinned. The mechanism lives
+    # here, in the shared base, and is off by default: a screen opts in by
+    # declaring SPARE_COLUMNS, which keeps every module's table one attribute
+    # away from the same behaviour instead of one more copy of the maths.
+
+    #: Columns that share whatever the fixed ones leave over:
+    #: ``{label: (min_width, max_width)}``. Exactly one entry may use ``None``
+    #: as ``max_width`` — that column absorbs the remainder; the others are
+    #: clamped so a long host name cannot squeeze everything else out.
+    SPARE_COLUMNS: dict[str, tuple[int, int | None]] = {}
+
+    #: Cell padding `Column.render_width` adds to a configured width.
+    _CELL_X_PADDING = CELL_X_PADDING
+
+    _fit_pending: bool = False
+
+    def on_mount(self) -> None:
+        self._schedule_fit()
+
+    def on_resize(self, event: _events.Resize) -> None:
+        self._schedule_fit()
+
+    def _schedule_fit(self) -> None:
+        """Coalesce fits: a burst of appends must not queue one fit each."""
+        if self._fit_pending or not self.is_mounted or not self.SPARE_COLUMNS:
+            return
+        self._fit_pending = True
+        self.call_after_refresh(self._run_fit)
+
+    def _run_fit(self) -> None:
+        self._fit_pending = False
+        self.fit_columns()
+
+    def fit_columns(self) -> None:
+        """Share the table width between the fixed columns and SPARE_COLUMNS.
+
+        Called on mount, on resize and after new data — the moments the table's
+        width or its column set can change. When there is not even room for the
+        minimums, the columns keep their minimums and the table scrolls
+        horizontally, which is the honest fallback.
+        """
+        if not self.SPARE_COLUMNS:
+            return
+        columns = self.ordered_columns
+        if not columns:
+            return
+        by_label = {str(col.label).strip(): index for index, col in enumerate(columns)}
+        spare: list[tuple[int, int, int | None]] = [
+            (by_label[label], low, high) for label, (low, high) in self.SPARE_COLUMNS.items() if label in by_label
+        ]
+        if not spare:
+            return
+        budget = self.content_size.width - self._row_label_column_width
+        if budget <= 0:
+            return
+        spare_indexes = {index for index, _low, _high in spare}
+        fixed = sum(col.render_width for index, col in enumerate(columns) if index not in spare_indexes)
+        # Every spare column pays cell padding on top of its width.
+        free = budget - fixed - self._CELL_X_PADDING * len(spare)
+
+        absorbers = [item for item in spare if item[2] is None]
+        clamped = [item for item in spare if item[2] is not None]
+        widths: dict[int, int] = {}
+        # The absorbing column's minimum is reserved first: it must never end up
+        # below it just because the clamped columns grabbed the space.
+        reserved = sum(low for _index, low, _high in absorbers)
+        share = free - reserved
+        share //= 2 * len(clamped) if clamped else 1
+        for index, low, high in clamped:
+            widths[index] = min(high, max(low, share))  # type: ignore[arg-type]
+        taken = sum(widths.values())
+        for index, low, _high in absorbers:
+            widths[index] = max(low, (free - taken) // max(len(absorbers), 1))
+        self._apply_widths(widths)
+
+    def _apply_widths(self, widths: dict[int, int]) -> None:
+        """Pin column widths and remember them for the next column rebuild.
+
+        `ordered_columns` is rebuilt from `_column_widths` whenever the table is
+        reloaded, so writing only the `Column` objects loses the fit on the next
+        `set_data`.
+        """
+        columns = self.ordered_columns
+        stored = self._column_widths
+        changed = False
+        for index, width in widths.items():
+            column = columns[index]
+            if column.width == width and not column.auto_width:
+                continue
+            column.width = width
+            column.auto_width = False
+            if stored is not None and index < len(stored):
+                stored[index] = width
+            changed = True
+        if not changed:
+            return
+        self._require_update_dimensions = True
+        self.refresh()
 
     def safe_sort(self, col_name: str, direction: str = "ascending") -> bool:
         """Безопасная сортировка через родной DataTable.sort() с crash-guard.

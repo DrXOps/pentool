@@ -381,26 +381,32 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             logger.debug("APP: layout-race guard not installed: %s", exc)
 
     def compose(self) -> ComposeResult:
-        yield ModuleTabs(id="module-tabs")
-        # Only the start screen is mounted. The other module screens are created
-        # on first use and dropped when the user leaves them — see
-        # `tui/screen_lifecycle.py`: with all thirteen mounted (~1600 widgets) the
-        # idle/refresh sweep Textual runs on every action cost about a second per
-        # click; with one mounted it is ~0.3 s (measured 2026-11-20).
-        with ContentSwitcher(initial="screen-dashboard"):
-            yield DashboardScreen(id="screen-dashboard")
-        # Footer and StatusBar both used to `dock: bottom` independently —
-        # in Textual, multiple independently-docked widgets at the same
-        # edge don't stack, they all pin to the same row and overlap each
-        # other (whichever was composed last wins the pixels). That's why
-        # StatusBar (and, inside it, the new ActivityIndicator) never
-        # rendered — Footer, composed after it, was drawn on top and
-        # covered it completely. Wrapping both in one docked container
-        # lets them lay out normally (one above the other) inside it.
-        with Vertical(id="bottom-dock"):
-            yield ModuleHintBar(id="module-hints")
-            yield GlobalHintBar(id="global-hints")
-            yield StatusBar(id="statusbar", now=self._now)
+        # One rounded frame around the whole window: the module strip, the
+        # content and the bottom hints are blocks of the same card language
+        # (`round $foreground`, the frame the inner cards use) instead of a flat
+        # strip on top and a differently shaded strip at the bottom. Cost: two
+        # rows and two columns — see `#app-shell` in app.tcss.
+        with Vertical(id="app-shell"):
+            yield ModuleTabs(id="module-tabs")
+            # Only the start screen is mounted. The other module screens are
+            # created on first use and dropped when the user leaves them — see
+            # `tui/screen_lifecycle.py`: with all thirteen mounted (~1600 widgets)
+            # the idle/refresh sweep Textual runs on every action cost about a
+            # second per click; with one mounted it is ~0.3 s (measured 2026-11-20).
+            with ContentSwitcher(initial="screen-dashboard"):
+                yield DashboardScreen(id="screen-dashboard")
+            # Footer and StatusBar both used to `dock: bottom` independently —
+            # in Textual, multiple independently-docked widgets at the same
+            # edge don't stack, they all pin to the same row and overlap each
+            # other (whichever was composed last wins the pixels). That's why
+            # StatusBar (and, inside it, the new ActivityIndicator) never
+            # rendered — Footer, composed after it, was drawn on top and
+            # covered it completely. Wrapping both in one docked container
+            # lets them lay out normally (one above the other) inside it.
+            with Vertical(id="bottom-dock"):
+                yield ModuleHintBar(id="module-hints")
+                yield GlobalHintBar(id="global-hints")
+                yield StatusBar(id="statusbar", now=self._now)
 
     async def on_mount(self) -> None:
         setup_logging(self._cfg.log_file, self._cfg.log_level)
@@ -915,7 +921,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self.post_message(ConfigChanged(changed_fields))
 
     #: Below this terminal width the layout switches to its compact form.
-    NARROW_BREAKPOINT: int = 80
+    #:
+    #: 100, not 80: the Proxy history filter bar needs 98 cells inside the card
+    #: (five labelled fields plus two spelled-out toggles and Filter/Clear), and
+    #: the window frame takes four of them. At exactly 100 columns the bar was
+    #: clipped — measured on the real screen, not in a synthetic host. The frame
+    #: margin also drops to zero in the narrow form, and the 25% inspector is
+    #: hidden, which is what a 100-column terminal wants anyway.
+    NARROW_BREAKPOINT: int = 100
 
     def on_resize(self, event) -> None:
         """Adapt the layout to the terminal width — never the user's state.

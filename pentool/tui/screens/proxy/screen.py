@@ -215,6 +215,7 @@ class ProxyScreen(
                     initial_text="(No requests waiting for intercept)",
                     buttons=["copy", "paste", "format", "clear"],
                     id="intercept-panel",
+                    classes="card",
                 )
             yield ResizeHandle(
                 "intercept-req-area",
@@ -223,14 +224,14 @@ class ProxyScreen(
                 id="resize-intercept",
             )
             with Horizontal(id="intercept-bottom-area"):
-                with Vertical(id="intercept-sent-panel"):
+                with Vertical(id="intercept-sent-panel", classes="card"):
                     yield HttpView("Sent Request", id="intercept-sent-req")
                 yield ResizeHandle(
                     "intercept-sent-panel",
                     "intercept-resp-panel",
                     id="resize-intercept-sent-resp",
                 )
-                with Vertical(id="intercept-resp-panel"):
+                with Vertical(id="intercept-resp-panel", classes="card"):
                     yield HttpView("Response", id="intercept-resp-viewer")
 
     def _compose_history_tab(self) -> ComposeResult:
@@ -239,16 +240,17 @@ class ProxyScreen(
                 with Vertical(id="main-panel"):
                     with Vertical(id="table-area"):
                         yield FilterBar(id="filter-bar", classes="card-host")
-                        yield DataTable(
-                            columns=_COL_NAMES,
-                            initial_table=_make_empty_table(),
-                            id="request-list",
-                            cursor_type="row",
-                            zebra_stripes=True,
-                            max_column_content_width=120,
-                            column_widths=[5, 20, 8, 60, 6, 8, 8],
-                        )
-                        yield Static("", id="history-count", classes="history-count")
+                        with Vertical(id="history-card", classes="card"):
+                            yield DataTable(
+                                columns=_COL_NAMES,
+                                initial_table=_make_empty_table(),
+                                id="request-list",
+                                cursor_type="row",
+                                zebra_stripes=True,
+                                max_column_content_width=120,
+                                column_widths=[5, 24, 8, 24, 6, 8, 8],
+                            )
+                            yield Static("", id="history-count", classes="history-count")
                     yield ResizeHandle(
                         "table-area",
                         "detail-area",
@@ -256,14 +258,14 @@ class ProxyScreen(
                         id="resize-table-detail",
                     )
                     with Horizontal(id="detail-area"):
-                        with Vertical(id="req-panel"):
+                        with Vertical(id="req-panel", classes="card"):
                             yield HttpView("Request", id="req-editor")
                         yield ResizeHandle(
                             "req-panel",
                             "resp-panel",
                             id="resize-req-resp",
                         )
-                        with Vertical(id="resp-panel"):
+                        with Vertical(id="resp-panel", classes="card"):
                             yield HttpView("Response", id="resp-viewer")
                 yield InspectorPanel(id="inspector-panel")
 
@@ -273,15 +275,16 @@ class ProxyScreen(
                 with Vertical(id="ws-main-panel"):
                     with Vertical(id="ws-table-area"):
                         yield WsFilterBar(id="ws-filter-bar", classes="card-host")
-                        yield DataTable(
-                            columns=_COL_NAMES,
-                            initial_table=_make_empty_table(),
-                            id="ws-request-list",
-                            cursor_type="row",
-                            zebra_stripes=True,
-                            column_widths=[5, 20, 8, 60, 6, 8, 8],
-                        )
-                        yield Static("", id="ws-history-count", classes="history-count")
+                        with Vertical(id="ws-history-card", classes="card"):
+                            yield DataTable(
+                                columns=_COL_NAMES,
+                                initial_table=_make_empty_table(),
+                                id="ws-request-list",
+                                cursor_type="row",
+                                zebra_stripes=True,
+                                column_widths=[5, 24, 8, 24, 6, 8, 8],
+                            )
+                            yield Static("", id="ws-history-count", classes="history-count")
                     yield ResizeHandle(
                         "ws-table-area",
                         "ws-detail-area",
@@ -289,14 +292,14 @@ class ProxyScreen(
                         id="resize-ws-table-detail",
                     )
                     with Horizontal(id="ws-detail-area"):
-                        with Vertical(id="ws-req-panel"):
+                        with Vertical(id="ws-req-panel", classes="card"):
                             yield HttpView("Request", id="ws-req-editor")
                         yield ResizeHandle(
                             "ws-req-panel",
                             "ws-resp-panel",
                             id="resize-ws-req-resp",
                         )
-                        with Vertical(id="ws-resp-panel"):
+                        with Vertical(id="ws-resp-panel", classes="card"):
                             yield HttpView("Response", id="ws-resp-viewer")
                     yield ResizeHandle(
                         "ws-detail-area",
@@ -312,6 +315,7 @@ class ProxyScreen(
                             max_lines=1000,
                             buttons=["copy", "clear"],
                             id="ws-msg-panel",
+                            classes="card",
                         )
 
     def compose(self) -> ComposeResult:
@@ -465,17 +469,9 @@ class ProxyScreen(
             arrow = _rows_to_arrow(rows)
             table = self.query_one("#request-list", DataTable)
             table.set_data(arrow)
-            table._ordered_columns = None
-            try:
-                for col in table.ordered_columns:
-                    if str(col.label).strip().startswith("Host"):
-                        col.width = 30
-                        col.auto_width = False
-                        break
-            except Exception:  # logging-ok: косметика — ширина колонки, данные на месте
-                # Колонка Host остаётся автоподобранной — таблица читается хуже,
-                # но данные на месте. След нужен, чтобы не искать причину заново.
-                logger.debug("proxy: Host column width not pinned")
+            # Column widths are owned by the table itself (ProxyDataTable
+            # .fit_columns): Host and URL share whatever the fixed columns
+            # leave, so the table never needs a horizontal scrollbar.
             table._clear_caches()
             table._require_update_dimensions = True
             table.refresh()
@@ -685,15 +681,7 @@ class ProxyScreen(
                 logger.debug("proxy: WS table not found, page not shown: %s", exc)
                 return
             table.set_data(arrow)
-            table._ordered_columns = None
-            try:
-                for col in table.ordered_columns:
-                    if str(col.label).strip().startswith("Host"):
-                        col.width = 30
-                        col.auto_width = False
-                        break
-            except Exception:  # logging-ok: косметика — ширина колонки
-                logger.debug("proxy: WS Host column width not pinned")
+            # Same as the HTTP table: widths are fitted by the table itself.
             table._clear_caches()
             table._require_update_dimensions = True
             table.refresh()

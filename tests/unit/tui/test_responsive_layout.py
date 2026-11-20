@@ -141,8 +141,12 @@ class TestNoStateMutationOnResize:
         assert "set_class" in called
 
     def test_breakpoint_is_named_and_used_once(self) -> None:
-        assert PentoolApp.NARROW_BREAKPOINT == 80
+        # 100 since 2026-11-20: the Proxy history filter bar needs 96 cells
+        # inside the card, and the wide screen margin (`padding: 0 2`) takes four
+        # of them — at 100 columns the app has to be in its narrow form. The
+        # value lives here as a guard against a hard-coded number creeping back.
+        assert PentoolApp.NARROW_BREAKPOINT == 100
         from pentool.tui import app as app_module
 
         src = inspect.getsource(app_module)
-        assert "< 80" not in src, "hard-coded 80 left behind — use NARROW_BREAKPOINT"
+        assert "< 100" not in src, "hard-coded breakpoint left behind — use NARROW_BREAKPOINT"

@@ -1,7 +1,9 @@
 HintBarBase {
 height: 1;
 dock: none;
-background: $surface;
+/* `$panel`, not `$surface`: вместе со `StatusBar` низ приложения читается как
+   один блок того же цвета, что полоса модулей сверху. */
+background: $panel;
 padding: 0 1;
 color: $text-muted;
 }

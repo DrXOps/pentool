@@ -1,7 +1,9 @@
 StatusBar {
     height: 1;
     dock: bottom;
-    background: $primary-darken-3;
+    /* Same block colour as the two hint bars above it and the module strip on
+       top: the bottom chrome reads as one panel instead of three shades. */
+    background: $panel;
     layout: horizontal;
 }
 StatusBar > _Left {

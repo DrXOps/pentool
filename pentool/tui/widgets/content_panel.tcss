@@ -11,7 +11,8 @@ ContentPanel > .cp-title {
 ContentPanel > .cp-title > Static {
     width: 1fr;
     height: 1;
-    color: $text-muted;
+    /* Section headers in the cards UI: `┌─ REQUEST ─`, accent + bold. */
+    color: $accent;
     text-style: bold;
 }
 /* Кнопки в заголовке */
