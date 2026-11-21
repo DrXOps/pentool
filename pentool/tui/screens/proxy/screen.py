@@ -238,9 +238,12 @@ class ProxyScreen(
         """
         with Horizontal(id="body"):
             with Vertical(id="main-panel"):
-                with Vertical(id="table-area"):
-                    yield FilterBar(id="filter-bar", classes="card-host")
-                    with Vertical(id="history-card", classes="card"):
+                # One card for the whole tab: filters, table and the
+                # request/response split live inside it, separated by the resize
+                # handles instead of by gaps between separate cards.
+                with Vertical(id="history-body", classes="card"):
+                    yield FilterBar(id="filter-bar")
+                    with Vertical(id="table-area"):
                         yield DataTable(
                             columns=_COL_NAMES,
                             initial_table=_make_empty_table(),
@@ -251,22 +254,22 @@ class ProxyScreen(
                             column_widths=[5, 24, 8, 24, 6, 8, 8],
                         )
                         yield Static("", id="history-count", classes="history-count")
-                yield ResizeHandle(
-                    "table-area",
-                    "detail-area",
-                    vertical=True,
-                    id="resize-table-detail",
-                )
-                with Horizontal(id="detail-area"):
-                    with Vertical(id="req-panel", classes="card"):
-                        yield HttpView("Request", id="req-editor")
                     yield ResizeHandle(
-                        "req-panel",
-                        "resp-panel",
-                        id="resize-req-resp",
+                        "table-area",
+                        "detail-area",
+                        vertical=True,
+                        id="resize-table-detail",
                     )
-                    with Vertical(id="resp-panel", classes="card"):
-                        yield HttpView("Response", id="resp-viewer")
+                    with Horizontal(id="detail-area"):
+                        with Vertical(id="req-panel"):
+                            yield HttpView("Request", id="req-editor")
+                        yield ResizeHandle(
+                            "req-panel",
+                            "resp-panel",
+                            id="resize-req-resp",
+                        )
+                        with Vertical(id="resp-panel"):
+                            yield HttpView("Response", id="resp-viewer")
             yield InspectorPanel(id="inspector-panel")
 
     def _compose_ws_tab(self) -> ComposeResult:
@@ -276,9 +279,9 @@ class ProxyScreen(
         """
         with Horizontal(id="ws-body"):
             with Vertical(id="ws-main-panel"):
-                with Vertical(id="ws-table-area"):
-                    yield WsFilterBar(id="ws-filter-bar", classes="card-host")
-                    with Vertical(id="ws-history-card", classes="card"):
+                with Vertical(id="ws-history-body", classes="card"):
+                    yield WsFilterBar(id="ws-filter-bar")
+                    with Vertical(id="ws-table-area"):
                         yield DataTable(
                             columns=_COL_NAMES,
                             initial_table=_make_empty_table(),
@@ -288,22 +291,22 @@ class ProxyScreen(
                             column_widths=[5, 24, 8, 24, 6, 8, 8],
                         )
                         yield Static("", id="ws-history-count", classes="history-count")
-                yield ResizeHandle(
-                    "ws-table-area",
-                    "ws-detail-area",
-                    vertical=True,
-                    id="resize-ws-table-detail",
-                )
-                with Horizontal(id="ws-detail-area"):
-                    with Vertical(id="ws-req-panel", classes="card"):
-                        yield HttpView("Request", id="ws-req-editor")
                     yield ResizeHandle(
-                        "ws-req-panel",
-                        "ws-resp-panel",
-                        id="resize-ws-req-resp",
+                        "ws-table-area",
+                        "ws-detail-area",
+                        vertical=True,
+                        id="resize-ws-table-detail",
                     )
-                    with Vertical(id="ws-resp-panel", classes="card"):
-                        yield HttpView("Response", id="ws-resp-viewer")
+                    with Horizontal(id="ws-detail-area"):
+                        with Vertical(id="ws-req-panel"):
+                            yield HttpView("Request", id="ws-req-editor")
+                        yield ResizeHandle(
+                            "ws-req-panel",
+                            "ws-resp-panel",
+                            id="resize-ws-req-resp",
+                        )
+                        with Vertical(id="ws-resp-panel"):
+                            yield HttpView("Response", id="ws-resp-viewer")
                 yield ResizeHandle(
                     "ws-detail-area",
                     "ws-messages-area",

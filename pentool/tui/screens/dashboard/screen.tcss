@@ -91,8 +91,6 @@ DashboardScreen #logo {
 DashboardScreen #top-row {
     height: 9;
     layout: horizontal;
-    padding: 0 1;
-    margin-top: 1;
 }
 DashboardScreen #top-row LiveChart {
     width: 1fr;
@@ -117,8 +115,6 @@ DashboardScreen #dash-resources {
 DashboardScreen #main-area {
     height: 1fr;
     layout: horizontal;
-    padding: 0 1;
-    margin-top: 1;
 }
 /* Left column — Projects */
 DashboardScreen #left-pane {
@@ -208,14 +204,20 @@ DashboardScreen #status-panel .led-item {
     height: 1;
     color: $text-muted;
 }
-/* Lower part of right column: Vulnerability Matrix */
+/* Lower part of right column: matrix (2/3) + subscription (1/3). The matrix used
+   to own the whole width and height here; it is a heatmap, not the main content
+   of the screen, so it makes room for the licence card. */
+DashboardScreen #bottom-row {
+    height: 1fr;
+    layout: horizontal;
+}
 DashboardScreen #matrix-col {
+    width: 2fr;
     height: 1fr;
     /* Without a floor the matrix collapsed to its frame (0 content rows) on a
        40-row terminal and showed an empty card. It needs the header, the column
-        row and a few finding rows. */
-    min-height: 8;
-    margin-top: 1;
+       row and a few finding rows. */
+    min-height: 5;
     border: round $foreground;
     background: transparent;
 }
@@ -223,4 +225,23 @@ DashboardScreen #matrix-col SeverityMatrix {
     height: 1fr;
     width: 1fr;
     border: none;
+}
+DashboardScreen #subscription-col {
+    width: 1fr;
+    height: 1fr;
+    min-height: 5;
+    margin-left: 1;
+    border: round $foreground;
+    background: transparent;
+    padding: 0 1;
+    layout: vertical;
+}
+DashboardScreen #subscription-title {
+    height: 1;
+    color: $accent;
+    text-style: bold;
+}
+DashboardScreen #subscription-body {
+    height: 1fr;
+    color: $text-muted;
 }

@@ -67,6 +67,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
                     widget_type="textarea",
                     buttons=["copy", "paste", "clear"],
                     id="dec-input",
+                    classes="card",
                 )
 
             yield ResizeHandle("dec-input-col", "dec-output-col", id="dec-resize-h")
@@ -79,6 +80,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
                     textarea_read_only=True,
                     buttons=["copy"],
                     id="dec-output",
+                    classes="card",
                 )
 
         yield ResizeHandle("dec-work-area", "dec-steps-area", vertical=True, id="dec-resize-v")
@@ -92,6 +94,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
                 max_lines=200,
                 buttons=["copy", "clear"],
                 id="dec-steps-log",
+                classes="card",
             )
 
     # ── Toolbar actions ────────────────────────────────────────────────────────

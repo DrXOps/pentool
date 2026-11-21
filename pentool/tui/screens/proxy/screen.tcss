@@ -27,13 +27,15 @@ ProxyScreen #filter-bar {
     /* Было 1; карточка с рамкой требует auto (рамка = +2 строки). */
     height: auto;
 }
-/* Table + "showing N of M" strip live in one card under the filter bar; the
-   bar keeps its own white frame, so the two blocks read as stacked cards
-   rather than a frame inside a frame. */
-ProxyScreen #history-card,
-ProxyScreen #ws-history-card {
+/* One card per history tab: filters, the table and the request/response split
+   are children of `#history-body` (`#ws-history-body`), so the tab reads as a
+   single block instead of a plate with three unrelated cards stacked under it.
+   The bar has no frame of its own — its bottom line separates it from the table. */
+ProxyScreen #history-body,
+ProxyScreen #ws-history-body {
     height: 1fr;
-    min-height: 4;
+    min-height: 6;
+    padding: 0 1;
 }
 /* Panels that are themselves the card (no wrapper): `ContentPanel` ships
    `height: auto`, and with the border that is taller than its area — the last

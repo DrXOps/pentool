@@ -480,8 +480,46 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
                             id="led-threads-bar",
                             classes="led-item",
                         )
-                with Vertical(id="matrix-col"):
-                    yield SeverityMatrix(id="vuln-matrix")
+                with Horizontal(id="bottom-row"):
+                    with Vertical(id="matrix-col"):
+                        yield SeverityMatrix(id="vuln-matrix")
+                    with Vertical(id="subscription-col"):
+                        yield Static("SUBSCRIPTION", id="subscription-title")
+                        yield Static("", id="subscription-body")
+
+    def _refresh_subscription(self) -> None:
+        """Fill the subscription card from the current license.
+
+        Read-only overview: plan, expiry, the features this build actually has,
+        and the machine id prefix (support asks for it when a key does not
+        activate). A failed check shows the reason instead of a fake "FREE".
+        """
+        try:
+            from pentool.core.license import get_session_license
+
+            info = get_session_license()
+        except Exception:
+            logger.warning("dashboard: license not read for the subscription card", exc_info=True)
+            return
+
+        plan = info.status_text
+        if not info.valid and info.error:
+            plan = f"{plan} ({info.error})"
+        features = ", ".join(sorted(info.features)) if info.features else "—"
+        machine = (info.machine_id or "—")[:12]
+        # Plain text on purpose: `$success` is a CSS variable, not markup, and a
+        # Static with an unknown tag renders nothing at all (the card stayed
+        # blank until this was caught). Colour comes from the widget styles.
+        lines = [
+            f"Plan:     {plan}",
+            f"Expires:  {info.expires_text}",
+            f"Features: {features}",
+            f"Machine:  {machine}",
+        ]
+        try:
+            self.query_one("#subscription-body", Static).update("\n".join(lines))
+        except NoMatches as exc:
+            logger.debug("dashboard: subscription card not mounted: %s", exc)
 
     # ── Module header (see pentool/tui/header.py) ─────────────────────────
     def header_spec(self) -> HeaderSpec:
@@ -537,6 +575,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         self._populate_projects()
         self._update_ai_status()
         self._init_ai_sync()
+        self._refresh_subscription()
         self._boot_animate()
         # Layout of the blocks above is not final yet at mount; decide about the
         # matrix once the first layout pass is done.
@@ -549,6 +588,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
     def on_show(self) -> None:
         """При показе — синхронизировать AI статус."""
         self._update_ai_status()
+        self._refresh_subscription()
         self._fit_matrix()
 
     def _fit_matrix(self) -> None:

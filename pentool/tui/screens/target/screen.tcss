@@ -11,6 +11,10 @@ TargetScreen #site-tree {
     width: 2fr;
     height: 1fr;
     border: round $foreground;
+    /* Textual's Tree paints its own surface, which inside a transparent card
+       read as a lighter rectangle — the card looked broken (same fix as the
+       dashboard's project tree). */
+    background: transparent;
 }
 TargetScreen #detail-panel {
     width: 1fr;

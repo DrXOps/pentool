@@ -115,17 +115,25 @@ async def test_wide_terminal_gives_the_url_column_the_extra_room() -> None:
 
 
 def test_card_class_is_defined_once_in_app_css() -> None:
-    """`.card` has to exist or tools/check_tui_css.py rejects the class."""
-    assert ".card {" in _APP_CSS
-    assert ".card-host {" in _APP_CSS
+    """One card class, one owner: app.tcss.
+
+    `.card-host` used to duplicate `.card` without the horizontal padding; it is
+    gone (the Proxy filter bars were its last users and now sit inside the single
+    history card), so a second definition would be drift waiting to happen.
+    """
+    assert _APP_CSS.count(".card {") == 1
+    assert ".card-host" not in _APP_CSS
 
 
 def test_history_tabs_wrap_table_and_counter_in_a_card() -> None:
-    """The card is built in compose, so check the structure the screen emits."""
+    """One card per history tab: filters, table and details all live inside it."""
     source = inspect.getsource(ProxyScreen._compose_history_tab) + inspect.getsource(ProxyScreen._compose_ws_tab)
-    assert 'id="history-card", classes="card"' in source
-    assert 'id="ws-history-card", classes="card"' in source
-    assert "ProxyScreen #history-card," in _PROXY_CSS
+    assert 'id="history-body", classes="card"' in source
+    assert 'id="ws-history-body", classes="card"' in source
+    for inner in ("#filter-bar", "#table-area", "#detail-area"):
+        assert f'id="{inner[1:]}"' in source, f"the history card lost {inner}"
+    assert "ProxyScreen #history-body," in _PROXY_CSS
+    assert "ProxyScreen #ws-history-body {" in _PROXY_CSS
 
 
 def test_every_proxy_panel_block_is_a_card() -> None:
@@ -135,17 +143,17 @@ def test_every_proxy_panel_block_is_a_card() -> None:
         + inspect.getsource(ProxyScreen._compose_history_tab)
         + inspect.getsource(ProxyScreen._compose_ws_tab)
     )
+    # Intercept tab: each block is its own card (they are siblings in the tab).
     expected = [
-        'id="req-panel", classes="card"',
-        'id="resp-panel", classes="card"',
-        'id="intercept-panel",',  # the panel itself is the card, see below
         'id="intercept-sent-panel", classes="card"',
         'id="intercept-resp-panel", classes="card"',
-        'id="ws-req-panel", classes="card"',
-        'id="ws-resp-panel", classes="card"',
+        'id="intercept-panel",',  # the ContentPanel itself carries the card class
         'id="ws-msg-panel",',
     ]
     for marker in expected:
         assert marker in source, f"a Proxy panel block lost its card class: {marker}"
-    # ContentPanels take the card on the widget itself, not on a wrapper.
-    assert source.count('classes="card"') >= 7
+    # Inside the history card the panels are plain containers (a frame inside a
+    # frame would read as two cards stacked in one block).
+    for plain in ('id="req-panel")', 'id="resp-panel")', 'id="ws-req-panel")', 'id="ws-resp-panel")'):
+        assert plain in source, f"an inner panel should not be a card of its own: {plain}"
+    assert source.count('classes="card"') >= 4

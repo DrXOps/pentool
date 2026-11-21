@@ -169,10 +169,10 @@ async def _clipped_controls(
     breakpoint = PentoolApp.NARROW_BREAKPOINT
 
     class _Host(App):
-        # The real app.tcss is loaded so `.card-host` (the border that eats two
-        # columns) and the window frame apply as they do in the app: `#app-shell`
-        # spends two columns on its border (+ two more of padding when the
-        # terminal is not narrow).
+        # The real app.tcss is loaded so the card frame/padding and the window
+        # frame apply as they do in the app: `#app-shell` spends columns on its
+        # border (plus padding when the terminal is not narrow), and `.card` adds
+        # a border and one column of padding per side.
         CSS = (
             _APP_CSS
             + """
@@ -184,7 +184,7 @@ async def _clipped_controls(
         def compose(self):
             with Vertical(id="app-shell"):
                 with Vertical(id="table-area"):
-                    yield bar(id="filter-bar", classes="card-host")
+                    yield bar(id="filter-bar", classes="card")
 
         def on_resize(self, event) -> None:
             self.screen.set_class(event.size.width < breakpoint, "narrow")
@@ -218,10 +218,12 @@ async def _clipped_controls(
             "scope_label": str(mounted.query_one("#fb-scope", ToolbarButton).label),
             "comments_label": str(mounted.query_one("#fb-comments", ToolbarButton).label),
         }
-    # Screen margin is two cells per side, one below the app's narrow breakpoint;
-    # the card border takes one more per side.
-    margin = 4 if width < breakpoint else 6
-    assert avail == width - margin, "card border / screen margin not applied — the guard would measure wrong room"
+    # The bar must not be wider than the card it sits in — and the card must not be
+    # wider than the terminal. Exact margins depend on the window frame (border +
+    # optional padding) and the card (border + padding), so the guard checks the
+    # invariant instead of hardcoding cell counts that drift with the CSS.
+    assert 0 < avail < width, "the bar got the full terminal width — card/window chrome is not applied"
+    assert avail >= width - 10, f"bar lost too much width to chrome: {avail} of {width}"
     return result
 
 
@@ -295,7 +297,7 @@ async def test_toggle_label_spells_the_state_it_is_in() -> None:
 
         def compose(self):
             with Vertical(id="table-area"):
-                yield ProxyFilterBar(id="filter-bar", classes="card-host")
+                yield ProxyFilterBar(id="filter-bar", classes="card")
 
     app = _Host()
     async with app.run_test(size=(120, 20)) as pilot:
