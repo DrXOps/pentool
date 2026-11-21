@@ -10,8 +10,8 @@ SequencerScreen #seq-config-row {
     layout: horizontal;
     align: left middle;
     padding: 0 1;
-    background: $panel;
-    border-bottom: solid $primary-darken-3;
+    background: transparent;
+    border-bottom: solid $primary 35%;
 }
 SequencerScreen .seq-cfg-label {
     width: auto;
@@ -21,15 +21,15 @@ SequencerScreen .seq-cfg-label {
 SequencerScreen #btn-seq-source {
     width: auto;
     padding: 0 1;
-    background: $surface;
+    background: transparent;
 }
 SequencerScreen #seq-param-input {
     width: 20;
-    background: $surface;
+    background: transparent;
     margin: 0 2 0 0;
 }
 SequencerScreen #seq-param-input:focus {
-    background: $surface-lighten-1;
+    background: transparent;
 }
 SequencerScreen #seq-counter {
     width: auto;
@@ -40,9 +40,9 @@ SequencerScreen #seq-counter {
 /* ── Summary bar ─────────────────────────────────────────────────────────── */
 SequencerScreen #seq-summary-bar {
     height: 1;
-    background: $panel;
+    background: transparent;
     padding: 0 1;
-    border-bottom: solid $primary-darken-3;
+    border-bottom: solid $primary 35%;
 }
 SequencerScreen #seq-summary {
     width: 1fr;
@@ -86,12 +86,12 @@ SequencerScreen #seq-gauge-area {
     height: 5;
     layout: vertical;
     padding: 0 1;
-    background: $panel;
+    background: transparent;
 }
 SequencerScreen #seq-gauge-label {
     height: 1;
     color: $text-muted;
-    background: $panel;
+    background: transparent;
     padding: 0 0;
 }
 SequencerScreen #seq-gauge {
@@ -101,7 +101,7 @@ SequencerScreen #seq-gauge {
 }
 SequencerScreen #seq-assessment {
     height: 1;
-    color: $primary;
+    color: $accent;
     text-style: bold;
 }
 SequencerScreen #seq-bits-label {

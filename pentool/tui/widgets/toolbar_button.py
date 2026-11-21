@@ -23,6 +23,12 @@ class ToolbarButton(Static):
 
     DEFAULT_CSS = _CSS
 
+    #: Set by the module header: which screen action / sub-tab this button
+    #: stands for. Kept as plain attributes so one widget class serves both
+    #: the fixed toolbar slots and the header's recycled slots.
+    data_action: str = ""
+    data_tab: str = ""
+
     class Pressed(Message):
         """Button press message."""
 

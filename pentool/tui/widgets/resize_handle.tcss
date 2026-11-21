@@ -1,16 +1,25 @@
 ResizeHandle {
-    /* 2 колонки, а не 1: ручка между колонками мышью ловилась с трудом
-       (вертикальная при этом во всю ширину и проблем не вызывала). */
-    width: 2;
-    height: 100%;
-    background: $primary-darken-2;
+    /* 1 column, transparent, drawn as the same thin line as the horizontal
+       divider: the old 2-column $primary-darken-2 bar read as a thick blue
+       stripe between two cards. Grab area is helped by the resize cursor and the
+       hover colour, not by width — the thickness is configurable
+       (`resize_handle_thickness`, default 1).
+       Height is `1fr`, not `100%`: the divider must stretch to fill whatever the
+       row gives it, and `100%` did not always resolve against the parent's full
+       height (the line appeared cut short). */
+    width: 1;
+    height: 1fr;
+    background: transparent;
+    color: $primary-darken-1;
     pointer: ew-resize;  /* horizontal divider — bidirectional horizontal arrow */
 }
 ResizeHandle:hover {
-    background: $primary;
+    background: transparent;
+    color: $primary;
 }
 ResizeHandle.-dragging {
-    background: $accent;
+    background: transparent;
+    color: $accent;
     pointer: grabbing;
 }
 ResizeHandle.-vertical {

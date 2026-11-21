@@ -1,8 +1,22 @@
 HistoryFilterBar {
-    height: 1;
+    /* height: 1 было служебной полосой; в карточке рамка добавляет строку
+       сверху и снизу, поэтому высота — по содержимому блока. */
+    height: auto;
     layout: horizontal;
-    background: $surface;
-    padding: 0 1;
+    background: transparent;
+}
+/* Два логических ряда (поля / действия) лежат в ряд, пока влезают; на узкой
+   полосе класс `.-two-rows` (его ставит сам виджет по своей ширине) меняет
+   раскладку на вертикальную — тогда фильтры в одной строке, тоглы и кнопки в
+   другой. Слова на тоглах («Scope»/«In scope», «Comments»/«Commented») стоят
+   ширины: в одну строку они влезают только от ~113 клеток. */
+HistoryFilterBar .fb-row {
+    width: auto;
+    height: auto;
+    layout: horizontal;
+}
+HistoryFilterBar.-two-rows {
+    layout: vertical;
 }
 HistoryFilterBar .fb-label {
     width: auto;
@@ -14,34 +28,42 @@ HistoryFilterBar Input {
     height: 1;
     border-left: solid $primary-darken-1;
     border-right: solid $primary-darken-1;
-    background: $surface-lighten-1;
+    background: transparent;
     padding: 0 1;
     color: $text;
 }
 HistoryFilterBar Input:focus {
     border-left: solid $primary;
     border-right: solid $primary;
-    background: $surface-lighten-2;
+    background: transparent;
 }
-HistoryFilterBar #fb-host   { width: 16; }
-HistoryFilterBar #fb-url    { width: 20; }
-HistoryFilterBar #fb-status { width: 7; }
-HistoryFilterBar #fb-search { width: 20; }
+HistoryFilterBar #fb-host   { width: 8; }
+HistoryFilterBar #fb-url    { width: 10; }
+HistoryFilterBar #fb-status { width: 6; }
+HistoryFilterBar #fb-search {
+    /* Фиксированная ширина: `1fr` растягивал поле на весь остаток строки. */
+    width: 7;
+}
 HistoryFilterBar #fb-apply {
     height: 1;
     width: auto;
     min-width: 7;
+    /* Button's DEFAULT_CSS carries `line-pad: 1`, which already insets the
+       label by one cell on each side ("Filter" = 6 + 2 = 8 cells). Our own
+       horizontal padding was a second inset on top of that and made the button
+       10 cells wide; dropping it is what buys the room. `line-pad: 0` is not an
+       option: Textual's integer parser rejects 0 for that property. */
     background: $primary-darken-1;
     border: none;
-    padding: 0 1;
+    padding: 0;
 }
 HistoryFilterBar #fb-reset {
     height: 1;
     width: auto;
     min-width: 7;
-    background: $panel;
+    background: transparent;
     border: none;
-    padding: 0 1;
+    padding: 0;
 }
 HistoryFilterBar .fb-sep {
     width: 1;
@@ -50,8 +72,14 @@ HistoryFilterBar .fb-sep {
 }
 HistoryFilterBar OptionCycler {
     height: 1;
-    width: 8;
-    background: $panel;
+    /* OptionCycler's own DEFAULT_CSS pins `min-width: 14`, and min-width beats
+       a plain `width`, so an earlier `width: 4` never took effect: Method and
+       Mark kept eating 14 cells each. Both properties are set here so the bar,
+       not the widget default, decides the width. 7 is the smallest value that
+       shows the default "Any ▼" without clipping. */
+    width: 7;
+    min-width: 7;
+    background: transparent;
     color: $text;
     padding: 0 1;
     pointer: pointer;
@@ -61,9 +89,10 @@ HistoryFilterBar OptionCycler:hover {
 }
 HistoryFilterBar ToolbarButton {
     height: 1;
-    width: 14;
+    width: auto;
+    min-width: 3;
     padding: 0 1;
-    background: $panel;
+    background: transparent;
     color: $text-muted;
     pointer: pointer;
 }
@@ -76,6 +105,6 @@ HistoryFilterBar ToolbarButton.-active {
 }
 HistoryFilterBar ToolbarButton.disabled {
     color: $text-disabled;
-    background: $panel;
+    background: transparent;
     opacity: 0.5;
 }

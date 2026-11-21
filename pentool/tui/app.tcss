@@ -5,8 +5,10 @@ PentoolApp {
     layers: overlay;
 }
 
+/* Верхняя полоса модулей: одна строка подписей + линия под ней. Геометрия
+   живёт здесь, чтобы не было двух владельцев (module_tabs.tcss держит цвета). */
 ModuleTabs {
-    height: 3;
+    height: 2;
     width: 100%;
 }
 
@@ -32,13 +34,55 @@ TabbedContent {
    here with `dock: none` so they stack vertically. */
 #bottom-dock {
     dock: bottom;
+    /* Two content rows (hints + status) + one separator line. */
     height: 3;
     layout: vertical;
+    /* Footer sits on the window background too, closed off from the content by
+       one line in the card-frame colour. */
+    background: transparent;
+    border-top: solid $primary 35%;
 }
 
-#bottom-dock GlobalHintBar { dock: none; height: 1; }
-#bottom-dock ModuleHintBar { dock: none; height: 1; }
+/* Two rows now: the hints row (with its Global/Module switch) and the status
+   bar. The former second hints row was merged into the switch. */
+#bottom-dock #hints-row { dock: none; height: 1; }
 #bottom-dock StatusBar { dock: none; height: 1; }
+
+/* ── Hints row: [ Global ][ Module ]  keys… ────────────────────────────────
+   One row instead of two: the switch changes the content of the same row, so
+   the footer keeps its height while the user works. Scope defaults to the
+   active module — those are the keys needed right now; the global keys are one
+   click (or F2) away. */
+#hints-row {
+    height: 1;
+    width: 100%;
+    background: transparent;
+}
+
+#hints-row ToolbarButton {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    background: transparent;
+    color: $text-muted;
+}
+
+#hints-row ToolbarButton:hover {
+    background: $primary 25%;
+}
+
+#hints-row ToolbarButton.hints-chip-on {
+    background: $primary 35%;
+    color: $text;
+    text-style: bold;
+}
+
+#hints-row #hints-text {
+    width: 1fr;
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
 
 /* Global checkbox style — compact, height 1, no border.
    Glyph itself ("[ ]" / "[✓]") is set once in Checkbox.BUTTON_LEFT/
@@ -90,9 +134,117 @@ Checkbox:focus > .toggle--label {
    конкретных виджетов; класс добавляется к виджету в Python. */
 .panel-title {
     height: 1;
-    background: $primary-darken-3;
+    /* Transparent: the header row of a panel sits inside its card, so a filled
+       strip read as a second, older design language ("blue band over Request /
+       Response"). The accent colour of the title text carries the emphasis. */
+    background: transparent;
     padding: 0 1;
 }
+
+/* ── Заголовки таблиц ─────────────────────────────────────────────────────
+   Заголовок сортируемый (клик = сортировка), но по умолчанию Textual красит
+   наведение в `$secondary 30%` поверх `$primary` — разницы не видно. Здесь
+   подсветка акцентом: наведение на заголовок читается как «сюда можно
+   нажать». Курсор-«рука» над заголовком переключается в
+   `widgets/data_table.ArrowBackendDataTable.watch_hover_coordinate`. */
+DataTable > .datatable--header-hover {
+    background: $accent 35%;
+    color: $text;
+    text-style: bold;
+}
+
+/* ── Хром приложения: вкладки и подчёркивание ─────────────────────────────
+   Один стиль на весь TUI: полоса модулей (`ModuleTabs`) и все `TabbedContent`
+   во всех модулях получают одинаковый вид. По умолчанию Textual рисует под
+   вкладками полосу `━` на всю ширину (`Underline` + `Bar`), и рядом с
+   карточками она читалась как индикатор прогресса. Полосу убираем совсем:
+   активная вкладка видна плашкой цвета карточной рамки, как блоки интерфейса.
+   `display: none` вместо перекраски — `Bar` всё равно рисует символы `━`, а
+   подкрасить их в цвет фона значит оставить мёртвую строку. */
+Underline {
+    display: none;
+}
+/* Строка вкладок теперь одна (подписи), без второй строки под полосу:
+   у `Tabs`/`ContentTabs` по умолчанию высота 2. */
+Tabs {
+    height: 1;
+}
+/* Полоса вкладок без собственной заливки: `ContentTabs` по умолчанию красит
+   себя в `$panel`, и над карточками это читалось как «старый фон» (видно на
+   `Tab 1` в Repeater/Intruder). Хром везде прозрачный, разделён линиями. */
+ContentTabs {
+    background: transparent;
+}
+TabbedContent {
+    background: transparent;
+}
+Tab {
+    color: $text-muted;
+}
+Tab:hover {
+    color: $text;
+    background: $primary 20%;
+}
+Tab.-active {
+    color: $accent;
+    text-style: bold;
+    background: $primary 20%;
+}
+/* Tabs:focus перекрашивает активную вкладку в курсорные цвета — возвращаем
+   «карточный» вид, иначе при фокусе стиль снова расходится с остальным UI. */
+Tabs:focus Tab.-active {
+    color: $accent;
+    text-style: bold;
+    background: $primary 20%;
+}
+
+/* ── Поля ввода ───────────────────────────────────────────────────────────
+   Тулбары и карточки прозрачные, поэтому поле ввода без своей поверхности
+   сливалось с фоном: не видно ни границы поля, ни того, куда печатать. Даём
+   ему ту же «поверхность», что у всплывающих блоков, и подсветку на фокусе.
+   Высота не меняется (рамка не добавляется — она съела бы строку в тулбарах). */
+Input {
+    background: $surface;
+    color: $text;
+}
+
+Input:focus {
+    background: $surface-lighten-1;
+}
+
+/* Текстовые области внутри карточек — наоборот, прозрачные: их поверхность
+   задаёт карточка (см. widgets/content_panel.tcss, request_editor.tcss). */
+TextArea {
+    background: transparent;
+}
+
+/* ── Карточки (ветка feature/tui-cards-proxy) ─────────────────────────────
+   Один владелец скруглений. Правила лежат здесь, потому что Textual
+   префиксует первый селектор DEFAULT_CSS типом виджета
+   (textual/css/parse.py:174) — класс, написанный в tcss экрана или виджета,
+   не совпадёт ни с чем. */
+/* Полоса с адресом/фильтрами: белая рамка, скруглённые края.
+   Цвет именно $foreground: `$text` в палитре Textual нет (есть
+   $text-muted/$text-disabled), а на несуществующей переменной парсер падает
+   с «Invalid value for border property» и роняет всё приложение. */
+.card-host {
+    background: transparent;
+    border: round $foreground;
+}
+/* Обычная карточка: та же белая рамка, что у `.card-host`, чтобы блоки на
+   экране не спорили цветом. Вертикального padding нет — карточки оборачивают
+   таблицы и панели, где лишние строки отнимают место у содержимого.
+   `transition` НЕ ставим: анимация рамки держит кадры 160 мс после каждого
+   наведения/клика. Замер: клик по кнопке в полосе — 335 мс с анимацией против
+   257 мс без неё, и это на каждом действии. */
+.card {
+    background: transparent;
+    border: round $foreground;
+    padding: 0 1;
+}
+/* No hover recolour: a card frame is a frame, not a control. Highlighting it on
+   hover made the layout flicker while the pointer crossed the screen and
+   suggested the whole block was clickable. */
 
 /* Override Textual's built-in toast: replace the default vertical
    severity stripe on the left edge with a full border all the way round,
@@ -131,15 +283,124 @@ Toast.-critical    { border: heavy $error; }
     color: $primary-darken-2;
 }
 
-/* ── Общее поле программы (2026-11-17) ─────────────────────────────────────
+/* ── Module header (row 1 state, row 2 actions/tabs/more) ──────────────────
+   Row 1 lives inside #module-bar, next to the module tabs; row 2 is
+   #module-header, hidden for modules that describe no header (Dashboard).
+   Screens describe it via `HeaderSpec` (pentool/tui/header.py) and never
+   compose their own toolbar. */
+#module-bar {
+    height: 2;
+    width: 100%;
+}
+
+#module-bar ModuleTabs {
+    width: 1fr;
+}
+
+#hdr-state {
+    height: 1;
+    width: auto;
+    align-vertical: top;
+    padding: 0 1;
+}
+
+#hdr-counters {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    color: $accent;
+}
+
+#module-header {
+    /* One content row + one separator line: a 1-row box with a border would leave
+       no room for the buttons (content height 0), which made the header look
+       empty and swallow every click. */
+    height: 2;
+    width: 100%;
+    /* Chrome has no fill of its own: it sits on the window background, separated
+       from the content by one line in the card-frame colour. */
+    background: transparent;
+    border-bottom: solid $primary 35%;
+}
+
+#hdr-actions {
+    height: 1;
+    width: auto;
+}
+
+#hdr-tabs {
+    height: 1;
+    width: 1fr;
+    padding: 0 1;
+}
+
+#hdr-more-zone {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+}
+
+#module-header ToolbarButton {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    background: transparent;
+    color: $text;
+}
+
+#module-header ToolbarButton:hover {
+    background: $primary 25%;
+}
+
+#module-header ToolbarButton.hdr-tab {
+    color: $text-muted;
+}
+
+#module-header ToolbarButton.hdr-tab.hdr-tab-on {
+    background: $primary 55%;
+    color: $text;
+    text-style: bold;
+}
+
+#hdr-state ToolbarButton {
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    background: transparent;
+    color: $text-muted;
+}
+
+#hdr-state ToolbarButton:hover {
+    background: $primary 25%;
+}
+
+#hdr-state ToolbarButton.hdr-state-on {
+    color: $success;
+    text-style: bold;
+}
+
+#hdr-state ToolbarButton.hdr-state-off {
+    color: $text-muted;
+}
+
+/* ── Общее поле программы (2026-11-17, рамка окна — 2026-11-20) ────────────
    Раньше отступы от краёв задавались внутри конкретных экранов: у дашборда
    карточки стояли с полями, а proxy/intruder/target прилипали к краям, и
-   «рамка» приложения выглядела по-разному в каждом модуле. Теперь поле задано
-   один раз для всех экранов: диалоги (ModalScreen) остаются без него, а на
-   узком терминале отступ уменьшается, чтобы не отнимать колонки. */
+   «рамка» приложения выглядела по-разному в каждом модуле. Теперь внешняя
+   граница одна: скруглённая рамка окна (#app-shell) тем же цветом и формой,
+   что у карточек внутри. Экранное поле при этом убрано — рамка и есть поле. */
 
 Screen {
-    padding: 0 2;
+    padding: 0;
+}
+
+/* Окно-карточка: вкладки модулей, содержимое и низ живут внутри одной рамки.
+   `round $foreground` — тот же цвет, что у `.card`/`.card-host`, поэтому
+   вложенные карточки читаются как блоки внутри блока, а не как чужая рамка. */
+#app-shell {
+    background: transparent;
+    border: round $foreground;
+    padding: 0 1;
 }
 
 /* Диалоги — отдельные окна поверх, у них своя рамка. */
@@ -147,8 +408,13 @@ ModalScreen {
     padding: 0;
 }
 
+/* Узкий терминал: поле окна убирается, колонки уходят содержимому. Рамка
+   остаётся (одна клетка с каждой стороны), иначе окно перестаёт быть карточкой. */
 Screen.narrow {
-    padding: 0 1;
+    padding: 0;
+}
+Screen.narrow #app-shell {
+    padding: 0;
 }
 
 /* Narrow terminal: the inspector is the first thing to go, but

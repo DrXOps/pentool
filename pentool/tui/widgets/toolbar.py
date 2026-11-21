@@ -60,22 +60,17 @@ class Toolbar(Horizontal):
 
     @staticmethod
     def grouped(*buttons) -> list:
-        """Кнопки, между которыми разделитель расставлен сам.
+        """Кнопки через пробел, без разделителей.
 
-        Разделители ставились вручную, и при добавлении новой кнопки их
-        забывали — отсюда «Add и Clear слиплись», «Drop и Forward без черты».
-        Здесь слипание невозможно по построению: список готов для
-        ``Toolbar(*children)`` и для ``yield from``.
+        Разделители `│` убраны из интерфейса целиком (2026-11-21): строка
+        кнопок читается по расстоянию, а черты дробили один ряд действий на
+        «группы», которых в модели нет. Метод сохранён, чтобы существующие
+        вызовы не переписывать.
 
         Example:
             Toolbar(*Toolbar.grouped(btn_add, btn_remove, btn_clear))
         """
-        items: list = []
-        for index, button in enumerate(buttons):
-            if index:
-                items.append(Static(" │ ", classes="toolbar-sep"))
-            items.append(button)
-        return items
+        return list(buttons)
 
     @staticmethod
     def buttons(*buttons):

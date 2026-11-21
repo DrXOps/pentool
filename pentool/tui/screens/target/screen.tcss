@@ -10,12 +10,12 @@ TargetScreen #main-split {
 TargetScreen #site-tree {
     width: 2fr;
     height: 1fr;
-    border: solid $primary-darken-3;
+    border: round $foreground;
 }
 TargetScreen #detail-panel {
     width: 1fr;
     height: 1fr;
-    border: solid $primary-darken-3;
+    border: round $foreground;
     layout: vertical;
     padding: 0 1;
 }

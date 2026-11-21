@@ -2,7 +2,7 @@ OptionCycler {
     height: 1;
     width: auto;
     min-width: 14;
-    background: $panel;
+    background: transparent;
     color: $text;
     padding: 0 1;
 }

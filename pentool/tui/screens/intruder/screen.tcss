@@ -7,13 +7,13 @@ IntruderScreen TabbedContent ContentSwitcher {
     height: 1fr;
 }
 IntruderScreen TabbedContent ContentTabs {
-    background: $panel;
+    background: transparent;
     max-width: 100%;
     overflow-x: auto;
     scrollbar-size: 0 0;
 }
 IntruderScreen TabbedContent ContentTabs Tabs {
-    background: $panel;
+    background: transparent;
     min-width: 100%;
     max-width: 100%;
     overflow-x: auto;
@@ -40,23 +40,15 @@ IntruderScreen #intruder-global-toolbar Label.toolbar-label {
 IntruderScreen #intruder-global-toolbar Input {
     width: 6;
     height: 1;
-    border: solid $primary-darken-2;
+    border: round $foreground;
     padding: 0 1;
-    background: $surface;
+    background: transparent;
 }
 IntruderScreen #intruder-global-toolbar #intruder-turbo {
     width: auto;
 }
-/* StartStopWidget не должен растягиваться на всю строку toolbar */
-IntruderScreen #intruder-start-stop {
-    width: auto;
-}
-IntruderScreen #intruder-start-stop Toolbar {
-    width: auto;
-}
-IntruderScreen #intruder-start-stop ToolbarButton {
-    width: auto;
-}
+/* Start / Pause / Stop moved to the module header (see `header_spec()`), so the
+   StartStopWidget rules that used to live here are gone with the widget. */
 
 /* ── Per-tab attack description ─────────────────────────────────────── */
 /* Per-tab widget: id is ``attack-type-desc-<tab_id>`` (IntruderScreen._wid)
@@ -109,21 +101,23 @@ IntruderScreen .intruder-payload-list {
 }
 
 IntruderScreen .section-title {
-    /* height/background/padding — из общего .panel-title (F-038). */
-    color: $text-muted;
+    /* height/background/padding — from the shared `.panel-title` (F-038).
+       Accent colour so the panel headers match Request/Response elsewhere. */
+    color: $accent;
+    text-style: bold;
 }
 
 IntruderScreen .payload-count-label {
     height: 1;
     padding: 0 1;
-    background: $panel;
+    background: transparent;
 }
 
 /* ── Processing bar ─────────────────────────────────────────────────── */
 IntruderScreen .proc-bar {
     height: 1;
     layout: horizontal;
-    background: $panel;
+    background: transparent;
     padding: 0 1;
     align: left middle;
 }
@@ -139,11 +133,16 @@ IntruderScreen .intruder-results-area {
     height: 1fr;
     min-height: 5;
     layout: vertical;
+    /* Results are a block of their own: framed as a card, like the findings
+       table in Scanner and the history table in Proxy. */
+    border: round $foreground;
+    background: transparent;
+    padding: 0 1;
 }
 
 IntruderScreen .progress-row {
     height: 1;
-    background: $panel;
+    background: transparent;
     padding: 0 1;
     layout: horizontal;
     align: left middle;
@@ -165,7 +164,7 @@ IntruderScreen .intruder-results-area DataTable {
    owned here; the inner Label/Input/Button rules moved with the widget. */
 IntruderScreen IntruderFilterBar {
     height: 2;
-    background: $panel;
+    background: transparent;
     padding: 0 1;
 }
 
@@ -193,8 +192,8 @@ _InputDialog {
 _InputDialog #dialog {
     width: 50;
     height: auto;
-    border: solid $primary;
-    background: $surface;
+    border: round $foreground;
+    background: transparent;
     padding: 1 2;
 }
 _InputDialog #prompt-label {
@@ -222,6 +221,6 @@ IntruderScreen .tab-rename {
     display: none;
     dock: top;
     width: 20;
-    background: $panel;
+    background: transparent;
     layer: overlay;
 }

@@ -10,8 +10,8 @@ DecoderScreen #dec-op-row {
     layout: horizontal;
     align: left middle;
     padding: 0 1;
-    background: $panel;
-    border-bottom: solid $primary-darken-3;
+    background: transparent;
+    border-bottom: solid $primary 35%;
 }
 DecoderScreen #dec-op-label {
     width: 11;
@@ -20,7 +20,7 @@ DecoderScreen #dec-op-label {
 DecoderScreen #btn-dec-op-select {
     width: auto;
     padding: 0 1;
-    background: $surface;
+    background: transparent;
 }
 DecoderScreen #btn-dec-op-select:hover {
     background: $primary-darken-1;

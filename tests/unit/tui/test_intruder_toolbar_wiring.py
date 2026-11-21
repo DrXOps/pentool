@@ -33,9 +33,11 @@ from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _SCREEN = Path(__file__).resolve().parents[3] / "pentool" / "tui" / "screens" / "intruder" / "screen.py"
 
-#: Buttons handled inline in ``_on_toolbar_pressed`` before the dispatch dict —
-#: they are global (tab-independent) and created literally in ``compose``.
+#: Buttons handled inline in ``_on_toolbar_pressed`` before the dispatch dict.
+#: Tab add/remove, Start/Stop and Clear/Export moved to the module header
+#: (`header_spec()`), so they are no longer widgets of this screen.
 _GLOBAL_IDS = {"btn-new-tab", "btn-close-tab", "btn-start", "btn-stop", "btn-pause"}
+_HEADER_ACTIONS = {"new_tab", "close_tab", "start", "pause", "stop", "export", "clear"}
 
 
 def _dispatch_keys() -> set[str]:
@@ -68,13 +70,18 @@ async def _mounted(pilot):
 
 class TestDispatchTableHasWidgets:
     async def test_every_per_tab_dispatch_key_has_a_button(self) -> None:
-        """A dispatch key exists either per-tab (suffixed) or globally."""
+        """A dispatch key exists per-tab (suffixed), in the header, or nowhere.
+
+        Keys whose control moved to the module header are covered by
+        `test_the_two_buttons_cb11bfd_dropped_are_back` and the navigation test.
+        """
+        moved = {"btn-new-tab", "btn-close-tab", "btn-clear-results", "btn-export-csv"}
         app = _App()
         async with app.run_test(size=(200, 60)) as pilot:
             screen, tid, pane = await _mounted(pilot)
             missing = [
                 key
-                for key in _dispatch_keys()
+                for key in _dispatch_keys() - moved
                 if not len(pane.query(f"#{key}-{tid}")) and not len(screen.query(f"#{key}"))
             ]
             assert not missing, (
@@ -83,23 +90,31 @@ class TestDispatchTableHasWidgets:
             )
 
     async def test_the_two_buttons_cb11bfd_dropped_are_back(self) -> None:
-        """The exact regression: handlers without widgets for five weeks."""
-        app = _App()
-        async with app.run_test(size=(200, 60)) as pilot:
-            await pilot.pause()
-            screen = pilot.app.query_one(IntruderScreen)
-            for btn_id in ("btn-clear-results", "btn-export-csv"):
-                found = screen.query(f"#{btn_id}")
-                assert len(found) == 1, f"#{btn_id} is dispatched but not in the global toolbar"
-                assert isinstance(found.first(), ToolbarButton)
+        """The exact regression: handlers without widgets for five weeks.
 
-    async def test_navigation_buttons_exist_and_are_unique(self) -> None:
+        Both controls live in the module header now, so the check follows the
+        spec: an action the dispatch table knows must be offered by the header.
+        """
         app = _App()
         async with app.run_test(size=(200, 60)) as pilot:
             await pilot.pause()
             screen = pilot.app.query_one(IntruderScreen)
-            for btn_id in sorted(_GLOBAL_IDS - {"btn-start", "btn-stop", "btn-pause"}):
-                assert len(screen.query(f"#{btn_id}")) == 1, f"#{btn_id} missing or duplicated"
+            spec = screen.header_spec()
+            offered = {item.action for item in (*spec.state, *spec.actions, *spec.more)}
+            missing = {"export", "clear"} - offered
+            assert not missing, f"header lost these actions: {sorted(missing)}"
+            assert {"export", "clear"} <= _HEADER_ACTIONS
+
+    async def test_navigation_actions_are_offered_by_the_header(self) -> None:
+        """Tab add/remove moved to `⋯`; they must still be reachable."""
+        app = _App()
+        async with app.run_test(size=(200, 60)) as pilot:
+            await pilot.pause()
+            screen = pilot.app.query_one(IntruderScreen)
+            spec = screen.header_spec()
+            offered = {item.action for item in (*spec.state, *spec.actions, *spec.more)}
+            for action in ("new_tab", "close_tab"):
+                assert action in offered, f"{action} is not offered anywhere in the header"
 
 
 class TestLayoutPiecesSurviveTheTabPort:

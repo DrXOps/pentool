@@ -1,5 +1,5 @@
 ResourceMonitor {
     height: 7;
-    border: solid $primary-darken-3;
+    border: round $foreground;
     padding: 0 1;
 }

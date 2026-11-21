@@ -4,11 +4,11 @@ ProxyScreen {
 ProxyScreen #proxy-subtabs {
     height: 1fr;
 }
+/* The sub-tab strip is drawn in the module header (chips) — see
+   `pentool/tui/header.py`. Keeping it here too would show the tabs twice and
+   cost a row of content for nothing. */
 ProxyScreen #proxy-subtabs > ContentTabs {
-    background: $panel;
-}
-ProxyScreen #proxy-subtabs > ContentTabs Tabs {
-    background: $panel;
+    display: none;
 }
 ProxyScreen #body {
     height: 1fr;
@@ -24,14 +24,30 @@ ProxyScreen #table-area {
     min-height: 5;
 }
 ProxyScreen #filter-bar {
-    height: 1;
+    /* Было 1; карточка с рамкой требует auto (рамка = +2 строки). */
+    height: auto;
+}
+/* Table + "showing N of M" strip live in one card under the filter bar; the
+   bar keeps its own white frame, so the two blocks read as stacked cards
+   rather than a frame inside a frame. */
+ProxyScreen #history-card,
+ProxyScreen #ws-history-card {
+    height: 1fr;
+    min-height: 4;
+}
+/* Panels that are themselves the card (no wrapper): `ContentPanel` ships
+   `height: auto`, and with the border that is taller than its area — the last
+   body line got clipped. Fill the area instead. */
+ProxyScreen #intercept-panel,
+ProxyScreen #ws-msg-panel {
+    height: 1fr;
 }
 ProxyScreen #request-list {
     height: 1fr;
 }
 ProxyScreen .history-count {
     height: 1;
-    background: $panel;
+    background: transparent;
     color: $text-muted;
     padding: 0 1;
     text-align: right;
@@ -94,13 +110,13 @@ ProxyScreen #intercept-resp-viewer {
     height: 1fr;
     border: none;
 }
-ProxyScreen #intercept-toolbar {
-    height: 2;
-    background: $panel;
+/* Forward / Drop / Special moved to the module header (see
+   `pentool/tui/header.py`), so the panel toolbar is gone; the hint keeps its
+   own row. */
+ProxyScreen #intercept-hint {
+    height: 1;
     padding: 0 1;
-    align: left middle;
-    layout: horizontal;
-    border-bottom: solid $primary-darken-2;
+    color: $text-muted;
 }
 ProxyScreen #intercept-hint {
     color: $text-muted;
@@ -117,7 +133,9 @@ ProxyScreen #ws-main-panel {
     layout: vertical;
 }
 ProxyScreen #ws-filter-bar {
-    height: 1;
+    /* Was 1 from the service-strip days: with the card border the content row
+       got zero height and the WS filters were not drawn at all. */
+    height: auto;
 }
 ProxyScreen #ws-table-area {
     height: 1fr;

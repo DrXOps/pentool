@@ -19,8 +19,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.css.query import NoMatches
-from textual.widgets import Label
 
 from pentool.collections.filter_predicate import FilterField, FilterFieldType, FilterOp, FilterPredicate
 from pentool.core.logging import get_logger
@@ -52,10 +52,14 @@ _METHODS: list[tuple[str, str]] = [
     ("OPTIONS", "OPTIONS"),
 ]
 
-_SCOPE_LABEL = "★ Scope"
-_SCOPE_ON_LABEL = "★ In Scope"
-_COMMENTS_LABEL = "📝 Comments"
-_COMMENTS_ON_LABEL = "📝 Comments: ON"
+#: Toggles spell their state out — the word changes on click, so nobody has to
+#: remember what a glyph meant. Said as words they are wider, which is why the
+#: bar switches to two rows when one row cannot hold them (see
+#: ``SINGLE_ROW_MIN_WIDTH``).
+_SCOPE_LABEL = "Scope"
+_SCOPE_ON_LABEL = "In scope"
+_COMMENTS_LABEL = "Comments"
+_COMMENTS_ON_LABEL = "Commented"
 
 
 class HistoryFilterBar(FilterBarWidget):
@@ -67,18 +71,56 @@ class HistoryFilterBar(FilterBarWidget):
 
     DEFAULT_CSS = _CSS
 
+    #: Bar width below which the two logical rows stack instead of sitting side
+    #: by side. Measured, not guessed: the fields row plus the actions row (five
+    #: labelled fields, two spelled-out toggles, Filter/Clear) need this much.
+    #: At 120 columns the screen hands the bar 114 cells, so it stays one row;
+    #: at 100 (and below) it stacks.
+    SINGLE_ROW_MIN_WIDTH = 113
+
+    is_two_rows: bool = False
+
     def compose(self) -> ComposeResult:
-        yield from self._compose_fields()
-        yield ToolbarButton(_SCOPE_LABEL, "fb-scope")
-        yield ToolbarButton(_COMMENTS_LABEL, "fb-comments")
-        yield Label(" ", classes="fb-sep")
-        yield from self._compose_actions()
+        # Two rows in the DOM that lie side by side while they fit and stack when
+        # they don't — `layout: horizontal` here, `vertical` under `.-two-rows`.
+        # Same widgets either way, so switching costs a re-layout, not a remount.
+        with Horizontal(id="fb-fields", classes="fb-row"):
+            yield from self._compose_fields()
+        with Horizontal(id="fb-actions", classes="fb-row"):
+            yield ToolbarButton(
+                _SCOPE_LABEL,
+                "fb-scope",
+                tooltip="Show only requests that fall inside Scope",
+            )
+            yield ToolbarButton(
+                _COMMENTS_LABEL,
+                "fb-comments",
+                tooltip="Show only requests with a comment",
+            )
+            yield from self._compose_actions()
 
     def collect(self) -> list[FilterPredicate]:
         predicates = super().collect()
         self._maybe_add_scope(predicates)
         self._maybe_add_comments(predicates)
         return predicates
+
+    # ── One row while it fits, two rows when it does not ──────────────────
+
+    def on_resize(self, event) -> None:
+        """Decide the row count from the bar's own width.
+
+        Not from the terminal width: the inspector panel or a dragged resize
+        handle can take columns away while the screen stays wide, and it is the
+        bar that overflows.
+        """
+        self.set_two_rows(event.size.width < self.SINGLE_ROW_MIN_WIDTH)
+
+    def set_two_rows(self, two_rows: bool) -> None:
+        if two_rows == self.is_two_rows:
+            return
+        self.is_two_rows = two_rows
+        self.set_class(two_rows, "-two-rows")
 
     def _clear_fields(self) -> None:
         super()._clear_fields()
@@ -172,7 +214,7 @@ class ProxyFilterBar(HistoryFilterBar):
                 FilterFieldType.TEXT,
                 "fts",
                 FilterOp.FTS,
-                placeholder="FTS5 query...",
+                placeholder="FTS5...",
             ),
         ]
 

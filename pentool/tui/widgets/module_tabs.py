@@ -23,9 +23,9 @@ MODULES: list[tuple[str, str, str]] = [
     ("intruder", "Intruder", "^I"),
     ("scanner", "Scanner", "^S"),
     ("target", "Target", "^T"),
-    ("decoder", "Decoder", "^D"),
-    ("comparer", "Comparer", "^C"),
-    ("sequencer", "Sequencer", "^Q"),
+    # Decoder / Comparer / Sequencer live under Utils as sub-tabs; D/C/Q still
+    # open the right one (see `utils_tab` in hotkeys/defaults.py).
+    ("utils", "Utils", "^U"),
     ("extensions", "Extensions", "^E"),
     ("recon", "Recon", "^N"),
     ("settings", "Settings", "^,"),

@@ -11,7 +11,8 @@ ContentPanel > .cp-title {
 ContentPanel > .cp-title > Static {
     width: 1fr;
     height: 1;
-    color: $text-muted;
+    /* Section headers in the cards UI: `┌─ REQUEST ─`, accent + bold. */
+    color: $accent;
     text-style: bold;
 }
 /* Кнопки в заголовке */
@@ -30,12 +31,16 @@ ContentPanel > .cp-title > ToolbarButton:focus {
 ContentPanel > #cp-body {
     height: 1fr;
     min-height: 6;
+    background: transparent;
 }
 ContentPanel RichLog {
     border: none;
     padding: 0 1;
     height: 1fr;
     min-height: 6;
+    /* Panels sit inside cards: their body must not paint a lighter block, or the
+       card reads as two different designs stacked. */
+    background: transparent;
 }
 ContentPanel RichLog:focus {
     border: none;
@@ -45,6 +50,7 @@ ContentPanel TextArea {
     border: none;
     height: 1fr;
     min-height: 6;
+    background: transparent;
 }
 ContentPanel TextArea:focus {
     border: none;

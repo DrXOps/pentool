@@ -103,7 +103,7 @@ class TestContentPanelTitle:
             await pilot.pause()
 
             title = str(panel.query_one(".cp-title > Static", Static).render())
-            assert title == "report[1]final.json", f"the title lost characters: {title!r}"
+            assert title == "┌─ report[1]final.json ─", f"the title lost characters or the frame: {title!r}"
 
 
 class TestComparerDiffLog:

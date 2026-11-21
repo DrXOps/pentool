@@ -154,17 +154,13 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
     def compose(self) -> ComposeResult:
         yield Toolbar(
             ToolbarButton("★ Add to Scope", "btn-add-scope"),
-            Toolbar.sep(),
             ToolbarButton("✖ Remove from Scope", "btn-remove-scope"),
-            Toolbar.sep(),
             ToolbarButton("⚙ Scope", "btn-scope-rules", tooltip="Edit scope rules (hosts, wildcards, regex)"),
-            Toolbar.sep(),
             ToolbarButton(
                 "🕷 Crawl Scope",
                 "btn-crawl-scope",
                 tooltip="Crawl every in-scope host with the Spider",
             ),
-            Toolbar.sep(),
             ToolbarButton(
                 "🕷 Crawl Host",
                 "btn-crawl-host",
@@ -180,11 +176,8 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 ),
                 id="ai-crawl-box",
             ),
-            Toolbar.sep(),
             ToolbarButton("🗑 Clear", "btn-clear"),
-            Toolbar.sep(),
             ToolbarButton("📄 Export JSON", "btn-export"),
-            Toolbar.sep(),
             ToolbarButton("🧭 Recon", "btn-recon", tooltip="Open Recon screen for the selected domain"),
         )
 

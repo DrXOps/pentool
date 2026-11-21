@@ -3,7 +3,7 @@ ToolbarButton {
     width: auto;
     padding: 0 1;
     color: $text;
-    background: $panel;
+    background: transparent;
     pointer: pointer;  /* buttons — pointing hand cursor */
 }
 ToolbarButton:hover {

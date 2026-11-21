@@ -110,7 +110,7 @@ class TestProxyScreenEvents:
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            await pilot.click("#btn-forward")
+            pilot.app._dispatch_header_action("forward")
             await pilot.pause()
             # No Exception
 

@@ -163,7 +163,7 @@ class TestProxyScreenWidgets:
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            btn = app.query("#btn-intercept")
+            btn = app.query("#hdr-state-1, #hdr-state-2")
             assert len(btn) > 0
 
     @pytest.mark.asyncio
@@ -173,7 +173,7 @@ class TestProxyScreenWidgets:
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
-            btn = app.query("#btn-forward")
+            btn = app.query(".hdr-act")
             assert len(btn) > 0
 
 
@@ -182,16 +182,18 @@ class TestProxyScreenWidgets:
 class TestRepeaterScreenWidgets:
     @pytest.mark.asyncio
     async def test_send_button_always_in_dom(self) -> None:
-        """#btn-send is always present in DOM even when tab is inactive."""
+        """Send lives in the header, so it exists even when the screen is lazy."""
         from pentool.tui.app import PentoolApp
 
         app = PentoolApp()
+        app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
             await pilot.press("R")
-            await pilot.pause()
-            btn = app.query("#btn-send")
-            assert len(btn) > 0
+            for _ in range(6):
+                await pilot.pause()
+            buttons = [b for b in app.query(".hdr-act") if b.display and b.data_action == "send"]
+            assert buttons, "Send is missing from the module header"
 
     @pytest.mark.asyncio
     async def test_request_editor_in_dom(self) -> None:

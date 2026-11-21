@@ -2,14 +2,21 @@
 Toolbar {
     height: auto;
     min-height: 2;
-    background: $panel;
+    /* No fill: a toolbar is a row of controls, not a block. The `$panel` shade
+       made every action row (Intruder's threads/delay, Positions/Payloads,
+       Target's Scope/Crawl/Clear, Scanner, Recon) look like an older design
+       stacked inside the cards. Chrome sits on the window background and is
+       separated by lines, same as the module header and the footer. */
+    background: transparent;
     layout: horizontal;
     padding: 0 1;
     align: left middle;
     /* Широкий тулбар прокручивается, а не обрезает правые кнопки
        (именно из-за обрезки «Smart…» уезжала за край). */
     overflow-x: auto;
-    border-bottom: solid $primary-darken-2;
+    /* Цвет — как у рамки карточек: линии под тулбарами и под полосой модулей
+       больше не отличаются от рамок блоков. */
+    border-bottom: solid $primary 35%;
 }
 
 /* Разделитель между кнопками — компактный */

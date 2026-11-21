@@ -7,6 +7,7 @@ are prevented from actually running asyncio loops.
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import types
 
@@ -161,3 +162,29 @@ class TestStopProxyAsync:
         app._proxy_loop = None
         await app._stop_proxy_async()
         assert app._update_status_calls >= 1
+
+    @pytest.mark.asyncio
+    async def test_daemon_stop_is_awaited(self):
+        """`_stop_proxy_async` must *await* the daemon stop, not return its coroutine.
+
+        Returning it un-awaited meant the stop never ran: a project switch
+        continued to the next DB while the proxy kept writing into the previous
+        one, so the new project's history stayed empty ("history is gone again").
+        """
+        app = _FakeApp()
+        app._proxy = _mk_proxy(running=True)
+        app._proxy_thread = None
+        app._proxy_loop = None
+        app._engine = lambda: "daemon"  # type: ignore[method-assign]
+
+        stopped: list[bool] = []
+
+        async def fake_daemon_stop() -> None:
+            await asyncio.sleep(0)  # a real await point: only an awaited call gets here
+            stopped.append(True)
+
+        app._stop_proxy_daemon_async = fake_daemon_stop  # type: ignore[method-assign]
+
+        await app._stop_proxy_async()
+
+        assert stopped == [True], "daemon stop coroutine was returned instead of awaited"

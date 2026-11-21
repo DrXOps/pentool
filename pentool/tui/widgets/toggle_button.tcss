@@ -2,6 +2,6 @@ ToggleButton {
     height: 1;
     width: auto;
     padding: 0 1;
-    background: $panel;
+    background: transparent;
     color: $text;
 }

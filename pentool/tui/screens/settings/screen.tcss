@@ -26,7 +26,7 @@ SettingsScreen .row-label {
 }
 SettingsScreen Input {
     border: none;
-    background: $panel;
+    background: transparent;
     width: 30;
     padding: 0 1;
 }
@@ -38,7 +38,7 @@ SettingsScreen #settings-save {
 }
 SettingsScreen #settings-open-ca {
     width: auto;
-    background: $panel;
+    background: transparent;
     padding: 0 2;
     margin-left: 1;
 }

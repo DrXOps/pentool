@@ -1,7 +1,10 @@
 StatusBar {
     height: 1;
     dock: bottom;
-    background: $primary-darken-3;
+    /* The footer block (hints row + status bar) sits on the window background and
+       is separated from the content by a line — see `#bottom-dock` in app.tcss.
+       A filled panel here made the bottom look like an older design. */
+    background: transparent;
     layout: horizontal;
 }
 StatusBar > _Left {

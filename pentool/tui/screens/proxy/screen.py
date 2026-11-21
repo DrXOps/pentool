@@ -20,6 +20,7 @@ from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
 from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 from pentool.core.logging import get_logger
 from pentool.services.proxy_service import ProxyService
+from pentool.tui.header import HeaderAction, HeaderSpec, HeaderTab
 from pentool.tui.hotkeys.defaults import PROXY_BINDINGS
 from pentool.tui.markup import esc
 from pentool.tui.messages import SendToIntruder, SendToRepeater, SyncScopeToTarget
@@ -40,7 +41,6 @@ from pentool.tui.widgets.proxy_helpers import row_to_record as _row_to_record
 from pentool.tui.widgets.proxy_helpers import rows_to_arrow as _rows_to_arrow
 from pentool.tui.widgets.request_editor import HttpView
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.toolbar import Toolbar
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
@@ -119,6 +119,9 @@ class ProxyScreen(
         self._pending_req_ids_ts: dict[str, float] = {}  # БАГ-C: timestamps for periodic cleanup
         self._intercept_req: InterceptedRequest | None = None
         self._intercept_pending: list[InterceptedRequest] = []
+        #: "starting"/"stopping" while the proxy is coming up or going down; the
+        #: header shows a spinner-ish label instead of the plain state then.
+        self._proxy_transition: str = ""
         self._intercept_show_special_chars: bool = False
         self._intercept_raw_full: str = ""
         # Debounce: batch rapid row appends into one incremental add_rows() call
@@ -170,44 +173,12 @@ class ProxyScreen(
         # highlight within the window triggers a load.
         self._highlight_debounce_handle = None
 
-    def _build_toolbar(self) -> ComposeResult:
-        yield Toolbar(
-            ToolbarButton("○ Proxy", "btn-proxy", classes="inactive"),
-            Toolbar.sep(),
-            ToolbarButton("○ Intercept", "btn-intercept", classes="inactive"),
-            Toolbar.sep(),
-            ToolbarButton(
-                "☐ Skip out-of-scope",
-                "btn-enforce-scope",
-                tooltip=(
-                    "When ON: requests to hosts NOT listed in Scope are "
-                    "tunneled straight through and never captured/shown in "
-                    "History. When OFF (default): Scope is informational "
-                    "only — ALL traffic is captured regardless of Scope. "
-                    "Saved per-project."
-                ),
-            ),
-            Toolbar.sep(),
-            ToolbarButton("M/R", "btn-mr"),
-            Toolbar.sep(),
-            ToolbarButton("Clear", "btn-clear"),
-        )
-
     def _compose_intercept_tab(self) -> ComposeResult:
         with TabPane("Intercept", id="tab-intercept"):
-            with Horizontal(id="intercept-toolbar"):
-                # Forward и Drop — разные решения по одному запросу; без черты
-                # они читались как одна кнопка-переключатель.
-                yield from Toolbar.row(
-                    Toolbar.group_buttons(
-                        ToolbarButton("⏩ Forward", "btn-forward", classes="disabled"),
-                        ToolbarButton("✖ Drop", "btn-drop", classes="disabled"),
-                    ),
-                    Toolbar.group_buttons(
-                        ToolbarButton("⏎ Special: OFF", "btn-intercept-special-chars"),
-                    ),
-                )
-                yield Label("(enable Intercept to capture requests)", id="intercept-hint")
+            # Forward / Drop / Special are header buttons now (row 2, left side):
+            # they are actions of this sub-tab, so they belong to the header spec
+            # rather than to the panel. Only the hint stays here.
+            yield Label("(enable Intercept to capture requests)", id="intercept-hint")
             with Vertical(id="intercept-req-area"):
                 yield ContentPanel(
                     "Intercept",
@@ -215,6 +186,7 @@ class ProxyScreen(
                     initial_text="(No requests waiting for intercept)",
                     buttons=["copy", "paste", "format", "clear"],
                     id="intercept-panel",
+                    classes="card",
                 )
             yield ResizeHandle(
                 "intercept-req-area",
@@ -223,14 +195,14 @@ class ProxyScreen(
                 id="resize-intercept",
             )
             with Horizontal(id="intercept-bottom-area"):
-                with Vertical(id="intercept-sent-panel"):
+                with Vertical(id="intercept-sent-panel", classes="card"):
                     yield HttpView("Sent Request", id="intercept-sent-req")
                 yield ResizeHandle(
                     "intercept-sent-panel",
                     "intercept-resp-panel",
                     id="resize-intercept-sent-resp",
                 )
-                with Vertical(id="intercept-resp-panel"):
+                with Vertical(id="intercept-resp-panel", classes="card"):
                     yield HttpView("Response", id="intercept-resp-viewer")
 
     def _compose_history_tab(self) -> ComposeResult:
@@ -238,17 +210,18 @@ class ProxyScreen(
             with Horizontal(id="body"):
                 with Vertical(id="main-panel"):
                     with Vertical(id="table-area"):
-                        yield FilterBar(id="filter-bar")
-                        yield DataTable(
-                            columns=_COL_NAMES,
-                            initial_table=_make_empty_table(),
-                            id="request-list",
-                            cursor_type="row",
-                            zebra_stripes=True,
-                            max_column_content_width=120,
-                            column_widths=[5, 20, 8, 60, 6, 8, 8],
-                        )
-                        yield Static("", id="history-count", classes="history-count")
+                        yield FilterBar(id="filter-bar", classes="card-host")
+                        with Vertical(id="history-card", classes="card"):
+                            yield DataTable(
+                                columns=_COL_NAMES,
+                                initial_table=_make_empty_table(),
+                                id="request-list",
+                                cursor_type="row",
+                                zebra_stripes=True,
+                                max_column_content_width=120,
+                                column_widths=[5, 24, 8, 24, 6, 8, 8],
+                            )
+                            yield Static("", id="history-count", classes="history-count")
                     yield ResizeHandle(
                         "table-area",
                         "detail-area",
@@ -256,14 +229,14 @@ class ProxyScreen(
                         id="resize-table-detail",
                     )
                     with Horizontal(id="detail-area"):
-                        with Vertical(id="req-panel"):
+                        with Vertical(id="req-panel", classes="card"):
                             yield HttpView("Request", id="req-editor")
                         yield ResizeHandle(
                             "req-panel",
                             "resp-panel",
                             id="resize-req-resp",
                         )
-                        with Vertical(id="resp-panel"):
+                        with Vertical(id="resp-panel", classes="card"):
                             yield HttpView("Response", id="resp-viewer")
                 yield InspectorPanel(id="inspector-panel")
 
@@ -272,16 +245,17 @@ class ProxyScreen(
             with Horizontal(id="ws-body"):
                 with Vertical(id="ws-main-panel"):
                     with Vertical(id="ws-table-area"):
-                        yield WsFilterBar(id="ws-filter-bar")
-                        yield DataTable(
-                            columns=_COL_NAMES,
-                            initial_table=_make_empty_table(),
-                            id="ws-request-list",
-                            cursor_type="row",
-                            zebra_stripes=True,
-                            column_widths=[5, 20, 8, 60, 6, 8, 8],
-                        )
-                        yield Static("", id="ws-history-count", classes="history-count")
+                        yield WsFilterBar(id="ws-filter-bar", classes="card-host")
+                        with Vertical(id="ws-history-card", classes="card"):
+                            yield DataTable(
+                                columns=_COL_NAMES,
+                                initial_table=_make_empty_table(),
+                                id="ws-request-list",
+                                cursor_type="row",
+                                zebra_stripes=True,
+                                column_widths=[5, 24, 8, 24, 6, 8, 8],
+                            )
+                            yield Static("", id="ws-history-count", classes="history-count")
                     yield ResizeHandle(
                         "ws-table-area",
                         "ws-detail-area",
@@ -289,14 +263,14 @@ class ProxyScreen(
                         id="resize-ws-table-detail",
                     )
                     with Horizontal(id="ws-detail-area"):
-                        with Vertical(id="ws-req-panel"):
+                        with Vertical(id="ws-req-panel", classes="card"):
                             yield HttpView("Request", id="ws-req-editor")
                         yield ResizeHandle(
                             "ws-req-panel",
                             "ws-resp-panel",
                             id="resize-ws-req-resp",
                         )
-                        with Vertical(id="ws-resp-panel"):
+                        with Vertical(id="ws-resp-panel", classes="card"):
                             yield HttpView("Response", id="ws-resp-viewer")
                     yield ResizeHandle(
                         "ws-detail-area",
@@ -312,14 +286,129 @@ class ProxyScreen(
                             max_lines=1000,
                             buttons=["copy", "clear"],
                             id="ws-msg-panel",
+                            classes="card",
                         )
 
     def compose(self) -> ComposeResult:
-        yield from self._build_toolbar()
+        # The module toolbar (proxy / intercept / skip / M&R / clear) lives in the
+        # app's module header now: content occupies the full width and every
+        # module reads the same (see `pentool/tui/header.py` and
+        # `header_spec()` below). The sub-tab strip is drawn there too — its own
+        # `ContentTabs` row is hidden in screen.tcss, so tabs exist once.
         with TabbedContent(id="proxy-subtabs"):
             yield from self._compose_intercept_tab()
             yield from self._compose_history_tab()
             yield from self._compose_ws_tab()
+
+    # ── Module header (see pentool/tui/header.py) ─────────────────────────
+    def _subtab_ids(self) -> tuple[tuple[str, str], ...]:
+        return (
+            ("tab-intercept", "Intercept"),
+            ("tab-http-history", "HTTP History"),
+            ("tab-ws-history", "WS History"),
+        )
+
+    def _active_subtab(self) -> str:
+        try:
+            tabs = self.query_one("#proxy-subtabs", TabbedContent)
+        except NoMatches:
+            return "tab-http-history"
+        return tabs.active or "tab-http-history"
+
+    def header_spec(self) -> HeaderSpec:
+        """Two-row header: state on row 1, sub-tab actions + chips on row 2."""
+        proxy = self._get_proxy()
+        running = bool(proxy and getattr(proxy, "is_running", False))
+        port = getattr(proxy, "port", 8080)
+        intercepting = bool(proxy and getattr(proxy, "intercept_enabled", False))
+        skipping = bool(proxy and getattr(proxy, "enforce_scope", False))
+        active = self._active_subtab()
+
+        if self._proxy_transition == "starting":
+            proxy_label = "⏳ Proxy…"
+        elif self._proxy_transition == "stopping":
+            proxy_label = "⏳ Proxy…"
+        elif running:
+            proxy_label = f"● Proxy:{port}"
+        else:
+            proxy_label = "○ Proxy"
+
+        actions: list[HeaderAction] = []
+        if active == "tab-intercept":
+            queued = len(self._intercept_pending) + (1 if self._intercept_req is not None else 0)
+            forwardable = queued > 0
+            actions.append(HeaderAction("forward", "⏩ Forward", enabled=forwardable))
+            actions.append(HeaderAction("drop", "✖ Drop", enabled=forwardable))
+            actions.append(HeaderAction("special", "⏎ Special"))
+
+        pending = len(self._intercept_pending) + (1 if self._intercept_req is not None else 0)
+        counters: tuple[str, ...] = (f"⏸ {pending}",) if intercepting and pending else ()
+
+        return HeaderSpec(
+            state=(
+                HeaderAction("proxy", proxy_label, enabled=running),
+                HeaderAction("intercept", "● Intercept" if intercepting else "○ Intercept", enabled=intercepting),
+            ),
+            counters=counters,
+            tabs=tuple(HeaderTab(tab_id, label) for tab_id, label in self._subtab_ids()),
+            active_tab=active,
+            actions=tuple(actions),
+            more=(
+                HeaderAction("skip", "☑ Skip out-of-scope: ON" if skipping else "☐ Skip out-of-scope: OFF"),
+                HeaderAction("mr", "Match & Replace…"),
+                HeaderAction("clear", "Clear history"),
+            ),
+        )
+
+    def _special_chars_label(self) -> str:
+        """Label for the Special-chars toggle (the flag lives on the screen)."""
+        return "⏎ Special: ON" if self._intercept_show_special_chars else "⏎ Special: OFF"
+
+    def header_action(self, action_id: str) -> None:
+        """A header button was pressed: route to the existing screen actions."""
+        if action_id == "proxy":
+            self.action_toggle_proxy()
+        elif action_id == "intercept":
+            self.action_toggle_intercept()
+        elif action_id == "skip":
+            self.action_toggle_enforce_scope()
+        elif action_id == "forward":
+            self.action_forward()
+        elif action_id == "drop":
+            self.action_drop()
+        elif action_id == "special":
+            self._toggle_intercept_special_chars(None)
+        elif action_id == "mr":
+            self.action_open_mr()
+        elif action_id == "clear":
+            self.action_clear_list()
+
+    def header_tab_selected(self, tab_id: str) -> None:
+        """A sub-tab chip was clicked in the header."""
+        try:
+            self.query_one("#proxy-subtabs", TabbedContent).active = tab_id
+        except NoMatches as exc:
+            logger.debug("proxy: header tab %s not applied: %s", tab_id, exc)
+            return
+        self._refresh_header_now()
+
+    @on(TabbedContent.TabActivated)
+    def _on_subtab_activated(self, _: TabbedContent.TabActivated) -> None:
+        """Sub-tab changed (chip, hotkey or intercept auto-switch).
+
+        Row 2 shows the actions of the *active* sub-tab — Forward/Drop only exist
+        for Intercept — so the header follows the tabs, whatever changed them.
+        """
+        self._refresh_header_now()
+
+    def _refresh_header_now(self) -> None:
+        """Ask the app to redraw the header (state, counters, actions)."""
+        refresh = getattr(self.app, "refresh_header", None)
+        if refresh is None:
+            # Standalone screen (unit tests mount it without PentoolApp).
+            logger.debug("proxy: app has no header to refresh")
+            return
+        refresh()
 
     def on_mount(self) -> None:
         self._sync_proxy_button()
@@ -465,17 +554,9 @@ class ProxyScreen(
             arrow = _rows_to_arrow(rows)
             table = self.query_one("#request-list", DataTable)
             table.set_data(arrow)
-            table._ordered_columns = None
-            try:
-                for col in table.ordered_columns:
-                    if str(col.label).strip().startswith("Host"):
-                        col.width = 30
-                        col.auto_width = False
-                        break
-            except Exception:  # logging-ok: косметика — ширина колонки, данные на месте
-                # Колонка Host остаётся автоподобранной — таблица читается хуже,
-                # но данные на месте. След нужен, чтобы не искать причину заново.
-                logger.debug("proxy: Host column width not pinned")
+            # Column widths are owned by the table itself (ProxyDataTable
+            # .fit_columns): Host and URL share whatever the fixed columns
+            # leave, so the table never needs a horizontal scrollbar.
             table._clear_caches()
             table._require_update_dimensions = True
             table.refresh()
@@ -685,15 +766,7 @@ class ProxyScreen(
                 logger.debug("proxy: WS table not found, page not shown: %s", exc)
                 return
             table.set_data(arrow)
-            table._ordered_columns = None
-            try:
-                for col in table.ordered_columns:
-                    if str(col.label).strip().startswith("Host"):
-                        col.width = 30
-                        col.auto_width = False
-                        break
-            except Exception:  # logging-ok: косметика — ширина колонки
-                logger.debug("proxy: WS Host column width not pinned")
+            # Same as the HTTP table: widths are fitted by the table itself.
             table._clear_caches()
             table._require_update_dimensions = True
             table.refresh()
@@ -703,21 +776,18 @@ class ProxyScreen(
             logger.error("_reload_ws_table failed", exc_info=True)
 
     def _setup_tooltips(self) -> None:
+        # The module toolbar moved to the header (see header_spec): those buttons
+        # carry their tooltips from the spec now, so only the panel-local button
+        # is left here.
         tooltips = {
-            "btn-proxy": "Toggle proxy server",
-            "btn-forward": "Forward intercepted request",
-            "btn-drop": "Drop intercepted request",
-            "btn-intercept": "Toggle intercept mode",
-            "btn-mr": "Match and Replace rules",
             "btn-ca-cert": "Install CA certificate",
-            "btn-clear": "Clear request history",
         }
         for btn_id, tip in tooltips.items():
             try:
                 self.query_one(f"#{btn_id}", ToolbarButton).tooltip = tip
             except NoMatches as exc:
                 # Кнопки нет в дереве — подсказка ей и не нужна; но именно
-                # такая тишина скрывает опечатку в одном из семи id.
+                # такая тишина скрывает опечатку в id.
                 logger.debug("proxy: tooltip for #%s not set: %s", btn_id, exc)
 
     def load_from_project(self) -> None:
@@ -1659,66 +1729,19 @@ class ProxyScreen(
             # это прямо вводит в заблуждение.
             logger.warning("proxy: inspector not loaded for entry %s", entry_id, exc_info=True)
 
-    @on(ToolbarButton.Pressed, "#btn-proxy")
-    def on_btn_proxy(self, _: ToolbarButton.Pressed) -> None:
-        self.action_toggle_proxy()
-
-    @on(ToolbarButton.Pressed, "#btn-forward")
-    def on_btn_forward(self, _: ToolbarButton.Pressed) -> None:
-        self.action_forward()
-
-    @on(ToolbarButton.Pressed, "#btn-drop")
-    def on_btn_drop(self, _: ToolbarButton.Pressed) -> None:
-        self.action_drop()
-
-    @on(ToolbarButton.Pressed, "#btn-intercept-special-chars")
-    def on_btn_intercept_special_chars(self, event: ToolbarButton.Pressed) -> None:
-        self._toggle_intercept_special_chars(event.button)
-
-    @on(ToolbarButton.Pressed, "#btn-intercept")
-    def on_btn_intercept(self, _: ToolbarButton.Pressed) -> None:
-        self.action_toggle_intercept()
-
-    @on(ToolbarButton.Pressed, "#btn-enforce-scope")
-    def on_btn_enforce_scope(self, _: ToolbarButton.Pressed) -> None:
-        self.action_toggle_enforce_scope()
-
-    @on(ToolbarButton.Pressed, "#btn-mr")
-    def on_btn_mr(self, _: ToolbarButton.Pressed) -> None:
-        self.action_open_mr()
-
-    @on(ToolbarButton.Pressed, "#btn-clear")
-    def on_btn_clear(self, _: ToolbarButton.Pressed) -> None:
-        self.action_clear_list()
-
     def action_load_history(self) -> None:
         self.run_worker(self._reload_table(self._current_filters))
 
     def action_toggle_proxy(self) -> None:
         proxy = self._get_proxy()
-        # Instant visual feedback — before the thread actually starts/stops
+        # Instant feedback in the header — before the thread actually starts or
+        # stops. The label lives in the header spec now, so the state is a field
+        # on the screen and `refresh_header()` repaints it.
         if proxy and not proxy.is_running:
-            try:
-                btn = self.query_one("#btn-proxy", ToolbarButton)
-                btn.label = "⏳ Starting..."
-                btn.remove_class("inactive")
-                btn.add_class("active")
-            except NoMatches as exc:
-                # Это только мгновенная реакция до запуска; сам запуск ниже
-                # выполнится. След нужен, чтобы «кнопка не отозвалась» имело
-                # объяснение: кнопки нет в дереве, то есть toolbar ещё не
-                # собран.
-                logger.debug("proxy: start feedback not painted: %s", exc)
+            self._proxy_transition = "starting"
         elif proxy and proxy.is_running:
-            try:
-                btn = self.query_one("#btn-proxy", ToolbarButton)
-                btn.label = "⏳ Stopping..."
-                btn.remove_class("active")
-                btn.add_class("inactive")
-            except NoMatches as exc:
-                # То же для остановки: кнопка останется с подписью «Stop», а
-                # прокси уже гасится — причина только «её нет в дереве».
-                logger.debug("proxy: stop feedback not painted: %s", exc)
+            self._proxy_transition = "stopping"
+        self._refresh_header_now()
         self.app.action_toggle_proxy()  # type: ignore[attr-defined]
         self.call_after_refresh(self._sync_proxy_button)
 
@@ -1893,22 +1916,13 @@ class ProxyScreen(
             self._sync_enforce_scope_button(True)
 
     def _sync_enforce_scope_button(self, enabled: bool | None = None) -> None:
-        """Sync Skip-out-of-scope button (enabled param avoids reading stale proxy attribute)."""
-        proxy = self._get_proxy()
-        if enabled is None:
-            enabled = bool(proxy and proxy.enforce_scope)
-        try:
-            btn = self.query_one("#btn-enforce-scope", ToolbarButton)
-        except NoMatches as exc:
-            # Кнопки нет — синхронизировать нечего (экран ещё не собран).
-            logger.debug("proxy: enforce-scope button not found: %s", exc)
-            return
-        if enabled:
-            btn.label = "☑ Skip out-of-scope"
-            btn.add_class("active")
-        else:
-            btn.label = "☐ Skip out-of-scope"
-            btn.remove_class("active")
+        """Repaint the Skip-out-of-scope state in the header.
+
+        Kept as a method (and named like before) because several call sites —
+        project switch, settings load, toolbar action — still call it; the state
+        itself is read from the proxy inside `header_spec()`.
+        """
+        self._refresh_header_now()
 
     def action_open_mr(self) -> None:
         proxy = self._get_proxy()
@@ -1929,22 +1943,9 @@ class ProxyScreen(
         self.app.push_screen(CertInstallDialog(ca_path))
 
     def _sync_proxy_button(self) -> None:
-        proxy = self._get_proxy()
-        try:
-            btn = self.query_one("#btn-proxy", ToolbarButton)
-        except NoMatches as exc:
-            # Кнопка прокси не синхронизируется: Start показывает остановленный
-            # сервер (и наоборот), а прокси при этом работает.
-            logger.debug("proxy: proxy button not synced: %s", exc)
-            return
-        if proxy and proxy.is_running:
-            btn.label = f"● Proxy:{proxy.port}"
-            btn.remove_class("inactive")
-            btn.add_class("active")
-        else:
-            btn.label = "○ Proxy"
-            btn.remove_class("active")
-            btn.add_class("inactive")
+        """Repaint the proxy state in the header (label + counter come from the spec)."""
+        self._proxy_transition = ""
+        self._refresh_header_now()
 
     def update_proxy_label(self, running: bool, port: int) -> None:
         self._sync_proxy_button()

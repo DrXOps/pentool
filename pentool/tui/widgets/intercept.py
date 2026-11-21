@@ -156,8 +156,13 @@ class InterceptMixin:
         except NoMatches as exc:
             logger.debug("intercept: response panel not cleared after drop: %s", exc)
 
-    def _toggle_intercept_special_chars(self: _InterceptHost, btn: ToolbarButton) -> None:
-        """Toggle display of literal \\r\\n / \\n special chars in the Intercept editor."""
+    def _toggle_intercept_special_chars(self: _InterceptHost, btn: ToolbarButton | None) -> None:
+        """Toggle display of literal \\r\\n / \\n special chars in the Intercept editor.
+
+        ``btn`` is the toolbar button that asked for the toggle; when the toggle
+        comes from the module header there is no such button (the label lives in
+        the header spec), so the button update is skipped and the header redraws.
+        """
         try:
             from pentool.tui.widgets.request_editor import decode_special_chars, visualize_special_chars
 
@@ -177,15 +182,19 @@ class InterceptMixin:
             self._intercept_raw_full = current
 
         self._intercept_show_special_chars = not self._intercept_show_special_chars
+        label = "⏎ Special: ON" if self._intercept_show_special_chars else "⏎ Special: OFF"
+        if btn is not None:
+            btn.update(label)
+            btn.set_class(self._intercept_show_special_chars, "active")
         if self._intercept_show_special_chars:
-            btn.update("⏎ Special: ON")
-            btn.add_class("active")
             editor.load_text(visualize_special_chars(self._intercept_raw_full))
         else:
-            btn.update("⏎ Special: OFF")
-            btn.remove_class("active")
             editor.load_text(self._intercept_raw_full)
             self._apply_intercept_highlight(self._intercept_raw_full)
+        # The label lives in the header now — redraw it either way.
+        refresh = getattr(self.app, "refresh_header", None)
+        if refresh is not None:
+            refresh()
 
     def _apply_intercept_highlight(self: _InterceptHost, raw: str) -> None:
         """Apply HTTP header syntax highlighting directly on the (full-text) intercept editor."""
@@ -205,16 +214,12 @@ class InterceptMixin:
             logger.debug("intercept: header highlighting not applied: %s", exc)
 
     def _disable_intercept_buttons(self: _InterceptHost, hint: str = "") -> None:
-        """Disable Forward/Drop and update the hint."""
+        """Reflect "nothing waiting" in the header and update the hint."""
         from textual.widgets import Label
 
-        try:
-            self.query_one("#btn-forward", ToolbarButton).disabled = True
-            self.query_one("#btn-drop", ToolbarButton).disabled = True
-        except NoMatches as exc:
-            # Кнопки остаются активными, хотя перехватывать нечего: Forward
-            # нажмётся и ничего не сделает.
-            logger.debug("intercept: buttons not disabled: %s", exc)
+        # Forward/Drop live in the module header; their enabled state comes from
+        # the header spec (queue length), so a redraw is the whole sync.
+        self._refresh_header_now()  # type: ignore[attr-defined]
         if hint:
             try:
                 self.query_one("#intercept-hint", Label).update(hint)
@@ -280,13 +285,8 @@ class InterceptMixin:
         except NoMatches as exc:
             # Новый перехваченный запрос, а в панели ответа — ответ прошлого.
             logger.debug("intercept: response panel not cleared for new request: %s", exc)
-        try:
-            self.query_one("#btn-forward", ToolbarButton).disabled = False
-            self.query_one("#btn-drop", ToolbarButton).disabled = False
-        except NoMatches as exc:
-            # Запрос ждёт решения, а кнопки Forward/Drop серые — прокси
-            # заблокирован, и разблокировать его из UI нечем.
-            logger.debug("intercept: buttons not enabled for new request: %s", exc)
+        # Forward/Drop are header buttons now: redraw so they become enabled.
+        self._refresh_header_now()  # type: ignore[attr-defined]
         queued = len(self._intercept_pending)
         hint = f"⏸ Intercepted: {req.method} {req.url}"
         if queued:
@@ -342,20 +342,5 @@ class InterceptMixin:
             self._disable_intercept_buttons(hint="(Intercept disabled)")
 
     def _sync_intercept_button(self: _InterceptHost) -> None:
-        proxy = self._get_proxy()
-        try:
-            btn = self.query_one("#btn-intercept", ToolbarButton)
-        except NoMatches as exc:
-            # Кнопка перехвата остаётся в прежнем положении — по ней решают,
-            # включён перехват или нет.
-            logger.debug("intercept: toggle button not synced: %s", exc)
-            return
-        enabled = proxy and proxy.intercept_enabled
-        if enabled:
-            btn.label = "● Intercept"
-            btn.remove_class("inactive")
-            btn.add_class("active")
-        else:
-            btn.label = "○ Intercept"
-            btn.remove_class("active")
-            btn.add_class("inactive")
+        """Repaint the intercept state in the module header (spec reads the proxy)."""
+        self._refresh_header_now()  # type: ignore[attr-defined]

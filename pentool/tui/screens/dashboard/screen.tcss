@@ -1,13 +1,13 @@
 LiveChart {
     height: 7;
     width: 1fr;
-    border: solid $primary-darken-3;
-    background: $panel;
+    border: round $foreground;
+    background: transparent;
     padding: 0 1;
 }
 LiveChart #chart-title {
     height: auto;
-    color: $primary;
+    color: $accent;
     text-style: bold;
 }
 LiveChart #chart-spark {
@@ -34,13 +34,13 @@ LiveChart #chart-summary {
 ThreatMeter {
     height: 100%;
     width: 1fr;
-    border: solid $error-darken-2;
-    background: $panel;
+    border: round $foreground;
+    background: transparent;
     padding: 0 1;
 }
 ThreatMeter #tm-title {
     height: auto;
-    color: $error;
+    color: $accent;
     text-style: bold;
 }
 ThreatMeter #tm-gauge {
@@ -63,8 +63,8 @@ ThreatMeter #tm-hint {
 SeverityMatrix {
     height: 1fr;
     width: 1fr;
-    border: solid $warning-darken-2;
-    background: $panel;
+    border: round $foreground;
+    background: transparent;
     padding: 0 1;
 }
 SeverityMatrix #mx-body {
@@ -75,11 +75,11 @@ DashboardScreen {
     layout: vertical;
     width: 1fr;
     height: 1fr;
-    background: $background;
+    background: transparent;
 }
 DashboardScreen #logo-bar {
     height: 9;
-    background: $panel;
+    background: transparent;
     border-bottom: solid $primary-darken-3;
     align: center middle;
     padding: 0 2;
@@ -107,8 +107,8 @@ DashboardScreen #top-row ThreatMeter {
 DashboardScreen #top-row ResourceMonitor {
     width: 1fr;
     height: 1fr;
-    border: solid $primary-darken-3;
-    background: $panel;
+    border: round $foreground;
+    background: transparent;
     padding: 0 1;
 }
 DashboardScreen #dash-resources {
@@ -125,20 +125,23 @@ DashboardScreen #left-pane {
     width: 32%;
     height: 1fr;
     min-height: 16;
-    border: solid $primary-darken-2;
-    background: $panel;
+    border: round $foreground;
+    background: transparent;
     padding: 0 1;
     layout: vertical;
 }
 DashboardScreen #pp-title {
     height: 2;
-    color: $primary;
+    color: $accent;
     text-style: bold;
     border-bottom: solid $primary-darken-3;
 }
 DashboardScreen #project-tree {
     height: 1fr;
     min-height: 5;
+    /* Tree paints its own surface by default; inside a transparent card that
+       read as a lighter rectangle — the card looked broken. */
+    background: transparent;
 }
 DashboardScreen #pp-actions {
     height: 3;
@@ -165,37 +168,40 @@ DashboardScreen #right-col {
 }
 /* Upper part of right column: Feed + Status */
 DashboardScreen #mid-row {
-    height: 10;
+    height: 9;
     layout: horizontal;
 }
 DashboardScreen #feed-panel {
     width: 1fr;
     height: 1fr;
-    border: solid $primary-darken-3;
-    background: $panel;
+    border: round $foreground;
+    background: transparent;
     padding: 0 1;
     layout: vertical;
 }
 DashboardScreen #feed-panel-title {
     height: 1;
-    color: $primary;
+    color: $accent;
     text-style: bold;
 }
 DashboardScreen #feed-log {
     height: 1fr;
+    /* Same as the project tree: RichLog's own surface made the LIVE FEED card
+       look filled while its neighbours are transparent. */
+    background: transparent;
 }
 DashboardScreen #status-panel {
     width: 22;
     height: 1fr;
-    border: solid $primary-darken-3;
-    background: $panel;
+    border: round $foreground;
+    background: transparent;
     padding: 0 1;
     layout: vertical;
     margin-left: 1;
 }
 DashboardScreen #status-panel-title {
     height: 1;
-    color: $primary;
+    color: $accent;
     text-style: bold;
 }
 DashboardScreen #status-panel .led-item {
@@ -205,9 +211,13 @@ DashboardScreen #status-panel .led-item {
 /* Lower part of right column: Vulnerability Matrix */
 DashboardScreen #matrix-col {
     height: 1fr;
+    /* Without a floor the matrix collapsed to its frame (0 content rows) on a
+       40-row terminal and showed an empty card. It needs the header, the column
+        row and a few finding rows. */
+    min-height: 8;
     margin-top: 1;
-    border: solid $warning-darken-2;
-    background: $panel;
+    border: round $foreground;
+    background: transparent;
 }
 DashboardScreen #matrix-col SeverityMatrix {
     height: 1fr;

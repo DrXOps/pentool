@@ -45,13 +45,9 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
         # ── Toolbar ────────────────────────────────────────────────────────────
         yield Toolbar(
             ToolbarButton("▶ Run", "btn-dec-run"),
-            Toolbar.sep(),
             ToolbarButton("+ Add Step", "btn-dec-add"),
-            Toolbar.sep(),
             ToolbarButton("✗ Clear Chain", "btn-dec-clrchain"),
-            Toolbar.sep(),
             ToolbarButton("⇅ Swap I/O", "btn-dec-swap"),
-            Toolbar.sep(),
             ToolbarButton("🔍 Smart", "btn-dec-smart"),
         )
 

@@ -1,75 +1,43 @@
-"""GlobalHintBar / ModuleHintBar — две строки подсказок внизу экрана.
+"""Helpers for the bottom hints row (Global / Module scope).
 
-Первая строка (снизу) — ``[InModule] Ctrl+R: Send …`` — клавиши активного модуля.
-Вторая строка (снизу) — ``[Global] P: Proxy  R: Rpt …`` — клавиши переключения модулей.
-Обе наследуют HintBarBase (compose + set_text).
+The row itself is composed in `PentoolApp.compose()` from the shared widgets
+(`ToolbarButton` + `Static`) — the same way every screen builds its toolbar — and
+the app owns the scope state. This module keeps the pure parts: the scope
+constants, the global key colours and the module display name.
 """
 
 from __future__ import annotations
 
-from pentool.tui.hotkeys import build_status_bar_markup, registry
-from pentool.tui.widgets.hintbar_base import HintBarBase
+SCOPE_GLOBAL = "global"
+SCOPE_MODULE = "module"
 
-# ── Цвета клавиш для [Global] секции ──────────────────────────────────
-_GLOBAL_KEY_COLORS: dict[str, str] = {
-    "H": "#88ccff",  # Dash   — голубой
-    "P": "#66dd88",  # Proxy  — зелёный
-    "R": "#ff9944",  # Rpt    — оранжевый
-    "I": "#ff6666",  # Intrud — красный
-    "S": "#aa66ff",  # Scan   — фиолетовый
-    "T": "#66ccff",  # Target — синий
-    "D": "#ddbb44",  # Decode — жёлтый
-    "C": "#ff88cc",  # Comp   — розовый
-    "Q": "#77dddd",  # Seq    — бирюзовый
-    "E": "#aaaaaa",  # Ext    — серый
+#: Key colours for the global scope (module-switching keys).
+GLOBAL_KEY_COLORS: dict[str, str] = {
+    "H": "#88ccff",  # Dash
+    "P": "#66dd88",  # Proxy
+    "R": "#ff9944",  # Repeater
+    "I": "#ff6666",  # Intruder
+    "S": "#aa66ff",  # Scanner
+    "T": "#66ccff",  # Target
+    "D": "#ddbb44",  # Decoder
+    "C": "#ff88cc",  # Comparer
+    "Q": "#77dddd",  # Sequencer
+    "E": "#aaaaaa",  # Extensions
 }
 
 
-def _render_global_entry(keys: str, description: str) -> str:
-    """Render one [Global] entry: coloured key + dim description."""
-    color = _GLOBAL_KEY_COLORS.get(keys, "$text")
+def render_global_entry(keys: str, description: str) -> str:
+    """One global entry: coloured key + muted description."""
+    color = GLOBAL_KEY_COLORS.get(keys, "$text")
     desc = f"[dim]{description}[/]" if description else ""
     return f"[bold {color}]{keys}[/] {desc}"
 
 
-class GlobalHintBar(HintBarBase):
-    """[Global] — клавиши переключения модулей."""
+def module_label(module_id: str) -> str:
+    """Display name of a module (``Proxy``); falls back to a title-cased id."""
+    from pentool.tui.widgets.module_tabs import MODULES
 
-    def on_mount(self) -> None:
-        self._refresh()
-
-    def _refresh(self) -> None:
-        entries = registry.get_entries("global")
-        shown = [e for e in entries if e.show and e.description]
-        shown.sort(key=lambda e: (-len(e.keys), e.keys))
-        if shown:
-            parts = [_render_global_entry(e.keys, e.description) for e in shown]
-            self.set_text(f"\\[Global]  {' │ '.join(parts)}")
-        else:
-            self.set_text("\\[Global] —")
-
-
-class ModuleHintBar(HintBarBase):
-    """[InModule] — хоткеи текущего модуля (Proxy, Repeater, …)."""
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._current_group: str | None = None
-
-    def set_module(self, module_id: str) -> None:
-        """Switch to *module_id* and re-render hints."""
-        if module_id == self._current_group:
-            return
-        self._current_group = module_id
-        self._refresh()
-
-    def _refresh(self) -> None:
-        if not self._current_group:
-            self.set_text("\\[InModule] —")
-            return
-        entries = registry.get_entries(self._current_group)
-        hints = build_status_bar_markup(entries)
-        if hints:
-            self.set_text(f"\\[InModule]  {hints}")
-        else:
-            self.set_text("\\[InModule] —")
+    for mod_id, label, _hotkey in MODULES:
+        if mod_id == module_id:
+            return label
+    return module_id.replace("_", " ").title()

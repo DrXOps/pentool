@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
@@ -14,6 +13,7 @@ from textual.widgets.text_area import Selection
 
 from pentool.core.logging import get_logger
 from pentool.services.repeater_service import RepeaterService
+from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import REPEATER_BINDINGS
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
@@ -23,7 +23,6 @@ from pentool.tui.widgets.diff_panel import DiffPanel
 from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.search_bar import SearchBar
-from pentool.tui.widgets.toolbar import Toolbar
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
@@ -127,11 +126,17 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     @property
     def _cancel_btn(self) -> ToolbarButton:
-        return self.query_one("#btn-cancel", ToolbarButton)
+        """Kept for external callers; the button itself is in the module header.
+
+        Send/Cancel moved to the header (`header_spec`), so nothing inside this
+        screen should poke them directly — use `_refresh_header_now()`.
+        """
+        return self.app.query_one("#hdr-state-2", ToolbarButton)
 
     @property
     def _send_btn(self) -> ToolbarButton:
-        return self.query_one("#btn-send", ToolbarButton)
+        """See `_cancel_btn`: Send is a header state button now."""
+        return self.app.query_one("#hdr-state-1", ToolbarButton)
 
     @property
     def _status_bar(self) -> Static:
@@ -161,27 +166,68 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         tid = tab_id or self._active_tab_id
         return self.query_one(f"#resp-viewer-{tid}", ResponseViewer)
 
-    def compose(self) -> ComposeResult:
-        yield Toolbar(
-            ToolbarButton("⚡ Send", "btn-send"),
-            Toolbar.sep(),
-            ToolbarButton("✖ Cancel", "btn-cancel", classes="disabled"),
-            Toolbar.sep(),
-            ToolbarButton("↪ Follow: ON", "btn-follow", classes="active"),
-            Toolbar.sep(),
-            ToolbarButton("➕ Tab", "btn-new-tab"),
-            Toolbar.sep(),
-            ToolbarButton("➖ Tab", "btn-close-tab"),
-            Toolbar.sep(),
-            ToolbarButton("✨ Beautify", "btn-beautify", tooltip="Format request and response body (JSON/XML)"),
-            Toolbar.sep(),
-            ToolbarButton("→ Decoder", "btn-send-decoder"),
-            Toolbar.sep(),
-            ToolbarButton("→ Comparer", "btn-send-comparer"),
-            Toolbar.sep(),
-            ToolbarButton("→ Intruder", "btn-send-intruder"),
+    # ── Module header (see pentool/tui/header.py) ─────────────────────────
+    def header_spec(self) -> HeaderSpec:
+        """One row of actions, in the order they are used.
+
+        Send / Cancel / Follow first, then the tab pair, then the "send to
+        another module" group — no `⋯` menu, everything is one click. Repeater's
+        own tabs are *documents* (one per request), not module sub-sections, so
+        they stay in the TabbedContent.
+        """
+        sending = self._sending
+        return HeaderSpec(
+            actions=(
+                HeaderAction("send", "⚡ Send", enabled=not sending),
+                HeaderAction("cancel", "✖ Cancel", enabled=sending),
+                HeaderAction(
+                    "follow",
+                    "↪ Follow: ON" if self._follow_redirects else "↪ Follow: OFF",
+                    enabled=self._follow_redirects,
+                ),
+                HeaderAction("new_tab", "➕ Tab"),
+                HeaderAction("close_tab", "➖ Tab"),
+                HeaderAction("beautify", "✨ Beautify"),
+                HeaderAction("decoder", "→ Decoder"),
+                HeaderAction("comparer", "→ Comparer"),
+                HeaderAction("intruder", "→ Intruder"),
+            ),
         )
 
+    def header_action(self, action_id: str) -> None:
+        """A header button was pressed."""
+        if action_id == "send":
+            self.action_send()
+        elif action_id == "cancel":
+            self.action_cancel()
+        elif action_id == "follow":
+            self._follow_redirects = not self._follow_redirects
+        elif action_id == "beautify":
+            self._beautify_active_request()
+        elif action_id == "decoder":
+            self._send_to_decoder(self._get_active_text())
+        elif action_id == "comparer":
+            self._send_to_comparer(self._get_active_text(), label="Repeater Request")
+        elif action_id == "intruder":
+            self._send_to_intruder()
+        elif action_id == "new_tab":
+            self.action_new_tab()
+        elif action_id == "close_tab":
+            self.action_close_tab()
+        self._refresh_header_now()
+
+    def header_tab_selected(self, tab_id: str) -> None:
+        """Request tabs are documents — switching them stays in TabbedContent."""
+        return None
+
+    def _refresh_header_now(self) -> None:
+        refresh = getattr(self.app, "refresh_header", None)
+        if refresh is not None:
+            refresh()
+
+    def compose(self) -> ComposeResult:
+        # Send / Cancel / Follow and the sub-tab actions live in the module header
+        # (`header_spec()` below) — the toolbar row is gone, request tabs stay.
         with Horizontal(id="content-row"):
             with Vertical(id="tabs-area"):
                 yield TabbedContent(id="repeater-tabs")
@@ -372,8 +418,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
     def _fill_req_resp(self, tab_id: str, state: _TabState, row: Horizontal) -> None:
         try:
-            req_panel = Vertical(classes="req-panel", id=f"req-panel-{tab_id}")
-            resp_panel = Vertical(classes="resp-panel", id=f"resp-panel-{tab_id}")
+            req_panel = Vertical(classes="req-panel card", id=f"req-panel-{tab_id}")
+            resp_panel = Vertical(classes="resp-panel card", id=f"resp-panel-{tab_id}")
             row.mount(req_panel)
             row.mount(
                 ResizeHandle(
@@ -887,18 +933,18 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             return
         self._sending = True
         self._set_status("Sending...")
-        try:
-            # Пока запрос в полёте, повторная отправка бессмысленна: второй
-            # клик уходил в тот же таб и ждал ответа в очереди.
-            self._send_btn.disabled = True
-        except NoMatches as exc:
-            logger.debug("repeater: send button not disabled: %s", exc)
-        try:
-            self._cancel_btn.disabled = False
-        except NoMatches as exc:
-            # Кнопки Cancel нет в дереве — отменять долгий запрос будет нечем.
-            logger.debug("repeater: cancel button not enabled: %s", exc)
+        # Send/Cancel live in the header now: redraw instead of poking buttons
+        # that are no longer in this screen's DOM.
+        self._refresh_header_now()
         self.run_worker(self._do_send(tab_id, raw), exclusive=False, name="repeater-send")
+
+    def action_cancel(self) -> None:
+        """Cancel the in-flight send (Cancel header button)."""
+        # `cancel_group` is a no-op when nothing is running, so no try/except.
+        self.workers.cancel_group(self, "repeater-send")
+        self._sending = False
+        self._set_status("Cancelled")
+        self._refresh_header_now()
 
     async def _do_send(self, tab_id: str, raw: str) -> None:
         repeater_api = self._get_api()
@@ -937,12 +983,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
         self._set_status(f"[green]HTTP {resp.status}[/green] — {len(resp.body)} bytes — {elapsed_ms}ms")
         self._sending = False
-        try:
-            self._cancel_btn.disabled = True
-        except NoMatches as exc:
-            # Cancel остаётся активным после завершения — нажатие на него
-            # отменит уже завершённый запрос. Кнопки нет в дереве.
-            logger.debug("repeater: cancel button not disabled after send: %s", exc)
+        self._refresh_header_now()
         self.app.notify(f"HTTP {resp.status} — {elapsed_ms}ms", timeout=2)
         await service.close()
 
@@ -956,14 +997,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             # сбрасывает флаг ДО этого события, и кнопка Send оставалась серой
             # навсегда (ровно то, что видно в тестировании).
             self._sending = False
-            try:
-                self._send_btn.disabled = False
-                self._cancel_btn.disabled = True
-            except NoMatches as exc:
-                # Воркер закончился, а кнопки остались в положении «идёт
-                # отправка» — экран залипает. Кнопок нет в дереве, то есть
-                # экран уже разбирают.
-                logger.debug("repeater: send/cancel buttons not reset: %s", exc)
+            # Send/Cancel are header buttons now: one redraw resets both.
+            self._refresh_header_now()
 
     def action_clear(self) -> None:
         tab_id = self._active_tab_id
@@ -978,33 +1013,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             # в дереве, то есть вкладка не смонтирована.
             logger.debug("repeater: tab %s not cleared: %s", tab_id, exc)
         self._set_status("Cleared")
-
-    @on(ToolbarButton.Pressed, "#btn-send")
-    def on_btn_send(self, _: ToolbarButton.Pressed) -> None:
-        self.action_send()
-
-    @on(ToolbarButton.Pressed, "#btn-follow")
-    def on_btn_follow(self, event: ToolbarButton.Pressed) -> None:
-        self._follow_redirects = not self._follow_redirects
-        btn = event.button
-        if self._follow_redirects:
-            btn.update("↪ Follow: ON")
-            btn.add_class("active")
-        else:
-            btn.update("↪ Follow: OFF")
-            btn.remove_class("active")
-
-    @on(ToolbarButton.Pressed, "#btn-new-tab")
-    def on_btn_new_tab(self, _: ToolbarButton.Pressed) -> None:
-        self.action_new_tab()
-
-    @on(ToolbarButton.Pressed, "#btn-close-tab")
-    def on_btn_close_tab(self, _: ToolbarButton.Pressed) -> None:
-        self.action_close_tab()
-
-    @on(ToolbarButton.Pressed, "#btn-beautify")
-    def on_btn_beautify(self, _: ToolbarButton.Pressed) -> None:
-        self._beautify_active_request()
 
     def _beautify_active_request(self) -> None:
         """Beautify both Request and Response panels of the active tab —
@@ -1034,18 +1042,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             self._notify("Response beautified (request body not valid JSON/XML)", timeout=2)
         else:
             self._notify("Nothing to beautify — no valid JSON/XML body found", severity="warning", timeout=3)
-
-    @on(ToolbarButton.Pressed, "#btn-send-decoder")
-    def on_btn_send_decoder(self, _: ToolbarButton.Pressed) -> None:
-        self._send_to_decoder(self._get_active_text())
-
-    @on(ToolbarButton.Pressed, "#btn-send-comparer")
-    def on_btn_send_comparer(self, _: ToolbarButton.Pressed) -> None:
-        self._send_to_comparer(self._get_active_text(), label="Repeater Request")
-
-    @on(ToolbarButton.Pressed, "#btn-send-intruder")
-    def on_btn_send_intruder(self, _: ToolbarButton.Pressed) -> None:
-        self._send_to_intruder()
 
     def _send_to_intruder(self) -> None:
         try:
