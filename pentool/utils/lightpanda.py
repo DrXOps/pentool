@@ -64,8 +64,8 @@ def is_lightpanda_available() -> bool:
 
 # ── Auto-install ──────────────────────────────────────────────────────────
 
-# Размер артефакта v0.3.7 (замер HEAD-запросом 2026-11-18): 157 502 440 байт.
-# Показываем пользователю до загрузки, чтобы согласие было осознанным.
+# Artifact size of v0.3.7 (measured with a HEAD request on 2026-11-18): 157 502 440 bytes.
+# Shown before the download, so the consent is informed.
 _LIGHTPANDA_DOWNLOAD_MIB = 150
 _LIGHTPANDA_VERSION = "0.3.7"
 _LIGHTPANDA_URL_TEMPLATE = (
@@ -83,7 +83,7 @@ def _detect_arch() -> str:
 
 
 def _decline_marker() -> Path:
-    """Файл-маркер «пользователь уже отказался от загрузки»."""
+    """Marker file: "the user already declined the download"."""
     return Path.home() / ".config" / "pentool" / "lightpanda-declined"
 
 
@@ -93,27 +93,27 @@ def _remember_decline() -> None:
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text("declined\n", encoding="utf-8")
     except OSError as exc:
-        # Маркер не записан — спросим ещё раз в следующий раз. Это лучше, чем
-        # молча качать 150 МиБ без согласия.
+        # Marker not written — we ask again next time. That is better than
+        # silently pulling 150 MiB without consent.
         logger.debug("lightpanda: decline marker not written: %s", exc)
 
 
 def install_declined() -> bool:
-    """Пользователь уже отказался от загрузки на этом устройстве."""
+    """The user already declined the download on this device."""
     return _decline_marker().is_file()
 
 
 def ensure_lightpanda_with_consent(auto_yes: bool = False) -> bool:
     """Скачать Lightpanda только с согласия пользователя.
 
-    Загрузка одноразовая и крупная (~150 МиБ), поэтому:
-      - уже стоит → True без вопросов;
-      - отказ был запомнен → False без вопросов;
-      - `auto_yes` (флаг `--install-browser`) → качаем молча;
-      - нет TTY (CI, пайп) → не качаем, печатаем как поставить руками;
-      - TTY → спрашиваем «скачать ~150 МиБ? [y/N]», отказ запоминаем.
+    The download is one-off and large (~150 MiB), so:
+      - already installed → True, no questions;
+      - a previous refusal is remembered → False, no questions;
+      - `auto_yes` (`--install-browser`) → download silently;
+      - no TTY (CI, pipe) → do not download, print how to install manually;
+      - TTY → ask "download ~150 MiB? [y/N]" and remember a refusal.
 
-    Возвращает True, если бинарник доступен в итоге.
+    Returns True when the binary is available in the end.
     """
     if find_lightpanda_binary() is not None:
         return True
@@ -214,7 +214,7 @@ async def ensure_lightpanda_installed(force: bool = False) -> bool:
                     if total:
                         pct = downloaded * 100 // total
                         print(f"  ↻ {pct}% ({downloaded >> 20} MiB / {total >> 20} MiB)", file=sys.stderr, flush=True)
-        # Проверка размера — минимум 5 MiB
+        # Size check — at least 5 MiB
         if not tmp.exists() or tmp.stat().st_size < 5_000_000:
             logger.error("Lightpanda download too small — aborting")
             tmp.unlink(missing_ok=True)

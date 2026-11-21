@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 # features unavailable (same as if no PRO package were installed).
 _UNSAFE_SKIP_PRO_CHECK_FLAG = "--unsafe-skip-pro-compat-check"
 
-# CI/CD флаги — не проверять обновления при запуске / автообновлять без диалога
+# CI/CD flags — skip the update check on start / update without a dialog
 _NO_CHECK_UPDATES_FLAG = "--no-check-updates"
 _AUTO_UPDATE_FLAG = "--auto-update"
 
@@ -104,7 +104,7 @@ def _ensure_pro_compatible(
 
     if not compatible:
         if auto_update:
-            # CI/CD: молча обновляем без диалога
+            # CI/CD: update silently, no dialog
             try:
                 import asyncio
 
@@ -119,7 +119,7 @@ def _ensure_pro_compatible(
             except Exception:
                 logger.debug("auto-update PRO attempt (interactive) failed", exc_info=True)
         else:
-            # Интерактивный режим: спросить пользователя
+            # Interactive mode: ask the user
             try:
                 import asyncio
 
@@ -135,7 +135,7 @@ def _ensure_pro_compatible(
                     elif not result.warning:
                         compatible, warning = is_pro_package_compatible()
                 elif choice in ("n", "no"):
-                    pass  # продолжить без PRO
+                    pass  # continue without PRO
                 elif choice in ("s", "skip"):
                     print("[pentool] Skipping PRO check. Use --no-check-updates to silence.", file=sys.stderr)
                     return  # вообще пропустить проверку в этой сессии

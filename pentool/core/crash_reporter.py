@@ -65,7 +65,9 @@ def _save_local_crash(exc: BaseException, tb_text: str | None = None) -> None:
 
                 _tb.print_exc(file=f)
             f.write(f"=== END CRASH {ts} ===\n")
-    except Exception:  # logging-ok: дамп уже не записать, а рекурсия в логгере хуже молчания
+    except (
+        Exception
+    ):  # logging-ok: the dump cannot be written any more, and recursing into the logger is worse than silence
         pass  # last resort — nothing we can do
 
 
@@ -105,11 +107,11 @@ async def send_crash_async(exc: BaseException, endpoint: str = f"{_API_BASE}/api
         async with aiohttp.ClientSession(timeout=timeout) as session:
             await session.post(endpoint, json=payload, ssl=False)
     except Exception:
-        # Сеть подвела — сохраняем локально, чтобы трейсбек не потерялся.
-        # Ловится широко осознанно: fire-and-forget телеметрия не должна
-        # ронять приложение ни при каком ответе сервера (это зафиксировано
-        # тестом test_send_crash_async_post_error_swallowed), поэтому причина
-        # не сужается, а пишется в журнал.
+        # The network failed — keep the report locally so the traceback is not lost.
+        # Caught broadly on purpose: fire-and-forget telemetry must not
+        # crash the app on any server response (this is pinned by
+        # test_send_crash_async_post_error_swallowed), so the cause
+        # is logged instead of being narrowed.
         logger.warning("crash report not sent — saved locally", exc_info=True)
         _save_local_crash(exc, tb_text)
 
@@ -123,10 +125,10 @@ def send_crash(exc: BaseException) -> None:
         if not getattr(cfg, "send_crash_reports", True):
             return
     except Exception:
-        # Fail-open осознанно и зафиксировано тестами
-        # (test_send_crash_config_exception_still_attempts): сломанный конфиг не
-        # должен молча выключать краш-репорты — они нужны как раз тогда, когда
-        # что-то сломано.
+        # Fail-open on purpose, pinned by tests
+        # (test_send_crash_config_exception_still_attempts): a broken config must not
+        # silently disable crash reports — they are needed exactly when
+        # something is broken.
         logger.debug("crash-telemetry: opt-out setting not read — sending anyway", exc_info=True)
 
     try:
@@ -162,8 +164,8 @@ async def send_first_run_ping_async(endpoint: str = f"{_API_BASE}/api/telemetry/
         async with aiohttp.ClientSession(timeout=timeout) as session:
             await session.post(endpoint, json={"machine_id": machine_id}, ssl=False)
     except Exception:
-        # Установочный пинг — тоже fire-and-forget: любая ошибка сети не должна
-        # ничего ломать, но и молчать о ней незачем.
+        # The install ping is fire-and-forget too: a network error must not
+        # break anything, but there is no reason to stay silent about it either.
         logger.warning("first-run ping not sent", exc_info=True)
 
 
@@ -181,10 +183,10 @@ def send_first_run_ping() -> None:
         if not getattr(cfg, "send_crash_reports", True):
             return
     except Exception:
-        # Fail-open осознанно и зафиксировано тестами
-        # (test_send_crash_config_exception_still_attempts): сломанный конфиг не
-        # должен молча выключать краш-репорты — они нужны как раз тогда, когда
-        # что-то сломано.
+        # Fail-open on purpose, pinned by tests
+        # (test_send_crash_config_exception_still_attempts): a broken config must not
+        # silently disable crash reports — they are needed exactly when
+        # something is broken.
         logger.debug("crash-telemetry: opt-out setting not read — sending anyway", exc_info=True)
 
     try:

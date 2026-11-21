@@ -246,14 +246,14 @@ def _load_ctx_from_disk(domain: str, ca_cert_path: str, cert_dir: str | None) ->
 
         return _build_ssl_ctx(cert_pem, key_pem)
     except Exception:
-        # Кэш нечитаем или испорчен — сертификат будет пересоздан. Это
-        # ожидаемое восстановление, но причина должна остаться в журнале:
-        # иначе не отличить порчу файла от ошибки в самом разборе.
+        # The cache is unreadable or corrupt — the certificate is recreated. That is
+        # the expected recovery, but the cause must stay in the journal:
+        # otherwise a corrupt file cannot be told apart from a parsing bug.
         logger.warning("cert: cached certificate unusable, regenerating", exc_info=True)
         # Corrupted cache — delete and regenerate
         try:
             path.unlink(missing_ok=True)
-        except Exception:  # logging-ok: остаточный файл кэша не мешает — он будет перезаписан
+        except Exception:  # logging-ok: a leftover cache file is harmless — it gets overwritten
             logger.debug("cert: failed to delete corrupted cache file", exc_info=True)
         return None
 
@@ -266,7 +266,7 @@ def _save_ctx_to_disk(domain: str, cert_pem: bytes, key_pem: bytes, cert_dir: st
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(cert_pem + key_pem)
         path.chmod(0o600)
-    except Exception:  # logging-ok: кэш необязателен — сертификат пересоздастся, данные не теряются
+    except Exception:  # logging-ok: the cache is optional — the certificate is recreated, no data is lost
         logger.debug("cert: disk cache save failed", exc_info=True)  # non-critical
 
 
@@ -294,6 +294,6 @@ def _build_ssl_ctx(cert_pem: bytes, key_pem: bytes) -> ssl.SSLContext:
 
 
 # ── In-memory LRU cache for SSL contexts (1000 domains) ──────────────────────
-# Shares the generic LRUCache from utils/lru_cache.py (Этап 7.4 consolidation);
+# Shares the generic LRUCache from utils/lru_cache.py (stage 7.4 consolidation);
 # key is the string "{domain}:{ca_cert_path}".
 _ssl_ctx_cache: LRUCache = LRUCache(max_size=1000)

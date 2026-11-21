@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # PRO-package verify/extract/platform helpers now live in
-# core/license_update.py (Этап 6) — re-exported here under the same names so
-# existing call sites don't change. Импорт поднят в верхний блок: раньше он
-# стоял после констант, и это давало E402 при каждом касании файла.
+# core/license_update.py (stage 6) — re-exported here under the same names so
+# existing call sites don't change. The import moved into the top block: it used
+# to sit after the constants, which raised E402 on every edit of this file.
 from pentool.core.license_update import current_platform as _current_platform
 from pentool.core.license_update import safe_extract_tar as _safe_extract_tar
 from pentool.core.license_update import verify_pro_package_signature as _verify_pro_package_signature
@@ -92,21 +92,21 @@ class LicenseInfo:
 
 
 def get_machine_id() -> str:
-    # 1. /etc/machine-id — стабильный ID системы (systemd, Linux)
+    # 1. /etc/machine-id — stable system id (systemd, Linux)
     try:
         mid = Path("/etc/machine-id").read_text(encoding="utf-8").strip()
         if mid and mid != "uninitialized":
             return hashlib.sha256(mid.encode()).hexdigest()[:32]
     except Exception:
         pass
-    # 2. /var/lib/dbus/machine-id — альтернативный путь
+    # 2. /var/lib/dbus/machine-id — alternative path
     try:
         mid = Path("/var/lib/dbus/machine-id").read_text(encoding="utf-8").strip()
         if mid:
             return hashlib.sha256(mid.encode()).hexdigest()[:32]
     except Exception:
         pass
-    # 3. Fallback: hostname + MAC (как было раньше)
+    # 3. Fallback: hostname + MAC (as it used to be)
     try:
         import socket
 
@@ -124,10 +124,10 @@ def _load_cached() -> dict | None:
             data = json.loads(_LICENSE_FILE.read_text(encoding="utf-8"))
             return data
     except Exception:
-        # Кэш лицензии не прочитан — состояние придётся получать заново, а при
-        # отсутствии сети пользователь увидит «не активировано». Данные целы,
-        # поэтому warning, но с трейсбеком: иначе не отличить порчу файла от
-        # ошибки в разборе.
+        # Licence cache not read: the state will be fetched again, and without a
+        # network the user sees "not activated" while the data itself is intact.
+        # Hence a warning with a traceback — otherwise a corrupt file cannot be
+        # told apart from a parsing bug.
         logger.warning("license: cached state not loaded", exc_info=True)
     return None
 
@@ -140,8 +140,8 @@ def _save_cached(data: dict) -> None:
             encoding="utf-8",
         )
     except Exception:
-        # Кэш не записан: следующий запуск будет вынужден идти в сеть, а без неё
-        # покажет «не активировано» при живой лицензии.
+        # Cache not written: the next start is forced to go online, and offline it
+        # shows "not activated" despite a valid licence.
         logger.warning("license: cached state not saved", exc_info=True)
 
 
@@ -284,7 +284,7 @@ def refresh_session_license(info: "LicenseInfo | None" = None) -> "LicenseInfo":
     return _session_license
 
 
-class FeatureNotAvailable(Exception):  # noqa: N818 — публичное имя, на него ссылаются декоратор и вызывающие
+class FeatureNotAvailable(Exception):  # noqa: N818 — public name, the decorator and callers rely on it
     """Feature not available in the current plan."""
 
     def __init__(self, feature: str, plan_required: str = "pro"):
@@ -466,7 +466,7 @@ async def reassign_license(key: str) -> LicenseInfo:
                         error="Server did not confirm reassignment",
                     )
 
-                # После reassign — активируем по полной (получаем подписанный ответ)
+                # After reassign — activate fully (fetch the signed response)
                 return await activate_license(key)
     except Exception as exc:
         return LicenseInfo(
@@ -498,7 +498,7 @@ async def deactivate_license() -> None:
                     ssl=False,
                 )
         except Exception:
-            pass  # сервер недоступен — хотя бы локально сбросим
+            pass  # server unreachable — at least reset locally
     try:
         if _LICENSE_FILE.exists():
             _LICENSE_FILE.unlink()
@@ -638,8 +638,8 @@ def _write_pro_meta(build_id: str) -> None:
     try:
         from pentool import __version__ as free_version
     except Exception:
-        # Версия приложения не прочиталась — это признак сломанной установки,
-        # поэтому warning с трейсбеком, а не тихая пустая строка.
+        # The app version could not be read — a sign of a broken installation,
+        # so a warning with a traceback instead of a silent empty string.
         logger.warning("license: app version not readable for PRO meta", exc_info=True)
         free_version = ""
     try:
@@ -649,8 +649,8 @@ def _write_pro_meta(build_id: str) -> None:
         )
         _PRO_BUILD_MARKER.unlink(missing_ok=True)  # migrate off the legacy marker
     except Exception:
-        # Метаданные PRO не записаны — пакет сочтут несовместимым, хотя он
-        # установлен и работает. Причина должна быть видна.
+        # PRO metadata not written: the package will be considered incompatible
+        # although it is installed and working. The reason must be visible.
         logger.warning("license: PRO build meta not written", exc_info=True)
 
 
@@ -767,9 +767,9 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
             try:
                 build_id = await _fetch_pro_build_id(plat)
             except Exception:
-                # Установка продолжится с build_id «unknown:…» — это неточная
-                # метка, но не потеря данных. warning, чтобы сбой сети не
-                # выглядел как нормальный ход установки.
+                # The installation continues with build_id "unknown:…": an
+                # imprecise label, not data loss. A warning, so a network failure
+                # does not read like a normal install step.
                 logger.warning("license: PRO build_id not fetched", exc_info=True)
                 build_id = None
         if not build_id:
@@ -778,8 +778,8 @@ async def download_pro_package(key: str, machine_id: str) -> bool:
 
         return True
     except Exception:
-        # Установка PRO провалилась: вызывающий получит False и покажет ошибку,
-        # но в журнале должна остаться причина — иначе разбор невозможен.
+        # PRO installation failed: the caller gets False and shows an error, but
+        # the journal must keep the cause — otherwise there is nothing to investigate.
         logger.error("license: PRO package download/install failed", exc_info=True)
         return False
 

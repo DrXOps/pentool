@@ -230,7 +230,7 @@ def _find_executable(name: str) -> str | None:
 
 
 def _x11_display_ok() -> bool:
-    """Проверить, что X11 DISPLAY доступен (xclip/xsel/GTK без него не работают)."""
+    """Check that an X11 DISPLAY is available (xclip/xsel/GTK need it)."""
     return bool(os.environ.get("DISPLAY"))
 
 
@@ -241,7 +241,7 @@ def copy_to_clipboard(text: str) -> bool:
         logger.debug("copy_to_clipboard: empty text, skipping")
         return False
 
-    # tkinter — работает везде где есть Tk (без внешних бинарников)
+    # tkinter — works anywhere Tk exists (no external binaries)
     try:
         import tkinter as _tk
 
@@ -259,7 +259,7 @@ def copy_to_clipboard(text: str) -> bool:
     logger.debug("copy_to_clipboard: DISPLAY=%s", have_display)
 
     if have_display:
-        # xclip (оптимально — самый быстрый)
+        # xclip (the fastest option)
         path = _find_executable("xclip")
         if path:
             try:
@@ -280,7 +280,7 @@ def copy_to_clipboard(text: str) -> bool:
             except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
                 logger.debug("copy_to_clipboard: xclip error: %s", exc)
 
-        # xsel (fallback на X11)
+        # xsel (X11 fallback)
         path = _find_executable("xsel")
         if path:
             try:
@@ -301,7 +301,7 @@ def copy_to_clipboard(text: str) -> bool:
             except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
                 logger.debug("copy_to_clipboard: xsel error: %s", exc)
 
-        # GTK clipboard (работает на X11 без xclip/xsel)
+        # GTK clipboard (works on X11 without xclip/xsel)
         try:
             gtk_script = (
                 "import gi; gi.require_version('Gtk','3.0'); "
@@ -325,7 +325,7 @@ def copy_to_clipboard(text: str) -> bool:
         except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
             logger.debug("copy_to_clipboard: GTK error: %s", exc)
 
-    # wl-copy (Wayland — не требует DISPLAY)
+    # wl-copy (Wayland — no DISPLAY needed)
     path = _find_executable("wl-copy")
     if path:
         try:
@@ -346,11 +346,11 @@ def copy_to_clipboard(text: str) -> bool:
         except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
             logger.debug("copy_to_clipboard: wl-copy error: %s", exc)
 
-    # pyperclip — универсальный fallback
+    # pyperclip — the universal fallback
 
-    # pyperclip — универсальный fallback, покрывает macOS, Windows, и headless
-    # через собственные механизмы (xclip/xsel/wl-copy сам выбирает).
-    # Пробуем его в самом конце, потому что он может тянуть тяжелые импорты.
+    # pyperclip — the universal fallback; covers macOS, Windows, and headless
+    # through its own mechanisms (it picks xclip/xsel/wl-copy itself).
+    # Tried last, because it may pull heavy imports.
     try:
         import pyperclip  # type: ignore[import]
 
@@ -367,7 +367,7 @@ def copy_to_clipboard(text: str) -> bool:
 def paste_from_clipboard() -> str | None:
     """Read from clipboard via (tkinter → xclip/xsel → GTK → wl-paste → pyperclip)."""
 
-    # tkinter — работает без внешних бинарников
+    # tkinter — works without external binaries
     try:
         import tkinter as _tk
 

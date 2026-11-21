@@ -49,14 +49,14 @@ class ScanConfig:
     # tab showing every finding ever saved to the project DB.
     scan_tab_uid: str = ""
     scan_session_id: str = ""
-    # Optional automatic session-login (Этап 2.3). When True and `login` is
+    # Optional automatic session-login (stage 2.3). When True and `login` is
     # set, ScanService tries to establish a cookie session against the first
     # target (CSRF-protected form, e.g. DVWA) before the active scan, and
     # reuses it via the shared _auth_headers. Off by default — the crawler
     # should never silently log into third-party sites without an explicit opt-in.
     auto_login: bool = False
     login: tuple[str, str] | None = None  # (username, password)
-    # Hybrid JS crawl (Этап 2.4): when True and Lightpanda is installed, if the
+    # Hybrid JS crawl (stage 2.4): when True and Lightpanda is installed, if the
     # static crawl only reaches the entry page, re-crawl with js_render to pull
     # client-side-built links (levels 3+). Off by default.
     hybrid_js: bool = False
@@ -147,7 +147,7 @@ class ScanService(BaseService):
 
         self._emit(ScanProgressEvent(done=0, total=len(all_scan_targets), scanning=True, source="scanner"))
 
-        # Optional auto-login (Этап 2.3): if the caller opted in with creds and
+        # Optional auto-login (stage 2.3): if the caller opted in with creds and
         # the crawl never learned a session, try to establish one so the active
         # scan runs against a logged-in context (not redirected to /login.php).
         if config.auto_login and config.login and not self._auth_headers:
@@ -183,7 +183,7 @@ class ScanService(BaseService):
             for base_url in config.targets:
                 if self._stop_requested:
                     break
-                # Если Target уже краулил этот хост — используем его результаты
+                # If Target already crawled this host, reuse its results
                 if SpiderAPI.has_cached_result(base_url):
                     cached_pages = SpiderAPI.get_cached_pages(base_url)
                     self._log(f"[dim]Spider: using cached pages from Target crawl ({len(cached_pages)} pages)[/dim]")
@@ -239,7 +239,7 @@ class ScanService(BaseService):
         return unique
 
     async def _try_auto_login(self, config: ScanConfig) -> None:
-        """Best-effort session login against the first target (Этап 2.3).
+        """Best-effort session login against the first target (stage 2.3).
 
         Uses pentool.utils.auth_login.build_session_headers() to submit a
         CSRF-protected login form, then stores the resulting Cookie in
@@ -267,7 +267,7 @@ class ScanService(BaseService):
 
     # Action-URL substrings that signal a state-mutating/security-relevant
     # endpoint. Auto-submitting these as POST could log the user out, delete
-    # data, or hit admin panels — so ScanService skips them (Этап 2.6 safety).
+    # data, or hit admin panels — so ScanService skips them (stage 2.6 safety).
     _RISKY_FORM_MARKERS = (
         "/logout",
         "/signout",
@@ -346,7 +346,7 @@ class ScanService(BaseService):
                     ParsedRequest(method="GET", url=url, headers=auth_headers, body="") for url in all_scan_targets
                 ]
 
-            # Auto-submit POST forms (Этап 2.6) with default field values so
+            # Auto-submit POST forms (stage 2.6) with default field values so
             # POST-only endpoints (e.g. sqli_blind/exec/upload) are reached.
             # Skip dangerous actions (/logout, /delete, /admin, ...) to avoid
             # real side-effects.
@@ -380,12 +380,12 @@ class ScanService(BaseService):
             # The engine runs TechFingerprinter before the worker pool. We
             # catch it here so the parallel AI worker knows the WAF profile.
             _collected_tech: list | None = []
-            _tech_ready = asyncio.Event()  # AIWorker ждёт этот Event перед WAF-шагами
+            _tech_ready = asyncio.Event()  # AIWorker waits for this Event before WAF steps
 
             def _on_fingerprint(tp) -> None:
                 _collected_tech.clear()
                 _collected_tech.append(tp)
-                _tech_ready.set()  # сигнал AIWorker
+                _tech_ready.set()  # signal to AIWorker
 
             logger.info(
                 "ACTIVE_SCAN: targets=%d reqs=%d checks=%s threads=%d delay=%.2fs use_ai=%s resume=%s",
@@ -399,8 +399,8 @@ class ScanService(BaseService):
             )
 
             # ── Parallel AIWorker ────────────────────────────────────────────
-            # Запускается ДО active-скан, передаёт сгенерированные пейлоады
-            # через очередь — движок забирает их в рантайме.
+            # Starts BEFORE the active scan and passes the generated payloads
+            # through a queue — the engine takes them at runtime.
             ai_payload_queue: asyncio.Queue | None = None
             waf_bypass_queue: asyncio.Queue | None = None
             ai_discovered_urls = []
@@ -475,7 +475,7 @@ class ScanService(BaseService):
                 waf_bypass_queue=waf_bypass_queue,
             )
 
-            # После скана — дожидаемся AIWorker (если ещё не finished)
+            # After the scan, wait for AIWorker (if it is not finished yet)
             if ai_task is not None:
                 try:
                     ai_discovered_urls = await asyncio.wait_for(ai_task, timeout=30.0) or []
@@ -544,7 +544,7 @@ class ScanService(BaseService):
             if getattr(result, "auth_headers", None):
                 self._auth_headers = dict(result.auth_headers)
 
-            # Hybrid JS crawl (Этап 2.4): when the caller opted in (hybrid_js)
+            # Hybrid JS crawl (stage 2.4): when the caller opted in (hybrid_js)
             # and a JS engine (Lightpanda) is available, if the static crawl
             # surfaced almost nothing (only reached the entry page — typical
             # for a JS/SPA app whose level-2/3 links are built client-side),

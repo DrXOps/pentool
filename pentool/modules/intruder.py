@@ -156,9 +156,9 @@ def load_payloads_from_file(path: str) -> list[str]:
             if stripped and not stripped.startswith("#"):
                 result.append(stripped)
     except Exception:
-        # Файл не прочитан — набор payload'ов останется пустым, и атака пойдёт
-        # «ни с чем». Молчать нельзя: пользователь иначе не отличит пустой файл
-        # от нечитаемого.
+        # The file was not read — the payload set stays empty and the attack runs
+        # with nothing. Staying silent is wrong: the user could not tell an empty
+        # file from an unreadable one.
         logger.warning("intruder: payloads from %s not loaded", path, exc_info=True)
     return result
 
@@ -482,8 +482,8 @@ def process_payload(payload: str, operations: list[str]) -> str:
             try:
                 result = func(result)
             except Exception:
-                # Операция преобразования не применилась — набор уйдёт в атаку
-                # частично обработанным. Это искажает результат, поэтому в лог.
+                # The transform did not apply — the set would go into the attack
+                # half-processed. That skews the result, hence it is logged.
                 logger.warning("intruder: payload operation %r failed, kept previous value", op, exc_info=True)
     return result
 
@@ -688,7 +688,7 @@ class IntruderAttack:
         )
         on_progress(0, self._total)
 
-        # БАГ-D: reuse a single HTTPClient (and its aiohttp connection pool)
+        # BUG-D: reuse a single HTTPClient (and its aiohttp connection pool)
         # for the whole attack instead of opening/closing a new TCP+TLS
         # connection per request. aiohttp.ClientSession is safe to share
         # across concurrent coroutines. Only close it here if we created
@@ -786,7 +786,7 @@ class IntruderAttack:
 
             req = parse_http_request(request_raw)
             if client is not None:
-                # Reused client (БАГ-D) — do not close, owned by run()/caller.
+                # Reused client (BUG-D) — do not close, owned by run()/caller.
                 resp = await client.send(req)
             else:
                 # Fallback for direct/standalone calls (e.g. tests) that

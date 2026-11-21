@@ -249,8 +249,8 @@ async def init_db(db_path: str) -> None:
             "CREATE INDEX IF NOT EXISTS idx_requests_status ON requests (status_code)",
             # intruder_results: filtering by attack_id
             "CREATE INDEX IF NOT EXISTS idx_intruder_results_attack ON intruder_results (attack_id)",
-            # Частичный индекс: пустой tab_uid — это «вкладка ещё не сохранена»,
-            # а не конфликтующая строка (иначе второй INSERT с '' упал бы).
+            # Partial index: an empty tab_uid means "the tab is not saved yet",
+            # not a conflicting row (otherwise a second INSERT with '' would fail).
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_repeater_tabs_uid ON repeater_tabs (tab_uid) WHERE tab_uid != ''",
             # vulnerabilities: filtering by host/url/severity
             "CREATE INDEX IF NOT EXISTS idx_vulns_host ON vulnerabilities (host)",

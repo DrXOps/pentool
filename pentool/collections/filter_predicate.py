@@ -1,15 +1,15 @@
 """Filter engine — универсальная система фильтрации таблиц.
 
-Слои:
-    FilterOp          — enum операторов
-    FilterPredicate   — один предикат (поле + оператор + значение)
-    FilterSpec        — набор предикатов с AND/OR-логикой
-    ColumnFilter      — описание UI-поля фильтрации
+Layers:
+    FilterOp          — operator enum
+    FilterPredicate   — one predicate (field + operator + value)
+    FilterSpec        — a set of predicates with AND/OR logic
+    ColumnFilter      — description of a filter UI field
 
-FilterSpec умеет:
-    - to_sql()  → (WHERE clause, params) для SQL-фильтрации
-    - apply()   → фильтровать список dict'ов in-memory
-    - to_dict() / from_dict() — сериализация
+FilterSpec can:
+    - to_sql()  → (WHERE clause, params) for SQL filtering
+    - apply()   → filter a list of dicts in memory
+    - to_dict() / from_dict() — serialisation
 """
 
 from __future__ import annotations
@@ -18,11 +18,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-# ── Операторы ──────────────────────────────────────────────────────────────
+# ── Operators ──────────────────────────────────────────────────────────────
 
 
 class FilterOp(str, Enum):
-    """Оператор сравнения для одного предиката."""
+    """Comparison operator of a single predicate."""
 
     EQ = "eq"  # field = ?
     NEQ = "neq"  # field != ?
@@ -38,10 +38,10 @@ class FilterOp(str, Enum):
     IS_NULL = "is_null"  # field IS NULL
     NOT_NULL = "not_null"  # field IS NOT NULL
     HAS = "has"  # for tags: field CONTAINS value
-    FTS = "fts"  # FTS5 full-text search (спецобработка)
+    FTS = "fts"  # FTS5 full-text search (special-cased)
 
 
-# ── Предикат ───────────────────────────────────────────────────────────────
+# ── Predicate ───────────────────────────────────────────────────────────────
 
 
 @dataclass
@@ -134,7 +134,7 @@ class FilterPredicate:
         """Check if a row dict satisfies this predicate."""
         actual = row.get(self.field)
 
-        # IS_NULL / NOT_NULL обрабатываются до проверки на None
+        # IS_NULL / NOT_NULL are handled before the None check
         if self.operator == FilterOp.IS_NULL:
             return actual is None or actual == ""
         if self.operator == FilterOp.NOT_NULL:
@@ -182,7 +182,7 @@ class FilterPredicate:
         return False  # unknown operator
 
 
-# ── Набор предикатов ───────────────────────────────────────────────────────
+# ── Predicate set ───────────────────────────────────────────────────────
 
 
 @dataclass
@@ -190,8 +190,8 @@ class FilterSpec:
     """Набор предикатов фильтрации.
 
     Args:
-        predicates: список предикатов
-        logic: "AND" или "OR" — как комбинировать предикаты
+        predicates: list of predicates
+        logic: "AND" or "OR" — how to combine the predicates
     """
 
     predicates: list[FilterPredicate] = field(default_factory=list)
@@ -249,7 +249,7 @@ class FilterSpec:
         # OR logic
         return [r for r in rows if any(p.apply(r) for p in self.predicates)]
 
-    # ── Сериализация ───────────────────────────────────────────────────────
+    # ── Serialisation ───────────────────────────────────────────────────────
 
     def to_dict(self) -> dict:
         return {
@@ -270,34 +270,34 @@ class FilterSpec:
         return cls(predicates=predicates, logic=d.get("logic", "AND"))
 
 
-# ── Описание UI-поля фильтрации ────────────────────────────────────────────
+# ── Filter UI field description ────────────────────────────────────────────
 
 
 class FilterFieldType(str, Enum):
-    """Тип UI-контрола для поля фильтрации."""
+    """UI control type of a filter field."""
 
     TEXT = "text"  # Input (text)
     NUMBER = "number"  # Input (number)
     SELECT = "select"  # Select/Dropdown
-    CYCLER = "cycler"  # Циклический переключатель (Any → GET → POST → ...)
-    TOGGLE = "toggle"  # Вкл/Выкл
-    RANGE = "range"  # Два Input (from, to)
+    CYCLER = "cycler"  # cyclic switcher (Any → GET → POST → ...)
+    TOGGLE = "toggle"  # on/off
+    RANGE = "range"  # two Inputs (from, to)
 
 
 @dataclass
 class FilterField:
     """Описание одного поля фильтрации в FilterBar.
 
-    Позволяет FilterBarWidget сконфигурировать UI без жёсткого кода.
+    Lets FilterBarWidget configure its UI without hard-coded widgets.
 
     Attributes:
-        id:         DOM id для виджета (fb-{name})
-        label:      Текст метки ("Host:", "Status:")
-        field_type: Тип UI-контрола
-        field:      Имя колонки в данных/БД ("host", "status_code")
-        operator:   Оператор сравнения по умолчанию
-        options:    Опции для CYCLER/SELECT [(label, value), ...]
-        placeholder: Placeholder для TEXT/NUMBER
+        id:         DOM id of the widget (fb-{name})
+        label:      label text ("Host:", "Status:")
+        field_type: UI control type
+        field:      column name in the data/DB ("host", "status_code")
+        operator:   default comparison operator
+        options:    options for CYCLER/SELECT [(label, value), ...]
+        placeholder: placeholder for TEXT/NUMBER
     """
 
     id: str

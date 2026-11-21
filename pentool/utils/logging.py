@@ -1,10 +1,10 @@
 """Фабрика логгеров — общая для всех слоёв.
 
-Живёт в ``utils`` намеренно: логгер нужен и ``utils``, и ``core``, и
-``modules``, а правило слоёв запрещает пакетам ниже ``core`` импортировать
-``core``. ``pentool.core.logging`` реэкспортирует эти имена, поэтому
-существующие ``from pentool.core.logging import get_logger`` продолжают
-работать без изменений.
+Deliberately lives in ``utils``: the logger is needed by ``utils``, ``core`` and
+``modules``, while the layering rule forbids packages below ``core`` from importing
+``core``. ``pentool.core.logging`` re-exports these names, so
+the existing ``from pentool.core.logging import get_logger`` imports keep
+working unchanged.
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ from typing import ClassVar
 class _NamedLogger(logging.Logger):
     """Логгер с per-module фильтрацией уровней через конфиг.
 
-    Фильтры задаются один раз через ``_NamedLogger.configure(rules)`` и
-    работают на все логгеры в системе. ``error`` всегда проходит.
+    Filters are configured once via ``_NamedLogger.configure(rules)`` and
+    apply to every logger in the process. ``error`` always passes.
     """
 
     _filters: ClassVar[dict[str, set[str] | None]] = {}

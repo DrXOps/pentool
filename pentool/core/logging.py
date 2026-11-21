@@ -7,23 +7,23 @@ Usage::
     logger.debug("...")   # respects per-module filters
     logger.info("...")
     logger.warning("...")
-    logger.error("...")   # error всегда проходит
+    logger.error("...")   # error always passes
 
-В Settings → [logging.rules] можно точечно отключить/включить уровни::
+In Settings → [logging.rules] levels can be switched on and off per rule::
 
     [logging.rules]
     pentool.proxy.client = -debug
     pentool.modules.scanner.engine = -debug,-info
     pentool.tui = +error
 
-Правила:
-    +level — включить уровень (кроме error — всегда включён)
-    -level — выключить уровень
-    off    — выключить всё кроме error
+Rules:
+    +level — enable a level (except error, which is always on)
+    -level — disable a level
+    off    — disable everything except error
 
-Сама фабрика ``get_logger`` и класс логгера живут в ``pentool.utils.logging``
-(нижний слой, чтобы логгировать могли и utils). Здесь они реэкспортируются,
-поэтому старые импорты ``from pentool.core.logging import get_logger`` валидны.
+The ``get_logger`` factory and the logger class live in ``pentool.utils.logging``
+(the lower layer, so utils can log too). They are re-exported here,
+so the old ``from pentool.core.logging import get_logger`` imports stay valid.
 """
 
 from __future__ import annotations
@@ -60,13 +60,13 @@ def _rotation_limits() -> tuple[int, int]:
 def setup_logging(log_file: str, level: str = "INFO") -> logging.Logger:
     """Настроить логирование.
 
-    `PENTOOL_LOG_FILE` переопределяет путь: тесты пишут в /tmp, а не в
-    настоящий журнал на 9p — иначе DEBUG-запись на каждый зонд делает прогон
-    в разы медленнее (замер: 8 мин против 3).
+    `PENTOOL_LOG_FILE` overrides the path: tests write to /tmp instead of the
+    real journal on 9p — otherwise a DEBUG line per probe makes the run
+    several times slower (measured: 8 min versus 3).
     """
     log_file = os.environ.get("PENTOOL_LOG_FILE", log_file)
-    # `PENTOOL_LOG_LEVEL` — для тестов и CI: прогон с DEBUG на каждый зонд
-    # пишет тысячи записей и замедляет набор втрое.
+    # `PENTOOL_LOG_LEVEL` is for tests and CI: a run with DEBUG per probe
+    # writes thousands of records and slows the suite down threefold.
     level = os.environ.get("PENTOOL_LOG_LEVEL", level)
     """Configure logging: write to file (DEBUG) and to console (given level)."""
     log_path = Path(log_file)
@@ -120,7 +120,7 @@ def _load_logging_rules(root_logger: logging.Logger) -> None:
         rules_section = getattr(cfg, "logging_rules", None) or {}
         _NamedLogger.configure(rules_section)
     except Exception:
-        # Секция [logging.rules] не прочиталась — правила остались прежними.
-        # Это не потеря данных, но и не норма: warning с трейсбеком, иначе
-        # сломанный конфиг логирования выглядит как его отсутствие.
+        # The [logging.rules] section could not be read — the rules stayed as before.
+        # That is not data loss, but not normal either: a warning with a traceback,
+        # otherwise a broken logging config looks like no config at all.
         root_logger.warning("logging.rules not applied", exc_info=True)

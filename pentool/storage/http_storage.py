@@ -121,8 +121,8 @@ class HttpStorage(BaseSqliteStorage):
             total = row[0] if row else 0
             logger.info("HttpStorage: switched to %s, found %d existing records", path, total)
         except Exception:
-            # Не удалось посчитать записи после переключения: сама БД открыта,
-            # но цифра в журнале будет отсутствовать — это деградация.
+            # Row count after the switch failed: the DB itself is open,
+            # but the number will be missing from the journal — a degradation.
             logger.warning("HttpStorage: could not count records after switch", exc_info=True)
 
     async def add_request(self, req: Any, resp: Any = None, is_websocket: bool = False) -> int:
@@ -382,7 +382,7 @@ class HttpStorage(BaseSqliteStorage):
         result = []
         from pentool.storage.large_body_handler import LargeBodyHandler
 
-        # Конвертируем sqlite3.Row → dict, чтобы работал .get()
+        # Convert sqlite3.Row → dict so that .get() works
         rows = [dict(r) for r in rows]
         # Batch-load all large bodies to avoid N+1 disk reads
         req_refs = [r.get("request_body_ref") for r in rows]

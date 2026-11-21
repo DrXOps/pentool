@@ -50,8 +50,8 @@ class LargeBodyHandler:
             try:
                 result[p] = Path(p).read_bytes()
             except Exception:
-                # Одно тело не прочиталось — вызывающий получит словарь без него
-                # и покажет запрос с пустым телом. Это потеря, не косметика.
+                # One body could not be read — the caller gets the dict without it
+                # and shows the request with an empty body. That is data loss, not cosmetics.
                 logger.warning("LargeBodyHandler: batch load failed for %s", p, exc_info=True)
         return result
 

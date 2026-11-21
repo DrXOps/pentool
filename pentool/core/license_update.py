@@ -1,6 +1,6 @@
 """PRO-package updater domain: signature verify + safe tar extract + platform.
 
-Extracted from core/license.py (Этап 6, license_update) so the PRO-download
+Extracted from core/license.py (stage 6, license_update) so the PRO-download
 mechanics are pure and testable in isolation, separate from license state.
 """
 

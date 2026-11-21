@@ -63,23 +63,23 @@ class Config:
     # ── AI ────────────────────────────────────────────────────────────────────────
     ai_enabled: bool = False  # master switch for the AI assistant
 
-    # Интерфейс: подсказки при наведении и набор иконок в панелях.
-    # Иконки: unicode (по умолчанию) | ascii | emoji — покрытие шрифтов
-    # различается, поэтому набор выбирается в Settings → Interface.
+    # Interface: hover tooltips and the icon set used in panels.
+    # Icons: unicode (default) | ascii | emoji — font coverage
+    # differs between terminals, so the set is chosen in Settings → Interface.
     tooltips_enabled: bool = True
     panel_icons: str = "unicode"
-    # Толщина ручек ресайза в клетках — одна и та же для обеих ориентаций,
-    # иначе вертикальная и горизонтальная выглядят по-разному.
+    # Resize handle thickness in cells — the same for both orientations,
+    # otherwise the vertical and horizontal ones look different.
     resize_handle_thickness: int = 1
     ai_model: str = ""  # LLM model name / path (GGUF)
     ai_mcp_host: str = "127.0.0.1"  # MCP server host
     ai_mcp_port: int = 0  # 0 = stdio, >0 = TCP
     ai_mcp_model_path: str = ""  # path to the GGUF file
     ai_mcp_auto_start: bool = False  # auto-start the MCP server when pentool launches
-    # Debug — подробное логирование процесса скана и AI-воркера
-    scan_debug: bool = False  # показать/скрыть детальный вывод скана
-    # Auto-Scope — автоматически добавлять хост в Scope при отправке в модуль
-    auto_scope: bool = False  # если True — хост из контекстного меню → в Scope
+    # Debug — verbose logging of the scan pipeline and the AI worker
+    scan_debug: bool = False  # show/hide the verbose scan output
+    # Auto-Scope — add the host to Scope automatically when sending to a module
+    auto_scope: bool = False  # when True — the host from the context menu goes to Scope
 
     # ── Per-module logging rules (NamedLogger) ──────────────────────────────────
     logging_rules: dict[str, str] = field(default_factory=dict)
@@ -174,7 +174,7 @@ class Config:
         if len(cfg.recent_projects) != before:
             try:
                 cfg.save()
-            except Exception:  # logging-ok: необязательная чистка списка, повторится при следующей загрузке
+            except Exception:  # logging-ok: optional list cleanup, it repeats on the next load
                 pass
         return cfg
 

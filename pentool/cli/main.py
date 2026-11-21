@@ -115,8 +115,8 @@ def cli(
 
     ctx.obj["config"] = cfg
 
-    # click.group без invoke_without_command — cli() вызывается только когда
-    # нет подкоманды. Поэтому здесь обрабатываем --url --headless режим.
+    # click.group without invoke_without_command — cli() runs only when there is
+    # no subcommand. That is why the --url --headless mode is handled here.
     if cli_urls:
         urls = list(cli_urls)
         if headless:
@@ -138,8 +138,8 @@ def cli(
         else:
             from pentool.tui.app import PentoolApp
 
-            # JS-браузер нужен только для фетча при --smart. Загрузка идёт
-            # ТОЛЬКО с согласия: одноразово ~150 МиБ (см. ensure_lightpanda_with_consent).
+            # The JS browser is only needed for the fetch under --smart. The download
+            # happens ONLY with consent: one-off ~150 MiB (see ensure_lightpanda_with_consent).
             if cli_smart:
                 from pentool.utils.lightpanda import ensure_lightpanda_with_consent
 

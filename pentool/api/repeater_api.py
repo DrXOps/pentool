@@ -55,7 +55,7 @@ class RepeaterAPI(ExportableAPI):
         return await self._repeater.delete_entry(entry_id)
 
     # ── Tabs ────────────────────────────────────────────────────────────────
-    # Вкладки хранятся отдельно от истории отправок: закрытие вкладки должно
+    # Tabs are stored apart from the send history: closing a tab must
     # её забывать, а `repeater_entries` — лог, который закрытие не чистит.
 
     async def save_tab(

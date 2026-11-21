@@ -56,9 +56,9 @@ def row_to_result_fields(
 ) -> dict[str, Any]:
     """Разложить строку `intruder_results` в kwargs доменного объекта.
 
-    Хелпер на уровне модуля, а не прямое создание `IntruderResult` в методе:
-    так storage не импортирует `pentool.modules.intruder` во время выполнения
-    (правило слоёв), а вызывающий слой просто делает
+    A module-level helper instead of building `IntruderResult` inline, so that
+    storage does not import `pentool.modules.intruder` at runtime
+    (the layering rule) while the calling layer simply does
     `IntruderResult(**row_to_result_fields(...))`.
     """
     return {
@@ -125,9 +125,9 @@ class IntruderStorage(BaseSqliteStorage):
                 )
             await db.commit()
         except (OperationalError, ProgrammingError) as exc:
-            # Потенциальная гонка: close() мог быть вызван между execute() и commit()
-            # Или commit() пытается выполниться на уже закрытом соединении
-            # Игнорируем, чтобы не падать при завершении приложения/переключении проекта
+            # Potential race: close() may have been called between execute() and commit()
+            # Or commit() runs against an already closed connection
+            # Ignored, so that quitting the app or switching projects does not crash
             from pentool.core.logging import get_logger
 
             get_logger(__name__).debug("save_state failed (likely race): %s", exc)

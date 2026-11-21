@@ -80,7 +80,7 @@ class ProxyServer:
         self.requests: list[InterceptedRequest] = []
         self._requests_max = 1000
         # O(1) lookup cache: req_id → InterceptedRequest.
-        # Поддерживается в sync при append/evict.
+        # Kept in sync on append/evict.
         self._request_cache: dict[str, InterceptedRequest] = {}
 
         self._server: asyncio.AbstractServer | None = None
@@ -698,7 +698,7 @@ class ProxyServer:
                 to_evict = len(self.requests) - self._requests_max
                 evicted = self.requests[:to_evict]
                 self.requests = (non_waiting[to_evict:] if len(non_waiting) >= to_evict else []) + waiting
-                # Удаляем из кэша вытесненные записи
+                # Drop the evicted entries from the cache
                 for r in evicted:
                     self._request_cache.pop(r.id, None)
 

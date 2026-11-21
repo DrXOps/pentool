@@ -192,11 +192,11 @@ class Repeater(BaseSqliteStorage):
         await self._db.commit()
 
     # ── Tabs ────────────────────────────────────────────────────────────────
-    # `repeater_entries` — это ИСТОРИЯ отправок: одна строка на отправку,
-    # только добавление. Набор открытых вкладок живёт в `repeater_tabs` под
-    # стабильным `tab_uid` (как у Scanner и Intruder). Выводить вкладки из
-    # истории нельзя: закрытие забывало вкладку только в памяти, и после
-    # перезапуска она возвращалась (F-053).
+    # `repeater_entries` is the SEND HISTORY: one row per send,
+    # append-only. The set of open tabs lives in `repeater_tabs` under a
+    # stable `tab_uid` (as in Scanner and Intruder). Deriving tabs from the
+    # history is wrong: closing forgot the tab in memory only, and after a
+    # restart it came back (F-053).
 
     async def save_tab(
         self,
@@ -207,8 +207,8 @@ class Repeater(BaseSqliteStorage):
     ) -> None:
         """Upsert одной вкладки по её стабильному `tab_uid`.
 
-        Имя и текст заменяемы: `tab_uid` создаётся один раз за жизнь вкладки,
-        а переименование — косметика, которая не должна создавать новую строку.
+        Name and text are replaceable: `tab_uid` is created once per tab lifetime,
+        and renaming is cosmetic — it must not create a new row.
         """
         if not tab_uid or not await self.ensure_open():
             return
@@ -223,12 +223,12 @@ class Repeater(BaseSqliteStorage):
             )
             await self._db.commit()
         except (OperationalError, ProgrammingError) as exc:
-            # Тот же класс гонки, что в IntruderStorage: close()/switch_db()
-            # мог случиться между execute() и commit().
+            # Same race class as in IntruderStorage: close()/switch_db()
+            # could happen between execute() and commit().
             logger.debug("save_tab failed (likely race): %s", exc)
 
     async def get_tabs(self) -> list[dict]:
-        """Все сохранённые вкладки проекта в порядке создания."""
+        """Every saved tab of the project, in creation order."""
         if not await self.ensure_open():
             return []
         cursor = await self._db.execute(
@@ -248,7 +248,7 @@ class Repeater(BaseSqliteStorage):
         ]
 
     async def delete_tab(self, tab_uid: str) -> None:
-        """Забыть вкладку. История (`repeater_entries`) не трогается — это лог."""
+        """Forget a tab. The history (`repeater_entries`) stays — it is a log."""
         if not tab_uid or not await self.ensure_open():
             return
         await self._db.execute("DELETE FROM repeater_tabs WHERE tab_uid = ?", (tab_uid,))
@@ -257,16 +257,16 @@ class Repeater(BaseSqliteStorage):
     async def seed_tabs_from_history(self) -> list[dict]:
         """Одноразовая миграция: собрать реестр вкладок из истории отправок.
 
-        До 2026-11-16 набором вкладок считались последние 20 строк
-        `repeater_entries`, сгруппированные по `tab_name`. У существующего
-        проекта строк в `repeater_tabs` нет, и после обновления он открылся бы
-        одной пустой вкладкой — то есть пользователь потерял бы то, что видел
-        раньше.
+        Until 2026-11-16 the set of tabs was the last 20 rows of
+        `repeater_entries`, grouped by `tab_name`. In an existing project
+        there are no rows in `repeater_tabs`, and after the upgrade it would open
+        with a single empty tab — the user would lose what they saw before.
 
-        Поэтому при пустом реестре вкладки один раз собираются из истории (те же
-        правила группировки: новейшая запись на имя) и записываются в реестр.
-        Дальше источником истины остаётся только реестр, и закрытие вкладки
-        становится окончательным. Повторный вызов ничего не делает.
+
+        So with an empty registry the tabs are rebuilt once from the history (same
+        grouping rules: newest row per name) and written to the registry.
+        After that the registry alone is the source of truth, and closing a tab
+        becomes final. A repeated call does nothing.
         """
         existing = await self.get_tabs()
         if existing:

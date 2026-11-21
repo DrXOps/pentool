@@ -3,7 +3,7 @@
 aiosqlite creates its worker thread as non-daemon (`Thread(...)` in
 `Connection.__init__`). A non-daemon thread keeps the interpreter alive after
 the TUI's run() returns — so a normal exit can hang waiting on SQLite workers
-that never finish (one of the " завис на выходе " failure modes). Marking them
+that never finish (one of the "hung on exit" failure modes). Marking them
 daemon lets the process exit promptly; data is still flushed because we close
 the storage explicitly before exit.
 

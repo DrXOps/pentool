@@ -62,7 +62,7 @@ class IntruderAPI(ExportableAPI):
         # (scanner refactor plan) section 2.2).
         # IntruderAttack already accepted this as an optional constructor
         # param (reusing one HTTPClient/connection pool across the whole
-        # attack — see the БАГ-D fix in modules/intruder.py) but IntruderAPI
+        # attack — see the BUG-D fix in modules/intruder.py) but IntruderAPI
         # had no way to pass one in — it always let IntruderAttack create
         # its own from scratch. Threading it through here just extends the
         # existing `http_client=None` pattern one layer up, matching how
@@ -91,10 +91,10 @@ class IntruderAPI(ExportableAPI):
     def make_attack(self, config: IntruderConfig, turbo_mode: bool = False):
         """Создать IntruderAttack (или TurboIntruderAttack) без привязки к общему `_attack`.
 
-        Нужен для параллельных per-tab атак: каждый таб создаёт СВОЙ инстанс атаки
-        через эту фабрику и хранит его в своём состоянии, чтобы пауза/стоп/остановка
-        действовали независимо от других вкладок. `_attack` при этом не трогается.
-        (Наследует http_client для reuse одного пула соединений по умолчанию.)
+        Needed for parallel per-tab attacks: every tab creates its OWN attack instance
+        through this factory and keeps it in its own state, so pause/stop/abort
+        act independently of other tabs. `_attack` itself is left alone.
+        (Inherits http_client to reuse a single connection pool by default.)
         """
         if turbo_mode:
             from pentool.modules.intruder_turbo import TurboIntruderAttack
@@ -306,8 +306,8 @@ class IntruderAPI(ExportableAPI):
                     self._restored_results.append(result)
                 loaded += 1
             except Exception:
-                # Результат не восстановлен — в импортированном проекте его не
-                # будет, хотя он был в файле. Трейсбек нужен: без него не
-                # понять, какое поле не сошлось.
+                # Result not restored — in the imported project it will be missing
+                # although it was in the file. The traceback is needed: without it
+                # there is no way to tell which field did not match.
                 logger.warning("IntruderAPI.import_project_data: skip result", exc_info=True)
         return loaded

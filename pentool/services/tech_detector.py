@@ -58,8 +58,8 @@ def get_cached_tech(url: str) -> dict[str, Any] | None:
 def get_tech_cache(host: str) -> dict | None:
     """Обёртка над PRO TechCache для TUI — читает кэш технологий.
 
-    Используется target/screen.py и auto_scope.py для отображения tech info.
-    Избегает прямого импорта modules.scanner.tech_cache из TUI-слоя.
+    Used by target/screen.py and auto_scope.py to display tech info.
+    Avoids importing modules.scanner.tech_cache from the TUI layer directly.
     """
     try:
         from pentool.modules.scanner.tech_cache import TechCache

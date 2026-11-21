@@ -43,7 +43,7 @@ class RepeaterService(BaseService):
 
         t0 = time.monotonic()
         try:
-            # Single route through the API layer (Этап 4.3): if no RepeaterAPI
+            # Single route through the API layer (stage 4.3): if no RepeaterAPI
             # was injected, spin up our own (no history saved — same behaviour
             # as the old direct HTTPClient fallback). This removes the second,
             # duplicated HTTP path in the service.
@@ -75,7 +75,7 @@ class RepeaterService(BaseService):
             return None, elapsed_ms, str(exc)
 
     async def close(self) -> None:
-        # No standalone HTTP client anymore (Этап 4.3) — the API layer owns it.
+        # No standalone HTTP client anymore (stage 4.3) — the API layer owns it.
         pass
 
     # _emit and _log inherited from BaseService

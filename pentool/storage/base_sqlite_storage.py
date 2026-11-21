@@ -1,7 +1,7 @@
 """BaseSqliteStorage — shared persistent-connection lifecycle for SQLite storages.
 
 Extracted from HttpStorage as part of the connection-consolidation effort
-(see chat: "проблема с соединениями к БД" — вариант C, общий пул соединений).
+(see chat: "the DB connection problem" — option C, a shared connection pool).
 Both `HttpStorage` (Proxy/History) and `IntruderStorage` (Intruder tab
 state/results) inherit from this — each keeps ONE persistent aiosqlite
 connection open for as long as the project is active, instead of opening
@@ -96,10 +96,10 @@ class BaseSqliteStorage:
         if self._db is None:
             return
         db = self._db
-        self._db = None  # ← защита: ensure_open() вернёт False для всех
-        #   последующих обращений, даже если реальное
-        #   закрытие ещё не завершилось (гонка между
-        #   async воркером и switch_db / action_quit).
+        self._db = None  # ← guard: ensure_open() returns False for every
+        #   subsequent call, even if the actual
+        #   close has not finished yet (a race between the
+        #   async worker and switch_db / action_quit).
         try:
             # WAL checkpoint so .db-wal/-shm don't linger on disk.
             await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")

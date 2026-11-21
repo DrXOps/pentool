@@ -1,13 +1,13 @@
 """Доменные типы результатов Intruder, видимые слою хранения.
 
-Почему отдельный модуль, а не `pentool.modules.intruder`: правило слоёв
-запрещает `storage -> modules`, но `IntruderStorage` обязан возвращать
-типизированные результаты. Это чистый value object — ни атак, ни сети, ни
-асyncio, поэтому он может жить на уровне storage.
+Why a separate module and not `pentool.modules.intruder`: the layering rule
+forbids `storage -> modules`, yet `IntruderStorage` has to return
+typed results. This is a pure value object — no attacks, no network, no
+asyncio, so it can live at the storage level.
 
-`pentool.modules.intruder` реэкспортирует имя, так что существующие
-`from pentool.modules.intruder import IntruderResult` продолжают работать
-(включая PRO-пакет `pro/`, который импортирует именно из modules).
+`pentool.modules.intruder` re-exports the name, so the existing
+`from pentool.modules.intruder import IntruderResult` imports keep working
+(including the PRO package `pro/`, which imports from modules).
 """
 
 from __future__ import annotations
@@ -20,9 +20,9 @@ from datetime import datetime, timezone
 class IntruderResult:
     """Один результат прогона Intruder.
 
-    Поля — ровно то, что хранится в таблице `intruder_results` плюс
-    вычисляемый `timestamp`. Никакого поведения: объект только переносит
-    данные из модуля атаки в storage и обратно.
+    The fields are exactly what the `intruder_results` table stores plus
+    a computed `timestamp`. No behaviour: the object only carries
+    data between the attack module and storage.
     """
 
     id: str

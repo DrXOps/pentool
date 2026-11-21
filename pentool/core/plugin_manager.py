@@ -302,7 +302,7 @@ class PluginManager:
             logger.info("Loaded plugin: %s", path.name)
 
         except Exception:
-            # Плагин не загружен — его возможностей в приложении не будет.
+            # The plugin is not loaded — its capabilities will be missing from the app.
             logger.error("Failed to load plugin %s", path, exc_info=True)
 
     @staticmethod

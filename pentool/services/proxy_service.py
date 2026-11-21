@@ -309,8 +309,8 @@ class ProxyService(BaseService):
         try:
             return await self._storage.export_all_requests(limit=limit)
         except Exception:
-            # История не выгружена — экспорт вернёт пустой список, и это будет
-            # выглядеть как «истории нет». Трейсбек отделяет одно от другого.
+            # History not exported — the export returns an empty list, which would
+            # look like "no history". The traceback tells the two apart.
             logger.warning("ProxyService: export_all_requests failed", exc_info=True)
             return []
 
