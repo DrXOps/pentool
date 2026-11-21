@@ -110,6 +110,9 @@ class ProxyScreen(
         # + full backend rebuild (see _append_row_to_table).
         self._rows_cache: list[dict] = []
         self._ws_rows_cache: list[dict] = []
+        #: Last text written to the "Showing N of M" label — a repeated `update()`
+        #: re-measures the widget and costs a layout pass over the whole screen.
+        self._history_count_text: str = ""
         self._sort_col: int | None = None
         self._sort_reverse: bool = False
         self._inspector_visible: bool = False
@@ -534,12 +537,7 @@ class ProxyScreen(
                 desc=(order_dir == "desc"),
             )
             total = await self._proxy_service.count_history(filters=filters)
-            logger.info(
-                "PROXY SCREEN: _reload_table loaded %d/%d rows",
-                len(newest_first_rows),
-                total,
-            )
-            logger.info(
+            logger.debug(
                 "PROXY SCREEN: _reload_table loaded %d/%d rows",
                 len(newest_first_rows),
                 total,
@@ -553,17 +551,21 @@ class ProxyScreen(
             self._history_oldest_offset = max(total - len(rows), 0)
             arrow = _rows_to_arrow(rows)
             table = self.query_one("#request-list", DataTable)
-            table.set_data(arrow)
-            # Column widths are owned by the table itself (ProxyDataTable
-            # .fit_columns): Host and URL share whatever the fixed columns
-            # leave, so the table never needs a horizontal scrollbar.
-            table._clear_caches()
-            table._require_update_dimensions = True
-            table.refresh()
-            # Scroll to the last row — newest requests are at the bottom
-            if rows:
-                table.move_cursor(row=len(rows) - 1)
-            self._update_history_count_label()
+            # One layout pass for the whole update instead of one per widget:
+            # `set_data`, the cursor move and the counter each mark the screen
+            # dirty on their own (measured: 6-8 full passes per action).
+            with self.app.batch_update():
+                table.set_data(arrow)
+                # Column widths are owned by the table itself
+                # (ProxyDataTable.fit_columns): Host and URL share whatever the
+                # fixed columns leave, so no horizontal scrollbar is needed.
+                table._clear_caches()
+                table._require_update_dimensions = True
+                table.refresh()
+                # Scroll to the last row — newest requests are at the bottom
+                if rows:
+                    table.move_cursor(row=len(rows) - 1)
+                self._update_history_count_label()
         except Exception as exc:
             logger.error("_reload_table failed: %s", exc, exc_info=True)
 
@@ -577,7 +579,13 @@ class ProxyScreen(
             return
         shown = len(self._rows_cache)
         total = self._history_total
-        label.update(f"Showing {shown:,} of {total:,} records")
+        # Every update makes Textual re-measure the widget, and a re-measure means
+        # a layout pass over the whole screen (measured: ~55 ms with the cards UI).
+        # The label changes only when the numbers do.
+        text = f"Showing {shown:,} of {total:,} records"
+        if text != self._history_count_text:
+            self._history_count_text = text
+            label.update(text)
 
     def _update_ws_history_count_label(self) -> None:
         """Same "Showing N of M" treatment for the WS History table.
@@ -627,11 +635,7 @@ class ProxyScreen(
             try:
                 table = self.query_one("#request-list", DataTable)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.set_data(arrow)
-                table._ordered_columns = None
-                table._clear_caches()
-                table._require_update_dimensions = True
-                table.refresh()
+                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
                 # Keep the view anchored where the user was — after
                 # prepending N rows, scroll down by N rows worth so the
                 # previously-visible row stays in view instead of jumping
@@ -695,11 +699,7 @@ class ProxyScreen(
             try:
                 table = self.query_one("#ws-request-list", DataTable)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.set_data(arrow)
-                table._ordered_columns = None
-                table._clear_caches()
-                table._require_update_dimensions = True
-                table.refresh()
+                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
                 table.scroll_to(y=table.scroll_y + len(older_rows), animate=False)
             except Exception:
                 logger.warning("proxy: WS history rows not shown after load", exc_info=True)
@@ -1026,10 +1026,7 @@ class ProxyScreen(
                 logger.error("PROXY SCREEN: _flush_pending_rows: add_rows crashed: %s", exc, exc_info=True)
                 # Fall back to full rebuild (slow but safe)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.set_data(arrow)
-                table._ordered_columns = None
-                table._clear_caches()
-                table._require_update_dimensions = True
+                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
             _t3 = time.monotonic()
             if was_at_tail or table.cursor_row >= len(self._rows_cache) - 1:
                 table.scroll_end(animate=False)
@@ -1076,10 +1073,7 @@ class ProxyScreen(
             try:
                 table = self.query_one("#request-list", DataTable)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.set_data(arrow)
-                table._ordered_columns = None
-                table._clear_caches()
-                table._require_update_dimensions = True
+                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
                 table.scroll_end(animate=False)
             except Exception:
                 logger.warning("proxy: rows cache trim failed", exc_info=True)
@@ -1129,10 +1123,7 @@ class ProxyScreen(
             except Exception as exc:
                 logger.error("PROXY SCREEN: _flush_pending_ws_rows: add_rows crashed: %s", exc, exc_info=True)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.set_data(arrow)
-                table._ordered_columns = None
-                table._clear_caches()
-                table._require_update_dimensions = True
+                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
             if was_at_tail or table.cursor_row >= len(self._ws_rows_cache) - 1:
                 table.scroll_end(animate=False)
         except Exception:
@@ -1147,10 +1138,7 @@ class ProxyScreen(
             try:
                 table = self.query_one("#ws-request-list", DataTable)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.set_data(arrow)
-                table._ordered_columns = None
-                table._clear_caches()
-                table._require_update_dimensions = True
+                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
                 table.scroll_end(animate=False)
             except Exception:
                 logger.warning("proxy: WS rows cache trim failed", exc_info=True)
@@ -1406,11 +1394,7 @@ class ProxyScreen(
             import pentool.tui.screens.proxy.screen as _ps
 
             arrow = _ps._rows_to_arrow(self._rows_cache)
-            table.set_data(arrow)
-            table._ordered_columns = None
-            table._clear_caches()
-            table._require_update_dimensions = True
-            table.refresh()
+            table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
             if self._rows_cache:
                 table.scroll_end(animate=False)
         except Exception:

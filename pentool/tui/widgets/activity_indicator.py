@@ -109,6 +109,12 @@ class ActivityIndicator(Widget):
         # Cached from the last _poll_state() run — the blink tick reads this
         # instead of re-invoking is_active() every ~0.25s.
         self._active_state: dict[str, bool] = {t.key: False for t in self._checkers}
+        #: Last AI-config value seen by `_poll_state` — repainting the strip for an
+        #: unchanged value is a wasted layout pass (once per second, forever).
+        self._ai_cfg_on: bool = False
+        #: True once the idle shortcut cleared the blink classes after activity
+        #: stopped, so the "everything is idle" repaint happens exactly once.
+        self._blink_cleared: bool = True
 
     # ── checker construction ────────────────────────────────────────────────
 
@@ -240,6 +246,23 @@ class ActivityIndicator(Widget):
             # только при отказе, иначе журнал забился бы повторами.
             logger.debug("activity: ai_enabled not read, assuming off: %s", exc)
 
+        # Only repaint when the state actually changed: setting the same classes
+        # and tooltips again still costs a layout pass on every widget in the
+        # strip, once per second, forever.
+        current = {}
+        for t in self._checkers:
+            try:
+                current[t.key] = bool(t.is_active())
+            except (AttributeError, ImportError, KeyError, TypeError, RuntimeError) as exc:
+                # A checker with a broken source reads as "idle"; the glyph stops
+                # lying about a state nobody can read (same rule as below).
+                logger.debug("activity: state of %s not read: %s", t.key, exc)
+                current[t.key] = False
+        if current == self._active_state and ai_cfg_on == self._ai_cfg_on:
+            return
+        self._active_state = current
+        self._ai_cfg_on = ai_cfg_on
+
         for t in self._checkers:
             try:
                 active = bool(t.is_active())
@@ -270,7 +293,27 @@ class ActivityIndicator(Widget):
 
         ``blink_on`` is passed explicitly in snapshot mode: a phase derived
         from the clock makes the baseline nondeterministic.
+
+        Idle shortcut: every class change makes Textual recompute the layout of
+        the whole screen, and this tick runs ~3x/s for the whole session. When no
+        module is running there is nothing to blink, so the tick returns at once —
+        the *first* idle tick after an operation still clears the classes (see
+        `_blink_cleared`).
         """
+        if blink_on is None and not any(self._active_state.values()):
+            if not self._blink_cleared:
+                self._blink_cleared = True
+                for t in self._checkers:
+                    try:
+                        widget = self.query_one(f"#activity-{t.key}", Static)
+                    except NoMatches as exc:
+                        logger.debug("activity: idle glyph %s not found: %s", t.key, exc)
+                        continue
+                    widget.set_class(False, "active-on")
+                    widget.set_class(False, "active-off")
+                    widget.set_class(True, "idle")
+            return
+        self._blink_cleared = False
         if blink_on is None:
             # int(now * _BLINK_HZ) alternates 0/1 every half-cycle — same
             # pattern used by the Dashboard's finding-blink.
