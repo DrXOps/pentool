@@ -62,8 +62,8 @@ SequencerScreen #seq-input-col {
     layout: vertical;
 }
 SequencerScreen .seq-col-label {
-    /* height/background/padding — из общего .panel-title (F-038). */
-    color: $text-muted;
+    /* height/background/padding — from the shared .panel-title (F-038). */
+    color: $accent;
     text-style: bold;
 }
 SequencerScreen #seq-token-area {
@@ -83,7 +83,8 @@ SequencerScreen #seq-analysis-log {
 
 /* ── Entropy gauge ───────────────────────────────────────────────────────── */
 SequencerScreen #seq-gauge-area {
-    height: 5;
+    /* Card frame adds two rows to what used to be a 5-row block. */
+    height: 7;
     layout: vertical;
     padding: 0 1;
     background: transparent;

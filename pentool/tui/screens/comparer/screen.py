@@ -56,10 +56,22 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
         # ── Two TextAreas via ContentPanel ──────────────────────────────────────
         with Horizontal(id="cmp-edit-area"):
             with Vertical(id="cmp-left-col"):
-                yield ContentPanel("Left", widget_type="textarea", buttons=["copy", "paste"], id="cmp-left-panel")
+                yield ContentPanel(
+                    "Left",
+                    widget_type="textarea",
+                    buttons=["copy", "paste"],
+                    id="cmp-left-panel",
+                    classes="card",
+                )
             yield ResizeHandle("cmp-left-col", "cmp-right-col", id="cmp-resize-h")
             with Vertical(id="cmp-right-col"):
-                yield ContentPanel("Right", widget_type="textarea", buttons=["copy", "paste"], id="cmp-right-panel")
+                yield ContentPanel(
+                    "Right",
+                    widget_type="textarea",
+                    buttons=["copy", "paste"],
+                    id="cmp-right-panel",
+                    classes="card",
+                )
 
         yield ResizeHandle("cmp-edit-area", "cmp-diff-area", vertical=True, id="cmp-resize-v")
 
@@ -75,6 +87,7 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
                 max_lines=2000,
                 buttons=["copy"],
                 id="cmp-diff-panel",
+                classes="card",
             )
 
     # ── Toolbar ───────────────────────────────────────────────────────────────

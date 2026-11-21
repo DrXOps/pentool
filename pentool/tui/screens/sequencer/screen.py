@@ -88,7 +88,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         # ── Main area ──────────────────────────────────────────────────────────
         with Horizontal(id="seq-main-area"):
             # Left column: token input (one per line)
-            with Vertical(id="seq-input-col"):
+            with Vertical(id="seq-input-col", classes="card"):
                 yield Static("Tokens (one per line)", id="seq-tokens-label", classes="seq-col-label panel-title")
                 yield TextArea(id="seq-token-area", language=None)
 
@@ -103,12 +103,13 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
                     max_lines=500,
                     buttons=["copy"],
                     id="seq-analysis-log",
+                    classes="card",
                 )
 
         yield ResizeHandle("seq-main-area", "seq-gauge-area", vertical=True, id="seq-resize-v")
 
         # ── Entropy gauge ──────────────────────────────────────────────────────
-        with Vertical(id="seq-gauge-area"):
+        with Vertical(id="seq-gauge-area", classes="card"):
             yield Static("ENTROPY", id="seq-gauge-label")
             yield Static(" ", id="seq-gauge")
             yield Static(" ", id="seq-assessment")
