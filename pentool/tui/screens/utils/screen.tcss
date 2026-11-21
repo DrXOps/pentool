@@ -23,5 +23,9 @@ UtilsScreen #utils-tabs > ContentTabs {
 }
 
 UtilsScreen TabPane {
+    /* Each tool is a block of its own: framed as a card, body transparent, so
+       the three utilities read as three cards inside one module. */
+    border: round $foreground;
     background: transparent;
+    padding: 0 1;
 }

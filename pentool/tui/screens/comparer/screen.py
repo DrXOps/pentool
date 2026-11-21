@@ -43,13 +43,9 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
         # ── Toolbar ────────────────────────────────────────────────────────────
         yield Toolbar(
             ToolbarButton("⇄ Compare", "btn-cmp-compare"),
-            Toolbar.sep(),
             ToolbarButton("↑ Load Left", "btn-cmp-load-left"),
-            Toolbar.sep(),
             ToolbarButton("↑ Load Right", "btn-cmp-load-right"),
-            Toolbar.sep(),
             ToolbarButton("📋 Copy Diff", "btn-cmp-copy"),
-            Toolbar.sep(),
             ToolbarButton("🗑 Clear", "btn-cmp-clear"),
         )
 

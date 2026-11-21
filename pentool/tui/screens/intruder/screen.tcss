@@ -133,6 +133,11 @@ IntruderScreen .intruder-results-area {
     height: 1fr;
     min-height: 5;
     layout: vertical;
+    /* Results are a block of their own: framed as a card, like the findings
+       table in Scanner and the history table in Proxy. */
+    border: round $foreground;
+    background: transparent;
+    padding: 0 1;
 }
 
 IntruderScreen .progress-row {

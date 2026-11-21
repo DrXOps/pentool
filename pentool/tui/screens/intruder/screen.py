@@ -413,12 +413,9 @@ class IntruderScreen(
         attack_toolbar = Toolbar(
             Label("Attack:", classes="toolbar-label"),
             ToolbarButton(f"{_ATTACK_LABELS[state.attack_type]} ▼", self._wid(tab_id, _TabId.BTN_ATTACK_TYPE)),
-            Toolbar.sep(),
             ToolbarButton("Add §§", self._wid(tab_id, _TabId.BTN_ADD_MARKER)),
             ToolbarButton("Clear §§", self._wid(tab_id, _TabId.BTN_CLEAR_MARKERS)),
-            Toolbar.sep(),
             ToolbarButton("Auto §§", self._wid(tab_id, _TabId.BTN_MARK_PARAMS)),
-            Toolbar.sep(),
             Static(
                 _ATTACK_DESCRIPTIONS.get(state.attack_type, ""),
                 id=self._wid(tab_id, _TabId.ATTACK_TYPE_DESC),
@@ -452,17 +449,18 @@ class IntruderScreen(
         # A separator between EVERY pair of actions (reported: "no divider
         # between Add and Clear"). Labels are short: the long ones
         # ("Load from file…", "Generate…") pushed "Smart" off screen.
+        # No dividers: one flat row of payload actions, same look as the module
+        # header and the Repeater toolbar. Short labels keep the row inside the
+        # panel width.
         payloads_toolbar = Toolbar(
             Label("Payload set:"),
-            *Toolbar.grouped(
-                ToolbarButton("Set 1 ▼", self._wid(tab_id, _TabId.BTN_PAYLOAD_SET)),
-                ToolbarButton("Add", self._wid(tab_id, _TabId.BTN_PAYLOAD_ADD)),
-                ToolbarButton("Rem", self._wid(tab_id, _TabId.BTN_PAYLOAD_REMOVE)),
-                ToolbarButton("Clr", self._wid(tab_id, _TabId.BTN_PAYLOAD_CLEAR)),
-                ToolbarButton("Load", self._wid(tab_id, _TabId.BTN_PAYLOAD_LOAD)),
-                ToolbarButton("Gen", self._wid(tab_id, _TabId.BTN_PAYLOAD_GENERATE)),
-                ToolbarButton("Smart", self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART), classes="pro-locked"),
-            ),
+            ToolbarButton("Set 1 ▼", self._wid(tab_id, _TabId.BTN_PAYLOAD_SET)),
+            ToolbarButton("Add", self._wid(tab_id, _TabId.BTN_PAYLOAD_ADD)),
+            ToolbarButton("Rem", self._wid(tab_id, _TabId.BTN_PAYLOAD_REMOVE)),
+            ToolbarButton("Clr", self._wid(tab_id, _TabId.BTN_PAYLOAD_CLEAR)),
+            ToolbarButton("Load", self._wid(tab_id, _TabId.BTN_PAYLOAD_LOAD)),
+            ToolbarButton("Gen", self._wid(tab_id, _TabId.BTN_PAYLOAD_GENERATE)),
+            ToolbarButton("Smart", self._wid(tab_id, _TabId.BTN_PAYLOAD_SMART), classes="pro-locked"),
             id=self._wid(tab_id, _TabId.PAYLOAD_BUTTONS_TOOLBAR),
         )
 
@@ -805,10 +803,8 @@ class IntruderScreen(
         yield Toolbar(
             Label("Threads:", classes="toolbar-label"),
             Input("10", id="intruder-threads", placeholder="10", compact=True, type="integer"),
-            Toolbar.sep(),
             Label("Delay(ms):", classes="toolbar-label"),
             Input("0", id="intruder-delay", placeholder="0", compact=True, type="integer"),
-            Toolbar.sep(),
             Checkbox("⚡ Turbo", id="intruder-turbo", value=False),
             id="intruder-global-toolbar",
         )

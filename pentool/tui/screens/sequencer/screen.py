@@ -57,17 +57,11 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         # ── Toolbar ────────────────────────────────────────────────────────────
         yield Toolbar(
             ToolbarButton("▶ Capture", "btn-seq-capture"),
-            Toolbar.sep(),
             ToolbarButton("■ Stop", "btn-seq-stop", classes="disabled"),
-            Toolbar.sep(),
             ToolbarButton("⚡ Analyze", "btn-seq-analyze"),
-            Toolbar.sep(),
             ToolbarButton("📂 Load File", "btn-seq-load"),
-            Toolbar.sep(),
             ToolbarButton("🗑 Clear", "btn-seq-clear"),
-            Toolbar.sep(),
             ToolbarButton("📋 Copy", "btn-seq-copy"),
-            Toolbar.sep(),
             ToolbarButton("💾 Export", "btn-seq-export"),
         )
 
