@@ -59,11 +59,11 @@ TUI = ROOT / "pentool" / "tui"
 
 
 def tui_roots() -> list[Path]:
-    """Все TUI-корни: основной пакет и PRO (если сабмодуль установлен).
+    """All TUI roots: the main package and PRO (if the submodule is installed).
 
-    Считается при каждом вызове, а не на импорте: тесты подменяют ROOT/TUI
-    на временный каталог, и закэшированный список продолжал бы сканировать
-    настоящий репозиторий (поймано тестами гейта).
+    Computed on every call rather than at import time: the tests substitute
+    ROOT/TUI with a temporary directory, and a cached list would keep scanning
+    the real repository (caught by the gate's tests).
     """
     roots = [TUI]
     pro_tui = ROOT / "pro" / "pentool" / "tui"

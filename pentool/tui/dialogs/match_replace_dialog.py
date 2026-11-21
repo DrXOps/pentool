@@ -120,13 +120,13 @@ class MatchReplaceDialog(BaseDialog[list[MatchReplaceRule] | None]):
         try:
             self.query_one("#btn-sel-target", ToolbarButton).label = f"{target_label} ▼"
         except NoMatches as exc:
-            # Кнопка покажет прежнее значение — правило сохранится с одним
-            # target/scope, а пользователь увидит другое на экране.
+            # The button will show the previous value — the rule is saved with one
+            # target/scope while the user sees another one on screen.
             logger.debug("match/replace: target label not updated: %s", exc)
         try:
             self.query_one("#btn-sel-scope", ToolbarButton).label = f"{scope_label} ▼"
         except NoMatches as exc:
-            # То же для scope: экран и сохраняемое правило расходятся.
+            # Same for scope: the screen and the saved rule diverge.
             logger.debug("match/replace: scope label not updated: %s", exc)
 
     def _read_form(self) -> MatchReplaceRule:

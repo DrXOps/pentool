@@ -1,4 +1,4 @@
-"""InterceptMixin — ProxyScreen's Intercept-tab logic (Этап 6, intercept).
+"""InterceptMixin — ProxyScreen's Intercept-tab logic (Stage 6, intercept).
 
 Extracted from the proxy mega-screen so the Intercept tab's behaviour —
 queueing, Forward/Drop, special-char visualisation, syntax highlighting,
@@ -80,14 +80,14 @@ class InterceptMixin:
             editor = self.query_one("#intercept-panel", ContentPanel).content_widget
             modified = editor.text
         except NoMatches as exc:
-            # Панели перехвата нет в дереве (вкладка не смонтирована) —
-            # отправляем исходный запрос, править нечего.
+            # The intercept panel is not in the tree (the tab is not mounted) —
+            # send the original request, there is nothing to edit.
             logger.debug("intercept: no editor to read, sending original: %s", exc)
             modified = None
         except Exception:
-            # `modified = None` ниже означает «отправить запрос без правок».
-            # Если редактор был, но не прочитался, правки пользователя тихо
-            # теряются и уходит исходный запрос — это трейсбек, а не строка.
+            # `modified = None` below means "forward the request with no edits".
+            # If an editor existed but could not be read, the user's edits are
+            # silently lost and the original request goes out — a traceback, not a string.
             logger.exception("intercept: edited request not read, sending original")
             modified = None
         if modified is not None and self._intercept_show_special_chars:
@@ -96,23 +96,23 @@ class InterceptMixin:
 
                 modified = decode_special_chars(modified)
             except Exception:
-                # В запрос уйдут литеральные «\r\n» вместо CRLF — сервер
-                # ответит 400, и связь с отображением спецсимволов не видна.
+                # Literal "\r\n" would go out instead of CRLF — the server replies
+                # 400, and the link to the special-chars display stays invisible.
                 logger.exception("intercept: special chars not decoded before forward")
         # Display the sent request in the bottom-left panel
         sent_text = modified if modified and modified.strip() else ""
         try:
             self.query_one("#intercept-sent-req", HttpView).load_raw_http(sent_text)
         except NoMatches as exc:
-            # Нижняя панель покажет предыдущий запрос под только что
-            # отправленным — прямое расхождение с тем, что ушло на сервер.
+            # The bottom panel would show the previous request under the one just
+            # sent — a direct mismatch with what went to the server.
             logger.debug("intercept: sent request not shown: %s", exc)
         # Clear the response panel — waiting for the server response
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
         except NoMatches as exc:
-            # Ответ от прошлого перехвата останется на экране и будет прочитан
-            # как ответ на этот запрос.
+            # The response from the previous intercept stays on screen and will be
+            # read as the response to this request.
             logger.debug("intercept: response panel not cleared before forward: %s", exc)
         proxy.forward(req.id, modified if modified and modified.strip() else None)
         self._intercept_req = None
@@ -144,8 +144,8 @@ class InterceptMixin:
                 "(No requests waiting for intercept)"
             )
         except NoMatches as exc:
-            # Кнопки уже показывают «Dropped», а в редакторе остался
-            # отброшенный запрос: пользователь может нажать Forward по нему.
+            # The buttons already say "Dropped", but the editor still holds the
+            # discarded request: the user may press Forward on it.
             logger.debug("intercept: editor not reset after drop: %s", exc)
         try:
             self.query_one("#intercept-sent-req", HttpView).clear()
@@ -168,8 +168,8 @@ class InterceptMixin:
 
             editor = self.query_one("#intercept-panel", ContentPanel).content_widget
         except NoMatches as exc:
-            # Кнопка «Special» переключает флаг, но если редактор не найден —
-            # переключать нечего, и кнопка выглядит сломанной.
+            # The "Special" button toggles the flag, but if the editor is not
+            # found there is nothing to toggle, and the button looks broken.
             logger.debug("intercept: panel not found for special-chars toggle: %s", exc)
             return
         # Commit the current text before switching mode representation
@@ -209,8 +209,8 @@ class InterceptMixin:
             editor._line_cache.clear()
             editor.refresh()
         except Exception as exc:
-            # Подсветка — украшение, но её отсутствие при живом остальном
-            # редакторе выглядит как «перестало работать».
+            # Highlighting is decoration, but its absence next to an otherwise
+            # working editor looks like "it stopped working".
             logger.debug("intercept: header highlighting not applied: %s", exc)
 
     def _disable_intercept_buttons(self: _InterceptHost, hint: str = "") -> None:
@@ -224,7 +224,7 @@ class InterceptMixin:
             try:
                 self.query_one("#intercept-hint", Label).update(hint)
             except NoMatches as exc:
-                # Подсказка — единственное объяснение, почему кнопки серые.
+                # The hint is the only explanation of why the buttons are grey.
                 logger.debug("intercept: hint not updated: %s", exc)
 
     def show_intercepted_request(self: _InterceptHost, req: InterceptedRequest) -> None:
@@ -244,8 +244,8 @@ class InterceptMixin:
                     f"⏸ {esc(req.method)} {esc(req.url)}  (+{len(self._intercept_pending)} queued)"
                 )
             except NoMatches as exc:
-                # Запрос встал в очередь, но счётчик очереди на экране не
-                # вырос — пользователь не знает, что ждёт ещё один.
+                # The request was queued, but the queue counter on screen did not
+                # grow — the user does not know another one is waiting.
                 logger.debug("intercept: queue hint not updated: %s", exc)
             return
         self._display_intercept_req(req)
@@ -262,8 +262,8 @@ class InterceptMixin:
 
             raw = build_http_request(req.to_parsed_request())
         except Exception as exc:
-            # Показываем заглушку вместо запроса — но без записи не понять,
-            # что на самом деле пришло от прокси.
+            # Show a stub instead of the request — but without the log entry
+            # there is no telling what actually came from the proxy.
             logger.debug("intercept: request could not be rendered: %s", exc)
             raw = f"{req.method} {req.url}\n\n(could not render request)"
         self._intercept_raw_full = raw
@@ -275,15 +275,15 @@ class InterceptMixin:
                 editor.load_text(raw)
                 self._apply_intercept_highlight(raw)
         except Exception as exc:
-            # Запрос перехвачен и ждёт Forward, но в редакторе его нет —
-            # пользователь отправит пустое или прошлое содержимое.
+            # The request is intercepted and waiting for Forward, but it is not in
+            # the editor — the user would send empty or stale content.
             logger.debug("intercept: request not shown in editor: %s", exc)
         # Clear only the response panel — leave Sent Request as-is
         # (it is updated only in action_forward/action_drop)
         try:
             self.query_one("#intercept-resp-viewer", HttpView).clear()
         except NoMatches as exc:
-            # Новый перехваченный запрос, а в панели ответа — ответ прошлого.
+            # A new intercepted request, yet the response panel holds the previous response.
             logger.debug("intercept: response panel not cleared for new request: %s", exc)
         # Forward/Drop are header buttons now: redraw so they become enabled.
         self._refresh_header_now()  # type: ignore[attr-defined]
@@ -300,8 +300,8 @@ class InterceptMixin:
             tabs = self.query_one("#proxy-subtabs", TabbedContent)
             tabs.active = "tab-intercept"
         except NoMatches as exc:
-            # Перехват идёт, а пользователь не видит вкладку с ним — запрос
-            # просто висит, и понять это из UI нельзя.
+            # Interception is running, but the user cannot see its tab — the
+            # request just hangs, and the UI gives no way to notice that.
             logger.debug("intercept: intercept tab not activated: %s", exc)
 
     def show_intercept_response(self: _InterceptHost, req: InterceptedRequest) -> None:
@@ -319,15 +319,15 @@ class InterceptMixin:
             raw = f"{status_line}\r\n{headers}\r\n\r\n{body}"
             self.query_one("#intercept-resp-viewer", HttpView).load_raw_http(raw)
         except NoMatches as exc:
-            # Ответ пришёл, а панель его не показала — со стороны Send
-            # выглядит неудавшимся.
+            # The response arrived, but the panel did not show it — from the Send
+            # side it looks like a failure.
             logger.debug("intercept: response not shown: %s", exc)
         try:
             self.query_one("#intercept-hint", Label).update(
                 f"✓ Response: {req.response.status} — {esc(req.method)} {esc(req.url)}"
             )
         except NoMatches as exc:
-            # Строка-подсказка останется на «Forwarded — waiting…» навсегда.
+            # The hint line will stay on "Forwarded — waiting…" forever.
             logger.debug("intercept: response hint not updated: %s", exc)
 
     def action_toggle_intercept(self: _InterceptHost) -> None:

@@ -1,22 +1,23 @@
-"""Экранирование текста, попадающего в Rich-разметку.
+"""Escaping text that lands in Rich markup.
 
-``RichLog(markup=True)`` и ``Static`` (у него ``markup=True`` по умолчанию)
-разбирают текст как Rich-разметку. Текст, пришедший извне — тело
-HTTP-ответа, URL из трафика, путь из снимка карты сайта, stderr внешней
-утилиты, ответ сервера лицензий — в разметку попадать не должен:
+``RichLog(markup=True)`` and ``Static`` (which has ``markup=True`` by default)
+parse their text as Rich markup. Text that came from outside — an HTTP
+response body, a URL from traffic, a path from the sitemap snapshot, the stderr
+of an external tool, a licensing server reply — must not get into markup:
 
-* ``[/]`` без открывающего тега — ``MarkupError`` прямо в обработчике
-  сообщения: строка лога теряется, исключение уходит в диспетчер Textual;
-* ``[link=javascript:…]`` создаёт кликабельную ссылку с опасным таргетом.
-  В самом TUI браузера нет, но то же тело переиспользуется в HTML-отчётах
-  (``export/``), где ссылка уже работает.
+* ``[/]`` with no opening tag — ``MarkupError`` right inside the message
+  handler: the log line is lost and the exception goes to the Textual
+  dispatcher;
+* ``[link=javascript:…]`` builds a clickable link with a dangerous target.
+  The TUI itself has no browser, but the same body is reused in the HTML
+  reports (``export/``), where the link does work.
 
-Правило: своя разметка — литералом, чужое значение — через :func:`esc`::
+Rule: our own markup goes in literally, a foreign value goes through :func:`esc`::
 
-    log.write(f"[bold]{esc(host)}[/bold] — {count} запросов")
+    log.write(f"[bold]{esc(host)}[/bold] — {count} requests")
 
-Экранируется только значение, не вся строка: ``escape()`` поверх строки с
-нашими тегами покажет их пользователю буквально.
+Only the value is escaped, not the whole line: ``escape()`` over a string that
+already carries our tags would show those tags to the user literally.
 """
 
 from __future__ import annotations
@@ -25,5 +26,5 @@ from rich.markup import escape
 
 
 def esc(value: object) -> str:
-    """Вернуть ``value`` как текст: ``[`` и ``]`` в нём разметкой не станут."""
+    """Return ``value`` as text: ``[`` and ``]`` in it will not become markup."""
     return escape(str(value))

@@ -136,8 +136,8 @@ def _select_word_at_cursor(area: TextArea) -> None:
         if start < end:
             area.selection = Selection((row, start), (row, end))
     except Exception as exc:
-        # Двойной клик по слову не выделил его — мелочь, но именно такие
-        # «мелочи» и есть весь класс молчаливых хендлеров.
+        # Double-click on a word did not select it — a small thing, but exactly
+        # such "small things" make up the whole class of silent handlers.
         logger.debug("editor: word at cursor not selected: %s", exc)
 
 
@@ -306,8 +306,8 @@ class _BaseHttpWidget(Widget):
                     area = self.query_one(f"#{self._textarea_id}", TextArea)
                     self.call_after_refresh(_select_word_at_cursor, area)
                 except NoMatches as exc:
-                    # Текстовой области нет в дереве (редактор ещё собирается)
-                    # — двойной клик не выделит слово.
+                    # No TextArea in the tree yet (the editor is still being composed)
+                    # — the double-click will not select a word.
                     logger.debug("editor: no TextArea for word select: %s", exc)
                 return
             self._last_click_time = now
@@ -327,8 +327,8 @@ class _BaseHttpWidget(Widget):
             area.language = lang if lang in _SUPPORTED_LANGS else None
             area.load_text(text)
         except Exception as exc:
-            # Текст не попал в редактор — запрос, загруженный из Proxy/Repeater,
-            # просто не появится; это самая заметная из здешних потерь.
+            # The text never reached the editor — a request loaded from Proxy/Repeater
+            # simply will not appear; this is the most noticeable of the losses here.
             logger.debug("editor: text with language %r not set: %s", lang, exc)
 
     def _set_text(self, text: str) -> None:
@@ -465,8 +465,8 @@ def _load_into_textarea(area: TextArea, text: str, highlight_terms: list[str] | 
 class HttpView(ContentPanel):
     """Read-only viewer of HTTP request or response.
 
-    Наследует ContentPanel: заголовок + кнопки в панели, TextArea внутри.
-    Header highlighting — через _highlights; body — через встроенный хайлайтер.
+    Inherits ContentPanel: header + buttons in the panel, TextArea inside.
+    Header highlighting goes through _highlights; body through the built-in highlighter.
     """
 
     _textarea_id = "cp-body-widget"
@@ -487,9 +487,9 @@ class HttpView(ContentPanel):
         )
 
     def compose(self) -> ComposeResult:
-        """HttpView не переопределяет compose — использует ContentPanel.compose.
-        Единственный нюанс: нам нужен отдельный обработчик двойного клика
-        (_BaseHttpWidget.on_event), который мы устанавливаем через watch.
+        """HttpView does not override compose — it uses ContentPanel.compose.
+        The only nuance: we need a separate double-click handler
+        (_BaseHttpWidget.on_event), which we install via watch.
         """
         yield from ContentPanel.compose(self)
 
@@ -501,26 +501,26 @@ class HttpView(ContentPanel):
             area = self.query_one("#cp-body-widget", TextArea)
             _load_into_textarea(area, text, highlight_terms)
         except Exception:
-            # Панель просят показать запрос/ответ, а она не показала: на экране
-            # останется предыдущее содержимое под новым заголовком.
+            # The panel is asked to show a request/response and did not: the screen
+            # keeps the previous content under the new header.
             logger.warning("editor: raw HTTP not loaded into panel", exc_info=True)
 
     def clear(self) -> None:
-        """Очистить содержимое."""
+        """Clear the content."""
         try:
             area = self.query_one("#cp-body-widget", TextArea)
             area.load_text("")
         except Exception as exc:
-            # Панель просят очистить (например, при отправке нового запроса),
-            # а в ней остаётся прежнее содержимое.
+            # The panel is asked to clear (e.g. when a new request is sent),
+            # but it keeps the previous content.
             logger.debug("editor: panel not cleared: %s", exc)
 
 
 class RequestEditor(ContentPanel):
     """Editable HTTP request field with header and body highlighting.
 
-    Наследует ContentPanel: заголовок + кнопки + TextArea.
-    Поддерживает beautify, special chars, show_line_numbers.
+    Inherits ContentPanel: header + buttons + TextArea.
+    Supports beautify, special chars, show_line_numbers.
     """
 
     _textarea_id = "cp-body-widget"
@@ -583,18 +583,18 @@ class RequestEditor(ContentPanel):
             area._line_cache.clear()
             area.refresh()
         except Exception:
-            # `_raw_full` уже присвоен, поэтому get_text() вернёт новый текст,
-            # хотя на экране прежний — расхождение между тем, что видно, и
-            # тем, что уйдёт на сервер. Это ошибка, а не косметика.
+            # `_raw_full` is already assigned, so get_text() will return the new
+            # text while the screen shows the old one — a mismatch between what is
+            # visible and what will be sent to the server. That is a bug, not cosmetics.
             logger.error("editor: raw request not loaded into editor", exc_info=True)
 
     def get_text(self) -> str:
         try:
             raw_area = self.query_one("#cp-body-widget", TextArea).text
         except NoMatches as exc:
-            # Возвращаем пустую строку — вызывающий отправит пустой запрос,
-            # и по журналу будет видно, что редактора не было, а не что
-            # пользователь ничего не набрал.
+            # Return an empty string — the caller will send an empty request, and
+            # the log will show that there was no editor, rather than that the
+            # user typed nothing.
             logger.debug("editor: get_text found no editor: %s", exc)
             raw_area = ""
 
@@ -630,7 +630,7 @@ class RequestEditor(ContentPanel):
         try:
             area = self.query_one("#cp-body-widget", TextArea)
         except NoMatches as exc:
-            # Кнопка «Special» не переключит режим: редактора нет.
+            # The "Special" button will not toggle the mode: there is no editor.
             logger.debug("editor: special-chars toggle found no editor: %s", exc)
             return
         raw = self._raw_full or area.text
@@ -642,7 +642,7 @@ class RequestEditor(ContentPanel):
         else:
             decoded = decode_special_chars(area.text)
             area.load_text(decoded)
-        # Восстановить подсветку синтаксиса после load_text (она сбрасывается)
+        # Restore syntax highlighting after load_text (it gets reset)
         try:
             from collections import defaultdict
 
@@ -650,8 +650,8 @@ class RequestEditor(ContentPanel):
             area._line_cache.clear()
             area.refresh()
         except Exception as exc:
-            # Текст переключён, а подсветка — от прежнего представления:
-            # цвета «съезжают» относительно строк, и это читается как порча.
+            # The text is toggled, but the highlighting is from the previous view:
+            # colors shift relative to the lines, which reads as corruption.
             logger.debug("editor: highlighting not restored after special-chars toggle: %s", exc)
 
     def beautify_body(self) -> bool:
@@ -663,8 +663,8 @@ class RequestEditor(ContentPanel):
         try:
             area = self.query_one("#cp-body-widget", TextArea)
         except NoMatches as exc:
-            # Beautify вернёт False — вызывающий напечатает «нет валидного
-            # JSON/XML», хотя причина в другом.
+            # Beautify returns False — the caller will print "no valid JSON/XML",
+            # even though the cause is different.
             logger.debug("editor: beautify found no editor: %s", exc)
             return False
 
@@ -700,8 +700,8 @@ def _beautify_text(body: str) -> str | None:
         parsed = json.loads(stripped)
         return json.dumps(parsed, indent=2, ensure_ascii=False)
     except Exception as exc:
-        # Основной и ожидаемый путь: тело не JSON — пробуем XML ниже.
-        # Запись нужна, чтобы «не JSON» не путалось с ошибкой json.
+        # Main and expected path: the body is not JSON — try XML below.
+        # The log line is needed so "not JSON" is not confused with a json error.
         logger.debug("editor: body is not JSON, trying XML: %s", exc)
 
     # Try XML
@@ -715,8 +715,8 @@ def _beautify_text(body: str) -> str | None:
             lines = [line for line in pretty.split("\n") if line.strip()]
             return "\n".join(lines)
         except Exception as exc:
-            # Начало похоже на XML, но разбор не удался — тело останется как
-            # есть. Это и есть «нечего форматировать», но причина другая.
+            # The start looks like XML, but parsing failed — the body stays as it
+            # is. This is still "nothing to format", but for a different reason.
             logger.debug("editor: body looks like XML but is not well-formed: %s", exc)
 
     return None
@@ -725,9 +725,9 @@ def _beautify_text(body: str) -> str | None:
 class ResponseViewer(ContentPanel):
     """HTTP response viewer panel with header and body highlighting.
 
-    Наследует ContentPanel: заголовок + кнопки + TextArea.
-    Load_response() обновляет заголовок (статус + Content-Type + размер).
-    Body highlighting через _build_http_highlights.
+    Inherits ContentPanel: header + buttons + TextArea.
+    load_response() updates the header (status + Content-Type + size).
+    Body highlighting goes through _build_http_highlights.
     """
 
     _textarea_id = "cp-body-widget"
@@ -770,8 +770,8 @@ class ResponseViewer(ContentPanel):
             label_text = f"{self._label}  ·  {resp.status} {resp.reason}  ·  {size_str}{lang_str}"
             self.set_title(label_text)
         except Exception:
-            # Заголовок панели остаётся прежним — то есть показывает статус и
-            # размер прошлого ответа под новым телом.
+            # The panel header stays as it was — i.e. it shows the status and size
+            # of the previous response under the new body.
             logger.warning("editor: response label not updated", exc_info=True)
 
         try:
@@ -798,8 +798,8 @@ class ResponseViewer(ContentPanel):
             area._line_cache.clear()
             area.refresh()
         except Exception:
-            # Ответ пришёл и записан в панель, но подсветка (и, возможно,
-            # сам текст) не применились — панель покажет прошлый ответ.
+            # The response arrived and is written to the panel, but the highlighting
+            # (and possibly the text) was not applied — the panel shows the old response.
             logger.warning("editor: response not rendered in panel", exc_info=True)
 
     def load_raw(self, text: str) -> None:
@@ -808,7 +808,7 @@ class ResponseViewer(ContentPanel):
             area = self.query_one("#cp-body-widget", TextArea)
             _load_into_textarea(area, text)
         except Exception:
-            # Сырой текст ответа не показан — на экране остался прошлый.
+            # The raw response text is not shown — the previous one stayed on screen.
             logger.warning("editor: raw response text not loaded", exc_info=True)
 
     def clear(self) -> None:
@@ -817,7 +817,7 @@ class ResponseViewer(ContentPanel):
             area = self.query_one("#cp-body-widget", TextArea)
             area.load_text("")
         except Exception as exc:
-            # Панель просят очистить, а в ней остаётся прошлый ответ.
+            # The panel is asked to clear, but the previous response stays in it.
             logger.debug("editor: response panel not cleared: %s", exc)
 
     def beautify_body(self) -> bool:
@@ -831,7 +831,7 @@ class ResponseViewer(ContentPanel):
         try:
             area = self.query_one("#cp-body-widget", TextArea)
         except NoMatches as exc:
-            # Возвращаем False как «нечего форматировать», хотя причины разные.
+            # We return False as "nothing to format", even though the reasons differ.
             logger.debug("editor: response beautify found no editor: %s", exc)
             return False
 
@@ -857,6 +857,6 @@ class ResponseViewer(ContentPanel):
         try:
             self.set_title(self._label)
         except Exception as exc:
-            # Заголовок остаётся с прежним статусом и размером — после clear()
-            # панель подписана ответом, которого в ней уже нет.
+            # The header keeps the old status and size — after clear() the panel is
+            # labelled with a response it no longer contains.
             logger.debug("editor: label not reset: %s", exc)

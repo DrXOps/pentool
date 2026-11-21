@@ -69,7 +69,7 @@ class PayloadDropZone(Widget):
                 _on_selected,
             )
         except Exception:
-            # Диалог выбора файла не открылся — кнопка «Load from file»
-            # выглядит нажатой, но на экране ничего не происходит. Ловится
-            # всё: `push_screen` — это монтаж целого экрана.
+            # The file picker did not open — the "Load from file" button looks
+            # pressed, but nothing happens on screen. Everything is caught here:
+            # `push_screen` mounts a whole screen.
             logger.exception("payload drop zone: file dialog not opened")

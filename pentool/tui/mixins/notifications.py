@@ -1,6 +1,6 @@
 """NotificationsMixin — standardised toasts (flash/notify) for the App.
 
-Extracted from PentoolApp (Этап 5.1, notifications domain) so the app class
+Extracted from PentoolApp (Stage 5.1, notifications domain) so the app class
 stays thin and notification behaviour is tested/reused in one place. Ties all
 `app.notify(...)` call sites into Textual's built-in toast rack and layers a
 config-gated sound on top.
@@ -27,9 +27,9 @@ class NotificationsMixin:
 
             self.query_one("#module-tabs", ModuleTabs).flash(message, severity, timeout)  # type: ignore[attr-defined]
         except Exception as exc:
-            # Сообщение-вспышка не показано вовсе. Это не критично (уведомление
-            # дублируется тостом у вызывающего), но повторяющаяся ошибка здесь
-            # означает, что строка модулей разошлась с #module-tabs.
+            # The flash message is not shown at all. That is not critical (the
+            # caller also raises a toast), but a recurring error here means the
+            # module bar has diverged from #module-tabs.
             logger.debug("flash: module tabs unavailable: %s", exc)
 
     def notify(

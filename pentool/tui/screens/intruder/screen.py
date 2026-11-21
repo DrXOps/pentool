@@ -1,8 +1,8 @@
 """Intruder screen — automated attacks with payloads.
 
-Per-tab full UI: каждый таб — полноценный независимый экран с собственным
-тулбаром, positions, payloads, результатами, деталями и фильтром.
-Глобальными остаются только ➕Tab / ➖Tab.
+Per-tab full UI: every tab is a self-contained screen with its own toolbar,
+positions, payloads, results, details and filter. Only ➕Tab / ➖Tab stay
+global.
 """
 
 from __future__ import annotations
@@ -155,8 +155,8 @@ class _TabId:
 
 @dataclass
 class _IntruderTabState:
-    """Состояние одного таба Intruder — теперь хранит ВСЁ, включая
-    результаты, детали, фильтр (раньше было глобальным)."""
+    """State of a single Intruder tab — now holds EVERYTHING, including
+    results, details and the filter (these used to be global)."""
 
     tab_id: str = ""
     tab_uid: str = ""
@@ -182,8 +182,8 @@ class _IntruderTabState:
     turbo_mode: bool = False
     payload_load_in_progress: bool = False
     last_payload_sets: list | None = None
-    # Атака этой вкладки — изолированная и параллельная (IntruderAttack).
-    # attack_task — asyncio.Task от run(); нужен для осторожной отмены.
+    # This tab's attack — isolated and able to run in parallel (IntruderAttack).
+    # attack_task — the asyncio.Task from run(); used for careful cancellation.
     attack: "IntruderAttack | None" = None
 
 
@@ -201,7 +201,7 @@ class IntruderScreen(
     DEFAULT_CSS = _CSS
     BINDINGS = INTRUDER_BINDINGS
 
-    # TabRenameMixin config (оставлено для совместимости, но делегирует в TabbedContentPanel)
+    # TabRenameMixin config (kept for compatibility, but delegates to TabbedContentPanel)
     _rename_input_id: str = "intruder-rename-input"
     _rename_tab_prefix: str = "intruder-tab-"
     _rename_tabs_widget_id: str = "intruder-tabs"
@@ -214,15 +214,15 @@ class IntruderScreen(
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        # Чьи значения сейчас показывает глобальный toolbar. Нужен, чтобы
-        # TabDeactivated не переписал состояние таба значениями соседнего
-        # (см. _save_toolbar_to_tab).
+        # Which tab's values the global toolbar is currently showing. Needed so
+        # TabDeactivated does not overwrite a tab's state with a neighbour's
+        # values (see _save_toolbar_to_tab).
         self._toolbar_tab_id: str | None = None
-        # Старый _tabs для обратной совместимости (тесты)
+        # Legacy _tabs kept for backward compatibility (tests)
         self._tabs: list[_IntruderTabState] = []
         self._active_tab_id: str | None = None
         self._tab_counter: int = 0
-        # ── Фабрика табов для TabbedContentPanel ──
+        # ── Tab factory for TabbedContentPanel ──
         import uuid as _uuid
 
         def _factory(tab_id: str, name: str) -> _IntruderTabState:
@@ -243,16 +243,16 @@ class IntruderScreen(
         # Auto-save state
         self._state_loaded: bool = False
         self._running_save_tasks: list[str] = []
-        # tab_id -> живая атака. Нужен ровно затем, чтобы on_unmount мог
-        # погасить атаки: к этому моменту DOM-дерева уже нет, и состояние
-        # табов из панели не достать.
+        # tab_id -> live attack. Exists solely so on_unmount can shut attacks
+        # down: by that point the DOM tree is gone and the tab states cannot be
+        # fetched from the panel any more.
         self._live_attacks: dict[str, object] = {}
 
     # ── Active tab state ─────────────────────────────────────────────────
 
     @property
     def _tc_panel(self) -> TabbedContentPanel:
-        """TabbedContentPanel виджет."""
+        """The TabbedContentPanel widget."""
         return self.query_one("#intruder-tabs", TabbedContentPanel)
 
     @property
@@ -264,17 +264,17 @@ class IntruderScreen(
             if st is not None:
                 return st  # type: ignore[return-value]
         except Exception as exc:
-            # Ниже — запасной путь для тестов без compose. Запись отличает
-            # «экрана ещё нет» от «панель есть, но сломана».
+            # Below is the fallback path for tests without compose. The log line
+            # tells "no screen yet" apart from "panel exists but is broken".
             logger.debug("intruder: tab panel state unavailable: %s", exc)
-        # Fallback для тестов (без compose)
+        # Fallback for tests (without compose)
         if hasattr(self, "_tabs") and self._active_tab_id:
             for t in self._tabs:
                 if t.tab_id == self._active_tab_id:
                     return t
         return None
 
-    # Прокси-свойства для обратной совместимости (все читают из _active_tab)
+    # Proxy properties for backward compatibility (all read from _active_tab)
     @property
     def _attack_type(self) -> AttackType:
         t = self._active_tab
@@ -373,43 +373,43 @@ class IntruderScreen(
         return self.query_one(f"#{self._wid(tab_id, suffix)}", widget_cls)
 
     def _template_editor(self, tab: _IntruderTabState | None = None) -> ContentPanel:
-        """Вернуть ContentPanel таба (по умолчанию — активного)."""
+        """Return the tab's ContentPanel (the active tab's by default)."""
         tab = tab if tab is not None else self._active_tab
         if tab is None:
             raise LookupError("no active tab")
         wid = self._wid(tab.tab_id, _TabId.TEMPLATE_PANEL)
         return self.query_one(f"#{wid}", ContentPanel)
 
-    # ── BUILD TAB UI — per-tab только template + payloads ─────────────────
-    # Toolbar, results, detail panel — глобальные в compose().
-    # Так табы лёгкие, быстро переключаются, заголовки не теряются.
+    # ── BUILD TAB UI — per-tab: only template + payloads ──────────────────
+    # Toolbar, results, detail panel are global, built in compose().
+    # This keeps tabs light, fast to switch, and their titles never get lost.
 
     def _build_tab_ui(self, state: _IntruderTabState, tab_id: str) -> TabPane:
-        """Создать TabPane.
-        Возвращает пустой placeholder — содержимое монтируется поэтапно
-        в _mount_tab_body() ПОСЛЕ того как add_pane() добавил таб в DOM.
-        Так тяжёлый Intruder-таб не перегружает layout при add_pane,
-        и заголовок вкладки виден сразу.
+        """Create a TabPane.
+        Returns an empty placeholder — the content is mounted step by step in
+        _mount_tab_body() AFTER add_pane() has added the tab to the DOM. That
+        way a heavy Intruder tab does not overload the layout on add_pane, and
+        the tab header is visible immediately.
         """
         placeholder = Static("…", id=f"tab-placeholder-{tab_id}")
         return TabPane(state.name, placeholder, id=tab_id)
 
     async def _mount_tab_body(self, tab_id: str, state: _IntruderTabState) -> None:
-        """Поэтапно собрать полное содержимое aтаки внутрь TabPane.
+        """Assemble the full attack content inside the TabPane, step by step.
 
-        Вызывается из _on_tab_created (после того как таб добавлен в DOM
-        и стал активным). tab-body — вертикальный стек:
+        Called from _on_tab_created (after the tab has been added to the DOM
+        and became active). tab-body is a vertical stack:
         toolbar → top (template+payloads) → results → filter → detail.
-        Метод асинхронный ради одного await: call_after_refresh выполняет
-        возвращённую корутину через commit, поэтому монтирование успевает
-        завершиться до загрузки данных таба.
+        The method is async for a single await: call_after_refresh runs the
+        returned coroutine through commit, so mounting gets to finish before
+        the tab data is loaded.
         """
 
         # ── Attack toolbar (per-tab): Sniper/Add§§/Clear§§/Auto§§ ─────────────
-        # (как в _compose_positions до мультитаба a315ada)
-        # Подпись и описание берутся из state, а не из литерала: таб может
-        # подниматься из БД с уже выбранным типом атаки, и раньше он
-        # показывал «Sniper ▼» с описанием снипера при state=battering_ram.
+        # (as in _compose_positions before multi-tab, a315ada)
+        # The label and description come from state, not a literal: a tab can be
+        # restored from the DB with an attack type already chosen, and it used to
+        # show "Sniper ▼" with the sniper description at state=battering_ram.
         attack_toolbar = Toolbar(
             Label("Attack:", classes="toolbar-label"),
             ToolbarButton(f"{_ATTACK_LABELS[state.attack_type]} ▼", self._wid(tab_id, _TabId.BTN_ATTACK_TYPE)),
@@ -424,7 +424,7 @@ class IntruderScreen(
             id=self._wid(tab_id, _TabId.TOOLBAR),
         )
 
-        # ── Template editor (в левой positions-колонке) ────────────────
+        # ── Template editor (in the left positions column) ─────────────
         template = Vertical(
             Static("Positions", classes="section-title panel-title"),
             attack_toolbar,
@@ -441,11 +441,11 @@ class IntruderScreen(
         )
 
         # ── Payloads panel ──────────────────────────────────────────────
-        # Разделители строятся группами (`Toolbar.row`): между группами — да,
-        # внутри группы — нет. Ведущей черты перед подписью быть не должно —
-        # она делила пустоту (замечание из тестирования).
-        # Подписи укорочены: длинные («Load from file…», «Generate…») выносили
-        # тулбар за край экрана вместе с «Smart…».
+        # Separators are built in groups (`Toolbar.row`): yes between groups, no
+        # inside a group. There must be no leading rule before the label — it
+        # divided emptiness (a note from testing).
+        # Labels were shortened: the long ones ("Load from file…", "Generate…")
+        # pushed the toolbar off the screen edge together with "Smart…".
         # A separator between EVERY pair of actions (reported: "no divider
         # between Add and Clear"). Labels are short: the long ones
         # ("Load from file…", "Generate…") pushed "Smart" off screen.
@@ -467,9 +467,9 @@ class IntruderScreen(
         pldiv = Vertical(
             Static("Payloads", classes="section-title panel-title"),
             payloads_toolbar,
-            # Счётчик — над списком, как в компоновке до мультитаба: он
-            # показывает, сколько строк пришло при загрузке файла, и при
-            # потоковом чтении растёт на глазах — под списком этого не видно.
+            # The counter sits above the list, as in the pre-multi-tab layout: it
+            # shows how many lines arrived while loading a file, and during
+            # streaming it grows visibly — below the list that would be hidden.
             Static("", id=self._wid(tab_id, _TabId.PAYLOAD_COUNT_LABEL), classes="payload-count-label"),
             ListView(id=self._wid(tab_id, _TabId.PAYLOAD_LIST), classes="intruder-payload-list"),
             classes="intruder-payloads-panel card",
@@ -490,12 +490,12 @@ class IntruderScreen(
         # ── Top area (template | handle | payloads + processing) ───────
         top_area = Horizontal(
             template,
-            # Разделитель Positions|Payloads был в компоновке до мультитаба и
-            # потерялся при переносе: обе панели фиксированы, и на широком
-            # терминале шаблон нельзя было отдать под больше места.
-            # Цели — прямые дети top-area: ResizeHandle пишет width в них
-            # напрямую, а `payloads-panel` вложен в `body-right`, и правка его
-            # ширины ничего бы не дала.
+            # The Positions|Payloads divider existed in the pre-multi-tab layout
+            # and was lost in the move: both panels are fixed, and on a wide
+            # terminal the template could not be given more room.
+            # The targets are direct children of top-area: ResizeHandle writes
+            # width into them directly, while `payloads-panel` is nested inside
+            # `body-right`, so resizing its width would change nothing.
             ResizeHandle(
                 self._wid(tab_id, _TabId.POSITIONS_PANEL),
                 self._wid(tab_id, _TabId.BODY_RIGHT),
@@ -506,7 +506,7 @@ class IntruderScreen(
         )
 
         # ── Results + progress ──────────────────────────────────────────
-        # Фильтр — СВЕРХУ, над таблицей (как в оригинальной компоновке a315ada:
+        # The filter is ON TOP, above the table (as in the original layout a315ada:
         # filter bar → progress → results-table → detail).
         filter_bar = _IntruderFilterBar(id=self._wid(tab_id, _TabId.INTRUDER_FILTER_BAR))
         results_col = Vertical(
@@ -568,20 +568,20 @@ class IntruderScreen(
 
         try:
             pane = self.query_one(f"#{tab_id}", TabPane)
-            # Убрать placeholder
+            # Remove the placeholder
             try:
                 ph = pane.query_one(f"#tab-placeholder-{tab_id}")
                 ph.remove()
             except Exception as exc:
-                # Заглушка уже снята предыдущим проходом — обычный ход. Запись
-                # отличает его от опечатки в id placeholder'а.
+                # The stub is already gone from a previous pass — a normal case.
+                # The log entry tells it apart from a typo in the placeholder id.
                 logger.debug("intruder: placeholder for %s not removed: %s", tab_id, exc)
-            # mount() — не мгновенная вставка: он планируется в очереди
-            # сообщений, и без await дети появляются в DOM на произвольном
-            # такте позже. Тогда _refresh_payload_list ищет ListView раньше
-            # времени, ловит NoMatches и глотает его, а таб остаётся с пустым
-            # списком payload'ов. AwaitComplete гарантирует, что к следующей
-            # строке дерево уже собрано.
+            # mount() is not an instant insert: it is scheduled in the message
+            # queue, and without await the children land in the DOM some
+            # arbitrary tick later. Then _refresh_payload_list looks for the
+            # ListView too early, catches NoMatches and swallows it, leaving the
+            # tab with an empty payload list. AwaitComplete guarantees the tree
+            # is already assembled by the next line.
             await pane.mount(inner)
         except Exception as exc:
             logger.debug("_mount_tab_body: %s", exc)
@@ -589,17 +589,17 @@ class IntruderScreen(
         # New tabs start with their AI control visible; match the current mode
         # right away instead of waiting for the next AiModeChanged (F-022).
         self.call_after_refresh(self._apply_ai_visibility_after_mount, tab_id)
-        # Tooltips ставятся здесь: кнопки таба в DOM только с этой строки.
+        # Tooltips are set here: the tab buttons enter the DOM on this very line.
         self._apply_tab_tooltips(tab_id)
-        # Содержимое таба — сразу после монтирования, без откладывания на
-        # очередной refresh: таб может прийти из БД уже с payload_sources,
-        # attack_type и активным набором, и до этой строки он показывал бы
-        # пустой список и «Set 1 ▼» независимо от того, что лежит в БД.
-        # Хелперы читают _active_tab, поэтому при пачечном восстановлении
-        # (вкладки создаются подряд, активна последняя) этот вызов наполнит
-        # активную вкладку, а не ту, чьё тело сейчас доехало, — data-driven,
-        # поэтому данные всегда попадают в свои виджеты. Остальные вкладки
-        # наполняются на TabActivated, когда их открывают.
+        # Tab content — right after mounting, without deferring to yet another
+        # refresh: a tab can come from the DB already with payload_sources,
+        # attack_type and an active set, and until this line it would show an
+        # empty list and "Set 1 ▼" regardless of what the DB holds.
+        # The helpers read _active_tab, so during batch restore (tabs are
+        # created in a row and the last one is active) this call fills the
+        # active tab, not the one whose body just arrived — it is data-driven,
+        # so the data always lands in its own widgets. The other tabs are
+        # filled on TabActivated, when the user opens them.
         self._load_active_tab_content()
 
     def _apply_ai_visibility_after_mount(self, tab_id: str) -> None:
@@ -612,12 +612,12 @@ class IntruderScreen(
             logger.debug("_apply_ai_visibility_after_mount: %s", exc)
 
     # ── TabbedContentPanel message handlers ───────────────────────────────
-    # Когда пользователь переключает таб — TabbedContentPanel постит
-    # TabDeactivated (старый таб) и TabActivated (новый таб).
+    # When the user switches tabs, TabbedContentPanel posts
+    # TabDeactivated (old tab) and TabActivated (new tab).
 
     @on(TabbedContentPanel.TabDeactivated, "#intruder-tabs")
     def _on_tab_deactivated(self, event: TabbedContentPanel.TabDeactivated) -> None:
-        """Сохранить состояние старого таба перед переключением."""
+        """Save the old tab's state before the switch."""
         state = event.tab_state
         if not isinstance(state, _IntruderTabState):
             return
@@ -629,31 +629,31 @@ class IntruderScreen(
             if isinstance(w, TextArea):
                 state.template_text = w.text
         except Exception:
-            # В state остаётся прежний шаблон — правки пользователя в этом
-            # табе теряются при переключении. Ровно тот класс потерь, что
-            # описаны в комментарии ниже, поэтому error с трейсбеком.
+            # The old template stays in state — the user's edits in this tab are
+            # lost on switching. Exactly the class of loss described in the
+            # comment below, hence an error with a traceback.
             logger.error("intruder: template text not saved for tab %s", state.tab_id, exc_info=True)
-        # Threads/Delay/Turbo живут в глобальном toolbar и описывают активный
-        # таб, поэтому их надо снять ДО того, как toolbar перерисуется под
-        # новый таб. Без этого значения оставались только в state-дефолтах:
-        # пользователь вводил 77 потоков, уходил на другой таб и возвращался
-        # к тем же 10 — правка терялась молча.
+        # Threads/Delay/Turbo live in the global toolbar and describe the active
+        # tab, so they must be captured BEFORE the toolbar is redrawn for the
+        # new tab. Without this the values survived only in state defaults: the
+        # user typed 77 threads, switched to another tab and came back to the
+        # same 10 — the edit was lost silently.
         self._save_toolbar_to_tab(state)
         self._auto_save_tab(state)
 
     def _save_toolbar_to_tab(self, state: _IntruderTabState) -> None:
-        """Перенести Threads/Delay/Turbo из глобального toolbar в state таба.
+        """Move Threads/Delay/Turbo from the global toolbar into the tab state.
 
-        Ошибки не пробрасываются: toolbar может быть ещё не смонтирован
-        (первый таб создаётся в ``on_mount`` до раскладки), и это не повод
-        ронять переключение вкладок.
+        Errors are not propagated: the toolbar may not be mounted yet (the
+        first tab is created in ``on_mount`` before layout), and that is no
+        reason to break tab switching.
         """
         if self._toolbar_tab_id != state.tab_id:
-            # Toolbar показывает ДРУГОЙ таб (пачечное восстановление создаёт
-            # вкладки подряд, а _sync_toolbar_from_tab успевает пройти только
-            # для активной). Сохранять сейчас — значит записать в этот таб
-            # чужие значения: восстановленные из БД 55 потоков превращались
-            # в дефолтные 10 при первом же переключении.
+            # The toolbar shows a DIFFERENT tab (batch restore creates tabs in a
+            # row, and _sync_toolbar_from_tab only gets through for the active
+            # one). Saving now would write somebody else's values into this tab:
+            # 55 threads restored from the DB turned into the default 10 on the
+            # very first switch.
             return
         try:
             threads = self.query_one("#intruder-threads", Input)
@@ -661,9 +661,9 @@ class IntruderScreen(
             turbo = self.query_one("#intruder-turbo", Checkbox)
         except NoMatches:
             return
-        # Пустое поле — не ноль потоков, а «пользователь стёр значение»;
-        # запуск атаки трактует это как дефолт, поэтому и здесь оставляем
-        # state как есть, а не сохраняем 0.
+        # An empty field is not zero threads but "the user erased the value";
+        # attack start treats it as the default, so here too we leave the state
+        # as is instead of saving 0.
         if threads.value.strip():
             try:
                 state.thread_count = int(threads.value)
@@ -678,28 +678,28 @@ class IntruderScreen(
 
     @on(TabbedContentPanel.TabActivated, "#intruder-tabs")
     def _on_tab_activated(self, event: TabbedContentPanel.TabActivated) -> None:
-        """Таб переключён — обновляем UI (данные уже в state)."""
-        # Данные, а не только таблица: восстановление из БД создаёт вкладки
-        # пачкой и активной делает последнюю, поэтому тела остальных (и их
-        # списки payload'ов) заполняются здесь, когда пользователь их откроет.
+        """Tab switched — refresh the UI (the data is already in state)."""
+        # Data, not just the table: restoring from the DB creates tabs in a
+        # batch and makes the last one active, so the other bodies (and their
+        # payload lists) are filled here, when the user opens them.
         self._load_active_tab_content()
-        # Синхронизируем глобальный toolbar с активной вкладкой
+        # Sync the global toolbar with the active tab
         tab = self._active_tab
         if tab is not None:
             self._sync_toolbar_from_tab(tab)
 
     def _sync_toolbar_from_tab(self, tab: _IntruderTabState) -> None:
-        """Перенести статус/параметры активной вкладки в глобальный toolbar.
+        """Move the active tab's status/parameters into the global toolbar.
 
-        Start/Stop, Threads, Delay, Turbo отражают активную вкладку; каждая
-        вкладка хранит свои значения в state, поэтому при переключении toolbar
-        показывает именно активную.
+        Start/Stop, Threads, Delay, Turbo reflect the active tab; each tab keeps
+        its own values in state, so on switching the toolbar shows exactly the
+        active one.
         """
         try:
             self.query_one("#intruder-threads", Input).value = str(tab.thread_count if tab.thread_count else 10)
             self.query_one("#intruder-delay", Input).value = str(tab.delay_ms if tab.delay_ms else 0)
             cb = self.query_one("#intruder-turbo", Checkbox)
-            # Turbo нельзя включать в FREE-режиме
+            # Turbo cannot be enabled in FREE mode
             from pentool.core.license import get_session_license
 
             is_pro = get_session_license().is_pro() if get_session_license() else False
@@ -718,30 +718,32 @@ class IntruderScreen(
 
     @on(TabbedContentPanel.TabCreated, "#intruder-tabs")
     def _on_tab_created(self, event: TabbedContentPanel.TabCreated) -> None:
-        """Новый таб создан — монтируем полное содержимое атаки в pane.
+        """A new tab was created — mount the full attack content into the pane.
 
-        add_pane уже добавил placeholder+заголовок, таб стал активным.
-        Теперь догружаем тяжёлый контент (toolbar/results/detail) по этапам,
-        чтобы layout успел разложить пустой таб и не потерял заголовки.
+        add_pane has already added the placeholder and header, and the tab is
+        active. Now the heavy content (toolbar/results/detail) is loaded in
+        stages, so the layout can arrange the empty tab and does not lose the
+        headers.
         """
         state = event.tab_state
         if not isinstance(state, _IntruderTabState):
             return
-        # _load_active_tab_content НЕ ставится здесь в очередь рядом с
-        # _mount_tab_body: обе функции уходят в один батч refresh-колбэков, и
-        # тогда _refresh_payload_list ищет ListView до того, как mount()
-        # действительно добавил содержимое таба в DOM. NoMatches глотается
-        # try/except, поэтому восстановленный из БД таб оставался с пустым
-        # списком payload'ов до первого ручного действия. Загрузку данных
-        # планирует сам _mount_tab_body — уже после pane.mount(inner).
+        # _load_active_tab_content is NOT queued here next to _mount_tab_body:
+        # both functions would go into one batch of refresh callbacks, and then
+        # _refresh_payload_list looks for the ListView before mount() has
+        # actually added the tab content to the DOM. NoMatches is swallowed by
+        # try/except, so a tab restored from the DB stayed with an empty payload
+        # list until the first manual action. The data load is scheduled by
+        # _mount_tab_body itself — already after pane.mount(inner).
         self.call_after_refresh(self._mount_tab_body, state.tab_id, state)
 
     @on(TabbedContentPanel.TabClosed, "#intruder-tabs")
     def _on_tab_closed(self, event: TabbedContentPanel.TabClosed) -> None:
-        """Таб закрыт — погасить его атаку и загрузить оставшийся.
+        """Tab closed — shut down its attack and load the remaining one.
 
-        Панель постит закрытое состояние в сообщении: из ``_states`` таб уже
-        удалён, и без него нельзя понять, чью атаку глушить.
+        The panel posts the closed state in the message: the tab is already
+        removed from ``_states``, and without it there is no way to tell whose
+        attack to stop.
         """
         closed = event.tab_state
         if isinstance(closed, _IntruderTabState) and (closed.running or closed.attack is not None):
@@ -784,10 +786,10 @@ class IntruderScreen(
 
                         self.call_after_refresh(_sel)
                 except (LookupError, NoMatches) as exc:
-                    # Таба нет или его тело не смонтировано — двойной клик
-                    # ничего не выделит. Названы ровно эти две причины:
-                    # `LookupError` из `_template_editor` и `NoMatches` из
-                    # `content_widget`; опечатка в этом блоке всплывёт.
+                    # No tab, or its body is not mounted — the double click will
+                    # select nothing. Exactly these two causes are named:
+                    # `LookupError` from `_template_editor` and `NoMatches` from
+                    # `content_widget`; a typo in this block will surface.
                     logger.debug("op: double-click select skipped: %s", exc)
                 return
             self._last_click_time = now
@@ -809,7 +811,7 @@ class IntruderScreen(
             id="intruder-global-toolbar",
         )
 
-        # ── TabbedContentPanel (полный UI per-tab внутри) ─────────────────
+        # ── TabbedContentPanel (full per-tab UI inside) ───────────────────
         yield TabbedContentPanel[_IntruderTabState](
             id="intruder-tabs",
             tab_id_prefix="intruder-tab-",
@@ -906,37 +908,37 @@ class IntruderScreen(
         if refresh is not None:
             refresh()
 
-    # ── Tab lifecycle (action_*) — делегируют в TabbedContentPanel ─────
+    # ── Tab lifecycle (action_*) — delegates to TabbedContentPanel ─────
 
     def action_new_tab(self) -> None:
-        """Создать новый таб с дефолтным состоянием."""
+        """Create a new tab with the default state."""
         self._tab_counter_adjust()
-        # Данные нового таба подгружает _load_active_tab_content, который
-        # _mount_tab_body планирует после монтирования содержимого. Здесь
-        # планировать нельзя: к этому моменту _post_tab_messages ещё не
-        # создал ни одного per-tab виджета.
+        # The new tab's data is loaded by _load_active_tab_content, which
+        # _mount_tab_body schedules after mounting the content. Scheduling it
+        # here is not allowed: at this point _post_tab_messages has not created
+        # a single per-tab widget yet.
         self._tc_panel.action_new_tab()
 
     def _tab_counter_adjust(self) -> None:
-        """Подстроить _tab_counter под TabbedContentPanel (для совместимости тестов)."""
+        """Adjust _tab_counter to match TabbedContentPanel (test compatibility)."""
         pass
 
     def action_close_tab(self) -> None:
         self._tc_panel.action_close_tab()
 
     def _load_active_tab_content(self) -> None:
-        """Подгрузить данные активного таба в только что смонтированные виджеты.
+        """Load the active tab's data into the freshly mounted widgets.
 
-        Вызывается из _mount_tab_body последней строкой — уже после того,
-        как pane.mount(inner) действительно добавил виджеты в DOM. Таб может
-        прийти из БД уже с payload_sources, attack_type и счётом активного
-        набора, поэтому каждый per-tab виджет получает значение из state:
-        раньше список payload'ов оставался пустым, а подпись набора —
-        «Set 1 ▼» независимо от того, что лежало в БД.
+        Called from _mount_tab_body as its last line — after pane.mount(inner)
+        has actually added the widgets to the DOM. A tab can come from the DB
+        already with payload_sources, attack_type and an active set index, so
+        every per-tab widget takes its value from state: previously the payload
+        list stayed empty and the set label read "Set 1 ▼" regardless of what
+        the DB held.
 
-        Таблица результатов перестраивается всегда, даже без активного таба:
-        это и делал прежний _on_tab_activated, и вызов из него не должен
-        терять это поведение из-за раннего return.
+        The results table is rebuilt unconditionally, even without an active
+        tab: that is what the former _on_tab_activated did, and the call from it
+        must not lose this behaviour because of an early return.
         """
         tab = self._active_tab
         if tab is not None:
@@ -955,9 +957,9 @@ class IntruderScreen(
             if isinstance(w, TextArea):
                 tab.template_text = w.text
         except Exception:
-            # Шаблон в state остаётся прежним, а `_auto_save_tab` ниже
-            # сохранит в БД именно его — то есть правка не переживёт
-            # перезапуск, хотя автосохранение «работало». Потеря данных → error.
+            # The template in state stays as before, and `_auto_save_tab` below
+            # will save exactly that to the DB — so the edit will not survive a
+            # restart, even though autosave "worked". Data loss → error.
             logger.error("intruder: current template text not saved", exc_info=True)
         self._auto_save_tab(tab)
 
@@ -979,8 +981,8 @@ class IntruderScreen(
                 exclusive=False,
             )
         except Exception:
-            # Автосохранение таба не встало в очередь: правки живут только в
-            # памяти и пропадут при перезапуске, о чём ничего не скажет.
+            # The tab autosave did not get queued: edits live only in memory and
+            # will vanish on restart without saying anything.
             logger.exception("_auto_save_tab failed")
 
     def _load_tabs_from_db(self) -> None:
@@ -1042,18 +1044,18 @@ class IntruderScreen(
     # ── Rename (BaseModuleScreen interface) ───────────────────────────────────
 
     def _start_rename(self, tab_id: str) -> None:
-        """Переименование вкладки: поле живёт в панели вкладок.
+        """Tab rename: the input lives in the tab panel.
 
-        Раньше экран монтировал СВОЙ `Input` с тем же id, что и панель, — в
-        дереве оказывались два поля с одинаковым идентификатором, `query_one`
-        находил скрытое первое, а видимое оставалось без фокуса. Со стороны это
-        «F2/двойной клик не работает».
+        The screen used to mount its OWN `Input` with the same id as the
+        panel's — two fields with an identical id ended up in the tree,
+        `query_one` found the hidden first one, and the visible one never got
+        focus. From the outside this looks like "F2/double click does not work".
         """
         try:
             self._tc_panel._start_rename(tab_id)
         except Exception:
-            # Вкладка не переименовывается — и это единственное место, где
-            # видно причину: сама панель глотает ошибку в debug.
+            # The tab is not renamed — and this is the only place where the
+            # cause is visible: the panel itself swallows the error into debug.
             logger.exception("intruder: rename not started for %s", tab_id)
 
     def _rename_tab(self, tab_id: str, new_name: str) -> None:
@@ -1071,34 +1073,35 @@ class IntruderScreen(
     # ── Mount, show ──────────────────────────────────────────────────────
 
     def on_unmount(self) -> None:
-        """Экран уходит — ни одна атака не должна пережить его.
+        """The screen is going away — no attack may outlive it.
 
-        ``cancel_node`` снимает и хвосты загрузок; атаки гасим поимённо, чтобы
-        сначала встал воркер, а потом уже сама атака (см. ``_stop_tab_attack``).
+        ``cancel_node`` also takes down leftover loads; attacks are stopped by
+        name so that the worker goes down first and the attack itself after
+        (see ``_stop_tab_attack``).
         """
-        # DOM к этому моменту уже снят (Textual размонтирует поддерево до
-        # on_unmount узла), поэтому атаки берём из своего словаря.
+        # The DOM is already gone by now (Textual unmounts the subtree before a
+        # node's on_unmount), so the attacks are taken from our own dict.
         for tab_id, attack in list(self._live_attacks.items()):
             try:
                 self.workers.cancel_group(self, self._attack_group(tab_id))
             except Exception:
-                # Воркер атаки не снят: он продолжит писать в БД проекта,
-                # который уже закрывают, и досчитает до конца после ухода
-                # с экрана. Это утечка, и её причина нужна целиком.
+                # The attack worker was not taken down: it keeps writing to the
+                # DB of a project that is already closing and runs to the end
+                # after leaving the screen. That is a leak; keep the full cause.
                 logger.exception("on_unmount: cancel_group failed for %s", tab_id)
             try:
-                # Воркер остановки живёт на App: у экрана вот-вот снимут всех
-                # воркеров, и он не должен попасть под раздачу.
+                # The stop worker lives on the App: the screen is about to have
+                # all its workers cancelled, and it must not be caught by that.
                 self.app.run_worker(attack.stop(), exit_on_error=False)  # type: ignore[attr-defined]
             except Exception:
-                # Атака не погашена — после ухода с экрана интерфейса, который
-                # её остановит, уже не будет.
+                # The attack was not shut down — after leaving the screen there
+                # will be no UI left that could stop it.
                 logger.exception("on_unmount: attack.stop failed for %s", tab_id)
         self._live_attacks.clear()
         try:
             self.workers.cancel_node(self)
         except Exception:
-            # Хвосты загрузок переживут экран и могут дописать в закрытую БД.
+            # Leftover loads outlive the screen and may write to a closed DB.
             logger.exception("on_unmount: cancel_node failed")
 
     def on_mount(self) -> None:
@@ -1106,7 +1109,7 @@ class IntruderScreen(
         tc = self._tc_panel
         tc.set_default_state_factory(self._tab_factory)
         tc.action_new_tab()
-        # Синхронизировать глобальный toolbar с первым (активным) табом
+        # Sync the global toolbar with the first (active) tab
         if self._active_tab is not None:
             self._sync_toolbar_from_tab(self._active_tab)
         self._setup_tooltips()
@@ -1148,17 +1151,17 @@ class IntruderScreen(
         button.display = ai_on
 
     def _sync_attack_type_ui(self, tab: _IntruderTabState) -> None:
-        """Привести кнопку типа атаки и её описание к ``tab.attack_type``.
+        """Bring the attack-type button and its description to ``tab.attack_type``.
 
-        Состояние таба — единственный источник правды, а показывают его два
-        разных виджета. Пока каждый писатель (меню, загрузка из БД, активация
-        вкладки) правил их сам, они расходились: ``_do_load_state`` писал в
-        кнопку ``⚡ Sniper`` и не трогал описание, а ``_load_active_tab_content``
-        не трогал ни то, ни другое — вкладка, открытая после смены типа,
-        показывала подпись от прошлого значения.
+        Tab state is the single source of truth, and it is displayed by two
+        different widgets. While every writer (menu, DB load, tab activation)
+        patched them itself, they drifted apart: ``_do_load_state`` wrote
+        ``⚡ Sniper`` into the button and left the description alone, while
+        ``_load_active_tab_content`` touched neither — a tab opened after a type
+        change showed the label of the previous value.
 
-        NoMatches не пробрасывается: тело таба может быть ещё не смонтировано,
-        и тогда UI поправит ``_load_active_tab_content`` на активации.
+        NoMatches is not propagated: the tab body may not be mounted yet, and
+        then the UI is fixed up by ``_load_active_tab_content`` on activation.
         """
         try:
             btn = self.query_one(f"#{self._wid(tab.tab_id, _TabId.BTN_ATTACK_TYPE)}", ToolbarButton)
@@ -1176,7 +1179,7 @@ class IntruderScreen(
     #: header (see `header_spec`), so there are no global toolbar tooltips left.
     _GLOBAL_TOOLTIPS: dict[str, str] = {}  # noqa: RUF012 - intentionally empty class table
 
-    #: Tooltips для кнопок, живущих внутри таба — id собирается ``_wid``.
+    #: Tooltips for the buttons living inside a tab — the id is built by ``_wid``.
     _TAB_TOOLTIPS: dict[str, str] = {
         _TabId.BTN_ADD_MARKER: "Wrap selected text in §markers§",
         _TabId.BTN_CLEAR_MARKERS: "Remove all §markers§ from template",
@@ -1185,22 +1188,22 @@ class IntruderScreen(
     }
 
     def _setup_tooltips(self) -> None:
-        """Подсказки на кнопки глобального toolbar (табы — отдельно)."""
+        """Tooltips for the global toolbar buttons (tabs are handled separately)."""
         for wid, tip in self._GLOBAL_TOOLTIPS.items():
             try:
                 self.query_one(f"#{wid}", ToolbarButton).tooltip = tip
             except NoMatches:
-                # StartStopWidget ещё не смонтирован — не наш случай, но
-                # глотать стоит только «нет виджета», а не любую ошибку.
+                # StartStopWidget is not mounted yet — not our case, but only
+                # "no widget" should be swallowed, not any error.
                 logger.debug("_setup_tooltips: #%s not mounted yet", wid)
 
     def _apply_tab_tooltips(self, tab_id: str) -> None:
-        """Подсказки на per-tab кнопки. Зовётся после mount тела таба.
+        """Tooltips for the per-tab buttons. Called after the tab body is mounted.
 
-        Из ``on_mount`` их ставить нельзя: ``compose`` создаёт только пустые
-        TabPane, тела монтируются позже (``_mount_tab_body``), поэтому запрос по
-        ``#…-<tab_id>`` не находил ничего, а NoMatches глотался — подсказки не
-        появлялись ни у первого таба, ни у новых.
+        They cannot be set from ``on_mount``: ``compose`` creates only empty
+        TabPanes, the bodies are mounted later (``_mount_tab_body``), so a query
+        by ``#…-<tab_id>`` found nothing, NoMatches was swallowed, and no
+        tooltips appeared for the first tab or for new ones.
         """
         for suffix, tip in self._TAB_TOOLTIPS.items():
             try:
@@ -1253,7 +1256,7 @@ class IntruderScreen(
         self.run_worker(self._do_load_results(api), exclusive=False, exit_on_error=False)
 
     async def _do_load_results(self, api: "IntruderAPI", order_by: str | None = None, order_dir: str = "desc") -> None:
-        """Загрузить результаты из SQL с учётом FilterSpec и ORDER BY."""
+        """Load the results from SQL honouring FilterSpec and ORDER BY."""
         try:
             tab = self._active_tab
             if tab is None:
@@ -1332,9 +1335,9 @@ class IntruderScreen(
                     if isinstance(w, TextArea):
                         w.text = template
                 except Exception:
-                    # Сохранённый шаблон есть, а в редакторе — пусто: вкладка
-                    # откроется пустой, хотя данные в БД лежат. Это потеря
-                    # данных на восстановлении, поэтому error с трейсбеком.
+                    # A saved template exists but the editor is empty: the tab
+                    # will open blank even though the data sits in the DB. That
+                    # is data loss on restore, hence an error with a traceback.
                     logger.error("intruder: saved template not restored for tab %s", _tab_uid, exc_info=True)
             attack_type_str = state.get("attack_type", "sniper")
             try:
@@ -1352,10 +1355,11 @@ class IntruderScreen(
             logger.error("intruder: tab state not loaded", exc_info=True)
 
     def _auto_save_state(self, tab: _IntruderTabState | None = None) -> None:
-        """Сохранить состояние таба (по умолчанию — активного).
+        """Save the tab state (the active tab by default).
 
-        ``tab`` явный нужен путям, которые правят не активную вкладку (меню,
-        открытое до переключения): иначе в БД ушёл бы соседний таб.
+        An explicit ``tab`` is needed by paths that edit a non-active tab (a
+        menu opened before switching): otherwise a neighbouring tab would be
+        written to the DB.
         """
         api = self._get_api()
         if api is None:
@@ -1364,7 +1368,7 @@ class IntruderScreen(
             tab = tab if tab is not None else self._active_tab
             if tab is None:
                 return
-            # Читаем template из per-tab editor
+            # Read the template from the per-tab editor
             template = ""
             try:
                 editor = self._template_editor(tab)
@@ -1408,29 +1412,29 @@ class IntruderScreen(
         except Exception:
             logger.error("intruder: result not saved", exc_info=True)
 
-    # ── @on handlers — ToolbarButton.Pressed (только глобальные кнопки) ──
-    # Per-tab кнопки с суффиксом -{tab_id} — их ловит @on без селектора,
-    # который матчит любые ToolbarButton.Pressed и отбрасывает известные
-    # глобальные (btn-start, btn-stop...) а остальные диспатчит per-tab.
+    # ── @on handlers — ToolbarButton.Pressed (global buttons only) ──────
+    # Per-tab buttons carry the -{tab_id} suffix — they are caught by the @on
+    # without a selector, which matches any ToolbarButton.Pressed, drops the
+    # known global ones (btn-start, btn-stop...) and dispatches the rest per tab.
 
     @on(ToolbarButton.Pressed)
     def _on_toolbar_pressed(self, event: ToolbarButton.Pressed) -> None:
-        """Общий диспатч для ToolbarButton.
+        """Common dispatch for ToolbarButton.
 
-        Пропускает btn-start/btn-stop/btn-pause — они обрабатываются
-        самим StartStopWidget (который постит отдельные сообщения).
+        Skips btn-start/btn-stop/btn-pause — they are handled by StartStopWidget
+        itself (which posts separate messages).
         """
         btn = event.button
         btn_id = btn.id or ""
 
-        # ── Пропускаем кнопки StartStopWidget ─────────────────────────
+        # ── Skip the StartStopWidget buttons ──────────────────────────
         if btn_id in ("btn-start", "btn-stop", "btn-pause"):
             return
 
         tab = self._active_tab
         tab_id = tab.tab_id if tab else None
 
-        # ── Глобальные (вне табов) ────────────────────────────────────
+        # ── Global (outside tabs) ─────────────────────────────────────
         if btn_id == "btn-new-tab":
             self.action_new_tab()
             return
@@ -1478,10 +1482,10 @@ class IntruderScreen(
             if event.text_area is not our_editor.content_widget:
                 return
         except (LookupError, NoMatches):
-            # Таба ещё нет (`LookupError` из `_template_editor`) или тело таба
-            # не смонтировано (`NoMatches` из `content_widget`): событие пришло
-            # от TextArea вне шаблона, и запоминать нечего. Широкий `except`
-            # здесь глотал бы и опечатку в имени поля события.
+            # No tab yet (`LookupError` from `_template_editor`) or its body is
+            # not mounted (`NoMatches` from `content_widget`): the event came
+            # from a TextArea outside the template, so nothing to remember.
+            # A broad `except` would also swallow a typo in the event field name.
             return
         sel = event.selection
         if sel.start != sel.end:
@@ -1505,10 +1509,10 @@ class IntruderScreen(
             if event.text_area is not our_editor.content_widget:
                 return
         except (LookupError, NoMatches):
-            # Правка пришла из чужого редактора (шаблона нет или тело таба не
-            # смонтировано) — наборы payload не пересчитываем. Молчание здесь
-            # не последствие, а норма: печатание в редакторе ответа не должно
-            # трогать payload-селект Intruder.
+            # The edit came from a foreign editor (no template, or the tab body
+            # is not mounted) — payload sets are not recomputed. Silence here is
+            # not a consequence but the norm: typing in a response editor must
+            # not touch Intruder's payload select.
             return
         self._update_payload_select()
         if self._state_loaded:
@@ -1559,12 +1563,12 @@ class IntruderScreen(
                 elif table:
                     table.remove_column("Extract")
             except NoMatches as exc:
-                # Таблицы результатов нет в дереве (таб не смонтирован) —
-                # колонку добавят при его сборке.
+                # The results table is not in the tree (the tab is not mounted)
+                # — the column will be added when it is assembled.
                 logger.debug("intruder: Extract column not toggled: %s", exc)
             except Exception:
-                # Колонка осталась прежней: фильтр с извлечением применён, а
-                # данные из ответов на экране не показать.
+                # The column stayed as it was: the extract filter is applied, but
+                # the data from the responses cannot be shown on screen.
                 logger.exception("intruder: Extract column toggle failed")
         tab = self._active_tab
         if not (tab and tab.running):
@@ -1590,9 +1594,9 @@ class IntruderScreen(
         t_id = tab.tab_id
 
         def _on_select(action: str) -> None:
-            # Тип атаки принадлежит табу, из которого открыли меню. Пока
-            # callback брал ``_active_tab``, а рисовал по ``t_id``, смена
-            # вкладки при открытом меню меняла один таб и показывала другой.
+            # The attack type belongs to the tab the menu was opened from. While
+            # the callback took ``_active_tab`` but painted by ``t_id``, switching
+            # tabs with the menu open changed one tab and showed another.
             tab = screen._tc_panel.get_state(t_id)
             if tab is None:
                 return
@@ -1619,9 +1623,9 @@ class IntruderScreen(
         t_id = tab.tab_id
 
         def _on_select(action: str) -> None:
-            # Набор принадлежит табу, из которого открыли меню: пока callback
-            # брал ``_active_tab``, переключение вкладки при открытом меню
-            # меняло набор одного таба и перерисовывало список другого.
+            # The set belongs to the tab the menu was opened from: while the
+            # callback took ``_active_tab``, switching tabs with the menu open
+            # changed one tab's set and redrew another tab's list.
             tab = self._tc_panel.get_state(t_id)
             if tab is None:
                 return
@@ -1630,8 +1634,8 @@ class IntruderScreen(
             except ValueError as exc:
                 logger.debug("_open_payload_set_menu: bad action %r: %s", action, exc)
                 return
-            # Подпись и список пересчитывает _update_payload_select: он же
-            # зажимает индекс в границы набора и добивает недостающие наборы.
+            # The label and list are recomputed by _update_payload_select: it
+            # also clamps the index to the set bounds and tops up missing sets.
             self._update_payload_select(tab)
             self._highlight_nth_marker(tab.active_set_idx, tab)
 
@@ -1744,7 +1748,7 @@ class IntruderScreen(
         )
 
     def _mark_all_params(self, options: dict | None = None) -> None:
-        # Полная копия из оригинального файла (все методы маркировки)
+        # A full copy from the original file (all the marking methods)
         try:
             editor = self._template_editor()
             w = editor.content_widget
@@ -1842,8 +1846,8 @@ class IntruderScreen(
                 new_lines = lines[:body_lines_start] + marked_body.split("\n")
                 lines = new_lines
             except Exception as exc:
-                # Тело объявлено как JSON, но не разобралось — маркеры в него
-                # не попали, и атака пойдёт без позиций в этом теле.
+                # The body is declared as JSON but did not parse — no markers
+                # went into it, and the attack will run without positions there.
                 logger.debug("payload markers: JSON body not marked: %s", exc)
         if options is None or options.get("cookie", True):
             for i, line in enumerate(lines):
@@ -1900,8 +1904,8 @@ class IntruderScreen(
                     new_lines = lines[:body_lines_start] + [ln for ln in marked_xml.split("\n") if ln.strip()]
                     lines = new_lines
                 except Exception as exc:
-                    # XML-тело не разобралось или не собралось обратно —
-                    # позиции в нём не размечены, и Intruder нечего подставлять.
+                    # The XML body failed to parse or to serialise back — no
+                    # positions are marked, so Intruder has nothing to inject.
                     logger.debug("payload markers: XML body not marked: %s", exc)
         new_text = "\n".join(lines)
         try:
@@ -1929,18 +1933,18 @@ class IntruderScreen(
     # ── Payload list management ──────────────────────────────────────────
 
     def _update_payload_select(self, tab: _IntruderTabState | None = None) -> None:
-        """Пересчитать наборы payload'ов и подпись «Set N» для таба.
+        """Recompute the payload sets and the "Set N" label for a tab.
 
-        ``tab`` явный — на случай, когда действие адресовано не активной
-        вкладке (меню, открытое до переключения). Без него берётся активная.
+        An explicit ``tab`` covers the case when the action targets a non-active
+        tab (a menu opened before switching). Without it the active one is used.
         """
         tab = tab if tab is not None else self._active_tab
         if tab is None:
             return
         if not self._tab_body_mounted(tab.tab_id):
-            # Тело вкладки ещё не собрано (таб создан, pane не смонтирован).
-            # Это порядок вызовов, а не сбой: считать нечего и жаловаться не на
-            # что — иначе журнал заполняется предупреждениями на каждый таб.
+            # The tab body is not assembled yet (tab created, pane not mounted).
+            # This is call order, not a failure: nothing to count and nothing to
+            # complain about — otherwise the log fills with a warning per tab.
             logger.debug("intruder: payload select skipped — tab %s not mounted yet", tab.tab_id)
             return
         try:
@@ -1948,8 +1952,8 @@ class IntruderScreen(
             w = editor.content_widget
             template = w.text if isinstance(w, TextArea) else ""
         except NoMatches as exc:
-            # Вкладка смонтирована, а панели шаблона нет — расхождение DOM и
-            # состояния; считаем по пустому шаблону, но след оставляем.
+            # The tab is mounted but the template panel is gone — a DOM/state
+            # mismatch; count against an empty template, but leave a trace.
             logger.debug("intruder: template panel missing for %s: %s", tab.tab_id, exc)
             template = ""
         except Exception:
@@ -1973,11 +1977,11 @@ class IntruderScreen(
         self._refresh_payload_list(tab)
 
     def _tab_body_mounted(self, tab_id: str) -> bool:
-        """Собрано ли тело вкладки (её тулбар и панель шаблона в DOM).
+        """Whether the tab body is assembled (its toolbar and template panel in the DOM).
 
-        Нужен, чтобы отличать «ещё не смонтировано» (нормальный порядок при
-        создании таба) от «смонтировано, но виджета нет» (настоящее
-        расхождение). Без этого различия любой вызов до сборки писал warning.
+        Needed to tell "not mounted yet" (the normal order when a tab is
+        created) from "mounted, but the widget is missing" (a real mismatch).
+        Without that distinction any call before assembly logged a warning.
         """
         marker = self._wid(tab_id, _TabId.PAYLOAD_BUTTONS_TOOLBAR)
         return bool(self.query(f"#{marker}"))
@@ -2032,8 +2036,8 @@ class IntruderScreen(
         try:
             label = self.query_one(f"#{self._wid(tab_id, _TabId.PAYLOAD_COUNT_LABEL)}", Static)
         except NoMatches as exc:
-            # Подпись «N line(s)» не обновлена — при загрузке файла она
-            # остаётся от прошлого набора, и размер payload врут.
+            # The "N line(s)" label was not updated — when a file loads it keeps
+            # the previous set's value, and the payload size is a lie.
             logger.debug("intruder: payload count label not found: %s", exc)
             return
         active = tab.payload_sources[tab.active_set_idx] if tab.active_set_idx < len(tab.payload_sources) else []
@@ -2348,10 +2352,10 @@ class IntruderScreen(
             template = w.text if isinstance(w, TextArea) else ""
             logger.info("INTRUDER: template len=%d", len(template))
         except (LookupError, NoMatches) as e:
-            # Таба нет или его тело не смонтировано. Раньше здесь стоял
-            # `except Exception`; он ловил и ту же пару, и опечатку в имени
-            # поля — но опечатка дала бы «не удалось получить шаблон» вместо
-            # настоящей причины, поэтому пара названа явно.
+            # No tab, or its body is not mounted. This used to be a bare
+            # `except Exception`; it caught both this pair and a typo in a field
+            # name — but a typo would have produced "cannot get template"
+            # instead of the real cause, so the pair is named explicitly.
             logger.error("INTRUDER: cannot get template: %s", e)
             return
         if not template.strip():
@@ -2392,8 +2396,8 @@ class IntruderScreen(
             else:
                 threads = max(1, min(threads, 200))
         except (NoMatches, ValueError) as exc:
-            # Поля нет в дереве или в нём не число — атака пойдёт на 5/10
-            # потоках, тогда как на экране останется то, что ввели.
+            # The field is missing or not a number — the attack runs on 5/10
+            # threads while the screen keeps showing what was typed.
             logger.debug("intruder: thread count not usable, falling back: %s", exc)
             threads = 5 if not is_pro else 10
 
@@ -2404,8 +2408,8 @@ class IntruderScreen(
             else:
                 delay_ms = max(0, delay_ms)
         except (NoMatches, ValueError) as exc:
-            # То же для задержки: атака пойдёт с другим темпом, чем показывает
-            # поле задержки, и по экрану этого не понять.
+            # Same for the delay: the attack will use a different pace than the
+            # delay field shows, and the screen gives no hint of that.
             logger.debug("intruder: delay not usable, falling back: %s", exc)
             delay_ms = 100 if not is_pro else 0
 
@@ -2415,7 +2419,7 @@ class IntruderScreen(
             turb_cb.value = False
         tab.turbo_mode = turbo_mode
 
-        # Сохраняем параметры активной вкладки в её state
+        # Store the active tab's parameters in its state
         tab.thread_count = threads
         tab.delay_ms = delay_ms
 
@@ -2434,11 +2438,11 @@ class IntruderScreen(
             self.app.notify("No project open", severity="warning", timeout=3)
             return
 
-        # Создаём изолированную атаку для ЭТОЙ вкладки (параллельно другим)
+        # Create an isolated attack for THIS tab (parallel to the others)
         attack = api.make_attack(config, turbo_mode=turbo_mode)
         tab.attack = attack
 
-        # Захватываем таб: результаты пишут в него, а не в активный
+        # Capture the tab: results are written into it, not into the active one
         self._refresh_header_now()
         tab.running = True
         tab.paused = False
@@ -2459,49 +2463,49 @@ class IntruderScreen(
 
     @staticmethod
     def _attack_group(tab_id: str) -> str:
-        """Группа воркера атаки таба — по ней её снимает закрытие вкладки.
+        """Worker group of a tab's attack — tab close cancels the attack by it.
 
-        Name и group намеренно совпадают: ``on_worker_state_changed``
-        разбирает имя, а ``cancel_group`` ищет группу, и вторая строка с
-        теми же буквами разъехалась бы при первом же переименовании.
+        Name and group intentionally match: ``on_worker_state_changed`` parses
+        the name, ``cancel_group`` looks up the group, and a second string with
+        the same letters would drift apart on the first rename.
         """
         return f"intruder-attack-{tab_id}"
 
     def _stop_tab_attack(self, tab: _IntruderTabState) -> None:
-        """Остановить атаку таба: снять воркер и попросить саму атаку встать.
+        """Stop a tab's attack: cancel the worker and ask the attack to stop.
 
-        Воркер снимается первым: ``attack.stop()`` на длинном сетевом цикле
-        возвращается не сразу, а закрытая вкладка не должна ждать.
+        The worker is cancelled first: ``attack.stop()`` does not return at once
+        on a long network loop, and a closed tab must not wait for it.
         """
         try:
             self.workers.cancel_group(self, self._attack_group(tab.tab_id))
         except Exception:
-            # Воркер атаки остался: закрытый таб продолжит слать запросы.
+            # The attack worker survived: the closed tab will keep sending requests.
             logger.exception("_stop_tab_attack: cancel_group failed for %s", tab.tab_id)
         attack = getattr(tab, "attack", None)
         self._live_attacks.pop(tab.tab_id, None)
         tab.running = False
         tab.paused = False
         if attack is not None:
-            # На App, а не на экране: экран может уходить (on_unmount), и тогда
-            # собственный cancel_node снял бы воркер остановки раньше, чем он
-            # успел выполниться — атака осталась бы жива.
+            # On the App, not the screen: the screen may be leaving (on_unmount),
+            # and then its own cancel_node would kill the stop worker before it
+            # had a chance to run — the attack would stay alive.
             try:
                 self.app.run_worker(attack.stop(), exit_on_error=False)  # type: ignore[attr-defined]
             except Exception:
-                # `tab.running` уже False, а атака продолжает идти: экран
-                # считает её закрытой, Stop нажимать больше не на что.
+                # `tab.running` is already False yet the attack keeps running:
+                # the screen considers it closed and Stop is no longer available.
                 logger.exception("_stop_tab_attack: attack.stop failed for %s", tab.tab_id)
 
     async def _run_attack(self, tab: _IntruderTabState, attack: "IntruderAttack") -> None:
-        """Запустить изолированную атаку вкладки.
+        """Run the tab's isolated attack.
 
-        ``tab`` захвачен на старте — результаты пишут в него, а не в _active_tab,
-        чтобы при параллельных атаках переключение вкладок не сбивало данные.
+        ``tab`` is captured at start — results go into it, not into _active_tab,
+        so that with parallel attacks switching tabs does not scramble the data.
         """
         logger.info("INTRUDER: _run_attack started tab=%s type=%s", tab.tab_id, tab.attack_type)
 
-        # Получаем ссылку на рабочий таб
+        # Keep a reference to the working tab
         _tab = tab
 
         def on_result(result: IntruderResult) -> None:
@@ -2527,8 +2531,8 @@ class IntruderScreen(
                 _tab.tab_id,
                 len(_tab.all_results),
             )
-            # Статус toolbar обновляем, только если это активная вкладка.
-            # Для фоновых вкладок статус подтянется при переключении (_sync_toolbar).
+            # The toolbar status is updated only if this is the active tab.
+            # Background tabs get their status pulled on switch (_sync_toolbar).
             if _tab is self._active_tab:
                 self._refresh_header_now()
                 self.app.notify(
@@ -2538,10 +2542,10 @@ class IntruderScreen(
                 )
 
     def _on_result(self, result: IntruderResult, tab: _IntruderTabState | None = None) -> None:
-        """Результат из атаки вкладки — пишем в её таб (не в _active_tab).
+        """A result from a tab's attack — written into that tab (not _active_tab).
 
-        При параллельных атаках вкладку захватываем на старте и передаём сюда,
-        иначе результат ушёл бы в активную на текущий момент вкладку.
+        With parallel attacks the tab is captured at start and passed in here,
+        otherwise the result would land in whatever tab is active at the moment.
         """
         if tab is None:
             tab = self._active_tab
@@ -2616,13 +2620,13 @@ class IntruderScreen(
         name = getattr(event.worker, "name", "") or ""
         if not name.startswith("intruder-attack-"):
             return
-        # Определяем таб из имени воркера: intruder-attack-<tab_id>
+        # Derive the tab from the worker name: intruder-attack-<tab_id>
         tid = name[len("intruder-attack-") :]
         tab = self._tc_panel.get_state(tid)
         if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
             if tab is not None and tab.running:
                 tab.paused = False
-                # Если это активная вкладка — синхронизировать toolbar
+                # If this is the active tab — sync the toolbar
                 if tab is self._active_tab:
                     self._refresh_header_now()
                     self._refresh_header_now()
@@ -2685,8 +2689,8 @@ class IntruderScreen(
             self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROGRESS_LABEL)}", Static).update("0/0 (0%)")
             self.query_one(f"#{self._wid(tab.tab_id, _TabId.ATTACK_PROGRESS)}", ProgressBar).update(total=100)
         except NoMatches as exc:
-            # Результаты очищены, а прогресс и счётчик «N/M» показывают
-            # прошлую атаку — экран говорит, что данные есть, хотя их нет.
+            # The results are cleared but the progress and the "N/M" counter
+            # still show the previous attack — the screen claims data it lacks.
             logger.debug("intruder: progress not reset with results: %s", exc)
 
     def _results_table(self) -> DataTable | None:
@@ -2847,7 +2851,7 @@ class IntruderScreen(
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if not event.data_table.id:
             return
-        # Определяем, относится ли к нашему results-table (per-tab)
+        # Check whether this belongs to our results-table (per-tab)
         tab = self._active_tab
         if tab is None:
             return
@@ -2900,9 +2904,9 @@ class IntruderScreen(
             panel.display = False
             tab.current_result = None
         except NoMatches as exc:
-            # Панели деталей нет в дереве (таб не смонтирован). `current_result`
-            # сбрасывается в том же `try`, поэтому вместе с панелью остаётся и
-            # выделенный результат — отсюда запись, а не молчание.
+            # The detail panel is not in the tree (the tab is not mounted).
+            # `current_result` is reset in the same `try`, so the selected result
+            # stays alongside the panel — hence a log line, not silence.
             logger.debug("intruder: detail panel not hidden: %s", exc)
 
     # ── Context menu ───────────────────────────────────────────────────
@@ -2978,12 +2982,12 @@ class IntruderScreen(
 
                 webbrowser.open(result.url)
         except NoMatches as exc:
-            # Таблицы результатов нет в дереве — открывать нечего. Горячая
-            # клавиша промолчит, но это «экран не собран», а не поломка.
+            # There is no results table in the tree — nothing to open. The hotkey
+            # will stay silent, but this is "screen not assembled", not a break.
             logger.debug("intruder: open in browser — no results table: %s", exc)
         except Exception:
-            # Браузер не открылся: со стороны выглядит как «клавиша не
-            # работает», и повторить её пользователь может бесконечно.
+            # The browser did not open: from the outside it looks like "the key
+            # does not work", and the user can retry it endlessly.
             logger.exception("intruder: open in browser failed")
 
     def _copy_selected_payload(self) -> None:

@@ -208,8 +208,8 @@ class LiveChart(Vertical):
         try:
             self.query_one("#chart-summary", Static).update(text)
         except NoMatches as exc:
-            # Значение запомнено, а на экране — прежнее: сводка отстаёт от
-            # графика на один шаг и это неотличимо от «ещё не обновилось».
+            # The value is remembered, but the screen still shows the old one: the
+            # summary lags the chart by one step, indistinguishable from "not updated yet".
             logger.debug("dashboard: chart summary not painted: %s", exc)
 
     def on_mount(self) -> None:
@@ -241,8 +241,8 @@ class LiveChart(Vertical):
             self.query_one("#chart-stats", Static).update(stats)
             self.query_one("#chart-meta", Static).update(f"[dim]scale: 0–{mv} {self._unit}  │  window: 60s[/dim]")
         except NoMatches as exc:
-            # _render_chart зовётся на каждый пакет — молчание здесь означало
-            # бы график, который «замер», без объяснения.
+            # _render_chart is called on every packet — silence here would mean a
+            # chart that "froze", with no explanation.
             logger.debug("dashboard: chart not rendered: %s", exc)
 
 
@@ -295,8 +295,8 @@ class ThreatMeter(Vertical):
             self.query_one("#tm-breakdown", Static).update(breakdown)
             self.query_one("#tm-top", Static).update(top)
         except Exception as exc:
-            # Уровень угрозы перестаёт обновляться: индикатор «замирает» на
-            # последнем значении, и находки перестают на него влиять.
+            # The threat level stops updating: the gauge "freezes" at its last
+            # value, and findings stop influencing it.
             logger.debug("dashboard: threat meter not refreshed: %s", exc)
 
 
@@ -371,8 +371,8 @@ class SeverityMatrix(Vertical):
         try:
             self.query_one("#mx-body", Static).update(self._build_text())
         except NoMatches as exc:
-            # Матрица находок перестаёт перерисовываться — новые находки в
-            # ней не появляются, хотя лента их показывает.
+            # The findings matrix stops repainting — new findings never show up
+            # in it, even though the feed does show them.
             logger.debug("dashboard: severity matrix not refreshed: %s", exc)
 
 
@@ -442,10 +442,10 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
                 with Horizontal(id="mid-row"):
                     with Vertical(id="feed-panel"):
                         yield Static("┌─ LIVE FEED ─", id="feed-panel-title")
-                        # markup=True обязателен: весь фид написан тегами ([dim], [cyan]…),
-                        # а RichLog по умолчанию их не парсит и показывает
-                        # пользователю служебный текст как есть. Внешние значения
-                        # в строках экранируются через esc().
+                        # markup=True is required: the whole feed is written with tags ([dim], [cyan]…),
+                        # but RichLog does not parse them by default and shows the
+                        # user the service text verbatim. External values in the
+                        # lines are escaped through esc().
                         yield RichLog(markup=True, wrap=False, max_lines=300, id="feed-log")
                     with Vertical(id="status-panel"):
                         yield Static("┌─ STATUS ─", id="status-panel-title")
@@ -567,9 +567,9 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             feed = self.query_one("#feed-log", RichLog)
             feed.write("[dim cyan]ℹ Live feed ready. Waiting for events...[/dim cyan]")
         except NoMatches as exc:
-            # Первая строка ленты — единственное подтверждение, что лента
-            # вообще работает; её отсутствие неотличимо от «событий не было».
-            # `NoMatches` — ленты нет в дереве (экран ещё собирается).
+            # The first feed line is the only proof that the feed works at all;
+            # its absence is indistinguishable from "there were no events".
+            # `NoMatches` — the feed is not in the tree (the screen is still composing).
             logger.debug("dashboard: live feed greeting not written: %s", exc)
         self._load_stats_bg()
         self._populate_projects()
@@ -586,7 +586,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         self._fit_matrix()
 
     def on_show(self) -> None:
-        """При показе — синхронизировать AI статус."""
+        """On show — resync the AI status."""
         self._update_ai_status()
         self._refresh_subscription()
         self._fit_matrix()
@@ -642,8 +642,8 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
                     mtime = os.path.getmtime(path)
                     ts = datetime.fromtimestamp(mtime).strftime("%m/%d %H:%M")
                 except Exception as exc:
-                    # Проект на месте, но время не прочиталось (сеть, WSL 9p) —
-                    # строка просто останется без метки. Нормальный исход.
+                    # The project is there, but its timestamp could not be read (network, WSL 9p) —
+                    # the row simply stays without a mark. A normal outcome.
                     logger.debug("dashboard: mtime of %s not read: %s", path, exc)
                 exists = os.path.exists(path)
                 is_active = path == current
@@ -667,8 +667,8 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
                 root.add_leaf("[dim]No recent projects — use Open to load[/dim]")
             root.expand()
         except Exception as exc:
-            # Дерево проектов пустое или показывает прежний список: это
-            # стартовый экран, и его пустота читается как «проектов нет».
+            # The project tree is empty or shows the previous list: this is the
+            # start screen, and its emptiness reads as "there are no projects".
             logger.debug("dashboard: recent projects not shown: %s", exc)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
@@ -701,8 +701,8 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
 
                 mcp_running = is_mcp_running()
             except Exception as exc:
-                # Считаем «не запущен» — безопасный исход, но индикатор может
-                # врать в сторону «OFF» при живом сервере.
+                # Treated as "not running" — the safe outcome, but the indicator can
+                # lie towards "OFF" while the server is alive.
                 logger.debug("dashboard: MCP state unknown, showing OFF: %s", exc)
             try:
                 self.update_mcp_status(running=mcp_running, ready=ai_enabled and model_ready)
@@ -716,23 +716,24 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
                 else:
                     self._set_led_bar("led-ai-bar", "dim", "AI: [dim]disabled[/dim]")
             except Exception as exc:
-                # Ряд AI остаётся в состоянии по умолчанию: пользователь
-                # включил AI, а дашборд всё ещё показывает DISABLED.
+                # The AI row stays in its default state: the user has enabled AI,
+                # yet the dashboard still shows DISABLED.
                 logger.debug("dashboard: AI status row not updated: %s", exc)
         except Exception as exc:
-            # Весь блок — AI/MCP статус. Отказ означает, что на дашборде он
-            # не отражает реальность; без записи это невозможно заметить.
+            # The whole block is the AI/MCP status. A failure means the dashboard
+            # no longer reflects reality; without this log it cannot be noticed.
             logger.debug("dashboard: AI/MCP status block failed: %s", exc)
 
     @work(group="dashboard-boot")
     async def _boot_animate(self) -> None:
-        """Постепенно дописать приветствие в ленту.
+        """Type the welcome message into the feed gradually.
 
-        Раньше это был поток с ``time.sleep`` и ``call_from_thread`` на каждую
-        строку: второй способ трогать UI извне event loop, который надо было
-        держать в голове при любом касании дашборда (F-028). Пауза нужна
-        только для «печатного» эффекта, поэтому она асинхронная, а группа
-        воркера позволяет снять анимацию вместе с экраном (ADR-11).
+        This used to be a thread with ``time.sleep`` and ``call_from_thread`` per
+        line: a second way to touch the UI from outside the event loop, which had
+        to be kept in mind on every change to the dashboard (F-028). The pause is
+        only needed for the "typewriter" effect, so it is asynchronous, and the
+        worker group lets the animation be cancelled together with the screen
+        (ADR-11).
         """
         await asyncio.sleep(0.2)
         for color, line in _BOOT_LINES:
@@ -746,8 +747,8 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         try:
             log = self.query_one("#feed-log", RichLog)
             log.write(f"[dim green]{ts}[/dim green] {color}{esc(line)}[/]")
-        except Exception:  # logging-ok: косметика приветственной ленты, данные не касается
-            # Приветствие не дописано — лента выглядит пустой при старте.
+        except Exception:  # logging-ok: welcome-feed cosmetics, data is not involved
+            # The welcome was not finished — the feed looks empty on startup.
             logger.debug("dashboard: boot line not written")
 
     def _tick(self) -> None:
@@ -766,8 +767,8 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             self.query_one("#chart-requests", LiveChart).push(rps)
             self._refresh_header_now()
         except Exception as exc:
-            # Тик раз в секунду: молча сломанный тик — это «график не идёт»,
-            # и он же навсегда обнуляет счётчик пакетов.
+            # Tick once per second: a silently broken tick is "the chart is not
+            # running", and it also zeroes the packet counter for good.
             logger.debug("dashboard: tick failed: %s", exc)
         self._update_ai_status()
 
@@ -781,8 +782,8 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             data = await self._fetch_stats(db_path)
             self._apply_stats(data)
         except Exception:
-            # Карточки статистики остаются с прошлыми числами (или пустыми):
-            # дашборд показывает не то, что в базе, и других следов нет.
+            # The stats cards keep the previous numbers (or stay empty): the
+            # dashboard shows something other than what is in the DB, with no other trace.
             logger.exception("_load_stats_bg failed")
 
     async def _fetch_stats(self, db_path: str) -> dict:
@@ -842,16 +843,16 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         try:
             self.query_one("#feed-log", RichLog).write(text)
         except NoMatches as exc:
-            # Единственное место, куда дашборд пишет всё, что происходит.
-            # Пропуск здесь означает «лента молчит, хотя события идут».
+            # The single place the dashboard writes everything that happens to.
+            # A miss here means "the feed is silent although events are flowing".
             logger.debug("dashboard: feed write failed: %s", exc)
 
     def _set_led_bar(self, widget_id: str, color: str, label: str) -> None:
         try:
             self.query_one(f"#{widget_id}", Static).update(f"[{color}]●[/{color}] {label}")
         except NoMatches as exc:
-            # Индикатор останется в прежнем состоянии (например, «OFF» при
-            # включённом AI).
+            # The indicator will keep its previous state (for example "OFF" while
+            # AI is enabled).
             logger.debug("dashboard: LED %s not set: %s", widget_id, exc)
 
     def push_request(self, method: str, url: str, status: int = 0) -> None:
@@ -889,13 +890,13 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         try:
             self.query_one("#threat-meter", ThreatMeter).update_findings(self._finding_counts, self._top_finding)
         except NoMatches as exc:
-            # Счётчики уже увеличены, а шкала угрозы — нет: она отстаёт от
-            # ленты, и разница накапливается.
+            # The counters are already incremented, but the threat gauge is not: it
+            # lags behind the feed, and the difference keeps accumulating.
             logger.debug("dashboard: threat meter not updated with finding: %s", exc)
         try:
             self.query_one("#vuln-matrix", SeverityMatrix).add_finding(vuln_type, sev)
         except NoMatches as exc:
-            # В матрице находка не появится, хотя в ленте она есть.
+            # The finding will not appear in the matrix, although it is in the feed.
             logger.debug("dashboard: finding not added to matrix: %s", exc)
 
         ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -1060,15 +1061,15 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         try:
             self.app.action_new_project()  # type: ignore
         except Exception:
-            # Ctrl+N на дашборде ничего не открыл — «создать проект» перестало
-            # быть доступным из стартового экрана. Причина — сбой в самом
-            # действии приложения, поэтому трейсбек.
+            # Ctrl+N opened nothing on the dashboard — "new project" is no longer
+            # reachable from the start screen. The cause is a failure inside the
+            # app action itself, hence the traceback.
             logger.exception("dashboard: new project not started")
 
     def action_save_project(self) -> None:
         try:
             self.app.action_save_project()  # type: ignore
         except Exception:
-            # Ctrl+S молчит: проект не сохранён, и никакого другого признака
-            # этого не будет до закрытия приложения.
+            # Ctrl+S stays silent: the project is not saved, and there will be no
+            # other sign of it until the app is closed.
             logger.exception("dashboard: save project not started")

@@ -1,6 +1,6 @@
-"""Auto-Scope: автоматически добавлять хост в Scope + TechDetect.
+"""Auto-Scope: automatically add a host to Scope + TechDetect.
 
-Используется из контекстных меню (RequestContextMenuMixin) и при --real старте.
+Used from the context menus (RequestContextMenuMixin) and on a --real start.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from pentool.core.config import get_config
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)  # диагностика — убедись что логи видны
+log.setLevel(logging.INFO)  # diagnostics — make sure the logs are visible
 
 # Textual worker group for fire-and-forget tech detection. Every task lives in
 # this group, so `WorkerManager.cancel_group` can stop them on app shutdown
@@ -36,10 +36,10 @@ def _spawn_tech_detect(host: str, app) -> None:
             exit_on_error=False,
         )
     except Exception:
-        # Воркер не завёлся — техдетект хоста не запустится вовсе, и в дереве
-        # у него не будет строки Tech. `run_worker` может упасть по разным
-        # причинам (приложение уже закрывается, группа занята), поэтому
-        # трейсбек.
+        # The worker never started — host tech detection will not run at all and
+        # the tree will have no Tech row for it. `run_worker` can fail for
+        # various reasons (the app is already closing, the group is busy), hence
+        # the traceback.
         log.exception("tech_detect: worker spawn failed for %s", host)
 
 
@@ -110,7 +110,7 @@ def _force_scope_host(host: str, app) -> None:
         return
     norm_host = _strip_default_port(host)
 
-    # 1. SiteMap — через TargetScreen._get_api().sitemap (app.sitemap НЕ СУЩЕСТВУЕТ)
+    # 1. SiteMap — via TargetScreen._get_api().sitemap (app.sitemap DOES NOT EXIST)
     sitemap_ok = False
     try:
         sitemap = _get_sitemap(app)
@@ -137,7 +137,7 @@ def _force_scope_host(host: str, app) -> None:
     except Exception as exc:
         log.warning("FORCE_SCOPE: proxy sync error: %s", exc)
 
-    # 3. Trigger async TechDetect (только если SiteMap жива)
+    # 3. Trigger async TechDetect (only if the SiteMap is alive)
     if sitemap_ok:
         _spawn_tech_detect(norm_host, app)
     else:
@@ -197,7 +197,7 @@ async def _tech_detect_and_cache(host: str, app) -> None:
     Uses Lightpanda to fetch the page, then TechFingerprinter to detect
     technologies. Results are cached in TechCache so repeat scans skip it.
     """
-    # 1. Check cache через services слой (не прямой импорт PRO)
+    # 1. Check the cache via the services layer (no direct PRO import)
     from pentool.services.tech_detector import get_tech_cache
 
     cached = get_tech_cache(host)
@@ -206,7 +206,7 @@ async def _tech_detect_and_cache(host: str, app) -> None:
         await _update_target_tree_tech(host, cached, app)
         return
 
-    # 2. Run fingerprint — через services слой (не прямой импорт PRO)
+    # 2. Run fingerprint — via the services layer (no direct PRO import)
     from pentool.services.tech_detector import cache_tech_profile, fingerprint_from_html, run_fingerprint
     from pentool.utils.http_client import get_shared_http_client
     from pentool.utils.lightpanda import is_lightpanda_available, lightpanda_fetch_html
@@ -227,7 +227,7 @@ async def _tech_detect_and_cache(host: str, app) -> None:
         log.info("TECH_DETECT: %s — no profile (skipped)", host)
         return
 
-    # 4. Кэширование: TechProfile теперь содержит все поля напрямую
+    # 4. Caching: TechProfile now carries all fields directly
     profile_dict = profile.to_context_dict() if hasattr(profile, "to_context_dict") else profile
     cache_tech_profile(host, profile_dict)
     log.info("TECH_DETECT: %s — cached: %s", host, profile_dict)

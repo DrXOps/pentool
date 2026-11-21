@@ -76,9 +76,9 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
         yield ResizeHandle("cmp-edit-area", "cmp-diff-area", vertical=True, id="cmp-resize-v")
 
         # ── Diff output ────────────────────────────────────────────────────────
-        # Панель дифа живёт внутри #cmp-diff-area и носит свой id: два узла с
-        # одним id делают query_one("#cmp-diff-area", ContentPanel) исключением
-        # WrongType, а не находкой.
+        # The diff panel lives inside #cmp-diff-area and carries its own id: two
+        # nodes with the same id make query_one("#cmp-diff-area", ContentPanel)
+        # raise WrongType instead of returning the node.
         with Vertical(id="cmp-diff-area"):
             yield ContentPanel(
                 "Diff",
@@ -165,8 +165,8 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
             self._last_result = result
             self._render_result(result)
         except NoMatches as exc:
-            # Панели сравнения нет в дереве (экран ещё собирается) — читать
-            # нечего, и Ctrl+Enter ничего не сделает.
+            # There is no comparison panel in the tree (the screen is still
+            # composing) — nothing to read, and Ctrl+Enter does nothing.
             logger.debug("comparer: panel not mounted for compare: %s", exc)
         except Exception as exc:
             self.err(exc, "Compare error")
@@ -217,8 +217,8 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
             self.query_one("#cmp-stats", Static).update("[dim]— Press Compare or Ctrl+Enter to diff —[/dim]")
             self._last_result = None
         except NoMatches as exc:
-            # Очистка не дошла до всех панелей: на экране остался прежний diff,
-            # хотя кнопка нажата. Панели нет в дереве.
+            # The clear did not reach every panel: the previous diff stays on
+            # screen even though the button was pressed. Panel not in the tree.
             logger.debug("comparer: panel not mounted for clear: %s", exc)
 
     # ── Public API (loading from other modules) ───────────────────────────────
@@ -231,8 +231,8 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
                 w.load_text(text)
             panel.set_title(label)
         except Exception:
-            # Текст не попал в левую панель: сравнивать нечего, а пользователь
-            # считает, что данные загружены.
+            # The text never reached the left panel: there is nothing to compare,
+            # while the user believes the data has been loaded.
             logger.warning("load_left: text not shown", exc_info=True)
 
     def load_right(self, text: str, label: str = "Right") -> None:
@@ -243,7 +243,7 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
                 w.load_text(text)
             panel.set_title(label)
         except Exception:
-            # Текст не попал в правую панель — то же, что и слева.
+            # The text never reached the right panel — same as on the left.
             logger.warning("load_right: text not shown", exc_info=True)
 
     def load_smart(self, text: str, label: str = "") -> None:
@@ -255,6 +255,6 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
             else:
                 self.load_right(text, label or "Right")
         except Exception:
-            # Не удалось даже определить, свободна ли левая панель: выбор стороны
-            # для сравнения сделан наугад.
+            # Could not even tell whether the left panel is free: the side for
+            # the comparison was picked at random.
             logger.warning("load_smart: side not resolved", exc_info=True)

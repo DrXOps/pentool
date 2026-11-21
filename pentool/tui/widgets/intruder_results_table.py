@@ -1,8 +1,8 @@
-"""IntruderResultsTable — DataTable для результатов атак Intruder.
+"""IntruderResultsTable — DataTable for Intruder attack results.
 
-Наследует ArrowBackendDataTable (widgets/data_table.py), добавляет:
-- Стандартную конфигурацию колонок
-- Параметры отображения, совпадающие с аналогичными таблицами в проекте
+Inherits ArrowBackendDataTable (widgets/data_table.py) and adds:
+- The standard column configuration
+- Display parameters matching the equivalent tables elsewhere in the project
 """
 
 from __future__ import annotations
@@ -14,10 +14,10 @@ _RESULTS_COL_WIDTHS = [5, 45, 8, 10, 10, 30]
 
 
 class IntruderResultsTable(ArrowBackendDataTable):
-    """DataTable для результатов Intruder, как ProxyDataTable для Proxy.
+    """DataTable for Intruder results, the way ProxyDataTable serves Proxy.
 
-    Не задаёт колонки и ширины жёстко — они передаются снаружи
-    при compose, аналогично ProxyDataTable.
+    Does not hard-code columns and widths — they are passed in from outside
+    at compose time, exactly like ProxyDataTable.
     """
 
     pass

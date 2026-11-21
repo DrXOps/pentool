@@ -55,7 +55,7 @@ class SettingsScreen(AppMixin, Widget):
         ("Monokai", "monokai"),
     ]
     _MODES = [("Advanced", "advanced"), ("Basic", "basic")]
-    # Набор иконок панелей: покрытие шрифтов различается (см. ContentPanel.ICON_SETS)
+    # Panel icon set: font coverage differs (see ContentPanel.ICON_SETS)
     _PANEL_ICONS = [("Unicode", "unicode"), ("ASCII", "ascii"), ("Emoji", "emoji")]
 
     def compose(self) -> ComposeResult:
@@ -276,8 +276,8 @@ class SettingsScreen(AppMixin, Widget):
             self.query_one("#set-proxy-host", Input).value = cfg.proxy_host
             self.query_one("#set-proxy-port", Input).value = str(cfg.proxy_port)
         except Exception:
-            # Поле останется пустым, а Save запишет пустую строку поверх
-            # сохранённого хоста — то есть молчание здесь дороже, чем кажется.
+            # The field stays empty and Save then writes an empty string over the
+            # saved host — so staying silent here costs more than it looks.
             logger.warning("settings: proxy fields not prefilled", exc_info=True)
         try:
             from pentool.core.config import get_config
@@ -303,8 +303,8 @@ class SettingsScreen(AppMixin, Widget):
             self.query_one("#set-scan-marker-name", Input).value = getattr(cfg, "scan_marker_name", "X-Scanner")
             self.query_one("#set-scan-marker-value", Input).value = getattr(cfg, "scan_marker_value", "pentool/1.0")
         except Exception:
-            # Девять полей в одном блоке: без записи не видно, что Save
-            # отправит значения по умолчанию вместо сохранённых.
+            # Nine fields in one block: without this log there is no sign that Save
+            # will submit defaults instead of the saved values.
             logger.warning("settings: request/scan fields not prefilled", exc_info=True)
         try:
             from pentool.core.config import get_config
@@ -334,8 +334,8 @@ class SettingsScreen(AppMixin, Widget):
                     icons_cycler.set_value(val)
                     break
         except Exception:
-            # Циклер останется на первой теме списка, а сохранённая тема —
-            # другой; без записи это выглядит как «настройка слетела».
+            # The cycler stays on the first theme in the list while the saved theme
+            # is a different one; without this log it looks like the setting reset itself.
             logger.warning("settings: theme cycler not prefilled", exc_info=True)
 
         # ── AI settings load ────────────────────────────────────────────────────────────
@@ -399,12 +399,12 @@ class SettingsScreen(AppMixin, Widget):
                     if not inp.value:
                         inp.value = info.license_key
                 except NoMatches:
-                    # Поле просто останется пустым — пользователю придётся
-                    # ввести ключ заново; это не потеря, но и не норма.
+                    # The field simply stays empty — the user will have to
+                    # re-enter the key; nothing is lost, but it is still not normal.
                     logger.warning("settings: license key not prefilled", exc_info=True)
         except Exception:
-            # Панель лицензии останется в состоянии, собранном в compose —
-            # то есть покажет «FREE» независимо от того, что на диске.
+            # The license panel keeps the state built in compose —
+            # that is, it shows "FREE" regardless of what is on disk.
             logger.warning("settings: license panel not refreshed", exc_info=True)
 
     @on(ToolbarButton.Pressed, "#settings-save")
@@ -450,10 +450,10 @@ class SettingsScreen(AppMixin, Widget):
             widget = event.control
             wid = widget.id if widget else None
         except Exception:
-            # Без id не сработает ни одна ветка — то есть переключение темы и
-            # режима UI молча перестанет применяться. `event.control` —
-            # свойство Textual, и падать там может только сам фреймворк, так
-            # что причина должна остаться целиком.
+            # Without an id no branch fires at all — that is, theme and UI-mode
+            # switching silently stop being applied. `event.control` is a Textual
+            # property, so only the framework itself can fail there; the full
+            # reason must therefore be kept.
             logger.exception("settings: cycler event source unknown")
             wid = None
 
@@ -464,8 +464,8 @@ class SettingsScreen(AppMixin, Widget):
             try:
                 self._apply_ui_mode(UIMode(event.value))
             except ValueError as exc:
-                # Значение из списка, которого нет в UIMode: режим останется
-                # прежним. Молча — это выглядит как «переключатель не работает».
+                # A value from the list that is absent from UIMode: the mode stays
+                # as before. Silently, this looks like the switch does not work.
                 logger.debug("settings: UI mode %r not applied: %s", event.value, exc)
 
     def _apply_theme_debounced(self, theme: str) -> None:
@@ -478,8 +478,8 @@ class SettingsScreen(AppMixin, Widget):
             try:
                 self._theme_debounce.stop()
             except Exception:
-                # Таймер уже сработал — его нечего останавливать. Ссылку всё
-                # равно обнуляем ниже, поэтому здесь достаточно следа.
+                # The timer has already fired — there is nothing to stop. The
+                # reference is reset below anyway, so a trace here is enough.
                 logger.warning("settings: theme debounce timer already gone", exc_info=True)
             self._theme_debounce = None
         # set_timer fires once after the delay
@@ -497,8 +497,8 @@ class SettingsScreen(AppMixin, Widget):
             if getattr(self.app, "theme", None) != theme:
                 self.app.theme = theme  # type: ignore[attr-defined]
         except Exception as exc:
-            # Пользователь кликнул тему и ждёт предпросмотра; отказ Textual
-            # принять имя темы иначе не виден вообще.
+            # The user clicked a theme and expects a preview; a Textual refusal
+            # to accept the theme name is otherwise not visible at all.
             logger.debug("settings: theme preview %r not applied: %s", theme, exc)
 
     def _apply_theme(self, theme: str) -> None:
@@ -511,7 +511,7 @@ class SettingsScreen(AppMixin, Widget):
             if getattr(self.app, "theme", None) != theme:
                 self.app.theme = theme  # type: ignore[attr-defined]
         except InvalidThemeError as exc:
-            # Save уже записал тему в конфиг — то есть файл и экран разойдутся.
+            # Save has already written the theme to config — so the file and the screen diverge.
             logger.debug("settings: theme %r not applied on save: %s", theme, exc)
         # Persist in a thread worker so yaml.dump + file.write don't block the event loop.
         self.run_worker(self._async_save_theme(theme), exclusive=False, thread=False)
@@ -530,8 +530,8 @@ class SettingsScreen(AppMixin, Widget):
 
             await loop.run_in_executor(None, _save)
         except Exception as exc:
-            # Тема применена на экране, но не попала в config.yaml — после
-            # перезапуска вернётся прежняя. Пользователь этого не увидит.
+            # The theme is applied on screen but never reached config.yaml — after a
+            # restart the old one comes back. The user will not see this.
             logger.warning("settings: theme %r not saved to disk: %s", theme, exc)
 
     def _save_interface_settings(self) -> None:
@@ -541,11 +541,11 @@ class SettingsScreen(AppMixin, Widget):
             theme_val = self.query_one("#set-theme", OptionCycler).value
             self._apply_theme(theme_val)
         except NoMatches:
-            # Ниже всё равно покажем «applied» — поэтому запись единственное
-            # место, где видно, что применилось не всё. Поля темы нет в дереве.
+            # "applied" is shown below anyway — so this log is the only
+            # place showing that not everything was applied. The theme field is missing from the tree.
             logger.warning("settings: theme not read on save", exc_info=True)
         except Exception:
-            # Поле есть, но тема не применилась: конфиг сохранён, экран — нет.
+            # The field exists, but the theme was not applied: config saved, screen not.
             logger.exception("settings: theme not applied on save")
 
         # Apply UI mode (no config write needed — ModuleTabs handles it)
@@ -555,8 +555,8 @@ class SettingsScreen(AppMixin, Widget):
         except NoMatches:
             logger.warning("settings: UI mode selector not found on save", exc_info=True)
         except ValueError as exc:
-            # В поле режима значение вне UIMode — вкладки останутся прежними,
-            # хотя «applied» уже показано.
+            # The mode field holds a value outside UIMode — tabs stay as before,
+            # even though "applied" has already been shown.
             logger.debug("settings: UI mode %r not applied on save: %s", mode_val, exc)
 
         self.app.notify("Interface settings applied", timeout=2)  # type: ignore[attr-defined]
@@ -569,9 +569,9 @@ class SettingsScreen(AppMixin, Widget):
             tabs_widget = self.app.query_one(ModuleTabs)  # type: ignore[attr-defined]
             tabs_widget.set_mode(mode.value)
         except NoMatches as exc:
-            # Набор вкладок останется прежним: пользователь выбрал Advanced, а
-            # вкладки не появились — «переключатель не работает». Вкладок нет
-            # в дереве (приложение ещё собирается или уже разбирается).
+            # The tab set stays as before: the user picked Advanced, yet the tabs
+            # never appeared — "the switch does not work". The tabs are missing
+            # from the tree (the app is still composing or already tearing down).
             logger.debug("settings: module tabs mode %r not applied: %s", mode.value, exc)
 
     async def _async_save_config(self, changes: dict, notify_msg: str) -> None:
@@ -644,8 +644,8 @@ class SettingsScreen(AppMixin, Widget):
                 if enabled != getattr(cfg, "auto_save_enabled", False):
                     changes["auto_save_enabled"] = enabled
             except Exception:
-                # Поле не прочитано — значит, его новое значение не сохранится,
-                # а уведомление ниже всё равно скажет «saved».
+                # The field was not read — so its new value will not be saved,
+                # while the notification below still says "saved".
                 logger.warning("settings: auto_save_enabled not collected", exc_info=True)
             try:
                 interval_str = self.query_one("#set-autosave-interval", Input).value.strip()
@@ -716,9 +716,9 @@ class SettingsScreen(AppMixin, Widget):
             except NoMatches:
                 logger.warning("settings: verify_ssl not collected", exc_info=True)
 
-            # Интерфейс: подсказки и набор иконок. Собираются здесь же, чтобы
-            # уходить общим путём сохранения (свой `cfg.save()` в тестах писал
-            # в реальный config.yaml и ломал изоляцию).
+            # Interface: hints and icon set. Collected here as well so that they
+            # go through the shared save path (their own `cfg.save()` in tests wrote
+            # to the real config.yaml and broke isolation).
             try:
                 hints_v = self.query_one("#set-tooltips", Checkbox).value
                 if hints_v != getattr(cfg, "tooltips_enabled", True):
@@ -790,7 +790,7 @@ class SettingsScreen(AppMixin, Widget):
 
     @on(Switch.Changed, "#set-ai-enabled")
     def _on_ai_switch_changed(self, event: Switch.Changed) -> None:
-        """Live-save at switch toggle — сохраняет только ai_enabled."""
+        """Live-save at switch toggle — persists only ai_enabled."""
         changes = {"ai_enabled": event.switch.value}
         self._save_settings(changes, "AI toggled")
 
@@ -809,8 +809,8 @@ class SettingsScreen(AppMixin, Widget):
                 port_v = self.query_one("#set-ai-mcp-port", Input).value.strip()
                 changes["ai_mcp_port"] = int(port_v) if port_v else 0
             except Exception:
-                # Порт остаётся прежним, хотя пользователь его менял: молчание
-                # превращает это в «настройка не сохранилась».
+                # The port stays as before even though the user changed it: silence
+                # turns this into "the setting was not saved".
                 logger.warning("settings: ai_mcp_port not collected", exc_info=True)
             try:
                 model_v = self.query_one("#set-ai-model-path", Input).value.strip()
@@ -833,8 +833,8 @@ class SettingsScreen(AppMixin, Widget):
         try:
             key = self.query_one("#license-key-input", Input).value.strip()
         except NoMatches:
-            # Пустой ключ ниже даст понятное «Enter a license key first» —
-            # это правильный пользовательский исход, но причина другая.
+            # An empty key below yields a clear "Enter a license key first" —
+            # that is the right user-facing outcome, but the reason is different.
             logger.warning("settings: license key input unreadable", exc_info=True)
             key = ""
         if not key:
@@ -850,7 +850,7 @@ class SettingsScreen(AppMixin, Widget):
         try:
             info = await activate_license(key)
             if not info.valid and ("slots in use" in info.error or "bound to another machine" in info.error):
-                # Предложить сбросить старую привязку
+                # Offer to release the old binding
                 from pentool.tui.dialogs.confirm import ConfirmDialog
 
                 confirmed = await self.app.push_screen_widget(  # type: ignore[attr-defined]

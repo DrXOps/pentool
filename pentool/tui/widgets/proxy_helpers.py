@@ -1,6 +1,6 @@
 """Proxy request-table domain: Arrow-building helpers for the HTTP history table.
 
-Extracted from ProxyScreen (Этап 6, proxy_table domain) so the row→Arrow
+Extracted from ProxyScreen (stage 6, proxy_table domain) so the row→Arrow
 mapping is pure and testable in isolation. Both the full-rebuild path
 ("_rows_to_arrow") and the incremental append path share these so column
 order and row formatting stay in sync.
@@ -25,7 +25,7 @@ _COLOR_DOTS: dict[str, str] = {
 
 
 def format_size(size: int | None) -> str:
-    """Форматировать размер в человекочитаемый вид.
+    """Format a size into a human-readable form.
 
     >>> format_size(1024)
     '1.0 KB'
@@ -117,7 +117,7 @@ def rows_to_arrow(rows: list[dict]):
         statuses.append(status)
         sizes.append(size)
         times.append(tstr)
-    # Size: nullable int64 — None/null отображается как "-"
+    # Size: nullable int64 — None/null is rendered as "-"
     size_array = pa.array(sizes, type=pa.int64())
     return pa.table(
         {

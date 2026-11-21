@@ -62,7 +62,7 @@ _HISTORY_PAGE_SIZE = 300
 _FILTER_RELOAD_DEBOUNCE_S = 0.6
 
 # HTTP-history table Arrow/row helpers (_make_empty_table, _rows_to_arrow,
-# _row_to_record, _COL_NAMES) moved to tui/widgets/proxy_helpers.py (Этап 6) —
+# _row_to_record, _COL_NAMES) moved to tui/widgets/proxy_helpers.py (Stage 6) —
 # imported at the top of this module under the same names.
 
 DataTable = ProxyDataTable
@@ -136,7 +136,7 @@ class ProxyScreen(
         self._current_filters: FilterSpec | None = None
         self._ws_current_filters: FilterSpec | None = None
         self._pending_req_ids: dict[str, int] = {}
-        self._pending_req_ids_ts: dict[str, float] = {}  # БАГ-C: timestamps for periodic cleanup
+        self._pending_req_ids_ts: dict[str, float] = {}  # BUG-C: timestamps for periodic cleanup
         self._intercept_req: InterceptedRequest | None = None
         self._intercept_pending: list[InterceptedRequest] = []
         #: Sub-tab whose body is currently mounted as the "spare" one (lazy
@@ -544,7 +544,7 @@ class ProxyScreen(
         self._sync_enforce_scope_button()
         self._setup_tooltips()
         # init_storage is called from app.on_mount after _proxy_service injection
-        # БАГ-C: periodic cleanup of stale _pending_req_ids entries (memory leak fix)
+        # BUG-C: periodic cleanup of stale _pending_req_ids entries (memory leak fix)
         self.set_interval(300, self._cleanup_pending_req_ids)
         # Load the per-project Scope host list (falls back to the global
         # Config.scope only if this project's DB has nothing saved yet —
@@ -564,9 +564,9 @@ class ProxyScreen(
 
             get_event_bus().subscribe(WebSocketFrameEvent, self._on_ws_frame_event)
         except Exception:
-            # Без подписки вкладка WS History остаётся пустой навсегда: ни
-            # ошибки, ни «нет кадров» — просто пусто. Причина (импорт шины,
-            # конфликт ключа подписки) видна только в трейсбеке.
+            # Without the subscription the WS History tab stays empty forever: no
+            # error, no "no frames" message — just empty. The reason (bus import,
+            # subscription-key conflict) is visible only in the traceback.
             logger.exception("proxy: WS frame subscription failed")
 
     def _on_ws_frame_event(self, event) -> None:
@@ -609,7 +609,7 @@ class ProxyScreen(
                     f"[{dir_color}]{dir_arrow} {op_name}[/{dir_color}] [dim]{getattr(event, 'request_id', '')}[/dim]"
                 )
         except Exception as exc:
-            # Кадр не показан. Без записи это неотличимо от «кадров не было».
+            # Frame not rendered. Without this record it is indistinguishable from "no frames arrived".
             logger.debug("proxy: WS frame not rendered: %s", exc)
 
     def on_unmount(self) -> None:
@@ -620,10 +620,10 @@ class ProxyScreen(
 
             get_event_bus().unsubscribe(WebSocketFrameEvent, self._on_ws_frame_event)
         except Exception:
-            # Отписаться не удалось — шина продолжит звать метод снятого
-            # экрана; это утечка ровно того рода, что чинит ADR-6. Нужен
-            # трейсбек: по строке не видно, шина не нашла подписку или упала
-            # внутри.
+            # Unsubscribe failed — the bus keeps calling the method of an unmounted
+            # screen; that is exactly the leak ADR-6 fixes. A traceback is needed:
+            # a single line does not show whether the bus missed the subscription or
+            # failed inside it.
             logger.exception("proxy: WS frame unsubscribe failed on unmount")
 
     async def _reload_table(
@@ -642,9 +642,9 @@ class ProxyScreen(
         pagination.
 
         Args:
-            filters: необязательный FilterSpec
-            order_by: имя колонки для SQL ORDER BY (None = default = id)
-            order_dir: "asc" или "desc"
+            filters: optional FilterSpec
+            order_by: column name for SQL ORDER BY (None = default = id)
+            order_dir: "asc" or "desc"
         """
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
@@ -698,8 +698,8 @@ class ProxyScreen(
         try:
             label = self.query_one("#history-count", Static)
         except NoMatches as exc:
-            # Счётчик не обновлён — «Showing N of M» остаётся от прошлой
-            # страницы, и по нему не понять, сколько записей загружено.
+            # Counter not updated — "Showing N of M" still reflects the previous
+            # page, so the number of loaded records cannot be read off it.
             logger.debug("proxy: history counter not found: %s", exc)
             return
         shown = len(self._rows_cache)
@@ -722,8 +722,8 @@ class ProxyScreen(
         try:
             label = self.query_one("#ws-history-count", Static)
         except NoMatches as exc:
-            # То же для WS History: счётчик отстаёт от фактически показанных
-            # строк, и «прокрутите вверх» не появляется, когда нужно.
+            # Same for WS History: the counter lags behind the rows actually shown,
+            # and "scroll up to load more" does not appear when it should.
             logger.debug("proxy: WS history counter not found: %s", exc)
             return
         shown = len(self._ws_rows_cache)
@@ -760,7 +760,7 @@ class ProxyScreen(
             try:
                 table = self.query_one("#request-list", DataTable)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
+                table.set_data(arrow)  # set_data already resets caches and dimensions
                 # Keep the view anchored where the user was — after
                 # prepending N rows, scroll down by N rows worth so the
                 # previously-visible row stays in view instead of jumping
@@ -824,7 +824,7 @@ class ProxyScreen(
             try:
                 table = self.query_one("#ws-request-list", DataTable)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
+                table.set_data(arrow)  # set_data already resets caches and dimensions
                 table.scroll_to(y=table.scroll_y + len(older_rows), animate=False)
             except Exception:
                 logger.warning("proxy: WS history rows not shown after load", exc_info=True)
@@ -848,9 +848,9 @@ class ProxyScreen(
         """Load/reload WebSocket requests into the WS History table.
 
         Args:
-            filters: необязательный FilterSpec
-            order_by: имя колонки для SQL ORDER BY (None = default = id)
-            order_dir: "asc" или "desc"
+            filters: optional FilterSpec
+            order_by: column name for SQL ORDER BY (None = default = id)
+            order_dir: "asc" or "desc"
         """
         if self._proxy_service is None or not self._proxy_service.is_storage_ready():
             return
@@ -886,8 +886,8 @@ class ProxyScreen(
             try:
                 table = self.query_one("#ws-request-list", DataTable)
             except NoMatches as exc:
-                # Таблица WS не найдена — загруженная страница не показана,
-                # хотя счётчик уже увеличили: «Showing N of M» врёт.
+                # WS table not found — the loaded page is not displayed even though
+                # the counter was already bumped: "Showing N of M" now lies.
                 logger.debug("proxy: WS table not found, page not shown: %s", exc)
                 return
             table.set_data(arrow)
@@ -911,8 +911,8 @@ class ProxyScreen(
             try:
                 self.query_one(f"#{btn_id}", ToolbarButton).tooltip = tip
             except NoMatches as exc:
-                # Кнопки нет в дереве — подсказка ей и не нужна; но именно
-                # такая тишина скрывает опечатку в id.
+                # The button is not in the tree — it needs no tooltip; but it is
+                # exactly this silence that hides a typo in the id.
                 logger.debug("proxy: tooltip for #%s not set: %s", btn_id, exc)
 
     def load_from_project(self) -> None:
@@ -1045,9 +1045,9 @@ class ProxyScreen(
         if req.is_websocket:
             if actual_row_id and actual_row_id != -1:
                 if self._current_filters:
-                    # При активных фильтрах (включая "Comments: ON")
-                    # перезагружаем всю WS таблицу из БД, чтобы 💬 маркер
-                    # и фильтрация работали сразу (как HTTP).
+                    # With filters active (including "Comments: ON") reload the
+                    # whole WS table from the DB, so the 💬 marker and the
+                    # filtering take effect immediately (same as HTTP).
                     self._schedule_filter_reload()
                 else:
                     self._append_ws_row_to_table(req, actual_row_id)
@@ -1151,7 +1151,7 @@ class ProxyScreen(
                 logger.error("PROXY SCREEN: _flush_pending_rows: add_rows crashed: %s", exc, exc_info=True)
                 # Fall back to full rebuild (slow but safe)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
+                table.set_data(arrow)  # set_data already resets caches and dimensions
             _t3 = time.monotonic()
             if was_at_tail or table.cursor_row >= len(self._rows_cache) - 1:
                 table.scroll_end(animate=False)
@@ -1198,7 +1198,7 @@ class ProxyScreen(
             try:
                 table = self.query_one("#request-list", DataTable)
                 arrow = _rows_to_arrow(self._rows_cache)
-                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
+                table.set_data(arrow)  # set_data already resets caches and dimensions
                 table.scroll_end(animate=False)
             except Exception:
                 logger.warning("proxy: rows cache trim failed", exc_info=True)
@@ -1248,7 +1248,7 @@ class ProxyScreen(
             except Exception as exc:
                 logger.error("PROXY SCREEN: _flush_pending_ws_rows: add_rows crashed: %s", exc, exc_info=True)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
+                table.set_data(arrow)  # set_data already resets caches and dimensions
             if was_at_tail or table.cursor_row >= len(self._ws_rows_cache) - 1:
                 table.scroll_end(animate=False)
         except Exception:
@@ -1263,7 +1263,7 @@ class ProxyScreen(
             try:
                 table = self.query_one("#ws-request-list", DataTable)
                 arrow = _rows_to_arrow(self._ws_rows_cache)
-                table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
+                table.set_data(arrow)  # set_data already resets caches and dimensions
                 table.scroll_end(animate=False)
             except Exception:
                 logger.warning("proxy: WS rows cache trim failed", exc_info=True)
@@ -1282,8 +1282,8 @@ class ProxyScreen(
                     try:
                         self._highlight_debounce_handle.stop()
                     except Exception as exc:
-                        # Таймер уже сработал — останавливать нечего; ссылка всё
-                        # равно перезаписывается следующей строкой.
+                        # The timer already fired — nothing to stop; the handle is
+                        # overwritten by the next line anyway.
                         logger.debug("proxy: highlight timer already gone: %s", exc)
                 self._highlight_debounce_handle = self.set_timer(0.25, lambda: self._debounced_load(new_id))
         except Exception as exc:
@@ -1338,10 +1338,10 @@ class ProxyScreen(
         try:
             event.data_table.focus()
         except Exception:
-            # Без фокуса колесо мыши перестаёт листать таблицу — то есть
-            # «прокрутка сломалась». Иначе это выглядит как проблема Textual.
-            # Трейсбек, потому что фокус в Textual может не взяться по разным
-            # причинам, и по строке их не различить.
+            # Without focus the mouse wheel stops paging the table — which users
+            # read as "scrolling broke". Otherwise it looks like a Textual bug.
+            # A traceback, because focus in Textual can fail for various reasons
+            # and a single line cannot tell them apart.
             logger.exception("proxy: table not focused on cell highlight")
 
     def _debounced_load(self, row_id: int | None) -> None:
@@ -1351,10 +1351,10 @@ class ProxyScreen(
             if not app.is_running:
                 return
         except Exception:
-            # Виджет уже снят: `self.app` поднимается по цепочке родителей и
-            # не находит приложения (Textual бросает `NoActiveAppError`, а он
-            # живёт в приватном модуле — импортировать его ради одного
-            # хендлера дороже, чем записать трейсбек).
+            # The widget is already unmounted: `self.app` walks up the parent chain
+            # and finds no app (Textual raises `NoActiveAppError`, which lives in a
+            # private module — importing it for a single handler costs more than
+            # logging a traceback).
             logger.exception("proxy: debounced load skipped, app not usable")
             return
         self.run_worker(self._load_row_details(row_id))
@@ -1409,8 +1409,8 @@ class ProxyScreen(
             raw_req = build_http_request(parsed_req)
             self.query_one("#ws-req-editor", HttpView).load_raw_http(raw_req)
         except Exception:
-            # Панель запроса WS-кадра осталась от предыдущего кадра — то есть
-            # показывает чужой запрос под выбранной строкой.
+            # The WS frame's request panel still holds the previous frame — that is,
+            # it shows someone else's request under the selected row.
             logger.warning("proxy: WS request panel not filled", exc_info=True)
 
         resp_headers = entry.get("response_headers") or {}
@@ -1427,8 +1427,8 @@ class ProxyScreen(
             else:
                 view.load_raw_http("(no response)")
         except Exception:
-            # Та же беда с другой стороны: в панели ответа висит чужой ответ,
-            # и разница с выбранным кадром никак не объясняется.
+            # Same problem on the other side: the response panel keeps a foreign
+            # response, and the difference from the selected frame is unexplained.
             logger.warning("proxy: WS response panel not filled", exc_info=True)
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
@@ -1485,9 +1485,9 @@ class ProxyScreen(
             else:
                 panel.remove_class("-visible")
         except NoMatches as exc:
-            # Флаг уже переключён, а панель — нет: следующее нажатие вернёт
-            # флаг и панель разъедется с состоянием навсегда. `NoMatches` —
-            # панели нет в дереве (вкладка не смонтирована).
+            # The flag is already toggled but the panel is not: the next click flips
+            # the flag back and panel and state diverge for good. `NoMatches` — the
+            # panel is not in the tree (the tab is not mounted).
             logger.debug("proxy: inspector panel not toggled: %s", exc)
 
     def _switch_proxy_tab(self, tab_id: str) -> None:
@@ -1506,8 +1506,8 @@ class ProxyScreen(
             if tab_id == "tab-http-history":
                 self.call_after_refresh(self._reload_http_history_on_switch)
         except Exception as exc:
-            # Горячая клавиша вкладки нажата, а вкладка не переключилась —
-            # именно то, что пользователь называет «клавиша не работает».
+            # The tab hotkey was pressed but the tab did not switch — exactly what
+            # the user describes as "the key does not work".
             logger.debug("proxy: switch to tab %s failed: %s", tab_id, exc)
 
     def _reload_http_history_on_switch(self) -> None:
@@ -1519,12 +1519,12 @@ class ProxyScreen(
             import pentool.tui.screens.proxy.screen as _ps
 
             arrow = _ps._rows_to_arrow(self._rows_cache)
-            table.set_data(arrow)  # set_data уже сбрасывает кэши и размеры
+            table.set_data(arrow)  # set_data already resets caches and dimensions
             if self._rows_cache:
                 table.scroll_end(animate=False)
         except Exception:
-            # Таблица остаётся с прежним содержимым, хотя строки в кэше есть —
-            # ровно тот случай, который этот метод и был написан чинить.
+            # The table keeps its old contents even though rows are in the cache —
+            # exactly the case this method was written to fix.
             logger.error("proxy: HTTP history not rebuilt on tab switch", exc_info=True)
 
     def _focus_tab_table(self, tab_id: str) -> None:
@@ -1539,11 +1539,11 @@ class ProxyScreen(
                     table.focus()
                     return
                 except Exception as exc:
-                    # Нормальный ход: во вкладке Intercept таблицы нет вовсе.
-                    # Запись нужна, чтобы отличить это от опечатки в классе.
+                    # Normal case: the Intercept tab has no table at all. The log
+                    # entry is there to tell this apart from a typo in the class.
                     logger.debug("proxy: no %s in #%s: %s", cls.__name__, tab_id, exc)
         except Exception as exc:
-            # Вкладки нет — фокус останется где был.
+            # No such tab — focus stays where it was.
             logger.debug("proxy: pane #%s not found for focusing: %s", tab_id, exc)
 
     def action_focus_tab_history(self) -> None:
@@ -1565,8 +1565,8 @@ class ProxyScreen(
             x = r.x + 2
             y = r.y + 1 + table.cursor_row
         except NoMatches as exc:
-            # Меню откроется в углу вместо строки — заметно, но причина без
-            # записи не восстанавливается.
+            # The menu opens in the corner instead of at the row — noticeable, but
+            # without the log entry the cause cannot be reconstructed.
             logger.debug("proxy: context menu position unknown, using default: %s", exc)
             x, y = 10, 5
         self._open_context_menu(x, y)
@@ -1640,8 +1640,8 @@ class ProxyScreen(
 
             self.app.post_message(SendToTarget(parsed))  # type: ignore[attr-defined]
         except Exception as exc:
-            # Хост не попал в карту сайта — пользователь этого не ждёт, но и
-            # не увидит; запись объясняет, почему Target пуст.
+            # The host never reached the sitemap — the user does not expect it and
+            # will not see it either; the log entry explains why Target is empty.
             logger.debug("proxy: host not auto-added to Target: %s", exc)
 
     def _open_in_lightpanda(self) -> None:
@@ -1756,8 +1756,8 @@ class ProxyScreen(
             save_request_txt(parsed, path)
             self.app.notify(f"Saved to {path}", timeout=3)
         except Exception as exc:
-            # Уведомление показывает причину пользователю, но в журнале её не
-            # было — а именно журнал читают при разборе «куда сохранилось».
+            # The notification shows the reason to the user, but the journal never
+            # had it — and the journal is what people read to find "where did it save".
             logger.warning("proxy: request not saved to file", exc_info=True)
             self.app.notify(f"Save failed: {exc}", severity="error", timeout=4)
 
@@ -1797,8 +1797,8 @@ class ProxyScreen(
             raw_req = build_http_request(parsed_req)
             self.query_one("#req-editor", HttpView).load_raw_http(raw_req)
         except Exception:
-            # В редакторе остаётся предыдущий запрос — то есть под выбранной
-            # строкой показывается чужой. Худший из молчаливых исходов здесь.
+            # The editor keeps the previous request — so under the selected row a
+            # foreign one is shown. The worst of the silent outcomes here.
             logger.warning("proxy: request panel not filled for entry %s", entry_id, exc_info=True)
 
         # Comment is no longer shown in a persistent field — stash it so the
@@ -1820,7 +1820,7 @@ class ProxyScreen(
             else:
                 view.load_raw_http("(no response)")
         except Exception:
-            # Та же асимметрия, что с запросом: в панели ответа висит чужой.
+            # Same asymmetry as with the request: the response panel keeps a foreign one.
             logger.warning("proxy: response panel not filled for entry %s", entry_id, exc_info=True)
 
         try:
@@ -1834,8 +1834,8 @@ class ProxyScreen(
                 )
             panel.load(parsed_req, parsed_resp_for_inspector)
         except Exception:
-            # Инспектор показывает разбор прошлой строки — при открытой панели
-            # это прямо вводит в заблуждение.
+            # The inspector shows the analysis of the previous row — with the panel
+            # open that is outright misleading.
             logger.warning("proxy: inspector not loaded for entry %s", entry_id, exc_info=True)
 
     def action_load_history(self) -> None:
@@ -1863,7 +1863,7 @@ class ProxyScreen(
             self.query_one("#req-editor", HttpView).clear()
             self.query_one("#resp-viewer", HttpView).clear()
         except NoMatches as exc:
-            # История очищена, а панели показывают запрос, которого больше нет.
+            # History cleared but the panels still show a request that no longer exists.
             logger.debug("proxy: detail panels not cleared with history: %s", exc)
         self._selected_req_id = None
         self._selected_ws_req_id = None
@@ -1891,8 +1891,8 @@ class ProxyScreen(
             table.clear_data()
             table.refresh()
         except Exception as exc:
-            # Кэш и счётчик обнулены, а таблица — нет: покажет строки, которых
-            # уже не существует, причём без возможности это заметить.
+            # Cache and counter are zeroed but the table is not: it will show rows
+            # that no longer exist, with no way to notice it.
             logger.debug("proxy: table not cleared with history: %s", exc)
         self._update_history_count_label()
 
@@ -1978,9 +1978,10 @@ class ProxyScreen(
                 from pentool.core.config import get_config
 
                 hosts = list(get_config().scope)
-            except Exception:  # logging-ok: у нового проекта нет scope-настройки — это ожидаемо
-                # Проект ещё без scope-настройки, глобальный конфиг недоступен —
-                # тогда действительно пусто. Запись отличает это от сбоя.
+            except Exception:  # logging-ok: a new project has no scope setting — this is expected
+                # The project has no scope setting yet and the global config is
+                # unavailable — then the scope really is empty. The log entry tells
+                # this apart from a failure.
                 logger.debug("proxy: global scope not available")
                 hosts = []
         if hosts is None:
@@ -1998,8 +1999,8 @@ class ProxyScreen(
             else:
                 st.add_class("disabled")
         except Exception:
-            # Кнопка Scope покажет неверное состояние (заблокирована при
-            # заполненном scope) — самый раздражающий из мелких симптомов.
+            # The Scope button will show the wrong state (disabled while scope is
+            # populated) — the most annoying of the small symptoms.
             logger.warning("proxy: scope toggle not synced", exc_info=True)
 
     async def _load_enforce_scope_setting(self) -> None:
@@ -2016,8 +2017,8 @@ class ProxyScreen(
             if raw is not None:
                 enabled = json.loads(raw)
         except Exception:
-            # Флаг остаётся OFF. Это безопасный исход (фильтра нет), но
-            # именно поэтому сбой прочтения легко принять за «настройки нет».
+            # The flag stays OFF. That is the safe outcome (no filtering), but it is
+            # exactly why a read failure is easily mistaken for "no setting saved".
             logger.warning("proxy: enforce_scope setting not read", exc_info=True)
         logger.info("PROXY: load_enforce_scope_setting -> enforce=%s", enabled)
         proxy.set_enforce_scope(enabled)
@@ -2100,8 +2101,8 @@ class ProxyScreen(
                     return True
                 node = getattr(node, "parent", None)
         except Exception as exc:
-            # False означает «не текстовый редактор» — то есть горячая клавиша
-            # уйдёт виджету вместо того, чтобы напечатать букву.
+            # False means "not a text editor" — so the hotkey goes to the widget
+            # instead of typing a character.
             logger.debug("proxy: _is_in_text_panel failed: %s", exc)
         return False
 
@@ -2113,9 +2114,9 @@ class ProxyScreen(
             if 0 <= cursor_row < len(self._rows_cache):
                 self._selected_req_id = self._rows_cache[cursor_row].get("id")
         except NoMatches as exc:
-            # Меню откроется, но действия в нём будут применены не к той
-            # строке, на которую пользователь кликнул: таблицы нет в дереве
-            # (вкладка history не смонтирована).
+            # The menu opens, but its actions will be applied to the wrong row —
+            # not the one the user clicked: the table is not in the tree (the
+            # history tab is not mounted).
             logger.debug("proxy: cursor row not resolved for context menu: %s", exc)
         self._open_context_menu(event.screen_x, event.screen_y)
 
@@ -2148,8 +2149,8 @@ class ProxyScreen(
                     return
                 node = getattr(node, "parent", None)
         except NoMatches as exc:
-            # Не смогли понять, чей это клик — меню откроется как «табличное»
-            # даже над текстовой панелью. `NoMatches` — таблицы нет в дереве.
+            # Could not tell whose click this was — the menu opens as a table menu
+            # even over a text panel. `NoMatches` — the table is not in the tree.
             logger.debug("proxy: click source not resolved: %s", exc)
         # Click outside text panel and DataTable — open the table context menu
         self._open_context_menu(event.screen_x, event.screen_y)
@@ -2162,9 +2163,9 @@ class ProxyScreen(
                 table = self.query_one("#request-list", DataTable)
                 self._select_row(table.cursor_row)
             except NoMatches as exc:
-                # Двойной клик по строке ничего не открыл: пользователь
-                # повторит его, и это будет выглядеть как зависание. Причина —
-                # таблицы нет в дереве, то есть вкладка History не смонтирована.
+                # Double-clicking a row opened nothing: the user will try again and
+                # it will look like a hang. The cause — the table is not in the tree,
+                # i.e. the History tab is not mounted.
                 logger.debug("proxy: double-click did not open row details: %s", exc)
 
     def _open_context_menu(self, x: int, y: int) -> None:
@@ -2207,8 +2208,8 @@ class ProxyScreen(
             area = view.query_one("#http-body", TextArea)
             return area.text or ""
         except NoMatches as exc:
-            # Возвращаем «пустой запрос» — вызывающий отправит его как есть,
-            # то есть в Repeater уйдёт заготовка вместо выбранного запроса.
+            # Return an "empty request" — the caller sends it as is, so Repeater
+            # receives a blank instead of the selected request.
             logger.debug("proxy: request text not read: %s", exc)
             return ""
 
@@ -2223,8 +2224,8 @@ class ProxyScreen(
                 if host:
                     return host
         except Exception as exc:
-            # Ниже есть запасной путь по _selected_req_id — молчание здесь
-            # скрыло бы, что основной перестал работать.
+            # There is a fallback by _selected_req_id below — silence here would
+            # hide that the primary path stopped working.
             logger.debug("proxy: host by cursor row unavailable: %s", exc)
         # Fallback — look up by _selected_req_id
         if self._selected_req_id is None or not self._rows_cache:
@@ -2324,8 +2325,8 @@ class ProxyScreen(
             else:
                 st.add_class("disabled")
         except Exception as exc:
-            # Кнопка Scope разойдётся с реальным списком хостов: только что
-            # добавленный хост, а кнопка всё ещё «недоступна».
+            # The Scope button will diverge from the real host list: the host was
+            # just added, yet the button still reads "unavailable".
             logger.debug("proxy: scope button not synced after action: %s", exc)
 
     def _sync_target_host_scope(self, host: str, in_scope: bool) -> None:

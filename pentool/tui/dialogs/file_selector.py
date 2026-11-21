@@ -93,8 +93,8 @@ class FileSelectorDialog(BaseDialog[None]):
         try:
             self.query_one("#path-label", Static).update(str(self._current_dir))
         except NoMatches as exc:
-            # Строка пути останется от предыдущего каталога, а таблица уже
-            # показывает новый — пользователь читает путь, в котором его нет.
+            # The path line keeps the previous directory while the table
+            # already shows the new one — the user reads a path they are not in.
             logger.debug("file dialog: path label not updated: %s", exc)
 
         entries = []
@@ -112,12 +112,12 @@ class FileSelectorDialog(BaseDialog[None]):
                     prefix = "📁 " if is_dir else "📄 "
                     entries.append((prefix + entry.name, size, modified, is_dir, entry.name))
                 except (PermissionError, OSError):
-                    # Запись, которую нельзя прочитать, не показывается вовсе —
-                    # каталог выглядит короче, чем он есть на диске.
+                    # An entry that cannot be read is not shown at all — the
+                    # directory looks shorter than it is on disk.
                     logger.debug("file dialog: entry %s unreadable, skipped", entry)
                     continue
         except (PermissionError, OSError) as exc:
-            # Каталог не открылся — таблица пустая, причину видно только здесь.
+            # The directory did not open — the table is empty, only this line shows why.
             logger.debug("file dialog: %s not listed: %s", self._current_dir, exc)
 
         # Sort: directories first
@@ -142,8 +142,8 @@ class FileSelectorDialog(BaseDialog[None]):
                 try:
                     self.query_one("#filename-input", Input).value = entry_name
                 except NoMatches as exc:
-                    # В поле останется прошлое имя: OK подтвердит не тот файл,
-                    # который выделен в таблице.
+                    # The field keeps the previous name: OK would confirm a file
+                    # other than the one selected in the table.
                     logger.debug("file dialog: filename field not set to %r: %s", entry_name, exc)
 
             # Double-click: same row, interval < 500 ms
@@ -186,9 +186,10 @@ class FileSelectorDialog(BaseDialog[None]):
                         event.prevent_default()
                         return
             except NoMatches as exc:
-                # Вход в каталог не состоялся — Enter тут же подтвердит выбор,
-                # и диалог закроется с путём вместо перехода внутрь. Таблицы
-                # нет в дереве — единственная причина здесь.
+                # Entering the directory did not happen — Enter would confirm the
+                # selection right away, and the dialog would close with a path
+                # instead of descending. The table is missing from the DOM — the
+                # only cause here.
                 logger.debug("file dialog: enter-target not resolved: %s", exc)
             self.action_confirm()
             event.prevent_default()
@@ -219,9 +220,9 @@ class FileSelectorDialog(BaseDialog[None]):
                 self.dismiss(str(path))
                 return
         except NoMatches as exc:
-            # Введённое вручную имя не прочитано — OK вернёт выделенный в
-            # таблице файл (или None), то есть не то, что видит пользователь.
-            # Поля имени нет в дереве — единственная причина `NoMatches`.
+            # The manually typed name was not read — OK returns the file
+            # selected in the table (or None), i.e. not what the user sees.
+            # The name field is not in the DOM — the only cause of `NoMatches`.
             logger.debug("file dialog: manual filename not read: %s", exc)
 
         if self._selected_path:

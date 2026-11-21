@@ -1,4 +1,4 @@
-"""LightpandaViewer — модальное окно с рендером URL через Lightpanda."""
+"""LightpandaViewer — modal screen rendering a URL through Lightpanda."""
 
 from __future__ import annotations
 

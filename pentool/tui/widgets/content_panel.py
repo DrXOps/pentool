@@ -1,6 +1,6 @@
-"""ContentPanel — универсальный блок для RichLog/TextArea с панелью инструментов.
+"""ContentPanel — universal block for RichLog/TextArea with a toolbar.
 
-Заменяет ручные RichLog и TextArea с кнопками во всех экранах:
+Replaces hand-rolled RichLog and TextArea with buttons across all screens:
 - RichLog: scan-log, recon-log, feed-log, ws-msg-log, detail-log,
   dec-steps-log, cmp-diff-log, seq-analysis-log, diff-panel-log, lightpanda-body
 - TextArea: editor-area, viewer-area, http-body, dec-input/dec-output,
@@ -31,17 +31,17 @@ if TYPE_CHECKING:
 
 
 class ContentPanel(Widget):
-    """Блок-контейнер: RichLog или TextArea + панель кнопок в заголовке."""
+    """Container block: RichLog or TextArea + button toolbar in the header."""
 
     class CopyRequested(Message):
-        """Запрос на копирование содержимого в буфер."""
+        """Request to copy the panel content to the clipboard."""
 
         ALLOW_SELECTOR_MATCH = True
 
         def __init__(self, panel: "ContentPanel", text: str, selection: str | None = None) -> None:
             self.panel = panel
             self.text = text
-            self.selection = selection  # выделенный текст, None = копировать всё
+            self.selection = selection  # selected text, None = copy everything
             super().__init__()
 
         @property
@@ -49,7 +49,7 @@ class ContentPanel(Widget):
             return self.panel
 
     class PasteRequested(Message):
-        """Запрос на вставку из буфера."""
+        """Request to paste from the clipboard."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -62,7 +62,7 @@ class ContentPanel(Widget):
             return self.panel
 
     class FormatToggleRequested(Message):
-        """Запрос на переключение raw/formatted."""
+        """Request to toggle between raw and formatted."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -76,10 +76,11 @@ class ContentPanel(Widget):
 
     DEFAULT_CSS = (Path(__file__).parent / "content_panel.tcss").read_text(encoding="utf-8")
 
-    # ── Иконки панели ────────────────────────────────────────────────────
-    # Наборы различаются покрытием шрифтов: в Kitty под WSL часть глифов
-    # (`⎙ ⎘ ⇄ ↩ ⬇`) не рисуется вовсе, а `✕` есть почти везде. Поэтому набор
-    # выбирается в Settings → Interface, а не зашит одной строкой.
+    # ── Panel icons ──────────────────────────────────────────────────────
+    # The sets differ in font coverage: under WSL in Kitty some glyphs
+    # (`⎙ ⎘ ⇄ ↩ ⬇`) are not drawn at all, while `✕` exists almost everywhere.
+    # That is why the set is picked in Settings → Interface instead of being
+    # hardcoded in a single line.
     ICON_SETS: ClassVar[dict[str, dict[str, str]]] = {
         "unicode": {
             "copy": "❐",
@@ -124,7 +125,7 @@ class ContentPanel(Widget):
 
     @classmethod
     def button_label(cls, key: str) -> str:
-        """Иконка кнопки для текущего набора из настроек."""
+        """Button icon for the icon set currently chosen in settings."""
         icon_set = "unicode"
         try:
             from pentool.core.config import get_config
@@ -238,14 +239,14 @@ class ContentPanel(Widget):
             return ""
 
     def get_selected_text(self) -> str | None:
-        """Вернуть выделенный текст из TextArea, или None если нет выделения."""
+        """Return the selected text from the TextArea, or None if there is no selection."""
         w = self.content_widget
         if not isinstance(w, TextArea):
             return None
         sel = w.selection
         if sel is None:
             return None
-        # selection.start/end — кортежи (row, col)
+        # selection.start/end are (row, col) tuples
         if sel.start == sel.end:
             return None
         try:
@@ -280,18 +281,19 @@ class ContentPanel(Widget):
         return f"┌─ {self._panel_title} ─" if self._panel_title else ""
 
     def set_title(self, title: str) -> None:
-        """Обновить заголовок панели (Static в .cp-title).
+        """Update the panel title (the Static inside .cp-title).
 
-        Заголовок всегда текст, не разметка: в него попадают имена файлов
-        (могут содержать ``[``) и метки языка ответа в квадратных скобках
-        (``[html]``, ``[json]``) — без экранирования Rich съедает их молча.
+        The title is always text, never markup: file names end up in it
+        (they may contain ``[``) as do response language tags in square
+        brackets (``[html]``, ``[json]``) — without escaping Rich silently
+        swallows them.
         """
         self._panel_title = title
         try:
             self.query_one(".cp-title > Static", Static).update(esc(self.display_title))
         except NoMatches as exc:
-            # Заголовок на экране отстаёт от того, что реально загружено в
-            # панель: две панели рядом выглядят одинаково.
+            # The title on screen lags behind what is actually loaded into the
+            # panel: two panels side by side then look identical.
             logger.debug("content panel: title %r not shown: %s", title, exc)
 
     def write_to_log(self, text: str) -> None:

@@ -161,9 +161,9 @@ class RequestContextMenuMixin:
             if text:
                 copy_to_clipboard(text)
         except Exception as exc:
-            # «Copy selection» не копирует ничего, и пользователь узнаёт об
-            # этом только вставив пустой буфер. Обычный ход при окне без
-            # выделяемого текста — потому debug, а не warning.
+            # "Copy selection" copies nothing, and the user only finds out by
+            # pasting an empty clipboard. That is the normal path for a window
+            # with no selectable text — hence debug, not warning.
             logger.debug("ctx menu: copy selection failed: %s", exc)
 
     def _cm_do_select_all(self) -> None:
@@ -172,8 +172,8 @@ class RequestContextMenuMixin:
             if hasattr(focused, "select_all"):
                 focused.select_all()
         except Exception as exc:
-            # «Select all» молча ничего не выделил — следующее действие с
-            # выделением окажется пустым.
+            # "Select all" silently selected nothing — the next action that
+            # relies on the selection would come up empty.
             logger.debug("ctx menu: select all failed: %s", exc)
 
     def _cm_do_copy_url(self, raw: str) -> None:

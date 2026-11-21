@@ -94,10 +94,10 @@ class CustomNotifyCard(Widget):
             self.set_timer(0.4, self._force_visible)
         except Exception:
             # Animation is cosmetic — never break the notification itself.
-            # Но если анимация не запустилась, карточка осталась бы невидимой;
-            # _force_visible ниже это чинит, а запись объясняет, почему.
-            # Ловится всё: анимация — это три вызова Rich/Textual подряд, и
-            # любой из них вправе не сработать.
+            # But if the animation never started the card would stay invisible;
+            # _force_visible below fixes that, and this log line explains why.
+            # Catch everything: the animation is three Rich/Textual calls in a
+            # row, and any of them may fail.
             logger.exception("notify: card animation not started")
             self._force_visible()
 
@@ -107,16 +107,16 @@ class CustomNotifyCard(Widget):
             self.styles.opacity = 1.0
             self.styles.offset_y = 0.0
         except Exception:
-            # Карточка уведомления останется с нулевой прозрачностью — то есть
-            # показана и не видна одновременно.
+            # The notification card stays at zero opacity — i.e. shown and
+            # invisible at the same time.
             logger.exception("notify: card not forced visible")
 
     def on_click(self, event) -> None:
         try:
             widget = event.widget if hasattr(event, "widget") else None
         except Exception:
-            # Считаем, что клик пришёлся не по крестику — карточка закроется
-            # целиком. Без записи не понять, почему крестик иногда не работает.
+            # Assume the click missed the close cross — the whole card is dismissed,
+            # and without this log there is no telling why the cross sometimes fails.
             logger.exception("notify: click target unknown")
             widget = None
         if widget is not None and getattr(widget, "id", None) == "toast-close":
@@ -171,8 +171,8 @@ class CustomNotify(Widget):
                 toast.remove()
             self._refresh_display()
         except Exception as exc:
-            # Карточка остаётся на экране после истечения таймаута — то есть
-            # уведомление «не закрывается само».
+            # The card stays on screen after its timeout expires — i.e. the
+            # notification "does not close by itself".
             logger.debug("notify: toast not dismissed: %s", exc)
 
     def _refresh_display(self) -> None:
@@ -181,5 +181,5 @@ class CustomNotify(Widget):
         try:
             self.display = bool(self.children)
         except Exception as exc:
-            # Пустая стопка остаётся видимой и занимает место над Footer.
+            # The empty rack stays visible and takes up space above the Footer.
             logger.debug("notify: rack display not refreshed: %s", exc)

@@ -1,6 +1,6 @@
 """ProxyRuntimeMixin — Proxy start/stop runtime for the App.
 
-Extracted from PentoolApp (Этап 5.1, proxy-runtime domain) so the app class
+Extracted from PentoolApp (stage 5.1, proxy-runtime domain) so the app class
 stays thin and the start/stop/toggle path is tested in one place.
 
 The mixin expects its host (the App) to expose:
@@ -166,8 +166,8 @@ class ProxyRuntimeMixin:
 
                         self._proxy_loop.call_soon_threadsafe(_cancel_all)  # type: ignore[attr-defined]
                     except Exception as exc:
-                        # Зависшие задачи прокси не отменены: поток ниже может
-                        # не дождаться остановки, и порт останется занятым.
+                        # The hung proxy tasks were not cancelled: the thread below
+                        # may never see the stop, and the port stays occupied.
                         logger.debug("APP: proxy tasks not cancelled: %s", exc)
         if self._proxy_thread and self._proxy_thread.is_alive():  # type: ignore[attr-defined]
             self._proxy_thread.join(timeout=1.5)  # type: ignore[attr-defined]

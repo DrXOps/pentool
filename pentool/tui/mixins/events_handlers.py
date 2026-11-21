@@ -1,6 +1,6 @@
 """ProxyEventHandlersMixin — EventBus bridge for proxy request activity.
 
-Extracted from PentoolApp (Этап 5.1, events-handlers domain).
+Extracted from PentoolApp (stage 5.1, events-handlers domain).
 
 NOTE on Textual dispatch: methods decorated with `@on(...)` MUST live in the
 App class itself — Textual only introspects the direct App class for

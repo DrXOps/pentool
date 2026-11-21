@@ -1,7 +1,7 @@
 """Screen registry — maps module_id -> widget class.
 
 Centralises the module-to-screen mapping previously hardcoded as _SCREEN_MAP
-in the app (Этап 5.1, screen_registry domain). Keeps the App class thin and
+in the app (Stage 5.1, screen_registry domain). Keeps the App class thin and
 gives a single place to look up "which screen does module X open".
 """
 
@@ -38,21 +38,21 @@ SCREEN_MAP: dict[str, type] = {
 
 
 def _load_recon_screen() -> type | None:
-    """Загрузить PRO-экран Recon по требованию.
+    """Load the PRO Recon screen on demand.
 
-    На уровне модуля это делать нельзя: экран Recon тянет виджеты, которые
-    импортируют `pentool.tui.app`, а реестр читается из того же `app` —
-    получается цикл, `ImportError`, который прежний код молча проглатывал, и
-    модуль «просто не существовал»: вкладка открывалась пустым окном (диагноз
-    2026-11-17). Теперь импорт выполняется при первом обращении, когда `app` уже
-    собран, а причина отказа пишется в журнал.
+    Doing this at module level is not an option: the Recon screen pulls in
+    widgets that import `pentool.tui.app`, and the registry is read from that
+    same `app` — that makes a cycle, an `ImportError` the old code swallowed
+    silently, and the module "simply did not exist": the tab opened as an empty
+    window (diagnosis 2026-11-17). Now the import runs on first access, when
+    `app` is already built, and the reason for a failure goes to the log.
     """
     try:
-        # Важно: без префикса `pro.` — `pentool.__init__._bootstrap_pro()`
-        # расширяет `pentool.__path__` на `pro/pentool`, поэтому экран лежит
-        # как `pentool.tui.screens.recon.screen`. Импорт `pro.pentool.…` не
-        # работает никогда: на sys.path попадает сам каталог `pro/`, а не
-        # пакет с таким именем (проверено: ModuleNotFoundError).
+        # Important: no `pro.` prefix — `pentool.__init__._bootstrap_pro()`
+        # extends `pentool.__path__` with `pro/pentool`, so the screen lives
+        # as `pentool.tui.screens.recon.screen`. Importing `pro.pentool.…`
+        # never works: what lands on sys.path is the `pro/` directory itself,
+        # not a package of that name (verified: ModuleNotFoundError).
         from pentool.tui.screens.recon.screen import ReconScreen  # type: ignore[import-untyped]
     except (ImportError, ModuleNotFoundError):
         logger.warning("screen_registry: PRO-экран recon недоступен (PRO не установлен или устарел)", exc_info=True)

@@ -66,9 +66,9 @@ class AutoSaveMixin:
         try:
             await coro
         except Exception:
-            # Состояние модуля не сохранилось: после перезапуска пользователь
-            # увидит более старую версию, чем та, с которой работал. Это потеря
-            # данных — error с трейсбеком, а не debug.
+            # The module state was not saved: after a restart the user will see
+            # an older version than the one they worked with. That is data loss —
+            # log an error with a traceback, not debug.
             logger.error("autosave: %s did not save", worker_name, exc_info=True)
         finally:
             self._running_save_tasks = [w for w in self._running_save_tasks if w != worker_name]
@@ -79,9 +79,9 @@ class AutoSaveMixin:
         try:
             self.workers.cancel_group(self, self.SAVE_WORKER_GROUP)  # type: ignore[attr-defined]
         except Exception:
-            # Группа не отменена — сохранение доработает уже после закрытия БД
-            # (ровно тот случай, ради которого миксин и существует): запись
-            # может упасть или потеряться, поэтому error с трейсбеком.
+            # The group was not cancelled — the save will finish after the DB is
+            # already closed (exactly the case this mixin exists for): the write
+            # may fail or get lost, hence error with a traceback.
             logger.error("autosave: worker group not cancelled", exc_info=True)
         self._running_save_tasks.clear()
 

@@ -1,6 +1,6 @@
-"""ProxyFilterBar и WsFilterBar — фильтры HTTP/WS истории прокси.
+"""ProxyFilterBar and WsFilterBar — filters for the proxy HTTP/WS history.
 
-Порядок элементов ProxyFilterBar (слева направо):
+Element order in ProxyFilterBar (left to right):
   Host:[____] | Method:[GET ▼] | Status:[200]→[∞] | Mark:[Any ▼] |
   Search:[________] | ★ Scope | [Filter] [Clear]
 
@@ -8,10 +8,11 @@ WsFilterBar:
   Host:[____] | URL:[________] | Status:[200]→[∞] | Search:[________] |
   ★ Scope | [Filter] [Clear]
 
-Обе полосы — наследники ``HistoryFilterBar``: общая композиция, общие тоглы
-Scope/Comments и общий CSS. Раньше ``WsFilterBar.DEFAULT_CSS`` получался
-строковой заменой ``.replace("ProxyFilterBar", "WsFilterBar")`` по файлу
-``proxy_filter_bar.tcss`` — переименование класса молча ломало вторую полосу.
+Both bars inherit ``HistoryFilterBar``: shared composition, shared
+Scope/Comments toggles and shared CSS. ``WsFilterBar.DEFAULT_CSS`` used to be
+built by a string substitution ``.replace("ProxyFilterBar", "WsFilterBar")``
+over the ``proxy_filter_bar.tcss`` file — renaming the class silently broke
+the second bar.
 """
 
 from __future__ import annotations
@@ -63,10 +64,10 @@ _COMMENTS_ON_LABEL = "Commented"
 
 
 class HistoryFilterBar(FilterBarWidget):
-    """Общая часть фильтров истории: Scope/Comments-тоглы и их сброс.
+    """Shared part of the history filters: Scope/Comments toggles and their reset.
 
-    Наследник задаёт только ``configure()`` и, при необходимости,
-    ``collect()`` — композиция и обработка тоглов здесь.
+    A subclass provides only ``configure()`` and, when needed,
+    ``collect()`` — composition and toggle handling live here.
     """
 
     DEFAULT_CSS = _CSS
@@ -127,7 +128,7 @@ class HistoryFilterBar(FilterBarWidget):
         self._reset_scope()
         self._reset_comments()
 
-    # ── Тоглы ──────────────────────────────────────────────────────────────
+    # ── Toggles ────────────────────────────────────────────────────────────
 
     def _maybe_add_scope(self, predicates: list[FilterPredicate]) -> None:
         if self._toggle_active("fb-scope"):
@@ -147,8 +148,8 @@ class HistoryFilterBar(FilterBarWidget):
         try:
             return self.query_one(f"#{toggle_id}", ToolbarButton).has_class("active")
         except NoMatches as exc:
-            # Тогл считается выключенным — «★ Scope»/«Comments» на экране
-            # горят, а фильтр их не учитывает.
+            # The toggle counts as off — «★ Scope»/«Comments» stay lit on
+            # screen, yet the filter ignores them.
             logger.debug("proxy filter: toggle %s not found: %s", toggle_id, exc)
             return False
 
@@ -156,7 +157,7 @@ class HistoryFilterBar(FilterBarWidget):
         try:
             button = self.query_one(f"#{toggle_id}", ToolbarButton)
         except NoMatches as exc:
-            # Положение тогла не обновилось — подпись расходится с фильтром.
+            # The toggle's state was not updated — its label disagrees with the filter.
             logger.debug("proxy filter: toggle %s not set: %s", toggle_id, exc)
             return
         button.set_class(active, "active")
@@ -220,7 +221,7 @@ class ProxyFilterBar(HistoryFilterBar):
 
     def collect(self) -> list[FilterPredicate]:
         predicates = super().collect()
-        # Status: парсим "200" или "200-299"
+        # Status: parse "200" or "200-299"
         return [self._normalize_status(p) for p in predicates]
 
     @staticmethod

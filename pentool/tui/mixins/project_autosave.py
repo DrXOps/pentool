@@ -1,6 +1,6 @@
 """ProjectAutoSaveMixin — periodic project auto-save timer for the App.
 
-Extracted from PentoolApp (Этап 5.1, autosave domain). This is the periodic
+Extracted from PentoolApp (Stage 5.1, autosave domain). This is the periodic
 *TUI* timer that re-arms from config and surfaces a toast on each tick — it is
 deliberately NOT merged into ProjectManager (whose save_project/save_project_json
 are on-demand saves); a timer that needs set_interval + notify belongs to the
@@ -40,9 +40,9 @@ class ProjectAutoSaveMixin:
                 self._auto_save_timer.pause()  # type: ignore[attr-defined]
                 self._auto_save_timer.stop()  # type: ignore[attr-defined]
             except Exception:
-                # Старый таймер не остановлен — он продолжит тикать рядом с
-                # новым, и проект будет сохраняться дважды за интервал.
-                # Данные не теряются, но поведение не то, что задумано.
+                # The old timer was not stopped — it keeps ticking next to the
+                # new one, so the project is saved twice per interval.
+                # No data is lost, but this is not the intended behaviour.
                 logger.warning("auto-save: previous timer not stopped", exc_info=True)
             self._auto_save_timer = None  # type: ignore[attr-defined]
 
@@ -70,7 +70,7 @@ class ProjectAutoSaveMixin:
             self.notify(f"Auto-saved: {name}", timeout=2)  # type: ignore[attr-defined]
             logger.info("APP: auto-saved project %s", path)
         except Exception:
-            # Сохранение уже произошло (БД на месте), но пользователь не увидел
-            # подтверждения, а запись «auto-saved» в журнал не попала — тик
-            # отработал впустую. warning, а не debug: это видимая деградация.
+            # The save itself already happened (the DB is in place), but the user
+            # saw no confirmation and no "auto-saved" record reached the log — the
+            # tick ran for nothing. warning, not debug: this is visible degradation.
             logger.warning("_auto_save_tick: notification not shown", exc_info=True)

@@ -59,11 +59,11 @@ class ToolbarButton(Static):
             self.tooltip = tooltip
 
     def _apply_variant(self, variant: str) -> None:
-        """Семантический окрас кнопки (PRO-модули передают `variant=`).
+        """Semantic colouring of the button (PRO modules pass `variant=`).
 
-        Классы прописаны литералами, а не собраны из f-строки: гейт
-        `check_tui_css.py` проверяет каждый `.tcss`-класс по литералам в
-        Python, и собранное имя он справедливо считает «неиспользуемым».
+        The classes are written as literals rather than built from an f-string:
+        the `check_tui_css.py` gate checks every `.tcss` class against literals
+        in Python, and a built name is rightly considered "unused" by it.
         """
         if variant == "success":
             self.add_class("variant-success")

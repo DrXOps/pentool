@@ -22,7 +22,7 @@ class _Left(Horizontal):
 
 
 class _Right(Horizontal):
-    """Right half: saved, time — выровнены вправо."""
+    """Right half: saved, time — right-aligned."""
 
 
 class StatusBar(Widget):

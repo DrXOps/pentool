@@ -57,8 +57,8 @@ class InputDialog(BaseDialog):
                 inp.value = ""
                 inp.focus()
         except Exception as exc:
-            # Значение остаётся в поле: строка попала в набор или нет —
-            # неизвестно, и повторный Enter может добавить дубликат.
+            # The value stays in the field: whether the line made it into the set
+            # is unknown, and pressing Enter again may add a duplicate.
             logger.debug("intruder input: value not added: %s", exc)
 
     def on_key(self, event) -> None:

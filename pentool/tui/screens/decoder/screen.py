@@ -127,7 +127,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
 
     @on(ContentPanel.FormatToggleRequested)
     def on_dec_toggle_format(self, event: ContentPanel.FormatToggleRequested) -> None:
-        """Переключение raw/formatted — не применимо к Decoder."""
+        """Toggle raw/formatted — not applicable to the Decoder."""
         pass
 
     def _open_op_menu(self, btn: ToolbarButton) -> None:
@@ -141,8 +141,8 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
             btn = self.query_one("#btn-dec-op-select", ToolbarButton)
             btn.label = f"{op} ▼"
         except NoMatches as exc:
-            # Кнопка покажет прежнюю операцию, а цепочка строится уже из новой —
-            # что именно выполнится, по экрану не прочитать.
+            # The button still shows the previous operation while the chain is
+            # built from the new one — what actually runs is unreadable on screen.
             logger.debug("decoder: op button label not updated: %s", exc)
 
     def _add_step(self) -> None:
@@ -160,8 +160,8 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
         try:
             self.query_one("#dec-steps-log", ContentPanel).clear_content()
         except NoMatches as exc:
-            # Старые шаги остаются в панели лога после «Clear» — журнал
-            # описывает цепочку, которой уже нет.
+            # Old steps stay in the log panel after "Clear" — the journal
+            # describes a chain that no longer exists.
             logger.debug("decoder: steps log not cleared: %s", exc)
 
     def _swap_io(self) -> None:
@@ -230,8 +230,8 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
             else:
                 lbl.update("[dim](empty)[/dim]")
         except Exception as exc:
-            # Дисплей цепочки не обновлён — он показывает шаги, которых в
-            # цепочке уже нет (или наоборот), и Run выполнит не то.
+            # Chain display not updated — it shows steps that are no longer in
+            # the chain (or vice versa), so Run will execute the wrong thing.
             logger.debug("decoder: chain display not updated: %s", exc)
 
     # ── Run ───────────────────────────────────────────────────────────────────
@@ -303,9 +303,9 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
             self._chain.clear()
             self._update_chain_display()
         except NoMatches as exc:
-            # Одна из трёх панелей не в дереве — «Clear all» оставил часть
-            # прежнего вывода на экране. `NoMatches` называет причину; всё
-            # остальное пусть всплывает.
+            # One of the three panels is not in the tree — "Clear all" left part
+            # of the previous output on screen. `NoMatches` names the cause;
+            # let anything else bubble up.
             logger.debug("decoder: clear all — panel not mounted: %s", exc)
 
     # ── Public API (loading from other modules) ───────────────────────────────
@@ -316,6 +316,6 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
             self.query_one("#dec-output", ContentPanel).clear_content()
             self.query_one("#dec-steps-log", ContentPanel).clear_content()
         except NoMatches as exc:
-            # Текст загружен, а лог шагов прошлой операции остался — он
-            # описывает то, чего с новым входом уже не будет.
+            # The text was loaded but the step log from the previous operation
+            # remains — it describes what the new input will no longer produce.
             logger.debug("decoder: load_text panels not reset: %s", exc)

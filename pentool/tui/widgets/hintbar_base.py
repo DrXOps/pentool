@@ -1,7 +1,7 @@
-"""HintBarBase — базовый класс для нижних строк подсказок.
+"""HintBarBase — base class for the bottom hint strips.
 
-Наследники переопределяют ``_build_markup()`` и вызывают ``refresh()``.
-Достаточно минимально: compose + set_text, без reactive.
+Subclasses override ``_build_markup()`` and call ``refresh()``.
+Deliberately minimal: compose + set_text, no reactive.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ _HINT_CSS = (Path(__file__).parent / "hintbar_base.tcss").read_text(encoding="ut
 
 
 class HintBarBase(Widget):
-    """One-line hint strip —наследник задаёт ``_build_markup()``."""
+    """One-line hint strip — the subclass supplies ``_build_markup()``."""
 
     DEFAULT_CSS = _HINT_CSS
 
@@ -34,6 +34,6 @@ class HintBarBase(Widget):
         try:
             self.query_one("#hint-content", Static).update(markup)
         except NoMatches as exc:
-            # Строка подсказок остаётся от прошлого модуля — то есть учит
-            # клавишам, которых на этом экране нет.
+            # The hint strip is left over from the previous module — so it teaches
+            # keys that do not exist on this screen.
             _log.error("HintBar set_text FAILED: %s", exc)

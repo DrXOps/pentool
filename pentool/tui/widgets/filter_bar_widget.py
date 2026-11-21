@@ -1,11 +1,11 @@
-"""FilterBarWidget — универсальный виджет строки фильтра для любой таблицы.
+"""FilterBarWidget — a generic filter-row widget for any table.
 
-Конфигурируется через наследование:
-    - configure() → список FilterField (описания полей)
-    - compose() рендерит поля по configure()
-    - collect() читает поля и строит FilterSpec
+Configured through inheritance:
+    - configure() → list of FilterField (field descriptors)
+    - compose() renders the fields defined by configure()
+    - collect() reads the fields and builds a FilterSpec
 
-Наследник обязан объявить свой FilterChanged Message (см. Textual naming).
+A subclass must declare its own FilterChanged Message (see Textual naming).
 """
 
 from __future__ import annotations
@@ -34,10 +34,10 @@ _FILTER_BAR_CSS = (Path(__file__).parent / "filter_bar_widget.tcss").read_text(e
 
 
 class ToggleButton(Static):
-    """Кнопка-тумблер.
+    """Toggle button.
 
-    Минимальный DEFAULT_CSS для базового отображения.
-    Детали (цвета, hover, active) задаются родительским CSS.
+    Minimal DEFAULT_CSS for a basic appearance.
+    Details (colors, hover, active) come from the parent CSS.
     """
 
     DEFAULT_CSS = _TOGGLE_CSS
@@ -76,13 +76,13 @@ class ToggleButton(Static):
 
 
 class FilterBarWidget(Widget):
-    """Базовый виджет строки фильтрации.
+    """Base filter-row widget.
 
-    Наследник:
-        1. Объявляет свой FilterChanged Message.
-        2. Переопределяет configure() → список FilterField.
-        3. В compose() вызывает super() для рендера + свои виджеты после.
-        4. В collect() вызывает super() и дополняет кастомные предикаты.
+    A subclass:
+        1. Declares its own FilterChanged Message.
+        2. Overrides configure() → list of FilterField.
+        3. Calls super() in compose() to render the base, then its own widgets.
+        4. Calls super() in collect() and extends it with custom predicates.
     """
 
     class FilterChanged(Message):
@@ -96,10 +96,10 @@ class FilterBarWidget(Widget):
     _apply_label = "Filter"
     _reset_label = "Clear"
 
-    # ── Конфигурация ───────────────────────────────────────────────────────
+    # ── Configuration ──────────────────────────────────────────────────────
 
     def configure(self) -> list[FilterField]:
-        """Описание полей фильтрации. Override в наследнике."""
+        """Field descriptions for filtering. Override in a subclass."""
         return []
 
     # ── Compose ─────────────────────────────────────────────────────────────
@@ -137,12 +137,12 @@ class FilterBarWidget(Widget):
                 yield Label("→", classes="fb-label")
                 yield Input(id=hi_id, placeholder="∞")
 
-    # ── Сбор предикатов ────────────────────────────────────────────────────
+    # ── Predicate collection ───────────────────────────────────────────────
 
     def collect(self) -> list[FilterPredicate]:
         """Read current UI values → FilterPredicates.
 
-        Наследник может переопределить и расширить результат super().
+        A subclass may override this and extend the result of super().
         """
         predicates: list[FilterPredicate] = []
         for f in self.configure():
@@ -225,8 +225,8 @@ class FilterBarWidget(Widget):
                     self.query_one(f"#{field.id}-lo", Input).value = ""
                     self.query_one(f"#{field.id}-hi", Input).value = ""
         except Exception as exc:
-            # Поле фильтра не очищено: после «Reset» таблица остаётся
-            # отфильтрованной по прежнему значению, хотя бар выглядит пустым.
+            # Filter field not cleared: after "Reset" the table stays
+            # filtered by the previous value even though the bar looks empty.
             logger.debug("filter bar: field %r not cleared: %s", field.id, exc)
 
     # ── Handlers ───────────────────────────────────────────────────────────

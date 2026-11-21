@@ -44,10 +44,10 @@ class _TabState:
         self.name = name
         import uuid as _uuid
 
-        # Стабильная идентичность вкладки: переживает переименование и
-        # перезапуск. У восстановленной вкладки uid приходит из БД, а не
-        # генерируется заново — иначе каждая перезагрузка создавала бы новые
-        # строки, а прежние оставались бы сиротами.
+        # Stable tab identity: survives a rename and a restart. For a restored
+        # tab the uid comes from the DB instead of being generated anew — else
+        # every reload would create new rows while the old ones stayed behind as
+        # orphans.
         self.tab_uid: str = tab_uid or _uuid.uuid4().hex
         self.request_text: str = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
         self.response_text: str = ""
@@ -108,8 +108,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self._running_save_tasks: list[str] = []  # worker names for auto-save, cancelled on exit
         # Single persistent RepeaterAPI — created lazily via _get_api()
         self._repeater_api = None
-        # Экран выгружается (приложение остановилось или ушло с модуля):
-        # отложенные call_after_refresh больше не должны создавать вкладки.
+        # The screen is being torn down (app stopped or left the module):
+        # deferred call_after_refresh must not create tabs any more.
         self._tearing_down: bool = False
 
     # ── Query-one short-hands ──────────────────────────────────────────────
@@ -147,15 +147,15 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         return self.query_one("#repeater-diff-panel", DiffPanel)
 
     def _notify(self, msg: str, severity: str = "information", timeout: float = 2) -> None:
-        """Безопасная нотификация через app-level NotificationsMixin."""
+        """Safe notification through the app-level NotificationsMixin."""
         try:
             app = self.app
             if hasattr(app, "notify"):
                 app.notify(msg, severity=severity, timeout=timeout)
         except Exception:
-            # Уведомление не показано — то есть пользователь не узнал ни об
-            # ошибке отправки, ни о результате. Молчание здесь особенно дорого,
-            # поэтому это warning с трейсбеком, а не debug.
+            # The notification was not shown — so the user learned neither of
+            # the send error nor of the result. Silence is especially costly
+            # here, so this is a warning with a traceback, not debug.
             logger.warning("repeater: notify(%r) failed", msg[:60], exc_info=True)
 
     def _editor(self, tab_id: str | None = None) -> RequestEditor:
@@ -263,11 +263,11 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         return self._repeater_api
 
     def on_unmount(self) -> None:
-        """Экран выгружается: отложенные сборки вкладок и автосейв больше не нужны.
+        """The screen is torn down: deferred tab builds and auto-save are no longer needed.
 
-        Без флага `_new_tab_if_current`, поставленный в очередь
-        `call_after_refresh`, успевал отработать уже при остановке приложения и
-        валил её исключением из `tabs.active`.
+        Without the flag, `_new_tab_if_current`, queued via `call_after_refresh`,
+        still managed to run once the app was already stopping and crashed it
+        with an exception from `tabs.active`.
         """
         self._tearing_down = True
         self._cancel_save_workers()
@@ -292,16 +292,16 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         if generation is None:
             generation = self._tabs_generation
         try:
-            # Набор вкладок — это таблица `repeater_tabs`, а не история
-            # отправок: история append-only, и выводить из неё вкладки значило
-            # воскрешать закрытые после перезапуска (F-053).
+            # The set of tabs is the `repeater_tabs` table, not the send
+            # history: history is append-only, and deriving tabs from it meant
+            # resurrecting closed ones after a restart (F-053).
             tabs = await repeater_api.get_tabs()
             if generation != self._tabs_generation:
                 return
             if not tabs:
-                # Проект, созданный до появления реестра: вкладки у него жили
-                # в истории. Один раз собираем реестр из неё, иначе после
-                # обновления пользователь увидел бы одну пустую вкладку.
+                # Project created before the registry existed: its tabs lived
+                # in the history. Build the registry from it once, otherwise
+                # after the update the user would see one empty tab.
                 tabs = await repeater_api.seed_tabs_from_history()
                 if generation != self._tabs_generation:
                     return
@@ -321,8 +321,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 self.call_after_refresh(self._new_tab_if_current, generation)
 
         except Exception:
-            # Вкладки проекта не восстановлены — пользователь увидит один пустой
-            # таб и решит, что данные пропали. Это потеря, поэтому error.
+            # The project's tabs were not restored — the user will see one empty
+            # tab and conclude the data is lost. That is data loss, hence error.
             logger.error("_do_load_tabs: tabs not restored", exc_info=True)
             self.call_after_refresh(self._new_tab_if_current, generation)
 
@@ -330,9 +330,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         if generation != self._tabs_generation:
             return
         if self._tearing_down or not getattr(self, "is_attached", True):
-            # Экран уже выгружается. Создание вкладки здесь доходило до
-            # `add_pane` и падало на `tabs.active` — то есть валило остановку
-            # приложения исключением из отложенного callback'а.
+            # The screen is already being torn down. Creating a tab here got as
+            # far as `add_pane` and failed on `tabs.active` — i.e. it crashed app
+            # shutdown with an exception from a deferred callback.
             return
         self.action_new_tab()
 
@@ -377,9 +377,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             tabs.active = tab_id
         except ValueError as exc:
-            # Приложение остановилось между add_pane и активацией: панель уже
-            # добавлена, а активировать её нечем. Вкладку откатываем целиком,
-            # иначе состояние и DOM разойдутся.
+            # The app stopped between add_pane and activation: the pane is
+            # already added but there is nothing to activate it with. Roll the
+            # tab back entirely, otherwise state and DOM drift apart.
             logger.debug("repeater: tab %s not activated during teardown: %s", tab_id, exc)
             self._tabs = [t for t in self._tabs if t.tab_id != tab_id]
             return
@@ -393,8 +393,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             pane.mount(body)
             self.call_after_refresh(self._fill_tab_body, tab_id, state, body)
         except Exception as exc:
-            # Первый шаг сборки тела вкладки. Оборвавшись здесь, он оставляет
-            # пустую вкладку — ровно тот класс дефектов, что ищет аудит.
+            # First step of building the tab body. Breaking here leaves an
+            # empty tab — exactly the defect class the audit is looking for.
             logger.error("repeater: tab %s body not mounted: %s", tab_id, exc, exc_info=True)
             self._notify(f"Tab {tab_id}: body could not be built — see the log", severity="error")
 
@@ -453,8 +453,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
             self.call_after_refresh(self._init_tab_content, tab_id, state)
         except Exception as exc:
-            # Без редактора и панели ответа вкладка остаётся пустой: Send
-            # нажмётся, а печатать будет некуда.
+            # Without the editor and the response panel the tab stays empty:
+            # Send can be pressed, but there is nowhere to type.
             logger.error("repeater: tab %s editor/viewer not mounted: %s", tab_id, exc, exc_info=True)
 
     def _init_tab_content(self, tab_id: str, state: _TabState, attempt: int = 0) -> None:
@@ -481,16 +481,16 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             editor.load_raw(state.request_text)
         except Exception as exc:
-            # Восстановленная вкладка пуста, хотя её текст лежит в state —
-            # то есть автосохранение сработало, а загрузка нет.
+            # The restored tab is empty even though its text sits in state —
+            # i.e. auto-save worked but the load did not.
             logger.error("repeater: tab %s request text not restored: %s", tab_id, exc, exc_info=True)
         else:
             # From here the editor is the source of truth for this tab; only
             # now may its text be read back into `state.request_text`.
             state.ui_ready = True
-            # Вкладка должна пережить перезапуск сразу, а не только после
-            # первой правки: строка в `repeater_tabs` — это и есть набор
-            # вкладок проекта.
+            # The tab must survive a restart right away, not only after the first
+            # edit: a row in `repeater_tabs` is what the project's set of tabs
+            # is made of.
             self._auto_save_tab_to_db(state)
         # load_raw() -> TextArea.load_text() posts a Changed event; this
         # initial load must NOT mark the tab dirty. Clear it back to False
@@ -542,10 +542,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             self.workers.cancel_node(self)
         except Exception:
-            # Воркер, переживший switch_db, обратится к закрытому соединению и
-            # уронит TUI — это и есть причина, по которой отмена стоит первой.
-            # Падение произойдёт уже в другом месте, поэтому трейсбек нужен
-            # здесь, где видна настоящая причина.
+            # A worker that outlived switch_db will touch the closed connection
+            # and crash the TUI — that is exactly why cancellation comes first.
+            # The crash would happen elsewhere, so the traceback is needed here,
+            # where the real cause is visible.
             logger.exception("repeater: in-flight workers not cancelled")
         generation = self._tabs_generation
         # Point the persistent RepeaterAPI at the new project's DB instead of
@@ -562,10 +562,10 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
     async def _close_all_tabs(self) -> None:
         """Remove all tabs and reset state.
 
-        `TabbedContent.clear_panes()` — штатный способ снять все панели сразу.
-        Снятие по одной оставляло внутренний `Tabs` обновляющим `active` по уже
-        исчезнувшей панели (`ValueError: No Tab with id '--content-tab-tab-N'`);
-        всплывало это на перезагрузке проекта, когда на экране одна вкладка.
+        `TabbedContent.clear_panes()` is the proper way to drop all panes at once.
+        Removing them one by one left the internal `Tabs` updating `active` for a
+        pane that was already gone (`ValueError: No Tab with id '--content-tab-tab-N'`);
+        this surfaced on project reload, when the screen holds a single tab.
         """
         self._cancel_save_workers()
 
@@ -573,8 +573,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             await self._tabs_w.clear_panes()
         except Exception as exc:
-            # Панели не снялись — ниже список всё равно очищается, то есть
-            # вкладки в дереве станут сиротами без состояния.
+            # The panes were not removed — yet the list below is cleared anyway,
+            # so the tabs in the tree become orphans without state.
             logger.debug("repeater: panes not cleared: %s", exc)
         self._tabs = []
         self._active_tab_id = None
@@ -598,11 +598,11 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             try:
                 inp = self.query_one("#rename-input", Input)
             except NoMatches as exc:
-                # Поля ещё нет — ниже создаём его сами. Ожидаемый ход; запись
-                # отличает его от опечатки в id.
+                # The field does not exist yet — we create it below ourselves.
+                # Expected path; the log entry tells it apart from a typo in the id.
                 logger.debug("repeater: rename input not found, creating: %s", exc)
-                # classes="tab-rename" обязателен: без него поле попадает в обычный поток
-                # и выпадает внизу экрана вместо наложения на строку вкладок.
+                # classes="tab-rename" is mandatory: without it the field joins the normal
+                # flow and drops to the bottom of the screen instead of overlaying the tab row.
                 inp = Input(id="rename-input", classes="tab-rename", placeholder="Tab name...", compact=True)
                 self.query_one("#tabs-area").mount(inp)
             inp.value = state.name
@@ -611,8 +611,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             inp.action_select_all()
             inp._rename_tab_id = tab_id  # type: ignore[attr-defined]
         except Exception as exc:
-            # F2 по вкладке ничего не делает: вкладка не переименовывается,
-            # и это выглядит как «клавиша не работает».
+            # F2 on a tab does nothing: the tab is not renamed, and it looks
+            # like "the key does not work".
             logger.debug("repeater: rename not started for %s: %s", tab_id, exc)
 
     def _rename_tab(self, tab_id: str, new_name: str) -> None:
@@ -636,8 +636,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 suffix = "*" if state.is_dirty else ""
                 tab_widget.label = f"{state.name}{suffix}"
         except Exception as exc:
-            # Метка вкладки перестаёт отражать грязное состояние — а это
-            # единственный признак несохранённого запроса (F-031).
+            # The tab label stops reflecting the dirty state — and that is the
+            # only sign of an unsaved request (F-031).
             logger.debug("repeater: label not updated for tab %s: %s", state.tab_id, exc)
 
     def on_text_area_changed(self, event) -> None:
@@ -685,9 +685,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             panel = self._diff_panel
         except NoMatches as exc:
-            # Панели нет — Ctrl+D ничего не сделает. Ожидаемо только если
-            # экран ещё не собран; `NoMatches` — ровно этот случай, а опечатка
-            # в id всплывёт как `NoMatches` с другим селектором в тексте.
+            # No panel — Ctrl+D will do nothing. Expected only if the screen is
+            # not composed yet; `NoMatches` is exactly that case, while a typo in
+            # the id would surface as `NoMatches` with a different selector.
             logger.debug("repeater: diff panel not found for toggle: %s", exc)
             return
         now_visible = panel.toggle()
@@ -722,8 +722,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             else:
                 bar.show()
         except NoMatches as exc:
-            # Ctrl+F не показал панель поиска — клавиша выглядит мёртвой;
-            # панели нет в дереве, то есть экран ещё не собран.
+            # Ctrl+F did not show the search bar — the key looks dead; the bar is
+            # not in the tree, i.e. the screen is not composed yet.
             logger.debug("repeater: search bar not toggled: %s", exc)
 
     def on_search_bar_search(self, event: SearchBar.Search) -> None:
@@ -738,9 +738,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             bar = self._search_bar
             self._search_target = bar._search_target
         except NoMatches as exc:
-            # Цель поиска останется прежней: пользователь переключил
-            # Req/Resp, а искать будет в другом поле. Молча — сбивает. Панели
-            # поиска нет в дереве — единственная причина `NoMatches` здесь.
+            # The search target stays as it was: the user switched Req/Resp, but
+            # the search will run in the other panel — silently, which misleads.
+            # The search bar is absent from the tree, the only `NoMatches` here.
             logger.debug("repeater: search target not synced: %s", exc)
 
     def on_search_bar_closed(self, event: SearchBar.Closed) -> None:
@@ -767,8 +767,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                     matches.append(idx)
                     start = idx + 1
         except Exception as exc:
-            # Невалидная регулярка — норма: покажем «нет совпадений». Запись
-            # отличает это от настоящей ошибки поиска.
+            # An invalid regex is normal: we show "no matches". This log entry
+            # tells it apart from a real search error.
             logger.debug("repeater: search pattern %r unusable: %s", self._search_query, exc)
             matches = []
 
@@ -777,8 +777,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             try:
                 self._search_bar.set_count(0, 0)
             except Exception as exc:
-                # Счётчик «0/0» не выставлен — в баре останется прошлое
-                # «3/7» при пустом поиске.
+                # The "0/0" counter was not set — the bar keeps the previous
+                # "3/7" while the search is empty.
                 logger.debug("repeater: search count not reset: %s", exc)
             return
 
@@ -791,7 +791,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             self._search_bar.set_count(self._search_current + 1, len(matches))
         except Exception as exc:
-            # Курсор прыгнул, а номер совпадения — нет.
+            # The cursor jumped but the match number did not.
             logger.debug("repeater: search count not updated: %s", exc)
 
     def _get_active_text(self) -> str:
@@ -832,8 +832,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             area.move_cursor((row, col), center=True)
             area.selection = Selection((row, col), (end_row, end_col))
         except Exception as exc:
-            # Найдено N совпадений, но курсор не прыгнул — поиск выглядит
-            # сломанным при том, что он нашёл.
+            # N matches found, but the cursor did not jump — the search looks
+            # broken even though it did find something.
             logger.debug("repeater: cursor not moved to match at %d: %s", offset, exc)
 
     def _save_current_tab_state(self) -> None:
@@ -856,9 +856,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             # Auto-save to DB (async, fire-and-forget)
             self._auto_save_tab_to_db(state)
         except Exception:
-            # Текст вкладки не попал в state — при переключении он потеряется,
-            # то есть это ровно та потеря, ради которой автосохранение и есть.
-            # Уровень error и трейсбек: потерю данных нельзя оставлять в debug.
+            # The tab text never reached state — switching tabs will lose it,
+            # which is exactly the loss auto-save exists to prevent. Error level
+            # and a traceback: data loss must not be left at debug.
             logger.error("repeater: tab %s state not saved", self._active_tab_id, exc_info=True)
 
     def _auto_save_tab_to_db(self, state: _TabState) -> None:
@@ -880,8 +880,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
                 self._save_worker_name(f"save-{state.tab_id}"),
             )
         except Exception:
-            # Вкладка не попала в реестр: после перезапуска её не будет, хотя
-            # пользователь в ней работал.
+            # The tab never reached the registry: after a restart it will be
+            # gone even though the user worked in it.
             logger.error("_auto_save_tab_to_db: tab not persisted", exc_info=True)
 
     def _delete_tab_from_db(self, state: _TabState) -> None:
@@ -917,15 +917,15 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             editor = self._editor(tab_id)
             raw = editor.get_text()
         except NoMatches as exc:
-            # Send нажат, а редактора нет в дереве (вкладка не смонтирована) —
-            # запрос не прочитан, и отправлять нечего.
+            # Send was pressed but the editor is not in the tree (tab not
+            # mounted) — the request was not read, so there is nothing to send.
             logger.debug("repeater: editor not found for send: %s", exc)
             self._notify("Could not read the request — see the log", severity="error")
             return
         except Exception:
-            # Тот же исход, но причина другая: текст не прочитался из уже
-            # найденного редактора. Пользователю всё равно «не прочиталось»,
-            # а нам нужен трейсбек — это дефект, а не несмонтированная панель.
+            # Same outcome, different cause: the text could not be read from an
+            # editor that was found. To the user it is still "not read", but we
+            # need a traceback — this is a defect, not an unmounted panel.
             logger.exception("repeater: request text not read for send")
             self._notify("Could not read the request — see the log", severity="error")
             return
@@ -971,8 +971,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             viewer = self._viewer(tab_id)
             viewer.load_response(resp)
         except Exception as exc:
-            # Запрос ушёл, ответ пришёл, а панель его не показала — со стороны
-            # это «Send не работает», хотя статус-строка говорит HTTP 200.
+            # The request went out and a response came back, but the panel did not show
+            # it — from outside that is "Send is broken" while the status bar says HTTP 200.
             logger.debug("repeater: response not shown for tab %s: %s", tab_id, exc)
 
         # Successful send — snapshot the sent text and clear the "*" marker.
@@ -993,9 +993,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         if getattr(event.worker, "name", None) != "repeater-send":
             return
         if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
-            # Без условия `if self._sending`: успешный путь `_do_send` сам
-            # сбрасывает флаг ДО этого события, и кнопка Send оставалась серой
-            # навсегда (ровно то, что видно в тестировании).
+            # No `if self._sending` guard: the success path in `_do_send` clears
+            # the flag BEFORE this event, so the Send button stayed grey forever
+            # (exactly what shows up in manual testing).
             self._sending = False
             # Send/Cancel are header buttons now: one redraw resets both.
             self._refresh_header_now()
@@ -1008,9 +1008,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             self._editor(tab_id).clear()
             self._viewer(tab_id).clear()
         except NoMatches as exc:
-            # Статус ниже скажет «Cleared», а на экране останется прежний
-            # запрос — прямое противоречие между словом и делом. Панелей нет
-            # в дереве, то есть вкладка не смонтирована.
+            # The status below says "Cleared" while the old request stays on
+            # screen — a direct contradiction between word and deed. The panels
+            # are absent from the tree, i.e. the tab is not mounted.
             logger.debug("repeater: tab %s not cleared: %s", tab_id, exc)
         self._set_status("Cleared")
 
@@ -1025,8 +1025,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             editor = self._editor(self._active_tab_id)
             req_ok = editor.beautify_body()
         except Exception as exc:
-            # Остаётся False — ниже пользователь прочитает «нет валидного
-            # JSON/XML», хотя причина другая. Запись это разделяет.
+            # Stays False — below the user reads "no valid JSON/XML", although
+            # the cause is different. This log entry keeps the two apart.
             logger.debug("repeater: request beautify failed: %s", exc)
         try:
             viewer = self._viewer(self._active_tab_id)
@@ -1063,8 +1063,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             editor = self._editor(self._active_tab_id)
             editor.load_raw(raw)
         except Exception:
-            # Запрос не загрузился — вкладка останется с прежним текстом, а
-            # пользователь уверен, что отправил новый. Потеря данных → error.
+            # The request was not loaded — the tab keeps the previous text, while
+            # the user believes the new one was sent. Data loss → error.
             logger.error("repeater: request not loaded into tab %s", self._active_tab_id, exc_info=True)
 
     def load_request_in_new_tab(self, raw: str) -> None:
@@ -1084,7 +1084,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             editor = self._editor(self._active_tab_id)
             editor.load_raw(raw)
-        except Exception:  # logging-ok: ожидаемый путь — повтор через таймер
+        except Exception:  # logging-ok: expected path — retry via timer
             # Widget not yet mounted — retry with an extra defer
             logger.debug("repeater: editor not ready, retrying via timer")
             state = self._get_tab_state(self._active_tab_id)
@@ -1100,8 +1100,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             editor = self._editor(self._active_tab_id)
             editor.load_raw(raw)
         except Exception:
-            # Повтор тоже не удался: текст уже лежит в state, но на экране его
-            # нет. Молчание здесь означало бы «запрос потерялся» без следа.
+            # The retry failed too: the text is already in state but not on
+            # screen. Silence here would mean "the request got lost" with no trace.
             logger.warning(
                 "repeater: request still not loaded into tab %s after retry",
                 self._active_tab_id,
@@ -1113,8 +1113,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             bar = self._status_bar
             bar.update(msg)
         except Exception as exc:
-            # Статус — единственное место, где видны «Sending…», HTTP-код и
-            # ошибки отправки. Его пропажа делает экран немым.
+            # The status bar is the only place showing "Sending…", the HTTP code
+            # and send errors. Losing it makes the screen mute.
             logger.debug("repeater: status bar not updated: %s", exc)
 
     # ── context menu ───────────────────────────────────────────────────────────
@@ -1131,8 +1131,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             return self._editor(tab_id).get_text()
         except Exception as exc:
-            # Возвращается пустая строка — пункты меню отправят «ничего», и
-            # это будет выглядеть как отказ приложения.
+            # An empty string is returned — the menu items will send "nothing",
+            # and that will look like the app refusing.
             logger.debug("repeater: request text not read for context menu: %s", exc)
             return ""
 
@@ -1152,8 +1152,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             next_idx = (idx + 1) % len(ids)
             tabs.active = ids[next_idx]
         except NoMatches as exc:
-            # Ctrl+Tab не переключил вкладку — клавиша выглядит мёртвой;
-            # панели вкладок нет в дереве.
+            # Ctrl+Tab did not switch the tab — the key looks dead; the tab strip
+            # is not in the tree.
             logger.debug("repeater: next tab not activated: %s", exc)
 
     def action_send_to_scanner(self) -> None:

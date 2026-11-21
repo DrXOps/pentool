@@ -67,8 +67,8 @@ class InspectorPanel(Widget):
             parsed_url = urlparse(req.url)
             qparams = {k: ", ".join(v) for k, v in parse_qs(parsed_url.query).items()}
         except Exception as exc:
-            # Секция «Query Parameters» пуста: параметры в URL есть, но в
-            # инспекторе их нет — легко принять за запрос без query.
+            # The "Query Parameters" section stays empty: the URL has parameters,
+            # but the inspector shows none — easily taken for a query-less request.
             logger.debug("inspector: query string not parsed: %s", exc)
             qparams = {}
         self._add_section(widgets, "Query Parameters", qparams)
@@ -81,8 +81,8 @@ class InspectorPanel(Widget):
                 try:
                     body_params = {k: ", ".join(v) for k, v in parse_qs(body_text).items()}
                 except Exception as exc:
-                    # Форма объявлена, но не разобрана — секция «Body
-                    # Parameters» пуста, как будто тело без параметров.
+                    # A form is declared but not parsed — the "Body Parameters"
+                    # section stays empty, as if the body had no parameters.
                     logger.debug("inspector: form body not parsed: %s", exc)
             elif "application/json" in ct:
                 try:
@@ -90,8 +90,8 @@ class InspectorPanel(Widget):
                     if isinstance(d, dict):
                         body_params = {k: str(v) for k, v in d.items()}
                 except Exception as exc:
-                    # JSON-тело не разобралось (обрезанный ответ, JPEG в
-                    # Content-Type) — инспектор покажет пустую секцию.
+                    # The JSON body did not parse (truncated response, JPEG in
+                    # Content-Type) — the inspector will show an empty section.
                     logger.debug("inspector: JSON body not parsed: %s", exc)
         self._add_section(widgets, "Body Parameters", body_params)
 

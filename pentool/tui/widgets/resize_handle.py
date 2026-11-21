@@ -45,9 +45,9 @@ class ResizeHandle(Widget):
         if vertical:
             self.add_class("-vertical")
 
-        # Толщина задаётся настройкой и применяется к ОБЕИМ ориентациям:
-        # раньше отличалась по определению (ширина в колонках против высоты в
-        # строках), и выглядело как «разные по толщине» — что и было замечено.
+        # Thickness comes from config and applies to BOTH orientations: it used
+        # to differ by definition (width in columns vs. height in rows) and looked
+        # like "different thicknesses" — which is exactly what got reported.
         try:
             from pentool.core.config import get_config
 
@@ -77,8 +77,8 @@ class ResizeHandle(Widget):
             left = self.app.query_one(f"#{self._left_id}")
             right = self.app.query_one(f"#{self._right_id}")
         except NoMatches as exc:
-            # Одна из панелей не смонтирована — перетаскивание молча не
-            # начнётся (или не продолжится), разделитель выглядит мёртвым.
+            # One of the panels is not mounted — dragging silently never starts
+            # (or never continues), and the divider looks dead.
             logger.debug("resize handle: panel %s/%s missing: %s", self._left_id, self._right_id, exc)
             return
 
@@ -104,8 +104,8 @@ class ResizeHandle(Widget):
             left = self.app.query_one(f"#{self._left_id}")
             right = self.app.query_one(f"#{self._right_id}")
         except NoMatches as exc:
-            # Панель исчезла посреди перетаскивания — движение дальше молчит,
-            # разделитель остаётся «зажатым» без обратной связи.
+            # A panel vanished mid-drag — further movement stays silent and the
+            # divider remains "stuck" with no feedback.
             logger.debug("resize handle: panel gone during drag: %s", exc)
             return
 

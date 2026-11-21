@@ -37,7 +37,7 @@ TUI = ROOT / "pentool" / "tui"
 
 
 def tui_roots() -> list:
-    """TUI-корни: основной пакет и PRO, если сабмодуль установлен."""
+    """TUI roots: the main package and PRO, if the submodule is installed."""
     roots = [TUI]
     pro_tui = ROOT / "pro" / "pentool" / "tui"
     if pro_tui.is_dir():

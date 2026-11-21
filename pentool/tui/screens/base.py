@@ -83,8 +83,8 @@ class BaseModuleScreen(Widget):
                     )
                     return
             except NoMatches as e:
-                # Вкладок экрана нет в дереве — переименовывать нечего, двойной
-                # клик по вкладке просто ничего не сделает.
+                # The screen's tabs are not in the tree — there is nothing to
+                # rename, so a double click on a tab simply does nothing.
                 _log.debug("BaseModuleScreen: TabbedContent not in tree: %s", e)
                 return
 
@@ -109,9 +109,9 @@ class BaseModuleScreen(Widget):
             if inp.display:
                 inp.display = False
         except NoMatches as e:
-            # Поле переименования остаётся висеть поверх вкладок после ухода
-            # фокуса — оно перекрывает заголовки, а нажатия уходят в него.
-            # Поля нет в дереве — единственная причина `NoMatches` здесь.
+            # The rename field would stay on top of the tabs after focus is
+            # lost — it covers the headers and clicks go into it instead.
+            # The field is not in the tree — the only source of `NoMatches` here.
             _log.debug("BaseModuleScreen: rename input not hidden on blur: %s", e)
 
     # ── Abstract interface ────────────────────────────────────────────────────

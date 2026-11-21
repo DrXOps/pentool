@@ -132,9 +132,9 @@ class ProjectManager:
                     )
                     dash._populate_projects()
                 except Exception:
-                    # Файл сохранён (уведомление выше уже показано), но в ленте
-                    # и списке проектов этого нет — расхождение между «Saved» и
-                    # пустым списком на дашборде.
+                    # The file was saved (the notification above is already shown),
+                    # but the feed and the project list do not reflect it — a
+                    # mismatch between "Saved" and an empty dashboard list.
                     logger.warning("project: save not reflected on dashboard", exc_info=True)
             except Exception as e:
                 _err(e, "Save failed")
@@ -216,8 +216,8 @@ class ProjectManager:
                         len(http_history),
                     )
             except Exception:
-                # История прокси не попала в файл проекта: после загрузки её не
-                # будет. Это потеря при экспорте, а не косметика.
+                # Proxy history did not make it into the project file: after
+                # loading it will be gone. This is loss on export, not cosmetics.
                 logger.warning("_do_save_json: http_history export failed", exc_info=True)
             # Scanner findings
             try:
@@ -226,8 +226,8 @@ class ProjectManager:
                 scanner_screen = self._app.require_module_screen("scanner", ScannerScreen)
                 scanner_export = scanner_screen.get_scanner_export()
             except Exception:
-                # Находки сканера не попали в файл: проект сохранится «пустым»
-                # по этой части, хотя на экране они есть.
+                # Scanner findings did not make it into the file: the project is
+                # saved "empty" in this part even though the screen shows them.
                 logger.warning("_do_save_json: scanner findings not exported", exc_info=True)
                 scanner_export = {"findings": []}
             # Target sitemap
@@ -238,8 +238,8 @@ class ProjectManager:
                 target_api = target_screen._get_api()
                 target_export = target_api.export_project_data()
             except Exception:
-                # Карта сайта не попала в файл проекта — при загрузке Target
-                # будет пуст.
+                # The site map did not make it into the project file — on load
+                # Target will be empty.
                 logger.warning("_do_save_json: target sitemap not exported", exc_info=True)
                 target_export = {"sitemap": {}}
             # Intruder results
@@ -249,7 +249,7 @@ class ProjectManager:
                 intruder_screen = self._app.require_module_screen("intruder", IntruderScreen)
                 intruder_export = intruder_screen.get_intruder_export()
             except Exception:
-                # Результаты Intruder не попали в файл проекта.
+                # Intruder results did not make it into the project file.
                 logger.warning("_do_save_json: intruder results not exported", exc_info=True)
                 intruder_export = {"results": []}
             # Spider sessions (from EventBus history)
@@ -293,7 +293,7 @@ class ProjectManager:
                 scanner_screen._populate_from_db([])
                 scanner_screen._load_findings_worker()
             except Exception:
-                # Находки сканера не импортированы: проект откроется без них.
+                # Scanner findings were not imported: the project opens without them.
                 logger.warning("import scanner: findings not imported", exc_info=True)
             # Target sitemap
             target_count = 0
@@ -305,7 +305,7 @@ class ProjectManager:
                 target_count = target_api.import_project_data(data.get("target", {}))
                 target_screen._load_sitemap()
             except Exception:
-                # Карта сайта не импортирована — Target откроется пустым.
+                # Site map was not imported — Target will open empty.
                 logger.warning("import target: sitemap not imported", exc_info=True)
             # Intruder results
             intruder_count = 0
@@ -317,7 +317,7 @@ class ProjectManager:
                 if intruder_api:
                     intruder_count = intruder_api.import_project_data(data.get("intruder", {}))
             except Exception:
-                # Результаты Intruder не импортированы.
+                # Intruder results were not imported.
                 logger.warning("import intruder: results not imported", exc_info=True)
 
             self._app.post_message(ProxyLoadProject())
@@ -407,10 +407,10 @@ class ProjectManager:
                 # whatever the previous project had in memory.
                 self._proxy.set_enforce_scope(False)
             except Exception:
-                # У нового проекта остались история, scope и правила
-                # Match&Replace прошлого — то есть чужой проект виден в новом.
-                # Ловится всё: это прокси-объект, и его состояние чистится
-                # пятью независимыми сеттерами.
+                # The new project kept the previous project's history, scope and
+                # Match&Replace rules — i.e. another project is visible in it.
+                # Everything is caught here: this is the proxy object, and its
+                # state is cleared by five independent setters.
                 logger.exception("project: new-project proxy state not reset")
 
         self.update_project_name(path)
@@ -428,12 +428,12 @@ class ProjectManager:
             verb = "created" if is_new else "opened"
             dash.log_activity(f'Project "{os.path.splitext(os.path.basename(path))[0]}" {verb} from {path}', "ok")
         except NoMatches as exc:
-            # Экрана дашборда нет в дереве (проект открывают не со стартового
-            # экрана) — записи в ленте не будет, и это нормально.
+            # No dashboard screen in the tree (the project is opened not from the
+            # start screen) — there will be no feed entry, and that is fine.
             logger.debug("project: dashboard not mounted for switch log: %s", exc)
         except Exception:
-            # Проект переключён, но в ленте дашборда об этом нет записи —
-            # а именно по ленте пользователь понимает, что произошло.
+            # The project was switched, but the dashboard feed has no entry about
+            # it — and the feed is exactly how the user knows what happened.
             logger.exception("project: switch not logged to dashboard feed")
 
     # ── Internal async helpers ────────────────────────────────────────────────
@@ -482,8 +482,8 @@ class ProjectManager:
                         screen.query_one("#req-editor").clear()  # type: ignore[attr-defined]
                         screen.query_one("#resp-viewer").clear()  # type: ignore[attr-defined]
                     except NoMatches as exc:
-                        # Таблица очищена, а панели показывают запрос прошлого
-                        # проекта — данные нового проекта выглядят уже открытыми.
+                        # The table is cleared but the panels still show the previous
+                        # project's request — the new project's data looks loaded.
                         logger.debug("_do_switch: detail panels not cleared: %s", exc)
                     screen._selected_req_id = None  # type: ignore[attr-defined]
                 except Exception as exc:
@@ -588,9 +588,9 @@ class ProjectManager:
             try:
                 await target_screen._target_api.save()  # type: ignore[attr-defined]
             except Exception:
-                # Несохранённые изменения карты сайта прошлого проекта
-                # теряются при переключении — молча. Это потеря данных
-                # пользователя, поэтому warning с трейсбеком.
+                # Unsaved site map changes of the previous project are lost on a
+                # switch — silently. This is user data loss, which is why it is a
+                # warning with a traceback.
                 logger.warning("project: old site map not saved before switch", exc_info=True)
             # SiteMap holds one persistent SQLite connection: close it before
             # dropping the instance, otherwise a connection to the old project's
@@ -598,8 +598,8 @@ class ProjectManager:
             try:
                 await target_screen._target_api.close()  # type: ignore[attr-defined]
             except Exception:
-                # Соединение остаётся открытым до выхода: дескрипторы и
-                # блокировки копятся с каждым переключением проекта.
+                # The connection stays open until quit: file descriptors and locks
+                # pile up with every project switch.
                 logger.warning("project: old site map connection not closed", exc_info=True)
         target_screen._target_api = None  # type: ignore[attr-defined]
         target_screen._get_api()  # type: ignore[attr-defined]
@@ -611,9 +611,9 @@ class ProjectManager:
                 target_screen._target_api.clear()  # type: ignore[attr-defined]
                 target_screen._target_api.sitemap._scope_hosts.clear()  # type: ignore[attr-defined]
             except Exception:
-                # Узлы прошлого проекта могут появиться в новом — это ровно тот
-                # «артефакт, протекающий между проектами», ради которого блок и
-                # написан. error.
+                # Nodes from the previous project may show up in the new one — this
+                # is exactly the "artifact leaking between projects" that this block
+                # was written for. error.
                 logger.error("project: new project's site map not cleared", exc_info=True)
         target_screen._load_sitemap()  # type: ignore[attr-defined]
 
@@ -669,8 +669,8 @@ class ProjectManager:
             bar = self._app.query_one(StatusBar)
             bar.set_project(name, path, saved)
         except Exception as exc:
-            # Строка состояния будет показывать прежний проект — то есть
-            # называть файл, с которым приложение уже не работает.
+            # The status bar will keep showing the previous project — i.e. naming
+            # a file the application no longer works with.
             logger.debug("project: status bar not updated with %r: %s", name, exc)
         try:
             self._app.sub_title = f"project: {name}"
@@ -680,6 +680,6 @@ class ProjectManager:
             try:
                 self._cfg.add_recent_project(path)
             except Exception as exc:
-                # Проект открыт, но в списке «недавних» на дашборде его не
-                # будет — следующий раз его придётся искать вручную.
+                # The project is open, but it will not be in the dashboard's
+                # "recent" list — next time it has to be found by hand.
                 logger.debug("project: %s not added to recent projects: %s", path, exc)

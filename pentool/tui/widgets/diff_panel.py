@@ -61,8 +61,8 @@ class DiffPanel(Widget):
             self.query_one("#diff-panel-log", RichLog).clear()
             self.query_one("#diff-panel-title", Static).update("Diff vs. last sent")
         except NoMatches as exc:
-            # Панель остаётся с диффом от предыдущего запроса: «Diff vs. last
-            # sent» показывает расхождение с чужим запросом.
+            # The panel keeps the diff from the previous request: "Diff vs. last
+            # sent" would show a mismatch against somebody else's request.
             logger.debug("DiffPanel.clear: %s", exc)
 
     def toggle(self) -> bool:

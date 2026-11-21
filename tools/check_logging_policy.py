@@ -60,7 +60,7 @@ PACKAGE = ROOT / "pentool"
 
 
 def packages() -> list:
-    """Пакеты для проверки: основной и PRO (если сабмодуль установлен)."""
+    """Packages to check: the main one and PRO (if the submodule is installed)."""
     found = [PACKAGE]
     pro_package = ROOT / "pro" / "pentool"
     if pro_package.is_dir():
@@ -70,7 +70,7 @@ def packages() -> list:
 
 BASELINE = ROOT / "tools" / "logging_policy_baseline.json"
 
-#: Имена функций, работающих с состоянием: тут молчание = потеря данных.
+#: Names of functions that work with state: silence here means data loss.
 _DATA_VERBS = (
     "save",
     "store",
@@ -85,7 +85,7 @@ _DATA_VERBS = (
     "switch_db",
 )
 
-#: Косметика: даже если имя задело глагол (`_apply_theme`), логирование данных тут ни при чём.
+#: Cosmetic: even if the name hit a verb (`_apply_theme`), data logging is irrelevant here.
 _COSMETIC_WORDS = (
     "theme",
     "layout",
@@ -105,10 +105,10 @@ _COSMETIC_WORDS = (
     "style",
 )
 
-#: Уровни, которые считаются честным логом (при наличии трейсбека).
+#: Levels considered an honest log (when a traceback is present).
 _LOUD = {"warning", "error", "exception", "critical"}
 
-#: Имена модульных логгеров проекта (кроме них принимается любое `*log`/`*logger`).
+#: Names of the project's module-level loggers (any `*log`/`*logger` is accepted too).
 _LOGGER_NAMES = {"logger", "log", "root_logger", "_logger", "_log"}
 
 _PRAGMA = "logging-ok"
@@ -135,26 +135,26 @@ def _is_data_path(name: str) -> bool:
 
 
 def _handler_logs_loudly(handler: ast.ExceptHandler, source: str) -> bool:
-    """Пробрасывает, или logger.*(… exc_info=True), или logger.exception(…), или err(exc, …)."""
+    """Re-raises, or logger.*(… exc_info=True), or logger.exception(…), or err(exc, …)."""
     for stmt in ast.walk(ast.Module(body=handler.body, type_ignores=[])):
         if isinstance(stmt, ast.Raise):
             return True
         if not isinstance(stmt, ast.Call):
             continue
         func = stmt.func
-        # `err(exc, ...)` / `self.err(exc, ...)`: pentool.core.error_guard печатает
-        # traceback и уведомляет пользователя — та же честная форма, что и
-        # logger.exception, и гвард слоя 2 её уже признаёт.
+        # `err(exc, ...)` / `self.err(exc, ...)`: pentool.core.error_guard prints the
+        # traceback and notifies the user — the same honest shape as
+        # logger.exception, and the layer-2 guard already recognizes it.
         name = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else ""
-        # `err(exc, ...)` и его алиасы (`_err` — так его импортирует
-        # project_manager): error_guard печатает traceback и уведомляет
-        # пользователя, это честная форма, её признаёт и гвард слоя 2.
+        # `err(exc, ...)` and its aliases (`_err` is how
+        # project_manager imports it): error_guard prints the traceback and notifies
+        # the user, this is an honest shape that the layer-2 guard recognizes too.
         if name.lstrip("_") == "err" and stmt.args:
             return True
         if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
             continue
-        # Имя логгера в проекте не всегда `logger`: `log` в services/ai/factory.py,
-        # `root_logger` в core/logging.py. Принимаем их и любое `*log`/`*logger`.
+        # The logger is not always named `logger` in the project: `log` in services/ai/factory.py,
+        # `root_logger` in core/logging.py. We accept those and any `*log`/`*logger`.
         logger_name = func.value.id.lower()
         if logger_name not in _LOGGER_NAMES and not logger_name.endswith(("logger", "log")):
             continue
@@ -168,18 +168,18 @@ def _handler_logs_loudly(handler: ast.ExceptHandler, source: str) -> bool:
 
 
 def _has_pragma(handler: ast.ExceptHandler, lines: list[str]) -> bool:
-    """Прагма может оказаться не на строке `except`.
+    """The pragma may end up not on the `except` line.
 
-    Форматтер вправе развернуть длинный заголовок в многострочный
-    (`except (\n    Exception\n):  # logging-ok: …`), и тогда комментарий
-    уезжает со строки `lineno`. Поэтому смотрим ещё пару строк ниже.
+    The formatter is free to wrap a long header onto several lines
+    (`except (\n    Exception\n):  # logging-ok: …`), and then the comment
+    drifts away from the `lineno` line. So we also look a couple of lines below.
     """
     start = handler.lineno - 1
     return any(_PRAGMA in lines[i] for i in range(start, min(start + 3, len(lines))))
 
 
 def count_violations(tree: ast.AST, source: str) -> int:
-    """Сколько широких `except` в путях данных молчат о причине."""
+    """How many broad `except` blocks in data paths stay silent about the cause."""
     lines = source.splitlines()
     count = 0
     for node in ast.walk(tree):
@@ -213,7 +213,7 @@ def scan() -> dict[str, int]:
 
 
 def list_violations() -> list[tuple[str, int, str]]:
-    """(файл, строка, имя функции) для каждого нарушения — для пофайловой чистки."""
+    """(file, line, function name) for each violation — for file-by-file cleanup."""
     found: list[tuple[str, int, str]] = []
     for path in sorted(p for package in packages() for p in package.rglob("*.py")):
         source = path.read_text(encoding="utf-8")

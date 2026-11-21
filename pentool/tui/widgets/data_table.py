@@ -1,13 +1,13 @@
-"""ArrowBackendDataTable — универсальный DataTable с ArrowBackend.
+"""ArrowBackendDataTable — a generic DataTable backed by ArrowBackend.
 
-Объединяет повторяющийся паттерн ``ArrowBackend`` + ``DataTable``,
-который дублируется в ProxyScreen (10 мест).
+Bundles the ``ArrowBackend`` + ``DataTable`` pattern that ProxyScreen used to
+duplicate in 10 places.
 
-Использование::
+Usage::
 
     table = ArrowBackendDataTable(columns=["ID", "Host", "Method"])
-    table.set_data(arrow_table)  # полностью перестроить
-    table.add_rows(rows)         # инкрементально добавить
+    table.set_data(arrow_table)  # rebuild everything
+    table.add_rows(rows)         # append incrementally
 """
 
 from __future__ import annotations
@@ -232,11 +232,11 @@ class ArrowBackendDataTable(DataTable):
         self.refresh()
 
     def _get_cell_renderable(self, row_index, column_index):  # noqa: ANN201
-        """Crash-guard: оборачивает заголовки колонок в Text().
+        """Crash-guard: wraps column headers in Text().
 
-        В textual_fastdatatable.DataTable._get_cell_renderable (строка 1785)
-        для row_index == -1 возвращает label напрямую. Оборачиваем str в
-        RichText чтобы .plain работал (после ArrowBackend rebuild).
+        In textual_fastdatatable.DataTable._get_cell_renderable (line 1785)
+        row_index == -1 returns the label directly. We wrap a str in
+        RichText so that .plain works (after an ArrowBackend rebuild).
         """
         if row_index == -1:  # header row
             label = self.ordered_columns[column_index].label
@@ -246,7 +246,7 @@ class ArrowBackendDataTable(DataTable):
         return super()._get_cell_renderable(row_index, column_index)
 
     def _mouse_ready(self) -> bool:
-        """Проверка: таблица смонтирована и имеет ненулевой размер."""
+        """Check: the table is mounted and has a non-zero size."""
         try:
             region = self.region
             return region.width > 0 and region.height > 0
@@ -356,10 +356,10 @@ class ArrowBackendDataTable(DataTable):
         self.refresh()
 
     def safe_sort(self, col_name: str, direction: str = "ascending") -> bool:
-        """Безопасная сортировка через родной DataTable.sort() с crash-guard.
+        """Safe sorting through the native DataTable.sort(), with a crash-guard.
 
-        Проверяет готовность таблицы и вызывает sort(by=[(col, dir)]).
-        Возвращает True при успехе, False при ошибке.
+        Checks that the table is ready and calls sort(by=[(col, dir)]).
+        Returns True on success, False on error.
         """
         if not self._mouse_ready():
             return False

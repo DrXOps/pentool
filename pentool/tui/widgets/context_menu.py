@@ -83,21 +83,22 @@ class ContextMenu(Widget):
                 y = max(0, screen_h - menu_h)
             self.styles.offset = (x, y)
         except Exception as exc:
-            # Меню останется в исходной точке — может выйти за край экрана,
-            # и часть пунктов станет недоступна.
+            # The menu stays at its original point — it may run off the screen
+            # edge and some of its items become unreachable.
             logger.debug("context menu: position not corrected: %s", exc)
 
     def _dismiss(self) -> None:
         try:
             self.app.capture_mouse(None)
         except Exception as exc:
-            # Мышь остаётся захваченной снятым меню: клики по интерфейсу
-            # перестают доходить до виджетов.
+            # The mouse stays captured by the dismissed menu: clicks on the
+            # interface stop reaching the widgets.
             logger.debug("context menu: mouse capture not released: %s", exc)
         try:
             self.remove()
         except Exception as exc:
-            # Меню не снято — висит поверх интерфейса после выбора пункта.
+            # The menu was not dismissed — it hangs over the interface after an
+            # item is selected.
             logger.debug("context menu: not removed on dismiss: %s", exc)
 
     def _highlight(self, idx: int) -> None:

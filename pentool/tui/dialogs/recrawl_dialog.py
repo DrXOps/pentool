@@ -1,8 +1,8 @@
-"""RecrawlDialog — подтверждение повторного краула.
+"""RecrawlDialog — confirmation of a repeated crawl.
 
-Показывается когда хост уже был краулен — предлагает выбрать:
-- Re-crawl — запустить краул заново
-- Skip — оставить существующие результаты
+Shown when the host has already been crawled — offers the choice:
+- Re-crawl — run the crawl again
+- Skip — keep the existing results
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ _CSS = (Path(__file__).parent / "recrawl_dialog.tcss").read_text(encoding="utf-8
 
 
 class RecrawlDialog(BaseDialog):
-    """Диалог: хост уже краулен. Рекраул или Skip?"""
+    """Dialog: the host was already crawled. Re-crawl or Skip?"""
 
     DEFAULT_CSS = _CSS
 

@@ -161,8 +161,8 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
             btn = self.query_one("#btn-seq-source", ToolbarButton)
             btn.label = f"{label} ▼"
         except NoMatches as exc:
-            # Кнопка показывает прежний источник, а захват идёт из нового —
-            # токены приходят не из того места, что написано на экране.
+            # The button shows the previous source while capture runs from the new
+            # one — tokens come from somewhere other than what the screen says.
             logger.debug("sequencer: source button label not updated: %s", exc)
 
     def _start_capture(self) -> None:
@@ -273,14 +273,15 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
             if hasattr(self, "_proxy_hook"):
                 get_event_bus().unsubscribe(ProxyRequestDoneEvent, self._proxy_hook)
         except Exception as exc:
-            # Подписка остаётся: каждый запрос прокси продолжает капать в
-            # Sequencer после «Stop», и счётчик токенов растёт сам собой.
+            # The subscription stays: every proxy request keeps dripping into
+            # Sequencer after "Stop", and the token counter grows on its own.
             logger.debug("sequencer: proxy hook not unsubscribed: %s", exc)
         try:
             self.query_one("#btn-seq-capture", ToolbarButton).disabled = False
             self.query_one("#btn-seq-stop", ToolbarButton).disabled = True
         except NoMatches as exc:
-            # Кнопки остались в положении «идёт захват», хотя захват остановлен.
+            # The buttons stayed in the "capture running" position although the
+            # capture has been stopped.
             logger.debug("sequencer: capture buttons not reset: %s", exc)
         self.app.notify("Capture stopped", timeout=2)
 
@@ -288,8 +289,8 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         try:
             self.query_one("#seq-counter", Static).update(f"Captured: [bold]{self._seq.count}[/bold]")
         except NoMatches as exc:
-            # Счётчик замирает на старом числе — по нему решают, хватает ли
-            # токенов для анализа, так что решение принимается вслепую.
+            # The counter freezes at the old number — capture volume is judged by
+            # it, so the decision comes out blind.
             logger.debug("sequencer: counter not updated: %s", exc)
 
     def _load_file(self) -> None:
@@ -497,8 +498,8 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
             self.query_one("#seq-assessment", Static).update(" ")
             self.query_one("#seq-bits-label", Static).update(" ")
         except NoMatches as exc:
-            # Токены очищены, а панели анализа показывают энтропию и оценку
-            # прошлого набора — цифры относятся к данным, которых больше нет.
+            # Tokens are cleared while the analysis panels still show entropy and
+            # the score of the previous set — numbers about data that is gone.
             logger.debug("sequencer: analysis panels not cleared with tokens: %s", exc)
 
     def on_unmount(self) -> None:

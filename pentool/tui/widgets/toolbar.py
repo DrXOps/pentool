@@ -1,12 +1,12 @@
-"""Toolbar — единый класс-контейнер для тулбаров во всех экранах.
+"""Toolbar — a single container class for toolbars across all screens.
 
-Заменяет:
+Replaces:
     with Horizontal(id="toolbar"/"top-bar"/"recon-toolbar"):
         ...
 
-CSS: наследует стили через DEFAULT_CSS — не нужно дублировать в screen.tcss.
+CSS: inherits styles via DEFAULT_CSS — no need to duplicate them in screen.tcss.
 
-Использование:
+Usage:
 
     yield Toolbar(
         ToolbarButton("▶ Start", "btn-start", classes="active"),
@@ -18,8 +18,8 @@ CSS: наследует стили через DEFAULT_CSS — не нужно д
         Toolbar.counter("my-counter"),
     )
 
-Можно класть любые виджеты — Input, Label, Checkbox, Select, Static — Toolbar
-просто контейнер (Horizontal) с едиными стилями.
+Any widgets can be put inside — Input, Label, Checkbox, Select, Static — Toolbar
+is just a container (Horizontal) with unified styles.
 """
 
 from __future__ import annotations
@@ -36,9 +36,9 @@ _CSS = (Path(__file__).parent / "toolbar.tcss").read_text(encoding="utf-8")
 
 
 class Toolbar(Horizontal):
-    """Единый тулбар для всех экранов.
+    """A single toolbar for all screens.
 
-    Автоматически применяет стили .toolbar.
+    Automatically applies the .toolbar styles.
     """
 
     DEFAULT_CSS = _CSS
@@ -51,21 +51,21 @@ class Toolbar(Horizontal):
         # when ``id`` is None.
         super().__init__(*children, id=id)
 
-    # ── Статические хелперы ──────────────────────────────────────────
+    # ── Static helpers ───────────────────────────────────────────────
 
     @staticmethod
     def sep() -> Static:
-        """Разделитель | между кнопками."""
+        """Separator | between buttons."""
         return Static(" │ ", classes="toolbar-sep")
 
     @staticmethod
     def grouped(*buttons) -> list:
-        """Кнопки через пробел, без разделителей.
+        """Buttons separated by a space, without separators.
 
-        Разделители `│` убраны из интерфейса целиком (2026-11-21): строка
-        кнопок читается по расстоянию, а черты дробили один ряд действий на
-        «группы», которых в модели нет. Метод сохранён, чтобы существующие
-        вызовы не переписывать.
+        The `│` separators were removed from the interface entirely (2026-11-21):
+        a row of buttons reads by distance, while the bars split one row of
+        actions into "groups" that the model does not have. The method is kept
+        so existing call sites do not have to be rewritten.
 
         Example:
             Toolbar(*Toolbar.grouped(btn_add, btn_remove, btn_clear))
@@ -74,27 +74,27 @@ class Toolbar(Horizontal):
 
     @staticmethod
     def buttons(*buttons):
-        """То же, что ``grouped``, но для ``yield from`` в compose."""
+        """Same as ``grouped``, but for ``yield from`` in compose."""
         yield from Toolbar.grouped(*buttons)
 
     @staticmethod
     def group_buttons(*buttons) -> list:
-        """Кнопки БЕЗ разделителей внутри — одна логическая группа."""
+        """Buttons WITHOUT separators inside — a single logical group."""
         return list(buttons)
 
     @staticmethod
     def row(*groups) -> list:
-        """Строка тулбара из групп: разделители только МЕЖДУ группами.
+        """A toolbar row made of groups: separators only BETWEEN groups.
 
-        Это и есть «правильный базовый класс» для разделителей:
+        This is the "correct base class" for separators:
           Toolbar.row(
-              Toolbar.group_buttons(label, first),      # подпись + первая кнопка
-              Toolbar.group_buttons(add, remove, clear),  # действия над списком
-              Toolbar.group_buttons(load, generate),    # импорт/генерация
+              Toolbar.group_buttons(label, first),      # caption + first button
+              Toolbar.group_buttons(add, remove, clear),  # actions on the list
+              Toolbar.group_buttons(load, generate),    # import/generation
           )
-        Внутри группы черта не нужна (это одно действие с разными кнопками),
-        между группами — нужна. ``grouped`` ставит черту между каждой парой и
-        подходит для плоского списка равнозначных действий.
+        Inside a group the bar is not needed (it is one action with different
+        buttons), between groups it is needed. ``grouped`` puts a bar between
+        every pair and suits a flat list of equivalent actions.
         """
         items: list = []
         for index, group in enumerate(groups):
@@ -105,12 +105,12 @@ class Toolbar(Horizontal):
 
     @staticmethod
     def progress(id: str = "progress", total: int = 100, **kw) -> ProgressBar:
-        """Прогресс-бар с предустановками."""
+        """Progress bar with presets."""
         return ProgressBar(total=total, show_percentage=False, id=id, **kw)
 
     @staticmethod
     def counter(id: str = "counter", initial: str = "0 req") -> Label:
-        """Счётчик запросов."""
+        """Request counter."""
         return Label(initial, id=id)
 
     @staticmethod
@@ -120,7 +120,7 @@ class Toolbar(Horizontal):
         start_label: str = "▶ Start",
         stop_label: str = "■ Stop",
     ):
-        """Стандартная пара Start + Stop с сепаратором между."""
+        """Standard Start + Stop pair with a separator in between."""
         yield ToolbarButton(start_label, start_id, classes="active")
         yield Static(" │ ", classes="toolbar-sep")
         yield ToolbarButton(stop_label, stop_id, classes="inactive disabled")

@@ -1,9 +1,9 @@
-"""ProxyDataTable — DataTable для HTTP/WS истории прокси.
+"""ProxyDataTable — DataTable for the proxy HTTP/WS history.
 
-Наследует ArrowBackendDataTable (widgets/data_table.py), добавляет:
-- Кастомные сообщения ContextMenuRequest, ScrolledToTop, CommentIconClicked
-- on_event для контекстного меню и comment icon
-- watch_scroll_y для infinite scroll (подгрузка старых логов)
+Inherits ArrowBackendDataTable (widgets/data_table.py) and adds:
+- Custom messages ContextMenuRequest, ScrolledToTop, CommentIconClicked
+- on_event for the context menu and the comment icon
+- watch_scroll_y for infinite scroll (loading older log pages)
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 
 class ProxyDataTable(ArrowBackendDataTable):
-    """DataTable for Proxy HTTP/WS History с контекстным меню и infinite scroll."""
+    """DataTable for the Proxy HTTP/WS history with a context menu and infinite scroll."""
 
     class ContextMenuRequest(Message):
         """Request to open the context menu from a DataTable."""
@@ -51,12 +51,12 @@ class ProxyDataTable(ArrowBackendDataTable):
     # ── Size formatting (int64 data → human-readable display) ────────────────
 
     def _get_cell_renderable(self, row_index, column_index):  # noqa: ANN201
-        """Форматировать Size (int64) в человекочитаемый вид (KB/MB).
+        """Format Size (int64) into a human-readable form (KB/MB).
 
-        Для всех остальных колонок — стандартное поведение.
+        All other columns keep the standard behaviour.
         """
         if row_index == -1:
-            # header — через базовый класс
+            # header — via the base class
             return super()._get_cell_renderable(row_index, column_index)
         try:
             col = self.ordered_columns[column_index]
@@ -71,13 +71,13 @@ class ProxyDataTable(ArrowBackendDataTable):
                     return format_size(int(raw))
                 return "-"
         except Exception as exc:
-            # Колонка Size падает обратно на исходное значение бэкенда —
-            # размер показывается в байтах, неформатированным, и глазами его
-            # не сверить с соседними строками.
+            # The Size column falls back to the raw backend value — the size is
+            # then shown in bytes, unformatted, and cannot be eyeballed against
+            # the neighbouring rows.
             logger.debug("proxy table: size cell not formatted: %s", exc)
         return super()._get_cell_renderable(row_index, column_index)
 
-    # ── on_event: контекстное меню + comment icon ────────────────────────
+    # ── on_event: context menu + comment icon ────────────────────────────
 
     async def on_event(self, event: _events.Event) -> None:
         if isinstance(event, _events.MouseEvent) and not self._mouse_ready():

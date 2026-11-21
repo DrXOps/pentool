@@ -113,9 +113,9 @@ class SearchBar(Widget):
                 self.toggle_target()
                 self.post_message(self.TargetToggle())
         except Exception:
-            # Тогл Regex/цели поиска не переключился — клик по нему выглядит
-            # потерянным. Трейсбек: `event.widget` — свойство Textual, и по
-            # строке не видно, какая из двух веток упала.
+            # The Regex/search-target toggle did not switch — the click on it looks
+            # lost. Traceback note: `event.widget` is a Textual property, so the
+            # line alone does not show which of the two branches failed.
             logger.exception("search bar: toggle/click handler failed")
 
     def on_key(self, event) -> None:
@@ -138,8 +138,8 @@ class SearchBar(Widget):
             else:
                 count_label.update(f"{current}/{total}")
         except NoMatches:
-            # Счётчик совпадений замирает, хотя поиск отработал — по нему
-            # решают, искать дальше или менять запрос.
+            # The match counter freezes even though the search ran — users rely
+            # on it to decide whether to search again or change the query.
             logger.debug("search bar: count update failed", exc_info=True)
 
     def toggle_target(self) -> None:
@@ -151,6 +151,6 @@ class SearchBar(Widget):
             tgt.remove_class("search-target-req", "search-target-resp")
             tgt.add_class(f"search-target-{'req' if self._search_target == 'request' else 'resp'}")
         except NoMatches:
-            # Переключатель цели поиска остаётся на прежней подписи, а поиск
-            # уже идёт по другой стороне — экран врёт о том, что ищется.
+            # The search-target toggle keeps its previous label while the search
+            # already runs on the other side — the screen lies about what is searched.
             logger.debug("search bar: toggle target label failed", exc_info=True)

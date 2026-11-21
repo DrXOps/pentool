@@ -223,8 +223,8 @@ class ScopeDialog(BaseDialog[list[str] | ScopeConfig | None]):
                     f"[bold red]Invalid regex: {esc(', '.join(bad_all[:3]))}[/bold red]"
                 )
             except NoMatches as exc:
-                # Невалидная регулярка не показана: диалог просто не закроется,
-                # и пользователь не поймёт, почему OK ничего не делает.
+                # The invalid regex is not shown: the dialog simply will not
+                # close, and the user cannot tell why OK does nothing.
                 logger.debug("scope dialog: validation message not shown: %s", exc)
             return
 

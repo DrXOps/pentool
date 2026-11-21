@@ -1,13 +1,13 @@
-"""TabbedContentPanel — универсальный таб-контейнер с изоляцией.
+"""TabbedContentPanel — a generic tab container with isolation.
 
-Каждый таб получает свой TabPane с виджетами, собранными build_tab_ui().
-Модуль-владелец:
-1. Определяет датакласс TabState
-2. Передаёт build_tab_ui (синхронно строит TabPane), save_tab, load_tabs
-3. Подписывается на сообщения TabActivated / TabDeactivated
+Each tab gets its own TabPane with widgets built by build_tab_ui().
+The owning module:
+1. Defines the TabState dataclass
+2. Passes build_tab_ui (builds the TabPane synchronously), save_tab, load_tabs
+3. Subscribes to TabActivated / TabDeactivated messages
 
-NB: Внутренние ID виджетов НЕ ИМЕЮТ ЗНАЧЕНИЯ для @on-декораторов экрана —
-все коммуникации идут через сообщения TabbedContentPanel.
+NB: Internal widget IDs are MEANINGLESS to the screen's @on decorators —
+all communication goes through TabbedContentPanel messages.
 """
 
 from __future__ import annotations
@@ -26,15 +26,15 @@ from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# ── Hooks (опциональные) ──────────────────────────────────────────────
-# Модуль может передать callable, который будет вызван при определённых
-# событиях. Например, при создании таба — сохранить в БД.
-# Они не обязательны: модуль может подписаться на сообщения.
+# ── Hooks (optional) ─────────────────────────────────────────────────
+# A module may pass a callable that is invoked on specific events.
+# For example, on tab creation — persist it to the DB.
+# They are optional: the module can subscribe to messages instead.
 
 
 @dataclass
 class _TabMeta:
-    """Внутреннее состояние таба в контейнере."""
+    """Internal state of a tab inside the container."""
 
     tab_id: str
     pane: TabPane
@@ -45,26 +45,26 @@ TState = TypeVar("TState")
 
 
 class TabbedContentPanel(Widget, Generic[TState]):
-    """Универсальный контейнер с изолированными табами.
+    """Generic container with isolated tabs.
 
-    Generic[TState] — модуль передаёт свой датакласс (например _IntruderTabState).
+    Generic[TState] — the module passes in its own dataclass (e.g. _IntruderTabState).
 
-    Параметры:
-        id: ID контейнера в DOM (нужен для @on-фильтрации).
-        tab_id_prefix: префикс для генерации tab_id (напр. "intruder-tab-").
-        build_tab_ui: (state, tab_id) -> TabPane. Синхронно собирает виджеты.
-        save_tab: (state) -> Awaitable. Сохранить состояние таба.
-        load_tabs: () -> Awaitable[list[state]]. Загрузить все табы.
+    Args:
+        id: container ID in the DOM (needed for @on filtering).
+        tab_id_prefix: prefix for generated tab_id (e.g. "intruder-tab-").
+        build_tab_ui: (state, tab_id) -> TabPane. Builds the widgets synchronously.
+        save_tab: (state) -> Awaitable. Persist the tab state.
+        load_tabs: () -> Awaitable[list[state]]. Load all tabs.
     """
 
-    # ── Сообщения ──────────────────────────────────────────────────────
-    # Все сообщения принимают владельца (сам TabbedContentPanel) и отдают
-    # его через `control`. Это требуется @on(TabActivated, "#intruder-tabs"):
-    # декоратор матчит CSS-селектор против message.control, поэтому control
-    # обязан вернуть сам виджет-панель (по паттерну Textual TabbedContent).
+    # ── Messages ───────────────────────────────────────────────────────
+    # All messages take the owner (the TabbedContentPanel itself) and expose it
+    # via `control`. This is required by @on(TabActivated, "#intruder-tabs"):
+    # the decorator matches the CSS selector against message.control, so control
+    # must return the panel widget itself (following Textual's TabbedContent).
 
     class TabCreated(Message):
-        """Постится ПОСЛЕ создания таба."""
+        """Posted AFTER a tab is created."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -79,7 +79,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
             return self._owner
 
     class TabActivated(Message):
-        """Постится ПОСЛЕ переключения на новый таб."""
+        """Posted AFTER switching to a new tab."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -94,7 +94,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
             return self._owner
 
     class TabDeactivated(Message):
-        """Постится ДО переключения на другой таб (старый ещё активен)."""
+        """Posted BEFORE switching to another tab (the old one is still active)."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -109,7 +109,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
             return self._owner
 
     class TabClosed(Message):
-        """Постится ПОСЛЕ закрытия таба."""
+        """Posted AFTER a tab is closed."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -123,7 +123,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
         def control(self) -> "TabbedContentPanel":
             return self._owner
 
-    # ── Конфигурация ────────────────────────────────────────────────────
+    # ── Configuration ────────────────────────────────────────────────────
 
     def __init__(
         self,
@@ -135,7 +135,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
         save_tab: Callable[[TState], Awaitable[None]] | None = None,
         load_tabs: Callable[[], Awaitable[list[TState]]] | None = None,
         rename_input_id: str = "tcp-rename-input",
-        # Минимальное число табов (1 = нельзя закрыть последний)
+        # Minimum number of tabs (1 = the last one cannot be closed)
         min_tabs: int = 1,
     ) -> None:
         super().__init__(id=id)
@@ -147,7 +147,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
         self._rename_input_id = rename_input_id
         self._min_tabs = min_tabs
 
-        # ── Состояние ──────────────────────────────────────────────────
+        # ── State ──────────────────────────────────────────────────────
         self._states: dict[str, TState] = {}  # tab_id → state
         self._meta: dict[str, _TabMeta] = {}  # tab_id → meta
         self._counter: int = 0
@@ -155,21 +155,21 @@ class TabbedContentPanel(Widget, Generic[TState]):
         self._generation: int = 0
 
         # ── Generation guard ────────────────────────────────────────────
-        # Для защиты от stale callbacks при смене проекта.
-        # Экран вызывает set_generation_guard() перед load_tabs_from_storage().
+        # Protects against stale callbacks when the project changes.
+        # The screen calls set_generation_guard() before load_tabs_from_storage().
         self._tabs_generation: int = 0
 
     # ── compose ──────────────────────────────────────────────────────────
 
     def compose(self) -> ComposeResult:
         yield TabbedContent(id=f"{self.id}-content")
-        # Класс помимо id: экраны стилизуют поле одним правилом `.tab-rename`,
-        # а не копией правила на каждый экран с его собственным id.
+        # Class in addition to id: screens style the field with a single `.tab-rename`
+        # rule instead of a copy of that rule per screen with its own id.
         inp_rename = Input(id=self._rename_input_id, classes="tab-rename", placeholder="Tab name...", compact=True)
         inp_rename.display = False
         yield inp_rename
 
-    # ── Свойства ────────────────────────────────────────────────────────
+    # ── Properties ──────────────────────────────────────────────────────
 
     @property
     def tabs_content(self) -> TabbedContent:
@@ -196,14 +196,14 @@ class TabbedContentPanel(Widget, Generic[TState]):
     # ── Generation guard ──────────────────────────────────────────────────
 
     def set_generation(self, gen: int) -> None:
-        """Установить поколение для stale-защиты при смене проекта."""
+        """Set the generation used for stale protection on project change."""
         self._tabs_generation = gen
 
     def _is_stale(self) -> bool:
-        """Проверить, не сменилось ли поколение (stale callback)."""
+        """Check whether the generation changed (stale callback)."""
         return self._tabs_generation == 0  # simplified; screen sets it
 
-    # ── Lifecycle: создание / закрытие / переключение ────────────────────
+    # ── Lifecycle: create / close / switch ───────────────────────────────
 
     def action_new_tab(self, *, state: TState | None = None, name: str | None = None) -> str:
         """Create a new tab.
@@ -215,16 +215,16 @@ class TabbedContentPanel(Widget, Generic[TState]):
         Returns:
             tab_id.
         """
-        # Создание вкладки делает её активной так же, как переключение, но
-        # TabDeactivated по этому пути не приходит: ``tc.active = tab_id``
-        # выставляется до того, как pane попал в DOM, поэтому Textual не постит
-        # TabActivated для этой панели вовсе (проверено: обработчик
-        # on_tabbed_content_tab_activated не вызывается ни разу), а значит не
-        # срабатывает и ветка «деактивировать старый». Владелец так и не узнаёт,
-        # что прежний таб перестал быть активным — и всё, что он хранил «на
-        # вкладку» вне state (глобальный toolbar Intruder: Threads/Delay/Turbo),
-        # остаётся несохранённым. Поэтому постим сами, пока _active_tab_id ещё
-        # указывает на старый таб.
+        # Creating a tab makes it active just like switching does, but
+        # TabDeactivated never arrives on this path: ``tc.active = tab_id``
+        # is set before the pane is in the DOM, so Textual does not post
+        # TabActivated for this panel at all (verified: the
+        # on_tabbed_content_tab_activated handler is never called), which means
+        # the "deactivate the old one" branch never fires either. The owner never
+        # learns that the previous tab stopped being active — and everything it
+        # kept "per tab" outside of state (the global Intruder toolbar:
+        # Threads/Delay/Turbo) stays unsaved. Hence we post it ourselves while
+        # _active_tab_id still points at the old tab.
         previous_id = self._active_tab_id
         if previous_id and previous_id in self._states:
             self.post_message(self.TabDeactivated(self, previous_id, self._states[previous_id]))
@@ -278,8 +278,8 @@ class TabbedContentPanel(Widget, Generic[TState]):
             else:
                 self._defer_add_pane(tc, pane, tab_id)
         except Exception:
-            # Новая вкладка добавлена в `_states`, но панели в DOM нет:
-            # переключение на неё покажет пустоту, а вкладка не закроется.
+            # The new tab was added to `_states`, but its pane is not in the DOM:
+            # switching to it will show an empty body and the tab cannot be closed.
             logger.exception("action_new_tab setup failed for %s", tab_id)
 
         self._active_tab_id = tab_id
@@ -338,18 +338,18 @@ class TabbedContentPanel(Widget, Generic[TState]):
 
     def _post_tab_messages(self, tab_id: str, state: TState) -> None:
         """Post messages after widget is ready."""
-        # Если pane построен через build_tab_ui (с детьми) — mount не нужен.
-        # Иначе достраиваем через _mount_tab_ui.
+        # If the pane was built via build_tab_ui (with children) — no mount needed.
+        # Otherwise we finish building it through _mount_tab_ui.
         self._do_build_ui(tab_id, state)
-        # Постим сообщения для экрана
+        # Post the messages meant for the screen
         self.post_message(self.TabCreated(self, tab_id, state))
         self.post_message(self.TabActivated(self, tab_id, state))
 
     def _do_build_ui(self, tab_id: str, state: TState) -> None:
-        """Mount per-tab виджеты в TabPane (TabPane уже в DOM)."""
+        """Mount the per-tab widgets into the TabPane (the TabPane is already in the DOM)."""
         if tab_id not in self._states:
             return
-        # Если pane уже построен с детьми через build_tab_ui — ничего не делаем.
+        # If the pane was already built with children via build_tab_ui — nothing to do.
         existing = self._meta[tab_id].pane if tab_id in self._meta else None
         if existing is not None and list(existing.children):
             return
@@ -357,7 +357,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
             self._mount_tab_ui(state, tab_id)
 
     def _make_default_state(self, tab_id: str, name: str) -> TState:
-        """Создать пустой TabState (если модуль не передал)."""
+        """Create an empty TabState (when the module did not supply one)."""
         if hasattr(self, "_default_state_factory") and self._default_state_factory is not None:
             return self._default_state_factory(tab_id, name)
 
@@ -370,11 +370,11 @@ class TabbedContentPanel(Widget, Generic[TState]):
         return _DummyState(tab_id=tab_id, name=name)  # type: ignore[return-value]
 
     def set_default_state_factory(self, factory):
-        """Установить фабрику для создания TabState по умолчанию."""
+        """Set the factory used to create the default TabState."""
         self._default_state_factory = factory
 
     def action_close_tab(self) -> None:
-        """Закрыть активный таб (если > min_tabs)."""
+        """Close the active tab (when > min_tabs)."""
         if len(self._states) <= self._min_tabs:
             return
         tab_id = self._active_tab_id
@@ -385,9 +385,9 @@ class TabbedContentPanel(Widget, Generic[TState]):
             tc = self.tabs_content
             tc.remove_pane(tab_id)
         except NoMatches as exc:
-            # Панель остаётся в DOM, хотя из `_states` её уже убрали ниже —
-            # вкладка видна, но недоступна для переключения. `NoMatches` —
-            # контейнера вкладок нет в дереве (экран разбирают).
+            # The pane stays in the DOM even though it was already removed from
+            # `_states` just below — the tab is visible but cannot be switched to.
+            # `NoMatches` — the tab container is not in the tree (screen teardown).
             logger.debug("tab_panel: pane %s not removed: %s", tab_id, exc)
         self._states.pop(tab_id, None)
         self._meta.pop(tab_id, None)
@@ -399,8 +399,8 @@ class TabbedContentPanel(Widget, Generic[TState]):
                 tc = self.tabs_content
                 tc.active = new_id
             except NoMatches as exc:
-                # Заголовок переключился, содержимое — нет: неверная вкладка
-                # на экране при верном состоянии. Контейнера нет в дереве.
+                # The title switched but the content did not: the wrong tab is
+                # on screen while the state is correct. The container is not in the tree.
                 logger.debug("tab_panel: active tab not switched to %s: %s", new_id, exc)
         else:
             self._active_tab_id = None
@@ -408,7 +408,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
             self.post_message(self.TabClosed(self, tab_id, state))
 
     def switch_to(self, tab_id: str) -> None:
-        """Программное переключение на таб по id."""
+        """Switch to a tab by id programmatically."""
         if tab_id not in self._states:
             return
         # Deactivate old
@@ -422,35 +422,36 @@ class TabbedContentPanel(Widget, Generic[TState]):
             tc = self.tabs_content
             tc.active = tab_id
         except Exception as exc:
-            # Состояние считает вкладку активной, а экран показывает прежнюю —
-            # правки пойдут не туда.
+            # The state considers the tab active while the screen shows the previous
+            # one — edits will go to the wrong place.
             logger.debug("tab_panel: switch to %s not shown: %s", tab_id, exc)
         state = self._states.get(tab_id)
         if state is not None:
             self.post_message(self.TabActivated(self, tab_id, state))
 
     def get_any_tab_id(self) -> str | None:
-        """Вернуть любой tab_id (для тестов)."""
+        """Return any tab_id (for tests)."""
         if self._states:
             return next(iter(self._states))
         return None
 
     async def close_all(self) -> None:
-        """Закрыть все табы (при смене проекта).
+        """Close all tabs (on project change).
 
-        ВАЖНО: каждый remove_pane() awaited. Ранее discard-у meant: reload_from_project
-        делает close_all() сразу → action_new_tab(), и если pane с тем же id ещё
-        удаляется из DOM, новый add_pane со старым id падал (id занят) → заголовок
-        не добавлялся, а последующие «+» разъезжались. Как в Repeater:
-        await remove_pane() — чтобы не было гонки с action_new_tab().
+        IMPORTANT: every remove_pane() is awaited. Previously the discard-style
+        approach meant: reload_from_project calls close_all() and then
+        action_new_tab() right away, and if the pane with the same id is still
+        being removed from the DOM, the new add_pane with the old id failed (id
+        already taken) → the header was not added, and subsequent "+" clicks drifted.
+        As in Repeater: await remove_pane() — to avoid a race with action_new_tab().
         """
         for tab_id, state in list(self._states.items()):
             try:
                 tc = self.tabs_content
                 await tc.remove_pane(tab_id)
             except Exception as exc:
-                # Именно эта гонка и описана в docstring выше: не снятый pane
-                # с тем же id ломает следующий add_pane.
+                # This is exactly the race described in the docstring above: a pane
+                # that was not removed with the same id breaks the next add_pane.
                 logger.debug("tab_panel: pane %s not removed in close_all: %s", tab_id, exc)
             if state is not None:
                 self.post_message(self.TabClosed(self, tab_id, state))
@@ -460,14 +461,14 @@ class TabbedContentPanel(Widget, Generic[TState]):
         self._active_tab_id = None
 
     async def load_from_storage(self) -> None:
-        """Загрузить табы из хранилища (через load_tabs)."""
+        """Load tabs from storage (via load_tabs)."""
         if self._load_tabs_fn is None:
             return
         try:
             states = await self._load_tabs_fn()
         except Exception:
-            # Вкладки из хранилища не пришли — панель останется пустой, хотя
-            # данные в БД есть. Молчание здесь = «вкладки пропали».
+            # The tabs did not come back from storage — the panel stays empty even
+            # though the data is in the DB. Silence here = "the tabs are gone".
             logger.warning("tab_panel: tabs not loaded from storage", exc_info=True)
             return
         if not states:
@@ -483,7 +484,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
             self.action_new_tab(state=st)
 
     def _find_by_tab_uid(self, state: TState) -> str | None:
-        """Поиск таба по tab_uid (чтобы не создать дубликат)."""
+        """Find a tab by tab_uid (so that no duplicate is created)."""
         uid = getattr(state, "tab_uid", None)
         if not uid:
             return None
@@ -495,13 +496,13 @@ class TabbedContentPanel(Widget, Generic[TState]):
     # ── Rename (double-click) ───────────────────────────────────────────
 
     def on_click(self, event: Click) -> None:
-        """Double-click на Tab → rename."""
+        """Double-click on a Tab → rename."""
         if event.chain < 2:
             return
         widget = event.widget
         if not isinstance(widget, Tab):
             return
-        # Определяем tab_id из Tab
+        # Derive the tab_id from the Tab
         tab_widget_id = widget.id or ""
         if not tab_widget_id.startswith("--content-tab-"):
             return
@@ -523,7 +524,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
             inp.action_select_all()
             inp._rename_tab_id = tab_id  # type: ignore[attr-defined]
         except Exception as exc:
-            # Поле переименования не открылось — F2 по вкладке «не работает».
+            # The rename field did not open — F2 on a tab "does not work".
             logger.debug("tab_panel: rename not started for %s: %s", tab_id, exc)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -544,8 +545,8 @@ class TabbedContentPanel(Widget, Generic[TState]):
             if inp.display:
                 inp.display = False
         except NoMatches as exc:
-            # Поле переименования останется поверх вкладок после ухода фокуса;
-            # поля нет в дереве — панель уже снята.
+            # The rename field would stay on top of the tabs after focus is lost;
+            # the field is not in the tree — the panel has already been removed.
             logger.debug("tab_panel: rename input not hidden on blur: %s", exc)
 
     def _update_tab_label(self, tab_id: str, name: str) -> None:
@@ -555,15 +556,15 @@ class TabbedContentPanel(Widget, Generic[TState]):
             if tab_widget is not None:
                 tab_widget.label = name
         except Exception as exc:
-            # Имя в состоянии сменилось, а на заголовке — старое: переименование
-            # выглядит неприменившимся.
+            # The name changed in the state but the header still shows the old one:
+            # the rename looks like it was never applied.
             logger.debug("tab_panel: label not updated for %s: %s", tab_id, exc)
 
     def update_tab_label(self, tab_id: str, label: str) -> None:
-        """Публичный метод для обновления лейбла (напр. с * маркером dirty)."""
+        """Public method to update the label (e.g. with a * dirty marker)."""
         self._update_tab_label(tab_id, label)
 
-    # ── TabActivated (от Textual) ───────────────────────────────────────
+    # ── TabActivated (from Textual) ─────────────────────────────────────
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.tabbed_content.id != f"{self.id}-content":
@@ -592,7 +593,7 @@ class TabbedContentPanel(Widget, Generic[TState]):
         return self._states.get(tab_id)
 
     def get_tab_id_by_uid(self, tab_uid: str) -> str | None:
-        """Найти tab_id по tab_uid (для DB-загрузки)."""
+        """Find the tab_id by tab_uid (for DB loading)."""
         for tid, st in self._states.items():
             if getattr(st, "tab_uid", None) == tab_uid:
                 return tid

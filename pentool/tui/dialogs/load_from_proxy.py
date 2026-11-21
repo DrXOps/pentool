@@ -104,9 +104,9 @@ class LoadFromProxyDialog(BaseDialog[str | None]):
             try:
                 table.get_row_at(table.cursor_row)
             except RowDoesNotExist:
-                # Курсор стоит на пустой таблице — выбирать нечего, и Enter
-                # закрывает диалог как «отмена»; раньше это делал широкий
-                # `except`, который глотал и ошибки программиста.
+                # The cursor sits on an empty table — there is nothing to select,
+                # and Enter closes the dialog as "cancel"; a broad `except` used
+                # to do this and swallowed programmer errors as well.
                 self.dismiss(None)
                 return
             # row_key — row key, find the corresponding request

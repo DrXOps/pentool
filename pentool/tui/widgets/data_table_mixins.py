@@ -1,13 +1,13 @@
-"""Миксины для экранов с DataTable: сортировка.
+"""Mixins for screens with a DataTable: sorting.
 
-Все таблицы проекта наследуют ArrowBackendDataTable и имеют safe_sort.
-Миксин только управляет состоянием сортировки и стрелками.
+All project tables inherit from ArrowBackendDataTable and have safe_sort.
+The mixin only manages the sorting state and the arrows.
 
-Поддерживает два режима:
-- buffer_sort (default) — через in-memory DataTable.sort() (safe_sort)
-- sql_sort — через ORDER BY в SQL-запросе к хранилищу (передаётся order_by_map)
+Supports two modes:
+- buffer_sort (default) — via in-memory DataTable.sort() (safe_sort)
+- sql_sort — via ORDER BY in a storage SQL query (order_by_map is passed in)
 
-Использование::
+Usage::
 
     class MyScreen(Screen, SortableTableMixin):
         _COL_NAMES = ["ID", "Host", "Method"]
@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 
 
 class SortableTableMixin:
-    """Миксин для экрана с сортируемой таблицей.
+    """Mixin for a screen with a sortable table.
 
-    Все таблицы имеют safe_sort (ArrowBackendDataTable). Миксин управляет
-    _sort_col / _sort_reverse и стрелками ▲▼.
+    All tables have safe_sort (ArrowBackendDataTable). The mixin manages
+    _sort_col / _sort_reverse and the ▲▼ arrows.
 
-    Для SQL-сортировки (ORDER BY) задай order_by_map — словарь
-    {имя_колонки: имя_поля_в_БД}. Передаётся через _sort_table_sql().
+    For SQL sorting (ORDER BY) set order_by_map — a dict
+    {column_name: db_field_name}. It is passed via _sort_table_sql().
     """
 
     def __init__(self, *args, **kwargs) -> None:
@@ -45,11 +45,11 @@ class SortableTableMixin:
         event: DataTable.HeaderSelected,
         col_names: list[str],
     ) -> None:
-        """Сортировка через safe_sort (in-memory буфер).
+        """Sorting via safe_sort (in-memory buffer).
 
         Args:
-            event: HeaderSelected от DataTable
-            col_names: имена колонок для стрелок
+            event: HeaderSelected from DataTable
+            col_names: column names for the arrows
         """
         idx = event.column_index
         self._sort_reverse = (self._sort_col == idx) and not self._sort_reverse
@@ -72,13 +72,13 @@ class SortableTableMixin:
         order_by_map: dict[str, str],
         reload_cb: callable,  # noqa: ANN201
     ) -> None:
-        """SQL-сортировка: перегружает таблицу через ORDER BY из БД.
+        """SQL sorting: reloads the table via ORDER BY from the DB.
 
         Args:
-            event: HeaderSelected от DataTable
-            col_names: имена колонок для стрелок
-            order_by_map: {имя_колонки: имя_поля_в_SQL}
-            reload_cb: асинхронный callable(order_by, order_dir) → reload
+            event: HeaderSelected from DataTable
+            col_names: column names for the arrows
+            order_by_map: {column_name: SQL field name}
+            reload_cb: async callable(order_by, order_dir) → reload
         """
         idx = event.column_index
         col_name = col_names[idx] if idx < len(col_names) else ""
@@ -92,10 +92,10 @@ class SortableTableMixin:
         order_col = order_by_map[col_name]
         order_dir = "desc" if self._sort_reverse else "asc"
 
-        # Перезагружаем из БД с SQL-сортировкой
+        # Reload from the DB with SQL sorting
         self.run_worker(reload_cb(order_by=order_col, order_dir=order_dir))
 
-        # Обновляем стрелки после перезагрузки
+        # Update the arrows after the reload
         self._update_sort_arrows(None, col_names)
 
     def _update_sort_arrows(
@@ -103,7 +103,7 @@ class SortableTableMixin:
         table: DataTable | None,
         col_names: list[str],
     ) -> None:
-        """Показать стрелку ▲/▼ на активной колонке сортировки."""
+        """Show the ▲/▼ arrow on the active sort column."""
         try:
             for i, name in enumerate(col_names):
                 col = table.ordered_columns[i]

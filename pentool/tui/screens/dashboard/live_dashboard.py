@@ -63,8 +63,8 @@ class ResourceMonitor(Widget):
                 # detached HEAD — show short hash
                 return ref[:8]
         except Exception as exc:
-            # Панель покажет "?" вместо ветки — а ещё это единственный случай,
-            # когда git-репозиторий у проекта есть, но HEAD прочитать нельзя.
+            # The panel shows "?" instead of a branch — and this is the only case
+            # where the project has a git repo but HEAD cannot be read.
             logger.debug("resource monitor: git branch not read: %s", exc)
         return "?"
 
@@ -109,8 +109,8 @@ class ResourceMonitor(Widget):
                 threads = proc.num_threads()
                 self.query_one("#res-extra", Static).update(f"[dim]system threads: {threads}[/dim]")
             except Exception as exc:
-                # Строка «system threads» останется пустой — сама по себе
-                # косметика, но повтор раз в 2 с означает сломанный psutil.
+                # The "system threads" line stays empty — cosmetic on its own,
+                # but repeating every 2 s means psutil is broken.
                 logger.debug("resource monitor: threads not read: %s", exc)
             # Version info: show dev mode when running from source
             try:
@@ -126,16 +126,16 @@ class ResourceMonitor(Widget):
                 else:
                     self.query_one("#res-version", Static).update(f"[dim]v{__version__}[/dim]")
             except Exception as exc:
-                # Поле версии пустое — не видно ни версии, ни DEV-режима, и
-                # именно это первое, что просят в отчёте об ошибке.
+                # The version field stays empty — no version and no DEV mode, and
+                # that is the first thing asked for in a bug report.
                 logger.debug("resource monitor: version line not drawn: %s", exc)
         except ImportError:
             try:
                 self.query_one("#res-cpu", Static).update("[dim]psutil not installed[/dim]")
             except NoMatches as exc:
-                # Причина пустой панели ресурсов пользователю не сообщается.
+                # The reason the resource panel is empty is never shown to the user.
                 logger.debug("resource monitor: psutil notice not shown: %s", exc)
         except Exception as exc:
-            # Тик монитора целиком пропущен: панель показывает цифры
-            # предыдущего тика, будто система не меняется.
+            # The whole monitor tick was skipped: the panel shows the previous
+            # tick's numbers, as if the system never changes.
             logger.debug("resource monitor: update skipped: %s", exc)

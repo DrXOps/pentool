@@ -19,7 +19,6 @@ import ast
 import sys
 from pathlib import Path
 
-
 # Package root
 PACKAGE_ROOT = Path(__file__).parent.parent / "pentool"
 
@@ -65,8 +64,9 @@ def check_file(file_path: Path, forbidden: list[str]) -> list[str]:
     for imp in imported:
         for forbidden_prefix in forbidden:
             if imp == forbidden_prefix or imp.startswith(forbidden_prefix + "."):
-                violations.append(f"  ❌ {file_path.relative_to(PACKAGE_ROOT.parent)}: "
-                                   f"forbidden import '{imp}' (violates layer rule)")
+                violations.append(
+                    f"  ❌ {file_path.relative_to(PACKAGE_ROOT.parent)}: forbidden import '{imp}' (violates layer rule)"
+                )
     return violations
 
 

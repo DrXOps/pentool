@@ -101,9 +101,9 @@ class ActivityIndicator(Widget):
                 the checker callables below are built at construction time).
         """
         super().__init__(**kwargs)
-        # Общий вид панельного заголовка: одна строка, тёмная подложка, отступ
-        # по бокам (F-038). Класс добавляется здесь, а не в месте создания,
-        # чтобы новые точки монтирования не забывали о нём.
+        # Shared look of a panel header: one line, dark backing, side padding
+        # (F-038). The class is added here rather than at each construction site
+        # so new mount points cannot forget about it.
         self.add_class("panel-title")
         self._checkers: list[_Tracked] = self._build_checkers(app_ref)
         # Cached from the last _poll_state() run — the blink tick reads this
@@ -183,9 +183,9 @@ class ActivityIndicator(Widget):
                 screen = app_ref.module_screen("recon", ReconScreen)
                 if screen is None:
                     return None
-                # _running коллизирует с MessagePump._running (всегда True),
-                # используем _runner — он None когда простаивает и объект
-                # DiscoveryRunner когда запущен.
+                # _running collides with MessagePump._running (always True), so
+                # use _runner instead — it is None while idle and a
+                # DiscoveryRunner instance while a run is in progress.
                 return screen._runner is not None
             except (ImportError, AttributeError):
                 # PRO not installed (import) or the screen lost `_runner`
@@ -242,8 +242,8 @@ class ActivityIndicator(Widget):
 
             ai_cfg_on = bool(getattr(get_config(), "ai_enabled", False))
         except Exception as exc:
-            # Считаем AI выключенным — глиф приглушится. Раз в секунду; запись
-            # только при отказе, иначе журнал забился бы повторами.
+            # Treat AI as disabled — the glyph gets dimmed. Runs once a second;
+            # logged only on failure, else the log would fill with repeats.
             logger.debug("activity: ai_enabled not read, assuming off: %s", exc)
 
         # Only repaint when the state actually changed: setting the same classes
@@ -267,16 +267,16 @@ class ActivityIndicator(Widget):
             try:
                 active = bool(t.is_active())
             except Exception as exc:
-                # Состояние неизвестно — глиф покажет «idle». Это безопасно,
-                # но работающий модуль будет выглядеть выключенным.
+                # State unknown — the glyph shows "idle". That is safe, but a
+                # module that is actually running will look switched off.
                 logger.debug("activity: state of %s unknown: %s", t.key, exc)
                 active = False
             self._active_state[t.key] = active
             try:
                 widget = self.query_one(f"#activity-{t.key}", Static)
             except NoMatches as exc:
-                # Глифа нет в дереве — пропускаем (обычный ход при частичной
-                # сборке). Запись отличает это от опечатки в id.
+                # Glyph absent from the tree — skip it (usual during a partial
+                # build). The log line tells this apart from a typo in the id.
                 logger.debug("activity: glyph %s not found: %s", t.key, exc)
                 continue
             widget.tooltip = f"{t.label}: {'running' if active else 'idle'}"
@@ -322,7 +322,7 @@ class ActivityIndicator(Widget):
             try:
                 widget = self.query_one(f"#activity-{t.key}", Static)
             except NoMatches as exc:
-                # Тот же случай, что и в _poll_state: глифа пока нет.
+                # Same case as in _poll_state: the glyph does not exist yet.
                 logger.debug("activity: blink glyph %s not found: %s", t.key, exc)
                 continue
             active = self._active_state.get(t.key, False)

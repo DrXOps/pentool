@@ -1,15 +1,15 @@
-"""StartStopWidget — независимый виджет кнопок Start/Pause/Resume/Stop.
+"""StartStopWidget — a self-contained Start/Pause/Resume/Stop button widget.
 
-Отличается от StartStopMixin тем, что это Widget, а не mixin:
-- @on декораторы работают нативно (Textual собирает _textual_on из виджета)
-- _running / _paused живут внутри виджета, не конфликтуют с MessagePump
-- Экран получает сигналы через сообщения StartRequested / StopRequested
+Unlike StartStopMixin, this is a Widget rather than a mixin:
+- @on decorators work natively (Textual builds _textual_on from the widget)
+- _running / _paused live inside the widget and do not clash with MessagePump
+- The screen receives signals through StartRequested / StopRequested messages
 
-Использование в compose() экрана:
+Usage inside a screen's compose():
 
     yield StartStopWidget()
 
-Использование в @on:
+Usage with @on:
 
     @on(StartStopWidget.StartRequested)
     def on_start_stop_start(self, event: StartStopWidget.StartRequested) -> None:
@@ -19,9 +19,9 @@
     def on_start_stop_stop(self, event: StartStopWidget.StopRequested) -> None:
         self.stop_attack()
 
-API экрана для управления состоянием:
-    start_stop_widget.set_running(True / False)  — синхронизация UI
-    start_stop_widget.running / start_stop_widget.paused  — чтение состояния
+Screen API for driving state:
+    start_stop_widget.set_running(True / False)  — UI synchronisation
+    start_stop_widget.running / start_stop_widget.paused  — state readers
 """
 
 from __future__ import annotations
@@ -41,14 +41,14 @@ logger = get_logger(__name__)
 
 
 class StartStopWidget(Widget):
-    """Кнопки Start/Pause/Resume/Stop с самодостаточным UI.
+    """Start/Pause/Resume/Stop buttons with a self-contained UI.
 
-    Не требует от экрана _running / _paused.
-    Не требует @on-прокси.
+    Does not need _running / _paused from the screen.
+    Does not need @on proxies.
     """
 
     class StartRequested(Message):
-        """Пользователь нажал Start (когда был IDLE)."""
+        """The user pressed Start (while IDLE)."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -57,7 +57,7 @@ class StartStopWidget(Widget):
             return self._widget  # type: ignore
 
     class PauseRequested(Message):
-        """Пользователь нажал Pause (когда был RUNNING)."""
+        """The user pressed Pause (while RUNNING)."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -66,7 +66,7 @@ class StartStopWidget(Widget):
             return self._widget  # type: ignore
 
     class ResumeRequested(Message):
-        """Пользователь нажал Resume (когда был PAUSED)."""
+        """The user pressed Resume (while PAUSED)."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -75,7 +75,7 @@ class StartStopWidget(Widget):
             return self._widget  # type: ignore
 
     class StopRequested(Message):
-        """Пользователь нажал Stop."""
+        """The user pressed Stop."""
 
         ALLOW_SELECTOR_MATCH = True
 
@@ -101,7 +101,7 @@ class StartStopWidget(Widget):
             ToolbarButton("■ Stop", self.ID_STOP, classes="disabled"),
         )
 
-    # ── Свойства для чтения состояния ────────────────────────────────
+    # ── Properties for reading state ────────────────────────────────
 
     @property
     def running(self) -> bool:
@@ -111,12 +111,12 @@ class StartStopWidget(Widget):
     def paused(self) -> bool:
         return self._paused
 
-    # ── Синхронизация UI (вызывается экраном) ────────────────────────
+    # ── UI synchronisation (called by the screen) ───────────────────
 
     def set_running(self, running: bool) -> None:
-        """Переключить UI между Start<->Pause и Stop active<->disabled.
+        """Switch the UI between Start<->Pause and Stop active<->disabled.
 
-        Не сбрасывает _paused — экран сам управляет паузой.
+        Does not reset _paused — the screen manages pause on its own.
         """
         self._running = running
         try:
@@ -133,19 +133,19 @@ class StartStopWidget(Widget):
                 btn_start.add_class("active")
                 btn_stop.disabled = True
         except Exception as exc:
-            # Кнопки остались в прежнем положении: атака идёт, а UI показывает
-            # «▶ Start» (или наоборот), и Stop может быть недоступен.
+            # The buttons kept their previous appearance: the attack is running while
+            # the UI shows «▶ Start» (or the reverse), and Stop may be unavailable.
             logger.debug("start/stop: running state %s not shown: %s", running, exc)
 
     def set_paused(self, paused: bool) -> None:
-        """Переключить UI между Pause <-> Resume (не меняя _running).
+        """Switch the UI between Pause <-> Resume (without touching _running).
 
-        Снятие паузы возвращает кнопку к «⏸ Pause» только если атака реально
-        идёт. Иначе «не на паузе» — это и «остановлено», и подпись обязана
-        остаться «▶ Start»: экран синхронизирует состояние парой
-        ``set_running(False)`` + ``set_paused(False)``, и второй вызов не
-        должен отменять первый (F-031: свежий таб Intruder показывал «⏸ Pause»
-        до первого запуска).
+        Lifting the pause returns the button to «⏸ Pause» only if the attack is
+        genuinely running. Otherwise "not paused" also means "stopped", and the
+        label has to stay «▶ Start»: the screen synchronises state with the pair
+        ``set_running(False)`` + ``set_paused(False)``, and the second call must
+        not cancel out the first (F-031: a fresh Intruder tab displayed «⏸ Pause»
+        before the first run).
         """
         self._paused = paused
         try:
@@ -163,15 +163,15 @@ class StartStopWidget(Widget):
                 btn_start.remove_class("warn")
                 btn_start.add_class("active")
         except Exception as exc:
-            # Подпись кнопки не отражает паузу: следующий клик по «⏸ Pause»
-            # снимет паузу вместо её постановки, то есть наоборот.
+            # The button label does not reflect the pause: the next click on
+            # «⏸ Pause» will lift the pause instead of setting it — the opposite.
             logger.debug("start/stop: paused state %s not shown: %s", paused, exc)
 
-    # ── Обработка нажатий ──────────────────────────────────────────
+    # ── Click handling ─────────────────────────────────────────────
 
     @on(ToolbarButton.Pressed, f"#{ID_START}")
     def _on_start_pressed(self, _: ToolbarButton.Pressed) -> None:
-        """Start / Pause / Resume — в зависимости от состояния."""
+        """Start / Pause / Resume — depending on the current state."""
         if self._paused:
             self.post_message(self.ResumeRequested())
         elif self._running:

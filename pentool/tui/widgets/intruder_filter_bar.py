@@ -1,6 +1,6 @@
-"""IntruderFilterBar — фильтр результатов атак Intruder.
+"""IntruderFilterBar — filter for Intruder attack results.
 
-Одна строка: Status, Length, Grep, Extract, Only-matches, Apply/Reset/Clear.
+A single row: Status, Length, Grep, Extract, Only-matches, Apply/Reset/Clear.
 """
 
 from __future__ import annotations
@@ -84,8 +84,8 @@ class IntruderFilterBar(FilterBarWidget):
             if tb.has_class("active"):
                 predicates.append(FilterPredicate("grep_only_match", FilterOp.EQ, True))
         except Exception as exc:
-            # «Only matches» включён, но предикат не добавлен — таблица
-            # покажет все строки, хотя переключатель говорит обратное.
+            # "Only matches" is on, but the predicate was not added — the table
+            # will show every row while the toggle says otherwise.
             logger.debug("intruder filter: only-matches predicate not applied: %s", exc)
 
     def _apply(self) -> None:
@@ -102,8 +102,8 @@ class IntruderFilterBar(FilterBarWidget):
             tb.remove_class("active")
             tb.label = "○ Only matches"
         except Exception as exc:
-            # После Reset переключатель остаётся в позиции «включён», а фильтр
-            # уже сброшен — следующее Apply вернёт прежнее поведение.
+            # After Reset the toggle stays in the "on" position while the filter
+            # is already cleared — the next Apply restores the previous behaviour.
             logger.debug("intruder filter: only-matches toggle not reset: %s", exc)
         self._emit(FilterSpec())
 

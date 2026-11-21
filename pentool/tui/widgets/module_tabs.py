@@ -69,8 +69,8 @@ class ModuleTabs(Widget):
             tabs = self.query_one("#module-tabs-inner", Tabs)
             tabs.active = f"tab-{module_id}"
         except NoMatches as exc:
-            # `active_module` уже присвоен, а подсветка вкладки — нет: строка
-            # вкладок и содержимое расходятся.
+            # `active_module` is already assigned but the tab highlight is not:
+            # the tab row and the content now disagree.
             logger.debug("tabs: %r not selected: %s", module_id, exc)
 
     def set_mode(self, mode: str) -> None:
@@ -85,12 +85,12 @@ class ModuleTabs(Widget):
                     else:
                         tab.styles.display = "block"
                 except NoMatches as exc:
-                    # Одна вкладка не переключила видимость: режим Basic
-                    # покажет её, хотя не должен (или наоборот).
+                    # One tab did not switch visibility: Basic mode will show
+                    # it when it should not (or the other way around).
                     logger.debug("tabs: mode %r not applied to %s: %s", mode, mod_id, exc)
             tabs.refresh()
         except Exception as exc:
-            # Весь режим UI не применился — переключатель в Settings молчит.
+            # The whole UI mode was not applied — the Settings toggle stays silent.
             logger.debug("tabs: mode %r not applied at all: %s", mode, exc)
 
     def set_scanner_locked(self, locked: bool) -> None:
@@ -110,8 +110,8 @@ class ModuleTabs(Widget):
                 tab.tooltip = None
             tabs.refresh()
         except Exception as exc:
-            # Вкладка Scanner выглядит доступной без лицензии (или заперта
-            # при валидной) — расхождение с проверкой в `_switch_to`.
+            # The Scanner tab looks available without a license (or locked with
+            # a valid one) — this diverges from the check in `_switch_to`.
             logger.debug("tabs: scanner lock %s not applied: %s", locked, exc)
 
     def flash(self, message: str, severity: str = "information", timeout: float = 2.5) -> None:
@@ -135,13 +135,13 @@ class ModuleTabs(Widget):
                 try:
                     self._tooltip2_timer.stop()
                 except Exception as exc:
-                    # Таймер уже сработал — останавливать нечего; ссылка ниже
-                    # перезаписывается новым.
+                    # The timer already fired — nothing to stop; the reference
+                    # below is overwritten with a new one.
                     logger.debug("tabs: flash timer already gone: %s", exc)
             self._tooltip2_timer = self.set_timer(timeout, self._hide_tooltip2)
         except Exception as exc:
-            # Сообщение пользователю не показано вовсе — самый дорогой из
-            # здешних молчаливых исходов.
+            # The message never reached the user — the most expensive of the
+            # silent outcomes here.
             logger.debug("tabs: flash %r not shown: %s", message, exc)
 
     def _hide_tooltip2(self) -> None:
@@ -150,6 +150,6 @@ class ModuleTabs(Widget):
             tip.update("")
             tip.display = False
         except Exception as exc:
-            # Сообщение вспышки останется на экране навсегда.
+            # The flash message will stay on screen forever.
             logger.debug("tabs: flash not hidden: %s", exc)
         self._tooltip2_timer = None

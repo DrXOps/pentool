@@ -1,6 +1,6 @@
-"""Safe query_one helper — убирает повторяющийся try/except/log.
+"""Safe query_one helper — removes the repeated try/except/log.
 
-Паттерн, повторяющийся ~40+ раз по коду::
+The pattern repeated ~40+ times across the code::
 
     try:
         screen = self.query_one(SELECTOR, SomeScreen)
@@ -8,7 +8,7 @@
     except Exception as e:
         logger.debug("... %s", e)
 
-Заменяется на::
+Replaced by::
 
     safe_call(self, SELECTOR, SomeScreen, lambda s: s.do_something(), "context")
 """

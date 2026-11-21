@@ -41,10 +41,10 @@ PACKAGE = ROOT / "pentool"
 
 
 def _default_packages() -> list:
-    """Пакеты для проверки: основной и PRO (если сабмодуль установлен).
+    """Packages to check: the main one and PRO (if the submodule is installed).
 
-    Вычисляется при вызове: тесты подменяют PACKAGE/ROOT на временный
-    каталог, и закэшированный список ломал бы их.
+    Computed on each call: the tests patch PACKAGE/ROOT to a temporary
+    directory, and a cached list would break them.
     """
     found = [PACKAGE]
     pro_package = ROOT / "pro" / "pentool"
@@ -60,8 +60,8 @@ RULE = "BLE001"
 def scan(package_list: list[Path] | Path | None = None, root: Path = ROOT) -> dict[str, int]:
     """Per-file count of ``BLE001`` findings across packages, relative to *root*.
 
-    Первый аргумент принимает и один путь, и список: исторический вызов
-    ``scan(package, root)`` из тестов должен продолжать работать.
+    The first argument accepts either a single path or a list: the historical
+    ``scan(package, root)`` call from the tests must keep working.
     """
     if package_list is None:
         targets = _default_packages()
@@ -78,7 +78,7 @@ def scan(package_list: list[Path] | Path | None = None, root: Path = ROOT) -> di
 
 
 def _scan_one(package: Path, root: Path) -> dict[str, int]:
-    """Один пакет: то, что ruff называет ``BLE001``, в пересчёте на файл."""
+    """One package: what ruff reports as ``BLE001``, counted per file."""
     procedure = [
         sys.executable,
         "-m",
