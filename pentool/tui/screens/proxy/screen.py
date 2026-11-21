@@ -68,6 +68,23 @@ _FILTER_RELOAD_DEBOUNCE_S = 0.6
 DataTable = ProxyDataTable
 
 
+class _LazyTabBody(Vertical):
+    """Container that composes one sub-tab's body on demand.
+
+    A sub-tab builder is an ordinary `compose()`-style generator (it uses
+    `with Horizontal(...)` blocks), so it can only run inside a widget's own
+    compose pass. Mounting the container is what triggers that pass — see
+    `ProxyScreen._populate_tab`.
+    """
+
+    def __init__(self, builder, **kwargs) -> None:  # noqa: ANN001 - callable generator
+        super().__init__(**kwargs)
+        self._builder = builder
+
+    def compose(self) -> ComposeResult:
+        yield from self._builder()
+
+
 class ProxyScreen(
     ContentClipboardMixin,
     SortableTableMixin,
@@ -122,6 +139,9 @@ class ProxyScreen(
         self._pending_req_ids_ts: dict[str, float] = {}  # БАГ-C: timestamps for periodic cleanup
         self._intercept_req: InterceptedRequest | None = None
         self._intercept_pending: list[InterceptedRequest] = []
+        #: Sub-tab whose body is currently mounted as the "spare" one (lazy
+        #: sub-tabs keep the visible pane plus this one, see `_switch_tab_body`).
+        self._previous_tab: str = ""
         #: "starting"/"stopping" while the proxy is coming up or going down; the
         #: header shows a spinner-ish label instead of the plain state then.
         self._proxy_transition: str = ""
@@ -177,120 +197,129 @@ class ProxyScreen(
         self._highlight_debounce_handle = None
 
     def _compose_intercept_tab(self) -> ComposeResult:
-        with TabPane("Intercept", id="tab-intercept"):
-            # Forward / Drop / Special are header buttons now (row 2, left side):
-            # they are actions of this sub-tab, so they belong to the header spec
-            # rather than to the panel. Only the hint stays here.
-            yield Label("(enable Intercept to capture requests)", id="intercept-hint")
-            with Vertical(id="intercept-req-area"):
-                yield ContentPanel(
-                    "Intercept",
-                    widget_type="textarea",
-                    initial_text="(No requests waiting for intercept)",
-                    buttons=["copy", "paste", "format", "clear"],
-                    id="intercept-panel",
-                    classes="card",
-                )
-            yield ResizeHandle(
-                "intercept-req-area",
-                "intercept-bottom-area",
-                vertical=True,
-                id="resize-intercept",
+        """Children of the ``tab-intercept`` pane (the pane is created by `compose`).
+
+        Mounted lazily by `_populate_tab()` the first time the sub-tab is shown.
+        """
+        # Forward / Drop / Special are header buttons now (row 2, left side):
+        # they are actions of this sub-tab, so they belong to the header spec
+        # rather than to the panel. Only the hint stays here.
+        yield Label("(enable Intercept to capture requests)", id="intercept-hint")
+        with Vertical(id="intercept-req-area"):
+            yield ContentPanel(
+                "Intercept",
+                widget_type="textarea",
+                initial_text="(No requests waiting for intercept)",
+                buttons=["copy", "paste", "format", "clear"],
+                id="intercept-panel",
+                classes="card",
             )
-            with Horizontal(id="intercept-bottom-area"):
-                with Vertical(id="intercept-sent-panel", classes="card"):
-                    yield HttpView("Sent Request", id="intercept-sent-req")
-                yield ResizeHandle(
-                    "intercept-sent-panel",
-                    "intercept-resp-panel",
-                    id="resize-intercept-sent-resp",
-                )
-                with Vertical(id="intercept-resp-panel", classes="card"):
-                    yield HttpView("Response", id="intercept-resp-viewer")
+        yield ResizeHandle(
+            "intercept-req-area",
+            "intercept-bottom-area",
+            vertical=True,
+            id="resize-intercept",
+        )
+        with Horizontal(id="intercept-bottom-area"):
+            with Vertical(id="intercept-sent-panel", classes="card"):
+                yield HttpView("Sent Request", id="intercept-sent-req")
+            yield ResizeHandle(
+                "intercept-sent-panel",
+                "intercept-resp-panel",
+                id="resize-intercept-sent-resp",
+            )
+            with Vertical(id="intercept-resp-panel", classes="card"):
+                yield HttpView("Response", id="intercept-resp-viewer")
 
     def _compose_history_tab(self) -> ComposeResult:
-        with TabPane("HTTP History", id="tab-http-history"):
-            with Horizontal(id="body"):
-                with Vertical(id="main-panel"):
-                    with Vertical(id="table-area"):
-                        yield FilterBar(id="filter-bar", classes="card-host")
-                        with Vertical(id="history-card", classes="card"):
-                            yield DataTable(
-                                columns=_COL_NAMES,
-                                initial_table=_make_empty_table(),
-                                id="request-list",
-                                cursor_type="row",
-                                zebra_stripes=True,
-                                max_column_content_width=120,
-                                column_widths=[5, 24, 8, 24, 6, 8, 8],
-                            )
-                            yield Static("", id="history-count", classes="history-count")
-                    yield ResizeHandle(
-                        "table-area",
-                        "detail-area",
-                        vertical=True,
-                        id="resize-table-detail",
-                    )
-                    with Horizontal(id="detail-area"):
-                        with Vertical(id="req-panel", classes="card"):
-                            yield HttpView("Request", id="req-editor")
-                        yield ResizeHandle(
-                            "req-panel",
-                            "resp-panel",
-                            id="resize-req-resp",
+        """Children of the ``tab-http-history`` pane (the pane is created by `compose`).
+
+        Mounted lazily by `_populate_tab()` the first time the sub-tab is shown.
+        """
+        with Horizontal(id="body"):
+            with Vertical(id="main-panel"):
+                with Vertical(id="table-area"):
+                    yield FilterBar(id="filter-bar", classes="card-host")
+                    with Vertical(id="history-card", classes="card"):
+                        yield DataTable(
+                            columns=_COL_NAMES,
+                            initial_table=_make_empty_table(),
+                            id="request-list",
+                            cursor_type="row",
+                            zebra_stripes=True,
+                            max_column_content_width=120,
+                            column_widths=[5, 24, 8, 24, 6, 8, 8],
                         )
-                        with Vertical(id="resp-panel", classes="card"):
-                            yield HttpView("Response", id="resp-viewer")
-                yield InspectorPanel(id="inspector-panel")
+                        yield Static("", id="history-count", classes="history-count")
+                yield ResizeHandle(
+                    "table-area",
+                    "detail-area",
+                    vertical=True,
+                    id="resize-table-detail",
+                )
+                with Horizontal(id="detail-area"):
+                    with Vertical(id="req-panel", classes="card"):
+                        yield HttpView("Request", id="req-editor")
+                    yield ResizeHandle(
+                        "req-panel",
+                        "resp-panel",
+                        id="resize-req-resp",
+                    )
+                    with Vertical(id="resp-panel", classes="card"):
+                        yield HttpView("Response", id="resp-viewer")
+            yield InspectorPanel(id="inspector-panel")
 
     def _compose_ws_tab(self) -> ComposeResult:
-        with TabPane("WS History", id="tab-ws-history"):
-            with Horizontal(id="ws-body"):
-                with Vertical(id="ws-main-panel"):
-                    with Vertical(id="ws-table-area"):
-                        yield WsFilterBar(id="ws-filter-bar", classes="card-host")
-                        with Vertical(id="ws-history-card", classes="card"):
-                            yield DataTable(
-                                columns=_COL_NAMES,
-                                initial_table=_make_empty_table(),
-                                id="ws-request-list",
-                                cursor_type="row",
-                                zebra_stripes=True,
-                                column_widths=[5, 24, 8, 24, 6, 8, 8],
-                            )
-                            yield Static("", id="ws-history-count", classes="history-count")
-                    yield ResizeHandle(
-                        "ws-table-area",
-                        "ws-detail-area",
-                        vertical=True,
-                        id="resize-ws-table-detail",
-                    )
-                    with Horizontal(id="ws-detail-area"):
-                        with Vertical(id="ws-req-panel", classes="card"):
-                            yield HttpView("Request", id="ws-req-editor")
-                        yield ResizeHandle(
-                            "ws-req-panel",
-                            "ws-resp-panel",
-                            id="resize-ws-req-resp",
+        """Children of the ``tab-ws-history`` pane (the pane is created by `compose`).
+
+        Mounted lazily by `_populate_tab()` the first time the sub-tab is shown.
+        """
+        with Horizontal(id="ws-body"):
+            with Vertical(id="ws-main-panel"):
+                with Vertical(id="ws-table-area"):
+                    yield WsFilterBar(id="ws-filter-bar", classes="card-host")
+                    with Vertical(id="ws-history-card", classes="card"):
+                        yield DataTable(
+                            columns=_COL_NAMES,
+                            initial_table=_make_empty_table(),
+                            id="ws-request-list",
+                            cursor_type="row",
+                            zebra_stripes=True,
+                            column_widths=[5, 24, 8, 24, 6, 8, 8],
                         )
-                        with Vertical(id="ws-resp-panel", classes="card"):
-                            yield HttpView("Response", id="ws-resp-viewer")
+                        yield Static("", id="ws-history-count", classes="history-count")
+                yield ResizeHandle(
+                    "ws-table-area",
+                    "ws-detail-area",
+                    vertical=True,
+                    id="resize-ws-table-detail",
+                )
+                with Horizontal(id="ws-detail-area"):
+                    with Vertical(id="ws-req-panel", classes="card"):
+                        yield HttpView("Request", id="ws-req-editor")
                     yield ResizeHandle(
-                        "ws-detail-area",
-                        "ws-messages-area",
-                        vertical=True,
-                        id="resize-ws-detail-msg",
+                        "ws-req-panel",
+                        "ws-resp-panel",
+                        id="resize-ws-req-resp",
                     )
-                    with Vertical(id="ws-messages-area"):
-                        yield ContentPanel(
-                            "WebSocket Messages",
-                            widget_type="richlog",
-                            wrap=True,
-                            max_lines=1000,
-                            buttons=["copy", "clear"],
-                            id="ws-msg-panel",
-                            classes="card",
-                        )
+                    with Vertical(id="ws-resp-panel", classes="card"):
+                        yield HttpView("Response", id="ws-resp-viewer")
+                yield ResizeHandle(
+                    "ws-detail-area",
+                    "ws-messages-area",
+                    vertical=True,
+                    id="resize-ws-detail-msg",
+                )
+                with Vertical(id="ws-messages-area"):
+                    yield ContentPanel(
+                        "WebSocket Messages",
+                        widget_type="richlog",
+                        wrap=True,
+                        max_lines=1000,
+                        buttons=["copy", "clear"],
+                        id="ws-msg-panel",
+                        classes="card",
+                    )
 
     def compose(self) -> ComposeResult:
         # The module toolbar (proxy / intercept / skip / M&R / clear) lives in the
@@ -298,10 +327,103 @@ class ProxyScreen(
         # module reads the same (see `pentool/tui/header.py` and
         # `header_spec()` below). The sub-tab strip is drawn there too — its own
         # `ContentTabs` row is hidden in screen.tcss, so tabs exist once.
-        with TabbedContent(id="proxy-subtabs"):
-            yield from self._compose_intercept_tab()
-            yield from self._compose_history_tab()
-            yield from self._compose_ws_tab()
+        #
+        # Panes start **empty**: a sub-tab's body is mounted the first time the
+        # tab is shown (`_populate_tab`). Building all three here put 126 widgets
+        # in the tree (28 + 47 + 51) while the user looks at one tab, and every
+        # hidden widget took part in the layout/render sweep of each action.
+        with TabbedContent(initial="tab-http-history", id="proxy-subtabs"):
+            for tab_id, title in self._subtab_ids():
+                yield TabPane(title, id=tab_id)
+
+    # ── Lazy sub-tabs ─────────────────────────────────────────────────────
+    _TAB_BUILDERS = {
+        "tab-intercept": "_compose_intercept_tab",
+        "tab-http-history": "_compose_history_tab",
+        "tab-ws-history": "_compose_ws_tab",
+    }
+
+    async def _populate_tab(self, tab_id: str) -> None:
+        """Mount *tab_id*'s body if the pane is still empty."""
+        if tab_id not in self._TAB_BUILDERS:
+            return
+        try:
+            pane = self.query_one(f"#{tab_id}", TabPane)
+        except NoMatches as exc:
+            logger.debug("proxy: sub-tab %s not mounted yet: %s", tab_id, exc)
+            return
+        if pane.children:
+            return
+        builder = getattr(self, self._TAB_BUILDERS[tab_id])
+        try:
+            # The builder is a `compose()`-style generator (`with Horizontal(...)`
+            # blocks and all). It can only run inside a widget's own compose pass,
+            # so the body gets a container that composes it — `mount_all` outside
+            # of compose raises `IndexError` on Textual's `_compose_stacks`.
+            await pane.mount(_LazyTabBody(builder, id=f"{tab_id}-body"))
+        except Exception:
+            # A half-built tab is unusable: report loudly, the pane stays empty
+            # and the next tab switch retries.
+            logger.exception("proxy: sub-tab %s body not mounted", tab_id)
+            return
+        self._after_tab_mounted(tab_id)
+
+    def _after_tab_mounted(self, tab_id: str) -> None:
+        """Fill a freshly built sub-tab with data (its widgets just appeared)."""
+        self.call_after_refresh(self._refresh_tab_data, tab_id)
+
+    def _refresh_tab_data(self, tab_id: str) -> None:
+        if tab_id == "tab-http-history":
+            self.run_worker(self._reload_table(self._current_filters))
+        elif tab_id == "tab-ws-history":
+            self.run_worker(self._reload_ws_table())
+        else:
+            self._sync_intercept_tab_widgets()
+
+    def _sync_intercept_tab_widgets(self) -> None:
+        """Intercept tab rebuilt: restore hint/buttons from the queue state."""
+        try:
+            from textual.widgets import Label
+
+            queued = len(self._intercept_pending)
+            hint = "(enable Intercept to capture requests)"
+            if self._intercept_req is not None:
+                hint = f"⏸ Intercepted: {self._intercept_req.method} {self._intercept_req.url}"
+                if queued:
+                    hint += f"  (+{queued} queued)"
+            self.query_one("#intercept-hint", Label).update(hint)
+        except NoMatches as exc:
+            logger.debug("proxy: intercept hint not restored: %s", exc)
+
+    @on(TabbedContent.TabActivated, "#proxy-subtabs")
+    def _on_subtab_activated_lazy(self, event: TabbedContent.TabActivated) -> None:
+        """Build the newly selected sub-tab, drop the one left behind."""
+        tab_id = getattr(event.tab, "id", "") or ""
+        tab_id = tab_id.removeprefix("--content-tab-")
+        if not tab_id:
+            return
+        self.run_worker(self._switch_tab_body(tab_id), group="proxy-tabs", exclusive=True)
+
+    async def _switch_tab_body(self, tab_id: str) -> None:
+        """Keep one spare sub-tab mounted (the one just left), unmount the rest."""
+        for other in self._TAB_BUILDERS:
+            if other in (tab_id, self._previous_tab):
+                continue
+            await self._unmount_tab_body(other)
+        await self._populate_tab(tab_id)
+        self._previous_tab = tab_id
+
+    async def _unmount_tab_body(self, tab_id: str) -> None:
+        try:
+            pane = self.query_one(f"#{tab_id}", TabPane)
+        except NoMatches:
+            return
+        if not pane.children:
+            return
+        try:
+            await pane.remove_children()
+        except Exception:
+            logger.debug("proxy: sub-tab %s body not unmounted", tab_id, exc_info=True)
 
     # ── Module header (see pentool/tui/header.py) ─────────────────────────
     def _subtab_ids(self) -> tuple[tuple[str, str], ...]:
