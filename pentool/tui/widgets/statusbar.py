@@ -12,6 +12,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
+from pentool.tui.mixins.safe_query import safe_query_one
 from pentool.tui.widgets.activity_indicator import ActivityIndicator
 
 _CSS = (Path(__file__).parent / "statusbar.tcss").read_text(encoding="utf-8")
@@ -82,7 +83,12 @@ class StatusBar(Widget):
         self.set_interval(1.0, self._update_time)
 
     def _update_proxy(self) -> None:
-        widget = self.query_one("#proxy-status", Static)
+        # The bar ticks once per second from on_mount; a child can be missing
+        # during the first layout pass, and an exception in a clock tick would
+        # take the whole TUI down.
+        widget = safe_query_one(self, "#proxy-status", Static, context="statusbar: proxy status")
+        if widget is None:
+            return
         if self.proxy_running:
             widget.update(f"[green]● Proxy :{self.proxy_port}[/green]")
             widget.remove_class("stopped")
@@ -101,10 +107,14 @@ class StatusBar(Widget):
             markup = f"[dim]project:[/dim] [bold cyan]{name}[/bold cyan] [dim]{path}[/dim]"
         else:
             markup = f"[dim]project:[/dim] [bold cyan]{name}[/bold cyan]"
-        self.query_one("#project-name", Static).update(markup)
+        widget = safe_query_one(self, "#project-name", Static, context="statusbar: project name")
+        if widget is not None:
+            widget.update(markup)
 
     def _update_saved(self) -> None:
-        widget = self.query_one("#saved-status", Static)
+        widget = safe_query_one(self, "#saved-status", Static, context="statusbar: saved status")
+        if widget is None:
+            return
         if self.project_name == "no project":
             widget.update("")
         elif self.project_saved:
@@ -113,7 +123,9 @@ class StatusBar(Widget):
             widget.update("[yellow]● Unsaved[/yellow]")
 
     def _update_time(self) -> None:
-        self.query_one("#current-time", Static).update(self._now().strftime("%H:%M:%S"))
+        widget = safe_query_one(self, "#current-time", Static, context="statusbar: clock")
+        if widget is not None:
+            widget.update(self._now().strftime("%H:%M:%S"))
 
     def set_proxy_status(self, running: bool, port: int = 8080) -> None:
         self.proxy_running = running

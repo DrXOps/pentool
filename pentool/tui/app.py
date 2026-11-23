@@ -1402,12 +1402,19 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         spec = provider.header_spec() if provider is not None else None
         self._header_provider = provider
 
-        state_buttons = [self.query_one(f"#hdr-state-{slot}", ToolbarButton) for slot in (1, 2, 3)]
-        action_buttons = [self.query_one(f"#hdr-act-{slot}", ToolbarButton) for slot in range(1, 10)]
-        tab_buttons = [self.query_one(f"#hdr-tab-{slot}", ToolbarButton) for slot in range(1, 6)]
-        more_button = self.query_one("#hdr-more", ToolbarButton)
-        counters = self.query_one("#hdr-counters", Static)
-        header = self.query_one("#module-header", Horizontal)
+        # The header may be redrawn before its own row exists (module switch during
+        # the first frame, a timer tick after the composition was reset). Read the
+        # slots defensively: a missing row means "nothing to draw yet", not a crash.
+        try:
+            state_buttons = [self.query_one(f"#hdr-state-{slot}", ToolbarButton) for slot in (1, 2, 3)]
+            action_buttons = [self.query_one(f"#hdr-act-{slot}", ToolbarButton) for slot in range(1, 10)]
+            tab_buttons = [self.query_one(f"#hdr-tab-{slot}", ToolbarButton) for slot in range(1, 6)]
+            more_button = self.query_one("#hdr-more", ToolbarButton)
+            counters = self.query_one("#hdr-counters", Static)
+            header = self.query_one("#module-header", Horizontal)
+        except NoMatches:
+            logger.debug("header: slots not mounted yet, redraw skipped")
+            return
 
         state_items = spec.state if spec else ()
         for button, item in zip(state_buttons, state_items, strict=False):

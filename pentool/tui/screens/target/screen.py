@@ -21,6 +21,7 @@ from pentool.tui.mixins.ai_sync import AiModeSyncMixin
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
+from pentool.tui.mixins.safe_query import safe_query_one
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.resize_handle import ResizeHandle
@@ -236,11 +237,18 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         try:
             if getattr(self, "_sitemap_dirty", False):
                 self._sitemap_dirty = False
-                self.run_worker(  # type: ignore[attr-defined]
-                    self._do_save_sitemap(),
-                    group=self.SAVE_WORKER_GROUP,
-                    exit_on_error=False,
-                )
+                coro = self._do_save_sitemap()
+                try:
+                    self.run_worker(  # type: ignore[attr-defined]
+                        coro,
+                        group=self.SAVE_WORKER_GROUP,
+                        exit_on_error=False,
+                    )
+                except Exception:
+                    # The worker was not accepted (the node is already gone): close
+                    # the coroutine so it does not surface as "never awaited".
+                    coro.close()
+                    raise
         except Exception:
             logger.error("target: site map not flushed on unmount", exc_info=True)
         try:
@@ -417,7 +425,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         data = event.node.data
         if data is None:
             return
-        log = self.query_one("#detail-panel", ContentPanel)
+        # The details panel is rebuilt when the screen is remounted; a click that
+        # arrives during that gap must be ignored, not crash the app.
+        log = safe_query_one(self, "#detail-panel", ContentPanel, context="target: details panel")
+        if log is None:
+            return
         log.clear_content()
 
         if data.get("type") == "host":
@@ -1129,6 +1141,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
     def _flush_sitemap_sync(self) -> None:
         """Flush from a timer/manual call: start a tracked save worker."""
         if not getattr(self, "_sitemap_dirty", False):
+            return
+        if not self.is_mounted:
+            # The node is being torn down: unmount's own flush handles the write,
+            # and a worker started here would never run (its coroutine would be
+            # reported as "never awaited").
             return
         self._sitemap_dirty = False
         try:

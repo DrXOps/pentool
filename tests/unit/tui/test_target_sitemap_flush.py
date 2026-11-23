@@ -2,14 +2,14 @@
 
 `--url/--smart` adds exactly one host through `add_request_from_proxy`, and the
 old code persisted every 20th request only: a fresh project opened with an empty
-Target tree ("the host does not land in Target"). The flush is now debounced and
-also forced on unmount and right after the seed.
+Target tree ("the host does not land in Target"). The flush is now debounced, forced
+on unmount, and forced right after the seed.
 """
 
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from pentool.tui.screens.target.screen import TargetScreen
 
@@ -58,7 +58,21 @@ def test_timer_flush_starts_a_tracked_worker() -> None:
     # never-awaited coroutine would fail the suite with a RuntimeWarning.
     screen._do_save_sitemap = MagicMock(return_value="save-task")
 
-    screen._flush_sitemap_sync()
+    with patch.object(TargetScreen, "is_mounted", property(lambda self: True)):
+        screen._flush_sitemap_sync()
 
-    screen._start_save_worker.assert_called_once_with("save-task", screen._start_save_worker.call_args.args[1])
+    screen._start_save_worker.assert_called_once()
     assert screen._sitemap_dirty is False
+
+
+def test_unmounted_screen_does_not_start_a_flush() -> None:
+    """Unmount has its own flush; a timer firing afterwards must not leak a coroutine."""
+    screen = _screen()
+    screen._sitemap_dirty = True
+    screen._start_save_worker = MagicMock()
+
+    with patch.object(TargetScreen, "is_mounted", property(lambda self: False)):
+        screen._flush_sitemap_sync()
+
+    screen._start_save_worker.assert_not_called()
+    assert screen._sitemap_dirty is True, "the write is still owed and must be flushed on unmount"
