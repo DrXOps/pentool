@@ -80,7 +80,7 @@ DashboardScreen {
 DashboardScreen #logo-bar {
     height: 9;
     background: transparent;
-    border-bottom: solid $primary-darken-3;
+    border-bottom: solid $primary 35%;
     align: center middle;
     padding: 0 2;
 }
@@ -130,7 +130,7 @@ DashboardScreen #pp-title {
     height: 2;
     color: $accent;
     text-style: bold;
-    border-bottom: solid $primary-darken-3;
+    border-bottom: solid $primary 35%;
 }
 DashboardScreen #project-tree {
     height: 1fr;
@@ -142,7 +142,7 @@ DashboardScreen #project-tree {
 DashboardScreen #pp-actions {
     height: 3;
     layout: horizontal;
-    border-top: solid $primary-darken-3;
+    border-top: solid $primary 35%;
 }
 DashboardScreen #pp-actions ToolbarButton {
     height: 3;
@@ -151,7 +151,7 @@ DashboardScreen #pp-actions ToolbarButton {
 DashboardScreen #hk-panel {
     height: auto;
     color: $text-muted;
-    border-top: solid $primary-darken-3;
+    border-top: solid $primary 35%;
     padding: 1 0 0 0;
     text-style: dim;
 }

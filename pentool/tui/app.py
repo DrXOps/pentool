@@ -2129,6 +2129,12 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 logger.warning("on_send_url_to_target: Target screen unavailable")
                 return
             target.add_request_from_proxy(msg.req)
+            # The `--url` seed adds ONE host, so the debounced flush may never run
+            # before the user restarts: write it through now, otherwise the new
+            # project opens with an empty Target tree ("the host does not land").
+            flush = getattr(target, "flush_sitemap", None)
+            if flush is not None:
+                await flush()
         except Exception:
             # The URL from --url never made it into the site tree.
             logger.exception("on_send_url_to_target: url not added")

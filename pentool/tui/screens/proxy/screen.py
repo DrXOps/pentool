@@ -463,10 +463,11 @@ class ProxyScreen(
 
         actions: list[HeaderAction] = []
         if active == "tab-intercept":
-            queued = len(self._intercept_pending) + (1 if self._intercept_req is not None else 0)
-            forwardable = queued > 0
-            actions.append(HeaderAction("forward", "⏩ Forward", enabled=forwardable))
-            actions.append(HeaderAction("drop", "✖ Drop", enabled=forwardable))
+            # Forward/Drop stay clickable with nothing intercepted: a disabled
+            # button draws the "not allowed" cursor, which users read as a bug
+            # rather than as "nothing to act on yet". The handler explains it.
+            actions.append(HeaderAction("forward", "⏩ Forward"))
+            actions.append(HeaderAction("drop", "✖ Drop"))
             actions.append(HeaderAction("special", "⏎ Special"))
 
         pending = len(self._intercept_pending) + (1 if self._intercept_req is not None else 0)
@@ -501,8 +502,22 @@ class ProxyScreen(
         elif action_id == "skip":
             self.action_toggle_enforce_scope()
         elif action_id == "forward":
+            if self._nothing_intercepted():
+                self.notify(
+                    "Nothing intercepted yet — enable Intercept to capture requests",
+                    severity="warning",
+                    timeout=3,
+                )
+                return
             self.action_forward()
         elif action_id == "drop":
+            if self._nothing_intercepted():
+                self.notify(
+                    "Nothing intercepted yet — enable Intercept to capture requests",
+                    severity="warning",
+                    timeout=3,
+                )
+                return
             self.action_drop()
         elif action_id == "special":
             self._toggle_intercept_special_chars(None)
@@ -510,6 +525,10 @@ class ProxyScreen(
             self.action_open_mr()
         elif action_id == "clear":
             self.action_clear_list()
+
+    def _nothing_intercepted(self) -> bool:
+        """True when the intercept queue is empty (Forward/Drop have no subject)."""
+        return not self._intercept_pending and self._intercept_req is None
 
     def header_tab_selected(self, tab_id: str) -> None:
         """A sub-tab chip was clicked in the header."""

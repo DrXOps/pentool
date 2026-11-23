@@ -150,6 +150,11 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         self._selected_node_data = None
         self._scope_config = None  # ScopeConfig for regex include/exclude rules
         self._running_save_tasks: list[str] = []  # tracked auto-save workers
+        #: Site map changed since the last write. The flush happens on a short
+        #: debounce (live traffic) and on unmount (lazy screens tear the node down
+        #: without notice), so a single seeded host is never lost.
+        self._sitemap_dirty: bool = False
+        self._sitemap_save_timer = None
 
     def compose(self) -> ComposeResult:
         yield Toolbar(
@@ -213,7 +218,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         self._sync_ai_ui()
 
     def on_unmount(self) -> None:
-        """Leaving the screen cancels the site crawl.
+        """Cancel the crawl and flush whatever the site map still owes the DB.
 
         A crawl runs for minutes and holds the network and the process pool:
         off-screen nobody can show its result, while the ActivityIndicator would
@@ -223,7 +228,21 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         The active-crawl counter is decremented right here: a worker torn down by
         cancellation may never reach its ``finally``, and the counter would stay
         inflated forever.
+
+        The pending site map is written before the node disappears: with lazy
+        screens this hook is the last moment the tree can be persisted, and a
+        host seeded by ``--url`` used to be lost exactly here.
         """
+        try:
+            if getattr(self, "_sitemap_dirty", False):
+                self._sitemap_dirty = False
+                self.run_worker(  # type: ignore[attr-defined]
+                    self._do_save_sitemap(),
+                    group=self.SAVE_WORKER_GROUP,
+                    exit_on_error=False,
+                )
+        except Exception:
+            logger.error("target: site map not flushed on unmount", exc_info=True)
         try:
             cancelled = self.workers.cancel_group(self, self.CRAWL_GROUP)
         except Exception:
@@ -1086,12 +1105,44 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
                 len(api.get_hosts()),
             )
             self.call_after_refresh(self._refresh_tree)
-            # Persist to DB (batches of ~20 requests)
-            self._save_counter = getattr(self, "_save_counter", 0) + 1
-            if self._save_counter % 20 == 0:
-                self._start_save_worker(self._do_save_sitemap(), f"target-save-{time.monotonic_ns()}")
+            # Persist soon, not "every 20 requests": with `--url/--smart` the seed
+            # adds exactly ONE host, so the counter never reached 20 and the host
+            # was missing from the project after a restart ("the host does not
+            # land in Target"). A short debounce keeps batched writes for live
+            # traffic and guarantees a flush for the single-host case.
+            self._mark_sitemap_dirty()
         except Exception as exc:
             logger.warning("add_request_from_proxy: %s", exc)
+
+    def _mark_sitemap_dirty(self, delay: float = 2.0) -> None:
+        """Schedule a site-map flush shortly after the last change."""
+        try:
+            self._sitemap_dirty = True
+            timer = getattr(self, "_sitemap_save_timer", None)
+            if timer is not None:
+                timer.stop()
+            self._sitemap_save_timer = self.set_timer(delay, self._flush_sitemap_sync)
+        except Exception:
+            # No timer means no delayed flush; the unmount hook still tries once.
+            logger.debug("target: sitemap flush not scheduled", exc_info=True)
+
+    def _flush_sitemap_sync(self) -> None:
+        """Flush from a timer/manual call: start a tracked save worker."""
+        if not getattr(self, "_sitemap_dirty", False):
+            return
+        self._sitemap_dirty = False
+        try:
+            self._start_save_worker(self._do_save_sitemap(), f"target-save-{time.monotonic_ns()}")
+        except Exception:
+            self._sitemap_dirty = True
+            logger.error("target: site map flush not started", exc_info=True)
+
+    async def flush_sitemap(self) -> None:
+        """Awaitable flush — used after the `--url` seed so the host is in the DB."""
+        if not getattr(self, "_sitemap_dirty", False):
+            return
+        self._sitemap_dirty = False
+        await self._do_save_sitemap()
 
     async def _do_save_sitemap(self) -> None:
         try:
