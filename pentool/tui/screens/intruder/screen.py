@@ -37,6 +37,7 @@ from pentool.api.intruder_api import (
 )
 from pentool.api.payload_serialization import deserialize_payloads, serialize_payloads
 from pentool.collections.filter_predicate import FilterPredicate, FilterSpec
+from pentool.core.activity import set_activity
 from pentool.core.logging import get_logger
 from pentool.tui.dialogs.intruder_generate import GenerateDialog
 from pentool.tui.dialogs.intruder_input import InputDialog
@@ -2511,6 +2512,7 @@ class IntruderScreen(
         so that with parallel attacks switching tabs does not scramble the data.
         """
         logger.info("INTRUDER: _run_attack started tab=%s type=%s", tab.tab_id, tab.attack_type)
+        set_activity("intruder", True)
 
         # Keep a reference to the working tab
         _tab = tab
@@ -2531,6 +2533,7 @@ class IntruderScreen(
         finally:
             _tab.running = False
             self._live_attacks.pop(_tab.tab_id, None)
+            set_activity("intruder", bool(self._live_attacks))
             _tab.paused = False
             _tab.attack = None
             logger.info(

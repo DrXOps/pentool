@@ -23,6 +23,8 @@ import asyncio
 import logging
 import threading
 
+from pentool.core.activity import set_activity
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,6 +95,7 @@ class ProxyRuntimeMixin:
             self._update_status()  # type: ignore[attr-defined]
             self._update_proxy_screen_labels()  # type: ignore[attr-defined]
             self._update_dashboard_proxy_status(True)  # type: ignore[attr-defined]
+            set_activity("proxy", True)
             self.notify(  # type: ignore[attr-defined]
                 f"● Proxy :{self._proxy.port}",
                 severity="success",  # type: ignore[attr-defined]
@@ -126,6 +129,7 @@ class ProxyRuntimeMixin:
             self.call_from_thread(self._update_status)  # type: ignore[attr-defined]
             self.call_from_thread(self._update_proxy_screen_labels)  # type: ignore[attr-defined]
             self.call_from_thread(self._update_dashboard_proxy_status, True)  # type: ignore[attr-defined]
+            self.call_from_thread(set_activity, "proxy", True)  # type: ignore[attr-defined]
             self.call_from_thread(  # type: ignore[attr-defined]
                 self.notify,
                 f"● Proxy :{self._proxy.port}",
@@ -144,6 +148,7 @@ class ProxyRuntimeMixin:
 
     def _stop_proxy(self) -> None:
         """Synchronous proxy stop (direct socket cmd for daemon, async for memory engine)."""
+        set_activity("proxy", False)
         logger.info("APP: _stop_proxy called")
         if self._engine() == "daemon":
             return self._stop_proxy_daemon()
@@ -188,6 +193,7 @@ class ProxyRuntimeMixin:
         blocking the TUI thread, then polls for thread exit in 100ms steps
         (up to ~2s). For 'daemon' engine: delegates to the async daemon stop.
         """
+        set_activity("proxy", False)
         logger.info("APP: _stop_proxy_async called")
         if self._engine() == "daemon":
             # `await`, not `return`: the daemon stop is itself a coroutine, and
@@ -223,6 +229,7 @@ class ProxyRuntimeMixin:
 
     def _stop_proxy_daemon(self) -> None:
         """Stop the daemon-backed proxy synchronously (Stop button / Ctrl+Q)."""
+        set_activity("proxy", False)
         logger.info("APP: _stop_proxy_daemon called")
         with self._proxy_transition_lock:
             try:
@@ -244,6 +251,7 @@ class ProxyRuntimeMixin:
         stop() is a bounded socket command that itself terminates the daemon
         process; run it off the TUI thread so the UI thread isn't frozen.
         """
+        set_activity("proxy", False)
         logger.info("APP: _stop_proxy_daemon_async called")
         # Serialise against a concurrent start so we never stop() the proxy
         # mid-spawn (which would leave the port half-bound and a stray daemon).

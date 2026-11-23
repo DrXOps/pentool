@@ -20,6 +20,22 @@ class AppEvent:
         return self
 
 
+# ── Activity events (what is running right now) ───────────────────────────────
+
+
+@dataclass
+class ActivityChanged(AppEvent):
+    """A background process started or stopped.
+
+    Emitted by `pentool.core.activity.ActivityState` whenever a tracked module changes
+    state; the status-bar activity strip repaints from it instead of polling every module
+    once a second.
+    """
+
+    module: str = ""  # "proxy" | "spider" | "scanner" | "intruder" | "recon" | "ai"
+    active: bool = False
+
+
 # ── Scanner events ─────────────────────────────────────────────────────────────
 
 

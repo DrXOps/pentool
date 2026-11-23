@@ -1,49 +1,31 @@
-"""ActivityIndicator — small emoji-based "what's running right now" strip.
+"""ActivityIndicator — emoji strip showing what is running, fed by ActivityState.
 
-Sits in StatusBar, to the right of the existing proxy/project/time fields.
-Each tracked background process gets one emoji glyph that blinks while
-active and is dimmed/greyed while idle — Proxy 🌐, Spider 🕷️, Scanner 🔍,
-Intruder 💥. Hovering over an individual glyph shows a tooltip for that
-specific process (e.g. "Spider: idle" / "Spider: running") — each Static
-glyph sets its own `.tooltip`, rather than one shared tooltip on the whole
-strip listing every active process, so hovering Proxy doesn't show you
-Spider's state.
+Sits in the StatusBar, to the right of the proxy/project/time fields. Each tracked
+process has a glyph that blinks while active and is dimmed while idle; each glyph carries
+its own tooltip ("Spider: idle" / "Spider: running").
 
-Blinking (not just a static bright/dim swap) is deliberate: most terminals
-render emoji as fixed-color glyphs from the font/emoji-font, largely
-ignoring the ANSI foreground color and dim/bold text-style Textual would
-otherwise apply — so a purely color-based "bright vs dim" distinction was
-easy to miss. Toggling the glyph's cell *background* between a highlighted
-and a plain state (like a blinking LED) is visible regardless of how the
-terminal colors the emoji itself, and is combined with an on/off amplitude
-swing so it also reads correctly on terminals that do respect it.
+**Why events now (T-030).** The strip used to re-read every module's attribute once a
+second, forever. That cost a repaint per second, polled screens that were not even
+mounted, and could not distinguish "stopped" from "could not read the state". Producers
+now report transitions through `pentool.core.activity.get_activity_state()`, and this
+widget repaints on the event only.
 
-Deliberately implemented as polling rather than another EventBus
-subscription: every module already tracks its own running/scanning state
-in a plain attribute (ProxyServer.is_running, ScannerScreen._tabs[*].scanning,
-IntruderScreen._attack_running) — wiring up start/stop events for four more
-places would touch a lot of module code for a purely cosmetic feature.
-Reading those attributes off a timer cannot get out of sync with reality
-the way a missed event could.
+Polling did not disappear: it slowed down to `_STATE_POLL_INTERVAL` (5 s) and became a
+fallback that
 
-Spider is the one exception: it's tracked via PentoolApp.is_spider_active()
-(a shared counter on the app), not a single screen's attribute. There is no
-dedicated SpiderScreen/module-tab — crawling runs only from TargetScreen's
-"Crawl scope"/"Crawl selected host" convenience triggers, which build their
-own SpiderAPI instance (see TargetScreen._crawl_hosts_worker).
+* discovers state for sources with no event (AI-backend availability, config toggles), and
+* repairs a module that forgot to report (a `set()` that never ran still shows up within
+  a few seconds instead of showing "idle" for a running scan).
 
-Note on the non-Spider attribute names: none of them is `_running` — that
-name collides with textual.message_pump.MessagePump._running, an internal
-attribute every Widget already has (true while its own message loop is
-active, i.e. essentially always once mounted — nothing to do with whether
-an attack/pty is actually in progress). IntruderScreen used to shadow it
-under that exact name, which made this indicator's glyphs read "active"
-almost immediately at startup, before Start was ever pressed.
+Blinking stays: most terminals render emoji as fixed-colour glyphs, so a static bright/dim
+swap is easy to miss. Toggling the cell *background* reads as a blinking LED regardless,
+and the on/off amplitude swing covers terminals that do honour colours.
 """
 
 from __future__ import annotations
 
 import os
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +36,9 @@ from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import Static
 
+from pentool.core.activity import ActivityState, get_activity_state
+from pentool.core.event_bus import get_event_bus
+from pentool.core.events import ActivityChanged
 from pentool.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -62,29 +47,24 @@ _CSS = (Path(__file__).parent / "activity_indicator.tcss").read_text(encoding="u
 
 # How fast an active glyph blinks (full on/off cycles per second).
 _BLINK_HZ = 2.0
-# How often we re-check each module's running-state attribute — separate
-# from the blink toggle rate above so a fast blink doesn't mean re-querying
-# ProxyServer/ScannerScreen/etc. several times a second for no reason.
-_STATE_POLL_INTERVAL = 1.0
-# How often the blink phase itself is re-applied — needs to be faster than
-# _STATE_POLL_INTERVAL so the glyph actually visibly flashes.
+# Fallback polling: state changes arrive by event, this only fills the gaps (AI backend,
+# config toggles) and repairs a producer that never reported.
+_STATE_POLL_INTERVAL = 5.0
+# How often the blink phase itself is re-applied — must be faster than the poll so the
+# glyph visibly flashes.
 _BLINK_TICK_INTERVAL = 1.0 / (_BLINK_HZ * 2)
 
 
 @dataclass
 class _Tracked:
     key: str
-    # U+FE0F (VARIATION SELECTOR-16, "render as emoji") appended where the
-    # base codepoint would otherwise render as a narrow (1-cell) glyph in
-    # most terminals — the Spider emoji (U+1F577) defaults to text/narrow
-    # presentation without it, while Proxy/Scanner/Intruder's emoji are
-    # already wide by default. Without the explicit VS16, Spider's glyph
-    # rendered visibly narrower than the other three, throwing off the
-    # even spacing across the strip.
+    # U+FE0F (VARIATION SELECTOR-16, "render as emoji") where the base codepoint would
+    # otherwise render narrow: the Spider emoji defaults to text presentation, which made
+    # its glyph visibly narrower than the others and broke the strip's spacing.
     emoji: str
     label: str
-    # () -> bool | None — None means "could not determine" (module screen
-    # not mounted / PRO scanner unavailable / etc.), treated as idle.
+    # () -> bool | None — None means "could not determine" (screen not mounted, PRO
+    # unavailable), treated as "no change" by the fallback poll.
     is_active: Callable[[], bool | None]
 
 
@@ -96,29 +76,28 @@ class ActivityIndicator(Widget):
     def __init__(self, app_ref, **kwargs) -> None:
         """
         Args:
-            app_ref: the PentoolApp instance (passed explicitly rather than
-                relying on self.app, which is only available once mounted —
-                the checker callables below are built at construction time).
+            app_ref: the PentoolApp instance (passed explicitly rather than relying on
+                `self.app`, which only exists once mounted — the checker callables are
+                built at construction time).
         """
         super().__init__(**kwargs)
-        # Shared look of a panel header: one line, dark backing, side padding
-        # (F-038). The class is added here rather than at each construction site
-        # so new mount points cannot forget about it.
+        # Shared look of a panel header: one line, dark backing, side padding (F-038).
         self.add_class("panel-title")
         self._checkers: list[_Tracked] = self._build_checkers(app_ref)
-        # Cached from the last _poll_state() run — the blink tick reads this
-        # instead of re-invoking is_active() every ~0.25s.
-        self._active_state: dict[str, bool] = {t.key: False for t in self._checkers}
-        #: Last AI-config value seen by `_poll_state` — repainting the strip for an
-        #: unchanged value is a wasted layout pass (once per second, forever).
+        self._state: ActivityState = get_activity_state()
+        #: Cached state from the registry; the blink tick reads this instead of querying.
+        self._active_state: dict[str, bool] = self._state.snapshot()
+        #: Last AI-config value seen by `_poll_state`.
         self._ai_cfg_on: bool = False
-        #: True once the idle shortcut cleared the blink classes after activity
-        #: stopped, so the "everything is idle" repaint happens exactly once.
+        #: True once the idle shortcut cleared the blink classes after activity stopped.
         self._blink_cleared: bool = True
+        #: EventBus handler bound in on_mount, removed in on_unmount.
+        self._bus_subscribed: bool = False
 
     # ── checker construction ────────────────────────────────────────────────
 
     def _build_checkers(self, app_ref) -> list[_Tracked]:
+        """Fallback readers: consulted by the slow poll, not on every repaint."""
 
         def _proxy_active() -> bool | None:
             try:
@@ -130,12 +109,6 @@ class ActivityIndicator(Widget):
                 return None
 
         def _spider_active() -> bool | None:
-            # No dedicated SpiderScreen/module-tab anymore — crawling runs
-            # only from TargetScreen's "Crawl scope"/"Crawl selected host"
-            # triggers (which build their own SpiderAPI instance — see
-            # TargetScreen._crawl_hosts_worker). PentoolApp.is_spider_active()
-            # is the single shared counter that path increments/decrements,
-            # so this glyph tracks the real crawl regardless of host.
             try:
                 return bool(app_ref.is_spider_active())
             except Exception:
@@ -178,25 +151,18 @@ class ActivityIndicator(Widget):
             try:
                 from pentool.tui.screens.recon.screen import ReconScreen
 
-                # Lazy screens: Recon is usually not mounted at all, and the
-                # helper answers None for "no such screen" instead of raising.
                 screen = app_ref.module_screen("recon", ReconScreen)
                 if screen is None:
                     return None
-                # _running collides with MessagePump._running (always True), so
-                # use _runner instead — it is None while idle and a
-                # DiscoveryRunner instance while a run is in progress.
+                # `_runner` is None while idle and a DiscoveryRunner during a run.
                 return screen._runner is not None
             except (ImportError, AttributeError):
-                # PRO not installed (import) or the screen lost `_runner`
-                # (attribute) — either way Recon cannot be running.
                 return None
 
         return [
-            # Glyph set as it was (emoji render in the reporter's terminal).
-            # Only the two magnifiers were an issue: 🔍 and 🔎 are hard to tell
-            # apart, and the microscope 🔬 was missing from the font, so Scanner
-            # is back to 🔍 and Recon is a compass 🧭 (exploring terrain).
+            # Only the two magnifiers were an issue: 🔍 and 🔎 are hard to tell apart and
+            # the microscope 🔬 was missing from the font, so Scanner is 🔍 and Recon a
+            # compass 🧭 (exploring terrain).
             _Tracked("proxy", "🌐", "Proxy", _proxy_active),
             _Tracked("spider", "🕷️", "Spider", _spider_active),
             _Tracked("scanner", "🔍", "Scanner", _scanner_active),
@@ -205,100 +171,143 @@ class ActivityIndicator(Widget):
             _Tracked("ai", "🤖", "AI MCP", _ai_active),
         ]
 
-    # ── compose / refresh ────────────────────────────────────────────────────
+    # ── compose / lifecycle ─────────────────────────────────────────────────
 
     def compose(self) -> ComposeResult:
         for i, t in enumerate(self._checkers):
             if i > 0:
-                # Static, non-blinking separator between glyphs — distinct
-                # from the blinking active glyphs so it never draws the eye,
-                # and gives each glyph's cell a fixed, equal-width neighbor
-                # instead of relying on margin alone for spacing.
+                # Static, non-blinking separator between glyphs — distinct from the
+                # blinking glyphs so it never draws the eye.
                 yield Static("┊", classes="activity-sep")
             yield Static(t.emoji, id=f"activity-{t.key}", classes="activity-glyph idle")
 
     def on_mount(self) -> None:
+        get_event_bus().subscribe(ActivityChanged, self._on_activity_changed)
+        self._bus_subscribed = True
+        self._active_state = self._state.snapshot()
         self._poll_state()
         if os.environ.get("PENTOOL_SNAPSHOT") == "1":
-            # Snapshots must not depend on the blink phase: `_apply_blink`
-            # derives it from time.monotonic(), so two runs produced different
-            # baselines (same class of problem as a blinking cursor).
+            # Snapshots must not depend on the blink phase: `_apply_blink` derives it from
+            # time.monotonic(), so two runs produced different baselines.
             self._apply_blink(blink_on=True)
             return
         self.set_interval(_STATE_POLL_INTERVAL, self._poll_state)
         self.set_interval(_BLINK_TICK_INTERVAL, self._apply_blink)
 
-    def _poll_state(self) -> None:
-        """Re-read each module's running-state attribute (cheap, ~1/s) and
-        set each glyph's own tooltip — individually, not one shared tooltip
-        for the whole strip, so hovering one glyph doesn't show the others'
-        state.
+    def on_unmount(self) -> None:
+        if self._bus_subscribed:
+            get_event_bus().unsubscribe(ActivityChanged, self._on_activity_changed)
+            self._bus_subscribed = False
 
-        AI glyph is hidden when ai_enabled is off in config.
-        """
+    # ── event path ──────────────────────────────────────────────────────────
+
+    def _on_activity_changed(self, event: ActivityChanged) -> None:
+        """A producer reported a transition: repaint immediately."""
+        module, active = event.module, event.active
+        self._active_state[module] = active
+        if self.app is not None and threading.get_ident() != getattr(self.app, "_thread_id", threading.get_ident()):
+            # A producer running on its own thread (the in-memory proxy loop) must not
+            # touch widgets: hop to the app's thread.
+            self.app.call_from_thread(self._apply_state)
+            return
+        self._apply_state()
+
+    # ── repaint ─────────────────────────────────────────────────────────────
+
+    def _apply_state(self) -> None:
+        """Push the cached state into glyph classes and tooltips."""
+        for t in self._checkers:
+            active = bool(self._active_state.get(t.key, False))
+            try:
+                widget = self.query_one(f"#activity-{t.key}", Static)
+            except NoMatches as exc:
+                # Glyph absent from the tree — usual during a partial build.
+                logger.debug("activity: glyph %s not found: %s", t.key, exc)
+                continue
+            widget.tooltip = f"{t.label}: {'running' if active else 'idle'}"
+            if t.key == "ai":
+                widget.display = True
+                widget.set_class(not self._ai_cfg_on, "ai-disabled")
+        if not any(self._active_state.values()):
+            # Nothing runs: clear the blink classes once and stop touching the layout.
+            self._blink_cleared = True
+            for t in self._checkers:
+                try:
+                    widget = self.query_one(f"#activity-{t.key}", Static)
+                except NoMatches:
+                    continue
+                widget.set_class(False, "active-on")
+                widget.set_class(False, "active-off")
+                widget.set_class(True, "idle")
+            return
+        self._blink_cleared = False
+        self._apply_blink()
+
+    # ── fallback poll ───────────────────────────────────────────────────────
+
+    def _poll_state(self) -> None:
+        """Slow sweep: feed AI/config state and repair a module that never reported."""
         ai_cfg_on = False
         try:
             from pentool.core.config import get_config
 
             ai_cfg_on = bool(getattr(get_config(), "ai_enabled", False))
         except Exception as exc:
-            # Treat AI as disabled — the glyph gets dimmed. Runs once a second;
-            # logged only on failure, else the log would fill with repeats.
+            # Treat AI as disabled — the glyph gets dimmed. Runs every 5 s; log on
+            # failure only, otherwise the journal fills with repeats.
             logger.debug("activity: ai_enabled not read, assuming off: %s", exc)
 
-        # Only repaint when the state actually changed: setting the same classes
-        # and tooltips again still costs a layout pass on every widget in the
-        # strip, once per second, forever.
-        current = {}
-        for t in self._checkers:
-            try:
-                current[t.key] = bool(t.is_active())
-            except (AttributeError, ImportError, KeyError, TypeError, RuntimeError) as exc:
-                # A checker with a broken source reads as "idle"; the glyph stops
-                # lying about a state nobody can read (same rule as below).
-                logger.debug("activity: state of %s not read: %s", t.key, exc)
-                current[t.key] = False
-        if current == self._active_state and ai_cfg_on == self._ai_cfg_on:
-            return
-        self._active_state = current
+        ai_cfg_changed = ai_cfg_on != self._ai_cfg_on
         self._ai_cfg_on = ai_cfg_on
 
-        for t in self._checkers:
-            try:
-                active = bool(t.is_active())
-            except Exception as exc:
-                # State unknown — the glyph shows "idle". That is safe, but a
-                # module that is actually running will look switched off.
-                logger.debug("activity: state of %s unknown: %s", t.key, exc)
-                active = False
-            self._active_state[t.key] = active
-            try:
-                widget = self.query_one(f"#activity-{t.key}", Static)
-            except NoMatches as exc:
-                # Glyph absent from the tree — skip it (usual during a partial
-                # build). The log line tells this apart from a typo in the id.
-                logger.debug("activity: glyph %s not found: %s", t.key, exc)
+        # AI has no event source: `is_mcp_busy()` is the only answer.
+        for tracked in self._checkers:
+            if tracked.key != "ai":
                 continue
-            widget.tooltip = f"{t.label}: {'running' if active else 'idle'}"
-            # AI glyph — show dimmed/strikethrough when AI is disabled in config
-            if t.key == "ai":
-                widget.display = True  # always show
-                if not ai_cfg_on:
-                    widget.add_class("ai-disabled")
-                else:
-                    widget.remove_class("ai-disabled")
+            try:
+                value = tracked.is_active()
+            except (AttributeError, ImportError, KeyError, TypeError, RuntimeError) as exc:
+                logger.debug("activity: state of %s not read: %s", tracked.key, exc)
+                continue
+            if value is not None:
+                self._state.set(tracked.key, bool(value))
+
+        # Repair pass for the modules that *do* publish: a missed `set()` (an old code
+        # path, an exception between start and the report) would otherwise leave the
+        # glyph dark while the module runs. `None` means "cannot tell" — leave it alone.
+        for tracked in self._checkers:
+            if tracked.key in ("ai",):
+                continue
+            try:
+                value = tracked.is_active()
+            except (AttributeError, ImportError, KeyError, TypeError, RuntimeError) as exc:
+                logger.debug("activity: fallback state of %s not read: %s", tracked.key, exc)
+                continue
+            if value is None:
+                continue
+            if bool(value) != self._state.is_active(tracked.key):
+                logger.debug(
+                    "activity: %s reported %s but registry says %s — repairing",
+                    tracked.key,
+                    bool(value),
+                    self._state.is_active(tracked.key),
+                )
+                self._state.set(tracked.key, bool(value))
+
+        if ai_cfg_changed:
+            self._apply_state()
+
+    # ── blink ───────────────────────────────────────────────────────────────
 
     def _apply_blink(self, blink_on: bool | None = None) -> None:
-        """Toggle blink phase and (re)apply CSS classes (~%.2gHz tick).
+        """Toggle the blink phase and (re)apply the CSS classes (~2 Hz tick).
 
-        ``blink_on`` is passed explicitly in snapshot mode: a phase derived
-        from the clock makes the baseline nondeterministic.
+        ``blink_on`` is passed explicitly in snapshot mode: a phase derived from the
+        clock makes the baseline nondeterministic.
 
-        Idle shortcut: every class change makes Textual recompute the layout of
-        the whole screen, and this tick runs ~3x/s for the whole session. When no
-        module is running there is nothing to blink, so the tick returns at once —
-        the *first* idle tick after an operation still clears the classes (see
-        `_blink_cleared`).
+        Idle shortcut: every class change makes Textual recompute the layout, and this
+        tick runs ~4x/s for the whole session. When nothing is active there is nothing to
+        blink, so the tick returns at once.
         """
         if blink_on is None and not any(self._active_state.values()):
             if not self._blink_cleared:
@@ -315,14 +324,12 @@ class ActivityIndicator(Widget):
             return
         self._blink_cleared = False
         if blink_on is None:
-            # int(now * _BLINK_HZ) alternates 0/1 every half-cycle — same
-            # pattern used by the Dashboard's finding-blink.
+            # int(now * _BLINK_HZ) alternates 0/1 every half-cycle.
             blink_on = int(time.monotonic() * _BLINK_HZ * 2) % 2 == 0
         for t in self._checkers:
             try:
                 widget = self.query_one(f"#activity-{t.key}", Static)
             except NoMatches as exc:
-                # Same case as in _poll_state: the glyph does not exist yet.
                 logger.debug("activity: blink glyph %s not found: %s", t.key, exc)
                 continue
             active = self._active_state.get(t.key, False)

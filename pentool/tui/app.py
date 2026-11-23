@@ -21,6 +21,7 @@ from textual.widgets import Checkbox, ContentSwitcher, Static
 
 from pentool import __version__
 from pentool.api.proxy_api import InterceptedRequest, ProxyAPI, ProxyServer
+from pentool.core.activity import set_activity
 from pentool.core.config import get_config
 from pentool.core.db_schema import init_db
 from pentool.core.event_bus import get_event_bus
@@ -268,12 +269,14 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         """Call when any crawl begins — keeps ActivityIndicator's Spider
         glyph in sync regardless of which screen initiated the crawl."""
         self._spider_active_count += 1
+        set_activity("spider", True)
 
     def spider_crawl_finished(self) -> None:
         """Call when a crawl started via spider_crawl_started() ends (success,
         error, or stop) — never let the counter go negative even if start/end
         calls end up mismatched somewhere."""
         self._spider_active_count = max(0, self._spider_active_count - 1)
+        set_activity("spider", self._spider_active_count > 0)
 
     def is_spider_active(self) -> bool:
         return self._spider_active_count > 0
