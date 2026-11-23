@@ -135,3 +135,6 @@ docs/promo/
 
 # Animated software presentation (local only, never published to the site)
 presentation/
+
+# Promotion strategy (catalogue checklist) — local until the owner says otherwise
+awesome-catalogs.md
