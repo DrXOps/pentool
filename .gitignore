@@ -138,3 +138,8 @@ presentation/
 
 # Promotion strategy (catalogue checklist) — local until the owner says otherwise
 awesome-catalogs.md
+
+# Payment provider credentials (project id / api key / secret) — NEVER commit
+.pkey
+.pkey.*
+*.pkey
