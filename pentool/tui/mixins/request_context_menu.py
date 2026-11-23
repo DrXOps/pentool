@@ -22,6 +22,8 @@ class RequestContextMenuMixin:
     _cm_show_send_scanner: bool = False
     _cm_show_send_decoder: bool = False
     _cm_show_send_comparer: bool = False
+    #: Recon is PRO (`ai_discovery`); the items are shown only when the licence grants it.
+    _cm_show_send_recon: bool = True
     _cm_show_export_md: bool = False
     _cm_show_export_html: bool = False
 
@@ -84,6 +86,16 @@ class RequestContextMenuMixin:
         if send_items:
             items.append(("-", ""))
             items += send_items
+        # Recon group (PRO): host only, or a specific stage that starts immediately.
+        if self._cm_show_send_recon and self._cm_recon_available():
+            items.append(("-", ""))
+            items += [
+                ("recon_domain", "Recon: host only"),
+                ("recon_subdomains", "Recon: subdomains"),
+                ("recon_endpoints", "Recon: endpoints"),
+                ("recon_realip", "Recon: real IP"),
+                ("recon_fuzz", "Recon: fuzz params"),
+            ]
         # Decoder/Comparer group
         tool_items: list[tuple[str, str]] = []
         if self._cm_show_send_decoder:
@@ -137,6 +149,8 @@ class RequestContextMenuMixin:
             self._cm_do_send_intruder(raw)
         elif action == "send_scanner":
             self._cm_do_send_scanner(raw)
+        elif action.startswith("recon_"):
+            await self._cm_do_send_recon(raw, action.removeprefix("recon_"))
         elif action == "send_decoder":
             await self._cm_do_send_decoder(raw)
         elif action == "send_comparer":
@@ -288,6 +302,51 @@ class RequestContextMenuMixin:
             self.app.post_message(SendRequestToScanner(req))  # type: ignore[attr-defined]
         except Exception as exc:
             self.err(exc, "Send to Scanner failed")
+
+    def _cm_recon_available(self) -> bool:
+        """True when the licence grants Recon — otherwise the menu stays clean."""
+        try:
+            from pentool.core.license import get_session_license
+
+            info = get_session_license()
+        except (ImportError, AttributeError, KeyError) as exc:
+            # A missing/broken licence module must not break the context menu.
+            logger.debug("ctx menu: recon availability unknown: %s", exc)
+            return False
+        return bool(info is not None and info.is_pro() and info.has_feature("ai_discovery"))
+
+    async def _cm_do_send_recon(self, raw: str, mode: str = "domain") -> None:
+        """Send the request's host to Recon, optionally starting a stage."""
+        if not raw.strip():
+            self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
+            return
+        try:
+            from pentool.utils.parser import parse_http_request
+
+            request = parse_http_request(raw)
+        except (ValueError, KeyError, AttributeError) as exc:
+            self.app.notify(  # type: ignore[attr-defined]
+                f"Cannot parse request: {exc}", severity="warning", timeout=3
+            )
+            return
+
+        host = (getattr(request, "host", "") or "").strip()
+        if not host:
+            self.app.notify("Request has no Host header", severity="warning", timeout=3)  # type: ignore[attr-defined]
+            return
+
+        open_recon = getattr(self.app, "open_recon", None)  # type: ignore[attr-defined]
+        if open_recon is None:
+            logger.debug("ctx menu: app has no open_recon()")
+            return
+        try:
+            started = await open_recon(host, mode=mode, run=mode != "domain")
+            if not started:
+                logger.debug("ctx menu: recon refused host %s (mode %s)", host, mode)
+        except Exception as exc:  # noqa: BLE001 - top-level UI action: show it, never drop it
+            from pentool.core.error_guard import err
+
+            err(exc, "Send to Recon", self.app)  # type: ignore[attr-defined]
 
     async def _cm_do_send_decoder(self, raw: str) -> None:
         """Requires AppMixin in the inheritance chain."""

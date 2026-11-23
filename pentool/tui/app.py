@@ -2108,6 +2108,59 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
             err(exc, "Send to Scanner", self, severity="error")
 
+    # ── Recon (PRO): one entry point for every "send to Recon" surface ─────────
+
+    async def open_recon(self, target: str, mode: str = "domain", run: bool = False) -> bool:
+        """Send *target* (a host or URL) to the Recon module and optionally start a stage.
+
+        FREE code never imports PRO symbols: the Recon screen is resolved by module id
+        and asked to `prepare_recon(...)` if it has that hook. The licence check runs
+        first, so a free user gets an explanation instead of a module that refuses to
+        start, and the context menu hides the items entirely when `ai_discovery` is
+        not granted.
+
+        Args:
+            target: host or URL taken from the request/user input.
+            mode: `domain` (pre-fill only), `subdomains`, `endpoints`, `realip`,
+                `fuzz` or `full`.
+            run: start the run immediately for the non-`domain` modes.
+
+        Returns:
+            True when Recon accepted the target.
+        """
+        from pentool.core.license import get_session_license
+
+        license_info = get_session_license()
+        if license_info is None or not license_info.has_feature("ai_discovery"):
+            self.notify(
+                "Recon is a PRO feature — activate a licence (Settings → License) to use it.",
+                severity="warning",
+                timeout=4,
+            )
+            return False
+
+        screen = await self.ensure_module_screen("recon")
+        if screen is None:
+            self.notify("Recon module is unavailable (PRO package not installed).", severity="error", timeout=4)
+            return False
+
+        prepare = getattr(screen, "prepare_recon", None)
+        if prepare is None:
+            self.notify("This build of Recon cannot accept a target.", severity="error", timeout=4)
+            return False
+
+        self.action_switch_module("recon")
+        try:
+            started = prepare(target, mode=mode, run=run)
+            if started is False:
+                return False
+        except TypeError as exc:
+            # An older PRO screen without the new keyword arguments: fall back to the
+            # plain target-only call rather than dropping the user's request.
+            logger.debug("open_recon: falling back to target-only call: %s", exc)
+            prepare(target)
+        return True
+
     @on(SendRequestToScanner)
     async def on_send_request_to_scanner(self, msg: SendRequestToScanner) -> None:
         try:
