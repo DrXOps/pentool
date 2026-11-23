@@ -87,6 +87,11 @@ class ToolbarButton(Static):
 
     @disabled.setter
     def disabled(self, value: bool) -> None:
+        # Assigning the same value must not touch the CSS class: `add_class` with
+        # `update=True` re-runs the whole stylesheet pass, and the module header
+        # assigns `disabled` to ~19 slots on every redraw (twice during startup).
+        if value == self._disabled and self.has_class("disabled") == bool(value):
+            return
         self._disabled = value
         if value:
             self.add_class("disabled")
