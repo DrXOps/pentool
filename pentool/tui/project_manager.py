@@ -68,6 +68,12 @@ class ProjectManager:
                 return
             if not path.endswith(".db"):
                 path = path + ".db"
+            if os.path.exists(path):
+                # Creating a project on an existing database used to overwrite it
+                # without a word (T-003): one wrong click in the file picker was
+                # enough to lose a project. Ask, and go back to the picker on "no".
+                self._confirm_overwrite(path)
+                return
             self.switch_project_db(path, is_new=True)
 
         self._app.push_screen(
@@ -77,6 +83,29 @@ class ProjectManager:
                 start_dir=os.path.expanduser("~"),
             ),
             _on_path,
+        )
+
+    def _confirm_overwrite(self, path: str) -> None:
+        """Ask before replacing an existing project database."""
+        from pentool.tui.dialogs.confirm import ConfirmDialog
+
+        def _on_answer(confirmed: bool | None) -> None:
+            if not confirmed:
+                # Nothing was touched: back to where the user can pick another name.
+                self.new_project()
+                return
+            self.switch_project_db(path, is_new=True)
+
+        self._app.push_screen(
+            ConfirmDialog(
+                title="Database already exists",
+                message=(
+                    f"{path}\n\nThis file is already a project database. Creating a project here replaces its contents."
+                ),
+                confirm_text="Overwrite",
+                cancel_text="Choose another",
+            ),
+            _on_answer,
         )
 
     def open_project(self) -> None:

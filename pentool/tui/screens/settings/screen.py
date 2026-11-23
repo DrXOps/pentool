@@ -876,7 +876,15 @@ class SettingsScreen(AppMixin, Widget):
             refresh_session_license(info)
             if info.valid:
                 plan = esc(info.plan.upper())
-                self.app.notify(f"✓ License activated: {plan}", timeout=4)  # type: ignore[attr-defined]
+                # A restart is genuinely required: PRO modules are imported when
+                # the process starts (the package is added to sys.path in
+                # `pentool/__main__.py`), so Scanner/Recon stay unavailable in this
+                # session even though the license now allows them. Saying so beats
+                # "I paid and the module is still locked".
+                self.app.notify(  # type: ignore[attr-defined]
+                    f"✓ License activated: {plan}\nRestart Pentool to use PRO modules (Scanner, Recon).",
+                    timeout=8,
+                )
             else:
                 self.err(Exception(info.error), "License activation failed")
         except Exception as exc:
@@ -895,7 +903,12 @@ class SettingsScreen(AppMixin, Widget):
         try:
             await deactivate_license()
             refresh_session_license()
-            self.app.notify("✓ License deactivated", timeout=3)  # type: ignore[attr-defined]
+            # Same reason as on activation: the PRO modules already imported in
+            # this process keep working until a restart, so say it out loud.
+            self.app.notify(  # type: ignore[attr-defined]
+                "✓ License deactivated\nRestart Pentool to unload PRO modules.",
+                timeout=6,
+            )
         except Exception as exc:
             err(exc, "Deactivation error", self)
         self.call_after_refresh(self._refresh_license_ui)
