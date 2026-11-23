@@ -119,9 +119,9 @@ Claude Code начинает каждую сессию без памяти. Ви
 | `docs/CI_CD.md` | использование CLI в CI | Markdown |
 | `docs/INSTALLATION.md`, `docs/QUICKSTART.md`, `docs/USER_GUIDE.md` | пользовательская документация | Markdown |
 | `docs/i18n/{en,ru,zh,hi}/` | переводы тех же документов | Markdown |
-| `docs/plan_tabs_repeater_intruder.md` | план по вкладкам/повторителю/интрудеру | Markdown |
+| ~~`docs/plan_tabs_repeater_intruder.md`~~ | удалён 2026-11-23: фича реализована, план не нужен | — |
 | `docs/audit/README.md` | индекс аудитов | Markdown |
-| `CLAUDE.md` | правила для агента; ссылается на `memory/` и `/home/docx/pentool/MYPLANS/` | Markdown |
+| `CLAUDE.md` | правила для агента; планирование — в `MYPLANS/PLAN.md` (см. подпланы) | Markdown |
 | `docs/index.html`, `docs/pricing*.html` | сайт/промо (не техническая вики) | HTML |
 
 Замечания, влияющие на миграцию:
@@ -152,7 +152,7 @@ Claude Code начинает каждую сессию без памяти. Ви
 | `docs/API_CONTRACTS.md` | фактура для `wiki/api.md`, `wiki/modules.md`, `wiki/core.md` | Использовано как источник; файл на месте |
 | `docs/USER_GUIDE.md`, `QUICKSTART`, `INSTALLATION` | пользовательские руководства | Не переносить; вики ссылается |
 | `docs/CI_CD.md` | фактура для `wiki/cli.md` (флаги, коды выхода) | Использовано как источник |
-| `docs/plan_tabs_repeater_intruder.md` | план фичи | Оставлен на месте |
+| `docs/plan_tabs_repeater_intruder.md` | план фичи (реализована) | Удалён 2026-11-23 |
 | `docs/i18n/**` | переводы | Не трогать (и нечитаемы: mode 0000) |
 | `pyproject.toml` зависимости | 13 страниц `wiki/deps/<name>.md` | **Созданы** |
 | 13 модулей `pentool/*` | `wiki/<module>.md` | **Заполнены по коду** |

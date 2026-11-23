@@ -5,12 +5,10 @@ TUI-слой: 21 430 строк Python в 95 файлах и 2 670 строк `.
 сборки, как ходят сообщения, как не сделать хендлер, который никогда не
 вызовется.
 
-Полные документы аудита 2026-11-06: [`docs/tui-audit/`](../../docs/tui-audit/) —
-[REPORT](../../docs/tui-audit/REPORT.md) (находки),
-[DECISIONS](../../docs/tui-audit/DECISIONS.md) (ADR),
-[CONVENTIONS](../../docs/tui-audit/CONVENTIONS.md) (правила),
-[COMPONENTS](../../docs/tui-audit/COMPONENTS.md) (каталог),
-[SUMMARY](../../docs/tui-audit/SUMMARY.md) (итоги).
+Живые документы: [`DECISIONS.md`](../../docs/tui-audit/DECISIONS.md) (ADR — почему
+сделано именно так) и [`CONVENTIONS.md`](../../docs/tui-audit/CONVENTIONS.md) (правила
+написания TUI). Исторические REPORT/SUMMARY/COMPONENTS удалены 2026-11-23: их находки
+закрыты редизайном, актуальный аудит — [`docs/audit/2026-11-21-tui-audit.md`](../../docs/audit/2026-11-21-tui-audit.md).
 
 ---
 
@@ -136,7 +134,7 @@ uv run ruff check --select F pentool/tui
 1. Прочитать [`CONVENTIONS.md`](../../docs/tui-audit/CONVENTIONS.md) §1 — про
    хендлеры. Это самая частая ошибка в этом слое.
 2. Найти существующий компонент в
-   [`COMPONENTS.md`](../../docs/tui-audit/COMPONENTS.md) §7 — «задача →
+   [`CONVENTIONS.md`](../../docs/tui-audit/CONVENTIONS.md) §7 — «задача →
    компонент».
 3. Проверить `MYPLANS/tech_debt.md`: часть пунктов из SUMMARY §5 уже
    расписана там.

@@ -17,6 +17,7 @@
 8. [ComparerAPI](#comparerapi)
 9. [SequencerAPI](#sequencerapi)
 10. [ExportableAPI (base class)](#exportableapi-base-class)
+11. [ReconAPI](#reconapi-pro)
 
 ---
 
@@ -461,6 +462,96 @@ class ExportableAPI(ABC):
 Modules whose real state lives in SQLite (Repeater, Spider, Intruder tab state) implement these as no-ops or thin wrappers — the DB *is* the source of truth, not the project JSON blob.
 
 ---
+
+---
+
+## ReconAPI *(PRO)*
+
+**File:** `pro/pentool/modules/ai_discovery/runner.py` — lives in the `pentool-pro`
+package (obfuscated, license-gated), not in the FREE `pentool` distribution. The
+module screen is `pro/pentool/tui/screens/recon/screen.py`; access is guarded by the
+`ai_discovery` license feature (`PentoolApp._switch_to` closes the module without it).
+
+Unlike the other APIs there is no `ReconAPI` facade class: the screen builds a
+`DiscoveryRunner` directly, because the runner needs the app (scope, site map) at
+construction time. TUI code must still not import `pentool.modules.*` — the PRO
+package is imported lazily inside the screen, never at module import time in FREE code.
+
+### DiscoveryRunner
+
+```python
+runner = DiscoveryRunner(
+    app=app,                    # PentoolApp — for target scope and the site map
+    ai_backend=None,            # PRO AI backend; None = no AI-generated guesses
+    http_client=None,           # shared aiohttp client (None = own)
+    concurrency=10,             # parallel checks
+    enable_ai=True,             # use AI for subdomain/path guesses
+    auto_scope=True,            # add discovered hosts to Target scope
+    enable_fuzz=True,           # run parameter fuzzing
+)
+report: DiscoveryReport = await runner.run(
+    "example.com",
+    run_subdomains=True,
+    run_endpoints=True,
+    run_real_ip=True,
+    run_param_fuzz=True,
+    on_progress=lambda msg, done, total: ...,   # called inside the app's event loop
+)
+```
+
+**Important (T-023):** `on_progress` is awaited by the runner inside the application's
+event loop. It must not call `app.call_from_thread(...)` — that raises
+`RuntimeError: must run in a different thread` and kills the run. Update widgets
+directly.
+
+### Results
+
+```python
+@dataclass
+class SubdomainResult:      # one checked host
+    host: str; ip: str | None; cname: str | None; cdn: str | None
+    alive: bool                       # resolved via DNS
+    found_by: str                     # "ai" | "crt.sh" | "dns"
+    in_scope: bool
+
+@dataclass
+class EndpointResult:       # one probed path
+    path: str; method: str; status: int | None
+    content_length: int | None; content_type: str | None
+    is_alive: bool                     # not a soft-404
+    host: str
+
+@dataclass
+class RealIPResult:         # CDN bypass attempt
+    domain: str; cdn: str | None; real_ip: str | None
+    evidence: str                      # "cname" | "crt.sh" | "mx" | "direct"
+    alt_hosts: list[str]               # subdomains without CDN
+
+@dataclass
+class ParamFuzzResult:      # one parameter probe
+    endpoint: str; param: str; value: str
+    baseline_status: int; baseline_size: int
+    fuzzed_status: int; fuzzed_size: int; fuzzed_time: float
+    interesting: bool                  # status/size/timing changed
+
+@dataclass
+class DiscoveryReport:
+    domain: str
+    subdomains: list[SubdomainResult]
+    endpoints: list[EndpointResult]
+    real_ips: list[RealIPResult]
+    param_fuzz: list[ParamFuzzResult]
+    errors: list[str]
+
+    @property alive_subdomains -> list[SubdomainResult]
+    @property alive_endpoints -> list[EndpointResult]
+```
+
+### Requests and throttling
+
+The runner shares the proxy's HTTP client when one is passed (`http_client=`), so
+Recon traffic is written to the current project's history like any other request. Each
+stage reports progress as `on_progress(message, done, total)`.
 
 ## Common Patterns
 

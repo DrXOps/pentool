@@ -5,8 +5,8 @@
 - **Связи:** [[api]], [[core]], [[deps/textual]], [[deps/textual-fastdatatable]]
 - **Код:** pentool/tui/
 - **Источник:** pentool/tui/; аудит TUI 2026-11-06…12 —
-  `docs/tui-audit/REPORT.md` (46 находок), `DECISIONS.md`, `CONVENTIONS.md`,
-  `COMPONENTS.md`; волна 5 (порт Intruder) — `docs/tui-audit/SUMMARY.md` §38;
+  `docs/tui-audit/DECISIONS.md`, `CONVENTIONS.md`,
+  ; волна 5 (порт Intruder) — см. историю git;
   волна 6 (F-026, экранирование разметки) — §39
 - **Обновлено:** 2026-11-16
 
@@ -43,7 +43,7 @@
 ### 1. Сначала найти, потом писать
 
 Перед новым классом — пройти по каталогу компонентов
-(`docs/tui-audit/COMPONENTS.md`, раздел 7 «задача → компонент»). Готовое:
+(`docs/tui-audit/CONVENTIONS.md`, раздел 7 «задача → компонент»). Готовое:
 
 | Задача | Берём | Файл |
 |---|---|---|
@@ -851,7 +851,7 @@ Exception` без лога и без `raise`. Внимание: `uvx pre-commit 
 
 ## Источник
 
-Код `pentool/tui/`; аудит `docs/tui-audit/REPORT.md` (46 находок),
+Код `pentool/tui/`; исторический аудит (REPORT, 46 находок) закрыт редизайном,
 `DECISIONS.md` (ADR-1…ADR-14), `CONVENTIONS.md` (правила с обоснованиями),
 `COMPONENTS.md` (каталог компонентов). Гварды — `tests/unit/tui/`,
 `tests/snapshot/test_snapshot_inventory.py`, гейты — `tools/check_*.py`.

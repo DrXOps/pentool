@@ -55,7 +55,7 @@
 - `docs/API_CONTRACTS.md` — контракты всех API-классов
 - `docs/CI_CD.md`, `docs/INSTALLATION.md`, `docs/QUICKSTART.md`, `docs/USER_GUIDE.md`
 - `docs/i18n/{en,ru,zh,hi}/` — переводы
-- `docs/plan_tabs_repeater_intruder.md`, `docs/audit/README.md`
+- `docs/audit/README.md`, `MYPLANS/PLAN.md` (единый план и подпланы)
 - `CLAUDE.md` — правила для агента
 
 ## AI-автоматизация (не модуль `pentool/`)
