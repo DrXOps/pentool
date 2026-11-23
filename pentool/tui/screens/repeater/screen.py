@@ -443,7 +443,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         try:
             editor = RequestEditor(
                 label="Request Editor",
-                buttons=["copy", "paste", "clear", "special", "format"],
+                role="request-editable",
                 id=f"req-editor-{tab_id}",
             )
             req_panel.mount(editor)

@@ -433,7 +433,7 @@ class IntruderScreen(
                 title="Request Template",
                 widget_type="textarea",
                 initial_text=state.template_text or "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
-                buttons=["copy", "paste", "clear"],
+                role="request-editable-plain",
                 id=self._wid(tab_id, _TabId.TEMPLATE_PANEL),
                 classes="intruder-template-panel",
             ),

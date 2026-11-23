@@ -101,7 +101,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
                     widget_type="richlog",
                     wrap=True,
                     max_lines=500,
-                    buttons=["copy"],
+                    role="text-readonly",
                     id="seq-analysis-log",
                     classes="card",
                 )

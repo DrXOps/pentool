@@ -211,7 +211,7 @@ class ProxyScreen(
                 "Intercept",
                 widget_type="textarea",
                 initial_text="(No requests waiting for intercept)",
-                buttons=["copy", "paste", "format", "clear"],
+                role="request-with-format",
                 id="intercept-panel",
                 classes="card",
             )
@@ -317,7 +317,7 @@ class ProxyScreen(
                         widget_type="richlog",
                         wrap=True,
                         max_lines=1000,
-                        buttons=["copy", "clear"],
+                        role="log",
                         id="ws-msg-panel",
                         classes="card",
                     )

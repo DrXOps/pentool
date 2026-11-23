@@ -65,7 +65,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
                 yield ContentPanel(
                     "Input",
                     widget_type="textarea",
-                    buttons=["copy", "paste", "clear"],
+                    role="request-editable-plain",
                     id="dec-input",
                     classes="card",
                 )
@@ -78,7 +78,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
                     "Output",
                     widget_type="textarea",
                     textarea_read_only=True,
-                    buttons=["copy"],
+                    role="text-readonly",
                     id="dec-output",
                     classes="card",
                 )
@@ -92,7 +92,7 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
                 widget_type="richlog",
                 wrap=True,
                 max_lines=200,
-                buttons=["copy", "clear"],
+                role="log",
                 id="dec-steps-log",
                 classes="card",
             )

@@ -475,14 +475,14 @@ class HttpView(ContentPanel):
         self,
         title: str = "",
         *,
-        buttons: list[str] | None = None,
+        role: str = "text-readonly",
         **kwargs,
     ) -> None:
         super().__init__(
             title=title,
             widget_type="textarea",
             textarea_read_only=True,
-            buttons=buttons or ["copy"],
+            role=role,
             **kwargs,
         )
 
@@ -530,7 +530,7 @@ class RequestEditor(ContentPanel):
         label: str = "Request",
         *,
         read_only: bool = False,
-        buttons: list[str] | None = None,
+        role: str = "request-editable",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -538,7 +538,7 @@ class RequestEditor(ContentPanel):
             widget_type="textarea",
             textarea_read_only=read_only,
             textarea_soft_wrap=False,
-            buttons=buttons or ["copy"],
+            role=role,
             **kwargs,
         )
         self._label = label
@@ -736,7 +736,7 @@ class ResponseViewer(ContentPanel):
         self,
         label: str = "Response",
         *,
-        buttons: list[str] | None = None,
+        role: str = "text-readonly",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -744,7 +744,7 @@ class ResponseViewer(ContentPanel):
             widget_type="textarea",
             textarea_read_only=True,
             textarea_soft_wrap=False,
-            buttons=buttons or ["copy"],
+            role=role,
             **kwargs,
         )
         self._label = label

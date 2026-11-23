@@ -200,7 +200,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             # Vertical with the panel inside, so `query_one("#detail-panel",
             # ContentPanel)` found nothing and `on_tree_node_selected` crashed
             # in `Vertical.clear`.
-            yield ContentPanel("Details", id="detail-panel", widget_type="richlog", wrap=True, buttons=["copy"])
+            yield ContentPanel("Details", id="detail-panel", widget_type="richlog", wrap=True, role="text-readonly")
 
     def on_mount(self) -> None:
         """Hide the AI section on startup when ai_enabled is off."""

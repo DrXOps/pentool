@@ -59,7 +59,7 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
                 yield ContentPanel(
                     "Left",
                     widget_type="textarea",
-                    buttons=["copy", "paste"],
+                    role="compare-input",
                     id="cmp-left-panel",
                     classes="card",
                 )
@@ -68,7 +68,7 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
                 yield ContentPanel(
                     "Right",
                     widget_type="textarea",
-                    buttons=["copy", "paste"],
+                    role="compare-input",
                     id="cmp-right-panel",
                     classes="card",
                 )
@@ -85,7 +85,7 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
                 widget_type="richlog",
                 wrap=False,
                 max_lines=2000,
-                buttons=["copy"],
+                role="diff",
                 id="cmp-diff-panel",
                 classes="card",
             )

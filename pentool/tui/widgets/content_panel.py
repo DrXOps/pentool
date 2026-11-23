@@ -123,6 +123,26 @@ class ContentPanel(Widget):
 
     BUTTON_SCOPE: ClassVar[list[str]] = ["copy"]
 
+    #: Panel purpose → button set. One place decides which actions a panel offers,
+    #: so a read-only viewer cannot accidentally get `clear` and an editor cannot
+    #: lose `format`. Screens pass `role="..."` instead of listing buttons.
+    ROLES: ClassVar[dict[str, tuple[str, ...]]] = {
+        # Editable request/response text (Repeater editor, Intercept panel).
+        "request-editable": ("copy", "paste", "clear", "special", "format"),
+        "request-editable-plain": ("copy", "paste", "clear"),
+        "request-with-format": ("copy", "paste", "format", "clear"),
+        # Side-by-side comparison inputs (Comparer Left/Right).
+        "compare-input": ("copy", "paste"),
+        # Read-only text viewer (decoded output, HTTP views, details).
+        "text-readonly": ("copy",),
+        # Append-only journal: copying and clearing are both meaningful.
+        "log": ("copy", "clear"),
+        # Diff output: read and copy, nothing to clear or format.
+        "diff": ("copy",),
+        # Free-form editable text with copy/paste only.
+        "text-editable": ("copy", "paste"),
+    }
+
     @classmethod
     def button_label(cls, key: str) -> str:
         """Button icon for the icon set currently chosen in settings."""
@@ -161,9 +181,20 @@ class ContentPanel(Widget):
         max_lines: int = 2000,
         initial_text: str = "",
         buttons: list[str] | None = None,
+        role: str | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
+        if role is not None:
+            if role not in self.ROLES:
+                raise ValueError(f"unknown ContentPanel role {role!r}; known: {sorted(self.ROLES)}")
+            buttons = list(self.ROLES[role])
+        elif buttons is None:
+            buttons = list(self.BUTTON_SCOPE)
+        else:
+            # Escape hatch for plugins with a custom set; the repository itself
+            # always passes a role (guarded by tests/unit/tui/test_panel_roles.py).
+            logger.debug("content_panel: explicit buttons= used instead of a role")
         self._panel_title = title
         self._widget_type = widget_type
         self._textarea_read_only = textarea_read_only
@@ -172,7 +203,7 @@ class ContentPanel(Widget):
         self._wrap = wrap
         self._max_lines = max_lines
         self._initial_text = initial_text
-        self._buttons = list(buttons) if buttons is not None else list(self.BUTTON_SCOPE)
+        self._buttons = list(buttons)
         self._wrap_state = wrap
 
     def compose(self) -> ComposeResult:
