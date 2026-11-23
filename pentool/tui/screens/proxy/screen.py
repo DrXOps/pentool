@@ -41,6 +41,7 @@ from pentool.tui.widgets.proxy_helpers import row_to_record as _row_to_record
 from pentool.tui.widgets.proxy_helpers import rows_to_arrow as _rows_to_arrow
 from pentool.tui.widgets.request_editor import HttpView
 from pentool.tui.widgets.resize_handle import ResizeHandle
+from pentool.tui.widgets.table_factory import make_table
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
@@ -244,14 +245,12 @@ class ProxyScreen(
                 with Vertical(id="history-body", classes="card"):
                     yield FilterBar(id="filter-bar")
                     with Vertical(id="table-area"):
-                        yield DataTable(
-                            columns=_COL_NAMES,
+                        yield make_table(
+                            _COL_NAMES,
+                            table_id="request-list",
+                            widths=[5, 24, 8, 24, 6, 8, 8],
                             initial_table=_make_empty_table(),
-                            id="request-list",
-                            cursor_type="row",
-                            zebra_stripes=True,
-                            max_column_content_width=120,
-                            column_widths=[5, 24, 8, 24, 6, 8, 8],
+                            table_class=ProxyDataTable,
                         )
                         yield Static("", id="history-count", classes="history-count")
                     yield ResizeHandle(
@@ -282,13 +281,12 @@ class ProxyScreen(
                 with Vertical(id="ws-history-body", classes="card"):
                     yield WsFilterBar(id="ws-filter-bar")
                     with Vertical(id="ws-table-area"):
-                        yield DataTable(
-                            columns=_COL_NAMES,
+                        yield make_table(
+                            _COL_NAMES,
+                            table_id="ws-request-list",
+                            widths=[5, 24, 8, 24, 6, 8, 8],
                             initial_table=_make_empty_table(),
-                            id="ws-request-list",
-                            cursor_type="row",
-                            zebra_stripes=True,
-                            column_widths=[5, 24, 8, 24, 6, 8, 8],
+                            table_class=ProxyDataTable,
                         )
                         yield Static("", id="ws-history-count", classes="history-count")
                     yield ResizeHandle(

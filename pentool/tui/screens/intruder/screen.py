@@ -59,6 +59,7 @@ from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.request_editor import HttpView, _load_into_textarea
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.tab_panel import TabbedContentPanel
+from pentool.tui.widgets.table_factory import make_table
 from pentool.tui.widgets.toolbar import Toolbar
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -521,13 +522,13 @@ class IntruderScreen(
                 id=self._wid(tab_id, _TabId.PROGRESS_ROW),
                 classes="progress-row",
             ),
-            DataTable(
-                id=self._wid(tab_id, _TabId.RESULTS_TABLE),
-                columns=_RESULTS_COL_NAMES,
-                column_widths=[5, 45, 8, 10, 10, 30],
-                cursor_type="row",
-                zebra_stripes=True,
-                max_column_content_width=120,
+            make_table(
+                _RESULTS_COL_NAMES,
+                table_id=self._wid(tab_id, _TabId.RESULTS_TABLE),
+                widths=[5, 45, 8, 10, 10, 30],
+                # The screen's table subclass adds the "extract column" action and
+                # posts the messages the screen listens to.
+                table_class=DataTable,
             ),
             id=self._wid(tab_id, _TabId.RESULTS_AREA),
             classes="intruder-results-area",

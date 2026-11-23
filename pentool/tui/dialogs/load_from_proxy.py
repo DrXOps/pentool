@@ -14,6 +14,7 @@ from textual.widgets import Button, DataTable, Label
 from textual.widgets.data_table import RowDoesNotExist
 
 from pentool.tui.dialogs.base_dialog import BaseDialog
+from pentool.tui.widgets.table_factory import make_table
 
 _CSS = (Path(__file__).parent / "load_from_proxy.tcss").read_text(encoding="utf-8")
 
@@ -47,11 +48,7 @@ class LoadFromProxyDialog(BaseDialog[str | None]):
         with Vertical(id="dialog"):
             yield Label("Load Request from Proxy", id="title")
             yield Label("Double-click or press Enter to select a request", id="hint")
-            yield DataTable(
-                id="req-table",
-                cursor_type="row",
-                zebra_stripes=True,
-            )
+            yield make_table([], table_id="req-table")
             with Horizontal(id="buttons"):
                 yield Button("Load", variant="primary", id="btn-load")
                 yield Button("Cancel", variant="default", id="btn-cancel")

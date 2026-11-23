@@ -129,7 +129,10 @@ _SEVERITIES = (
     "critical",
 )  # constructor kwarg carrying class literals
 _CLASS_METHODS = {"add_class", "remove_class", "set_class", "set_classes", "toggle_class"}
-_ID_KW = "id"
+#: Keyword that carries a widget id. Two spellings are legitimate: ``id=`` (every
+#: Textual constructor) and ``table_id=`` (the `make_table` factory, which cannot
+#: use ``id`` because that name is taken by the widget itself).
+_ID_KWS = ("id", "table_id")
 
 
 def _iter_tcss() -> list[Path]:
@@ -233,7 +236,7 @@ def _string_literals(tree: ast.AST) -> tuple[set[str], set[str], set[str]]:
             elif isinstance(node.func, ast.Attribute):
                 func_name = node.func.attr
             for kw in node.keywords:
-                if kw.arg == _ID_KW:
+                if kw.arg in _ID_KWS:
                     for value in _constant_strings(kw.value):
                         ids.add(value)
                 if kw.arg in _CLASS_ATTRS:
@@ -250,7 +253,7 @@ def _string_literals(tree: ast.AST) -> tuple[set[str], set[str], set[str]]:
             for k, v in zip(node.keys, node.values):
                 if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
                     continue
-                if k.value == _ID_KW and isinstance(v, ast.Constant) and isinstance(v.value, str):
+                if k.value in _ID_KWS and isinstance(v, ast.Constant) and isinstance(v.value, str):
                     ids.add(v.value)
                 if k.value in _CLASS_ATTRS and isinstance(v, ast.Constant) and isinstance(v.value, str):
                     classes.update(v.value.split())
@@ -328,7 +331,7 @@ def _duplicate_ids(tree: ast.AST) -> list[tuple[str, int, int, str]]:
             if not isinstance(node, ast.Call):
                 continue
             for kw in node.keywords:
-                if kw.arg != _ID_KW:
+                if kw.arg not in _ID_KWS:
                     continue
                 value = kw.value
                 if not (isinstance(value, ast.Constant) and isinstance(value.value, str)):
