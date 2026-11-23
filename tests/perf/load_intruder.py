@@ -1,23 +1,23 @@
-"""Нагрузочные тесты Intruder: генерация пейлоадов и их отправка.
+"""Intruder load tests: payload generation and payload dispatch.
 
-Уровни (гибрид, см. LOAD_TESTING_PLAN_2026-08-17.md):
-  A — генерация пейлоадов БЕЗ сети:
-        * NumericPayloadSource / CharPayloadSource (комбинаторный взрыв) —
-          обход, len()/head() мгновенность, peak RSS O(1);
-        * FilePayloadSource на гигантском файле (100МБ..1ГБ по флагу) —
-          O(1)-память, len(), повторная итерация (pitchfork/cluster-bomb
-          пере-читывают файл);
-        * ProcessedPayloads поверх файла (urlencode/base64);
-        * substitute_payload на пейлоаде со 100 §-маркеров.
-  B — отправка на локальный MockServer (реальный HTTP): IntruderAttack.run()
-        для sniper/battering_ram/pitchfork/cluster_bomb, матрица threads × N,
-        bounded worker pool (пик задач ≤ threads), RSS/CPU.
-  C — DVWA (--level c, малый объём, сессия из dvwa_session).
+Levels (hybrid, see LOAD_TESTING_PLAN_2026-08-17.md):
+  A — payload generation WITHOUT network:
+        * NumericPayloadSource / CharPayloadSource (combinatorial explosion) —
+          iteration, instant len()/head(), peak RSS O(1);
+        * FilePayloadSource over a huge file (100MB..1GB behind a flag) —
+          O(1) memory, len(), re-iteration (pitchfork/cluster-bomb
+          re-read the file);
+        * ProcessedPayloads on top of the file (urlencode/base64);
+        * substitute_payload on a payload with 100 §-markers.
+  B — dispatch to a local MockServer (real HTTP): IntruderAttack.run()
+        for sniper/battering_ram/pitchfork/cluster_bomb, matrix threads × N,
+        bounded worker pool (in-flight tasks ≤ threads), RSS/CPU.
+  C — DVWA (--level c, low volume, session from dvwa_session).
 
-Запуск:
+Run:
     python3 tests/perf/load_intruder.py
     python3 tests/perf/load_intruder.py --level b --threads 10 --max-requests 5000
-    python3 tests/perf/load_intruder.py --level a --giga      # привлечь 1ГБ файл
+    python3 tests/perf/load_intruder.py --level a --giga      # pull in the 1GB file
     python3 tests/perf/load_intruder.py --level c            # DVWA smoke
 """
 
@@ -52,7 +52,7 @@ _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_data")
 _DEFAULT_FILE = os.path.join(_DATA_DIR, "payload_100MB.txt")
 
 
-# Шаблон для отправки на MockServer: два маркера (путь + GET-параметр).
+# Template for dispatch to MockServer: two markers (path + GET parameter).
 def _template(port: int, path_marker: str = "§100§") -> str:
     return (
         f"GET /page/{path_marker}?p=§01§ HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nUser-Agent: pentool-loadtest/1.0\r\n\r\n"
@@ -60,12 +60,12 @@ def _template(port: int, path_marker: str = "§100§") -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Уровень A — генерация (без сети)
+# Level A — generation (no network)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 def _timeit(label: str, sampler: MemSampler, fn):
-    """Выполнить fn, замерив время и RSS/CPU через sampler, вернуть (res, dt)."""
+    """Run fn, measuring time and RSS/CPU via sampler, return (res, dt)."""
     sampler.tick(f"before {label}")
     t0 = time.monotonic()
     res = fn()
@@ -88,7 +88,7 @@ def run_level_a(args) -> dict:
     dt_len = time.monotonic() - t0
     sampler.tick(f"after len()={n} in {dt_len * 1000:.0f}ms")
 
-    # обход
+    # traversal
     def _walk_numeric():
         cnt = 0
         for _ in src_num:
@@ -98,14 +98,14 @@ def run_level_a(args) -> dict:
     walked, dt_walk = _timeit("walk numeric 1M", sampler, _walk_numeric)
     print(f"  walked={walked:_} len()={n} len_dt={(dt_len * 1000):.0f}ms walk_dt={dt_walk:.2f}s")
 
-    # ── A2: CharPayloadSource — комбинаторный взрыв ────────────────────
+    # ── A2: CharPayloadSource — combinatorial explosion ────────────────
     print("--- A2: CharPayloadSource 26 букв × len 1..5 (~11.9M) ---")
     src_char = CharPayloadSource("abcdefghijklmnopqrstuvwxyz", 1, 5)
     sampler.tick("before char len()")
     t0 = time.monotonic()
     n_char = len(src_char)
     dt_char_len = time.monotonic() - t0
-    # head() должен быть мгновенным — не перебирать всё
+    # head() must be instant — do not iterate through everything
     t0 = time.monotonic()
     h = src_char.head(5)
     dt_char_head = time.monotonic() - t0
@@ -115,7 +115,7 @@ def run_level_a(args) -> dict:
     )
     out["char_len"] = n_char
 
-    # ── A3: FilePayloadSource на гигантском файле ──────────────────────
+    # ── A3: FilePayloadSource on a huge file ───────────────────────────
     print("--- A3: FilePayloadSource (O(1)-память) ---")
     file_path = args.file
     if args.giga and os.path.exists(file_path.replace("100MB", "1GB")):
@@ -135,13 +135,13 @@ def run_level_a(args) -> dict:
     t0 = time.monotonic()
     n_file = len(sfile)
     dt_file_len = time.monotonic() - t0
-    # Кешируем count, чтобы повторный len() был мгновенным
+    # Cache the count so that a repeated len() is instant
     t0 = time.monotonic()
     _ = len(sfile)
     dt_file_len2 = time.monotonic() - t0
     sampler.tick(f"after file len()=={n_file} ({dt_file_len:.2f}s streem, cached {dt_file_len2 * 1000:.0f}ms)")
 
-    # Обход с замером RSS — должен оставаться плоским (O(1))
+    # Traversal with RSS measurement — must stay flat (O(1))
     def _walk_file_stream():
         cnt = 0
         for _ in sfile:
@@ -157,7 +157,7 @@ def run_level_a(args) -> dict:
         f"(Δ{rss_after_walk - rss_before_walk:+.0f}; O(1)-память если Δ≈0)"
     )
 
-    # Повторная итерация — pitchfork/cluster-bomb пере-читывают файл
+    # Re-iteration — pitchfork/cluster-bomb re-read the file
     def _walk_file_2pass():
         s2 = FilePayloadSource(file_path)
         c = 0
@@ -170,7 +170,7 @@ def run_level_a(args) -> dict:
     walked2, dt_walk2 = _timeit("file 2 passes (re-iter)", sampler, _walk_file_2pass)
     print(f"  2 passes: {walked2:,} за {dt_walk2:.2f}s (пере-чтение файла)")
 
-    # ── A4: ProcessedPayloads поверх файла ─────────────────────────────
+    # ── A4: ProcessedPayloads on top of the file ───────────────────────
     print("--- A4: ProcessedPayloads поверх FilePayloadSource (urlencode+base64) ---")
     s_proc = ProcessedPayloads(FilePayloadSource(file_path), ["urlencode", "base64"], _apply_ops)
 
@@ -180,13 +180,13 @@ def run_level_a(args) -> dict:
             c += 1
         return c
 
-    # обходим лишь первые 200_000 строк, чтобы не ждать гигабайт на чистый smoke
+    # walk only the first 200_000 lines so a pure smoke run does not wait for gigabytes
     walked_p, dt_p = _timeit("walk processed (first 200k)", sampler, lambda: _walk_n_processed(s_proc, 200_000))
     print(f"  walked processed(200k): {walked_p:,} в {dt_p:.2f}s")
 
-    # ── A5: substitute_payload на 100 маркерах ────────────────────────
+    # ── A5: substitute_payload on 100 markers ─────────────────────────
     print("--- A5: substitute_payload на 100 §-маркеров × 1000 payloads ---")
-    many = ("a" + "§x§" + "b") * 100  # 100 маркеров
+    many = ("a" + "§x§" + "b") * 100  # 100 markers
     assert count_markers(many) == 100
     t0 = time.monotonic()
     for i in range(1000):
@@ -225,25 +225,25 @@ def _apply_ops(payload: str, ops: list[str]) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Уровень B — отправка на локальный MockServer (реальный HTTP)
+# Level B — dispatch to a local MockServer (real HTTP)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 async def run_attack_case(
     client, port: int, atype: AttackType, n_combos: int, threads: int, sampler: MemSampler
 ) -> dict:
-    """Один прогон IntruderAttack.run() одного типа атаки на n_combos.
+    """One IntruderAttack.run() pass for one attack type over n_combos.
 
-    client — общий HTTPClient (владеется вызывающим), передаётся как
-    injected-client в IntruderAttack: run() его НЕ закрывает (БаГ-D), поэтому
-    один клиент переиспользуется на все атаки, a подключения утилизируются.
+    client — a shared HTTPClient (owned by the caller), passed in as the
+    injected client into IntruderAttack: run() does NOT close it (Bug-D), so
+    one client is reused for all attacks and connections are recycled.
     """
-    # Билдим наборы, дающие n_combos запросов
+    # Build payload sets that yield n_combos requests
     if atype == AttackType.SNIPER:
-        # один маркер в пути + один в query → n_positions=2 на сет в 1 позицию
+        # one marker in the path + one in query → n_positions=2 for a set of 1 position
         template = _template(port, "§1§")
         sets = [[f"p{i}" for i in range(n_combos // 2)]]
-        total_expected = n_combos  # 2 позиции × (n_combos//2) payloads ≈ n_combos
+        total_expected = n_combos  # 2 positions × (n_combos//2) payloads ≈ n_combos
     elif atype == AttackType.BATTERING_RAM:
         template = _template(port, "§1§")
         sets = [[f"p{i}" for i in range(n_combos)]]
@@ -322,7 +322,7 @@ async def run_level_b(args, client) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Уровень C — DVWA smoke (малый объём, с сессией)
+# Level C — DVWA smoke (low volume, with a session)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -334,11 +334,11 @@ async def run_level_c(args, client) -> dict:
     print(f"  сессия: {headers['Cookie'][:40]}…")
 
     sampler = MemSampler(cpu=True)
-    # Интрудер на форму логина DVWA — POST на /login.php с полем username.
-    # Безопасно: и без сессии DVWA просто отрисует login-форму заново (или
-    # редирект на login.php — статус 30x), интудер его отметит и продолжит.
-    # Content-Length не задаём жёстко — aiohttp сам выставит по реальному body
-    # (длина меняется от payload). Малый набор (~9), прикрыт threads=2.
+    # Intruder against the DVWA login form — POST to /login.php with a username field.
+    # Safe: even without a session DVWA just renders the login form again (or
+    # redirects to login.php — status 30x), the intruder records it and moves on.
+    # Content-Length is not hard-coded — aiohttp sets it from the real body
+    # (the length varies with the payload). Small set (~9), capped by threads=2.
     template = (
         "POST /login.php HTTP/1.1\r\n"
         "Host: dvwa.local:7474\r\n"

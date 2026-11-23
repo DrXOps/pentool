@@ -1,15 +1,15 @@
-"""Интеграционный тест: симуляция работы пользователя.
+"""Integration test: simulating the user workflow.
 
-Сценарий:
-1. Запуск приложения
-2. Создание нового проекта
-3. Запуск прокси
-4. Симуляция перехвата запроса
-5. Отправка в Repeater (Ctrl+R)
-6. Отправка запроса в Repeater (Ctrl+Space)
-7. Проверка автосохранения вкладки
-8. Закрытие и повторное открытие проекта
-9. Проверка восстановления вкладок
+Scenario:
+1. Application startup
+2. Creating a new project
+3. Starting the proxy
+4. Simulating request interception
+5. Sending to Repeater (Ctrl+R)
+6. Sending the request in Repeater (Ctrl+Space)
+7. Checking tab autosave
+8. Closing and reopening the project
+9. Checking tab restoration
 """
 
 import asyncio
@@ -27,16 +27,16 @@ from pentool.utils.parser import ParsedRequest, ParsedResponse
 
 @pytest.mark.asyncio
 async def test_user_workflow_full():
-    """Полный цикл работы пользователя с pentool."""
+    """Full user workflow cycle with pentool."""
 
-    # 1. Создаём временный проект (как "Ctrl+N → выбор пути")
+    # 1. Create a temporary project (like "Ctrl+N → path selection")
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test_project.db")
 
         print(f"\n[USER] Создаю новый проект: {db_path}")
         await init_db(db_path)
 
-        # 2. Инициализируем компоненты (как при старте приложения)
+        # 2. Initialize the components (as on application startup)
         print("[USER] Инициализирую ProxyService...")
         proxy = ProxyServer(
             host="127.0.0.1",
@@ -52,12 +52,12 @@ async def test_user_workflow_full():
             db_path=db_path,
         )
 
-        # ВАЖНО: дождаться init_storage ДО любых других операций
+        # IMPORTANT: wait for init_storage BEFORE any other operations
         await proxy_service.init_storage()
         assert proxy_service.is_storage_ready(), "Storage должен быть готов после init"
         print("[USER] ✓ Storage готов")
 
-        # 3. Симулируем перехват запроса (как будто proxy перехватил)
+        # 3. Simulate request interception (as if the proxy intercepted it)
         print("[USER] Симулирую перехват GET http://example.com/test")
         from datetime import datetime, timezone
 
@@ -71,19 +71,19 @@ async def test_user_workflow_full():
             is_websocket=False,
         )
 
-        # Сохраняем запрос (как ProxyScreen.add_request_row)
+        # Save the request (like ProxyScreen.add_request_row)
         row_id = await proxy_service.store_request(req)
         assert row_id is not None, "Запрос должен сохраниться"
         print(f"[USER] ✓ Запрос сохранён, row_id={row_id}")
 
-        # 4. Проверяем что запрос появился в истории
+        # 4. Check that the request appeared in history
         history = await proxy_service.get_history(limit=10)
         assert len(history) == 1, f"Должен быть 1 запрос в истории, получено {len(history)}"
         assert history[0]["method"] == "GET"
         assert history[0]["url"] == "http://example.com/test"
         print(f"[USER] ✓ История содержит 1 запрос: {history[0]['method']} {history[0]['url']}")
 
-        # 5. Симулируем "Send to Repeater" (Ctrl+R на строке)
+        # 5. Simulate "Send to Repeater" (Ctrl+R on the row)
         print("[USER] Отправляю в Repeater (Ctrl+R)...")
         from pentool.utils.parser import build_http_request
 
@@ -95,12 +95,12 @@ async def test_user_workflow_full():
         )
         _raw_request = build_http_request(parsed_req)
 
-        # RepeaterScreen.load_request_in_new_tab вызовет save_to_history
+        # RepeaterScreen.load_request_in_new_tab will call save_to_history
         from pentool.api.repeater_api import RepeaterAPI
 
         repeater_api = RepeaterAPI(db_path=db_path)
 
-        # Симулируем отправку запроса (Ctrl+Space = ctrl-at в терминале) и получение ответа
+        # Simulate sending the request (Ctrl+Space = ctrl-at in the terminal) and receiving a response
         print("[USER] Отправляю запрос (Ctrl+Space / ctrl-at)...")
         response = ParsedResponse(
             status=200,
@@ -108,12 +108,12 @@ async def test_user_workflow_full():
             body="<html>Test response</html>",
         )
 
-        # Сохраняем в историю Repeater (автосохранение вкладки)
+        # Save to Repeater history (tab autosave)
         entry_id = await repeater_api.save_to_history(parsed_req, response, tab_name="Tab 1")
         assert entry_id > 0, "Запись должна сохраниться в repeater_entries"
         print(f"[USER] ✓ Вкладка сохранена, entry_id={entry_id}")
 
-        # 6. Проверяем что вкладка сохранилась
+        # 6. Check that the tab was saved
         repeater_history = await repeater_api.get_history(limit=10)
         assert len(repeater_history) == 1, f"Должна быть 1 вкладка, получено {len(repeater_history)}"
         assert repeater_history[0].tab_name == "Tab 1"
@@ -122,48 +122,48 @@ async def test_user_workflow_full():
         assert repeater_history[0].response_status == 200
         print(f"[USER] ✓ История Repeater содержит 1 вкладку: {repeater_history[0].tab_name}")
 
-        # 7. Симулируем закрытие проекта (как Ctrl+Q)
+        # 7. Simulate closing the project (like Ctrl+Q)
         print("[USER] Закрываю приложение (Ctrl+Q)...")
         await proxy_service._storage.close()
 
-        # 8. Симулируем повторное открытие проекта (Ctrl+O)
+        # 8. Simulate reopening the project (Ctrl+O)
         print(f"[USER] Повторно открываю проект: {db_path}")
 
-        # Пересоздаём ProxyService (как при switch_project)
+        # Recreate ProxyService (as during switch_project)
         proxy_service2 = ProxyService(
             proxy_api=proxy_api,
             db_path=db_path,
         )
 
-        # ВАЖНО: сначала init_storage
+        # IMPORTANT: init_storage first
         await proxy_service2.init_storage()
         assert proxy_service2.is_storage_ready(), "Storage должен быть готов после повторного открытия"
 
-        # Проверяем что история Proxy восстановилась
+        # Check that the Proxy history has been restored
         history2 = await proxy_service2.get_history(limit=10)
         assert len(history2) == 1, f"История должна восстановиться, получено {len(history2)} записей"
         print(f"[USER] ✓ История Proxy восстановлена: {len(history2)} запрос(ов)")
 
-        # Проверяем что вкладки Repeater восстановились
+        # Check that the Repeater tabs have been restored
         repeater_api2 = RepeaterAPI(db_path=db_path)
         repeater_history2 = await repeater_api2.get_history(limit=10)
         assert len(repeater_history2) == 1, f"Вкладки должны восстановиться, получено {len(repeater_history2)}"
         assert repeater_history2[0].tab_name == "Tab 1"
         print(f"[USER] ✓ Вкладки Repeater восстановлены: {len(repeater_history2)} вкладка(и)")
 
-        # 9. Проверяем switch_db (как при переключении проекта)
+        # 9. Check switch_db (as when switching projects)
         print("[USER] Переключаюсь на другой проект...")
         db_path2 = os.path.join(tmpdir, "test_project2.db")
         await init_db(db_path2)
 
-        # Дожидаемся завершения текущих операций перед switch
+        # Wait for the current operations to finish before the switch
         await asyncio.sleep(0.1)
 
-        # switch_db должен работать без ошибок
+        # switch_db must work without errors
         await proxy_service2.switch_db(db_path2)
         assert proxy_service2.is_storage_ready(), "Storage должен быть готов после switch_db"
 
-        # Новый проект должен быть пустым
+        # The new project must be empty
         history3 = await proxy_service2.get_history(limit=10)
         assert len(history3) == 0, f"Новый проект должен быть пустым, получено {len(history3)} записей"
         print("[USER] ✓ Переключение на новый проект успешно (история пустая)")

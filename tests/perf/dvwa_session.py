@@ -1,22 +1,22 @@
-"""Авторизация в тестовый DVWA (http://dvwa.local:7474) и сбор Cookie-заголовков.
+"""Log in to the test DVWA instance (http://dvwa.local:7474) and collect Cookie headers.
 
-Нужен для нагрузочных прогонов Уровня C, где движки (Scanner/Intruder/Spider)
-должны ходить на живой DVWA с действительной сессией — иначе DVWA синим
-редиректом отправит на /login.php, и сканер/спайдер найдут 0 страниц.
+Needed for Level C load runs, where the engines (Scanner/Intruder/Spider)
+must reach a live DVWA with a valid session — otherwise DVWA will send a blue
+redirect to /login.php and the scanner/spider will find 0 pages.
 
-DVWA (классическая) использует CSRF-токен на форме логина: `user_token`
-присутствует на /login.php как скрытое поле и меняется на каждую загрузку
-страницы. Поэтому простой POST с одним user_token не работает: надо
- 1) GET /login.php  → взять PHPSESSID из Set-Cookie и user_token из HTML;
- 2) POST /login.php c username/password/Login/user_token и Cookie: PHPSESSID;
- 3) GET /index.php с Cookie → проверить, что НЕ редирект на login.php;
- 4) собрать заголовок {"Cookie": "PHPSESSID=<id>; security=low"}.
+DVWA (classic) uses a CSRF token on the login form: `user_token`
+is present on /login.php as a hidden field and changes on every page
+load. So a simple POST with a single user_token does not work: you must
+ 1) GET /login.php  → take PHPSESSID from Set-Cookie and user_token from HTML;
+ 2) POST /login.php with username/password/Login/user_token and Cookie: PHPSESSID;
+ 3) GET /index.php with the Cookie → check that it is NOT a redirect to login.php;
+ 4) assemble the header {"Cookie": "PHPSESSID=<id>; security=low"}.
 
-Использует тот же HTTPClient, что и движки (pentool.utils.http_client), чтобы
-стек сети был единым. Чистые функции (extract_headers_from_set_cookie,
-extract_user_token) выделены отдельно — их можно юнит-тестить без сети.
+Uses the same HTTPClient as the engines (pentool.utils.http_client), so the
+network stack is uniform. The pure functions (extract_headers_from_set_cookie,
+extract_user_token) are split out — they can be unit-tested without network.
 
-Пример:
+Example:
     from tests.perf.dvwa_session import build_session_headers
     headers = await build_session_headers()   # async
     # -> {"Cookie": "PHPSESSID=…; security=low"}
@@ -33,13 +33,13 @@ DVWA_LOGIN = DVWA_URL + "/login.php"
 DVWA_INDEX = DVWA_URL + "/index.php"
 DVWA_CREDS = {"username": "admin", "password": "password"}
 
-# Post-логин 'security' желаем low → ставим куку явно и используем её.
-# (Некоторых версий не заботятся об этом как отдельном параметре формы.)
+# After login we want 'security' low → set the cookie explicitly and use it.
+# (Some versions do not treat it as a separate form parameter.)
 _SECURITY = "low"
 
-# Кеш сессии процесса: {key: (expiry_ts, headers)}.
+# Process-wide session cache: {key: (expiry_ts, headers)}.
 _SESSION_CACHE: dict[str, tuple[float, dict[str, str]]] = {}
-_CACHE_TTL = 60.0  # сек
+_CACHE_TTL = 60.0  # sec
 
 
 def _make_cache_key(url: str, username: str) -> str:
@@ -47,11 +47,11 @@ def _make_cache_key(url: str, username: str) -> str:
 
 
 def extract_user_token(html: str) -> Optional[str]:
-    """Вытащить user_token из HTML формы логина DVWA (без сети).
+    """Pull user_token out of the DVWA login form HTML (no network).
 
-    Ищем <input type='hidden' name='user_token' value='…'>. Возвращаем None,
-    если токен отсутствует (страница может выглядеть иначе — тогда авторизация
-    либо не нужна, либо формула поменялась).
+    We look for <input type='hidden' name='user_token' value='…'>. Return None
+    if the token is absent (the page may look different — then either login
+    is not needed, or the markup has changed).
     """
     m = re.search(
         r"name=[\"']user_token[\"'][^>]*value=[\"']([0-9a-fA-F]{32})[\"']",
@@ -60,8 +60,8 @@ def extract_user_token(html: str) -> Optional[str]:
     )
     if m:
         return m.group(1)
-    # Распространён браузерный порядок атрибутов value перед name? УDVWA фиксирован,
-    # но обработаем и обратный порядок для устойчивости.
+    # The browser-common attribute order puts value before name; DVWA is fixed,
+    # but we handle the reverse order too for robustness.
     m2 = re.search(
         r"value=[\"']([0-9a-fA-F]{32})[\"'][^>]*name=[\"']user_token[\"']",
         html,
@@ -71,10 +71,10 @@ def extract_user_token(html: str) -> Optional[str]:
 
 
 def extract_phpsessid(set_cookie: object) -> Optional[str]:
-    """Извлечь PHPSESSID из значения Set-Cookie (строка или список заголовков).
+    """Extract PHPSESSID from a Set-Cookie value (a string or a list of headers).
 
-    Принимает либо одиночную строку 'PHPSESSID=x; path=/_…', либо значение
-    из dict-заголовков aiohttp (list[str] при дубликатах).
+    Accepts either a single string 'PHPSESSID=x; path=/_…' or the value
+    from aiohttp dict headers (list[str] when duplicated).
     """
     if isinstance(set_cookie, list):
         for part in set_cookie:
@@ -98,11 +98,11 @@ async def build_session_headers(
     use_cache: bool = True,
     http_client=None,
 ) -> dict[str, str]:
-    """Получить Cookie-заголовки для действующей сессии DVWA (async).
+    """Get Cookie headers for a valid DVWA session (async).
 
-    Возвращает {"Cookie": "PHPSESSID=…; security=low"}. При повторных вызовах
-    в рамках одного процесса возвращает закешированную сессию (use_cache=True)
-    до истечения TTL.
+    Returns {"Cookie": "PHPSESSID=…; security=low"}. On repeated calls
+    within a single process it returns the cached session (use_cache=True)
+    until the TTL expires.
     """
     if use_cache:
         cache_key = _make_cache_key(url, username)
@@ -134,11 +134,11 @@ async def build_session_headers(
 
 
 async def _do_login(http_client, url: str, username: str, password: str) -> dict[str, str]:
-    """Внутренняя авторизация поверх переданного http_client (без владения им)."""
+    """Internal login on top of the passed-in http_client (without owning it)."""
     login_url = url + "/login.php"
     index_url = url + "/index.php"
 
-    # ── 1) GET /login.php: PHPSESSID из Set-Cookie + user_token из HTML ────
+    # ── 1) GET /login.php: PHPSESSID from Set-Cookie + user_token from HTML ─
     login_resp = await http_client.send(_req("GET", login_url))
     if login_resp.status not in (200, 302):
         raise RuntimeError(f"DVWA login GET: status {login_resp.status}")
@@ -146,14 +146,14 @@ async def _do_login(http_client, url: str, username: str, password: str) -> dict
     phpsessid = extract_phpsessid(login_resp.headers.get("Set-Cookie"))
     user_token = extract_user_token(login_resp.body or "")
 
-    # Токен/сессия могут отсутствовать, если уже залогинены (редирект на index).
+    # The token/session may be absent if we are already logged in (redirect to index).
     if phpsessid is None:
-        # Попробуем без него — вдруг уже есть сессия или сайт без CSRF.
+        # Try without it — maybe a session already exists or the site has no CSRF.
         phpsessid = ""
 
     cookie_header = f"PHPSESSID={phpsessid}; security={_SECURITY}"
 
-    # ── 2) POST /login.php с user_token ────────────────────────────────────
+    # ── 2) POST /login.php with user_token ─────────────────────────────────
     fields: dict[str, str] = {
         "username": username,
         "password": password,
@@ -172,17 +172,17 @@ async def _do_login(http_client, url: str, username: str, password: str) -> dict
         )
     )
 
-    # На случай, если после логина PHPSESSID обновился — перечитаем.
+    # In case PHPSESSID was refreshed after login — re-read it.
     new_sid = extract_phpsessid(post_resp.headers.get("Set-Cookie"))
     if new_sid:
         phpsessid = new_sid
         cookie_header = f"PHPSESSID={phpsessid}; security={_SECURITY}"
 
-    # ── 3) Подтверждение на /index.php ─────────────────────────────────────
+    # ── 3) Confirmation on /index.php ──────────────────────────────────────
     index_resp = await http_client.send(_req("GET", index_url, cookie_header))
     final_headers = {"Cookie": cookie_header}
     if index_resp.status in (301, 302, 303):
-        # Редирект на login.php → сессия не прошла
+        # Redirect to login.php → the session did not take
         loc = index_resp.headers.get("Location", "")
         if "login" in loc.lower():
             raise RuntimeError("DVWA авторизация не прошла: редирект на login.php")

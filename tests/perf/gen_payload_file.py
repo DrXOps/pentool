@@ -1,28 +1,28 @@
-"""Генератор гигантских файлов-пейлоадов для нагрузочных тестов Intruder.
+"""Generator of giant payload files for Intruder load tests.
 
-Назначение: создать на диске файлы пейлоадов размером от десятков МБ до 1+ ГБ
-таким образом, чтобы:
-  - каждая строка была "качественной" по конвенции FilePayloadSource
-    (непустая, не начинается с '#') — иначе ленивый источник её пропустит;
-  - размер и число строк были детерминированными и воспроизводимыми;
-  - запись шла бинарными чанками 4 МБ, держа память O(1) независимо от
-    итогового размера файла (никаких промежуточных list[str] всего файла).
+Purpose: create payload files on disk sized from tens of MB to 1+ GB
+in such a way that:
+  - every line is "high-quality" per the FilePayloadSource convention
+    (non-empty, does not start with '#') — otherwise the lazy source skips it;
+  - size and line count are deterministic and reproducible;
+  - writing goes in binary 4 MB chunks, keeping memory O(1) regardless of
+    the final file size (no intermediate list[str] of the whole file).
 
-Строка имеет вид:  <hex-приставка>:<payload>
-  - hex-приставка из произвольного префикса файла + монотонного счётчика
-    делает строки уникальными (важно: Intruder/спайдер дедуплицируют URL,
-    а cluster-bomb перечитывает наборы — повторы строк исказили бы замер);
-  - <payload> — псевдо-случайный алфавит заданной длины.
+A line looks like:  <hex-prefix>:<payload>
+  - the hex-prefix is built from an arbitrary file prefix + a monotonic counter,
+    which makes lines unique (important: Intruder/spider deduplicate URLs,
+    and cluster-bomb re-reads the sets — repeated lines would distort the measurement);
+  - <payload> — a pseudo-random alphabet of the given length.
 
-Использование:
+Usage:
     python3 tests/perf/gen_payload_file.py --path tests/perf/_data/p_100MB.txt --target-size 100M
     python3 tests/perf/gen_payload_file.py --path ... --lines 10_000_000 --line-len 24
-    python3 tests/perf/gen_payload_file.py --list          # показать уже сгенерированные
+    python3 tests/perf/gen_payload_file.py --list          # show already generated files
 
-Управление размером:
-  --target-size 100M / 1G  — удобно для тестов "файл X МБ в памяти O(1)".
-  --lines N --line-len L   — точный контроль числа строк (для тестов,
-                             где важен счётчик строк, а не байты).
+Size control:
+  --target-size 100M / 1G  — handy for "file of X MB in O(1) memory" tests.
+  --lines N --line-len L   — exact control of the line count (for tests
+                             where the line counter matters, not the bytes).
 """
 
 from __future__ import annotations
@@ -32,13 +32,13 @@ import sys
 import time
 from pathlib import Path
 
-_CHUNK = 4 * 1024 * 1024  # 4 МБ
+_CHUNK = 4 * 1024 * 1024  # 4 MiB
 _SEP = b":"
 _LINE_END = b"\n"
 
 
 def _parse_size(text: str) -> int:
-    """'100M' -> 100*1024*1024; '1G' -> 1*1024**3; также голые int (байты)."""
+    """'100M' -> 100*1024*1024; '1G' -> 1*1024**3; bare ints (bytes) too."""
     text = text.strip().upper()
     mult = 1
     if text.endswith("G"):
@@ -55,9 +55,9 @@ def _parse_size(text: str) -> int:
 
 
 def _line_for(i: int, line_len: int, prefix_len: int) -> bytes:
-    """Одна строка-байт для индекса i."""
-    # hex(i) — короткая приставка; добиваем до prefix_len букв '0', чтобы
-    # сортировка/дедуп не зависели от длины числа.
+    """One line of bytes for index i."""
+    # hex(i) — a short prefix; pad with '0' chars up to prefix_len so that
+    # sorting/dedup does not depend on the length of the number.
     idx = hex(i)[2:]
     prefix = idx.rjust(max(prefix_len, len(idx)), "0")
     return prefix.encode("ascii") + _SEP + (b"a" * (line_len - prefix_len - 1))
@@ -73,9 +73,9 @@ def generate(
     overwrite: bool = False,
     on_progress=None,
 ) -> dict:
-    """Записать файл-пейлоад. Либо target_size, либо lines (не оба).
+    """Write a payload file. Either target_size or lines (not both).
 
-    Возвращает {'lines': N, 'bytes': B, 'elapsed_s': S, 'mib_per_s': X}.
+    Returns {'lines': N, 'bytes': B, 'elapsed_s': S, 'mib_per_s': X}.
     """
     path_p = Path(path)
     path_p.parent.mkdir(parents=True, exist_ok=True)
@@ -90,10 +90,10 @@ def generate(
     i = 0
     last_report = time.monotonic()
     with open(path_p, "wb") as f:
-        # Писать можем большими чанками: набираем буфер, пока не упрёмся в
-        # разумный предел (8 МБ), затем flush. Так Python реже входит в
-        # write() на очень короткие строки (строка ~32 байта — write per
-        # line был бы избыточен).
+        # We can write in large chunks: accumulate the buffer until it hits a
+        # sensible limit (8 MB), then flush. That way Python enters write()
+        # less often on very short lines (a line is ~32 bytes — a write per
+        # line would be excessive).
         buf = bytearray()
         while lines is None or i < lines:
             line = _line_for(i, line_len, prefix_len) + _LINE_END
@@ -117,7 +117,7 @@ def generate(
 
 
 def list_generated(data_dir: str) -> list[tuple[str, int, int]]:
-    """[(relpath, bytes, lines-guess)] для существующих файлов в _data/."""
+    """[(relpath, bytes, lines-guess)] for the existing files in _data/."""
     out = []
     dp = Path(data_dir)
     if dp.is_dir():

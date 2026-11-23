@@ -1,23 +1,23 @@
-"""Стресс-тест прокси на WebSocket-гонку -> heap corruption.
+"""Stress test of the proxy on a WebSocket race -> heap corruption.
 
-Воспроизводит условия, при которых pentool падал с
-"malloc_printerr: free(): corrupted unsorted chunks" в _PyGen_Finalize под
-asyncio-циклом при интенсивном WebSocket-трафике + живом пуле executor.
+Reproduces the conditions under which pentool crashed with
+"malloc_printerr: free(): corrupted unsorted chunks" in _PyGen_Finalize under
+the asyncio loop during intensive WebSocket traffic + a live executor pool.
 
-Идея:
-  - локальный WS-origin (описывает 101 Switching Protocols, затем эхо байт),
-  - клиент открывает тысячи WebSocket-туннелей ЧЕРЕЗ ProxyServer (CONNECT+upgrade),
-  - массово открывает/закрывает их пачками,
-  - параллельно спамит executor-задачи (run_in_executor / asyncio.to_thread) и
-    периодически гоняет gc.collect() — чтобы пересечь финализацию генераторов
-    с активной кучей и живыми executor-потоками.
+Idea:
+  - a local WS origin (answers 101 Switching Protocols, then echoes bytes),
+  - the client opens thousands of WebSocket tunnels THROUGH ProxyServer (CONNECT+upgrade),
+  - opens/closes them en masse in batches,
+  - concurrently spams executor tasks (run_in_executor / asyncio.to_thread) and
+    periodically runs gc.collect() — to make generator finalization overlap
+    an active heap and live executor threads.
 
-Запуск делается в отдельном подпроцессе: падение (SIGABRT) ловится по
-returncode. При успешном завершении скрипт печатает итог.
+The run happens in a separate subprocess: a crash (SIGABRT) is caught via
+returncode. On successful completion the script prints a summary.
 
-Использование:
+Usage:
   python -m pytest -q tests/perf/stress_ws_crash.py --runstress
-или напрямую:
+or directly:
   python tests/perf/stress_ws_crash.py [N_ITER] [BATCH]
 """
 
@@ -31,7 +31,7 @@ import time
 from typing import Any
 
 logging.basicConfig(level=logging.WARNING)
-# Отключить шум прокси, чтобы стресс-тест был сосредоточен на нагрузке.
+# Silence proxy noise so the stress test stays focused on the load itself.
 logging.getLogger("pentool").setLevel(logging.CRITICAL)
 
 from pentool.modules.proxy import ProxyServer  # noqa: E402
@@ -41,16 +41,16 @@ ORIGIN_HOST = "127.0.0.1"
 
 
 async def _ws_echo_origin(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-    """Примитивный WS-origin: на первый запрос отвечает 101, дальше — эхо байт."""
+    """Primitive WS origin: answers 101 to the first request, then echoes bytes."""
     try:
-        # Прочитать заголовки до \r\n\r\n
+        # Read headers up to \r\n\r\n
         while True:
             line = await reader.readline()
             if not line or line in (b"\r\n", b"\n"):
                 break
         writer.write(b"HTTP/1.1 101 Switching Protocols\r\n\r\n")
         await writer.drain()
-        # Эхо любых байт обратно
+        # Echo any bytes back
         while True:
             try:
                 data = await reader.read(4096)
@@ -71,7 +71,7 @@ async def _ws_echo_origin(reader: asyncio.StreamReader, writer: asyncio.StreamWr
 
 
 async def _open_ws_tunnel(proxy_port: int, origin_port: int) -> tuple[object, object]:
-    """Открыть один WebSocket-туннель через прокси; вернуть (reader, writer)."""
+    """Open a single WebSocket tunnel through the proxy; return (reader, writer)."""
     reader, writer = await asyncio.open_connection(PROXY_HOST, proxy_port)
     connect_req = (
         f"CONNECT {ORIGIN_HOST}:{origin_port} HTTP/1.1\r\n"
@@ -81,7 +81,7 @@ async def _open_ws_tunnel(proxy_port: int, origin_port: int) -> tuple[object, ob
     )
     writer.write(connect_req.encode("utf-8"))
     await writer.drain()
-    # Прочитать ответ (200/101) до пустой строки
+    # Read the response (200/101) up to the empty line
     while True:
         line = await reader.readline()
         if not line or line in (b"\r\n", b"\n"):
@@ -90,9 +90,9 @@ async def _open_ws_tunnel(proxy_port: int, origin_port: int) -> tuple[object, ob
 
 
 async def _executor_spammer(loop: asyncio.AbstractEventLoop, stop: asyncio.Future) -> None:
-    """Держит пул ThreadPoolExecutor живым — имитация UI-work (refresh, save...)."""
+    """Keeps the ThreadPoolExecutor pool alive — imitation of UI work (refresh, save...)."""
     while not stop.done():
-        # Мелкие задачи в общем пуле — как run_in_executor(None, ...) в UI.
+        # Small tasks in the shared pool — like run_in_executor(None, ...) in the UI.
         for _ in range(20):
             await loop.run_in_executor(None, time.sleep, 0.0)
         await asyncio.sleep(0.02)
@@ -101,8 +101,8 @@ async def _executor_spammer(loop: asyncio.AbstractEventLoop, stop: asyncio.Futur
 
 
 def _make_gen_cycle() -> list[Any]:
-    """Генератор-рефцикл: next() держит генератор, который ссылается на фрейм,
-    образующий цикл — типовой объект, финализируется в _PyGen_Finalize при GC."""
+    """Generator ref-cycle: next() keeps the generator, which references a frame
+    that forms a cycle — a typical object finalized in _PyGen_Finalize during GC."""
 
     def gen():
         x = []
@@ -111,7 +111,7 @@ def _make_gen_cycle() -> list[Any]:
                 x.append([i] * 8)
                 yield i
         finally:
-            # Держит стек живым — цикл gen frame -> x -> frame.
+            # Keeps the stack alive — the cycle is gen frame -> x -> frame.
             del x
 
     g = gen()
@@ -120,9 +120,10 @@ def _make_gen_cycle() -> list[Any]:
 
 
 async def _gc_pressure(stop: asyncio.Future) -> None:
-    """Давит на GC-финализацию генераторов в ЖИВОМ loop: на каждом шаге создаёт
-    пачку генератор-рефциклов и гоняет collection, пока открыты WS-туннели —
-    имитация _PyGen_Finalize по активной куче параллельно рабочим корутинам."""
+    """Puts pressure on GC finalization of generators in the LIVE loop: at every step it
+    creates a batch of generator ref-cycles and runs collection while WS tunnels are
+    open — an imitation of _PyGen_Finalize over an active heap in parallel with
+    working coroutines."""
     while not stop.done():
         for _ in range(50):
             _make_gen_cycle()
@@ -140,14 +141,14 @@ async def _run_batch(proxy_port: int, origin_port: int, batch: int) -> tuple[int
             opened += 1
         except Exception:
             break
-    # Закрыть ту же пачку синхронно (массовое завершение генераторов туннеля).
+    # Close the same batch synchronously (mass termination of tunnel generators).
     for r, w in batch_conns:
         try:
             w.close()
             r.close()
         except Exception:
             pass
-    # Дать корутинам туннелей завершиться и GC-у отработать.
+    # Let the tunnel coroutines finish and the GC do its work.
     await asyncio.sleep(0.001)
     gc.collect()
     closed = len(batch_conns)
@@ -155,14 +156,14 @@ async def _run_batch(proxy_port: int, origin_port: int, batch: int) -> tuple[int
 
 
 async def main(n_iter: int, batch: int) -> int:
-    # Локальный WS-origin.
+    # Local WS origin.
     origin_server = await asyncio.start_server(_ws_echo_origin, ORIGIN_HOST, 0)
     origin_port = origin_server.sockets[0].getsockname()[1]
 
-    # Прокси.
+    # Proxy.
     proxy = ProxyServer(host=PROXY_HOST, port=0, cert_dir="/tmp/pentool_stress_certs")
     await proxy.start()
-    # proxy.port остаётся 0 при port=0 (эфемерный); реальный — из сокета.
+    # proxy.port stays 0 when port=0 (ephemeral); the real one comes from the socket.
     proxy_port = proxy._server.sockets[0].getsockname()[1]
 
     loop = asyncio.get_running_loop()
@@ -174,14 +175,14 @@ async def main(n_iter: int, batch: int) -> int:
     total_open = total_close = 0
     held: list[tuple[object, object]] = []
     try:
-        # Фаза 1: массовые волны открыть/закрыть (фрагментирует кучу).
+        # Phase 1: massive open/close waves (fragments the heap).
         for _ in range(n_iter):
             op, cl = await _run_batch(proxy_port, origin_port, batch)
             total_open += op
             total_close += cl
-        # Фаза 2 (ключевая): накопить МНОГО ОТКРЫТЫХ туннелей и не закрывать их —
-        # оставить pending _handle_client на _READ_TIMEOUT. Затем резко stop() ->
-        # массовая отмена -> _PyGen_Finalize массы генераторов на фоне кучи.
+        # Phase 2 (the key one): accumulate MANY OPEN tunnels and keep them open —
+        # leave pending _handle_client on _READ_TIMEOUT. Then abruptly stop() ->
+        # mass cancellation -> _PyGen_Finalize of a mass of generators against the heap.
         held_it = n_iter // 4 + 1
         for _ in range(held_it):
             for _ in range(batch):
@@ -202,7 +203,7 @@ async def main(n_iter: int, batch: int) -> int:
             await gcp
         except Exception:
             pass
-        # Резкий стоп на фоне открытых туннелей — кандидат на крэш.
+        # Abrupt stop against a background of open tunnels — a crash candidate.
         await proxy.stop()
         for _, w in held:
             try:

@@ -1,16 +1,16 @@
-"""Нагрузочные тесты Scanner (PRO): активное сканирование.
+"""Scanner (PRO) load tests: active scanning.
 
-Уровни (гибрид, LOAD_TESTING_PLAN_2026-08-17.md):
-  A — без сети (FakeHTTPClient): структурный рост задач/памяти/ЦПУ без I/O.
-        * рост n_requests при фикс. checks+concurrency;
-        * матрица concurrency (5/10/25/50/100) при фикс. n_requests;
-        * пик живых asyncio.Tasks vs concurrency (bounded pool).
-  B — локальный MockBigSite (реальный HTTP): детерминированный крупный сайт,
-        с реальными baseline-cache и fingerprint вызовами поверх payload-потока.
-  C — DVWA (-level c, малый объём): реальный стек PHP/MySQL, сессия из
-        dvwa_session, гигиеничный запуск (по 1 запросу на payload-класс).
+Levels (hybrid, LOAD_TESTING_PLAN_2026-08-17.md):
+  A — no network (FakeHTTPClient): structural growth of tasks/memory/CPU with no I/O.
+        * growth of n_requests at fixed checks+concurrency;
+        * concurrency matrix (5/10/25/50/100) at fixed n_requests;
+        * peak live asyncio.Tasks vs concurrency (bounded pool).
+  B — local MockBigSite (real HTTP): deterministic large site,
+        with real baseline-cache and fingerprint calls on top of the payload stream.
+  C — DVWA (-level c, small volume): real PHP/MySQL stack, session from
+        dvwa_session, hygienic run (1 request per payload class).
 
-Запуск:
+Run:
     python3 tests/perf/load_scanner.py --level a
     python3 tests/perf/load_scanner.py --level b --concurrency 10 --max-requests 2000
     python3 tests/perf/load_scanner.py --level c
@@ -60,8 +60,8 @@ from tests.perf.fake_http_client import FakeHTTPClient  # noqa: E402
 from tests.perf.memtrack import MemSampler, rss_mb, save_report  # noqa: E402
 from tests.perf.mock_big_site import MockBigSite, MockBigSiteConfig  # noqa: E402
 
-# Совпадает с production runtime: SQLiUnionCheck требует отдельного флага
-# (scanner_sqli_union) — в dev-лицензии недоступен, исключаем.
+# Matches production runtime: SQLiUnionCheck requires a separate flag
+# (scanner_sqli_union) — unavailable in the dev license, so we exclude it.
 ALL_CHECKS_FACTORY = [
     MissingSecurityHeadersCheck,
     InfoLeakCheck,
@@ -87,15 +87,15 @@ ALL_CHECKS_FACTORY = [
     SensitiveDataCheck,
 ]
 
-# Активные чеки (едут в run_active_on_requests) — passive-чеки работают на
-# уже полученном ответе и не создают активного payload-потока/HTTP-запросов,
-# поэтому для замеров планировщика/сети берём только их.
+# Active checks (those that run in run_active_on_requests) — passive checks work on
+# an already received response and create no active payload stream/HTTP requests,
+# so for scheduler/network measurements we take only the active ones.
 ACTIVE_CHECK_FACTORIES = [f for f in ALL_CHECKS_FACTORY if not f().passive]
 NUM_CORES = os.cpu_count() or 1
 
 
 def build_seed_requests(n: int, params_per_req: int = 3) -> list[ParsedRequest]:
-    """N distinct GET-запросов с query-параметрами + cookie (Level A)."""
+    """N distinct GET requests with query params + cookie (Level A)."""
     reqs = []
     for i in range(n):
         query = "&".join(f"p{k}=val{i}_{k}" for k in range(params_per_req))
@@ -121,7 +121,7 @@ def url_to_parse_request(url: str, cookie: str = "") -> ParsedRequest:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Уровень A — без сети (FakeHTTPClient): структурный замер
+# Level A — no network (FakeHTTPClient): structural measurement
 # ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -199,7 +199,7 @@ async def run_level_a(args) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Уровень B — локальный MockBigSite (реальный HTTP)
+# Level B — local MockBigSite (real HTTP)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -250,12 +250,12 @@ async def run_level_b(args) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Уровень C — DVWA (малый объём, сессия)
+# Level C — DVWA (small volume, session)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 def _sqlite_size(path: str | None) -> int | None:
-    """Размер БД SQLite на диске (байт), или None если файла нет/в памяти."""
+    """On-disk SQLite DB size in bytes, or None if the file is missing/in-memory."""
     if not path or path == ":memory:":
         return None
     try:
@@ -265,7 +265,7 @@ def _sqlite_size(path: str | None) -> int | None:
 
 
 def _count_vuln_rows(db_path: str) -> int:
-    """Число строк в таблице vulnerabilities БД (0 если нет БД/таблицы)."""
+    """Number of rows in the DB vulnerabilities table (0 if there is no DB/table)."""
     if not db_path or db_path == ":memory:":
         return 0
     try:
@@ -281,7 +281,7 @@ def _count_vuln_rows(db_path: str) -> int:
 
 
 async def _background_profile(sampler: MemSampler, stop: dict, interval: float = 0.15):
-    """Фоновый трекер: пишет CPU/RSS-точки в sampler, пока stop['go'] == True."""
+    """Background tracker: writes CPU/RSS samples into sampler while stop['go'] is True."""
     while stop["go"]:
         sampler.tick("profile _bg", heavy_gc_scan=False)
         await asyncio.sleep(interval)
@@ -294,23 +294,23 @@ async def run_level_c(args) -> dict:
     headers = await build_session_headers()
     print(f"  сессия: {headers['Cookie'][:40]}…")
 
-    # ── Дисковая БД вместо :memory: — чтобы измерить РАЗМЕР БД после скана
-    #    (вопрос «сколько места растёт БД»). Файл во временной _data-папке.
+    # ── On-disk DB instead of :memory: — to measure the DB SIZE after the scan
+    #    (the "how much space does the DB grow" question). File in the temp _data dir.
     _data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_data")
     os.makedirs(_data_dir, exist_ok=True)
     db_path = os.path.join(_data_dir, f"scan_c_{int(time.time())}.db")
-    # ScanEngine НЕ создаёт схему vulnerabilities сам — это делает
-    # core.db_schema.init_db. Без init_db save_findings падает с
-    # «no such table». Инициализируем схему до скана.
+    # ScanEngine does NOT create the vulnerabilities schema itself — that is done by
+    # core.db_schema.init_db. Without init_db save_findings fails with
+    # "no such table". We initialise the schema before the scan.
     from pentool.core.db_schema import init_db
 
     await init_db(db_path)
 
     sampler = MemSampler(cpu=True)
-    # Набор DVWA-страниц: главная + учебные уязвимые точки. Используем ТОЛЬКО
-    # GET-точки чтения (не мутируем формы входа/создания). XSS_r — чтобы были
-    # реальные findings (DVWA — учебная под XSS), SQLi и загрузка (upload —
-    # отдельная GET-цепочка, печатает форму, не мутируем).
+    # DVWA page set: the main page + training vulnerable endpoints. We use ONLY
+    # read-only GET endpoints (we do not mutate login/create forms). XSS_r — so that
+    # real findings appear (DVWA is a training target for XSS), SQLi and upload
+    # (upload is a separate GET chain that prints the form, we do not mutate).
     seed_urls = [
         DVWA_URL + "/index.php",
         DVWA_URL + "/vulnerabilities/xss_r/?name=test",
@@ -321,8 +321,8 @@ async def run_level_c(args) -> dict:
 
     client = HTTPClient(verify_ssl=False, extra_headers=headers)
     engine = ScanEngine(db_path=db_path, concurrency=args.concurrency, http_client=client)
-    # Лёгкие активные чеки: CORS (global), OpenRedirect (62), XSS (577) — XSS
-    # даёт findings на xss_r; SQLi/exec — слишком много payload/побочных.
+    # Lightweight active checks: CORS (global), OpenRedirect (62), XSS (577) — XSS
+    # yields findings on xss_r; SQLi/exec — too many payloads/side effects.
     engine.register_checks([c() for c in (CORSCheck, OpenRedirectCheck, XSSCheck) if not c().passive])
 
     calls = {"sent": 0}
@@ -330,7 +330,7 @@ async def run_level_c(args) -> dict:
     def _on_sent(*_a):
         calls["sent"] += 1
 
-    # ── Фоновый профиль CPU/RSS по времени (не просто start/done) ───────
+    # ── Background CPU/RSS profile over time (not just start/done) ───────
     bg_stop = {"go": True}
     bg_task = asyncio.create_task(_background_profile(sampler, bg_stop))
 
@@ -339,9 +339,9 @@ async def run_level_c(args) -> dict:
     db_size_after_scan = _sqlite_size(db_path) or 0
     try:
         findings = await engine.run_active_on_requests(seed_requests=seeds, on_request_sent=_on_sent)
-        # run_active_on_requests возвращает findings в память, но НЕ пишет их
-        # в БД — это делает внешний API-слой (ScannerAPI.start_active_scan).
-        # Явно сохраняем, чтобы замерить РЕАЛЬНЫЙ рост БД от findings.
+        # run_active_on_requests returns findings into memory but does NOT write them
+        # to the DB — the outer API layer does that (ScannerAPI.start_active_scan).
+        # We persist explicitly to measure the REAL DB growth caused by findings.
         try:
             await engine.save_findings(findings)
         except Exception as exc:
@@ -370,13 +370,13 @@ async def run_level_c(args) -> dict:
         f"БД+{db_growth_from_scan / 1024:.1f}KB vuln_rows={vuln_rows} {dt:.2f}s"
     )
 
-    # Уборка временной БД
+    # Clean up the temporary DB
     try:
         os.remove(db_path)
     except OSError:
         pass
 
-    # Спарклайн профиля — вынесем в out (смотреть по t_s)
+    # Profile sparkline — passed through in out (inspect it by t_s)
     cpu_spark = sampler.cpu_series()
     return {
         "n_seed": len(seeds),
@@ -393,7 +393,7 @@ async def run_level_c(args) -> dict:
 
 
 def _spark_str(vals: list[float]) -> str:
-    """Текстовый sparkline (зависит от memtrack.sparkline, лёгкая обёртка)."""
+    """Text sparkline (delegates to memtrack.sparkline, a thin wrapper)."""
     from tests.perf.memtrack import sparkline
 
     return sparkline(vals) if vals else ""

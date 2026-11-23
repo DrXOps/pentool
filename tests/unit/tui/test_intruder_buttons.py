@@ -1,9 +1,9 @@
-"""Тесты для StartStopMixin и кнопок Start/Stop/Pause/Resume в IntruderScreen.
+"""Tests for StartStopMixin and the Start/Stop/Pause/Resume buttons in IntruderScreen.
 
-Проверяет:
-- Наличие btn-start/btn-stop в compose
-- Цикл Start→Pause→Resume→Stop
-- ActivityIndicator не показывает Recon активным без запуска
+Verifies:
+- btn-start/btn-stop are present in compose
+- the Start→Pause→Resume→Stop cycle
+- ActivityIndicator does not report Recon as active without a start
 """
 
 from __future__ import annotations
@@ -13,12 +13,12 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
-# ─── Хелперы ────────────────────────────────────────────────────────────────
+# ─── Helpers ────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
 def mock_intruder_deps():
-    """Мокаем тяжёлые зависимости IntruderScreen."""
+    """Mock the heavy IntruderScreen dependencies."""
     patches = [
         patch("pentool.tui.screens.intruder.screen.get_logger", return_value=MagicMock()),
         patch("pentool.tui.screens.intruder.screen.IntruderConfig", MagicMock()),
@@ -37,19 +37,19 @@ _MOCK_APP = MagicMock()
 
 
 def _setup_screen(screen):
-    """Настраивает экран для unit-теста.
+    """Prepare the screen for a unit test.
 
-    - Устанавливает active_app ContextVar (чтобы app property работал)
-    - Подменяет run_worker на MagicMock
-    - Подменяет query_one на MagicMock (возвращает сам себя)
-    - Добавляет .disabled = False на мок (для btn-stop)
+    - Sets the active_app ContextVar (so the app property works)
+    - Replaces run_worker with a MagicMock
+    - Replaces query_one with a MagicMock (returns itself)
+    - Adds .disabled = False on the mock (for btn-stop)
     """
     from textual.app import active_app
 
-    # Устанавливаем active_app ContextVar
+    # Set the active_app ContextVar
     screen._active_app_token = active_app.set(_MOCK_APP)
     screen.run_worker = MagicMock()
-    # Мок query_one — возвращает сам себя с любыми атрибутами
+    # query_one mock — returns itself with arbitrary attributes
     mock_q = MagicMock()
     mock_q.disabled = False
     screen.query_one = MagicMock(return_value=mock_q)
@@ -57,7 +57,7 @@ def _setup_screen(screen):
 
 
 def _teardown_screen(screen):
-    """Чистит ContextVar."""
+    """Clean up the ContextVar."""
     from textual.app import active_app
 
     token = getattr(screen, "_active_app_token", None)
@@ -68,15 +68,15 @@ def _teardown_screen(screen):
             pass
 
 
-# ─── Тесты StartStopWidget (замена удалённого StartStopMixin) ────────────────
+# ─── StartStopWidget tests (replaces the removed StartStopMixin) ─────────────
 
 
 class TestStartStopWidget:
-    """StartStopMixin удалён: состояние Start/Stop/Pause живёт в StartStopWidget.
+    """StartStopMixin was removed: Start/Stop/Pause state lives in StartStopWidget.
 
-    Экран больше не наследует абстрактный миксин — виджет сам держит
-    ``_running``/``_paused`` и объявляет четыре сообщения, на которые экран
-    подписывается обычными ``on_start_stop_widget_*`` обработчиками.
+    The screen no longer inherits an abstract mixin — the widget itself holds
+    ``_running``/``_paused`` and declares the four messages that the screen
+    subscribes to with plain ``on_start_stop_widget_*`` handlers.
     """
 
     def test_initial_state_is_idle(self):
@@ -112,8 +112,8 @@ class TestStartStopWidget:
         for name in ("StartRequested", "PauseRequested", "ResumeRequested", "StopRequested"):
             message_cls = getattr(StartStopWidget, name)
             assert issubclass(message_cls, Message)
-            # Имя выводится из __qualname__ сообщения в snake_case; экран ловит
-            # их через @on, поэтому имя здесь только документируется.
+            # The name is derived from the message's __qualname__ in snake_case;
+            # the screen catches them via @on, so this name is only documented.
             expected = re.sub(r"(?<!^)(?=[A-Z])", "_", message_cls.__name__).lower()
             assert message_cls.handler_name == "on_start_stop_widget_" + expected
 
@@ -124,11 +124,11 @@ class TestStartStopWidget:
         assert StartStopWidget.ID_STOP == "btn-stop"
 
 
-# ─── Тесты IntruderScreen — кнопки и их нажатия ──────────────────────────────
+# ─── IntruderScreen tests — buttons and their clicks ─────────────────────────
 
 
 class TestIntruderButtons:
-    """Проверка btn-start/btn-stop в compose и методов."""
+    """Checks btn-start/btn-stop in compose and the related methods."""
 
     def test_intruder_has_start_stop_in_compose(self, mock_intruder_deps):
         import inspect
@@ -145,9 +145,9 @@ class TestIntruderButtons:
         spec_src = inspect.getsource(IntruderScreen.header_spec)
         for action in ('"start"', '"pause"', '"stop"', '"new_tab"', '"close_tab"'):
             assert action in spec_src, f"{action} is not offered by the Intruder header"
-        # В per-tab toolbar остались кнопки содержимого, но не StartStop.
-        # Идентификаторы собираются из _TabId (F-023), поэтому проверяем
-        # константу и её значение, а не литерал в тексте метода.
+        # The per-tab toolbar still has content buttons, but no StartStop.
+        # The identifiers are built from _TabId (F-023), so we assert the
+        # constant and its value rather than a literal in the method text.
         from pentool.tui.screens.intruder.screen import _TabId
 
         mount_src = inspect.getsource(IntruderScreen._mount_tab_body)
@@ -188,8 +188,8 @@ class TestIntruderButtons:
         tab.running = True
         tab.paused = True
         screen._active_tab_id = "t1"
-        screen._tabs = []  # не используется, active_tab пойдёт через фолбэк
-        # Подменяем property _active_tab на наш таб
+        screen._tabs = []  # unused, active_tab goes through the fallback
+        # Replace the _active_tab property with our tab
         with patch.object(IntruderScreen, "_active_tab", new_callable=PropertyMock, return_value=tab):
             _setup_screen(screen)
             try:
@@ -284,11 +284,11 @@ class TestIntruderButtons:
             _teardown_screen(screen)
 
 
-# ─── Тесты ActivityIndicator — Recon не должен ложно мигать ──────────────────
+# ─── ActivityIndicator tests — Recon must not blink spuriously ───────────────
 
 
 class TestActivityIndicatorRecon:
-    """Проверка ActivityIndicator — Recon не должен мигать без запуска."""
+    """Checks ActivityIndicator — Recon must not blink without a start."""
 
     def test_recon_active_uses_runner(self):
         import inspect

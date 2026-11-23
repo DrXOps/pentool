@@ -1,29 +1,31 @@
-"""Бенчмарк: где сидит CPU спайдера/сканера и стоит ли обходить GIL.
+"""Benchmark: where the spider/scanner CPU goes and whether to bypass the GIL.
 
-Цель (см. обсуждение 2026-08-17): решить, что даст (а) замена BeautifulSoup на
-lxml и (б) мультипроцессинг для обхода GIL — по фактам, а не на догадках.
+Goal (see the 2026-08-17 discussion): decide what will help — (a) swapping
+BeautifulSoup for lxml and (b) multiprocessing to bypass the GIL — based on
+facts, not on guesses.
 
-Из профиля spider._parse_html (см. load_spider / обсуждение) две доминирующие
-CPU-работы спайдера:
-  1. Парсинг HTML (BeautifulSoup html.parser)   ~31%
-  2. Обработка URL на каждую ссылку: urlparse/urljoin/urlsplit + _normalize_url  ~55%
-Обе — Python-код под GIL. Замеряем:
+From the profile of spider._parse_html (see load_spider / discussion) the two
+dominant CPU jobs of the spider:
+  1. HTML parsing (BeautifulSoup html.parser)   ~31%
+  2. Per-link URL handling: urlparse/urljoin/urlsplit + _normalize_url  ~55%
+Both are Python code under the GIL. We measure:
 
-  Раздел A — парсинг: bs4 vs lxml (если lxml доступен) на реальном HTML.
-  Раздел B — GIL/мультипроцессинг: две CPU-задачи (парсинг-подобная и
-      urlparse-подобная) выполняются как:
-        sync     — в текущем процессе (амбар GIL, как сейчас)
-        threads  — в ThreadPoolExecutor (GIL НЕ обходится, но показывает цену)
-        procs    — в ProcessPoolExecutor (обходит GIL)
-      Смотрим ускорение procs-vs-threads на каждой задаче и время IPС-переноса.
+  Section A — parsing: bs4 vs lxml (if lxml is available) on real HTML.
+  Section B — GIL/multiprocessing: two CPU jobs (a parsing-like one and a
+      urlparse-like one) are executed as:
+        sync     — in the current process (GIL-bound, as today)
+        threads  — in a ThreadPoolExecutor (GIL is NOT bypassed, but shows the cost)
+        procs    — in a ProcessPoolExecutor (bypasses the GIL)
+      We look at the procs-vs-threads speedup of each job and at the IPC transfer time.
 
-Запуск:
-    python3 tests/perf/bench_cpu_parsing.py          # синтетика (любой окружение)
-    python3 -m pip ... # для lxml-сравнения нужен lxml: system python имел его
+Run:
+    python3 tests/perf/bench_cpu_parsing.py          # synthetic (any environment)
+    python3 -m pip ... # the lxml comparison needs lxml: system python had it
 
-Вывод для решения: если urllib-строки доминируют (как в профиле), то HОЛЬШОЙ
-выигрыш multiprocessing даст только на них, а парсинг-часть выиграет от lxml
-без всякого multiprocessing. Решение приходит из соотношения этих двух.
+Decision input: if the urllib calls dominate (as in the profile), then the LARGE
+gain from multiprocessing will come only from them, while the parsing part will
+gain from lxml without any multiprocessing. The decision follows from the ratio
+of the two.
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ import os
 import time
 from urllib.parse import urljoin, urlparse
 
-# ═══════════ Раздел A — парсинг: bs4 vs lxml (по возможности) ═══════════════
+# ═══════════ Section A — parsing: bs4 vs lxml (when available) ══════════════
 
 
 def _big_html(n_links: int = 3000) -> str:
@@ -88,11 +90,11 @@ def _bench_parsing(html: str, have):
     return results
 
 
-# ═══════════ Раздел B — GIL vs multiprocessing на двух классах CPU-задач ═════
+# ═══════════ Section B — GIL vs multiprocessing on two kinds of CPU jobs ════
 
 
 def _urlparse_work(n: int) -> int:
-    """urlparse-подобная CPU-задача: много urllib-парсинга (как _add_link)."""
+    """urlparse-like CPU job: a lot of urllib parsing (like _add_link)."""
     cnt = 0
     base = "http://127.0.0.1:9/index.php"
     for i in range(n):
@@ -104,7 +106,7 @@ def _urlparse_work(n: int) -> int:
 
 
 def _strsplit_work(n: int) -> int:
-    """Парсинг-подобная CPU-задача: регекс+строки над большим HTML (как bs4)."""
+    """Parsing-like CPU job: regex+strings over a large HTML (like bs4)."""
     import re
 
     html = _big_html(3000)
@@ -119,7 +121,7 @@ def _run_tasks(name: str, work, args, n_parallel: int):
     print(f"\n── Раздел B: {name} (CPU-задача) ─────────────────────────────────")
     rows = {}
 
-    # sync — один вызов в текущем процессе (амбар GIL, как сейчас)
+    # sync — one call in the current process (GIL-bound, as today)
     total = args[0]
     t0 = time.monotonic()
     work(total)
@@ -127,15 +129,15 @@ def _run_tasks(name: str, work, args, n_parallel: int):
     rows["sync"] = dt_sync
     print(f"  sync    : {dt_sync * 1000:7.0f}ms  (вся работа в одном процессе, амбар)")
 
-    # Делим одну и ту же работу на n_parallel кусков ↓ суммарный объём тот же,
-    # что в sync. Тогда threads/procs показывают честное ускорение от
-    # распараллеливания ОДНОЙ задачи (не 8 независимых копий).
+    # Split the same work into n_parallel chunks ↓ the total volume stays the same
+    # as in sync. That way threads/procs show the honest speedup from parallelising
+    # ONE task (not 8 independent copies).
     per = max(1, total // n_parallel)
     split = [per] * n_parallel
-    # Подровняем, чтобы суммарно ≈ total (последний заберёт остаток)
+    # Even it out so the sum is ≈ total (the last chunk takes the remainder)
     split[-1] += total - per * n_parallel
 
-    # threads — ThreadPoolExecutor (GIL НЕ обходится, показывает цену GIL)
+    # threads — ThreadPoolExecutor (GIL is NOT bypassed, shows the GIL cost)
     t0 = time.monotonic()
     with cf.ThreadPoolExecutor(max_workers=n_parallel) as ex:
         list(ex.map(work, split))
@@ -143,7 +145,7 @@ def _run_tasks(name: str, work, args, n_parallel: int):
     rows["threads"] = dt_thr
     print(f"  threads : {dt_thr * 1000:7.0f}ms  ({n_parallel} потоков, GIL блокирует)")
 
-    # procs — ProcessPoolExecutor (обходит GIL, платит IPC-перенос аргумента)
+    # procs — ProcessPoolExecutor (bypasses the GIL, pays the IPC argument transfer)
     t0 = time.monotonic()
     with cf.ProcessPoolExecutor(max_workers=n_parallel) as ex:
         list(ex.map(work, split))

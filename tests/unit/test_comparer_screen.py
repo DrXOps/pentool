@@ -1,11 +1,11 @@
-"""Unit: ComparerScreen — ContentPanel интеграция, copy/paste, public API.
+"""Unit: ComparerScreen — ContentPanel integration, copy/paste, public API.
 
-Проверяем что после миграции TextArea → ContentPanel:
-- compose не падает
-- cmp-left-panel и cmp-right-panel суть ContentPanel с TextArea внутри
-- CopyRequested / PasteRequested обрабатываются
-- set_title() работает
-- public API (load_left/load_right/load_smart/action_clear) работает
+Verifies that after the TextArea → ContentPanel migration:
+- compose does not crash
+- cmp-left-panel and cmp-right-panel are ContentPanel with a TextArea inside
+- CopyRequested / PasteRequested are handled
+- set_title() works
+- public API (load_left/load_right/load_smart/action_clear) works
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pentool.tui.widgets.content_panel import ContentPanel
 
 
 class ComparerTestApp(App):
-    """Минимальное приложение с ComparerScreen для тестов."""
+    """Minimal app with ComparerScreen for tests."""
 
     ALLOW_SELECTOR_MATCH = True
 
@@ -35,7 +35,7 @@ def _right_panel(app: ComparerTestApp) -> ContentPanel:
 
 
 def _diff_panel(app: ComparerTestApp) -> ContentPanel:
-    # cmp-diff-area — Vertical; ContentPanel внутри без id, ищем по типу внутри него
+    # cmp-diff-area — Vertical; the ContentPanel inside has no id, find it by type
     area = app.query_one("#cmp-diff-area")
     return area.query_one(ContentPanel)
 
@@ -51,14 +51,14 @@ def _cmp_screen(app: ComparerTestApp) -> ComparerScreen:
 
 class TestComparerCompose:
     async def test_compose_does_not_crash(self) -> None:
-        """Создание ComparerScreen не падает."""
+        """Creating a ComparerScreen does not crash."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
             assert _cmp_screen(app) is not None
 
     async def test_left_panel_exists(self) -> None:
-        """cmp-left-panel — ContentPanel с TextArea."""
+        """cmp-left-panel — a ContentPanel with a TextArea."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -69,7 +69,7 @@ class TestComparerCompose:
             assert isinstance(panel.content_widget, TextArea)
 
     async def test_right_panel_exists(self) -> None:
-        """cmp-right-panel — ContentPanel с TextArea."""
+        """cmp-right-panel — a ContentPanel with a TextArea."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -80,7 +80,7 @@ class TestComparerCompose:
             assert isinstance(panel.content_widget, TextArea)
 
     async def test_left_panel_has_copy_paste(self) -> None:
-        """Левая панель имеет кнопки copy и paste."""
+        """The left panel has copy and paste buttons."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -88,7 +88,7 @@ class TestComparerCompose:
             assert len(list(_left_panel(app).query("#cp-btn-paste"))) == 1
 
     async def test_right_panel_has_copy_paste(self) -> None:
-        """Правая панель имеет кнопки copy и paste."""
+        """The right panel has copy and paste buttons."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -96,7 +96,7 @@ class TestComparerCompose:
             assert len(list(_right_panel(app).query("#cp-btn-paste"))) == 1
 
     async def test_diff_panel_exists(self) -> None:
-        """cmp-diff-area — ContentPanel с RichLog или TextArea."""
+        """cmp-diff-area — a ContentPanel with RichLog or TextArea."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -113,21 +113,21 @@ class TestComparerCompose:
 
 class TestComparerTitle:
     async def test_left_title_default(self) -> None:
-        """По умолчанию заголовок Left."""
+        """By default the title is Left."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
             assert _left_panel(app)._panel_title == "Left"
 
     async def test_right_title_default(self) -> None:
-        """По умолчанию заголовок Right."""
+        """By default the title is Right."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
             assert _right_panel(app)._panel_title == "Right"
 
     async def test_set_title_left(self) -> None:
-        """set_title() обновляет заголовок левой панели."""
+        """set_title() updates the left panel title."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -136,7 +136,7 @@ class TestComparerTitle:
             assert _left_panel(app)._panel_title == "test.txt"
 
     async def test_set_title_right(self) -> None:
-        """set_title() обновляет заголовок правой панели."""
+        """set_title() updates the right panel title."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -151,12 +151,12 @@ class TestComparerTitle:
 
 
 class TestComparerCopyPaste:
-    """Copy/paste через кнопки ContentPanel — проверяем эффект, не «не упало».
+    """Copy/paste via the ContentPanel buttons — we check the effect, not just no crash.
 
-    Раньше здесь было четыре теста без единого assert (F-034): хендлеры
-    миксина вообще не регистрировались, поэтому кнопки были no-op, и тесты
-    при этом оставались зелёными. Теперь буфер подменяется, а результат
-    проверяется по содержимому TextArea и по аргументу copy_to_clipboard.
+    Previously there were four tests here without a single assert (F-034): the
+    mixin handlers were never registered at all, so the buttons were no-ops, and
+    the tests still stayed green. Now the clipboard is replaced, and the result
+    is checked against the TextArea contents and the copy_to_clipboard argument.
     """
 
     @pytest.fixture
@@ -223,7 +223,7 @@ class TestComparerCopyPaste:
 
 class TestComparerPublicAPI:
     async def test_load_left(self) -> None:
-        """load_left() загружает текст и меняет заголовок."""
+        """load_left() loads the text and changes the title."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -237,7 +237,7 @@ class TestComparerPublicAPI:
             assert _left_panel(app)._panel_title == "greeting.txt"
 
     async def test_load_right(self) -> None:
-        """load_right() загружает текст и меняет заголовок."""
+        """load_right() loads the text and changes the title."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -251,7 +251,7 @@ class TestComparerPublicAPI:
             assert _right_panel(app)._panel_title == "data.txt"
 
     async def test_load_smart_empty_left(self) -> None:
-        """load_smart() когда левая пуста — загружает в левую."""
+        """load_smart() when the left panel is empty — loads into the left one."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -265,7 +265,7 @@ class TestComparerPublicAPI:
             assert _left_panel(app)._panel_title == "file1.txt"
 
     async def test_load_smart_filled_left(self) -> None:
-        """load_smart() когда левая не пуста — загружает в правую."""
+        """load_smart() when the left panel is not empty — loads into the right one."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -281,15 +281,15 @@ class TestComparerPublicAPI:
             assert _right_panel(app)._panel_title == "file2.txt"
 
     async def test_action_clear(self) -> None:
-        """action_clear() очищает оба поля и сбрасывает заголовки."""
+        """action_clear() clears both fields and resets the titles."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
-            # заполняем
+            # fill in
             _cmp_screen(app).load_left("left text", label="a.txt")
             _cmp_screen(app).load_right("right text", label="b.txt")
             await pilot.pause()
-            # очищаем
+            # clear
             _cmp_screen(app).action_clear()
             await pilot.pause()
             from textual.widgets import TextArea
@@ -304,7 +304,7 @@ class TestComparerPublicAPI:
             assert _right_panel(app)._panel_title == "Right"
 
     async def test_load_left_default_label(self) -> None:
-        """load_left() без label ставит 'Left'."""
+        """load_left() without label sets 'Left'."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -313,7 +313,7 @@ class TestComparerPublicAPI:
             assert _left_panel(app)._panel_title == "Left"
 
     async def test_load_right_default_label(self) -> None:
-        """load_right() без label ставит 'Right'."""
+        """load_right() without label sets 'Right'."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -322,7 +322,7 @@ class TestComparerPublicAPI:
             assert _right_panel(app)._panel_title == "Right"
 
     async def test_action_compare_empty(self) -> None:
-        """Сравнение пустых полей не падает."""
+        """Comparing empty fields does not crash."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -337,7 +337,7 @@ class TestComparerPublicAPI:
 
 class TestContentPanelSetTitle:
     async def test_set_title_updates_query(self) -> None:
-        """set_title() меняет _panel_title."""
+        """set_title() changes _panel_title."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -347,7 +347,7 @@ class TestContentPanelSetTitle:
             assert panel._panel_title == "New Title"
 
     async def test_set_title_cleared_after_clear(self) -> None:
-        """После action_clear заголовки возвращаются к Left/Right."""
+        """After action_clear the titles return to Left/Right."""
         app = ComparerTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
