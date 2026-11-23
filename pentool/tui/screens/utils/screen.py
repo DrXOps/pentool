@@ -17,7 +17,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.css.query import NoMatches
 from textual.widget import Widget
-from textual.widgets import TabbedContent, TabPane
+from textual.widgets import TabbedContent
 
 from pentool.core.logging import get_logger
 from pentool.tui.header import HeaderSpec, HeaderTab
@@ -25,6 +25,7 @@ from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.comparer.screen import ComparerScreen
 from pentool.tui.screens.decoder.screen import DecoderScreen
 from pentool.tui.screens.sequencer.screen import SequencerScreen
+from pentool.tui.widgets.static_tabs import remember_tab, remembered_tab, static_tabs
 
 logger = get_logger(__name__)
 
@@ -48,10 +49,24 @@ class UtilsScreen(AppMixin, Widget):
         self._active_kind: str = UTILS_TABS[0][0]
 
     def compose(self) -> ComposeResult:
-        with TabbedContent(initial=UTILS_TABS[0][0], id="utils-tabs"):
-            for tab_id, label, screen_cls in UTILS_TABS:
-                with TabPane(label, id=tab_id):
-                    yield screen_cls(id=f"{tab_id}-body")
+        # One factory for every module with a fixed set of panes (see
+        # `widgets/static_tabs.py`): the strip, the remembered pane and the fallback
+        # when a remembered id no longer exists behave the same everywhere.
+        yield from static_tabs(
+            "utils-tabs",
+            [(tab_id, label, self._build_tool_body(tab_id)) for tab_id, label, _cls in UTILS_TABS],
+            initial=remembered_tab(self.app, "utils", UTILS_TABS),
+        )
+
+    @staticmethod
+    def _build_tool_body(tab_id: str):
+        """Body builder for one sub-tab: the tool screen mounted under its own id."""
+
+        def build() -> Widget:
+            screen_cls = next(cls for tid, _label, cls in UTILS_TABS if tid == tab_id)
+            return screen_cls(id=f"{tab_id}-body")
+
+        return build
 
     # ── Sub-tab selection (hotkeys D / C / Q) ─────────────────────────────
     def select_subtab(self, kind: str) -> None:
@@ -131,6 +146,7 @@ class UtilsScreen(AppMixin, Widget):
             tab_id = tab_id.removeprefix("--content-tab-")
         if tab_id:
             self._active_kind = tab_id
+            remember_tab(self.app, "utils", tab_id)
         self._refresh_header_now()
 
     def _refresh_header_now(self) -> None:

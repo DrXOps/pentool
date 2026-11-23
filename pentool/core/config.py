@@ -58,6 +58,9 @@ class Config:
     check_updates: bool = True  # check for updates on startup
     # ── UI ────────────────────────────────────────────────────────────────────────
     theme: str = "textual-dark"  # Textual theme name
+    #: Remembered static sub-tab per module: {"utils": "utils-sequencer", ...}.
+    #: Written by `tui/widgets/static_tabs.py`; unknown values fall back to the first pane.
+    last_subtabs: dict[str, str] = field(default_factory=dict)
     notifications_sound_enabled: bool = True  # play a short sound with customnotify() toasts
 
     # ── AI ────────────────────────────────────────────────────────────────────────

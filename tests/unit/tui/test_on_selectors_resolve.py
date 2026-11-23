@@ -31,8 +31,10 @@ import pytest
 
 _TUI = Path(__file__).resolve().parents[3] / "pentool" / "tui"
 
-#: Constructors whose second positional argument is the widget id.
-_POSITIONAL_ID_CTORS = {"ToolbarButton"}
+#: Constructors that take a widget id positionally: name → argument index.
+#: ``ToolbarButton(label, id)`` passes it second; ``static_tabs(container_id, ...)``
+#: passes it first, because the id names the TabbedContent it builds.
+_POSITIONAL_ID_CTORS = {"ToolbarButton": 1, "static_tabs": 0}
 
 #: Ids supplied by something outside this package's compose() calls.
 _EXTERNAL_IDS = {
@@ -69,8 +71,9 @@ def _created_ids(files: list[Path]) -> tuple[set[str], set[str]]:
                 if kw.arg == "id":
                     _add_id(ids, prefixes, kw.value)
             name = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", "")
-            if name in _POSITIONAL_ID_CTORS and len(node.args) >= 2:
-                _add_id(ids, prefixes, node.args[1])
+            position = _POSITIONAL_ID_CTORS.get(name)
+            if position is not None and len(node.args) > position:
+                _add_id(ids, prefixes, node.args[position])
     return ids, prefixes
 
 
