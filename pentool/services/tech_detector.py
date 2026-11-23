@@ -56,7 +56,7 @@ def get_cached_tech(url: str) -> dict[str, Any] | None:
 
 
 def get_tech_cache(host: str) -> dict | None:
-    """Обёртка над PRO TechCache для TUI — читает кэш технологий.
+    """Wrapper over the PRO TechCache for the TUI — reads the tech cache.
 
     Used by target/screen.py and auto_scope.py to display tech info.
     Avoids importing modules.scanner.tech_cache from the TUI layer directly.

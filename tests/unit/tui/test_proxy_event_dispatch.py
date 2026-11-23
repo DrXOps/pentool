@@ -2,7 +2,7 @@
 
 Textual dispatches `@on(...)` handlers only when they are defined on the
 direct App class — it does NOT find them in MRO mixins. This bit us
-(Этап 5.1 bug: after moving on_proxy_request_added etc. into a mixin, live
+(Stage 5.1 bug: after moving on_proxy_request_added etc. into a mixin, live
 proxy traffic was captured but rows never appeared in history, because
 Textual silently skipped the mixin handlers).
 

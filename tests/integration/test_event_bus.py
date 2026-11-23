@@ -21,7 +21,7 @@ from pentool.core.events import (
 @pytest.mark.integration
 class TestEventBus:
     def test_subscribe_and_emit(self) -> None:
-        """subscribe + emit → handler вызван 1 раз."""
+        """subscribe + emit → handler called once."""
         bus = EventBus()
         calls = []
         bus.subscribe(ScanStarted, lambda e: calls.append(e))
@@ -29,7 +29,7 @@ class TestEventBus:
         assert len(calls) == 1
 
     def test_emit_passes_event_instance(self) -> None:
-        """handler получает тот же объект события."""
+        """handler receives the same event object."""
         bus = EventBus()
         received = []
         bus.subscribe(ScanStarted, lambda e: received.append(e))
@@ -38,7 +38,7 @@ class TestEventBus:
         assert received[0] is event
 
     def test_unsubscribe_stops_calls(self) -> None:
-        """unsubscribe → emit → handler НЕ вызван."""
+        """unsubscribe → emit → handler NOT called."""
         bus = EventBus()
         calls = []
 
@@ -51,7 +51,7 @@ class TestEventBus:
         assert len(calls) == 0
 
     def test_unsubscribe_all(self) -> None:
-        """подписаться на 2 типа → unsubscribe_all → emit оба → 0 вызовов."""
+        """subscribe to 2 event types → unsubscribe_all → emit both → 0 calls."""
         bus = EventBus()
         calls = []
 
@@ -66,7 +66,7 @@ class TestEventBus:
         assert len(calls) == 0
 
     def test_multiple_subscribers_same_type(self) -> None:
-        """2 handler-а для одного типа → оба вызваны."""
+        """2 handlers for one event type → both called."""
         bus = EventBus()
         calls_a = []
         calls_b = []
@@ -77,7 +77,7 @@ class TestEventBus:
         assert len(calls_b) == 1
 
     def test_get_history_returns_emitted(self) -> None:
-        """emit 3 события → get_history() len == 3."""
+        """emit 3 events → get_history() len == 3."""
         bus = EventBus()
         bus.emit(ScanStarted())
         bus.emit(ScanFinished())
@@ -95,7 +95,7 @@ class TestEventBus:
         assert isinstance(filtered[0], ScanStarted)
 
     def test_replay_calls_handler_for_history(self) -> None:
-        """emit 2 события → replay → handler вызван 2 раза."""
+        """emit 2 events → replay → handler called twice."""
         bus = EventBus()
         bus.emit(ScanStarted())
         bus.emit(ScanStarted())
@@ -104,7 +104,7 @@ class TestEventBus:
         assert len(calls) == 2
 
     def test_clear_history(self) -> None:
-        """emit 3 → clear_history() → get_history() пуст."""
+        """emit 3 → clear_history() → get_history() is empty."""
         bus = EventBus()
         bus.emit(ScanStarted())
         bus.emit(ScanFinished())
@@ -113,7 +113,7 @@ class TestEventBus:
         assert bus.get_history() == []
 
     def test_stats_returns_dict(self) -> None:
-        """stats() → dict с ключами history_size, subscriber_types, total_handlers."""
+        """stats() → dict with keys history_size, subscriber_types, total_handlers."""
         bus = EventBus()
         bus.subscribe(ScanStarted, lambda e: None)
         bus.emit(ScanStarted())
@@ -126,7 +126,7 @@ class TestEventBus:
         assert s["total_handlers"] >= 1
 
     def test_emit_threadsafe_from_thread(self) -> None:
-        """из threading.Thread emit_threadsafe(event, loop) → event в history."""
+        """emit_threadsafe(event, loop) from a threading.Thread → event in history."""
         bus = EventBus()
         loop = asyncio.new_event_loop()
 
@@ -139,7 +139,7 @@ class TestEventBus:
         t.start()
         t.join(timeout=2)
 
-        # emit_threadsafe сохраняет событие в history немедленно (под lock)
+        # emit_threadsafe stores the event in history immediately (under lock)
         history = bus.get_history()
         assert len(history) == 1
         assert history[0] is event
@@ -153,21 +153,21 @@ class TestEventBus:
 @pytest.mark.integration
 class TestEventBusGlobal:
     def setup_method(self):
-        """Сбрасываем глобальный синглтон перед каждым тестом."""
+        """Reset the global singleton before each test."""
         reset_event_bus()
 
     def teardown_method(self):
-        """Сбрасываем глобальный синглтон после каждого теста."""
+        """Reset the global singleton after each test."""
         reset_event_bus()
 
     def test_singleton_same_object(self) -> None:
-        """get_event_bus() is get_event_bus() — один и тот же объект."""
+        """get_event_bus() is get_event_bus() — the same object."""
         bus1 = get_event_bus()
         bus2 = get_event_bus()
         assert bus1 is bus2
 
     def test_reset_creates_new(self) -> None:
-        """reset_event_bus() → get_event_bus() возвращает новый объект."""
+        """reset_event_bus() → get_event_bus() returns a new object."""
         bus1 = get_event_bus()
         reset_event_bus()
         bus2 = get_event_bus()

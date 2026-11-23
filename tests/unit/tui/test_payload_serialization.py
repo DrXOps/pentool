@@ -1,4 +1,4 @@
-"""Unit tests for payload-set serialization helpers (Этап 6)."""
+"""Unit tests for payload-set serialization helpers (Stage 6)."""
 
 from __future__ import annotations
 

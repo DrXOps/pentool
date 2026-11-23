@@ -39,26 +39,26 @@ def cfg():
 
 @pytest.fixture(autouse=True)
 def _cloud_endpoint_env(monkeypatch):
-    """Облачный эндпоинт берётся только из окружения: `ai/models.yaml` хранит имя
-    переменной, а не URL. Тесты не должны зависеть от того, что случайно
-    оказалось в окружении хост-процесса — под Claude Code там был
-    `ANTHROPIC_BASE_URL`, под другим харнессом его нет, и разбор цепочки падал
-    в `resolve_model` ещё до подмены `call_model`.
+    """The cloud endpoint comes only from the environment: `ai/models.yaml` stores
+    the variable name, not the URL. Tests must not depend on whatever happened to
+    be in the host process environment — under Claude Code there was
+    `ANTHROPIC_BASE_URL`, under another harness it is absent, and chain parsing
+    failed in `resolve_model` even before `call_model` was patched.
 
-    Тесты, проверяющие отсутствие переменной, удаляют её сами через
-    `monkeypatch.delenv` — это перекрывает значение отсюда.
+    Tests that check the variable is missing delete it themselves via
+    `monkeypatch.delenv` — that overrides the value from here.
     """
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://gw.invalid")
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "test-token")
 
 
 # ---------------------------------------------------------------------------
-# Конфигурация
+# Configuration
 # ---------------------------------------------------------------------------
 def test_config_has_models_and_tasks(cfg):
     assert cfg["models"], "в models.yaml нет моделей"
     assert cfg["tasks"], "в models.yaml нет маршрутов задач"
-    # Каждая цепочка ссылается только на известные модели.
+    # Each chain references only known models.
     for task, chain in cfg["tasks"].items():
         for name in chain:
             assert name in cfg["models"], f"{task}: неизвестная модель {name}"
@@ -70,10 +70,11 @@ def test_config_documents_context_window(cfg):
 
 
 def test_yaml_fallback_matches_pyyaml(cfg):
-    """Встроенный парсер обязан давать тот же результат, что PyYAML.
+    """The built-in parser must give the same result as PyYAML.
 
-    ai/ кладётся в проекты без Python-зависимостей — там PyYAML может
-    отсутствовать, и работает фолбэк. Расхождение между ними — тихий баг.
+    ai/ is dropped into projects without Python dependencies — PyYAML may be
+    missing there, and the fallback runs. A divergence between the two is a
+    silent bug.
     """
     yaml = pytest.importorskip("yaml")
     text = (AI_DIR / "models.yaml").read_text(encoding="utf-8")
@@ -95,7 +96,7 @@ def test_parse_scalar_types():
 
 
 # ---------------------------------------------------------------------------
-# Маршрутизация
+# Routing
 # ---------------------------------------------------------------------------
 def test_task_chain_order(cfg):
     chain = runner.task_chain(cfg, "test-fix")
@@ -114,7 +115,7 @@ def test_unknown_model_raises(cfg):
 
 
 # ---------------------------------------------------------------------------
-# Переопределения через окружение
+# Overrides via the environment
 # ---------------------------------------------------------------------------
 def test_endpoint_and_model_from_env(cfg, monkeypatch):
     monkeypatch.setenv("OLLAMA_ENDPOINT", "http://example.invalid:1234")
@@ -125,7 +126,7 @@ def test_endpoint_and_model_from_env(cfg, monkeypatch):
 
 
 def test_missing_endpoint_env_is_explicit_error(cfg, monkeypatch):
-    """Облачная модель без эндпоинта — понятная ошибка, а не пустой URL."""
+    """A cloud model without an endpoint is a clear error, not an empty URL."""
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     with pytest.raises(SystemExit) as exc:
         runner.resolve_model(cfg, "deepseek-flash")
@@ -133,10 +134,10 @@ def test_missing_endpoint_env_is_explicit_error(cfg, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Провайдеры (без сети)
+# Providers (no network)
 # ---------------------------------------------------------------------------
 def test_anthropic_text_blocks_only(cfg, monkeypatch):
-    """Блоки thinking не должны попадать в вывод задачи."""
+    """Thinking blocks must not leak into the task output."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://gw.invalid")
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "test-token")
     spec = runner.resolve_model(cfg, "deepseek-flash")
@@ -188,7 +189,7 @@ def test_ollama_payload_shape(cfg, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Эскалация
+# Escalation
 # ---------------------------------------------------------------------------
 def test_escalation_on_network_error(cfg, monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "log_event", lambda *a, **k: None)
@@ -209,7 +210,7 @@ def test_escalation_on_network_error(cfg, monkeypatch, tmp_path):
 
 
 def test_no_escalation_on_config_error(cfg, monkeypatch):
-    """Ошибка конфигурации не лечится сменой модели — цепочка сразу падает."""
+    """A config error is not cured by switching models — the chain fails at once."""
     monkeypatch.setattr(runner, "log_event", lambda *a, **k: None)
 
     def fake_call(spec, prompt, system):
@@ -246,7 +247,7 @@ def test_dry_run_touches_no_provider(cfg, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Отчёт и журнал
+# Report and log
 # ---------------------------------------------------------------------------
 def _write_events(tmp_path, path: Path, events: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -315,7 +316,7 @@ def test_log_event_rotates(tmp_path, monkeypatch):
     files = sorted(p.name for p in (tmp_path / "logs").iterdir())
     assert "e.jsonl" in files
     assert any(name.startswith("e.jsonl.") for name in files)
-    assert len([f for f in files if f.startswith("e.jsonl")]) <= 3  # текущий + keep_files
+    assert len([f for f in files if f.startswith("e.jsonl")]) <= 3  # current + keep_files
 
 
 # ---------------------------------------------------------------------------

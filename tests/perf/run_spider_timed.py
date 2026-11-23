@@ -1,8 +1,8 @@
-"""Одноразовый замер краулера на http://dvwa.local:7474/login.php (2026-08-17).
+"""One-off crawler benchmark against http://dvwa.local:7474/login.php (2026-08-17).
 
-Авторизуется в DVWA (build_session_headers) для осмысленной сессии, затем
-краулит yказанный URL через AsyncSpider и печатает время/итоги.
-Не часть тестов — временная команда по запросу.
+Logs in to DVWA (build_session_headers) for a meaningful session, then
+crawls the given URL via AsyncSpider and prints the elapsed time/totals.
+Not part of the tests — a temporary command run on request.
 """
 
 from __future__ import annotations

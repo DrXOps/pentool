@@ -1,6 +1,6 @@
-"""Тесты IntruderStorage.get_results/count_results с FilterSpec.
+"""Tests for IntruderStorage.get_results/count_results with FilterSpec.
 
-Проверяет что SQL WHERE строится корректно для полей intruder_results:
+Verifies that the SQL WHERE clause is built correctly for intruder_results fields:
   - response_status (int)
   - response_length (int)
   - error (str | None)
@@ -55,13 +55,13 @@ async def _init_schema(db_path: str) -> None:
 
 @pytest.fixture
 def storage(tmp_path):
-    """Создаёт IntruderStorage с временной БД (схема + данные)."""
+    """Creates an IntruderStorage with a temporary DB (schema + data)."""
     db_path = str(tmp_path / "test_intruder.db")
     s = IntruderStorage(db_path=db_path)
     _run(s.init_db(db_path))
     _run(_init_schema(db_path))
 
-    # Добавляем тестовые результаты
+    # Add test results
     results = [
         IntruderResult(
             id="1",
@@ -127,14 +127,14 @@ def storage(tmp_path):
 
 @pytest.mark.asyncio
 async def test_get_results_no_filter(storage):
-    """Без фильтра — все результаты."""
+    """No filter — all results."""
     results = await storage.get_results(limit=100)
     assert len(results) == 4
 
 
 @pytest.mark.asyncio
 async def test_get_results_status_eq(storage):
-    """status=200 — 2 результата."""
+    """status=200 — 2 results."""
     spec = FilterSpec(
         predicates=[
             FilterPredicate("response_status", FilterOp.EQ, 200),
@@ -148,7 +148,7 @@ async def test_get_results_status_eq(storage):
 
 @pytest.mark.asyncio
 async def test_get_results_status_between(storage):
-    """status BETWEEN 200 AND 300 — 2 результата."""
+    """status BETWEEN 200 AND 300 — 2 results."""
     spec = FilterSpec(
         predicates=[
             FilterPredicate("response_status", FilterOp.BETWEEN, (200, 300)),
@@ -162,7 +162,7 @@ async def test_get_results_status_between(storage):
 
 @pytest.mark.asyncio
 async def test_get_results_length_gt(storage):
-    """length > 100 — 2 результата."""
+    """length > 100 — 2 results."""
     spec = FilterSpec(
         predicates=[
             FilterPredicate("response_length", FilterOp.GT, 100),
@@ -176,7 +176,7 @@ async def test_get_results_length_gt(storage):
 
 @pytest.mark.asyncio
 async def test_get_results_length_lt(storage):
-    """length < 100 — 1 результат."""
+    """length < 100 — 1 result."""
     spec = FilterSpec(
         predicates=[
             FilterPredicate("response_length", FilterOp.LT, 100),
@@ -189,7 +189,7 @@ async def test_get_results_length_lt(storage):
 
 @pytest.mark.asyncio
 async def test_get_results_combined_status_and_length(storage):
-    """status=200 AND length > 150 — 1 результат."""
+    """status=200 AND length > 150 — 1 result."""
     spec = FilterSpec(
         predicates=[
             FilterPredicate("response_status", FilterOp.EQ, 200),
@@ -204,14 +204,14 @@ async def test_get_results_combined_status_and_length(storage):
 
 @pytest.mark.asyncio
 async def test_get_results_attack_id_and_filter(storage):
-    """attack_id + filter — комбинированный WHERE."""
+    """attack_id + filter — combined WHERE."""
     spec = FilterSpec(
         predicates=[
             FilterPredicate("response_status", FilterOp.EQ, 200),
         ]
     )
     results = await storage.get_results(attack_id="a1", limit=100, filters=spec)
-    # a1 имеет status=200 для id 1 и 3, но фильтр оставляет только 200
+    # a1 has status=200 for id 1 and 3, but the filter keeps only 200
     assert len(results) == 2
     for r in results:
         assert r.attack_id == "a1"
@@ -243,13 +243,13 @@ async def test_count_results_attack_id_and_filter(storage):
         ]
     )
     total = await storage.count_results(attack_id="a1", filters=spec)
-    # a1: length > 100 = id3 (200) — 1 результат
+    # a1: length > 100 = id3 (200) — 1 result
     assert total == 1
 
 
 @pytest.mark.asyncio
 async def test_get_results_empty_filter(storage):
-    """Пустой FilterSpec — все результаты (равносильно None)."""
+    """Empty FilterSpec — all results (equivalent to None)."""
     spec = FilterSpec()
     results = await storage.get_results(limit=100, filters=spec)
     assert len(results) == 4
@@ -257,7 +257,7 @@ async def test_get_results_empty_filter(storage):
 
 @pytest.mark.asyncio
 async def test_get_results_no_match(storage):
-    """Фильтр не даёт результатов."""
+    """The filter yields no results."""
     spec = FilterSpec(
         predicates=[
             FilterPredicate("response_status", FilterOp.EQ, 999),

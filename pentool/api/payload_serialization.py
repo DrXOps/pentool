@@ -1,4 +1,4 @@
-"""Payload-set serialization helpers for the Intruder screen (Этап 6).
+"""Payload-set serialization helpers for the Intruder screen (Stage 6).
 
 Extracted from IntruderScreen so the lazy payload-source <-> JSON mapping is
 pure and testable. FilePayloadSource etc. live in pentool.modules.intruder;

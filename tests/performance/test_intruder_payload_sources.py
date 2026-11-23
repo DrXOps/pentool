@@ -1,17 +1,18 @@
-"""Быстрые, детерминированные perf-проверки ленивых источников Intruder.
+"""Fast, deterministic perf checks for lazy Intruder payload sources.
 
-Ассертуемые версии тяжёлых `tests/perf/load_intruder.py --level a` (см.
-LOAD_TESTING_PLAN_2026-08-17.md, milestone M7). Малые N — не тащат
-гигабайтные файлы, работают в обычном CI.
+Assertable versions of the heavy `tests/perf/load_intruder.py --level a` (see
+LOAD_TESTING_PLAN_2026-08-17.md, milestone M7). Small N do not drag in
+gigabyte files and run in ordinary CI.
 
-Что проверяем:
-  - NumericPayloadSource / CharPayloadSource: len()/bool()/head() O(1), не
-    материализуют комбинаторный взрыв (Char 26^1..4 — миллионы, но len() и
-    head() мгновенны);
-  - FilePayloadSource: потоковая итерация держит RSS почти плоским (O(1)
-    память), повторная итерация пере-открывает файл и даёт тот же объём,
-    len() корректен;
-  - ProcessedPayloads: применяет операции, но не материализует весь источник.
+What we check:
+  - NumericPayloadSource / CharPayloadSource: len()/bool()/head() are O(1),
+    they do not materialize the combinatorial explosion (Char 26^1..4 —
+    millions, yet len() and head() are instant);
+  - FilePayloadSource: streaming iteration keeps RSS nearly flat (O(1)
+    memory), a repeated iteration re-opens the file and yields the same
+    volume, len() is correct;
+  - ProcessedPayloads: applies the operations but does not materialize the
+    whole source.
 """
 
 from __future__ import annotations
@@ -30,12 +31,12 @@ from pentool.modules.intruder import (
 )
 from tests.perf.memtrack import rss_mb
 
-pytestmark = pytest.mark.perf  # noqa: F401 — маркер на весь модуль
+pytestmark = pytest.mark.perf  # noqa: F401 — marker for the whole module
 
 
 @pytest.fixture()
 def small_payload_file():
-    """10k строк, формат ген-файла (уникальные, непустые, не '#'-строки)."""
+    """10k lines in the gen-file format (unique, non-empty, no '#' lines)."""
     fd, path = tempfile.mkstemp(suffix=".txt", prefix="pentool_perf_")
     try:
         with os.fdopen(fd, "w") as f:
@@ -50,28 +51,28 @@ def small_payload_file():
 
 
 def test_numeric_len_and_head_o1():
-    """NumericPayloadSource: len()/bool() мгновенны, head() не материализует."""
+    """NumericPayloadSource: len()/bool() are instant, head() does not materialize."""
     src = NumericPayloadSource(0, 100_000)
     assert len(src) == 100_000
     assert bool(src) is True
     assert src.head(3) == ["0", "1", "2"]
-    # head(3) уже материализовал минимум — итерируем все 100k через len (O(1))
+    # head(3) has already materialized the minimum — walk all 100k via len (O(1))
     assert len(src) == 100_000
 
 
 def test_char_len_head_no_materialize():
-    """CharPayloadSource 26^1..4 ≈ 475k — len()/head() должны быть мгновенны."""
+    """CharPayloadSource 26^1..4 ≈ 475k — len()/head() must be instant."""
     src = CharPayloadSource("abcdefghijklmnopqrstuvwxyz", 1, 4)
     expected = 26 + 26**2 + 26**3 + 26**4
-    assert len(src) == expected  # O(1), closed-form, без перебора
+    assert len(src) == expected  # O(1), closed-form, without enumeration
     assert bool(src) is True
     assert src.head(4) == ["a", "b", "c", "d"]
-    # len() не должен был стоить полный перебор — повторный вызов мгновенный
+    # len() must not have cost a full enumeration — the repeat call is instant
     assert len(src) == expected
 
 
 def test_char_empty_ranges():
-    """CharPayloadSource с некорректным диапазоном — пустой, len()==0."""
+    """CharPayloadSource with an invalid range — empty, len()==0."""
     src = CharPayloadSource("", 1, 5)
     assert len(src) == 0
     assert bool(src) is False
@@ -80,7 +81,7 @@ def test_char_empty_ranges():
 
 
 def test_file_source_o1_memory_and_len(small_payload_file):
-    """FilePayloadSource: потоковая итерация держит RSS плоским (O(1))."""
+    """FilePayloadSource: streaming iteration keeps RSS flat (O(1))."""
     gc.collect()
     rss_before = rss_mb()
     src = FilePayloadSource(small_payload_file)
@@ -92,17 +93,17 @@ def test_file_source_o1_memory_and_len(small_payload_file):
     rss_after = rss_mb()
 
     assert count == 10_000
-    # Потоковая итерация не должна заметно растить RSS (допуск — самплинг)
+    # Streaming iteration must not noticeably grow RSS (tolerance — sampling)
     assert rss_after - rss_before < 20, (
         f"FilePayloadSource загрузил файл в память: RSS {rss_before:.1f}→{rss_after:.1f}MB"
     )
-    # len() должен посчитать то же число (streaming-подсчёт), потом кешировать
+    # len() must count the same number (streaming count), then cache it
     assert len(src) == 10_000
     assert len(src) == 10_000  # cached
 
 
 def test_file_source_reiterates(small_payload_file):
-    """Повторная итерация (pitchfork/cluster-bomb пере-читывает) даёт то же."""
+    """A repeated iteration (pitchfork/cluster-bomb re-reads) yields the same."""
     src = FilePayloadSource(small_payload_file)
 
     def _count():
@@ -115,9 +116,9 @@ def test_file_source_reiterates(small_payload_file):
 
 
 def test_processed_does_not_materialize(small_payload_file):
-    """ProcessedPayloads применяет ops, но не строит полный новый list."""
+    """ProcessedPayloads applies ops but does not build a full new list."""
     src = ProcessedPayloads(FilePayloadSource(small_payload_file), ["upper"], lambda p, ops: p.upper())
-    # head() через итерацию первых 5 — не материализует остальные
+    # head() via iterating the first 5 — does not materialize the rest
     import itertools
 
     first5 = list(itertools.islice(src, 5))

@@ -1,14 +1,14 @@
 """Isolation for TUI screen tests.
 
-Экраны получают путь к базе проекта через `AppMixin._get_db_path()`, то есть из
-конфигурации машины (`~/.config/pentool/pentool.db`). Без изоляции прогон
-UNIT-тестов пишет в историю настоящего проекта: например, `Repeater.on_mount`
-восстанавливает вкладки, а автосохранение затем складывает их обратно, и после
-такого прогона у пользователя появляются вкладки, которых он не создавал.
+Screens get the project database path via `AppMixin._get_db_path()`, that is, from
+the machine configuration (`~/.config/pentool/pentool.db`). Without isolation a
+UNIT-test run writes into the real project history: for example, `Repeater.on_mount`
+restores tabs, and autosave then stores them back, and after such a run the user
+ends up with tabs he never created.
 
-Здесь путь уводится в пустоту: `""` для экранов означает «базы нет», и они
-работают на вкладке по умолчанию. Тесты, которым нужна настоящая схема, задают
-свой путь сами (`tmp_path`) и перекрывают эту подмену — см.
+Here the path is diverted into the void: `""` for screens means "there is no
+database", and they work on the default tab. Tests that need a real schema set
+their own path (`tmp_path`) and override this substitution — see
 `test_repeater_tab_state_survives.py`.
 """
 

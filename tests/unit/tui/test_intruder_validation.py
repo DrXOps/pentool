@@ -2,7 +2,7 @@
 
 
 def test_count_markers_zero_blocks_start():
-    """action_start_attack должен вернуть notify при отсутствии маркеров."""
+    """action_start_attack must return a notify when no markers are present."""
     from pentool.api.intruder_api import count_markers
 
     assert count_markers("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n") == 0
@@ -16,10 +16,10 @@ def test_count_markers_multiple():
 
 
 def test_empty_payloads_check():
-    """Проверка что пустые строки в payload-списке не позволяют атаку."""
+    """Check that empty strings in the payload list do not allow an attack."""
     payload_sets = [["", "  ", ""]]
     result = any(p.strip() for ps in payload_sets for p in ps)
-    assert result is False  # все пустые — атака не должна запускаться
+    assert result is False  # all empty — the attack must not start
 
 
 def test_non_empty_payloads_check():

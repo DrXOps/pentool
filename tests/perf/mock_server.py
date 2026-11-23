@@ -1,4 +1,4 @@
-"""Локальный мок-сервер для perf-тестов (без внешней сети)."""
+"""Local mock server for perf tests (no external network)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from aiohttp import web
 
 
 async def handle(request: web.Request) -> web.Response:
-    # Небольшая полезная нагрузка + echo query, чтобы чекеры сканера имели что анализировать
+    # A small useful payload + echoed query, so scanner checks have something to analyze
     body = (
         "<html><head><title>Mock Target</title></head><body>"
         f"<p>method={request.method}</p><p>path={request.path_qs}</p>"
@@ -23,7 +23,7 @@ def make_app() -> web.Application:
 
 
 class MockServer:
-    """Контекстный менеджер: поднимает aiohttp сервер на свободном порту."""
+    """Context manager: starts an aiohttp server on a free port."""
 
     def __init__(self, port: int = 8765):
         self.port = port

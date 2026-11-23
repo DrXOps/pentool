@@ -1,4 +1,4 @@
-"""Unit tests for ProxyEventHandlersMixin (Этап 5.1) — EventBus bridge only.
+"""Unit tests for ProxyEventHandlersMixin (Stage 5.1) — EventBus bridge only.
 
 The mixin contains ONLY the EventBus → Textual-message bridge
 (_on_bus_proxy_captured / _on_bus_proxy_completed), which is invoked directly

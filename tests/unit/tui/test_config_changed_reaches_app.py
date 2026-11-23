@@ -1,17 +1,17 @@
-"""F-029: сохранение настроек доезжает до живого приложения.
+"""F-029: saving settings actually reaches the running application.
 
-Находка утверждала, что `SettingsScreen` пишет в `get_config()` напрямую и не
-публикует изменение, поэтому запущенный `ProxyServer` о новой настройке не
-узнаёт. Проверка исполнением показала другое: сохранение идёт через
-`cfg.update(**changes)`, а `Config.update` уведомляет наблюдателей — App
-постит `ConfigChanged` и применяет `proxy_host`/`proxy_port`, тему и таймер
-автосейва. Находка была написана по чтению кода; эти тесты держат контракт,
-чтобы он не разъехался снова.
+The finding claimed that `SettingsScreen` writes to `get_config()` directly and
+does not publish the change, so a running `ProxyServer` never learns about the
+new setting. Running the check showed otherwise: saving goes through
+`cfg.update(**changes)`, and `Config.update` notifies observers — App posts
+`ConfigChanged` and applies `proxy_host`/`proxy_port`, the theme and the
+autosave timer. The finding was written from reading the code; these tests hold
+the contract so it does not drift apart again.
 
-Что осталось за скобками (и почему): `ProxyServer` не перезапускается на
-лету — он читает `host`/`port` при старте, а обработчик только присваивает
-поля и честно говорит пользователю «restart proxy to apply». Это осознанно,
-а не потеря.
+What is left out of scope (and why): `ProxyServer` is not restarted on the fly
+— it reads `host`/`port` at startup, while the handler only assigns the fields
+and honestly tells the user «restart proxy to apply». That is deliberate, not
+a loss.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from pentool.tui.screens.settings.screen import SettingsScreen
 
 @pytest.fixture
 def isolated_config(tmp_path, monkeypatch):
-    """Не трогать настоящий config.yaml при сохранении."""
+    """Do not touch the real config.yaml when saving."""
     cfg = get_config()
     saved: dict = {}
 
@@ -44,7 +44,7 @@ class _FakeProxy:
 
 class TestSavingSettingsPublishesConfigChanged:
     async def test_a_saved_proxy_port_reaches_the_running_proxy(self, isolated_config) -> None:
-        """Смена порта в Settings видна живому ProxyServer, а не только в файле."""
+        """Changing the port in Settings is visible to the live ProxyServer, not just on disk."""
         cfg, _saved = isolated_config
         original_port = cfg.proxy_port
 
@@ -59,7 +59,7 @@ class TestSavingSettingsPublishesConfigChanged:
                 settings = await app.ensure_module_screen("settings", SettingsScreen)
                 assert settings is not None
 
-                cfg.proxy_port = 8080  # исходное значение для сравнения
+                cfg.proxy_port = 8080  # original value to compare against
                 app._proxy.port = 8080
                 await settings._async_save_config({"proxy_port": 9090}, "Proxy settings saved")
                 await pilot.pause()
@@ -73,7 +73,7 @@ class TestSavingSettingsPublishesConfigChanged:
             cfg.proxy_port = original_port
 
     async def test_the_app_handler_is_the_thing_that_applies_it(self, isolated_config) -> None:
-        """Прямая проверка контракта обработчика, независимо от источника."""
+        """Direct check of the handler contract, regardless of the source."""
         cfg, _saved = isolated_config
         original_host = cfg.proxy_host
 
@@ -95,10 +95,10 @@ class TestSavingSettingsPublishesConfigChanged:
 
 class TestConfigChangedCarriesWhatChanged:
     def test_only_changed_fields_are_published(self) -> None:
-        """`update()` с прежним значением не должен будить наблюдателей.
+        """`update()` with the previous value must not wake observers up.
 
-        Иначе каждый Save в Settings перерисовывал бы прокси и тему, даже
-        когда пользователь ничего не менял.
+        Otherwise every Save in Settings would repaint the proxy and the theme,
+        even when the user changed nothing.
         """
         cfg = get_config()
         seen: list[dict] = []
@@ -114,6 +114,7 @@ class TestConfigChangedCarriesWhatChanged:
             cfg.update(proxy_port=current + 1)
             assert seen == [{"proxy_port": current + 1}]
         finally:
-            # Наблюдатели — список обычных функций (Config._observers): снять
-            # его надо явно, иначе он переживёт тест и соберёт чужие события.
+            # Observers are a plain list of functions (Config._observers): it has
+            # to be removed explicitly, otherwise it outlives the test and
+            # collects events from other tests.
             cfg._observers.remove(observer)

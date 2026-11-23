@@ -79,7 +79,7 @@ class TestSetMode:
 
     def test_set_mode_handles_exception(self) -> None:
         t = _make_tabs()
-        # Панели нет в дереве — ровно `NoMatches` (ADR-6 п.4), не любая ошибка.
+        # The panel is not in the tree — exactly `NoMatches` (ADR-6 clause 4), not any error.
         t.query_one = Mock(side_effect=NoMatches())
         t.set_mode("basic")
 
@@ -113,7 +113,7 @@ class TestSetScannerLocked:
 
     def test_lock_handles_exception(self) -> None:
         t = _make_tabs()
-        # Вкладки нет в дереве — ровно `NoMatches` (ADR-6 п.4).
+        # The tab is not in the tree — exactly `NoMatches` (ADR-6 clause 4).
         t.query_one = Mock(side_effect=NoMatches())
         t.set_scanner_locked(True)
 
@@ -142,7 +142,7 @@ class TestFlash:
 
     def test_flash_handles_exception(self) -> None:
         t = _make_tabs()
-        # Строки вкладок нет — ровно `NoMatches` (ADR-6 п.4).
+        # The tabs row is not in the tree — exactly `NoMatches` (ADR-6 clause 4).
         t.query_one = Mock(side_effect=NoMatches())
         t.flash("hi")
 
@@ -159,7 +159,7 @@ class TestHideTooltip:
 
     def test_hide_tooltip_handles_exception(self) -> None:
         t = _make_tabs()
-        # Подсказки нет в дереве — ровно `NoMatches` (ADR-6 п.4).
+        # The tooltip is not in the tree — exactly `NoMatches` (ADR-6 clause 4).
         t.query_one = Mock(side_effect=NoMatches())
         t._hide_tooltip2()  # should not raise
 

@@ -1,11 +1,11 @@
 """Unit tests for pentool.cli.main — the root Click group.
 
-Проверяет только то, что реально существует в текущем CLI:
-- клик группа cli() импортируется корректно
-- --url --headless запускает headless скан
-- --version работает
-- --help работает
-- без аргументов показывает помощь (не падает)
+Checks only what actually exists in the current CLI:
+- the click group cli() imports correctly
+- --url --headless starts a headless scan
+- --version works
+- --help works
+- with no arguments it shows help (and does not crash)
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pentool.cli.main import cli
 
 
 def test_cli_imports() -> None:
-    """cli — click Group, корректно импортируется."""
+    """cli — a click Group that imports correctly."""
     from pentool.cli.main import cli as _cli
 
     assert _cli is not None
@@ -26,28 +26,28 @@ def test_cli_imports() -> None:
 
 
 def test_cli_help() -> None:
-    """--help показывает справку."""
+    """--help shows the usage text."""
     r = CliRunner().invoke(cli, ["--help"])
     assert r.exit_code == 0
     assert "Usage" in r.output
 
 
 def test_cli_version() -> None:
-    """--version показывает версию."""
+    """--version prints the version."""
     r = CliRunner().invoke(cli, ["--version"])
     assert r.exit_code == 0
     assert "version" in r.output or "pentool" in r.output
 
 
 def test_cli_no_args_shows_help() -> None:
-    """Без аргументов — помощь (не падает)."""
+    """With no arguments it shows help (and does not crash)."""
     r = CliRunner().invoke(cli)
     assert r.exit_code == 0
     assert "Usage" in r.output
 
 
 def test_cli_url_headless_runs() -> None:
-    """--url --headless запускает headless через run_headless_scan."""
+    """--url --headless starts a headless run through run_headless_scan."""
     with patch("pentool.cli.headless.run_headless_scan") as run_scan:
         r = CliRunner().invoke(cli, ["--url", "https://example.com", "--headless"])
     assert r.exit_code == 0
@@ -55,7 +55,7 @@ def test_cli_url_headless_runs() -> None:
 
 
 def test_cli_verbose_flag() -> None:
-    """--verbose устанавливает DEBUG логирование."""
+    """--verbose sets up DEBUG logging."""
     from pentool.core.config import Config
 
     cfg = Config()
@@ -69,7 +69,7 @@ def test_cli_verbose_flag() -> None:
 
 
 def test_cli_default_log_level() -> None:
-    """Без --verbose уровень из конфига."""
+    """Without --verbose the level comes from the config."""
     from pentool.core.config import Config
 
     cfg = Config(log_level="INFO")

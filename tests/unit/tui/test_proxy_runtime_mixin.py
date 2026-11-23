@@ -1,4 +1,4 @@
-"""Unit tests for ProxyRuntimeMixin (Этап 5.1).
+"""Unit tests for ProxyRuntimeMixin (Stage 5.1).
 
 Covers the start/stop/toggle path WITHOUT launching a real proxy server or
 network listener: `_proxy` is a mock, `_proxy_main` is stubbed, and threads

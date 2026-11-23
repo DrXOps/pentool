@@ -1,13 +1,13 @@
-"""Дерево Site Map: выбор узла не должен ронять приложение.
+"""Site Map tree: selecting a node must not crash the application.
 
-Найденный дефект: `on_tree_node_selected` брал `#detail-panel` как `Vertical`
-и звал `log.clear()`. У `Vertical` такого метода нет → `AttributeError` при
-выборе **любого** узла дерева, то есть падение на первом же клике. Заодно два
-других места искали `#detail-panel` как `ContentPanel`, но реально это был
-контейнер-обёртка, поэтому и там был `NoMatches`.
+Defect found: `on_tree_node_selected` took `#detail-panel` as a `Vertical`
+and called `log.clear()`. `Vertical` has no such method → `AttributeError` when
+selecting **any** tree node, i.e. a crash on the very first click. Two other
+places also looked up `#detail-panel` as a `ContentPanel`, but in reality it was
+a wrapper container, so they raised `NoMatches` as well.
 
-Теперь `#detail-panel` — сам `ContentPanel`, а запись идёт через его API
-(`clear_content` / `write_to_log`).
+Now `#detail-panel` is the `ContentPanel` itself, and writing goes through its
+API (`clear_content` / `write_to_log`).
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ async def _open_target_with_requests(pilot):
 
 @pytest.mark.asyncio
 async def test_detail_panel_is_a_content_panel() -> None:
-    """Иначе `clear_content`/`write_to_log` из других мест снова промахнутся."""
+    """Otherwise `clear_content`/`write_to_log` from other places will miss again."""
     app = PentoolApp()
     app._skip_project_guard = True
     async with app.run_test(size=(160, 45)) as pilot:
@@ -62,7 +62,7 @@ async def test_selecting_a_host_node_does_not_crash_and_fills_details() -> None:
         hosts = list(tree.root.children)
         assert hosts, "карта сайта пуста — тест не проверит выбор узла"
 
-        tree.select_node(hosts[0])  # именно этот вызов падал с AttributeError
+        tree.select_node(hosts[0])  # this exact call used to crash with AttributeError
         await _settle(pilot, 15)
 
         panel = screen.query_one("#detail-panel", ContentPanel)

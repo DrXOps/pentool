@@ -1,4 +1,4 @@
-"""Integration conftest — патч медленных IO и daemon-блокеров для TUI-тестов."""
+"""Integration conftest — patches slow IO and daemon blockers for TUI tests."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pentool.core.config import Config, set_config
 
 @pytest.fixture(autouse=True)
 def integration_config(tmp_path):
-    """Изолированный Config без recent_projects и update-check."""
+    """Isolated Config without recent_projects and update-check."""
     cfg = Config(
         db_path=str(tmp_path / "test.db"),
         cert_dir=str(tmp_path / "certs"),
@@ -25,23 +25,23 @@ def integration_config(tmp_path):
 
 @pytest.fixture
 def patch_tui_io():
-    """Патч медленных IO-операций и daemon-блокеров для TUI-тестов.
+    """Patches slow IO operations and daemon blockers for TUI tests.
 
-    Используй этот fixture явно в тестах которые запускают PentoolApp
-    через app.run_test() — добавь аргумент patch_tui_io в сигнатуру теста.
+    Use this fixture explicitly in tests that launch PentoolApp
+    via app.run_test() — add the patch_tui_io argument to the test signature.
 
-    Не применяется autouse=True потому что ломает unit-тесты ProxyService
-    которым нужен реальный init_storage.
+    It is not autouse=True because that breaks ProxyService unit tests
+    which need a real init_storage.
 
-    - load_or_create_ca      : RSA keygen 0.5–2 сек → fake tuple
-    - check_update_async     : HTTP + sleep(3) → мгновенный результат
-    - _setup_signal_handlers : не регистрировать SIGTERM/SIGINT
-    - ProxyService.init_storage: aiosqlite non-daemon поток → блокирует exit
-    - BaseSqliteStorage.ensure_open: то же самое для IntruderStorage —
-      IntruderScreen теперь держит один persistent aiosqlite-коннекшн на
-      весь app lifecycle (см. IntruderScreen._get_api()), но интеграционные
-      TUI-тесты не закрывают его явно — без мока поток зависает между
-      тестами так же, как ProxyService's до этого мока.
+    - load_or_create_ca      : RSA keygen 0.5–2 sec → fake tuple
+    - check_update_async     : HTTP + sleep(3) → instant result
+    - _setup_signal_handlers : do not register SIGTERM/SIGINT
+    - ProxyService.init_storage: aiosqlite non-daemon thread → blocks exit
+    - BaseSqliteStorage.ensure_open: the same for IntruderStorage —
+      IntruderScreen now keeps one persistent aiosqlite connection for
+      the whole app lifecycle (see IntruderScreen._get_api()), but integration
+      TUI tests do not close it explicitly — without the mock the thread hangs
+      between tests just like ProxyService's did before this mock.
     """
     from pentool.core.updater import UpdateInfo
 
@@ -58,11 +58,11 @@ def patch_tui_io():
         pass
 
     def _noop_start_proxy(self):
-        """Не запускать proxy-поток — он daemon=False и зависает между тестами."""
+        """Do not start the proxy thread — it is daemon=False and hangs between tests."""
         pass
 
     async def _noop_auto_open(self):
-        """Не открывать последний проект — нет recent_projects в тестах."""
+        """Do not open the last project — there is no recent_projects in tests."""
         pass
 
     with (
@@ -79,12 +79,12 @@ def patch_tui_io():
 
 @pytest.fixture
 async def cleanup_asyncio():
-    """Очистка asyncio ресурсов между TUI-тестами."""
+    """Cleanup of asyncio resources between TUI tests."""
     yield
     import asyncio
     import gc
 
-    # Закрыть все незавершённые tasks
+    # Close all unfinished tasks
     try:
         loop = asyncio.get_event_loop()
         if loop and not loop.is_closed():
@@ -94,13 +94,13 @@ async def cleanup_asyncio():
             if tasks:
                 loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
     except RuntimeError:
-        pass  # event loop может быть уже закрыт
+        pass  # the event loop may already be closed
 
-    # Принудительная сборка мусора для освобождения textual виджетов
+    # Force garbage collection to free textual widgets
     gc.collect()
     gc.collect()
 
-    # Дать время background threads завершиться
+    # Give background threads time to finish
     import time
 
     time.sleep(0.05)

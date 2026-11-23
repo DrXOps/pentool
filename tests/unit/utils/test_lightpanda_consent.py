@@ -1,8 +1,8 @@
-"""Загрузка JS-браузера Lightpanda — только с согласия пользователя.
+"""Downloading the Lightpanda JS browser — only with the user's consent.
 
-Одноразовая загрузка весит ~150 МиБ (v0.3.7 — 157 502 440 байт). Молча качать
-такой объём нельзя, поэтому `ensure_lightpanda_with_consent` спрашивает, помнит
-отказ и не трогает CI (там нет TTY).
+The one-off download weighs ~150 MiB (v0.3.7 — 157 502 440 bytes). Silently
+pulling that much data is not acceptable, so `ensure_lightpanda_with_consent`
+asks, remembers a refusal and leaves CI alone (there is no TTY there).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pentool.utils import lightpanda
 
 @pytest.fixture()
 def isolated(monkeypatch, tmp_path):
-    """Изолирует маркер отказа и подменяет установку/поиск бинарника."""
+    """Isolates the decline marker and stubs out binary install/lookup."""
     marker = tmp_path / "lightpanda-declined"
     monkeypatch.setattr(lightpanda, "_decline_marker", lambda: marker)
     monkeypatch.setattr(lightpanda, "find_lightpanda_binary", lambda: None)

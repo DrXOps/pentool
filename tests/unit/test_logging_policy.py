@@ -1,19 +1,19 @@
-"""Гвард логирования: проверка самого гварда, а не репозитория.
+"""Logging guard: verifying the guard itself, not the repository.
 
-Правило (`tools/check_logging_policy.py`): внутри функции, чьё имя означает
-работу с данными (`save`/`load`/`restore`/`apply`/…), широкий `except` обязан
-либо пробрасывать исключение, либо писать в лог `warning`+ с трейсбеком.
+Rule (`tools/check_logging_policy.py`): inside a function whose name implies
+working with data (`save`/`load`/`restore`/`apply`/…), a broad `except` must
+either re-raise the exception or log at `warning`+ with a traceback.
 
-Тесты проверяют три вещи, каждая из которых уже подводила в этом репозитории:
+The tests check three things, each of which has already let this repository down:
 
-* правило действительно ловит нарушение (иначе гвард «зелёный и пустой»);
-* правило не срабатывает на законных формах — `raise`, `logger.exception`,
-  `exc_info=True`, явная прагма `# logging-ok: причина`;
-* косметическая функция (`_apply_theme`) не попадает под правило, хотя в её
-  имени есть глагол `apply`.
+* the rule really catches a violation (otherwise the guard is "green and empty");
+* the rule does not fire on legitimate forms — `raise`, `logger.exception`,
+  `exc_info=True`, the explicit pragma `# logging-ok: reason`;
+* a cosmetic function (`_apply_theme`) is out of scope even though its name
+  contains the verb `apply`.
 
-Плюс проверяется, что базовая линия на диске соответствует коду: иначе счётчик
-разъедется с реальностью и трещотка начнёт врать в обе стороны.
+It also verifies that the baseline on disk matches the code: otherwise the counter
+will drift away from reality and the ratchet will start lying in both directions.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def save_settings(values):
 
 
 def test_debug_only_handler_in_a_data_path_is_caught() -> None:
-    """`debug` — не честный лог: в обычном журнале причины не видно."""
+    """`debug` is not honest logging: a normal journal does not show the cause."""
     source = """
 def _restore_tab(state):
     try:
@@ -90,7 +90,7 @@ def save_tab(state):
 
 
 def test_cosmetic_function_is_out_of_scope() -> None:
-    """`_apply_theme` задевает глагол `apply`, но данных не касается."""
+    """`_apply_theme` does touch the verb `apply`, but it does not touch data."""
     source = """
 def _apply_theme(name):
     try:
@@ -113,7 +113,7 @@ def save_tab(state):
 
 
 def test_baseline_matches_the_repository() -> None:
-    """Базовая линия не должна врать: иначе трещотка пропустит рост."""
+    """The baseline must not lie: otherwise the ratchet will let growth pass."""
     baseline_path = ROOT / "tools" / "logging_policy_baseline.json"
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     current = policy.scan()

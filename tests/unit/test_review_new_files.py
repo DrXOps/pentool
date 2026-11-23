@@ -1,9 +1,9 @@
-"""Гейт новых файлов: решение «в репозиторий» или «в .gitignore».
+"""Gate for new files: the "keep in the repository" or "add to .gitignore" decision.
 
-Проверяем именно решение, а не каталог: `pre-commit-guard` уже отсекает мусор
-по путям, но внутри разрешённых каталогов черновики и одноразовые скрипты
-проходили молча (так в origin оказались `aaaaaaaaaaaa.png`, `bug.png`, `tui-lab/`
-и ELF-бинарник `bin/xclip`).
+We check the decision itself, not the directory: `pre-commit-guard` already filters
+junk by path, but inside allowed directories drafts and one-off scripts slipped
+through silently (that is how `aaaaaaaaaaaa.png`, `bug.png`, `tui-lab/` and the
+ELF binary `bin/xclip` ended up in origin).
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def test_keep_decision_passes() -> None:
 
 
 def test_ignore_decision_requires_a_real_gitignore_rule() -> None:
-    """Иначе «локальный» файл всё равно уедет в origin при следующем git add -A."""
+    """Otherwise the "local" file still goes to origin on the next git add -A."""
     problems = check(["scratch.py"], {"scratch.py": IGNORE}, set())
     assert len(problems) == 1
     assert ".gitignore" in problems[0]
@@ -63,7 +63,7 @@ def test_cli_decide_writes_decision(tmp_path, monkeypatch) -> None:
 
 
 def test_repository_decisions_file_is_parseable(tmp_path) -> None:
-    """Файл решений репозитория (если есть) должен читаться без мусора."""
+    """The repository decisions file (if any) must load without garbage."""
     if not DECISIONS.is_file():
         pytest.skip("журнал решений ещё не создан")
     decisions = load_decisions()

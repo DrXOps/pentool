@@ -1,15 +1,15 @@
-"""Нагрузочные тесты Spider (AsyncSpider): обход и парсинг.
+"""Spider load tests (AsyncSpider): crawling and parsing.
 
-Уровни (гибрид, LOAD_TESTING_PLAN_2026-08-17.md):
-  A(parse) — скорость _parse_html БЕЗ сети на синтетических HTML-страницах
-        больших размеров (100КБ/1МБ): замер времени/памяти парсинга,
-        числа найденных ссылок/форм/JS.
-  B — обход локального MockBigSite (реальный HTTP): матрица n_pages ×
-        max_depth × concurrency, дедупликация URL, RSS/CPU/время.
-  C — DVWA crawl (малый max_pages), сессия через extra_headers.
+Levels (hybrid, LOAD_TESTING_PLAN_2026-08-17.md):
+  A(parse) — _parse_html speed WITHOUT network on synthetic oversized
+        HTML pages (100KB/1MB): measures parsing time/memory and the
+        number of discovered links/forms/JS.
+  B — crawl of the local MockBigSite (real HTTP): n_pages ×
+        max_depth × concurrency matrix, URL dedup, RSS/CPU/time.
+  C — DVWA crawl (small max_pages), session via extra_headers.
 
-Запуск:
-    python3 tests/perf/load_spider.py --level a        # парсинг
+Usage:
+    python3 tests/perf/load_spider.py --level a        # parsing
     python3 tests/perf/load_spider.py --level b --n-pages 5000
     python3 tests/perf/load_spider.py --level c
 """
@@ -31,12 +31,12 @@ from tests.perf.memtrack import MemSampler, rss_mb, save_report  # noqa: E402
 from tests.perf.mock_big_site import MockBigSite, MockBigSiteConfig  # noqa: E402
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Уровень A(parse) — скорость _parse_html без сети
+# Level A(parse) — _parse_html speed without network
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 def _synthetic_html(size_bytes: int, n_links: int, with_forms: bool = True) -> str:
-    """Синтетическая HTML-страница размера ~size_bytes с n_links ссылок."""
+    """Synthetic HTML page of about size_bytes size with n_links links."""
     base = []
     base.append("<html><head><title>Perf</title>")
     base.append("<script src='/static/app.js'></script></head><body>")
@@ -55,7 +55,7 @@ def _synthetic_html(size_bytes: int, n_links: int, with_forms: bool = True) -> s
     base.append("-->")
     base.append("</body></html>")
     h = "".join(base)
-    # Добить до точного target-размера, если ещё не хватает
+    # Top up to the exact target size if still short
     if len(h) < size_bytes:
         h = h.replace("-->", "x" * (size_bytes - len(h) + 3) + "-->", 1)
     return h
@@ -63,7 +63,7 @@ def _synthetic_html(size_bytes: int, n_links: int, with_forms: bool = True) -> s
 
 async def run_level_a(args) -> dict:
     print("\n=== УРОВЕНЬ A: парсинг HTML без сети ===")
-    spider = AsyncSpider(max_pages=0)  # не краулим, только _parse_html
+    spider = AsyncSpider(max_pages=0)  # no crawl, _parse_html only
     sampler = MemSampler(cpu=True)
     rows = []
     for size in (100 * 1024, 512 * 1024, 1024 * 1024):
@@ -99,7 +99,7 @@ async def run_level_a(args) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Уровень B — обход MockBigSite (реальный HTTP)
+# Level B — MockBigSite crawl (real HTTP)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -132,7 +132,7 @@ async def run_level_b(args) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Уровень C — DVWA crawl (малый, сессия)
+# Level C — DVWA crawl (small, session)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -156,7 +156,7 @@ async def run_level_c(args) -> dict:
     try:
         result = await spider.crawl(DVWA_URL)
     finally:
-        pass  # spider не держит ланчер, aiohttp сессия закрывается внутри crawl
+        pass  # spider does not own the launcher, aiohttp session closes inside crawl
     dt = time.monotonic() - t0
     gc.collect()
     d = result.to_dict()

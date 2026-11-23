@@ -1,4 +1,4 @@
-"""Unit tests for core/license_update.py (Этап 6, PRO package updater).
+"""Unit tests for core/license_update.py (Stage 6, PRO package updater).
 
 These are the pure helpers extracted from license.py — signature verify,
 safe tar extract, platform mapping.

@@ -1,6 +1,6 @@
 """Regression tests: per-project Scope isolation on project switch.
 
-User-selectable behavior ("новый проект = пустой скоуп, старый = свой"):
+User-selectable behavior ("new project = empty scope, old project = its own"):
 - A brand-NEW project (is_new=True) must NOT inherit the global Config.scope
   (which mirrors whatever the previously-open project last saved) — it starts
   empty.

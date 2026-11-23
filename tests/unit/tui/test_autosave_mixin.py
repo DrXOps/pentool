@@ -1,4 +1,4 @@
-"""Unit tests for AutoSaveMixin (Этап 3.1)."""
+"""Unit tests for AutoSaveMixin (Stage 3.1)."""
 
 from __future__ import annotations
 

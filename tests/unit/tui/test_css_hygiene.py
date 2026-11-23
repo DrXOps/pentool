@@ -6,7 +6,7 @@ written in four places, two of them contradicting each other. The point of this
 file is that a future session cannot reintroduce them by copy-paste without a
 red test.
 
-Rules (mirrored in ``wiki/tui.md`` §«Как писать CSS»):
+Rules (mirrored in ``wiki/tui.md`` §«How to write CSS»):
 
 1. CSS lives in ``.tcss`` files next to the widget — never as a string literal
    in ``.py`` (F-025). A stylesheet inside Python is invisible to grep for

@@ -153,8 +153,7 @@ class _LxmlSoup:
 
     Lets iteration code be written against one soup interface regardless of
     whether parsing via lxml (fast, C code) or bs4 (fallback). find_all by tag
-    name returns
-    список-подобный объект, у которого элементы имеют .get(name)/.text.
+    name returns a list-like object whose elements expose .get(name)/.text.
     """
 
     __slots__ = ("_tree",)
@@ -186,7 +185,7 @@ class _LxmlSoup:
 
 
 class _EmptySoup:
-    """Пустой soup, если ни lxml, ни bs4 недоступны — парсинг даёт ничего."""
+    """Empty soup when neither lxml nor bs4 is available — parsing yields nothing."""
 
     def find_all(self, name):
         return []
@@ -1045,8 +1044,8 @@ class AsyncSpider:
     def _normalize_url(self, url: str) -> str:
         """Normalize URL (remove fragment, trailing slash).
 
-        Делегирует в модульную _normalize_url_cpu — единая реализация с
-        воркерами ProcessPoolExecutor (см. _link_cpu_work).
+        Delegates to the module-level _normalize_url_cpu — one implementation shared
+        with the ProcessPoolExecutor workers (see _link_cpu_work).
         """
         return _normalize_url_cpu(url)
 

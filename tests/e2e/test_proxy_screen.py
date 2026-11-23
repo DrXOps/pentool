@@ -50,7 +50,7 @@ class TestProxyScreen:
             assert len(table) > 0
 
     async def test_toggle_intercept_changes_state(self) -> None:
-        """action_toggle_intercept() меняет состояние intercept."""
+        """action_toggle_intercept() toggles the intercept state."""
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()

@@ -1,9 +1,9 @@
-"""Гвард «комментарии в коде — на английском» (трещотка).
+"""Guard "comments in code are in English" (ratchet).
 
-Долг проекта: 3466 строк кириллицы в комментариях и докстрингах (2026-11-19).
-Переводить всё сразу нельзя — это переписывание полутора тысяч строк
-вперемешку с логикой. Гвард держит потолок: новый русский комментарий роняет
-коммит, а пофайловый перевод понижает базу.
+Project debt: 3466 lines of Cyrillic in comments and docstrings (2026-11-19).
+Translating everything at once is not allowed — that means rewriting one and a
+half thousand lines interleaved with logic. The guard holds the ceiling: a new
+Russian comment fails the commit, while per-file translation lowers the baseline.
 """
 
 from __future__ import annotations
@@ -17,10 +17,10 @@ import tools.check_english_comments as guard
 
 @pytest.fixture()
 def sandbox(tmp_path, monkeypatch):
-    """Свой корень и своя база — не трогаем реальный репозиторий."""
+    """Own root and own baseline — the real repository is left untouched."""
     package = tmp_path / "pentool"
     package.mkdir()
-    # Корень тоже подменяем: пути в отчёте считаются от него.
+    # The root is replaced as well: paths in the report are counted from it.
     monkeypatch.setattr(guard, "ROOT", tmp_path)
     monkeypatch.setattr(guard, "TARGETS", [package])
     baseline = tmp_path / "baseline.json"
@@ -42,7 +42,7 @@ def test_russian_comment_is_detected(sandbox) -> None:
     (package / "bad.py").write_text("# Проверяем значение\nVALUE = 1\n", encoding="utf-8")
 
     assert guard.scan() == {"pentool/bad.py": 1}
-    # номер строки тоже отдаётся (для --list и правок)
+    # the line number is returned too (for --list and for fixes)
     assert guard.list_violations() == [("pentool/bad.py", 1)]
 
 
@@ -56,7 +56,7 @@ def test_russian_docstring_is_detected(sandbox) -> None:
 
 
 def test_russian_string_data_is_not_a_violation(sandbox) -> None:
-    """Кириллица в данных — это не комментарий: локализация UI и тестовые строки."""
+    """Cyrillic in data is not a comment: UI localization and test strings."""
     package, _ = sandbox
     (package / "data.py").write_text('LABEL = "Сохранить"\n', encoding="utf-8")
     assert guard.scan() == {}
@@ -88,12 +88,12 @@ def test_update_lowers_but_never_raises(sandbox, capsys) -> None:
     guard.main(["--update"])
     assert json.loads(baseline.read_text(encoding="utf-8")) == {"pentool/two.py": 2}
 
-    # перевели одну строку — потолок опускается
+    # one line translated — the ceiling goes down
     (package / "two.py").write_text("# one\n# два\n", encoding="utf-8")
     guard.main(["--update"])
     assert json.loads(baseline.read_text(encoding="utf-8")) == {"pentool/two.py": 1}
 
-    # выросли снова — база НЕ поднимается, обычный прогон падает
+    # grew again — the baseline does NOT rise, a normal run fails
     (package / "two.py").write_text("# one\n# два\n# три\n", encoding="utf-8")
     guard.main(["--update"])
     assert json.loads(baseline.read_text(encoding="utf-8")) == {"pentool/two.py": 1}
@@ -101,9 +101,14 @@ def test_update_lowers_but_never_raises(sandbox, capsys) -> None:
 
 
 def test_repository_baseline_is_sorted_and_positive() -> None:
-    """База репозитория должна быть валидной: пути отсортированы, значения > 0."""
+    """The repository baseline must be valid: paths sorted, values > 0."""
     baseline = guard.load_baseline()
-    assert baseline, "база пуста: значит замер не делался"
     keys = list(baseline)
     assert keys == sorted(keys)
     assert all(value > 0 for value in baseline.values())
+
+
+def test_empty_baseline_means_no_remaining_debt() -> None:
+    """An empty baseline is the goal (debt paid), never a skipped measurement."""
+    if not guard.load_baseline():
+        assert guard.scan() == {}, "baseline is empty while violations still exist — run --update"

@@ -1,19 +1,22 @@
-"""Repeater: состояние вкладки должно догонять её редактор при смене вкладки.
+"""Repeater: a tab's state must catch up with its editor when the tab changes.
 
-Дефект, ради которого написан этот файл. ``action_new_tab()`` выставляет
-``_active_tab_id`` на новую вкладку сразу, а ``TabActivated`` приходит позже и
-первым делом зовёт ``_save_current_tab_state()`` — а тот читает именно
-``_active_tab_id``. К этому моменту там уже новая вкладка, редактор которой ещё
-не собран, поэтому сохранение выходит no-op (страхует ``ui_ready``), и текст,
-набранный в покидаемой вкладке, не попадает ни в её ``state``, ни в БД.
+The defect this file was written for. ``action_new_tab()`` sets
+``_active_tab_id`` to the new tab immediately, while ``TabActivated`` arrives
+later and first of all calls ``_save_current_tab_state()`` — and that reads
+exactly ``_active_tab_id``. By that moment it already holds the new tab, whose
+editor is not built yet, so the save comes out a no-op (``ui_ready`` guards
+that), and the text typed in the tab being left lands neither in its ``state``
+nor in the DB.
 
-Пользователь этого не видит: виджет живёт в DOM и помнит текст до перезагрузки
-проекта. Потеря проявляется ровно там, где должна была спасти — при
-восстановлении вкладок из истории: вкладка открывается с прежним запросом.
+The user does not see this: the widget lives in the DOM and remembers the text
+until the project is reloaded. The loss shows up exactly where it should have
+saved the day — when restoring tabs from history: the tab opens with the previous
+request.
 
-Тесты работают на живом экране (как соседний ``test_repeater_new_tab_request``),
-но автосохранение в БД подменено: проверяется состояние вкладки, а не история
-проекта, и юнит-тест не должен оставлять строк в настоящей базе.
+The tests run on a live screen (like the neighbouring
+``test_repeater_new_tab_request``), but auto-saving to the DB is stubbed out: what
+is checked is the tab state, not the project history, and a unit test must not
+leave rows in the real database.
 """
 
 from __future__ import annotations
@@ -29,11 +32,11 @@ MARK = "PUT /state-probe HTTP/1.1\r\nHost: probe.example\r\n\r\n"
 
 @pytest.fixture(autouse=True)
 def _no_project_history(monkeypatch):
-    """Никакой истории проекта: вкладки создаёт сам тест, а не база машины.
+    """No project history at all: the test creates the tabs, not the machine's DB.
 
-    Без этого `on_mount` поднимает вкладки из `~/.config/pentool/pentool.db`,
-    их число и содержимое зависят от машины, а ожидание готовности вкладки
-    начинает зависеть от того, сколько чужих вкладок монтируется рядом.
+    Without this, `on_mount` loads tabs from `~/.config/pentool/pentool.db`,
+    their number and contents depend on the machine, and waiting for a tab to be
+    ready starts depending on how many foreign tabs get mounted next to it.
     """
     monkeypatch.setattr(RepeaterScreen, "_get_db_path", lambda _self: "")
 
@@ -44,7 +47,7 @@ async def _open_repeater(pilot, persist: bool = False) -> RepeaterScreen:
     await _settle(pilot)
     screen = pilot.app.query_one(RepeaterScreen)
     if not persist:
-        # История проекта не должна становиться частью утверждений теста.
+        # The project history must not become part of the test's assertions.
         screen._auto_save_tab_to_db = lambda _state: None  # type: ignore[method-assign]
     return screen
 
@@ -55,7 +58,7 @@ async def _settle(pilot, cycles: int = 20) -> None:
 
 
 async def _wait_built(screen: RepeaterScreen, tab_id: str, pilot) -> None:
-    """Дождаться, пока у вкладки появится редактор и он чем-то заполнен."""
+    """Wait until the tab has an editor and that editor holds something."""
     for _ in range(60):
         state = screen._get_tab_state(tab_id)
         if state is not None and state.ui_ready:
@@ -73,7 +76,7 @@ def _text(screen: RepeaterScreen, tab_id: str) -> str:
 
 @pytest.mark.asyncio
 async def test_editing_then_opening_a_new_tab_commits_the_edit() -> None:
-    """Текст покидаемой вкладки обязан попасть в её state до смены активной."""
+    """The text of the tab being left must reach its state before the tab switch."""
     app = PentoolApp()
     app._skip_project_guard = True
     async with app.run_test(size=(140, 40)) as pilot:
@@ -99,7 +102,7 @@ async def test_editing_then_opening_a_new_tab_commits_the_edit() -> None:
 
 @pytest.mark.asyncio
 async def test_switching_tabs_commits_the_outgoing_edit() -> None:
-    """Обычный путь смены вкладки: ушедшая вкладка сохраняет свой текст."""
+    """The ordinary tab-switching path: the tab left behind saves its own text."""
     app = PentoolApp()
     app._skip_project_guard = True
     async with app.run_test(size=(140, 40)) as pilot:
@@ -156,9 +159,9 @@ async def test_closing_a_tab_removes_state_and_pane_but_not_the_neighbour() -> N
         await _settle(pilot)
         assert "keeper" in _text(screen, first), "соседняя вкладка потеряла свой запрос при закрытии"
 
-        # Экран не должен остаться без вкладок: последняя не закрывается.
-        # Сколько вкладок было на старте — вопрос истории проекта, поэтому
-        # проверяется именно инвариант, а не конкретное число.
+        # The screen must not be left without tabs: the last one is never closed.
+        # How many tabs there were at the start is a question of project history,
+        # so it is the invariant that gets checked here, not a specific number.
         while len(screen._tabs) > 1:
             screen._tabs_w.active = screen._tabs[-1].tab_id
             await _settle(pilot)
@@ -171,9 +174,10 @@ async def test_closing_a_tab_removes_state_and_pane_but_not_the_neighbour() -> N
         assert len(screen._tabs) == 1, "последняя вкладка закрылась — экран остался без вкладок"
 
 
-# ── Реестр вкладок в БД (F-053) ─────────────────────────────────────────────
-# Набор вкладок — таблица `repeater_tabs`, история отправок — `repeater_entries`.
-# Эти тесты идут через настоящую схему и настоящий модуль, на временной базе.
+# ── Tab registry in the DB (F-053) ──────────────────────────────────────────
+# The set of tabs is the `repeater_tabs` table, the send history is
+# `repeater_entries`. These tests go through the real schema and the real
+# module, on a temporary database.
 
 
 async def _db_tabs(db_path: str) -> list[dict]:
@@ -201,14 +205,14 @@ async def _empty_project_db(tmp_path, monkeypatch) -> str:
 
     db_path = str(tmp_path / "project.db")
     await init_db(db_path)
-    # Перекрывает autouse-фикстуру, которая уводит экран от базы машины.
+    # Overrides the autouse fixture that steers the screen away from the machine DB.
     monkeypatch.setattr(RepeaterScreen, "_get_db_path", lambda _self: db_path)
     return db_path
 
 
 @pytest.mark.asyncio
 async def test_tabs_are_restored_from_the_registry(tmp_path, monkeypatch) -> None:
-    """Восстановление читает реестр вкладок, а не историю отправок."""
+    """Restoring reads the tab registry, not the send history."""
     from pentool.modules.repeater import Repeater
 
     db_path = await _empty_project_db(tmp_path, monkeypatch)
@@ -249,7 +253,7 @@ async def test_a_new_tab_is_persisted_without_being_edited(tmp_path, monkeypatch
 
 @pytest.mark.asyncio
 async def test_a_closed_tab_is_forgotten_in_the_registry(tmp_path, monkeypatch) -> None:
-    """Главное свойство F-053: закрытая вкладка не возвращается после перезапуска."""
+    """The main property of F-053: a closed tab does not come back after a restart."""
     db_path = await _empty_project_db(tmp_path, monkeypatch)
 
     app = PentoolApp()

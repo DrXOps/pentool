@@ -465,7 +465,7 @@ class TestHybridJsCrawl:
         config = ScanConfig(targets=["http://x.com/"], resume=False, hybrid_js=True)
 
         with patch("pentool.api.spider_api.SpiderAPI", js_spider_cls):
-            # также мокаем статические методы SpiderAPI
+            # also mock the static methods of SpiderAPI
             with (
                 patch("pentool.api.spider_api.SpiderAPI.has_cached_result", return_value=False),
                 patch("pentool.api.spider_api.SpiderAPI.get_cached_pages", return_value=[]),

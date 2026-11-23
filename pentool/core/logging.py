@@ -58,7 +58,7 @@ def _rotation_limits() -> tuple[int, int]:
 
 
 def setup_logging(log_file: str, level: str = "INFO") -> logging.Logger:
-    """Настроить логирование.
+    """Configure logging.
 
     `PENTOOL_LOG_FILE` overrides the path: tests write to /tmp instead of the
     real journal on 9p — otherwise a DEBUG line per probe makes the run

@@ -56,7 +56,7 @@ class RepeaterAPI(ExportableAPI):
 
     # ── Tabs ────────────────────────────────────────────────────────────────
     # Tabs are stored apart from the send history: closing a tab must
-    # её забывать, а `repeater_entries` — лог, который закрытие не чистит.
+    # forget it, while `repeater_entries` is a log that closing does not clean.
 
     async def save_tab(
         self,
@@ -74,7 +74,7 @@ class RepeaterAPI(ExportableAPI):
         return await self._repeater.delete_tab(tab_uid)
 
     async def seed_tabs_from_history(self) -> list[dict]:
-        """Одноразовая миграция реестра вкладок из истории отправок."""
+        """One-time migration of the tab registry from the send history."""
         return await self._repeater.seed_tabs_from_history()
 
     async def switch_db(self, db_path: str) -> None:

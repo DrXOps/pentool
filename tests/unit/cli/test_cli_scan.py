@@ -96,7 +96,7 @@ def test_scan_report_with_findings(tmp_path):
 
 
 def test_scan_active_basic(tmp_path):
-    """ScanRunner запускает ScanService.run() с правильными target."""
+    """ScanRunner runs ScanService.run() with the correct targets."""
 
     fake_scanner_api = MagicMock()
     fake_scanner_api.return_value = fake_scanner_api
@@ -114,7 +114,7 @@ def test_scan_active_basic(tmp_path):
 
 
 def test_scan_active_with_checks_and_output(tmp_path):
-    """Check-names и output прокидываются в ScanConfig и генерацию отчёта."""
+    """Check names and output are passed through to ScanConfig and report generation."""
 
     fake_scanner_api = MagicMock()
     fake_scanner_api.return_value = fake_scanner_api
@@ -132,12 +132,12 @@ def test_scan_active_with_checks_and_output(tmp_path):
             input="",
         )
     assert r.exit_code == 0
-    # Проверяем что ScanService.run() был вызван
+    # Check that ScanService.run() was called
     fake_service.run.assert_awaited_once()
 
 
 def test_scan_active_on_finding_echo(tmp_path):
-    """on_finding выводит имя findings в CLI."""
+    """on_finding prints the finding name to the CLI."""
 
     fake_scanner_api = MagicMock()
     fake_scanner_api.return_value = fake_scanner_api

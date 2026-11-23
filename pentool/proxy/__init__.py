@@ -1,4 +1,4 @@
-"""Proxy isolation layer (П.3): a daemon process + a TUI facade.
+"""Proxy isolation layer (P.3): a daemon process + a TUI facade.
 
 The proxy lives in its OWN process, not inside the TUI. The TUI talks to it
 only over a local unix socket (commands in, events out). This is what removes

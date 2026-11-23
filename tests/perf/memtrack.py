@@ -1,17 +1,17 @@
-"""Общий хелпер для perf/leak-тестов памяти и ЦПУ.
+"""Shared helper for perf/leak memory and CPU tests.
 
-Переиспользуемые примитивы поверх psutil/tracemalloc/gc:
-  - MemSampler: периодический сэмплер RSS + число живых asyncio.Task +
-    число живых объектов заданных классов (через gc.get_objects()), а с
-    флагом heavy_cpu — также CPU% (процесс/процесс+ядра), ctx-switches и
-    накопленное user/sys время.
-  - snapshot_diff(): top-N diff двух tracemalloc-снимков.
-  - sparkline(): текстовый график без внешних зависимостей (как в
+Reusable primitives on top of psutil/tracemalloc/gc:
+  - MemSampler: periodic sampler of RSS + live asyncio.Task count +
+    live instance count of the given classes (via gc.get_objects()), and
+    with the heavy_cpu flag — also CPU% (process/process+cores),
+    ctx-switches and accumulated user/sys time.
+  - snapshot_diff(): top-N diff of two tracemalloc snapshots.
+  - sparkline(): text chart without external dependencies (as in
     datatable_deep.py / dashboard live_dashboard.py).
-  - render_report(): Markdown-отчёт с таблицей точек + спарклайнами
-    RSS и CPU.
+  - render_report(): Markdown report with a table of points + RSS and
+    CPU sparklines.
 
-Не часть pytest-сьюта — тяжёлые ручные прогоны, запускать напрямую:
+Not part of the pytest suite — heavy manual runs, launch directly:
     python3 tests/perf/scanner_engine_leak.py
 """
 
@@ -36,7 +36,7 @@ def rss_mb() -> float:
 
 
 def cpu_percent_total() -> float:
-    """CPU% процесса за интервал с последнего вызова (ноу-тро, 0..Ncores*100)."""
+    """Process CPU% over the interval since the last call (non-blocking, 0..Ncores*100)."""
     try:
         return PROC.cpu_percent(interval=None)
     except Exception:
@@ -44,7 +44,7 @@ def cpu_percent_total() -> float:
 
 
 def cpu_times_user_sys() -> tuple[float, float]:
-    """Накопленные user/sys секунды процесса (кумулятив, только растут)."""
+    """Accumulated user/sys seconds of the process (cumulative, only grow)."""
     try:
         t = PROC.cpu_times()
         return t.user, t.system
@@ -53,7 +53,7 @@ def cpu_times_user_sys() -> tuple[float, float]:
 
 
 def cpu_ctx_switches() -> tuple[int, int]:
-    """(voluntary, involuntary) ctx-switches процесса — кумулятив."""
+    """(voluntary, involuntary) process ctx-switches — cumulative."""
     try:
         c = PROC.num_ctx_switches()
         return c.voluntary, c.involuntary
@@ -62,7 +62,7 @@ def cpu_ctx_switches() -> tuple[int, int]:
 
 
 def cpu_percent_percore() -> list[float]:
-    """CPU% по каждому ядру системы за интервал с прошлого вызова."""
+    """CPU% for each system core over the interval since the last call."""
     try:
         return psutil.cpu_percent(interval=None, percpu=True)
     except Exception:
@@ -114,9 +114,9 @@ class Sample:
     t_s: float
     rss_mb: float
     tasks: int
-    # CPU-метрики заполняются только когда MemSampler(cpu=True) —
-    # по умолчанию None, чтобы не тащить psutil-наценку в простых прогонах
-    # (файл разделяют и leak-тесты, которым CPU-замер не нужен).
+    # CPU metrics are filled only when MemSampler(cpu=True) — None by
+    # default, so simple runs do not pay the psutil overhead (the file is
+    # also shared by leak tests that do not need CPU measurement).
     cpu_pct: float | None = None
     cpu_user_sys: tuple[float, float] | None = None
     ctx_switches: tuple[int, int] | None = None
@@ -131,11 +131,11 @@ class MemSampler:
     loop and want deterministic sample points (e.g. "after N tasks
     scheduled", not "whatever happened to be running at t=2.0s").
 
-    cpu=True включает замер CPU на каждый tick: cpu_pct — CPU% процесса за
-    интервал с прошлого вызова (0..Ncores*100, ноу-тро уровень сразу после
-    сна нагружающего задания), perfcore_max — максимум % по одному ядру,
-    ctx_switches — (voluntary, involuntary) накопленные. cpu_user_sys —
-    накопленное (user, sys) время.
+    cpu=True enables CPU measurement on every tick: cpu_pct — process CPU%
+    over the interval since the last call (0..Ncores*100, non-blocking level
+    right after the load task sleeps), perfcore_max — max % on a single core,
+    ctx_switches — accumulated (voluntary, involuntary). cpu_user_sys —
+    accumulated (user, sys) time.
     """
 
     def __init__(self, track_classes: tuple[type, ...] = (), *, cpu: bool = False) -> None:
@@ -144,9 +144,8 @@ class MemSampler:
         self._track_classes = track_classes
         self._cpu = cpu
         if cpu:
-            # Первый вызов cpu_percent() возвращает 0.0 (нужен warm-up) —
-            # делаем его на инициализации, чтобы первый tick имел реальный
-            # дельта-интервал.
+            # The first cpu_percent() call returns 0.0 (warm-up needed) —
+            # do it at init so the first tick has a real delta interval.
             cpu_percent_total()
 
     def tick(self, label: str, heavy_gc_scan: bool = False, **extra) -> Sample:
@@ -213,7 +212,7 @@ class MemSampler:
                 f"  min={min(self.cpu_series()):.1f}  max={max(self.cpu_series()):.1f}",
             ]
         lines += ["```", ""]
-        # Таблица
+        # Table
         if self._cpu:
             lines += [
                 "| t(s) | RSS(MB) | tasks | cpu% | core% | vsw | isw | user(s) | sys(s) | label | extra |",

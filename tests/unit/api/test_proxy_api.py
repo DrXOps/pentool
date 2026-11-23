@@ -234,8 +234,8 @@ class TestProxyAPIExportImport:
         api.set_proxy(mock_proxy_server)
         data = {"http_history": [{"bad": "missing required keys"}]}
         loaded, msg = api.import_project_data(data)
-        # from_dict не падает с неполными данными — создаёт объект с пустыми
-        # полями. loaded == 1 — ожидаемое поведение (не ошибка).
+        # from_dict does not fail on incomplete data — it builds an object with
+        # empty fields. loaded == 1 is the expected behaviour (not an error).
         assert loaded == 1
 
 

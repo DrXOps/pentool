@@ -138,7 +138,7 @@ def _ensure_pro_compatible(
                     pass  # continue without PRO
                 elif choice in ("s", "skip"):
                     print("[pentool] Skipping PRO check. Use --no-check-updates to silence.", file=sys.stderr)
-                    return  # вообще пропустить проверку в этой сессии
+                    return  # skip the check entirely for this session
             except Exception:
                 logger.debug("interactive PRO prompt failed", exc_info=True)
 
@@ -154,7 +154,7 @@ def _ensure_pro_compatible(
 
 
 def _warn_pro_mismatch(warning: str) -> None:
-    """Показать диалог PRO mismatch в терминале."""
+    """Show the PRO mismatch dialog in the terminal."""
     print()
     print("╔══════════════════════════════════════════════════╗")
     print("║ ⚠ PRO package version mismatch                 ║")
@@ -304,7 +304,7 @@ def main() -> None:
     if unsafe_skip_pro_check:
         sys.argv.remove(_UNSAFE_SKIP_PRO_CHECK_FLAG)
 
-    # CI/CD флаги
+    # CI/CD flags
     no_check_updates = _NO_CHECK_UPDATES_FLAG in sys.argv
     auto_update = _AUTO_UPDATE_FLAG in sys.argv
     for _flag in (_NO_CHECK_UPDATES_FLAG, _AUTO_UPDATE_FLAG):
@@ -312,10 +312,11 @@ def main() -> None:
             sys.argv.remove(_flag)
 
     if len(sys.argv) > 1:
-        # Один путь запуска: click — единственный парсер. Раньше здесь стоял шим
-        # `_run_target_mode`, искавший в argv буквальный `--smart`, поэтому
-        # установка JS-браузера то запускалась, то нет (флаг `--real` её не
-        # включал). Теперь установка живёт в cli/main.py рядом с `--smart`.
+        # Single launch path: click is the only parser. A shim
+        # `_run_target_mode` used to sit here, searching argv for a literal
+        # `--smart`, so the JS browser install sometimes ran and sometimes did
+        # not (the `--real` flag did not enable it). The install now lives in
+        # cli/main.py next to `--smart`.
         from pentool.cli.main import cli
 
         cli()

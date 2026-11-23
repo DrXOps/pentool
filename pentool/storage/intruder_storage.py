@@ -54,7 +54,7 @@ def row_to_result_fields(
     timestamp: datetime,
     payload_values: list[str],
 ) -> dict[str, Any]:
-    """Разложить строку `intruder_results` в kwargs доменного объекта.
+    """Unpack an `intruder_results` row into domain-object kwargs.
 
     A module-level helper instead of building `IntruderResult` inline, so that
     storage does not import `pentool.modules.intruder` at runtime
@@ -245,8 +245,8 @@ class IntruderStorage(BaseSqliteStorage):
         recent `limit` results overall (legacy single-tab behavior).
 
         Args:
-            filters: Optional FilterSpec для фильтрации по status/length/error.
-            order_by: имя колонки для ORDER BY (None = default = request_number/timestamp)
+            filters: Optional FilterSpec for filtering by status/length/error.
+            order_by: column name for ORDER BY (None = default = request_number/timestamp)
             desc: True = DESC, False = ASC
         """
         if not await self.ensure_open():

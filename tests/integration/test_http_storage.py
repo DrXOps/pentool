@@ -57,7 +57,7 @@ async def storage(tmp_path: Path) -> HttpStorage:
 @pytest.mark.integration
 class TestHttpStorageInit:
     async def test_init_db_creates_table(self, tmp_path: Path) -> None:
-        """init_db создаёт таблицу requests."""
+        """init_db creates the requests table."""
         import aiosqlite
 
         db_path = str(tmp_path / "init_test.db")
@@ -76,19 +76,19 @@ class TestHttpStorageInit:
 @pytest.mark.integration
 class TestHttpStorageAddRequest:
     async def test_add_request_returns_int(self, storage: HttpStorage) -> None:
-        """add_request возвращает int row_id."""
+        """add_request returns int row_id."""
         row_id = await storage.add_request(_make_req())
         assert isinstance(row_id, int)
         assert row_id >= 1
 
     async def test_add_request_multiple_increments(self, storage: HttpStorage) -> None:
-        """Последовательные вставки дают разные row_id."""
+        """Sequential inserts produce different row_ids."""
         id1 = await storage.add_request(_make_req())
         id2 = await storage.add_request(_make_req())
         assert id2 > id1
 
     async def test_add_request_with_response_saves_status(self, storage: HttpStorage) -> None:
-        """add_request с ответом сохраняет status_code."""
+        """add_request with a response saves status_code."""
         req = _make_req()
         resp = _make_resp(status=404, body="Not Found", content_type="text/html")
         row_id = await storage.add_request(req, resp)
@@ -98,7 +98,7 @@ class TestHttpStorageAddRequest:
         assert entry["status_code"] == 404
 
     async def test_add_request_with_response_saves_length(self, storage: HttpStorage) -> None:
-        """add_request с ответом сохраняет length."""
+        """add_request with a response saves length."""
         body = "Hello World"
         req = _make_req()
         resp = _make_resp(status=200, body=body)
@@ -109,7 +109,7 @@ class TestHttpStorageAddRequest:
         assert entry["length"] == len(body)
 
     async def test_add_request_with_response_saves_mime_type(self, storage: HttpStorage) -> None:
-        """add_request с ответом сохраняет mime_type."""
+        """add_request with a response saves mime_type."""
         req = _make_req()
         resp = _make_resp(status=200, content_type="application/json")
         row_id = await storage.add_request(req, resp)
@@ -119,7 +119,7 @@ class TestHttpStorageAddRequest:
         assert entry["mime_type"] == "application/json"
 
     async def test_add_request_websocket_flag(self, storage: HttpStorage) -> None:
-        """add_request с is_websocket=True сохраняет флаг."""
+        """add_request with is_websocket=True saves the flag."""
         row_id = await storage.add_request(_make_req(), is_websocket=True)
         entry = await storage.get_full_entry(row_id)
         assert entry is not None
@@ -129,7 +129,7 @@ class TestHttpStorageAddRequest:
 @pytest.mark.integration
 class TestHttpStorageGetMetadataBatch:
     async def test_get_metadata_batch_returns_list_of_dicts(self, storage: HttpStorage) -> None:
-        """get_metadata_batch возвращает список dict."""
+        """get_metadata_batch returns a list of dicts."""
         await storage.add_request(_make_req())
         rows = await storage.get_metadata_batch()
         assert isinstance(rows, list)
@@ -137,7 +137,7 @@ class TestHttpStorageGetMetadataBatch:
         assert isinstance(rows[0], dict)
 
     async def test_get_metadata_batch_filter_host(self, storage: HttpStorage) -> None:
-        """get_metadata_batch фильтрует по host."""
+        """get_metadata_batch filters by host."""
         await storage.add_request(_make_req("http://example.com/a"))
         await storage.add_request(_make_req("http://other.org/b"))
 
@@ -147,7 +147,7 @@ class TestHttpStorageGetMetadataBatch:
         assert "other.org" not in hosts
 
     async def test_get_metadata_batch_filter_method(self, storage: HttpStorage) -> None:
-        """get_metadata_batch фильтрует по method."""
+        """get_metadata_batch filters by method."""
         await storage.add_request(_make_req(method="GET"))
         await storage.add_request(_make_req(method="POST"))
 
@@ -155,7 +155,7 @@ class TestHttpStorageGetMetadataBatch:
         assert all(r["method"] == "POST" for r in rows)
 
     async def test_get_metadata_batch_filter_status_code_range(self, storage: HttpStorage) -> None:
-        """get_metadata_batch фильтрует по диапазону status_code."""
+        """get_metadata_batch filters by status_code range."""
         await storage.add_request(_make_req(), _make_resp(status=200))
         await storage.add_request(_make_req(), _make_resp(status=301))
         await storage.add_request(_make_req(), _make_resp(status=404))
@@ -167,13 +167,13 @@ class TestHttpStorageGetMetadataBatch:
 @pytest.mark.integration
 class TestHttpStorageGetFullEntry:
     async def test_get_full_entry_returns_dict(self, storage: HttpStorage) -> None:
-        """get_full_entry возвращает dict."""
+        """get_full_entry returns a dict."""
         row_id = await storage.add_request(_make_req())
         entry = await storage.get_full_entry(row_id)
         assert isinstance(entry, dict)
 
     async def test_get_full_entry_request_headers_as_dict(self, storage: HttpStorage) -> None:
-        """get_full_entry возвращает request_headers как dict, не JSON-строку."""
+        """get_full_entry returns request_headers as a dict, not a JSON string."""
         headers = {"Host": "example.com", "X-Custom": "value"}
         row_id = await storage.add_request(_make_req(headers=headers))
         entry = await storage.get_full_entry(row_id)
@@ -181,13 +181,13 @@ class TestHttpStorageGetFullEntry:
         assert entry["request_headers"].get("Host") == "example.com"
 
     async def test_get_full_entry_response_headers_as_dict(self, storage: HttpStorage) -> None:
-        """get_full_entry возвращает response_headers как dict."""
+        """get_full_entry returns response_headers as a dict."""
         row_id = await storage.add_request(_make_req(), _make_resp())
         entry = await storage.get_full_entry(row_id)
         assert isinstance(entry["response_headers"], dict)
 
     async def test_get_full_entry_missing_returns_none(self, storage: HttpStorage) -> None:
-        """get_full_entry возвращает None для несуществующего id."""
+        """get_full_entry returns None for a missing id."""
         result = await storage.get_full_entry(99999)
         assert result is None
 
@@ -195,14 +195,14 @@ class TestHttpStorageGetFullEntry:
 @pytest.mark.integration
 class TestHttpStorageDelete:
     async def test_delete_removes_record(self, storage: HttpStorage) -> None:
-        """delete удаляет запись."""
+        """delete removes the record."""
         row_id = await storage.add_request(_make_req())
         await storage.delete(row_id)
         result = await storage.get_full_entry(row_id)
         assert result is None
 
     async def test_delete_does_not_affect_other_records(self, storage: HttpStorage) -> None:
-        """delete не затрагивает другие записи."""
+        """delete does not affect other records."""
         id1 = await storage.add_request(_make_req())
         id2 = await storage.add_request(_make_req())
         await storage.delete(id1)
@@ -212,21 +212,21 @@ class TestHttpStorageDelete:
 @pytest.mark.integration
 class TestHttpStorageCount:
     async def test_count_returns_correct_number(self, storage: HttpStorage) -> None:
-        """count возвращает правильное число."""
+        """count returns the correct number."""
         for _ in range(3):
             await storage.add_request(_make_req())
         n = await storage.count()
         assert n == 3
 
     async def test_count_with_filter(self, storage: HttpStorage) -> None:
-        """count с фильтром считает только подходящие записи."""
+        """count with a filter counts only matching records."""
         await storage.add_request(_make_req(method="GET"))
         await storage.add_request(_make_req(method="POST"))
         n = await storage.count(filters={"method": "GET"})
         assert n == 1
 
     async def test_count_distinct_hosts(self, storage: HttpStorage) -> None:
-        """count_distinct_hosts возвращает число уникальных хостов."""
+        """count_distinct_hosts returns the number of unique hosts."""
         await storage.add_request(_make_req("http://alpha.com/a"))
         await storage.add_request(_make_req("http://alpha.com/b"))
         await storage.add_request(_make_req("http://beta.com/c"))
@@ -237,7 +237,7 @@ class TestHttpStorageCount:
 @pytest.mark.integration
 class TestHttpStorageSearch:
     async def test_search_fulltext(self, storage: HttpStorage) -> None:
-        """search выполняет полнотекстовый поиск."""
+        """search performs a full-text search."""
         await storage.add_request(_make_req("http://example.com/secretpage"))
         await storage.add_request(_make_req("http://other.org/notsecret"))
         results = await storage.search("secretpage")
@@ -245,7 +245,7 @@ class TestHttpStorageSearch:
         assert any("secretpage" in r["url"] for r in results)
 
     async def test_search_no_results(self, storage: HttpStorage) -> None:
-        """search возвращает пустой список при отсутствии совпадений."""
+        """search returns an empty list when there are no matches."""
         await storage.add_request(_make_req("http://example.com/hello"))
         results = await storage.search("zzznomatch999")
         assert results == []
@@ -254,7 +254,7 @@ class TestHttpStorageSearch:
 @pytest.mark.integration
 class TestHttpStorageClearAll:
     async def test_clear_all_empties_table(self, storage: HttpStorage) -> None:
-        """clear_all очищает таблицу."""
+        """clear_all empties the table."""
         for _ in range(5):
             await storage.add_request(_make_req())
         await storage.clear_all()
@@ -265,7 +265,7 @@ class TestHttpStorageClearAll:
 @pytest.mark.integration
 class TestHttpStorageSwitchDb:
     async def test_switch_db(self, tmp_path: Path) -> None:
-        """switch_db переключает базу данных."""
+        """switch_db switches the database."""
         s = HttpStorage()
         db1 = str(tmp_path / "db1.db")
         db2 = str(tmp_path / "db2.db")
@@ -277,7 +277,7 @@ class TestHttpStorageSwitchDb:
 
         await s.switch_db(db2)
         n2 = await s.count()
-        assert n2 == 0  # новая БД пустая
+        assert n2 == 0  # the new DB is empty
 
         await s.close()
 
@@ -285,19 +285,19 @@ class TestHttpStorageSwitchDb:
 @pytest.mark.integration
 class TestHttpStorageWebsocket:
     async def test_is_websocket_filter_false(self, storage: HttpStorage) -> None:
-        """is_websocket фильтр возвращает только не-WS записи."""
+        """is_websocket filter returns only non-WS records."""
         await storage.add_request(_make_req(), is_websocket=False)
         await storage.add_request(_make_req(), is_websocket=True)
 
         rows = await storage.get_metadata_batch(filters={"is_websocket": False})
         assert all(r.get("id") is not None for r in rows)
-        # Проверяем через get_full_entry что в результатах нет WS-записей
+        # Verify via get_full_entry that the results contain no WS records
         for r in rows:
             entry = await storage.get_full_entry(r["id"])
             assert entry["is_websocket"] == 0
 
     async def test_is_websocket_filter_true(self, storage: HttpStorage) -> None:
-        """is_websocket фильтр возвращает только WS-записи."""
+        """is_websocket filter returns only WS records."""
         await storage.add_request(_make_req(), is_websocket=False)
         ws_id = await storage.add_request(_make_req(), is_websocket=True)
 
@@ -309,13 +309,13 @@ class TestHttpStorageWebsocket:
 @pytest.mark.integration
 class TestHttpStorageGetRequestById:
     async def test_get_request_by_id_alias(self, storage: HttpStorage) -> None:
-        """get_request_by_id является алиасом get_full_entry."""
+        """get_request_by_id is an alias of get_full_entry."""
         row_id = await storage.add_request(_make_req())
         entry_via_full = await storage.get_full_entry(row_id)
         entry_via_alias = await storage.get_request_by_id(row_id)
         assert entry_via_full == entry_via_alias
 
     async def test_get_request_by_id_missing_returns_none(self, storage: HttpStorage) -> None:
-        """get_request_by_id возвращает None для несуществующего id."""
+        """get_request_by_id returns None for a missing id."""
         result = await storage.get_request_by_id(99999)
         assert result is None

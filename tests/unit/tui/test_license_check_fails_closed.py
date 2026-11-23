@@ -1,15 +1,16 @@
-"""Платная проверка лицензии не открывает доступ при сбое (ADR-6).
+"""A paid license check does not open access when it fails (ADR-6).
 
-`_switch_to` блокирует Scanner и Recon без лицензии. Оба обработчика были
-написаны «чтобы не падало»: `except Exception: pass`, — и это превращало сбой
-чтения лицензии в разрешение. Ошибка в проверке открывала платный модуль.
+`_switch_to` blocks Scanner and Recon without a license. Both handlers were
+written "so that it does not crash": `except Exception: pass` — and that turned
+a license read failure into permission. An error in the check opened a paid module.
 
-Здесь закреплено обратное: не смогли проверить — не пускаем, и пользователю
-сказано, почему. `pass` вместо `notify` вернул бы старое поведение молча, а
-это ровно тот класс дефектов, который аудит и вычищает.
+The opposite is pinned down here: if we could not verify it, we do not let you
+in, and the user is told why. A `pass` instead of `notify` would have restored
+the old behaviour silently, and that is exactly the class of defects the audit
+is cleaning out.
 
-Почему тест в unit, а не e2e: он не проверяет клавиши и вёрстку, только
-решение о доступе. Проверка клавиш живёт в `tests/e2e/test_navigation.py`.
+Why the test lives in unit and not e2e: it does not check keys and layout, only
+the access decision. Key handling lives in `tests/e2e/test_navigation.py`.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from pentool.tui.screen_registry import get_screen_class
 
 
 async def _attempt_switch(module_id: str, app: PentoolApp) -> tuple[str | None, list[str]]:
-    """Переключить модуль и вернуть (что стало активным, тексты уведомлений)."""
+    """Switch the module and return (what became active, notification texts)."""
     notes: list[str] = []
     original_notify = app.notify
 
@@ -45,9 +46,9 @@ async def _attempt_switch(module_id: str, app: PentoolApp) -> tuple[str | None, 
             "recon",
             "screen-recon",
             marks=pytest.mark.skipif(
-                # Спрашиваем геттер, а не словарь: PRO-экран регистрируется
-                # лениво, и `"recon" in SCREEN_MAP` до первого обращения даёт
-                # False даже когда PRO установлен — тест скипался впустую.
+                # Ask the getter, not the dict: the PRO screen is registered
+                # lazily, and `"recon" in SCREEN_MAP` before the first access
+                # gives False even when PRO is installed — the test skipped for nothing.
                 get_screen_class("recon") is None,
                 reason="Recon живёт в pro-сабмодуле; без него гейт недостижим (_switch_to выходит раньше)",
             ),
@@ -76,7 +77,7 @@ class TestBrokenLicenseCheckDoesNotGrantAccess:
         )
 
     async def test_an_invalid_license_blocks_the_module(self, module_id: str, screen_id: str) -> None:
-        """Контроль: обычный отказ (лицензии нет) по-прежнему закрывает модуль."""
+        """Control: a plain refusal (no license) still closes the module."""
         from pentool.core.license import LicenseInfo
 
         app = PentoolApp()

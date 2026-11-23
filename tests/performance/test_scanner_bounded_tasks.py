@@ -1,13 +1,13 @@
-"""Быстрый perf-проверка bounded worker pool ScanEngine.
+"""Fast perf check of the ScanEngine bounded worker pool.
 
-Аналог тяжёлого `tests/perf/load_scanner.py --level a` (M7). Ключевое
-обещание после фикса H1/H2: `run_active_on_requests` исполняет seed×point×check
-через фиксированный пул `concurrency` воркеров, а не eager `asyncio.gather`
-на все задачи сразу. Проверяем, что пик живых asyncio.Tasks ≈ concurrency
-(+ несколько служебных), и что он НЕ растёт с размером payload-потока.
+Analogous to the heavy `tests/perf/load_scanner.py --level a` (M7). The key
+promise after the H1/H2 fix: `run_active_on_requests` executes seed×point×check
+through a fixed pool of `concurrency` workers, not an eager `asyncio.gather`
+over all tasks at once. We check that the peak of live asyncio.Tasks ≈ concurrency
+(+ a few service ones), and that it does NOT grow with the size of the payload flow.
 
-Берём лёгкий активный чек (SQLi, ~150 payload) — на малом числе seed этого
-достаточно много HTTP-вызовов, чтобы bounded-pool был различим, но быстро.
+We take a lightweight active check (SQLi, ~150 payload) — with a small number of
+seeds that is enough HTTP calls for the bounded pool to be visible, yet fast.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def _seeds(n: int) -> list[ParsedRequest]:
 
 
 def _peak_during(concurrency: int, seeds: list[ParsedRequest]) -> int:
-    """Запустить активный скан и вернуть пик живых задач."""
+    """Run an active scan and return the peak of live tasks."""
 
     async def _monitor():
         engine = ScanEngine(db_path=":memory:", concurrency=concurrency, http_client=FakeHTTPClient())
@@ -66,27 +66,27 @@ def _peak_during(concurrency: int, seeds: list[ParsedRequest]) -> int:
 
 
 def test_peak_tasks_bounded_by_concurrency():
-    """Пик живых задач не должен сильно превышать concurrency."""
+    """The peak of live tasks must not significantly exceed concurrency."""
     concurrency = 5
     seeds = _seeds(40)
     peak = _peak_during(concurrency, seeds)
-    # Бounded pool: concurrency воркеров + main + peeker + пара служебных.
+    # Bounded pool: concurrency workers + main + peeker + a couple of service ones.
     assert peak <= concurrency + 3, (
         f"Пик живых задач {peak} при concurrency={concurrency} — "
         f"ожидали bounded (~concurrency+неск.). Eager fan-out был бы "
         f"seed×points×checks≈сотни."
     )
-    # Хотя бы воркеры запустились
+    # At least the workers did start
     assert peak >= concurrency, "Воркеры почему-то не поднялись"
 
 
 def test_peak_tasks_not_scaling_with_seeds():
-    """Рост числа seed при фикс. concurrency НЕ должен расти пик задач."""
+    """Growing the number of seeds at a fixed concurrency must NOT raise the task peak."""
     c = 4
     peak_10 = _peak_during(c, _seeds(10))
     peak_40 = _peak_during(c, _seeds(40))
-    # Пик задач при x4 объёме работы должен остаться ≈ тем же (bounded),
-    # а не вырасти в 4 раза.
+    # With a x4 volume of work the task peak must stay ≈ the same (bounded),
+    # rather than grow 4x.
     assert abs(peak_40 - peak_10) <= 3, (
         f"Пик задач вырос с {peak_10} (10 seed) до {peak_40} (40 seed) при "
         f"concurrency={c} — ожидали стабильный bounded pool."

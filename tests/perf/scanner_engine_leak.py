@@ -1,26 +1,26 @@
-"""Level A — ScanEngine leak test БЕЗ сети (FakeHTTPClient).
+"""Level A — ScanEngine leak test WITHOUT network (FakeHTTPClient).
 
-Гипотеза H1 (см. (memory-leak investigation)):
-`ScanEngine.run_active_on_requests()` строит `tasks_list` = ВСЕ комбинации
-(seed_request × injection_point × check) и передаёт целиком в
-`asyncio.gather(*[_run_one(...) for ...])`. Семафор (Threads в UI)
-ограничивает только сколько задач одновременно шлют реальный HTTP, но НЕ
-ограничивает, сколько `asyncio.Task` одновременно существует в памяти.
+Hypothesis H1 (see (memory-leak investigation)):
+`ScanEngine.run_active_on_requests()` builds `tasks_list` = ALL combinations
+(seed_request × injection_point × check) and passes it whole into
+`asyncio.gather(*[_run_one(...) for ...])`. The semaphore (Threads in the UI)
+limits only how many tasks send real HTTP at the same time, but does NOT
+limit how many `asyncio.Task` objects exist in memory simultaneously.
 
-Этот тест изолирует именно эту часть — без реальной сети (FakeHTTPClient
-отвечает мгновенно), без Spider, без TUI — чтобы отделить структурную
-причину роста памяти от сетевых/I-O эффектов.
+This test isolates exactly that part — without a real network (FakeHTTPClient
+answers instantly), without Spider, without TUI — to separate the structural
+cause of memory growth from network/I-O effects.
 
-Замеряется:
-  - RSS до/после каждого сценария
-  - "потолок" одновременно живых asyncio.Task (peek каждые 50мс, пока
-    идёт gather()) — прямая проверка H1
-  - как этот потолок реагирует на Threads (concurrency) — если H1 верна,
-    потолок почти не зависит от concurrency (растёт с
+Measured:
+  - RSS before/after each scenario
+  - the "ceiling" of simultaneously live asyncio.Task objects (peek every
+    50ms while gather() runs) — a direct check of H1
+  - how that ceiling reacts to Threads (concurrency) — if H1 holds,
+    the ceiling barely depends on concurrency (it grows with
     n_requests × n_checks × points_per_request)
-  - tracemalloc top-N для самого крупного сценария
+  - tracemalloc top-N for the largest scenario
 
-Запуск:
+Run:
     python3 tests/perf/scanner_engine_leak.py
     python3 tests/perf/scanner_engine_leak.py --max-requests 20000
 """
@@ -174,7 +174,7 @@ async def main(max_requests: int) -> None:
 
     n_checks_full = len(ALL_CHECKS_FACTORY)
 
-    # ── Матрица 1: рост n_requests при фиксированном concurrency ──────────
+    # ── Matrix 1: n_requests grows at fixed concurrency ──────────────────
     print("--- Матрица 1: n_requests растёт, concurrency=10, checks=все ---")
     scale_points = [p for p in (50, 200, 1000, 5000, max_requests) if p <= max_requests]
     scale_points = sorted(set(scale_points))
@@ -184,7 +184,7 @@ async def main(max_requests: int) -> None:
         results_scale.append(r)
         print(r)
 
-    # ── Матрица 2: H1 — Threads (concurrency) не спасает от роста задач ───
+    # ── Matrix 2: H1 — Threads (concurrency) does not stop task growth ───
     print("\n--- Матрица 2: concurrency растёт при фиксированном n_requests ---")
     fixed_n = min(1000, max_requests)
     conc_points = [5, 10, 25, 50, 100]
@@ -194,7 +194,7 @@ async def main(max_requests: int) -> None:
         results_conc.append(r)
         print(r)
 
-    # ── tracemalloc top-N для самого крупного сценария ─────────────────────
+    # ── tracemalloc top-N for the largest scenario ───────────────────────
     print("\n--- tracemalloc top-15 для самого крупного сценария ---")
     tracer = TraceSnaps()
     tracer.snap("before")
@@ -206,7 +206,7 @@ async def main(max_requests: int) -> None:
         print(line)
     tracer.stop()
 
-    # ── Вывод и вердикт по H1 ───────────────────────────────────────────────
+    # ── Output and H1 verdict ────────────────────────────────────────────
     print("\n=== Вердикт H1 ===")
     tasks_vs_n = [(r["n_requests"], r["peak_tasks"]) for r in results_scale]
     print(f"peak_tasks по мере роста n_requests: {tasks_vs_n}")

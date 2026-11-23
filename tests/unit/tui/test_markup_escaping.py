@@ -1,18 +1,19 @@
-"""F-026: внешний текст не должен разбираться как Rich-разметка.
+"""F-026: external text must not be parsed as Rich markup.
 
-``RichLog(markup=True)`` и ``Static`` (у него ``markup=True`` по умолчанию)
-превращают строку в разметку. Всё, что приходит извне — тело HTTP-ответа,
-URL из трафика, имя файла, host из карты сайта, stderr внешней утилиты —
-попадает туда как данные, и разметка делает с ним одно из двух:
+``RichLog(markup=True)`` and ``Static`` (which has ``markup=True`` by default)
+turn a string into markup. Everything that comes from outside — an HTTP response
+body, a URL from traffic, a file name, a host from the site map, stderr of an
+external utility — gets in there as data, and markup does one of two things
+to it:
 
-* **падает**: ``RichLog.write("[/]")`` → ``MarkupError`` прямо в писателе.
-  В ``except Exception`` экрана это тихая потеря целой строки лога;
-* **съедает**: ``a[b]c`` разбирается как тег ``[b]`` и рисуется как ``ac``.
-  Пользователь видит не то, что пришло (а ``[link=javascript:…]`` ещё и
-  становится кликабельной ссылкой в HTML-отчётах).
+* **crashes**: ``RichLog.write("[/]")`` → ``MarkupError`` right in the writer.
+  Inside the screen's ``except Exception`` that silently drops a whole log line;
+* **eats it**: ``a[b]c`` is parsed as the ``[b]`` tag and drawn as ``ac``.
+  The user sees something other than what arrived (and ``[link=javascript:…]``
+  even becomes a clickable link in HTML reports).
 
-Тесты идут через настоящие виджеты, поэтому ловят именно то, что видит
-пользователь: пропавший кусок URL и исключение при записи строки.
+The tests go through real widgets, so they catch exactly what the user sees:
+a missing piece of a URL and an exception while writing a line.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from pentool.tui.widgets.inspector_panel import InspectorPanel
 
 
 def _log_lines(log: RichLog) -> list[str]:
-    """Текст, который реально отрисован в RichLog."""
+    """The text actually rendered in the RichLog."""
     return [strip.text for strip in log.lines]
 
 
@@ -76,13 +77,13 @@ class TestEscHelper:
 
 
 class TestContentPanelTitle:
-    """Заголовок панели — текст: там имя файла и метка ``[html]``."""
+    """The panel title is text: it carries a file name and the ``[html]`` badge."""
 
     async def test_language_badge_survives_in_the_title(self) -> None:
-        """Response-viewer показывает язык ответа как ``[html]`` — и он виден.
+        """The response viewer shows the body language as ``[html]`` — and it stays visible.
 
-        Без экранирования Rich считает ``[html]`` тегом: в заголовке остаётся
-        дырка, а пользователь не знает, что за тело ему показали.
+        Without escaping Rich treats ``[html]`` as a tag: the title keeps a
+        hole, and the user has no idea which body was shown.
         """
         app = _PanelHost()
         async with app.run_test(size=(120, 30)) as pilot:
@@ -108,7 +109,7 @@ class TestContentPanelTitle:
 
 class TestComparerDiffLog:
     async def test_diff_lines_with_brackets_reach_the_log(self) -> None:
-        """Строка дифа приходит из сравниваемых тел — она не разметка."""
+        """A diff line comes from the compared bodies — it is not markup."""
         app = _ComparerHost()
         async with app.run_test(size=(160, 40)) as pilot:
             await pilot.pause()
@@ -130,8 +131,8 @@ class TestDiffPanelLog:
         async with app.run_test(size=(160, 40)) as pilot:
             await pilot.pause()
             panel = app.query_one(DiffPanel)
-            # RichLog откладывает записи до первого известного размера, а панель
-            # по умолчанию скрыта — показываем её, как это делает toggle().
+            # RichLog defers writes until it knows its size, and the panel is
+            # hidden by default — so show it, the way toggle() does.
             panel.toggle()
             await pilot.pause()
             panel.show_diff("[/]\nplain", "[bold]\nplain")
@@ -157,7 +158,7 @@ class TestDashboardFeed:
             assert "a[b]c" in written, f"feed line lost the bracketed host: {written!r}"
 
     async def test_a_request_url_with_closing_tag_does_not_break_the_feed(self) -> None:
-        """``[/]`` в URL раньше ронял запись строки (MarkupError в писателе)."""
+        """``[/]`` in a URL used to crash writing the line (MarkupError in the writer)."""
         app = _DashboardHost()
         async with app.run_test(size=(160, 40)) as pilot:
             await pilot.pause()
@@ -170,7 +171,7 @@ class TestDashboardFeed:
 
 
 class TestTargetTree:
-    """Подписи дерева: host и сегменты пути приходят из трафика."""
+    """Tree labels: the host and the path segments come from traffic."""
 
     async def test_host_in_scope_keeps_its_brackets(self) -> None:
         app = _TargetHost()
@@ -185,7 +186,7 @@ class TestTargetTree:
             assert any("a[b]c" in label for label in labels), f"host label lost the brackets: {labels!r}"
 
     async def test_path_segments_are_escaped_in_the_labels(self) -> None:
-        """``/a[b]c/users`` — сегменты пути приходят из трафика, не из кода."""
+        """``/a[b]c/users`` — path segments come from traffic, not from code."""
         from pentool.api.target_api import SiteNode
 
         app = _TargetHost()

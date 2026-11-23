@@ -30,7 +30,7 @@ def test_search_bar_target_toggle():
 
     # Unmounted widget: toggle_target() asks the DOM for the toggle label and
     # still flips its state when the label is absent. Absent means `NoMatches`,
-    # which is exactly what the handler catches (ADR-6 п.4) — a widget built by
+    # which is exactly what the handler catches (ADR-6 item 4) — a widget built by
     # `__new__` skips `Widget.__init__`, so its DOM query would raise
     # `AttributeError` instead, and that is the test's artefact, not the app's.
     def _unmounted_query(selector, expect_type=None):
@@ -87,7 +87,7 @@ def test_proxy_reload_table_has_comment():
 def test_http_storage_build_where_has_comment():
     from pentool.collections.filter_predicate import FilterOp, FilterPredicate, FilterSpec
 
-    # Фильтрация по комментариям теперь идёт через FilterPredicate с NOT_NULL
+    # Comment filtering now goes through FilterPredicate with NOT_NULL
     spec = FilterSpec(predicates=[FilterPredicate("comment", FilterOp.NOT_NULL, None)])
     where, params = spec.to_sql()
     assert "COALESCE(comment, '') != ''" in where

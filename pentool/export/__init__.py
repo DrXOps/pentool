@@ -38,14 +38,14 @@ from pentool.export._base import SEVERITY_COLOR, SEVERITY_EMOJI, BaseExporter, F
 # ── Concrete exporters (lazy — avoid circular imports) ────────────────────
 
 
-def MarkdownExporter(*args, **kw):  # noqa: N802 — фабрика сохраняет публичное имя класса
+def MarkdownExporter(*args, **kw):  # noqa: N802 — the factory preserves the public class name
     """Lazy-loaded MarkdownExporter."""
     from pentool.export.markdown import MarkdownExporter as _MarkdownExporter
 
     return _MarkdownExporter(*args, **kw)
 
 
-def HtmlExporter(*args, **kw):  # noqa: N802 — фабрика сохраняет публичное имя класса
+def HtmlExporter(*args, **kw):  # noqa: N802 — the factory preserves the public class name
     """Lazy-loaded HtmlExporter."""
     from pentool.export.html import HtmlExporter as _HtmlExporter
 

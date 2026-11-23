@@ -1,16 +1,16 @@
 """
-Perf-тест TUI-слоя через Textual Pilot — реальный запуск PentoolApp.
+Perf test of the TUI layer through the Textual Pilot — a real run of PentoolApp.
 
-В отличие от quick_check.py (который дёргает API/модули напрямую, минуя
-Textual), этот тест поднимает настоящее приложение и меряет:
+Unlike quick_check.py (which drives the API/modules directly, bypassing
+Textual), this test boots the real application and measures:
 
-  1. Время и память запуска (mount всего приложения).
-  2. Время переключения между всеми модулями (action_switch_module).
-  3. Поведение ProxyScreen с реальным ArrowBackend-рендером на большом
-     объёме строк, полученных через HttpStorage (полный путь: SQLite →
+  1. Startup time and memory (mounting the whole application).
+  2. Time to switch between all modules (action_switch_module).
+  3. ProxyScreen behaviour with real ArrowBackend rendering on a large
+     volume of rows obtained through HttpStorage (full path: SQLite →
      ProxyService.get_history → _rows_to_arrow → ArrowBackend → DataTable).
 
-Запуск:
+Run:
     python3 tests/perf/tui_deep.py
 """
 
@@ -34,9 +34,9 @@ def _rss_mb() -> float:
 
 
 async def seed_history_db(db_path: str, n_requests: int) -> None:
-    """Заполнить SQLite историю N запросами — до запуска приложения,
-    чтобы протестировать загрузку уже существующей большой истории
-    (а не только инкрементальное добавление)."""
+    """Fill the SQLite history with N requests — before the application starts —
+    to test loading of an already existing large history
+    (not just incremental appending)."""
     from pentool.storage.http_storage import HttpStorage
     from pentool.utils.parser import ParsedRequest, ParsedResponse
 
@@ -92,7 +92,7 @@ async def run() -> dict:
     app._skip_project_guard = True
 
     async with app.run_test(size=(160, 45)) as pilot:
-        # Дать приложению домонтироваться (proxy service init, storage, etc.)
+        # Give the application time to finish mounting (proxy service init, storage, etc.)
         await pilot.pause(0.5)
         mount_elapsed = time.monotonic() - t0
         rss_after_mount = _rss_mb()
@@ -104,7 +104,7 @@ async def run() -> dict:
         }
         print(f"[startup] {results['startup']}")
 
-        # ── Навигация по всем модулям — время переключения + память ──────────
+        # ── Navigation across all modules — switch time + memory ──────────────
         modules = [
             "dashboard",
             "proxy",
@@ -147,7 +147,7 @@ async def run() -> dict:
             print(f"[nav:{mod}] {nav_results[-1]}")
         results["navigation"] = nav_results
 
-        # ── Переключиться обратно на Proxy и загрузить полную историю ────────
+        # ── Switch back to Proxy and load the full history ───────────────────
         app.action_switch_module("proxy")
         await pilot.pause(0.2)
 
@@ -174,7 +174,7 @@ async def run() -> dict:
         }
         print(f"[proxy_full_history_load] {results['proxy_full_history_load']}")
 
-        # ── Скролл по таблице (эмуляция взаимодействия пользователя) ─────────
+        # ── Scrolling the table (emulating user interaction) ─────────────────
         gc.collect()
         rss_before_scroll = _rss_mb()
         t_scroll0 = time.monotonic()
@@ -189,7 +189,7 @@ async def run() -> dict:
         }
         print(f"[proxy_scroll_30_rows] {results['proxy_scroll_30_rows']}")
 
-        # ── Debounce-append: имитация живого трафика (100 быстрых вставок) ───
+        # ── Debounce-append: emulating live traffic (100 rapid inserts) ──────
         from datetime import datetime, timezone
 
         from pentool.modules.proxy import InterceptedRequest
@@ -207,7 +207,7 @@ async def run() -> dict:
                 timestamp=datetime.now(timezone.utc),
             )
             proxy_screen._append_row_to_table(req, row_id=100000 + i)
-        # ждём завершения debounce-таймера (150ms) + запас
+        # wait for the debounce timer to fire (150ms) + a margin
         await pilot.pause(0.4)
         live_elapsed = time.monotonic() - t_live0
         rss_after_live = _rss_mb()
@@ -293,11 +293,11 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-    # NOTE: после выхода из app.run_test() процесс не завершается сам по себе
-    # в разумное время (замечено эмпирически — зависает на shutdown дольше
-    # 30с даже без каких-либо доп. действий). Похоже на нескрытый фоновый
-    # ресурс (поток/таймер/сокет), который Textual/asyncio не убивает при
-    # выходе из тестового контекста. Это САМО ПО СЕБЕ занесено в отчёт как
-    # находка. Форсируем выход процесса, чтобы раннер не зависал.
+    # NOTE: after leaving app.run_test() the process does not terminate on its own
+    # within a reasonable time (observed empirically — it hangs on shutdown for
+    # longer than 30s even without any extra actions). This looks like an undisposed
+    # background resource (thread/timer/socket) that Textual/asyncio does not kill
+    # when leaving the test context. This IN ITSELF is recorded in the report as
+    # a finding. We force the process to exit so the runner does not hang.
     sys.stdout.flush()
     os._exit(0)

@@ -129,7 +129,7 @@ class TestProxyServiceGetHistory:
         await service.get_history(filters=spec)
         call_kwargs = service._storage.get_metadata_batch.call_args[1]
         stored_filters = call_kwargs["filters"]
-        # Scope-фильтр должен быть преобразован в hosts predicate
+        # The scope filter must be converted into a hosts predicate
         host_preds = [p for p in stored_filters.predicates if p.field == "hosts"]
         assert host_preds, f"No hosts filter found in {stored_filters.predicates}"
         assert host_preds[0].value == ["example.com"]

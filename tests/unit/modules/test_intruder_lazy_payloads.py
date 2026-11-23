@@ -2,8 +2,8 @@
 
 Covers FilePayloadSource, _lazy_cartesian_product, count_lines_with_progress,
 ProcessedPayloads, and IntruderAttack._count_total()/run() no longer
-materializing the full combination set — see the "Загрузка файлов
-пейлоадов до 30ГБ" requirement.
+materializing the full combination set — see the "Uploading payload files
+up to 30GB" requirement.
 """
 
 from __future__ import annotations

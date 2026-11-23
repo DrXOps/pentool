@@ -226,7 +226,7 @@ class SpiderAPI(ExportableAPI):
         host = urlparse(url).netloc.split(":")[0]
         result = cls._last_results.get(host)
         if result:
-            return result.pages  # pages уже list[str]
+            return result.pages  # pages is already list[str]
         return []
 
     def export_project_data(self) -> dict:

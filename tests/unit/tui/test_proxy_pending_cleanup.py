@@ -1,4 +1,4 @@
-"""Unit tests: БАГ-C — periodic cleanup of ProxyScreen._pending_req_ids.
+"""Unit tests: BUG-C — periodic cleanup of ProxyScreen._pending_req_ids.
 
 Covers _cleanup_pending_req_ids(): stale entries (older than 10 minutes)
 must be removed from both _pending_req_ids and _pending_req_ids_ts,

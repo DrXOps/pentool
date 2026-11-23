@@ -257,8 +257,8 @@ def _is_mcp_server_installed() -> bool:
 def _try_pip_install_mcp_server() -> bool:
     """Try to install the pentool-mcp-server package via the current pip/uv.
 
-    Возвращает True при успешной установке. При недоступности pip/сети
-    возвращает False (вызывающий fallback на inline-заглушку).
+    Returns True on a successful install. When pip/the network is unavailable,
+    returns False (the caller falls back to the inline stub).
     """
     import subprocess
     import sys
@@ -279,22 +279,22 @@ def _try_pip_install_mcp_server() -> bool:
 
 
 def _get_model_download_url() -> str:
-    """Вернуть URL для скачивания готового GGUF-файла модели.
+    """Return the URL for downloading the ready-made GGUF model file.
 
-    Квантизация LFM2.5-350M-heretic уже готова (пользователь ничего не
-    конвертирует) и хостится на HuggingFace: FadedRedStar/LFM2.5-350M-heretic-GGUF.
-    Берём near-lossless Q8_0 (~362 MB) — лучшая точность для задач
-    instruction-following / структурной генерации payload.
+    The LFM2.5-350M-heretic quantization is already done (the user converts
+    nothing) and is hosted on HuggingFace: FadedRedStar/LFM2.5-350M-heretic-GGUF.
+    We take the near-lossless Q8_0 (~362 MB) — the best accuracy for
+    instruction-following / structured payload generation tasks.
     """
     return "https://huggingface.co/FadedRedStar/LFM2.5-350M-heretic-GGUF/resolve/main/LFM2.5-350M-heretic-Q8_0.gguf"
 
 
 async def _download_gguf(dest: Path, progress_cb: Any = None) -> bool:
-    """Скачать готовый GGUF-файл модели в dest с проверкой результата.
+    """Download the ready-made GGUF model file to dest and verify the result.
 
-    Возвращает True только после успешной загрузки непустого файла с
-    ожидаемым (минимальным) размером. При любом сбое частичный файл
-    удаляется, возвращается False — чтобы не подсунуть повреждённую модель.
+    Returns True only after a non-empty file with the expected (minimum) size
+    has been downloaded successfully. On any failure the partial file is
+    deleted and False is returned — so a damaged model is never used.
     """
     import urllib.request
 

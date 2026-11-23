@@ -14,14 +14,14 @@ from pentool.tui.widgets.statusbar import StatusBar
 @pytest.mark.e2e
 class TestAppLifecycle:
     async def test_app_mounts(self) -> None:
-        """PentoolApp запускается без исключений, pilot.app не None."""
+        """PentoolApp starts without exceptions, pilot.app is not None."""
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
             assert pilot.app is not None
 
     async def test_proxy_screen_in_dom(self) -> None:
-        """ProxyScreen присутствует в DOM после старта."""
+        """ProxyScreen is present in the DOM after startup."""
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -29,7 +29,7 @@ class TestAppLifecycle:
             assert len(screens) > 0
 
     async def test_module_tabs_in_dom(self) -> None:
-        """ModuleTabs присутствует в DOM."""
+        """ModuleTabs is present in the DOM."""
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -37,7 +37,7 @@ class TestAppLifecycle:
             assert tabs is not None
 
     async def test_statusbar_in_dom(self) -> None:
-        """StatusBar присутствует в DOM."""
+        """StatusBar is present in the DOM."""
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
@@ -45,7 +45,7 @@ class TestAppLifecycle:
             assert sb is not None
 
     async def test_content_switcher_in_dom(self) -> None:
-        """ContentSwitcher присутствует в DOM."""
+        """ContentSwitcher is present in the DOM."""
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()

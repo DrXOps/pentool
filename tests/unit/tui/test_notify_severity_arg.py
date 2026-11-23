@@ -6,7 +6,7 @@ app.notify("<msg>", "information")) raises TypeError at runtime — which, when
 it happens inside a try block, surfaces to the user as a bogus
 "…failed: …mixin.notify" error toast instead of the real message.
 
-Real case (Этап 5.1): app.py on_send_to_repeater called
+Real case (Stage 5.1): app.py on_send_to_repeater called
 self.notify("→ Repeater", "information") — the toast never showed and every
 Send-to-Repeater logged a failure. Fix: severity="information".
 

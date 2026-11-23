@@ -477,7 +477,7 @@ class TestGlobalSingleton:
 
 
 class TestOverrideEventBus:
-    """override_event_bus — context-managed DI/isolation (Этап 7.1)."""
+    """override_event_bus — context-managed DI/isolation (Stage 7.1)."""
 
     def test_restores_previous_after_block(self):
         b1 = get_event_bus()

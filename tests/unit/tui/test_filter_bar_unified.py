@@ -316,8 +316,9 @@ async def test_toggle_label_spells_the_state_it_is_in() -> None:
 
 def test_ws_bar_still_pins_websocket_only() -> None:
     bar = object.__new__(WsFilterBar)
-    # Молчание тоглов — ровно `NoMatches`: виджета нет в дереве. Раньше здесь
-    # стоял `LookupError`, и это скрывало, что бар ловил вообще всё (ADR-6 п.4).
+    # The toggles staying silent means exactly `NoMatches`: the widget is not in
+    # the tree. Previously `LookupError` stood here, and it hid the fact that the
+    # bar was catching absolutely everything (ADR-6 item 4).
     bar.query_one = lambda *a, **k: (_ for _ in ()).throw(NoMatches())  # type: ignore[method-assign]
     fields = bar.collect()
     assert any(p.field == "is_websocket" for p in fields)

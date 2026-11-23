@@ -1,16 +1,16 @@
 """
-Быстрый perf/memory раннер для pentool (~15 минут суммарно).
+Fast perf/memory runner for pentool (~15 minutes in total).
 
-Гоняет 5 сценариев по модулям, снимает:
-  - RSS до/после (psutil)
-  - tracemalloc top-аллокации (diff до/после)
-  - время выполнения
+Runs 5 module scenarios and captures:
+  - RSS before/after (psutil)
+  - tracemalloc top allocations (before/after diff)
+  - execution time
 
-Использование:
-    python3 tests/perf/quick_check.py                # все сценарии
-    python3 tests/perf/quick_check.py --only scanner  # один сценарий
+Usage:
+    python3 tests/perf/quick_check.py                # all scenarios
+    python3 tests/perf/quick_check.py --only scanner  # a single scenario
 
-Отчёт сохраняется в tests/perf/report_<timestamp>.md
+The report is saved to tests/perf/report_<timestamp>.md
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ async def _measure(name: str, coro_factory) -> ScenarioResult:
     return result
 
 
-# ── Сценарий 1: Scanner — 60 URL x все active checks ─────────────────────────
+# ── Scenario 1: Scanner — 60 URLs x all active checks ────────────────────────
 
 
 async def scenario_scanner(base_url: str) -> dict:
@@ -124,7 +124,7 @@ async def scenario_scanner(base_url: str) -> dict:
     }
 
 
-# ── Сценарий 2: Proxy — 5000 запросов через HttpStorage (SQLite) ────────────
+# ── Scenario 2: Proxy — 5000 requests through HttpStorage (SQLite) ───────────
 
 
 async def scenario_proxy_storage() -> dict:
@@ -139,7 +139,7 @@ async def scenario_proxy_storage() -> dict:
     storage = HttpStorage()
     await storage.init_db(db_path)
 
-    body = "x" * 500  # средний размер тела
+    body = "x" * 500  # average body size
     for i in range(n_requests):
         req = ParsedRequest(
             method="GET",
@@ -161,13 +161,13 @@ async def scenario_proxy_storage() -> dict:
     }
 
 
-# ── Сценарий 3: Intruder — Cluster bomb, словарь ~1000 слов ──────────────────
+# ── Scenario 3: Intruder — Cluster bomb, ~1000-word wordlist ─────────────────
 
 
 async def scenario_intruder(base_url: str) -> dict:
     from pentool.modules.intruder import AttackType, IntruderAttack, IntruderConfig
 
-    payloads = [f"payload{i}" for i in range(200)]  # 200 x 2 позиции = 400 combos (cluster_bomb)
+    payloads = [f"payload{i}" for i in range(200)]  # 200 x 2 positions = 400 combos (cluster_bomb)
     template = ("GET /search?q=§q§&id=§id§ HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").replace("§", "§")
     # actual host must match mock server port
     host_port = base_url.replace("http://", "")
@@ -199,7 +199,7 @@ async def scenario_intruder(base_url: str) -> dict:
     }
 
 
-# ── Сценарий 4: DataTable (ArrowBackend) — 50k строк ─────────────────────────
+# ── Scenario 4: DataTable (ArrowBackend) — 50k rows ──────────────────────────
 
 
 async def scenario_datatable() -> dict:
@@ -237,11 +237,11 @@ async def scenario_datatable() -> dict:
     }
 
 
-# ── Сценарий 5: Dashboard LiveChart — 10k push событий ───────────────────────
+# ── Scenario 5: Dashboard LiveChart — 10k push events ────────────────────────
 
 
 async def scenario_livechart() -> dict:
-    # Импортируем без Textual App context — тестируем чистую логику push/render
+    # Import without a Textual App context — test the pure push/render logic
     from collections import deque
 
     class FakeLiveChart:

@@ -1,4 +1,4 @@
-"""Доменные типы результатов Intruder, видимые слою хранения.
+"""Intruder result domain types as seen by the storage layer.
 
 Why a separate module and not `pentool.modules.intruder`: the layering rule
 forbids `storage -> modules`, yet `IntruderStorage` has to return
@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 
 @dataclass
 class IntruderResult:
-    """Один результат прогона Intruder.
+    """A single Intruder run result.
 
     The fields are exactly what the `intruder_results` table stores plus
     a computed `timestamp`. No behaviour: the object only carries

@@ -1,14 +1,14 @@
 """
-Углублённый perf-тест DataTable/ArrowBackend — отдельно от quick_check.py.
+Deep perf test for DataTable/ArrowBackend — kept separate from quick_check.py.
 
-Разделяет:
-  1. Стоимость первого импорта pyarrow/pandas (разовая, не масштабируется).
-  2. Реальную стоимость вставки N строк (после того как библиотека уже импортирована).
-  3. Поведение при росте размера (10k / 50k / 100k) — линейный рост или скачки.
-  4. Поведение ProxyScreen-стиля пересборки backend (rebuild "с нуля" при каждом батче,
-     как это фактически делает _flush_pending_rows/_reload_table в screen.py).
+Separates:
+  1. Cost of the first pyarrow/pandas import (one-off, does not scale).
+  2. The real cost of inserting N rows (once the library is already imported).
+  3. Behavior as size grows (10k / 50k / 100k) — linear growth or jumps.
+  4. Behavior of a ProxyScreen-style backend rebuild (rebuild "from scratch" on every batch,
+     which is effectively what _flush_pending_rows/_reload_table in screen.py do).
 
-Запуск:
+Run:
     python3 tests/perf/datatable_deep.py
 """
 
@@ -47,7 +47,7 @@ def _build_table(n_rows: int):
 
 
 def step1_import_cost() -> dict:
-    """Изолированная стоимость первого импорта pyarrow/pandas/textual_fastdatatable."""
+    """Isolated cost of the first pyarrow/pandas/textual_fastdatatable import."""
     gc.collect()
     rss_before = _rss_mb()
     t0 = time.monotonic()
@@ -66,7 +66,7 @@ def step1_import_cost() -> dict:
 
 
 def step2_scaling() -> list[dict]:
-    """10k / 50k / 100k строк — после того как pyarrow уже импортирован (шаг 1)."""
+    """10k / 50k / 100k rows — after pyarrow has already been imported (step 1)."""
     from textual_fastdatatable import ArrowBackend
 
     results = []
@@ -98,15 +98,15 @@ def step2_scaling() -> list[dict]:
                 "delta_mb": round(rss_after - rss_before, 1),
             }
         )
-        # Не удаляем table/backend намеренно — следующий шаг видит кумулятивный рост
+        # Deliberately not deleting table/backend — the next step sees cumulative growth
     return results
 
 
 def step3_rebuild_churn(n_rebuilds: int = 30, rows_per_rebuild: int = 2000) -> dict:
-    """Имитация ProxyScreen._flush_pending_rows: полная пересборка ArrowBackend
-    N раз подряд (как при живом трафике, где каждый батч создаёт новый backend).
-    Проверяем, растёт ли память монотонно (утечка старых backend/table) или
-    стабилизируется (GC успевает подобрать старые объекты).
+    """Simulation of ProxyScreen._flush_pending_rows: a full ArrowBackend rebuild
+    N times in a row (as under live traffic, where every batch creates a new backend).
+    Checks whether memory grows monotonically (a leak of old backend/table objects) or
+    stabilizes (GC manages to reclaim the old objects in time).
     """
     from textual_fastdatatable import ArrowBackend
 
@@ -115,8 +115,8 @@ def step3_rebuild_churn(n_rebuilds: int = 30, rows_per_rebuild: int = 2000) -> d
     rss_samples = []
     for i in range(n_rebuilds):
         table = _build_table(rows_per_rebuild)
-        # держим ссылку только на последний backend — как в реальном коде:
-        # старый теряет последнюю ссылку здесь
+        # keep a reference only to the latest backend — as in the real code:
+        # the old one loses its last reference here
         _backend = ArrowBackend(table)
         if i % 5 == 0:
             gc.collect()

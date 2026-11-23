@@ -104,7 +104,7 @@ def install_declined() -> bool:
 
 
 def ensure_lightpanda_with_consent(auto_yes: bool = False) -> bool:
-    """Скачать Lightpanda только с согласия пользователя.
+    """Download Lightpanda only with the user's consent.
 
     The download is one-off and large (~150 MiB), so:
       - already installed → True, no questions;

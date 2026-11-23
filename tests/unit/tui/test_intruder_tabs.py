@@ -1,13 +1,13 @@
-"""Тесты для табов в IntruderScreen (адаптированы под TabbedContentPanel).
+"""Tests for tabs in IntruderScreen (adapted for TabbedContentPanel).
 
-Проверяет:
+Checks:
 - _IntruderTabState dataclass
-- Прокси-свойства (_attack_type, _payloads, _all_results)
+- Proxy properties (_attack_type, _payloads, _all_results)
 - _save_current_tab_state
 - _load_active_tab_content
 - _auto_save_tab
 - _results_table
-- _on_tab_activated / _on_tab_deactivated обработчики
+- _on_tab_activated / _on_tab_deactivated handlers
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ class TestIntruderTabState:
         assert tab_state.filter_spec is spec
 
 
-# ── Proxy properties (через _tabs fallback) ─────────────────────────────
+# ── Proxy properties (via _tabs fallback) ───────────────────────────────
 class TestIntruderTabProxyProperties:
     """Tests for proxy properties on IntruderScreen."""
 
@@ -139,7 +139,7 @@ class TestIntruderTabProxyProperties:
         assert state.payload_load_in_progress is True
 
 
-# ── Tab management (взаимодействие с TabbedContentPanel) ─────────────────
+# ── Tab management (interaction with TabbedContentPanel) ────────────────
 class TestIntruderTabManagement:
     """Tests for Intruder-specific (not TabbedContentPanel) tab methods."""
 
@@ -154,7 +154,7 @@ class TestIntruderTabManagement:
         screen._tabs = [state]
         screen._active_tab_id = "intruder-tab-1"
 
-        # Настоящий TextArea для isinstance check
+        # Real TextArea needed for the isinstance check
         real_ta = TextArea()
         real_ta.text = "GET /test HTTP/1.1"
         mock_panel = MagicMock()
@@ -187,7 +187,7 @@ class TestIntruderTabManagement:
         )
         screen._tabs = [state]
         screen._active_tab_id = "intruder-tab-1"
-        # grep данные живут в state (per-tab)
+        # grep data lives in state (per-tab)
         assert state.grep_match_patterns == ["error"]
         assert state.grep_only_match is True
 
@@ -261,22 +261,22 @@ class TestIntruderTabManagement:
         with patch.object(screen, "_rebuild_table_data") as mock_rebuild:
             screen._on_tab_activated(event)
         mock_rebuild.assert_called_once()
-        # grep данные в state (per-tab), не в глобальных полях экрана
+        # grep data lives in state (per-tab), not in global screen fields
         assert state.grep_match_patterns == ["error", "warning"]
         assert state.grep_only_match is True
 
 
 class TestIntruderPanelBinding:
-    """Регрессия: _tc_panel должен быть property, _on_tab_closed не должен
-    падать с 'TabbedContentPanel object is not callable'.
+    """Regression: _tc_panel must be a property, and _on_tab_closed must not
+    fail with 'TabbedContentPanel object is not callable'.
 
-    Причина бага: _tc_panel был объявлен как метод, но вызывался как property
-    (self._tc_panel.action_new_tab()). А в _on_tab_closed ручное инстанцирование
-    TabActivated(self._tc_panel(), ...) пыталось вызвать объект-панель.
+    Root cause: _tc_panel was declared as a method but called as a property
+    (self._tc_panel.action_new_tab()). And in _on_tab_closed, manually
+    instantiating TabActivated(self._tc_panel(), ...) tried to call the panel object.
     """
 
     def test_tc_panel_is_property_returns_panel(self):
-        """_tc_panel — property, возвращает TabbedContentPanel, не bound-method."""
+        """_tc_panel is a property returning TabbedContentPanel, not a bound method."""
         from textual.app import App, ComposeResult
         from textual.widgets import ContentSwitcher
 
@@ -297,9 +297,9 @@ class TestIntruderPanelBinding:
                 assert isinstance(panel, TabbedContentPanel), (
                     f"_tc_panel должен быть панелью, получил {type(panel).__name__}"
                 )
-                # не bound-method (не callable прямо)
+                # not a bound method (not directly callable)
                 assert not isinstance(panel, str)
-                # action_new_tab через экран не падает
+                # action_new_tab through the screen does not crash
                 screen.action_new_tab()
                 await pilot.pause()
                 assert panel.tab_count >= 1
@@ -309,7 +309,7 @@ class TestIntruderPanelBinding:
         asyncio.run(_run())
 
     def test_on_tab_closed_no_manual_message(self):
-        """Закрытие таба через панель не падает в _on_tab_closed."""
+        """Closing a tab through the panel does not crash in _on_tab_closed."""
         from textual.app import App, ComposeResult
         from textual.widgets import ContentSwitcher
 
@@ -340,10 +340,10 @@ class TestIntruderPanelBinding:
 
 
 class TestIntruderTabContent:
-    """Регрессия: содержимое таба должно строиться (не пустые табы).
+    """Regression: tab content must be built (no empty tabs).
 
-    Причина бага: TabbedContentPanel вызывал заглушечный _mount_tab_ui,
-    игнорируя _build_tab_ui → TabPane был пустым, template-panel отсутствовал.
+    Root cause: TabbedContentPanel called a stub _mount_tab_ui, ignoring
+    _build_tab_ui → TabPane was empty and the template-panel was missing.
     """
 
     def test_tab_is_not_empty_and_has_template(self):
@@ -366,22 +366,22 @@ class TestIntruderTabContent:
                 panel = screen._tc_panel
                 tid = panel.active_tab_id
                 pane = panel.tabs_content.get_pane(tid)
-                # Таб должен содержать template-panel — самый критичный момент
+                # The tab must contain the template-panel — the most critical point
                 template = pane.query_one(f"#template-panel-{tid}", ContentPanel)
                 assert template is not None
-                # Правая панель с payloads существует
+                # The right panel with payloads exists
                 right = pane.query_one(f"#body-right-{tid}")
                 assert right is not None
                 lv = pane.query_one(f"#payload-list-{tid}")
                 assert lv is not None
-                # Проверки выше упали бы пустым NoMatches, если таб пустой
+                # The checks above would fail with an empty NoMatches if the tab were empty
 
         import asyncio
 
         asyncio.run(_run())
 
     def test_tab_has_full_ui_sections(self):
-        """Весь экран per-tab: results, detail, filter, toolbar — внутри таба."""
+        """The whole screen is per-tab: results, detail, filter, toolbar live inside the tab."""
         from textual.app import App, ComposeResult
         from textual.widgets import ContentSwitcher
 
@@ -403,18 +403,18 @@ class TestIntruderTabContent:
                 tid = panel.active_tab_id
                 pane = panel.tabs_content.get_pane(tid)
 
-                # Results table + progress в табе (query_one падает NoMatches,
-                # если виджета нет — проверка выше уже настоящая).
+                # Results table + progress in the tab (query_one raises NoMatches
+                # when the widget is missing — so this check is a real one).
                 pane.query_one(f"#results-table-{tid}", IntruderResultsTable)
                 pane.query_one(f"#attack-progress-{tid}")
                 pane.query_one(f"#progress-label-{tid}")
 
-                # Detail panel + HttpView в табе
+                # Detail panel + HttpView in the tab
                 pane.query_one(f"#detail-request-{tid}", HttpView)
                 pane.query_one(f"#detail-response-{tid}", HttpView)
 
-                # Payload toolbar в табе. Start/Stop и Clear results —
-                # глобальные (одни на все вкладки), их проверяет
+                # Payload toolbar in the tab. Start/Stop and Clear results are
+                # global (shared by all tabs); they are covered by
                 # test_intruder_toolbar_wiring.py.
                 pane.query_one(f"#btn-payload-set-{tid}")
                 pane.query_one(f"#btn-payload-add-{tid}")

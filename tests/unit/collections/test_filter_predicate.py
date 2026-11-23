@@ -1,6 +1,6 @@
-"""Тесты FilterPredicate/FilterSpec — все операторы, комбинирование, граничные случаи.
+"""Tests for FilterPredicate/FilterSpec — all operators, combining, edge cases.
 
-Цель: 100% покрытие логики фильтрации.
+Goal: 100% coverage of the filtering logic.
 """
 
 from __future__ import annotations
@@ -178,7 +178,7 @@ class TestIn:
         assert params == ["GET", "POST"]
 
     def test_hosts_special(self):
-        """field='hosts' + IN разворачивается в OR для портов."""
+        """field='hosts' + IN expands into OR for ports."""
         p = FilterPredicate("hosts", FilterOp.IN, ["example.com", "test.org"])
         clause, params = p.to_sql()
         assert clause == ("((host = ? OR host LIKE ?) OR (host = ? OR host LIKE ?))")
@@ -190,7 +190,7 @@ class TestIn:
         ]
 
     def test_single_value(self):
-        """IN с одним значением."""
+        """IN with a single value."""
         p = FilterPredicate("method", FilterOp.IN, "GET")
         clause, params = p.to_sql()
         assert params == ["GET"]
@@ -207,7 +207,7 @@ class TestRegex:
 
     def test_invalid_regex(self):
         p = FilterPredicate("payload", FilterOp.REGEX, r"[invalid")
-        assert not p.apply({"payload": "test"})  # не падает
+        assert not p.apply({"payload": "test"})  # does not crash
 
     def test_sql(self):
         p = FilterPredicate("payload", FilterOp.REGEX, r"admin")
@@ -277,7 +277,7 @@ class TestFts:
         assert params == []
 
 
-# ─── FilterSpec — комбинирование ─────────────────────────────────────────────
+# ─── FilterSpec — combining ──────────────────────────────────────────────────
 
 
 class TestFilterSpecSql:
@@ -381,11 +381,11 @@ class TestFilterSpecApply:
         assert FilterSpec(predicates=[]).apply([{"a": 1}]) == [{"a": 1}]
 
     def test_none_value_applied(self):
-        """Проверка что apply не падает на None."""
+        """Checks that apply does not crash on None."""
         assert not FilterPredicate("host", FilterOp.EQ, "x").apply({"host": None})
 
 
-# ─── FilterSpec — сериализация ──────────────────────────────────────────────
+# ─── FilterSpec — serialization ─────────────────────────────────────────────
 
 
 class TestFilterSpecSerialization:
@@ -401,7 +401,7 @@ class TestFilterSpecSerialization:
         spec2 = FilterSpec.from_dict(d)
         assert len(spec2.predicates) == 3
         assert spec2.logic == "AND"
-        # SQL должен совпадать
+        # SQL must match
         assert spec.to_sql() == spec2.to_sql()
 
     def test_empty_to_dict(self):
@@ -413,17 +413,17 @@ class TestFilterSpecSerialization:
         assert spec.is_empty
 
 
-# ─── Граничные случаи ────────────────────────────────────────────────────────
+# ─── Edge cases ──────────────────────────────────────────────────────────────
 
 
 class TestEdgeCases:
     def test_none_field_in_row(self):
-        """Поле есть, но значение None — apply должен вернуть False."""
+        """Field present, but value is None — apply must return False."""
         p = FilterPredicate("status_code", FilterOp.EQ, 200)
         assert not p.apply({"status_code": None})
 
     def test_wrong_type_in_row(self):
-        """Поле есть, но тип не тот — EQ сравнивает, может вернуть False."""
+        """Field present but of wrong type — EQ compares and may return False."""
         p = FilterPredicate("status_code", FilterOp.EQ, 200)
         assert not p.apply({"status_code": "200"})  # int vs str
 
@@ -436,13 +436,13 @@ class TestEdgeCases:
         assert not p.apply({"x": 25})
 
 
-# ─── Комбинирование 5+ фильтров (симуляция реального сценария) ──────────────
+# ─── Combining 5+ filters (real-world scenario simulation) ──────────────────
 
 
 class TestFiveFiltersAnd:
-    """Сценарий: пользователь применил Host + Method + Status + Search + Scope.
+    """Scenario: the user applied Host + Method + Status + Search + Scope.
 
-    AND-логика — все условия должны выполниться одновременно.
+    AND logic — all conditions must hold at the same time.
     """
 
     def test_all_match(self):
@@ -482,7 +482,7 @@ class TestFiveFiltersAnd:
             ]
         )
         clause, params = s.to_sql()
-        # BETWEEN содержит " AND " внутри — считаем по кол-ву предикатов
+        # BETWEEN contains " AND " inside — so count predicates instead
         assert clause.startswith("WHERE")
         assert "host LIKE" in clause
         assert "method IN" in clause
@@ -492,14 +492,14 @@ class TestFiveFiltersAnd:
 
 
 class TestScopeAndCommentsTogether:
-    """Сценарий: scope_only=True + has_comment=True.
+    """Scenario: scope_only=True + has_comment=True.
 
-    Ожидается: строки, которые входят в scope И имеют комментарий.
-    На уровне apply: host в списке И comment не пустой.
+    Expected: rows that fall within scope AND have a comment.
+    At the apply level: host is in the list AND comment is not empty.
     """
 
     def test_scope_sql(self):
-        """scope_only → разворачивается в OR с портами. Проверяем SQL."""
+        """scope_only → expands into OR with ports. We check the SQL."""
         s = FilterSpec(
             predicates=[
                 FilterPredicate("hosts", FilterOp.IN, ["example.com", "test.org"]),
@@ -513,8 +513,8 @@ class TestScopeAndCommentsTogether:
         assert "test.org" in str(params)
 
     def test_scope_in_apply_treats_as_regular_in(self):
-        """apply для 'hosts' работает как обычный IN (сравнение точное)."""
-        # Это не SQL-ветка — in-memory apply не обрабатывает hosts специально
+        """apply for 'hosts' works like a regular IN (exact comparison)."""
+        # This is not the SQL branch — in-memory apply does not special-case hosts
         p = FilterPredicate("hosts", FilterOp.IN, ["example.com"])
         assert p.apply({"hosts": "example.com"})
         assert not p.apply({"hosts": "other.com"})
@@ -524,12 +524,12 @@ class TestScopeAndCommentsTogether:
         assert not FilterPredicate("comment", FilterOp.NOT_NULL, None).apply({"comment": ""})
 
 
-# ─── FTS комбинации ─────────────────────────────────────────────────────────
+# ─── FTS combinations ───────────────────────────────────────────────────────
 
 
 class TestFtsCombination:
     def test_fts_with_other_predicates(self):
-        """FTS исключается из SQL, но доступен через .fts_query."""
+        """FTS is excluded from SQL but is available via .fts_query."""
         s = FilterSpec(
             predicates=[
                 FilterPredicate("host", FilterOp.LIKE, "example"),
@@ -539,7 +539,7 @@ class TestFtsCombination:
         sql_clause, sql_params = s.to_sql()
         assert "host LIKE" in sql_clause
         assert s.fts_query == "login admin"
-        # SQL содержит только host, FTS отдельно
+        # SQL contains only host, FTS is separate
         assert len(sql_params) == 1
 
     def test_only_fts(self):

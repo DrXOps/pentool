@@ -205,7 +205,7 @@ class Repeater(BaseSqliteStorage):
         request_text: str,
         sort_order: int = 0,
     ) -> None:
-        """Upsert одной вкладки по её стабильному `tab_uid`.
+        """Upsert a single tab identified by its stable `tab_uid`.
 
         Name and text are replaceable: `tab_uid` is created once per tab lifetime,
         and renaming is cosmetic — it must not create a new row.
@@ -255,7 +255,7 @@ class Repeater(BaseSqliteStorage):
         await self._db.commit()
 
     async def seed_tabs_from_history(self) -> list[dict]:
-        """Одноразовая миграция: собрать реестр вкладок из истории отправок.
+        """One-time migration: rebuild the tab registry from the send history.
 
         Until 2026-11-16 the set of tabs was the last 20 rows of
         `repeater_entries`, grouped by `tab_name`. In an existing project

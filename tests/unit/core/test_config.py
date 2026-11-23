@@ -110,7 +110,7 @@ class TestConfigSaveLoad:
         assert d["log_level"] == "WARNING"
 
     def test_ai_fields_round_trip(self, tmp_path: Path) -> None:
-        """AI-поля сохраняются через save→load (регрессия бага #1 аудита)."""
+        """AI fields survive save→load (regression for audit bug #1)."""
         cfg = Config(
             ai_enabled=True,
             ai_model="test.gguf",
@@ -151,7 +151,7 @@ class TestConfigSingleton:
 
 
 class TestConfigOverride:
-    """override_config — context-managed DI/isolation (Этап 7.1)."""
+    """override_config — context-managed DI/isolation (Stage 7.1)."""
 
     def test_restores_previous_after_block(self) -> None:
         prev = Config(proxy_port=1)

@@ -9,8 +9,8 @@ from __future__ import annotations
 import os
 import tempfile
 
-# Тесты пишут журнал в /tmp, а не в настоящий ~/.config/pentool/logs/:
-# DEBUG-запись на каждый зонд в файл на 9p замедляла прогон втрое.
+# Tests write the log to /tmp, not to the real ~/.config/pentool/logs/:
+# one DEBUG record per probe to a file on 9p made the run three times slower.
 os.environ.setdefault("PENTOOL_LOG_FILE", str(__import__("pathlib").Path(tempfile.gettempdir()) / "pentool-tests.log"))
 os.environ.setdefault("PENTOOL_LOG_LEVEL", "WARNING")
 

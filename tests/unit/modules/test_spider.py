@@ -689,41 +689,41 @@ class TestSpiderJsRenderConfig:
 
 class TestSpiderAPIStop:
     def test_spider_api_stop_sets_correct_attribute(self):
-        """SpiderAPI.stop() должен устанавливать правильный атрибут _stop в AsyncSpider."""
+        """SpiderAPI.stop() must set the correct _stop attribute on AsyncSpider."""
         from pentool.api.spider_api import SpiderAPI
         from pentool.modules.spider import AsyncSpider
 
         api = SpiderAPI()
-        # Создаём mock-экземпляр AsyncSpider и подставляем его
+        # Create a mock AsyncSpider instance and substitute it
         spider = AsyncSpider()
         api._spider = spider
 
-        # До вызова stop() флаг равен False
+        # Before stop() is called the flag is False
         assert spider._stop is False
 
         api.stop()
 
-        # После вызова stop() флаг должен быть True
+        # After stop() is called the flag must be True
         assert spider._stop is True
-        # Флаг SpiderAPI тоже должен быть установлен
+        # The SpiderAPI flag must be set as well
         assert api._stop_requested is True
 
     def test_spider_api_stop_without_spider(self):
-        """SpiderAPI.stop() не падает, если _spider ещё не создан (None)."""
+        """SpiderAPI.stop() does not raise when _spider has not been created yet (None)."""
         from pentool.api.spider_api import SpiderAPI
 
         api = SpiderAPI()
         assert api._spider is None
-        # Не должно вызывать исключений
+        # Must not raise any exceptions
         api.stop()
         assert api._stop_requested is True
 
     def test_extract_path_variants_no_duplicates(self):
-        """_extract_path_variants не должен возвращать оригинальный URL как вариант."""
+        """_extract_path_variants must not return the original URL as a variant."""
         spider = AsyncSpider()
         url = "https://example.com/api/users/123/profile"
         variants = spider._extract_path_variants(url, "example.com")
-        # Ни один вариант не должен совпадать с оригинальным URL (дубль)
+        # No variant may match the original URL (a duplicate)
         assert url not in variants
 
     def test_extract_path_variants_generates_injections(self):

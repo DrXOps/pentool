@@ -1,4 +1,4 @@
-"""Unit tests for the screen registry (Этап 5.1)."""
+"""Unit tests for the screen registry (Stage 5.1)."""
 
 from __future__ import annotations
 
@@ -22,11 +22,10 @@ CORE_MODULES = {
 
 class TestScreenRegistry:
     def test_all_core_modules_mapped(self):
-        # Подмножество, а не равенство: PRO-экраны (recon) регистрируются
-        # лениво, при первом обращении к get_screen_class(), поэтому набор
-        # ключей зависит от порядка тестов. Точный набор здесь означал бы
-        # «тест проходит или падает в зависимости от того, кто раньше
-        # открыл Recon».
+        # A subset, not equality: PRO screens (recon) are registered lazily,
+        # on the first call to get_screen_class(), so the set of keys depends
+        # on test order. An exact set here would mean "the test passes or
+        # fails depending on who opened Recon first".
         missing = CORE_MODULES - set(SCREEN_MAP)
         assert not missing, f"не зарегистрированы экраны: {sorted(missing)}"
 
@@ -43,11 +42,11 @@ class TestScreenRegistry:
             assert isinstance(cls, type), f"{module_id} -> {cls!r} is not a class"
 
     def test_recon_is_reached_through_the_getter(self):
-        """PRO-экран грузится лениво и обязан быть доступен через геттер.
+        """The PRO screen loads lazily and must be reachable through the getter.
 
-        Импорт на уровне модуля давал цикл app → registry → recon → app:
-        `ImportError` проглатывался, и Recon открывался пустым окном. Поэтому
-        проверяем именно API, а не наличие ключа в SCREEN_MAP.
+        A module-level import created the cycle app → registry → recon → app:
+        the `ImportError` was swallowed, and Recon opened as an empty window.
+        So we check the API itself, not the presence of a key in SCREEN_MAP.
         """
         cls = get_screen_class("recon")
         if cls is None:

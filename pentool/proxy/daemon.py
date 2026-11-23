@@ -1,4 +1,4 @@
-"""Proxy daemon process (П.3 isolation).
+"""Proxy daemon process (P.3 isolation).
 
 Runs the ProxyServer in its OWN process/event-loop, so nothing in the TUI
 shares memory or an asyncio loop with the proxy. It:

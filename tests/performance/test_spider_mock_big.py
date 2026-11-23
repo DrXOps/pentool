@@ -1,11 +1,11 @@
-"""Быстрый perf-проверка Spider на локальном MockBigSite.
+"""Quick perf check of Spider against the local MockBigSite.
 
-Аналог тяжёлого `tests/perf/load_spider.py --level b` (M7). Проверяем на
-маленьком детерминированном mock-сайте:
-  - обход заканчивается (не зацикливается);
-  - дедупликация: число уникальных посещённых страниц ≤ max_pages, и
-    total_requests = len(visited) (нет повторных запросов одного URL);
-  - RSS не взрывается скачком на малом объёме (smoke-ассерт).
+Analogous to the heavy `tests/perf/load_spider.py --level b` (M7). We check on
+a small deterministic mock site:
+  - the crawl finishes (does not loop forever);
+  - deduplication: the number of unique visited pages ≤ max_pages, and
+    total_requests = len(visited) (no repeated requests for the same URL);
+  - RSS does not blow up abruptly on a small volume (smoke assertion).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ pytestmark = pytest.mark.perf
 
 
 def test_mock_site_crawl_completes_and_dedups():
-    """Обход MockBigSite: завершается, дедуплицирует, в пределах max_pages."""
+    """Crawl of MockBigSite: finishes, deduplicates, stays within max_pages."""
     gc.collect()
     rss_before = rss_mb()
 
@@ -37,28 +37,28 @@ def test_mock_site_crawl_completes_and_dedups():
     r = asyncio.run(_run())
     d = r.to_dict()
 
-    # Завершился, не зациклился
+    # Finished, did not get stuck in a loop
     assert d["pages_count"] <= 50, "превышен max_pages"
-    # Все найденные страницы уникальны (дедупликация внутри result.pages)
+    # All discovered pages are unique (dedup inside result.pages)
     assert len(r.pages) == len(set(r.pages)), "страницы дублируются в result.pages"
-    # Хотя бы что-то обойдено
+    # At least something was crawled
     assert d["pages_count"] > 0 or d["endpoints_count"] > 0, "crawl нашёл 0 страниц"
 
-    # RSS не должен скачком улететь на мелком прогоне (smoke; самплинг шумный)
+    # RSS must not jump on a small run (smoke; sampling is noisy)
     gc.collect()
     rss_after = rss_mb()
     assert rss_after - rss_before < 25, f"RSS изменился на {rss_after - rss_before:.1f}MB на малом обходе"
 
 
 def test_spider_scope_respected():
-    """Спайдер не уходит за пределы домена (scope)."""
+    """The spider does not leave the domain (scope)."""
 
     async def _run():
         cfg = MockBigSiteConfig(n_pages=50, params_per_page=2)
         async with MockBigSite(cfg) as site:
             spider = AsyncSpider(max_depth=3, max_pages=100, concurrency=5, timeout=10)
             r = await spider.crawl(site.base_url)
-            # Все найденные ссылки/форм — того же домена (127.0.0.1:port)
+            # All discovered links/forms belong to the same domain (127.0.0.1:port)
             for p in r.pages:
                 assert site.base_url in p, f"страница вне scope: {p}"
             return True

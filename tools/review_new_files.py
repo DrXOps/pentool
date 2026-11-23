@@ -1,25 +1,25 @@
-"""Гейт для новых файлов: решение «в репозиторий» или «в .gitignore».
+"""Gate for new files: the decision "into the repository" or "into .gitignore".
 
-Проблема, которую он закрывает: в удалённый репозиторий попадали случайные
-файлы — черновики, скриншоты с именами вроде `aaaaaaaaaaaa.png`, скрипты «на
-пять минут», пустые подпроекты, локальные инструкции агента. `pre-commit-guard`
-проверяет только *каталог* файла, поэтому внутри разрешённого каталога мусор
-проходил молча.
+The problem it closes: random files were getting into the remote repository —
+drafts, screenshots named like `aaaaaaaaaaaa.png`, scripts written "in five
+minutes", empty subprojects, local agent instructions. `pre-commit-guard`
+checks only the *directory* of a file, so junk inside an allowed directory
+passed silently.
 
-Правило: каждый файл, добавляемый в индекс (`git diff --cached --diff-filter=A`),
-обязан иметь **явное** решение в `.claude/state/new-file-decisions.tsv`:
+Rule: every file added to the index (`git diff --cached --diff-filter=A`)
+must have an **explicit** decision in `.claude/state/new-file-decisions.tsv`:
 
-    <путь><TAB>keep     — файл нужен в репозитории
-    <путь><TAB>ignore   — файл локальный; путь обязан быть в .gitignore
+    <path><TAB>keep     — the file is needed in the repository
+    <path><TAB>ignore   — the file is local; the path must be in .gitignore
 
-Решения — локальные (каталог `.claude/state/` в .gitignore): это рабочий журнал
-агента, а не часть продукта. Решение `ignore` без соответствующего правила в
-`.gitignore` считается ошибкой: иначе «локальный» файл всё равно уедет в origin
-при следующем `git add -A`.
+Decisions are local (the `.claude/state/` directory is in .gitignore): it is the
+agent's working log, not part of the product. An `ignore` decision without a
+matching rule in `.gitignore` is treated as an error: otherwise the "local" file
+still travels to origin on the next `git add -A`.
 
-Использование:
-    python tools/review_new_files.py                 # проверить (код возврата 0/1)
-    python tools/review_new_files.py --list          # показать добавленные и решения
+Usage:
+    python tools/review_new_files.py                 # check (exit code 0/1)
+    python tools/review_new_files.py --list          # show added files and decisions
     python tools/review_new_files.py --decide PATH keep|ignore
 """
 
@@ -37,7 +37,7 @@ VALID = (KEEP, IGNORE)
 
 
 def staged_added(cwd: Path | None = None) -> list[str]:
-    """Файлы, добавленные в индекс (новые, не правки существующих)."""
+    """Files added to the index (new ones, not edits to existing files)."""
     result = subprocess.run(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=A"],
         capture_output=True,
@@ -51,7 +51,7 @@ def staged_added(cwd: Path | None = None) -> list[str]:
 
 
 def is_ignored(path: str, cwd: Path | None = None) -> bool:
-    """Реально ли путь игнорируется git (а не только записан в решении)."""
+    """Whether the path is really ignored by git (not just recorded in a decision)."""
     result = subprocess.run(
         ["git", "check-ignore", "-q", path],
         capture_output=True,
@@ -63,8 +63,8 @@ def is_ignored(path: str, cwd: Path | None = None) -> bool:
 
 
 def load_decisions(path: Path | None = None) -> dict[str, str]:
-    # Путь берём во время вызова, а не в момент определения функции: иначе
-    # подмена DECISIONS в тестах не действует (проверено тестом).
+    # Take the path at call time rather than when the function is defined:
+    # otherwise patching DECISIONS in tests has no effect (verified by a test).
     path = path or DECISIONS
     if not path.is_file():
         return {}
@@ -92,7 +92,7 @@ def save_decision(file_path: str, decision: str, path: Path | None = None) -> No
 
 
 def check(added: list[str], decisions: dict[str, str], ignored: set[str]) -> list[str]:
-    """Вернуть список проблем (пустой — всё решено). Чистая функция для тестов."""
+    """Return the list of problems (empty means everything is decided). Pure function for tests."""
     problems: list[str] = []
     for name in added:
         decision = decisions.get(name)

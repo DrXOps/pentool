@@ -1,14 +1,14 @@
-"""F-015: закрытие вкладки Intruder обязано остановить её атаку.
+"""F-015: closing the Intruder tab must stop its attack.
 
-`action_start_attack` создаёт атаку, кладёт её в состояние таба и запускает
-воркер. Закрытие вкладки раньше только убирало pane из `TabbedContent`:
-атака продолжала слать запросы по цели, которых пользователь уже не видит, а
-воркер жил до конца `attack.run()`. То же при уходе с экрана — и там
-`query_one("#intruder-tabs")` в `on_unmount` вообще не находил DOM, так что
-даже список табов не читался.
+`action_start_attack` creates an attack, puts it into the tab state and starts
+the worker. Closing a tab used to only remove the pane from `TabbedContent`:
+the attack kept sending requests to the target that the user no longer sees,
+and the worker lived until the end of `attack.run()`. The same happened when
+leaving the screen — and there `query_one("#intruder-tabs")` in `on_unmount`
+did not find the DOM at all, so not even the tab list was read.
 
-Тесты держат настоящую атаку-двойника: она не завершается сама, поэтому
-«остановили» и «не остановили» различимы по счётчику `stop()`.
+The tests hold a real twin attack: it never finishes on its own, so "stopped"
+and "not stopped" are distinguishable by the `stop()` counter.
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ from pentool.tui.screens.intruder.screen import IntruderScreen
 
 
 class _SpyAttack:
-    """Атака-двойник: висит, пока её не отпустят.
+    """Twin attack: hangs until it is released.
 
-    ``stop()`` только считает вызов. Отпускает ли он ``run()`` — параметр:
-    с ``releases=False`` воркер снимается исключительно через
-    ``workers.cancel_group``, и тогда тест различает «попросили встать» и
-    «сняли воркер». Настоящая атака ведёт себя именно так: ``stop()``
-    поднимает флаг внутри сетевого цикла и возвращается не сразу.
+    ``stop()`` only counts the call. Whether it releases ``run()`` is a
+    parameter: with ``releases=False`` the worker is taken down exclusively via
+    ``workers.cancel_group``, and then the test tells "asked to stop" apart from
+    "worker removed". The real attack behaves exactly like that: ``stop()``
+    raises a flag inside the network loop and does not return immediately.
     """
 
     def __init__(self, releases: bool = True) -> None:
@@ -74,7 +74,7 @@ async def _settle(pilot, cycles: int = 8) -> None:
 
 
 async def _screen_with_running_attack(pilot, releases: bool = True):
-    """Довести экран до состояния «атака идёт» без сети и без БД."""
+    """Bring the screen to the "attack is running" state without network and without DB."""
     screen = pilot.app.query_one(IntruderScreen)
     spy = _SpyAttack(releases=releases)
     screen._api = _FakeApi(attack=spy)  # type: ignore[assignment]
@@ -85,8 +85,8 @@ async def _screen_with_running_attack(pilot, releases: bool = True):
     tab.attack_type = tab.attack_type  # noqa: B018 — keep the state object
     tab.template_text = "GET /§§ HTTP/1.1\r\nHost: example.com\r\n\r\n"
 
-    # Минимальный путь без UI-валидации: то же, что делает action_start_attack
-    # после сборки конфига.
+    # Minimal path without UI validation: the same as action_start_attack does
+    # after building the config.
     tab.attack = spy  # type: ignore[assignment]
     tab.running = True
     screen._live_attacks[tab.tab_id] = spy
@@ -104,7 +104,7 @@ class TestClosingATabStopsItsAttack:
             screen, tab, spy = await _screen_with_running_attack(pilot)
             assert spy.started == 1, "precondition: the attack worker must be running"
 
-            # Нужна вторая вкладка: закрывать последнюю панель не даёт.
+            # A second tab is needed: closing the last panel is not allowed.
             screen._tc_panel.action_new_tab()
             await _settle(pilot)
             screen._tc_panel.switch_to(tab.tab_id)
@@ -123,10 +123,10 @@ class TestClosingATabStopsItsAttack:
             assert tab.running is False
 
     async def test_the_worker_is_cancelled_not_just_asked(self) -> None:
-        """Снять группу — значит не дождаться конца `attack.run()`.
+        """Removing the group means not waiting for the end of `attack.run()`.
 
-        ``releases=False``: `stop()` не отпускает `run()`, поэтому воркер
-        исчезает только если его действительно отменили.
+        ``releases=False``: `stop()` does not release `run()`, so the worker
+        disappears only if it was really cancelled.
         """
         app = _App()
         async with app.run_test(size=(200, 60)) as pilot:
@@ -144,7 +144,7 @@ class TestClosingATabStopsItsAttack:
 
 class TestLeavingTheScreenStopsAttacks:
     async def test_unmount_reaches_an_attack_whose_dom_is_already_gone(self) -> None:
-        """`on_unmount` не может искать табы в DOM — только в своём словаре."""
+        """`on_unmount` cannot look up tabs in the DOM — only in its own dict."""
         app = _App()
         async with app.run_test(size=(200, 60)) as pilot:
             await _settle(pilot)

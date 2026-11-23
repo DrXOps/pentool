@@ -11,7 +11,7 @@ from pentool.modules.decoder import encode_op, run_chain
 
 @pytest.mark.performance
 def test_base64_encode_perf():
-    # 100KB данных
+    # 100KB of data
     data = "A" * (100 * 1024)
     start = time.monotonic()
     for _ in range(100):
@@ -32,7 +32,7 @@ def test_url_encode_perf():
 
 @pytest.mark.performance
 def test_decode_chain_perf():
-    # Цепочка: base64 → url
+    # Chain: base64 → url
     chain = ["Base64 Encode", "URL Encode"]
     data = "Hello, World! Test data for chain encoding performance."
     start = time.monotonic()

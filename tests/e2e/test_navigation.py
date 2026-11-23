@@ -12,7 +12,7 @@ from pentool.tui.app import PentoolApp
 @pytest.mark.e2e
 class TestNavigation:
     async def test_switch_to_repeater(self) -> None:
-        """Клавиша R → RepeaterScreen активна в ContentSwitcher."""
+        """Key R → RepeaterScreen is active in ContentSwitcher."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
@@ -24,7 +24,7 @@ class TestNavigation:
             assert cs.current == "screen-repeater"
 
     async def test_switch_to_intruder(self) -> None:
-        """Клавиша I → IntruderScreen активна в ContentSwitcher."""
+        """Key I → IntruderScreen is active in ContentSwitcher."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
@@ -36,7 +36,7 @@ class TestNavigation:
             assert cs.current == "screen-intruder"
 
     async def test_switch_to_decoder(self) -> None:
-        """Клавиша D → DecoderScreen активна в ContentSwitcher."""
+        """Key D → DecoderScreen is active in ContentSwitcher."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
@@ -48,7 +48,7 @@ class TestNavigation:
             assert cs.current == "screen-decoder"
 
     async def test_back_to_proxy(self) -> None:
-        """R → P → ProxyScreen активна в ContentSwitcher."""
+        """R → P → ProxyScreen is active in ContentSwitcher."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
@@ -62,12 +62,12 @@ class TestNavigation:
             assert cs.current == "screen-proxy"
 
     async def test_switch_to_scanner(self) -> None:
-        """Клавиша S → ScannerScreen активна в ContentSwitcher.
+        """Key S → ScannerScreen is active in ContentSwitcher.
 
-        Scanner закрыт фичей `scanner_pro`: без лицензии `_switch_to` уходит
-        в notify и остаётся на прежнем экране. Тест подставляет валидную
-        лицензию — иначе он проверял бы не навигацию, а отсутствие ключа
-        в окружении CI.
+        Scanner is gated by the `scanner_pro` feature: without a license `_switch_to`
+        falls through to notify and stays on the previous screen. The test injects a
+        valid license — otherwise it would verify the absence of a key in the CI
+        environment instead of navigation.
         """
         from unittest.mock import patch
 
@@ -86,7 +86,7 @@ class TestNavigation:
                 assert cs.current == "screen-scanner"
 
     async def test_switch_to_scanner_is_license_gated(self) -> None:
-        """Без `scanner_pro` клавиша S не переключает экран, а уведомляет."""
+        """Without `scanner_pro` the S key does not switch screens, it only notifies."""
         from unittest.mock import patch
 
         from pentool.core.license import LicenseInfo
@@ -104,7 +104,7 @@ class TestNavigation:
                 assert cs.current != "screen-scanner", "unlicensed Scanner must not open"
 
     async def test_multiple_switches(self) -> None:
-        """P → R → I → D без краша."""
+        """P → R → I → D without a crash."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:

@@ -1,9 +1,9 @@
-"""Тесты для TabbedContentPanel — универсального таб-контейнера.
+"""Tests for TabbedContentPanel — a universal tab container.
 
-Проверяет:
-- Создание/удаление табов
-- Переключение
-- Сигналы (TabCreated, TabActivated, TabDeactivated, TabClosed)
+Checks:
+- creation/removal of tabs
+- switching
+- signals (TabCreated, TabActivated, TabDeactivated, TabClosed)
 - rename
 - load_from_storage / close_all
 """
@@ -28,9 +28,9 @@ def panel():
     )
     mock_tc = MagicMock()
     p.query_one = MagicMock(return_value=mock_tc)
-    # call_after_refresh — вызываем синхронно
+    # call_after_refresh — call synchronously
     p.call_after_refresh = lambda fn, *a, **kw: fn(*a)
-    # post_message — записываем для проверки
+    # post_message — record messages for verification
     p._test_messages = []
     p.post_message = lambda msg: p._test_messages.append(msg)
     return p
@@ -180,10 +180,10 @@ def test_get_tab_id_by_uid(panel):
     assert panel.get_tab_id_by_uid("nonexistent") is None
 
 
-# ── Регрессия: message.control должен возвращать владельца-панель ─────
-# Раньше 4 сообщения возвращали `self._widget`, которого у Message НЕТ в
+# ── Regression: message.control must return the owning panel ─────────
+# Previously 4 messages returned `self._widget`, which Message does NOT have in
 # __slots__ → `AttributeError: 'TabActivated' object has no attribute '_widget'`
-# при попытке Textual доставить @on(..., "#id"). Фикс: сообщение хранит owner.
+# when Textual tried to deliver @on(..., "#id"). Fix: the message stores owner.
 
 
 def test_message_control_returns_panel(panel):
@@ -203,7 +203,7 @@ def test_message_control_returns_panel(panel):
 
 
 def test_dispatch_via_on_selector_no_attribute_error():
-    """Доставка @on(..., '#id') через реальный App не должна падать на '._widget'."""
+    """Delivering @on(..., '#id') through a real App must not fail on '._widget'."""
     from textual import on
     from textual.app import App, ComposeResult
 
@@ -255,15 +255,15 @@ def test_dispatch_via_on_selector_no_attribute_error():
     assert received["deactivated"] >= 1
 
 
-# ── Регрессия: add_pane после close_all не падает с дублирующимся id ──
-# reload_from_project() делает close_all() → action_new_tab(). Если close_all
-# не дождался remove_pane(), add_pane() с тем же tab_id падал (id занят) и
-# заголовок не добавлялся, а последующие «+» разъезжались (симптом «при +
-# ничего не происходит, при - выезжают заголовки»).
+# ── Regression: add_pane after close_all does not fail on duplicate id ─
+# reload_from_project() does close_all() → action_new_tab(). If close_all did
+# not wait for remove_pane(), add_pane() with the same tab_id failed (id taken)
+# and the header was not added, while subsequent "+" drifted apart (symptom:
+# "nothing happens on +, headers slide out on -").
 
 
 def test_action_new_tab_after_close_all_ok():
-    """close_all (await remove_pane) → action_new_tab: новый заголовок создаётся."""
+    """close_all (await remove_pane) → action_new_tab: a new header is created."""
     import asyncio
 
     from textual.app import App, ComposeResult
@@ -293,7 +293,7 @@ def test_action_new_tab_after_close_all_ok():
             app = pilot.app
             p = app._p
             await p.close_all()
-            # После close_all добавление нового таба не должно падать
+            # After close_all, adding a new tab must not fail
             tab_id = p.action_new_tab(name="Fresh")
             await pilot.pause()
             tabs = p.tabs_content.get_child_by_type(ContentTabs)

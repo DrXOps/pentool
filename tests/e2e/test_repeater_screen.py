@@ -26,7 +26,7 @@ class TestRepeaterScreen:
             assert buttons, "Send is missing from the module header"
 
     async def test_request_editor_present(self) -> None:
-        """RequestEditor присутствует в DOM после перехода на Repeater."""
+        """RequestEditor is present in the DOM after switching to Repeater."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
@@ -68,7 +68,7 @@ class TestRepeaterScreen:
             assert editor.get_text().startswith("GET / HTTP/1.1"), "request text did not reach the editor"
 
     async def test_new_tab_action(self) -> None:
-        """screen.action_new_tab() не крашит."""
+        """screen.action_new_tab() does not crash."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
@@ -78,10 +78,10 @@ class TestRepeaterScreen:
             screen = app.query_one(RepeaterScreen)
             screen.action_new_tab()
             await pilot.pause()
-            # Нет исключения — тест пройден
+            # No exception — the test passed
 
     async def test_dirty_marker_appears_after_edit_post_send(self) -> None:
-        """После успешной отправки правка текста должна пометить таб "*"."""
+        """After a successful send, editing the text must mark the tab "*"."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
@@ -111,7 +111,7 @@ class TestRepeaterScreen:
             assert tab_widget.label.plain.endswith("*")
 
     async def test_diff_panel_toggle_no_last_sent(self) -> None:
-        """Ctrl+D на никогда не отправленной вкладке не крашит и не открывает пустую панель."""
+        """Ctrl+D on a never-sent tab does not crash and does not open an empty panel."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:
@@ -123,12 +123,12 @@ class TestRepeaterScreen:
             screen = app.query_one(RepeaterScreen)
             screen.action_toggle_diff()
             await pilot.pause()
-            # Нет исключения — тест пройден
+            # No exception — the test passed
             panel = app.query_one(DiffPanel)
             assert panel is not None
 
     async def test_diff_panel_shows_diff_after_send(self) -> None:
-        """Ctrl+D после симулированной отправки открывает панель с диффом."""
+        """Ctrl+D after a simulated send opens the panel with a diff."""
         app = PentoolApp()
         app._skip_project_guard = True
         async with app.run_test(size=(120, 30)) as pilot:

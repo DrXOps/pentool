@@ -1,6 +1,6 @@
-"""Тесты HttpStorage._build_where — FilterSpec → SQL WHERE.
+"""Tests for HttpStorage._build_where — FilterSpec → SQL WHERE.
 
-Проверяет что _build_where корректно транслирует FilterSpec в SQL.
+Verifies that _build_where correctly translates FilterSpec into SQL.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from pentool.storage.http_storage import HttpStorage
 
 
 def _build_where(spec: FilterSpec | None) -> tuple[str, list]:
-    """Вызывает _build_where через HttpStorage."""
+    """Calls _build_where via HttpStorage."""
     return HttpStorage._build_where(None, spec)
 
 
@@ -98,7 +98,7 @@ class TestBuildWhereSingle:
         assert params == [1]
 
     def test_hosts_in_with_ports(self):
-        """scope — разворачивается в OR с портами."""
+        """scope — expands into an OR with ports."""
         s = FilterSpec(
             predicates=[
                 FilterPredicate("hosts", FilterOp.IN, ["example.com"]),
@@ -121,10 +121,10 @@ class TestBuildWhereSingle:
 
 
 class TestBuildWhereCombined:
-    """Полный сценарий: 5 фильтров одновременно."""
+    """Full scenario: 5 filters at once."""
 
     def test_http_history_default(self):
-        """Host + Method + Status + Scope — симуляция HTTP History."""
+        """Host + Method + Status + Scope — HTTP History simulation."""
         s = FilterSpec(
             predicates=[
                 FilterPredicate("host", FilterOp.LIKE, "example"),
@@ -141,7 +141,7 @@ class TestBuildWhereCombined:
         assert "is_websocket" in clause
 
     def test_scope_and_comment(self):
-        """Scope + Comments — два дополнительных фильтра."""
+        """Scope + Comments — two additional filters."""
         s = FilterSpec(
             predicates=[
                 FilterPredicate("hosts", FilterOp.IN, ["example.com", "test.org"]),
@@ -153,8 +153,8 @@ class TestBuildWhereCombined:
         assert "(host = ? OR host LIKE ?)" in clause
         assert "COALESCE(comment, '') != ''" in clause
         assert "is_websocket = ?" in clause
-        # NOT_NULL — без params (COALESCE), остальные 4 params: 2 scope host/ LIKE + websocket
-        # + 2 для scope (host = ?, host LIKE ? для каждого из 2 хостов)
+        # NOT_NULL — no params (COALESCE); the other 4 params: 2 scope host/ LIKE + websocket
+        # + 2 for scope (host = ?, host LIKE ? for each of the 2 hosts)
         assert len(params) == 5
 
     def test_color_and_has_params(self):

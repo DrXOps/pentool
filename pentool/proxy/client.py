@@ -1,4 +1,4 @@
-"""ProxyClient — TUI-side facade over the isolated proxy daemon (П.3).
+"""ProxyClient — TUI-side facade over the isolated proxy daemon (P.3).
 
 The proxy runs in its OWN process (see proxy/daemon.py). This client:
 

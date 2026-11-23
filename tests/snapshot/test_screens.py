@@ -1,17 +1,17 @@
-"""Снапшоты экранов TUI: визуальные регрессии.
+"""TUI screen snapshots: visual regressions.
 
-Первый прогон (создать эталоны):
+First run (create the baselines):
     pytest tests/snapshot/ --snapshot-update
 
-Обычный прогон (сравнить с эталоном):
+Regular run (compare against the baseline):
     pytest tests/snapshot/
 
-Обновить эталон после осознанного изменения интерфейса:
+Update the baseline after an intentional UI change:
     pytest tests/snapshot/ --snapshot-update
 
-Окно всегда 200x50 — полный экран без обрезки виджетов. Эталоны хранит
-`pytest-textual-snapshot`; кадр снимается только на замороженных часах и после
-того, как экран перестал меняться (см. `helpers.py`).
+The window is always 200x50 — the full screen with no widget clipping. Baselines
+are stored by `pytest-textual-snapshot`; a frame is captured only on the frozen
+clock and after the screen has stopped changing (see `helpers.py`).
 """
 
 from __future__ import annotations
@@ -23,11 +23,11 @@ from tests.snapshot.helpers import SNAP_SIZE, make_app, settle
 
 
 def _repeater_ready(app):
-    """Активная вкладка Repeater собрала редактор *и* получила текст запроса.
+    """The active Repeater tab has assembled its editor *and* received the request text.
 
-    Обе половины важны: без редактора фотографировать нечего, кроме layout, а
-    без текста редактор рисует пустую рамку — кадр устойчивый, поэтому проверка
-    «экран перестал меняться» вернула бы его сразу и эталон закрепил бы пустоту.
+    Both halves matter: without the editor there is nothing to photograph but the layout, and
+    without the text the editor draws an empty frame — the frame is stable, so the "screen
+    stopped changing" check would return it at once and the baseline would pin the emptiness.
     """
     from textual.css.query import NoMatches
 
@@ -41,7 +41,7 @@ def _repeater_ready(app):
 
 
 def _intruder_ready(app):
-    """Редактор шаблона Intruder собран и держит запрос."""
+    """The Intruder template editor is assembled and holds the request."""
     from textual.css.query import NoMatches
 
     from pentool.tui.screens.intruder.screen import IntruderScreen
@@ -66,7 +66,7 @@ def isolated_config(tmp_path):
 
 @pytest.mark.snapshot
 def test_repeater_screen(snap_compare) -> None:
-    """Repeater: TabbedContent с вкладкой Tab 1 и двумя редакторами."""
+    """Repeater: TabbedContent with the Tab 1 tab and two editors."""
     app = make_app()
     app._skip_project_guard = True
     assert snap_compare(
@@ -79,7 +79,7 @@ def test_repeater_screen(snap_compare) -> None:
 
 @pytest.mark.snapshot
 def test_intruder_screen(snap_compare) -> None:
-    """Intruder: тулбар Start/Pause/Stop, Positions+Payloads, Results."""
+    """Intruder: Start/Pause/Stop toolbar, Positions+Payloads, Results."""
     app = make_app()
     app._skip_project_guard = True
     assert snap_compare(
@@ -92,7 +92,7 @@ def test_intruder_screen(snap_compare) -> None:
 
 @pytest.mark.snapshot
 def test_decoder_screen(snap_compare) -> None:
-    """Decoder: заглушка этапа 13."""
+    """Decoder: stage 13 placeholder."""
     app = make_app()
     app._skip_project_guard = True
     assert snap_compare(
@@ -105,7 +105,7 @@ def test_decoder_screen(snap_compare) -> None:
 
 @pytest.mark.snapshot
 def test_settings_screen(snap_compare) -> None:
-    """Settings: подтабы Interface/Proxy/Hotkeys/Project."""
+    """Settings: Interface/Proxy/Hotkeys/Project subtabs."""
     app = make_app()
     assert snap_compare(
         app,
@@ -117,7 +117,7 @@ def test_settings_screen(snap_compare) -> None:
 
 @pytest.mark.snapshot
 def test_proxy_intercept_tab(snap_compare) -> None:
-    """Proxy → вкладка Intercept: пустой перехват."""
+    """Proxy → Intercept tab: empty interception."""
     app = make_app()
     app._skip_project_guard = True
     assert snap_compare(
@@ -130,7 +130,7 @@ def test_proxy_intercept_tab(snap_compare) -> None:
 
 @pytest.mark.snapshot
 def test_repeater_with_request(snap_compare) -> None:
-    """Repeater: реальный HTTP-запрос в редакторе."""
+    """Repeater: a real HTTP request in the editor."""
     from pentool.tui.screens.repeater.screen import RepeaterScreen
     from pentool.utils.parser import ParsedRequest, build_http_request
 
@@ -157,7 +157,7 @@ def test_repeater_with_request(snap_compare) -> None:
 
 @pytest.mark.snapshot
 def test_intruder_with_markers(snap_compare) -> None:
-    """Intruder: запрос с маркерами §§, разобранный в Positions."""
+    """Intruder: a request with §§ markers parsed into Positions."""
     from pentool.tui.screens.intruder.screen import IntruderScreen
     from pentool.utils.parser import ParsedRequest, build_http_request
 
@@ -180,7 +180,7 @@ def test_intruder_with_markers(snap_compare) -> None:
 
 @pytest.mark.snapshot
 def test_comparer_screen(snap_compare) -> None:
-    """Comparer: сравнение двух ответов бок о бок."""
+    """Comparer: side-by-side comparison of two responses."""
     app = make_app()
     app._skip_project_guard = True
     assert snap_compare(
@@ -193,7 +193,7 @@ def test_comparer_screen(snap_compare) -> None:
 
 @pytest.mark.snapshot
 def test_sequencer_screen(snap_compare) -> None:
-    """Sequencer: тулбар анализа энтропии токена."""
+    """Sequencer: token entropy analysis toolbar."""
     app = make_app()
     app._skip_project_guard = True
     assert snap_compare(

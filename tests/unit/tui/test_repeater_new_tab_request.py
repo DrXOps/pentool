@@ -30,13 +30,13 @@ DEFAULT_REQUEST = "GET / HTTP/1.1"
 
 @pytest.fixture(autouse=True)
 def _no_project_history(monkeypatch):
-    """Экран должен стартовать без истории проекта этой машины.
+    """The screen must start without this machine's project history.
 
-    Иначе `on_mount` восстанавливает вкладки из `~/.config/pentool/pentool.db`,
-    активной становится восстановленная вкладка со своим сохранённым запросом,
-    и утверждение «новая вкладка показывает запрос по умолчанию» зависит от
-    того, чем пользователь занимался до запуска тестов. Ровно так этот файл и
-    падал в полном прогоне, проходя в одиночку.
+    Otherwise `on_mount` restores tabs from `~/.config/pentool/pentool.db`,
+    a restored tab with its saved request becomes the active one, and the
+    assertion 'a new tab shows the default request' then depends on what the
+    user did before the tests were run. That is exactly how this file failed
+    in a full run while passing on its own.
     """
     monkeypatch.setattr(RepeaterScreen, "_get_db_path", lambda _self: "")
 

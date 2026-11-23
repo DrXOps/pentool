@@ -1,9 +1,9 @@
-"""Fake HTTPClient — мгновенные "консервированные" ответы, без сети.
+"""Fake HTTPClient — instant "canned" responses, no network.
 
-Используется в Level-A leak-тестах: изолирует именно *планирование*
-задач (`asyncio.gather` эагерный fan-out в ScanEngine/IntruderAttack) от
-реальных сетевых/I-O эффектов. Если память всё равно взрывается здесь —
-причина структурная (в самом коде движка), а не в сетевой буферизации.
+Used in the Level-A leak tests: it isolates precisely the *scheduling* of
+tasks (`asyncio.gather` eager fan-out in ScanEngine/IntruderAttack) from
+real network/I-O effects. If memory still blows up here, the cause is
+structural (in the engine code itself), not network buffering.
 """
 
 from __future__ import annotations
@@ -16,12 +16,12 @@ _BODY = "<html><head><title>Fake</title></head><body><p>Server: nginx/1.18.0</p>
 
 
 class FakeHTTPClient:
-    """Drop-in замена pentool.utils.http_client.HTTPClient для тестов.
+    """Drop-in replacement for pentool.utils.http_client.HTTPClient in tests.
 
-    Каждый send()/get()/post() возвращается мгновенно (один
-    asyncio.sleep(0) — чтобы остаться "хорошей" корутиной, реально
-    отдающей управление циклу событий) с фиксированным 200 OK — без
-    aiohttp, без сокетов, без per-request TCP/TLS. Считает вызовы.
+    Every send()/get()/post() returns instantly (a single
+    asyncio.sleep(0) — so it stays a "well-behaved" coroutine that actually
+    yields control to the event loop) with a fixed 200 OK — no aiohttp,
+    no sockets, no per-request TCP/TLS. It counts the calls.
     """
 
     def __init__(self, body: str = _BODY, status: int = 200, delay: float = 0.0) -> None:

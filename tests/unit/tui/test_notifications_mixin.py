@@ -1,4 +1,4 @@
-"""Unit tests for NotificationsMixin (Этап 5.1)."""
+"""Unit tests for NotificationsMixin (Stage 5.1)."""
 
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ class _FakeApp(NotificationsMixin, _FakeBase):
         self.timers.append((delay, callback))
 
     def query_one(self, selector, cls=None):
-        # Строки модулей нет в дереве — ровно `NoMatches` (ADR-6 п.4):
-        # `flash()` на этом и рассчитан, а `Exception` скрывал бы опечатку.
+        # The module-tabs row is not in the tree — exactly `NoMatches` (ADR-6 clause 4):
+        # `flash()` is designed for this, while `Exception` would hide a typo.
         raise NoMatches()
 
     def _refresh_notifications(self):

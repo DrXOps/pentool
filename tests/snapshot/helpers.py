@@ -1,33 +1,34 @@
 """Helpers for the screenshot suite.
 
-Сравнением и хранением эталонов занимается `pytest-textual-snapshot` (F-032).
-Здесь только то, чего библиотека знать не может:
+Comparing and storing reference images is handled by `pytest-textual-snapshot` (F-032).
+Only what the library cannot know lives here:
 
-* **Замороженные часы.** Статус-бар печатает время раз в секунду, поэтому два
-  запуска никогда не совпадут по байтам. Приложение принимает часы через шов
-  `PentoolApp(now=...)`; стирать время регуляркой из SVG нельзя — вместе с ним
-  исчезла бы и настоящая регрессия формата времени.
-* **Ожидание готовности и покоя.** Кадр для эталона снимается, когда экран уже
-  собрался (`ready`) и перестал меняться (`quiet` подряд одинаковых экспортов).
-  Скриншот после угаданного числа `pilot.pause()` — это лотерея: тело вкладки
-  Repeater собирается цепочкой `call_after_refresh`, и половина прогонов
-  фотографировала пустой редактор.
+* **Frozen clock.** The status bar prints the time once per second, so two runs
+  would never match byte for byte. The app receives the clock through the
+  `PentoolApp(now=...)` seam; you cannot strip the time out of the SVG with a
+  regex — a genuine time-format regression would disappear along with it.
+* **Waiting for readiness and quiet.** The frame for the reference image is taken
+  once the screen has already been assembled (`ready`) and has stopped changing
+  (`quiet` identical exports in a row). A screenshot after a guessed number of
+  `pilot.pause()` calls is a lottery: the body of the Repeater tab is assembled by
+  a chain of `call_after_refresh`, and half of the runs photographed an empty
+  editor.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-#: Полное окно: ни один виджет не обрезан.
+#: Full window: no widget is clipped.
 SNAP_SIZE = (200, 50)
 
 
 class FrozenClock(datetime):
-    """``datetime``, у которого ``now()`` фиксирован.
+    """A ``datetime`` whose ``now()`` is fixed.
 
-    Наследование, а не подмена модуля: остальные classmethod'ы
-    (`fromtimestamp`, `strptime`) продолжают работать, поэтому виджеты,
-    печатающие mtime файлов, ведут себя как в продакшене.
+    Subclassing rather than monkeypatching the module: the remaining classmethods
+    (`fromtimestamp`, `strptime`) keep working, so widgets that print file
+    mtimes behave as they do in production.
     """
 
     @classmethod
@@ -36,14 +37,14 @@ class FrozenClock(datetime):
 
 
 def make_app():
-    """Свежее приложение на замороженных часах."""
+    """A fresh app on the frozen clock."""
     from pentool.tui.app import PentoolApp
 
     return PentoolApp(now=FrozenClock.now)
 
 
 async def wait_for(pilot, predicate, *, frames: int = 60, what: str = "condition") -> None:
-    """Ждать выполнения ``predicate()`` кадр за кадром."""
+    """Wait for ``predicate()`` to hold, frame by frame."""
     for _ in range(frames):
         if predicate():
             return
@@ -52,12 +53,12 @@ async def wait_for(pilot, predicate, *, frames: int = 60, what: str = "condition
 
 
 async def settle(pilot, ready=None, *, quiet: int = 3, frames: int = 60, what: str = "screen") -> None:
-    """Дождаться кадра, который достоин стать эталоном.
+    """Wait for a frame that is worthy of becoming the reference.
 
-    Нужны оба условия. Готовность (`ready`) — потому что неподвижный экран ещё
-    не значит правильный: несобранное тело вкладки тоже неподвижно. Покой
-    (`quiet` одинаковых экспортов подряд) — потому что иначе снимок попадает в
-    середину анимации или позднего layout.
+    Both conditions are required. Readiness (`ready`) — because a motionless screen
+    does not yet mean a correct one: an unassembled tab body is motionless too.
+    Quiet (`quiet` identical exports in a row) — because otherwise the snapshot
+    lands in the middle of an animation or a late layout.
     """
     if ready is not None:
         await wait_for(pilot, ready, frames=frames, what=f"{what} readiness")

@@ -47,7 +47,7 @@ def intercepted_req():
 @pytest.mark.integration
 class TestProxyService:
     async def test_init_storage_ready(self, proxy_service: ProxyService) -> None:
-        """is_storage_ready() == True после init."""
+        """is_storage_ready() == True after init."""
         assert proxy_service.is_storage_ready() is True
 
     async def test_store_request_returns_id(self, proxy_service: ProxyService, intercepted_req) -> None:
@@ -68,14 +68,14 @@ class TestProxyService:
         assert len(history) >= 1
 
     async def test_delete_request(self, proxy_service: ProxyService, intercepted_req) -> None:
-        """store → delete(row_id) → row больше не находится."""
+        """store → delete(row_id) → row is no longer found."""
         row_id = await proxy_service.store_request(intercepted_req)
         await proxy_service.delete_request(row_id)
         entry = await proxy_service.get_full_entry(row_id)
         assert entry is None
 
     async def test_clear_history(self, proxy_service: ProxyService, intercepted_req) -> None:
-        """store 3 req → clear_history() → get_history() пуст."""
+        """store 3 req → clear_history() → get_history() is empty."""
         from pentool.modules.proxy import InterceptedRequest
 
         for i in range(3):
@@ -106,13 +106,13 @@ class TestProxyService:
         assert isinstance(result, dict)
 
     async def test_switch_db(self, proxy_service: ProxyService, tmp_path) -> None:
-        """switch_db новый путь → is_storage_ready() True."""
+        """switch_db new path → is_storage_ready() True."""
         new_db = str(tmp_path / "new_proxy.db")
         await proxy_service.switch_db(new_db)
         assert proxy_service.is_storage_ready() is True
 
     async def test_pre_storage_queue(self, tmp_path) -> None:
-        """Запрос до init_storage → в pre_storage_queue; после init → count == 1."""
+        """Request before init_storage → in pre_storage_queue; after init → count == 1."""
         from pentool.modules.proxy import InterceptedRequest
 
         mock_api = MagicMock(spec=ProxyAPI)
@@ -122,7 +122,7 @@ class TestProxyService:
             db_path=str(tmp_path / "queue_test.db"),
         )
 
-        # storage ещё не инициализирована
+        # storage is not initialized yet
         req = InterceptedRequest(
             id="pre-001",
             method="GET",
@@ -135,7 +135,7 @@ class TestProxyService:
         assert result is None
         assert len(service._pre_storage_queue) == 1
 
-        # теперь инициализируем — очередь должна быть сброшена в БД
+        # now initialize — the queue must be flushed into the DB
         await service.init_storage()
         count = await service._storage.count()
         assert count == 1
@@ -143,7 +143,7 @@ class TestProxyService:
         await service._storage.close()
 
     async def test_is_storage_ready_before_init(self, tmp_path) -> None:
-        """До init_storage → is_storage_ready() == False."""
+        """Before init_storage → is_storage_ready() == False."""
         mock_api = MagicMock(spec=ProxyAPI)
         service = ProxyService(
             proxy_api=mock_api,

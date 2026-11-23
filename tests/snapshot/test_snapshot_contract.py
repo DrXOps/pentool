@@ -1,18 +1,18 @@
-"""Эталоны принадлежат тестам, которые их читают (F-031/F-032).
+"""Baselines belong to the tests that read them (F-031/F-032).
 
-Сравнивается целый экран, поэтому устаревший эталон неотличим от настоящей
-визуальной регрессии: тесты молчали месяцами, когда в панели модулей появилась
-вкладка «Recon», и никто не пересоздал baseline.
+A whole screen is compared, so a stale baseline is indistinguishable from a real
+visual regression: the tests stayed silent for months when the "Recon" tab
+appeared in the modules panel, and nobody regenerated the baseline.
 
-Три дешёвых инварианта держат каталог честным:
+Three cheap invariants keep the catalog honest:
 
-* у каждого теста есть эталон, и у каждого эталона есть тест — осиротевший файл
-  это удалённый или переименованный тест, то есть молча ужавшееся покрытие;
-* эталоны не являются побайтовыми копиями друг друга — скопированный эталон
-  проходил бы вечно;
-* в каждом эталоне видно замороженные часы (`12:00:00`). Это проверка не
-  библиотеки, а шва: время в статус-баре не вырезается регуляркой, поэтому
-  изменение формата времени сломает эталон, как и должно.
+* every test has a baseline, and every baseline has a test — an orphaned file
+  means a deleted or renamed test, that is, silently shrunken coverage;
+* baselines are not byte-for-byte copies of each other — a copied baseline
+  would pass forever;
+* every baseline shows the frozen clock (`12:00:00`). This checks not the
+  library but the seam: the time in the status bar is not cut out by a regex,
+  so a change in the time format breaks the baseline, as it should.
 """
 
 from __future__ import annotations
@@ -24,18 +24,18 @@ from pathlib import Path
 _SNAP_DIR = Path(__file__).resolve().parent / "__snapshots__" / "test_screens"
 _TEST_FILE = Path(__file__).resolve().parent / "test_screens.py"
 
-#: Время замороженных часов из tests/snapshot/helpers.py.
+#: Frozen clock time from tests/snapshot/helpers.py.
 _FROZEN_TIME = "12:00:00"
 
 
 def _test_names() -> set[str]:
-    """Имена тестов, объявленных в test_screens.py."""
+    """Names of the tests declared in test_screens.py."""
     source = _TEST_FILE.read_text(encoding="utf-8")
     return set(re.findall(r"^def (test_\w+)\(", source, re.M))
 
 
 def _baseline_names() -> set[str]:
-    """Имена эталонов на диске (без расширения .raw)."""
+    """Names of the baselines on disk (without the .raw extension)."""
     return {path.stem for path in _SNAP_DIR.glob("*.raw")}
 
 
@@ -62,7 +62,7 @@ def test_baselines_are_not_copies_of_one_screen() -> None:
 
 
 def test_baselines_show_the_frozen_clock() -> None:
-    """Время не вырезается из снимка: шов часов должен быть виден в эталоне."""
+    """The time is not cut from the snapshot: the clock seam must be visible in the baseline."""
     without_clock = []
     for path in sorted(_SNAP_DIR.glob("*.raw")):
         if _FROZEN_TIME not in path.read_text(encoding="utf-8"):

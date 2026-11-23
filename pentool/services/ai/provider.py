@@ -23,8 +23,8 @@ log = logging.getLogger(__name__)
 # the PID is actually alive.
 _MCP_PROCESS_PID: int | None = None
 
-# Счётчик активных запросов к MCP — инкрементится перед generate, декрементится
-# после. ActivityIndicator.AI смотрит на него: мигает только когда > 0.
+# Counter of active MCP requests — incremented before generate, decremented
+# after. ActivityIndicator.AI watches it: it blinks only while > 0.
 _MCP_PENDING_REQUESTS: int = 0
 
 
@@ -75,8 +75,8 @@ class MCPBackend(AIBackend):
         self._mcp_cmd = mcp_cmd
         self._stdin: Any = None  # asyncio StreamWriter (process stdin)
         self._stdout: Any = None  # asyncio StreamReader (process stdout)
-        self._max_restarts: int = 3  # максимум перезапусков подряд
-        self._restart_count: int = 0  # счётчик перезапусков в этой сессии
+        self._max_restarts: int = 3  # maximum consecutive restarts
+        self._restart_count: int = 0  # restart counter for this session
 
     async def start(self) -> bool:
         """Start the MCP server as a subprocess."""
@@ -103,12 +103,12 @@ class MCPBackend(AIBackend):
             return False
 
     async def _ensure_alive(self) -> bool:
-        """Проверить, жив ли процесс MCP сервера. Если нет — перезапустить.
+        """Check whether the MCP server process is alive. If not — restart it.
 
-        Returns True если сервер жив (или успешно перезапущен).
+        Returns True if the server is alive (or was restarted successfully).
         """
         if self._process is not None and self._process.returncode is None:
-            return True  # ещё жив
+            return True  # still alive
 
         if self._restart_count >= self._max_restarts:
             log.error("MCPBackend: превышен лимит перезапусков (%d)", self._max_restarts)
@@ -126,14 +126,14 @@ class MCPBackend(AIBackend):
         self._stdout = None
         ok = await self.start()
         if ok:
-            # Сбросить счётчик при успешном запуске, если проработал > 30 сек
+            # Reset the counter on a successful start after it ran for > 30 sec
             self._restart_count = 0
         return ok
 
     async def _call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
         """Call an MCP-server tool over JSON-RPC.
 
-        При обрыве соединения — автоматический перезапуск сервера.
+        On a dropped connection — the server is restarted automatically.
         """
         if not await self._ensure_alive():
             log.warning("MCPBackend: сервер не запущен")

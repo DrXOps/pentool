@@ -1,13 +1,13 @@
-"""Быстрые perf-проверки bounded worker pool IntruderAttack.
+"""Fast perf checks for the bounded worker pool of IntruderAttack.
 
-Ассертуемый аналог тяжёлого `tests/perf/load_intruder.py --level b` (M7).
-Проверяем ключевое обещание ленивой передачи: число одновременно живых
-asyncio.Tasks должно быть ≤ threads + малая константа, и НЕ расти с размером
-payload-набора (до фикса это был eager fan-out сотен тысяч задач — см.
-intruder.py _run_one/worker — LEARN, H1).
+The assertable analog of the heavy `tests/perf/load_intruder.py --level b` (M7).
+We verify the key promise of lazy dispatch: the number of simultaneously live
+asyncio.Tasks must be ≤ threads + a small constant, and must NOT grow with the
+size of the payload set (before the fix this was an eager fan-out of hundreds of
+thousands of tasks — see intruder.py _run_one/worker — LEARN, H1).
 
-Используем FakeHTTPClient (без сети), чтобы отделить структурный замер
-планировщика от сетевого I/O — как tests/perf/fake_http_client.py.
+We use FakeHTTPClient (no network) to separate the structural measurement of the
+scheduler from network I/O — same as tests/perf/fake_http_client.py.
 """
 
 from __future__ import annotations
@@ -31,9 +31,9 @@ def _template() -> str:
 
 
 def _peak_tasks_while(coro_factory, interval: float = 0.005) -> tuple[int, int]:
-    """Запустить корутину и сэмплить число живых asyncio.Task.
+    """Run the coroutine and sample the number of live asyncio.Tasks.
 
-    Возвращает (peak, результаты-всего). interval 5ms — достаточно плотно.
+    Returns (peak, total results). interval 5ms — dense enough.
     """
 
     async def _runner():
@@ -61,11 +61,11 @@ def _peak_tasks_while(coro_factory, interval: float = 0.005) -> tuple[int, int]:
 
 
 def test_sniper_bounded_tasks():
-    """Sniper на 20k payload — пик задач ≤ threads + константа, не растёт с N."""
+    """Sniper over 20k payloads — peak tasks ≤ threads + constant, does not grow with N."""
     n_payloads = 20_000
     threads = 5
-    # Шаблон с ОДНИМ маркером: Sniper даёт ровно n_payloads комбинаций
-    # (n_positions × M), чтобы не путать с 2-позиционной версией.
+    # Template with a SINGLE marker: Sniper yields exactly n_payloads combinations
+    # (n_positions × M), so it is not confused with the 2-position version.
     template = "GET /page/§1§ HTTP/1.1\r\nHost: 127.0.0.1:9\r\nUser-Agent: pentool-perf-test/1.0\r\n\r\n"
     cfg = IntruderConfig(
         template=template,
@@ -84,16 +84,16 @@ def test_sniper_bounded_tasks():
     async def _run():
         await attack.run(on_result=on_result, on_progress=lambda d, t: None)
 
-    # peak_tasks при flows в рамках одного события — overkill; просто запустим
-    # и проверим, что results==20000 (все обработаны). Число одновременных
-    # задач проверяем отдельным более строгим тестом cluster-bomb ниже на
-    # большом комбинаторном наборе.
+    # peak_tasks for flows within a single event is overkill; we just run it
+    # and check that results==20000 (all processed). The count of concurrent
+    # tasks is checked by the stricter cluster-bomb test below on a
+    # large combinatorial set.
     asyncio.run(_run())
     assert results["n"] == n_payloads
 
 
 def test_cluster_bomb_peak_tasks_bounded():
-    """Cluster Bomb 300×300=90k — пик живых задач должен быть мал (bounded)."""
+    """Cluster Bomb 300×300=90k — the peak of live tasks must be small (bounded)."""
     a = 300
     b = 300
     total = a * b
@@ -113,7 +113,7 @@ def test_cluster_bomb_peak_tasks_bounded():
         results["n"] += 1
 
     async def _build_and_run():
-        # Интудер создаёт задачи по ходу — измерить пик во время run:
+        # The intruder creates tasks as it goes — measure the peak during run:
         peak = 0
         stop = {"go": True}
 
@@ -135,8 +135,8 @@ def test_cluster_bomb_peak_tasks_bounded():
         return peak
 
     peak = asyncio.run(_build_and_run())
-    # Бounded pool: в любой момент живых задач не больше threads-воркеров +
-    # main + peeker (2). Задач-«все сразу» в 90k быть не должно.
+    # Bounded pool: at any moment there are at most threads workers +
+    # main + peeker (2) live tasks. There must be no "all at once" 90k tasks.
     assert results["n"] == total, "Cluster Bomb обработал не все комбинации"
     assert peak <= threads + 3, (
         f"Пик одновременно живых задач {peak} при threads={threads} — ожидали bounded (eager fan-out был бы ~90k)"
@@ -144,7 +144,7 @@ def test_cluster_bomb_peak_tasks_bounded():
 
 
 def test_stop_and_pause_release_tasks():
-    """stop() перед стартом не оставляет висящих воркеров."""
+    """stop() before start leaves no dangling workers."""
     cfg = IntruderConfig(
         template=_template(),
         attack_type=AttackType.CLUSTER_BOMB,
@@ -155,7 +155,7 @@ def test_stop_and_pause_release_tasks():
     attack = IntruderAttack(cfg, db_path=":memory:", http_client=FakeHTTPClient())
 
     async def _stop_first():
-        await attack.stop()  # остановить до старта
+        await attack.stop()  # stop before starting
         await attack.run(on_result=lambda r: None, on_progress=lambda d, t: None)
         return attack.is_running
 

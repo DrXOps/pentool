@@ -36,7 +36,7 @@ def _run(cmd, cwd, stdin: str | None = None, env: dict | None = None):
 
 @pytest.fixture()
 def project(tmp_path: Path) -> Path:
-    """Мини-репозиторий: один коммит, один незакоммиченный файл."""
+    """Mini repo: one commit, one uncommitted file."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     for key, value in (("user.email", "t@example.invalid"), ("user.name", "t")):
         subprocess.run(["git", "-C", str(tmp_path), "config", key, value], check=True)
@@ -65,7 +65,7 @@ def test_save_writes_snapshot_and_instructions(project: Path):
     assert latest.exists()
     body = latest.read_text(encoding="utf-8")
     assert "b.py" in body, "незакоммиченный файл должен попасть в состояние"
-    # stdout PreCompact = инструкции для сжатия
+    # PreCompact stdout = instructions for compaction
     assert "обязательно сохрани" in res.stdout.lower()
 
 
@@ -144,7 +144,7 @@ def test_unknown_mode_fails(project: Path):
 
 
 def test_hook_works_without_jq(project: Path):
-    """jq не обязателен: хуки должны пережить его отсутствие."""
+    """jq is optional: the hooks must survive its absence."""
     path = ":".join(p for p in os.environ.get("PATH", "").split(":") if p and not (Path(p) / "jq").exists())
     res = _run(
         ["bash", str(CONTEXT_HOOK), "--save"],
@@ -165,7 +165,7 @@ def test_worktree_create_list_remove(project: Path):
     wt = project / ".worktrees" / "agent-a"
     assert wt.is_dir()
     assert (wt / ".worktree-env").exists()
-    # Каталог worktrees должен быть в .gitignore, иначе он попадёт в коммит.
+    # The worktrees directory must be in .gitignore, or it ends up in a commit.
     ignore = (project / ".gitignore").read_text(encoding="utf-8")
     assert ".worktrees/" in ignore
 
@@ -189,7 +189,7 @@ def test_worktree_env_isolation(project: Path):
     assert values["AI_WORKTREE_NAME"] == "agent-b"
     assert values["AI_WORKTREE_PATH"].endswith(".worktrees/agent-b")
     assert values["TMPDIR"].endswith(".worktrees/agent-b/tmp")
-    # Порт из стабильного диапазона, а не общий для всех worktree.
+    # A port from a stable range rather than one shared by all worktrees.
     assert values["AI_PORT"].isdigit()
     assert int(values["AI_PORT"]) >= 9100
 

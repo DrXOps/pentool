@@ -131,6 +131,6 @@ class TestClear:
 
     def test_clear_handles_exception(self) -> None:
         p = _make_panel()
-        # Панелей нет в дереве — ровно `NoMatches`, а не любая ошибка (ADR-6 п.4).
+        # No panels in the tree — exactly `NoMatches`, not any error (ADR-6 item 4).
         p.query_one = Mock(side_effect=NoMatches())  # type: ignore[method-assign]
         p.clear()

@@ -1,4 +1,4 @@
-"""Filter engine — универсальная система фильтрации таблиц.
+"""Filter engine — a universal table filtering system.
 
 Layers:
     FilterOp          — operator enum
@@ -46,7 +46,7 @@ class FilterOp(str, Enum):
 
 @dataclass
 class FilterPredicate:
-    """Один предикат фильтрации: field operator value.
+    """A single filter predicate: field operator value.
 
     Examples:
         FilterPredicate("host", FilterOp.LIKE, "example.com")
@@ -187,7 +187,7 @@ class FilterPredicate:
 
 @dataclass
 class FilterSpec:
-    """Набор предикатов фильтрации.
+    """A set of filter predicates.
 
     Args:
         predicates: list of predicates
@@ -286,7 +286,7 @@ class FilterFieldType(str, Enum):
 
 @dataclass
 class FilterField:
-    """Описание одного поля фильтрации в FilterBar.
+    """Description of a single filter field in FilterBar.
 
     Lets FilterBarWidget configure its UI without hard-coded widgets.
 

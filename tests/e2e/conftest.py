@@ -1,4 +1,4 @@
-"""E2E conftest — изолированный Config + патч медленных IO-операций."""
+"""E2E conftest — isolated Config + patching of slow IO operations."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def e2e_config(tmp_path):
-    """Изолированный Config: нет recent_projects, нет update-check."""
+    """Isolated Config: no recent_projects, no update check."""
     cfg = Config(
         db_path=str(tmp_path / "e2e.db"),
         cert_dir=str(tmp_path / "certs"),
@@ -29,18 +29,18 @@ def e2e_config(tmp_path):
 
 @pytest.fixture(autouse=True)
 def patch_slow_io():
-    """Патчим медленные IO-операции и daemon-блокеры.
+    """Patch slow IO operations and daemon blockers.
 
-    - load_or_create_ca       : RSA keygen 0.5–2 сек → возвращаем fake tuple
-    - check_update_async      : HTTP + sleep(3) → мгновенный результат
-    - _setup_signal_handlers  : регистрирует SIGTERM → вызывает sys.exit при teardown pytest
-    - ProxyService.init_storage: создаёт aiosqlite non-daemon поток → блокирует exit
-    - BaseSqliteStorage.ensure_open: то же самое для IntruderStorage (и любого
-      другого BaseSqliteStorage-потомка с ленивым connect) — IntruderScreen
-      теперь держит один persistent aiosqlite-коннекшн на весь app lifecycle
-      (см. IntruderScreen._get_api()/reload_from_project(), фикс краша от
-      open/close-на-каждый-результат), но e2e-тесты не проходят через
-      action_quit()/close(), поэтому поток аналогично зависал бы на выходе.
+    - load_or_create_ca       : RSA keygen 0.5–2 sec → return a fake tuple
+    - check_update_async      : HTTP + sleep(3) → instant result
+    - _setup_signal_handlers  : registers SIGTERM → calls sys.exit on pytest teardown
+    - ProxyService.init_storage: creates an aiosqlite non-daemon thread → blocks exit
+    - BaseSqliteStorage.ensure_open: the same for IntruderStorage (and for any
+      other BaseSqliteStorage subclass with lazy connect) — IntruderScreen now
+      keeps one persistent aiosqlite connection for the whole app lifecycle
+      (see IntruderScreen._get_api()/reload_from_project(), the fix for the crash
+      caused by open/close-on-every-result), but e2e tests do not go through
+      action_quit()/close(), so the thread would likewise hang on exit.
     """
     from pentool.core.updater import UpdateInfo
 
@@ -50,15 +50,15 @@ def patch_slow_io():
         return UpdateInfo(has_update=False, latest_version="0.0.0", url="")
 
     async def _noop_init_storage(self):
-        """Мок init_storage — не создаёт aiosqlite поток."""
+        """Mock init_storage — does not create an aiosqlite thread."""
         self._storage_ready = False  # storage disabled in E2E tests
 
     async def _noop_ensure_open(self):
-        """Мок BaseSqliteStorage.ensure_open — не создаёт aiosqlite поток."""
+        """Mock BaseSqliteStorage.ensure_open — does not create an aiosqlite thread."""
         return False
 
     def _noop_signals(self):
-        """Не регистрировать SIGTERM/SIGINT — иначе pytest получает сигнал при выходе."""
+        """Do not register SIGTERM/SIGINT — otherwise pytest gets a signal on exit."""
         pass
 
     with (

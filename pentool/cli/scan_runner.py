@@ -1,13 +1,13 @@
-"""ScanRunner — единый движок для CLI и headless-сканирования.
+"""ScanRunner — a single engine for CLI and headless scanning.
 
-Устраняет дублирование между ``cli/scan.py`` (scan active) и ``cli/headless.py``
-(run_headless_scan). Обе точки входа используют один и тот же класс.
+Eliminates duplication between ``cli/scan.py`` (scan active) and ``cli/headless.py``
+(run_headless_scan). Both entry points use the same class.
 
-Использует ``ScanService`` (а не прямой вызов ScannerAPI), что даёт:
-- Fingerprint → tech_profile → AIWorker через _on_fingerprint
-- Правильные очереди payload/WAF
-- Crawl через SpiderAPI
-- Единый жизненный цикл (stop, error handling)
+Uses ``ScanService`` (instead of calling ScannerAPI directly), which provides:
+- Fingerprint → tech_profile → AIWorker via _on_fingerprint
+- Correct payload/WAF queues
+- Crawling via SpiderAPI
+- A single lifecycle (stop, error handling)
 """
 
 from __future__ import annotations
@@ -79,8 +79,8 @@ class ScanRunner:
     def run(self) -> int:
         """Execute the scan and return exit code (0 = success).
 
-        Использует ``ScanService`` для полного жизненного цикла:
-        краул → fingerprint → AIWorker → активный скан → сохранение.
+        Uses ``ScanService`` for the full lifecycle:
+        crawl → fingerprint → AIWorker → active scan → save.
         """
         scanner_api = _import_scanner_api()
         from pentool.api.spider_api import SpiderAPI
@@ -92,7 +92,7 @@ class ScanRunner:
         cfg = get_config()
         api = scanner_api(db_path=cfg.db_path)
 
-        # Коллбэк для логирования в CLI
+        # Callback for CLI logging
         _findings: list = []
 
         def on_finding(f) -> None:
@@ -104,13 +104,13 @@ class ScanRunner:
                 click.echo(f"  [{sev}] {f.name} — {f.url}")
 
         def on_log(msg: str) -> None:
-            # Rich-теги не нужны в CLI, но их можно показывать
+            # Rich tags are not needed in the CLI, but they can be shown
             click.echo(f"  {msg}")
 
         async def _run() -> int:
             nonlocal _findings
 
-            # 1. Spider (краул) — если запрошен
+            # 1. Spider (crawl) — if requested
             spider_api: SpiderAPI | None = None
             if self.crawl:
                 use_js = is_lightpanda_available()
@@ -127,11 +127,11 @@ class ScanRunner:
             else:
                 click.echo("[scan] Skipping crawl — using provided URLs directly")
 
-            # 2. EventBus (для внутренних событий ScanService)
+            # 2. EventBus (for ScanService internal events)
             from pentool.core.events import FindingDiscovered, ScanProgressEvent
 
             bus = EventBus()
-            # Подписываемся на события для вывода в CLI
+            # Subscribe to events for CLI output
             findings_from_events: list = []
 
             def on_finding_event(event: FindingDiscovered) -> None:
@@ -150,7 +150,7 @@ class ScanRunner:
 
             bus.subscribe(ScanProgressEvent, on_progress_event)
 
-            # 3. ScanService — единый оркестратор
+            # 3. ScanService — the single orchestrator
             service = ScanService(
                 scanner_api=api,
                 spider_api=spider_api,
@@ -167,7 +167,7 @@ class ScanRunner:
                 max_depth=self.crawl_depth,
                 max_pages=self.max_pages,
                 db_path=cfg.db_path,
-                resume=not self.crawl,  # если краул выключен — используем URL как есть
+                resume=not self.crawl,  # if crawl is off — use the URLs as is
                 use_ai=self.use_ai,
             )
 
@@ -184,16 +184,16 @@ class ScanRunner:
                 click.echo(f"\n[scan] Scan failed: {exc}", err=True)
                 return 1
 
-            # findings уже содержит все результаты (ScanService сам их добавляет)
+            # findings already holds all results (ScanService adds them itself)
             _findings = findings
 
             click.echo(f"\nDone. Found {len(findings)} finding(s).")
 
-            # Сохраняем findings (ScanService уже сохранил, но дубль безопасен)
+            # Save the findings (ScanService already saved them, but a duplicate is safe)
             if findings:
                 await api.save_findings(findings)
 
-            # Генерируем отчёт
+            # Generate the report
             if self.output:
                 fmt = self._resolve_format()
                 await api.generate_report(self.output, fmt)

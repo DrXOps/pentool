@@ -22,7 +22,7 @@ def service():
 @pytest.mark.integration
 class TestRepeaterService:
     async def test_send_request_success(self, service: RepeaterService) -> None:
-        """Мокнуть GET → status=200; send_request → (ParsedResponse, elapsed_ms >= 0, None)."""
+        """Mock GET → status=200; send_request → (ParsedResponse, elapsed_ms >= 0, None)."""
         raw = "GET http://example.com/api HTTP/1.1\r\nHost: example.com\r\n\r\n"
         with aioresponses() as m:
             m.get("http://example.com/api", status=200, body=b"OK")
@@ -45,7 +45,7 @@ class TestRepeaterService:
         await service.close()
 
     async def test_send_request_post(self, service: RepeaterService) -> None:
-        """Мокнуть POST → status=201; отправить POST запрос → resp.status == 201."""
+        """Mock POST → status=201; send a POST request → resp.status == 201."""
         raw = (
             "POST http://example.com/api HTTP/1.1\r\n"
             "Host: example.com\r\n"
@@ -64,7 +64,7 @@ class TestRepeaterService:
         await service.close()
 
     async def test_elapsed_ms_non_negative(self, service: RepeaterService) -> None:
-        """elapsed_ms >= 0 всегда."""
+        """elapsed_ms is always >= 0."""
         raw = "GET http://example.com/timing HTTP/1.1\r\nHost: example.com\r\n\r\n"
         with aioresponses() as m:
             m.get("http://example.com/timing", status=200, body=b"ok")
@@ -75,12 +75,12 @@ class TestRepeaterService:
         await service.close()
 
     async def test_close_no_error(self, service: RepeaterService) -> None:
-        """service.close() не бросает исключение."""
-        # Инициализируем клиент одним запросом
+        """service.close() does not raise an exception."""
+        # Initialize the client with one request
         raw = "GET http://example.com/close HTTP/1.1\r\nHost: example.com\r\n\r\n"
         with aioresponses() as m:
             m.get("http://example.com/close", status=200, body=b"bye")
             await service.send_request(raw)
 
-        # close не должен бросать
+        # close must not raise
         await service.close()

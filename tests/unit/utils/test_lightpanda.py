@@ -1,4 +1,4 @@
-"""Unit tests: utils/lightpanda.py — headless JS rendering via Lightpanda (Этап A)."""
+"""Unit tests: utils/lightpanda.py — headless JS rendering via Lightpanda (Stage A)."""
 
 from __future__ import annotations
 
@@ -108,7 +108,7 @@ class TestFetchHtml:
         ):
             html = await lightpanda_fetch_html("https://example.com")
         assert html == "<html>rendered</html>"
-        # команда: lightpanda fetch --dump html <url>
+        # command: lightpanda fetch --dump html <url>
         args = exec_mock.call_args.args
         assert args[0] == "/x/lightpanda"
         assert args[1:3] == ("fetch", "--dump")

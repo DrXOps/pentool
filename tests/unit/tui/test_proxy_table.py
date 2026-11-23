@@ -1,4 +1,4 @@
-"""Unit tests for proxy request-table Arrow builders (Этап 6, proxy_table).
+"""Unit tests for proxy request-table Arrow builders (Stage 6, proxy_table).
 
 Extracted from ProxyScreen; these helpers are pure and testable in isolation.
 """

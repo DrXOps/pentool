@@ -106,11 +106,11 @@ def log(
     """Write one audit record to ``~/.pentool/ai/audit.jsonl``.
 
     Args:
-        task: имя задачи (choose_checks / crawl_endpoints / ...).
-        prompt_data: данные, отправленные в MCP (system_prompt, context, ...).
-        raw_response: сырой ответ LLM (текст до парсинга).
-        parsed_response: распаршенный JSON (dict/list/None).
-        error: строка ошибки, если была.
+        task: task name (choose_checks / crawl_endpoints / ...).
+        prompt_data: data sent to the MCP (system_prompt, context, ...).
+        raw_response: raw LLM response (text before parsing).
+        parsed_response: parsed JSON (dict/list/None).
+        error: error string, if there was one.
     """
     try:
         fd = _ensure_fd()

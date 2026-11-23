@@ -62,7 +62,7 @@ async def test_saving_the_same_uid_updates_instead_of_duplicating(repeater) -> N
 
 @pytest.mark.asyncio
 async def test_rename_keeps_one_row(repeater) -> None:
-    """Имя — косметика: переименование не должно плодить новую вкладку."""
+    """The name is cosmetic: a rename must not spawn a new tab."""
     await repeater.save_tab("uid-a", "Tab 1", "GET /a HTTP/1.1\r\n\r\n")
     await repeater.save_tab("uid-a", "Login", "GET /a HTTP/1.1\r\n\r\n")
 
@@ -91,7 +91,7 @@ async def test_delete_removes_only_that_tab(repeater) -> None:
 
 @pytest.mark.asyncio
 async def test_delete_does_not_touch_the_send_history(repeater) -> None:
-    """Закрытие вкладки — не удаление лога отправок (F-053)."""
+    """Closing a tab is not deleting the send log (F-053)."""
     req = ParsedRequest(method="GET", url="http://example.com/", headers={})
     resp = ParsedResponse(status=200, reason="OK", body="OK")
     await repeater.save_to_history(req, resp, tab_name="Tab 1")
@@ -106,19 +106,19 @@ async def test_delete_does_not_touch_the_send_history(repeater) -> None:
 
 @pytest.mark.asyncio
 async def test_empty_uid_is_ignored(repeater) -> None:
-    """Без uid строку не с чем сопоставить — лучше no-op, чем строка-сирота."""
+    """Without a uid there is nothing to match the row against — a no-op beats an orphan row."""
     await repeater.save_tab("", "Tab 1", "GET / HTTP/1.1\r\n\r\n")
     assert await repeater.get_tabs() == []
 
 
 @pytest.mark.asyncio
 async def test_seed_builds_the_registry_from_history_once(repeater) -> None:
-    """Миграция старого проекта: вкладки собираются из истории ровно один раз."""
+    """Migration of an old project: tabs are built from history exactly once."""
     req = ParsedRequest(method="GET", url="http://example.com/a", headers={})
     resp = ParsedResponse(status=200, reason="OK", body="OK")
     await repeater.save_to_history(req, resp, tab_name="Login")
     await repeater.save_to_history(req, resp, tab_name="Search")
-    # Более поздняя запись того же имени должна выиграть.
+    # The later entry under the same name must win.
     req_new = ParsedRequest(method="PUT", url="http://example.com/login2", headers={})
     await repeater.save_to_history(req_new, resp, tab_name="Login")
 

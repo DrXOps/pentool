@@ -1,10 +1,10 @@
-"""Unit tests for SortableTableMixin._sort_table_sql (SQL-сортировка).
+"""Unit tests for SortableTableMixin._sort_table_sql (SQL sorting).
 
-Проверяет, что _sort_table_sql:
-- вызывает reload_cb с правильными order_by/order_dir
-- обновляет _sort_col / _sort_reverse
-- клик на ту же колонку переключает направление
-- падает на buffer_sort, когда колонка не в order_by_map
+Verifies that _sort_table_sql:
+- calls reload_cb with the correct order_by/order_dir
+- updates _sort_col / _sort_reverse
+- a click on the same column toggles the direction
+- falls back to buffer_sort when the column is not in order_by_map
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 
 
 class _MinimalHost:
-    """Минимальная заглушка для экрана, использующего SortableTableMixin."""
+    """Minimal stub for a screen that uses SortableTableMixin."""
 
     def __init__(self) -> None:
         self._sort_col: int | None = None
@@ -30,7 +30,7 @@ class _MinimalHost:
         self._sort_table_fallback_called = False
 
     def run_worker(self, coro) -> None:
-        """Заглушка run_worker — выполняет корутину синхронно."""
+        """Stub for run_worker — runs the coroutine synchronously."""
         import asyncio
 
         try:
@@ -38,27 +38,27 @@ class _MinimalHost:
         except RuntimeError:
             asyncio.run(coro)
             return
-        # Уже в event loop — создаём задачу и ждём
+        # Already inside the event loop — create a task and wait for it
         loop.create_task(self._drain(coro))
 
     async def _drain(self, coro) -> None:
         await coro
-        await asyncio.sleep(0)  # даём шанс другим таскам  # даём шанс другим таскам
+        await asyncio.sleep(0)  # give other tasks a chance  # give other tasks a chance
 
     def _sort_table(self, event, col_names, **kwargs) -> None:
-        """Заглушка _sort_table — запоминает что был вызван fallback."""
+        """Stub for _sort_table — records that the fallback was called."""
         self._sort_table_fallback_called = True
         super()._sort_table(event, col_names, **kwargs)
 
 
 class _Host(_MinimalHost, SortableTableMixin):
-    """Полноценный host: миксин + минимальная заглушка."""
+    """Full-fledged host: the mixin plus a minimal stub."""
 
     pass
 
 
 def _make_event(column_index: int, table_id: str = "request-list") -> MagicMock:
-    """Создать мок HeaderSelected с указанным column_index."""
+    """Create a HeaderSelected mock with the given column_index."""
     event = MagicMock(spec=DataTable.HeaderSelected)
     event.column_index = column_index
     table = MagicMock(spec=DataTable)
@@ -67,7 +67,7 @@ def _make_event(column_index: int, table_id: str = "request-list") -> MagicMock:
     return event
 
 
-# ── Тесты _sort_table_sql ────────────────────────────────────────────────────
+# ── Tests for _sort_table_sql ────────────────────────────────────────────────
 
 
 class TestSortTableSql:
@@ -82,7 +82,7 @@ class TestSortTableSql:
     }
 
     def _reload_cb(self, order_by: str, order_dir: str):
-        """Возвращает корутину, которая сохранит параметры в _last_reload."""
+        """Return a coroutine that stores the parameters in _last_reload."""
 
         async def _inner(host: _Host):
             host._last_reload = (order_by, order_dir)
@@ -90,7 +90,7 @@ class TestSortTableSql:
         return _inner(self._host)
 
     def _call_sort(self, host: _Host, col_idx: int) -> None:
-        """Вызвать _sort_table_sql с настройками тестового класса."""
+        """Call _sort_table_sql with the settings of the test class."""
         event = _make_event(column_index=col_idx)
         host._sort_table_sql(event, self.COL_NAMES, self.ORDER_BY_MAP, self._reload_cb)
 

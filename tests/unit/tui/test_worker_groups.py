@@ -1,14 +1,15 @@
-"""ADR-11 п.3: у каждой долгой работы есть `group=`.
+"""ADR-11 item 3: every long-running job carries a `group=`.
 
-Воркер без группы нельзя снять точечно — только `cancel_all`, то есть вместе
-с чужими: загрузкой, сохранением, техдетектом. Именно так обход сайта в Target
-переживал уход с экрана: он шёл минутами, держал сеть и процесс-пул, а
-ActivityIndicator продолжал гореть. У семи `@work` в Target и одного в
-Dashboard группы не было вовсе.
+A worker without a group cannot be cancelled selectively — only via `cancel_all`,
+that is together with foreign work: loading, saving, tech detection. That is
+exactly how the site crawl in Target outlived leaving the screen: it ran for
+minutes, held the network and the process pool, while the ActivityIndicator kept
+glowing. Seven `@work` decorators in Target and one in Dashboard had no group at
+all.
 
-Гвард механический: AST по декораторам, а не список имён. Список пришлось бы
-обновлять руками, и он бы разошёлся с кодом ровно так же, как разошлись
-group и name у воркера атаки Intruder.
+The guard is mechanical: AST over decorators, not a list of names. A list would
+have to be maintained by hand, and it would drift from the code exactly the same
+way the group and name of the Intruder attack worker drifted apart.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ _TUI = Path(__file__).resolve().parents[3] / "pentool" / "tui"
 
 
 def _work_decorators() -> list[tuple[str, int, str]]:
-    """(file, line, function) для каждого `@work` / `@work(...)` без group."""
+    """(file, line, function) for every `@work` / `@work(...)` without group."""
     missing: list[tuple[str, int, str]] = []
     for path in sorted(_TUI.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -52,7 +53,7 @@ def test_every_work_worker_has_a_group() -> None:
 
 
 def test_the_guard_would_notice_a_new_ungrouped_worker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Мутация гварда: без этого теста он может быть пустым и всё равно зелёным."""
+    """Guard mutation test: without it the guard could be empty and still green."""
     fake_tui = tmp_path / "tui"
     fake_tui.mkdir()
     (fake_tui / "screen.py").write_text(
@@ -66,7 +67,7 @@ def test_the_guard_would_notice_a_new_ungrouped_worker(tmp_path: Path, monkeypat
 
 
 def test_the_crawl_worker_is_cancelled_when_the_target_screen_goes_away() -> None:
-    """Обход — единственный воркер, который обязан умереть вместе с экраном."""
+    """The crawl is the only worker that must die together with the screen."""
     from pentool.tui.screens.target.screen import TargetScreen
 
     source = (_TUI / "screens" / "target" / "screen.py").read_text(encoding="utf-8")

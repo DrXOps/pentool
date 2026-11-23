@@ -1,26 +1,26 @@
-"""ADR-6 п.1: в хендлере `except Exception` несёт трейсбек, а не строку.
+"""ADR-6 item 1: in a handler `except Exception` carries a traceback, not a string.
 
-Пункт 1 ADR-6 требует, чтобы `on_*`/`action_*`/`watch_*`/воркер, поймав
-`Exception`, записал её через `logger.exception(...)` — с трейсбеком. Строка
-`logger.debug("...: %s", exc)` не годится: по ней видно, *что* упало, но не
-*где*, а в TUI обработчик — это почти всегда единственное место, где сбой
-вообще можно увидеть.
+ADR-6 item 1 requires `on_*`/`action_*`/`watch_*`/worker, having caught an
+`Exception`, to record it via `logger.exception(...)` — with a traceback. The string
+`logger.debug("...: %s", exc)` is not acceptable: it shows *what* failed but not
+*where*, and in the TUI a handler is almost always the only place where a failure
+can be seen at all.
 
-Правило держалось на дисциплине: 85 хендлеров писали в журнал строкой,
-и ничто не мешало новому сделать так же. Гвард механический и точный по
-форме: трейсбек дают ровно четыре записи —
+The rule rested on discipline: 85 handlers logged a string,
+and nothing stopped a new one from doing the same. The guard is mechanical and exact in
+form: exactly four constructs give a traceback —
 
 * ``logger.exception(...)`` / ``_log.exception(...)`` / ``log.exception(...)``;
-* ``logger.error(..., exc_info=True)`` — то же самое, записанное длинно;
+* ``logger.error(..., exc_info=True)`` — the same thing, written the long way;
 * ``err(exc, ...)`` / ``self.err(exc, ...)`` — ``pentool.core.error_guard``
-  печатает ``traceback.format_exception`` и уведомляет пользователя;
-* ``raise`` — исключение уходит диспетчеру, трейсбек напечатает он.
+  prints ``traceback.format_exception`` and notifies the user;
+* ``raise`` — the exception goes to the dispatcher, which prints the traceback.
 
-Всё остальное — нарушение. Не «любой лог», а именно трейсбек: `debug` с
-`%s` проходит гвард только если рядом есть `exc_info=True`.
+Everything else is a violation. Not "any log", but specifically a traceback: `debug` with
+`%s` passes the guard only if `exc_info=True` is nearby.
 
-Область — как в ADR-6: методы с именами `on_`/`action_`/`watch_` и методы,
-в теле которых есть `run_worker` или декоратор `@work` (точка входа воркера).
+The scope is as in ADR-6: methods named `on_`/`action_`/`watch_` and methods
+whose body contains `run_worker` or the `@work` decorator (the worker entry point).
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ _TUI = Path(__file__).resolve().parents[3] / "pentool" / "tui"
 
 _HANDLER_PREFIXES = ("on_", "action_", "watch_")
 
-#: Формы, дающие трейсбек в журнале или у диспетчера.
+#: Forms that yield a traceback in the log or at the dispatcher.
 _TRACEBACK_FORMS = (
     "logger.exception",
     "_log.exception",
@@ -43,7 +43,7 @@ _ERR_CALLS = ("err(exc", "err(e,")
 
 
 def _is_blind(handler: ast.ExceptHandler) -> bool:
-    """``except Exception`` / ``except BaseException`` / голый ``except:``."""
+    """``except Exception`` / ``except BaseException`` / bare ``except:``."""
     if handler.type is None:
         return True
     types = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
@@ -105,7 +105,7 @@ def _guard_module():
 
 
 def test_guard_detects_a_planted_handler_without_traceback(tmp_path, monkeypatch) -> None:
-    """Гвард обязан падать на подсаженном коде — иначе он проверяет пустоту."""
+    """The guard must fail on planted code — otherwise it checks nothing."""
     planted = tmp_path / "tui" / "planted.py"
     planted.parent.mkdir(parents=True)
     planted.write_text(
@@ -121,7 +121,7 @@ def test_guard_detects_a_planted_handler_without_traceback(tmp_path, monkeypatch
     assert len(offenders) == 1
     assert "on_action" in offenders[0]
 
-    # Каждая из четырёх разрешённых форм гвард не трогает.
+    # The guard leaves each of the four allowed forms alone.
     for body in (
         "        logger.exception('failed')\n",
         "        logger.error('failed: %s', exc, exc_info=True)\n",
@@ -134,8 +134,8 @@ def test_guard_detects_a_planted_handler_without_traceback(tmp_path, monkeypatch
         )
         assert _offenders() == [], body
 
-    # Хендлер вне области правила (не on_*/action_*/watch_* и не воркер) —
-    # тоже не его дело: это вспомогательный метод, его исключение всплывает.
+    # A handler outside the scope of the rule (not on_*/action_*/watch_* and not a
+    # worker) is none of its business either: this is a helper method, its exception propagates.
     planted.write_text(
         "def helper(self):\n"
         "    try:\n"

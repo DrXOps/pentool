@@ -1,13 +1,13 @@
-"""`--real` не должен молча создавать пустой проект.
+"""`--real` must not silently create an empty project.
 
-Разбор жалобы «автоматический перехват с --real не работает»: флаг был
-переименован в `--smart`, а старый `--real` пропал — команда запускала проект
-без перехвата. Вторая причина: трафик тянул только бинарник Lightpanda, и если
-его нет в системе, `_do_real_fetch_sync` возвращал False, не сделав ни одного
-запроса.
+Analysis of the complaint "automatic interception with --real does not work":
+the flag was renamed to `--smart`, and the old `--real` disappeared — the
+command launched a project without interception. The second cause: traffic was
+pulled only by the Lightpanda binary, and if it is absent from the system,
+`_do_real_fetch_sync` returned False without making a single request.
 
-Тесты фиксируют обе половины: флаг-алиас существует, а отсутствие Lightpanda
-уводит в HTTP-фолбэк вместо тихого выхода.
+The tests pin down both halves: the flag alias exists, and the absence of
+Lightpanda leads into the HTTP fallback instead of a silent exit.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from pentool.tui.app import PentoolApp
 
 
 def test_real_flag_is_gone_and_smart_is_the_only_way() -> None:
-    """`--real` убран: он расходился с `--smart` (не включал установку браузера)."""
+    """`--real` was removed: it diverged from `--smart` (it did not enable browser installation)."""
     from pentool.cli.main import cli
 
     names = {param.name for param in cli.params}

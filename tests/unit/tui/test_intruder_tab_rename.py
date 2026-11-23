@@ -1,13 +1,13 @@
-"""Переименование вкладки Intruder (двойной клик / F2).
+"""Renaming an Intruder tab (double click / F2).
 
-Дефект: экран монтировал СВОЙ `Input` с тем же id, что уже создаёт панель
-вкладок. В дереве оказывались два поля с одинаковым идентификатором,
-`query_one` находил скрытое первое — видимое оставалось без фокуса, и
-переименование «не работало». Плюс у Intruder не было CSS-правила для поля
-(у Repeater было), поэтому поле всплывало посреди панели.
+Defect: the screen mounted ITS OWN `Input` with the same id that the tab panel
+already creates. The tree ended up with two fields sharing an identical
+identifier, so `query_one` found the hidden first one — the visible field never
+got focus and renaming "did not work". On top of that, Intruder had no CSS rule
+for the field (Repeater did), so the field popped up in the middle of the panel.
 
-Тесты фиксируют: поле одно, оно видимо и в фокусе, отправка меняет подпись
-вкладки и состояние, после ввода поле скрывается.
+The tests pin down: there is a single field, it is visible and focused,
+submitting changes the tab label and state, and the field is hidden afterwards.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ async def test_submitting_a_new_name_renames_the_tab() -> None:
         await _settle(pilot, 10)
         inp = panel.query_one(f"#{screen._rename_input_id}", Input)
 
-        # Порядок всплытия как в приложении: панель, затем экран (сохранение).
+        # Bubbling order matches the app: the panel first, then the screen (saves).
         event = types.SimpleNamespace(input=inp, value="RENAMED-TAB")
         panel.on_input_submitted(event)
         screen.on_input_submitted(event)

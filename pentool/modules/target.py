@@ -274,8 +274,8 @@ class SiteMap(BaseSqliteStorage):
                 )
             await db.commit()
         except Exception:
-            # Карта сайта не сохранена: при следующем запуске проект откроется
-            # без неё. Трейсбек обязателен — без него причину не найти.
+            # Site map not saved: on the next launch the project will open
+            # without it. The traceback is mandatory — without it the cause can't be found.
             logger.error("SiteMap.save error", exc_info=True)
 
     async def load(self) -> None:
@@ -312,8 +312,8 @@ class SiteMap(BaseSqliteStorage):
                 if raw:
                     self._scope_wildcards = [s for s in raw.split(",") if s.strip()]
         except Exception:
-            # Карта сайта не прочитана: экран Target будет пуст, хотя данные в
-            # БД есть. Трейсбек обязателен.
+            # Site map not loaded: the Target screen will be empty even though
+            # the data is in the DB. The traceback is mandatory.
             logger.error("SiteMap.load error", exc_info=True)
 
     def clear(self) -> None:

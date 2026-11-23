@@ -1,19 +1,19 @@
-"""Параметризуемый локальный "крупный сайт" для нагрузочных leak-тестов.
+"""Parameterized local "big site" for load-based leak tests.
 
-Единственная цель — дать Scanner/Spider/Intruder что-то похожее на
-реальный крупный сайт (много уникальных URL, GET/POST-параметров, форм),
-без сети, без риска бана/троттлинга и с детерминированным размером.
+Its only purpose is to give Scanner/Spider/Intruder something resembling a
+real large site (many unique URLs, GET/POST params, forms), with no network,
+no risk of a ban/throttling, and with a deterministic size.
 
-Параметры (через MockBigSiteConfig):
-  - n_pages:        число уникальных "страниц" /page/<i>
-  - params_per_page: число GET-параметров на страницу (?p0=..&p1=..)
-  - n_forms:        число POST-форм (каждая с несколькими полями)
-  - body_size:      размер HTML-тела ответа (байт) — влияет на baseline/diff
+Parameters (via MockBigSiteConfig):
+  - n_pages:         number of unique "pages" /page/<i>
+  - params_per_page: number of GET params per page (?p0=..&p1=..)
+  - n_forms:         number of POST forms (each with several fields)
+  - body_size:       size of the response HTML body (bytes) — affects baseline/diff
 
-Страницы линкуются друг на друга (следующие N_LINKS_PER_PAGE), так что
-Spider может реально обойти сайт (не просто список URL "в лоб").
+Pages link to one another (the next N_LINKS_PER_PAGE), so that Spider can
+actually crawl the site (not just take a list of URLs head-on).
 
-Использование как контекстный менеджер:
+Usage as a context manager:
     async with MockBigSite(MockBigSiteConfig(n_pages=2000)) as site:
         print(site.base_url)
 """

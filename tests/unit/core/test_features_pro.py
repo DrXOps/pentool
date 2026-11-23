@@ -13,9 +13,9 @@ def test_free_plan_no_payloads_pro():
 
 def test_pro_limit_threads():
     limit = get_limit("scanner_threads", "pro")
-    assert limit > 5  # PRO должен иметь больше чем FREE
+    assert limit > 5  # PRO must have more than FREE
 
 
 def test_enterprise_has_all_features():
-    # enterprise должен иметь все фичи что есть у pro
+    # enterprise must have every feature that pro has
     assert has_feature("payloads_pro", "enterprise") is True

@@ -89,7 +89,7 @@ class IntruderAPI(ExportableAPI):
         self._repo = storage or IntruderStorage(db_path=db_path)
 
     def make_attack(self, config: IntruderConfig, turbo_mode: bool = False):
-        """Создать IntruderAttack (или TurboIntruderAttack) без привязки к общему `_attack`.
+        """Create an IntruderAttack (or TurboIntruderAttack) without binding it to the shared `_attack`.
 
         Needed for parallel per-tab attacks: every tab creates its OWN attack instance
         through this factory and keeps it in its own state, so pause/stop/abort

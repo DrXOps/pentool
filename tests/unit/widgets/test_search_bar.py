@@ -90,7 +90,7 @@ class TestFireSearch:
 
     def test_fire_search_query_failure(self) -> None:
         b = _make_bar()
-        # Поля нет в дереве — ровно `NoMatches` (ADR-6 п.4), не любая ошибка.
+        # The field isn't in the tree — exactly `NoMatches` (ADR-6 clause 4), not just any error.
         b.query_one = Mock(side_effect=NoMatches())
         b.post_message = MagicMock()
         b._fire_search(1)
@@ -119,7 +119,7 @@ class TestToggleTarget:
     def test_toggle_tolerates_exception(self) -> None:
         b = _make_bar()
         b._search_target = "request"
-        # Тогла нет в дереве — ровно `NoMatches` (ADR-6 п.4).
+        # The toggle isn't in the tree — exactly `NoMatches` (ADR-6 clause 4).
         b.query_one = Mock(side_effect=NoMatches())
         b.toggle_target()
         assert b._search_target == "response"
@@ -211,7 +211,7 @@ class TestSetCount:
 
     def test_set_count_tolerates_exception(self) -> None:
         b = _make_bar()
-        # Счётчика нет в дереве — ровно `NoMatches` (ADR-6 п.4).
+        # The counter isn't in the tree — exactly `NoMatches` (ADR-6 clause 4).
         b.query_one = Mock(side_effect=NoMatches())
         b.set_count(0, 0)
 

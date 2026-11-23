@@ -1,4 +1,4 @@
-"""Unit tests: БАГ-D — HTTPClient reuse in IntruderAttack.run().
+"""Unit tests: BUG-D — HTTPClient reuse in IntruderAttack.run().
 
 Verifies that IntruderAttack.run() creates a single HTTPClient shared
 across all requests in an attack (instead of opening/closing a new

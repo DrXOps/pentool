@@ -38,11 +38,11 @@ class _App(App):
 
 @pytest.fixture(autouse=True)
 def _isolated_config(tmp_path, monkeypatch):
-    """Конфиг на время теста — свой, а не ~/.config/pentool/config.yaml.
+    """Config of its own for the duration of the test, not ~/.config/pentool/config.yaml.
 
-    Иначе prefill читает реальный файл: если там ai_enabled=true, переключатель
-    уже включён, установка True не даёт события Changed, и тест падает по
-    причине, не связанной с кодом.
+    Otherwise the prefill reads the real file: if it has ai_enabled=true, the switch
+    is already on, setting True emits no Changed event, and the test fails for a
+    reason unrelated to the code.
     """
     from pentool.core.config import Config, set_config
 

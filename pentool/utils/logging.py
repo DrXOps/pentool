@@ -1,4 +1,4 @@
-"""Фабрика логгеров — общая для всех слоёв.
+"""Logger factory — shared by every layer.
 
 Deliberately lives in ``utils``: the logger is needed by ``utils``, ``core`` and
 ``modules``, while the layering rule forbids packages below ``core`` from importing
@@ -14,7 +14,7 @@ from typing import ClassVar
 
 
 class _NamedLogger(logging.Logger):
-    """Логгер с per-module фильтрацией уровней через конфиг.
+    """Logger with per-module level filtering driven by config.
 
     Filters are configured once via ``_NamedLogger.configure(rules)`` and
     apply to every logger in the process. ``error`` always passes.
