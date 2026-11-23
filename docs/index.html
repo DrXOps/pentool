@@ -100,7 +100,7 @@
     .btn:hover { opacity: .85; transform: translateY(-1px); }
     .btn-primary { background: var(--accent); color: #0d1117; }
     .btn-secondary { background: var(--bg2); color: var(--text); border: 1px solid var(--border); }
-    .btn-donate { background: rgba(63,185,80,.15); color: var(--accent2); border: 1px solid rgba(63,185,80,.3); }
+    
 
     /* TERMINAL DEMO */
     .terminal-wrap { padding: 3rem 2rem; display: flex; justify-content: center; }
@@ -215,21 +215,9 @@
     .footer-bottom { text-align: center; padding: 1.5rem 2rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--border); }
 
     /* SCREENSHOTS — slider */
-    .slider {
-      position: relative;
-      max-width: 720px;
-      margin: 0 auto;
-    }
-    .slider-viewport {
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: var(--bg2);
-    }
-    .slider-track {
-      display: flex;
-      transition: transform .45s cubic-bezier(.4,0,.2,1);
-    }
+    
+    
+    
     .slide {
       flex: 0 0 100%;
       min-width: 100%;
@@ -256,123 +244,40 @@
       height: auto;
       display: block;
     }
-    .slider-btn {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      z-index: 6;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border: 1px solid var(--border);
-      background: var(--bg3);
-      color: var(--text);
-      font-size: 1.1rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background .2s, border-color .2s;
-    }
-    .slider-btn:hover { background: var(--accent); color: #0d1117; border-color: var(--accent); }
-    .slider-prev { left: -12px; }
-    .slider-next { right: -12px; }
-    .slider-dots {
-      display: flex;
-      justify-content: center;
-      gap: .5rem;
-      margin-top: 1.25rem;
-    }
-    .slider-dot {
-      width: 9px; height: 9px;
-      border-radius: 50%;
-      border: none;
-      background: var(--border);
-      cursor: pointer;
-      transition: background .2s, transform .2s;
-      padding: 0;
-    }
-    .slider-dot.active { background: var(--accent); transform: scale(1.3); }
-    .slider-credit {
-      text-align: center;
-      font-size: .8rem;
-      color: var(--muted);
-      margin-top: 1rem;
-    }
-    .slider-credit a { color: var(--accent); text-decoration: none; }
-    .slider-credit a:hover { text-decoration: underline; }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     /* DONATE */
-    .donate-section { padding: 5rem 2rem; max-width: 1000px; margin: 0 auto; }
-    .donate-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 1.25rem;
-      margin-top: 2.5rem;
-    }
-    .donate-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.25rem;
-      transition: border-color .2s;
-    }
-    .donate-card:hover { border-color: var(--accent2); }
-    .donate-card-header {
-      display: flex; align-items: center; gap: .6rem;
-      margin-bottom: 1rem;
-    }
-    .donate-coin { font-size: 1.4rem; }
-    .donate-card h3 { font-size: .95rem; font-weight: 700; margin: 0; }
-    .donate-network {
-      font-size: .75rem;
-      color: var(--muted);
-      font-weight: 600;
-      margin-bottom: .35rem;
-      margin-top: .75rem;
-    }
-    .donate-address-row {
-      display: flex; align-items: center; gap: .4rem;
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: .5rem .75rem;
-    }
-    .donate-address {
-      font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: .72rem;
-      color: var(--text);
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .donate-copy {
-      background: none; border: none;
-      color: var(--muted); cursor: pointer;
-      font-size: .75rem; padding: .1rem .3rem;
-      border-radius: 4px; white-space: nowrap;
-      transition: color .2s, background .2s;
-    }
-    .donate-copy:hover { color: var(--text); background: var(--bg); }
-    .donate-copy.copied { color: var(--accent2); }
-    .donate-note {
-      background: rgba(227,179,65,.06);
-      border: 1px solid rgba(227,179,65,.2);
-      border-radius: 8px;
-      padding: 1rem 1.25rem;
-      font-size: .85rem;
-      color: var(--muted);
-      margin-top: 2rem;
-    }
-    .donate-note strong { color: var(--warn); }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     @media (max-width: 600px) {
       .nav-links { display: none; }
       footer { flex-direction: column; }
-      .slider-prev { left: 6px; }
-      .slider-next { right: 6px; }
-      .donate-grid { grid-template-columns: 1fr; }
+      
+      
+      
     }
   </style>
 </head>
@@ -383,10 +288,8 @@
   <a class="nav-logo" href="#"><span>⬛</span> Pentool</a>
   <ul class="nav-links">
     <li><a href="#features" data-i18n="nav.features">Features</a></li>
-    <li><a href="#screenshots" data-i18n="nav.screenshots">Screenshots</a></li>
     <li><a href="#install" data-i18n="nav.install">Install</a></li>
-    <li><a href="#docs" data-i18n="nav.docs">Docs</a></li>
-    <li><a href="#donate" data-i18n="nav.donate">Donate</a></li>
+    <li><a href="https://t.me/pentool_pro" target="_blank" rel="noopener" data-i18n="nav.channel">Telegram channel</a></li>
     <li><a href="#beta" data-i18n="nav.beta">Trial</a></li>
   </ul>
   <div class="lang-switch" role="group" aria-label="Language">
@@ -406,7 +309,7 @@
   <div class="hero-buttons">
     <a class="btn btn-primary" href="#install" data-i18n="hero.btnInstall">📦 uv tool install pentool</a>
     <a class="btn btn-secondary" href="https://github.com/DrXOps/pentool" data-i18n="hero.btnGithub">⭐ GitHub</a>
-    <a class="btn btn-donate" href="https://t.me/sudores" data-i18n="hero.btnTrial">💬 Get PRO Trial</a>
+    <a class="btn" href="https://t.me/sudores" data-i18n="hero.btnTrial">💬 Get PRO Trial</a>
   </div>
 </section>
 
@@ -523,76 +426,13 @@
 
 <hr class="divider" />
 
-<!-- SCREENSHOTS -->
-<section class="section" id="screenshots">
-  <div class="section-label" data-i18n="screens.label">In action</div>
-  <h2 class="section-title" data-i18n="screens.title">Screenshots</h2>
-  <p class="section-sub" data-i18n="screens.sub">Pentool running in a real terminal — no mocks, no marketing renders.</p>
-  <div class="slider" id="screenshot-slider">
-    <div class="slider-viewport">
-      <div class="slider-track" id="slider-track">
-        <div class="slide">
-          <div class="slide-label" data-i18n="screens.dashboard">Dashboard</div>
-          <a href="screens/screen-dashboard.png" target="_blank">
-            <img src="screens/screen-dashboard.png" alt="Dashboard" loading="lazy" />
-          </a>
-        </div>
-        <div class="slide">
-          <div class="slide-label" data-i18n="screens.scanner">Scanner</div>
-          <a href="screens/screen-scanner.png" target="_blank">
-            <img src="screens/screen-scanner.png" alt="Scanner" loading="lazy" />
-          </a>
-        </div>
-        <div class="slide">
-          <div class="slide-label" data-i18n="screens.proxy">Proxy</div>
-          <a href="screens/screen-proxy.png" target="_blank">
-            <img src="screens/screen-proxy.png" alt="Proxy" loading="lazy" />
-          </a>
-        </div>
-        <div class="slide">
-          <div class="slide-label" data-i18n="screens.repeater">Repeater</div>
-          <a href="screens/screen-repeater.png" target="_blank">
-            <img src="screens/screen-repeater.png" alt="Repeater" loading="lazy" />
-          </a>
-        </div>
-        <div class="slide">
-          <div class="slide-label" data-i18n="screens.intruder">Intruder</div>
-          <a href="screens/screen-intruder.png" target="_blank">
-            <img src="screens/screen-intruder.png" alt="Intruder" loading="lazy" />
-          </a>
-        </div>
-        <div class="slide">
-          <div class="slide-label" data-i18n="screens.intruderDetail">Intruder — Attack Detail</div>
-          <a href="screens/screen-intruder-detail.png" target="_blank">
-            <img src="screens/screen-intruder-detail.png" alt="Intruder Attack Detail" loading="lazy" />
-          </a>
-        </div>
-        <div class="slide">
-          <div class="slide-label" data-i18n="screens.decoder">Decoder</div>
-          <a href="screens/screen-decoder.png" target="_blank">
-            <img src="screens/screen-decoder.png" alt="Decoder" loading="lazy" />
-          </a>
-        </div>
-      </div>
-    </div>
-    <button class="slider-btn slider-prev" aria-label="Previous" onclick="sliderMove(-1)">‹</button>
-    <button class="slider-btn slider-next" aria-label="Next" onclick="sliderMove(1)">›</button>
-    <div class="slider-dots" id="slider-dots"></div>
-    <p class="slider-credit" data-i18n="screens.credit">Click any screenshot to open it at full size.</p>
-  </div>
-</section>
-
-<hr class="divider" />
 <section class="beta-section" id="beta">
   <div class="beta-box">
     <h2 data-i18n="beta.title">🚀 Demo Version — 14-Day Free Trial</h2>
     <ul>
       <li>⏱ <div><strong data-i18n="beta.trial.s">Trial period: 14 days.</strong> <span data-i18n="beta.trial.d">Full PRO functionality is available from day one — no feature gates, no paywalls during the trial.</span></div></li>
-      <li>🔧 <div><strong data-i18n="beta.dev.s">PRO features are under active development.</strong> <span data-i18n="beta.dev.d">Some advanced modules are still being built. You're getting early access, not a finished product.</span></div></li>
-      <li>🔑 <div><strong data-i18n="beta.pro.s">Ready to go PRO?</strong> <span data-i18n="beta.pro.d">Licenses are not sold publicly yet. Reach out personally —</span> <a href="https://t.me/sudores">@sudores</a></div></li>
       <li>📰 <div><strong data-i18n="beta.news.s">Want news on new releases and features?</strong> <span data-i18n="beta.news.d">Subscribe to the</span> <a href="https://t.me/pentool_pro">Pentool</a></div></li>
       <li>🎙 <div><strong data-i18n="beta.review.s">Run a security blog, YouTube channel, or Telegram channel?</strong> <span data-i18n="beta.review.d">Write a review and recommend Pentool to your audience — we'll give you a</span> <strong data-i18n="beta.review.b">permanent PRO license, free of charge.</strong> → <a href="https://t.me/sudores">@sudores</a></div></li>
-      <li>☕ <div><strong data-i18n="beta.support.s">Want to support development?</strong> → <a href="https://t.me/sudores">@sudores</a></div></li>
     </ul>
   </div>
 </section>
@@ -600,115 +440,6 @@
 <hr class="divider" />
 
 <!-- DONATE -->
-<section class="donate-section" id="donate">
-  <div class="section-label" data-i18n="donate.label">Support the project</div>
-  <h2 class="section-title" data-i18n="donate.title">💝 Donate</h2>
-  <p class="section-sub" data-i18n="donate.sub">Help keep Pentool free and open-source. Any amount is appreciated.</p>
-  <div class="donate-grid">
-
-    <div class="donate-card">
-      <div class="donate-card-header">
-        <span class="donate-coin">₿</span>
-        <h3>Bitcoin (BTC)</h3>
-      </div>
-      <div class="donate-network">BTC · Native SegWit</div>
-      <div class="donate-address-row">
-        <span class="donate-address" id="addr-btc">bc1q3dpyhrllqfj3lh7sppszfp7tqwwczvnnnmqc6u</span>
-        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-btc',this)">Copy</button>
-      </div>
-    </div>
-
-    <div class="donate-card">
-      <div class="donate-card-header">
-        <span class="donate-coin">Ξ</span>
-        <h3>Ethereum (ETH)</h3>
-      </div>
-      <div class="donate-network">ERC-20 · Ethereum</div>
-      <div class="donate-address-row">
-        <span class="donate-address" id="addr-eth-erc20">0x080EF7003e9A2f74a427571882D84053787E57FA</span>
-        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-eth-erc20',this)">Copy</button>
-      </div>
-      <div class="donate-network">BSC · BEP-20</div>
-      <div class="donate-address-row">
-        <span class="donate-address" id="addr-eth-bsc">0x080EF7003e9A2f74a427571882D84053787E57FA</span>
-        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-eth-bsc',this)">Copy</button>
-      </div>
-    </div>
-
-    <div class="donate-card">
-      <div class="donate-card-header">
-        <span class="donate-coin">₮</span>
-        <h3>USDT (Tether)</h3>
-      </div>
-      <div class="donate-network">TRC-20 · TRON</div>
-      <div class="donate-address-row">
-        <span class="donate-address" id="addr-usdt-trc20">THuwFSKVkUjmWVDa8sRwVPdPtWVr4kxTtq</span>
-        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-usdt-trc20',this)">Copy</button>
-      </div>
-      <div class="donate-network">ERC-20 · Ethereum</div>
-      <div class="donate-address-row">
-        <span class="donate-address" id="addr-usdt-erc20">0x080EF7003e9A2f74a427571882D84053787E57FA</span>
-        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-usdt-erc20',this)">Copy</button>
-      </div>
-    </div>
-
-    <div class="donate-card">
-      <div class="donate-card-header">
-        <span class="donate-coin">💎</span>
-        <h3>TON Coin</h3>
-      </div>
-      <div class="donate-network">TON Network</div>
-      <div class="donate-address-row">
-        <span class="donate-address" id="addr-ton" data-i18n="donate.soon">Coming soon</span>
-        <button class="donate-copy" data-i18n="donate.copy" onclick="copyAddr('addr-ton',this)">Copy</button>
-      </div>
-    </div>
-
-  </div>
-  <div class="donate-note">
-    <strong data-i18n="donate.note.s">⚠️ Important:</strong> <span data-i18n="donate.note.d1">Always select the correct network before sending.</span>
-    <span data-i18n="donate.note.d2">Sending to the wrong network may result in permanent loss of funds.</span>
-    <span data-i18n="donate.note.d3">After donating, feel free to reach out on</span> <a href="https://t.me/sudores" style="color:var(--accent);">Telegram</a> — it means a lot!
-  </div>
-</section>
-
-<hr class="divider" />
-
-<!-- DOCS -->
-<section class="section" id="docs">
-  <div class="section-label" data-i18n="docs.label">Documentation</div>
-  <h2 class="section-title" data-i18n="docs.title">Learn Pentool</h2>
-  <p class="section-sub" data-i18n="docs.sub">Guides, references and plugin API.</p>
-  <div class="docs-grid">
-    <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md">
-      <div class="doc-icon">🚀</div>
-      <h4 data-i18n="docs.quickStart">Quick Start</h4>
-      <p data-i18n="docs.quickStart.d">Up and running in 5 minutes</p>
-    </a>
-    <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/INSTALLATION.md">
-      <div class="doc-icon">📦</div>
-      <h4 data-i18n="docs.installation">Installation</h4>
-      <p data-i18n="docs.installation.d">Detailed setup for all platforms</p>
-    </a>
-    <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/USER_GUIDE.md">
-      <div class="doc-icon">📖</div>
-      <h4 data-i18n="docs.userGuide">User Guide</h4>
-      <p data-i18n="docs.userGuide.d">All modules, all features</p>
-    </a>
-    <a class="doc-card" href="https://github.com/DrXOps/pentool/blob/main/docs/API_CONTRACTS.md">
-      <div class="doc-icon">🧩</div>
-      <h4 data-i18n="docs.pluginApi">Plugin API</h4>
-      <p data-i18n="docs.pluginApi.d">Build your own extensions</p>
-    </a>
-  </div>
-  <p class="section-sub" data-i18n="docs.langHint" style="margin-top:1.5rem;">
-    Read this page in your language — use the language switch in the top menu.
-  </p>
-</section>
-
-<hr class="divider" />
-
-<!-- FOOTER -->
 <footer>
   <div class="footer-brand">
     <div class="logo">⬛ <span>Pento</span>ol</div>
@@ -729,7 +460,6 @@
       <li><a href="https://t.me/pentool_pro" data-i18n="footer.telegramNews">Telegram Channel (news)</a></li>
       <li><a href="https://t.me/sudores" data-i18n="footer.telegramPersonal">Telegram @sudores (personal)</a></li>
       <li><a href="mailto:support@pentool.pro" data-i18n="footer.email">Email</a></li>
-      <li><a href="#donate" data-i18n="footer.donate">Donate ☕</a></li>
     </ul>
   </div>
   <div class="footer-links">
@@ -760,10 +490,8 @@
 const I18N = {
   en: {
     "nav.features": "Features",
-    "nav.screenshots": "Screenshots",
     "nav.install": "Install",
     "nav.docs": "Docs",
-    "nav.donate": "Donate",
     "nav.beta": "Trial",
     "hero.badge": "🚀 Demo · 14-day Free Trial · All PRO Features Included",
     "hero.h1.1": "Web Security TUI",
@@ -801,40 +529,14 @@ const I18N = {
     "install.noUv": "Don't have uv?",
     "install.pipAlso": "pip still works too:",
     "install.guide": "Full installation guide →",
-    "screens.label": "In action",
-    "screens.title": "Screenshots",
-    "screens.sub": "Pentool running in a real terminal — no mocks, no marketing renders.",
-    "screens.credit": "Click any screenshot to open it at full size.",
-    "screens.dashboard": "Dashboard",
-    "screens.scanner": "Scanner",
-    "screens.proxy": "Proxy",
-    "screens.repeater": "Repeater",
-    "screens.intruder": "Intruder",
-    "screens.intruderDetail": "Intruder — Attack Detail",
-    "screens.decoder": "Decoder",
     "beta.title": "🚀 Demo Version — 14-Day Free Trial",
     "beta.trial.s": "Trial period: 14 days.",
     "beta.trial.d": "Full PRO functionality is available from day one — no feature gates, no paywalls during the trial.",
-    "beta.dev.s": "PRO features are under active development.",
-    "beta.dev.d": "Some advanced modules are still being built. You're getting early access, not a finished product.",
-    "beta.pro.s": "Ready to go PRO?",
-    "beta.pro.d": "Licenses are not sold publicly yet. Reach out personally —",
     "beta.news.s": "Want news on new releases and features?",
     "beta.news.d": "Subscribe to the",
     "beta.review.s": "Run a security blog, YouTube channel, or Telegram channel?",
     "beta.review.d": "Write a review and recommend Pentool to your audience — we'll give you a",
     "beta.review.b": "permanent PRO license, free of charge.",
-    "beta.support.s": "Want to support development?",
-    "donate.label": "Support the project",
-    "donate.title": "💝 Donate",
-    "donate.sub": "Help keep Pentool free and open-source. Any amount is appreciated.",
-    "donate.copy": "Copy",
-    "donate.copied": "✓ Copied",
-    "donate.soon": "Coming soon",
-    "donate.note.s": "⚠️ Important:",
-    "donate.note.d1": "Always select the correct network before sending.",
-    "donate.note.d2": "Sending to the wrong network may result in permanent loss of funds.",
-    "donate.note.d3": "After donating, feel free to reach out on",
     "docs.label": "Documentation",
     "docs.title": "Learn Pentool",
     "docs.sub": "Guides, references and plugin API.",
@@ -855,21 +557,19 @@ const I18N = {
     "footer.telegramNews": "Telegram Channel (news)",
     "footer.telegramPersonal": "Telegram @sudores (personal)",
     "footer.email": "Email",
-    "footer.donate": "Donate ☕",
     "footer.legal": "Legal",
     "footer.pricing": "Pricing & PRO",
     "footer.terms": "Terms of Service",
     "footer.privacy": "Privacy Policy",
     "footer.licensePortal": "Licence portal",
+    "nav.channel": "Telegram channel",
     "footer.docs": "Docs"
   },
 
   ru: {
     "nav.features": "Возможности",
-    "nav.screenshots": "Скриншоты",
     "nav.install": "Установка",
     "nav.docs": "Документация",
-    "nav.donate": "Поддержка",
     "nav.beta": "Триал",
     "hero.badge": "🚀 Демо · 14-дневный бесплатный триал · Все функции PRO",
     "hero.h1.1": "Web Security TUI",
@@ -907,40 +607,14 @@ const I18N = {
     "install.noUv": "Нет uv?",
     "install.pipAlso": "pip тоже работает:",
     "install.guide": "Полное руководство по установке →",
-    "screens.label": "В действии",
-    "screens.title": "Скриншоты",
-    "screens.sub": "Pentool работает в реальном терминале — без моков и маркетинговых рендеров.",
-    "screens.credit": "Нажмите на скриншот, чтобы открыть его в полном размере.",
-    "screens.dashboard": "Дашборд",
-    "screens.scanner": "Сканер",
-    "screens.proxy": "Прокси",
-    "screens.repeater": "Repeater",
-    "screens.intruder": "Intruder",
-    "screens.intruderDetail": "Intruder — детали атаки",
-    "screens.decoder": "Decoder",
     "beta.title": "🚀 Демо-версия — 14-дневный бесплатный триал",
     "beta.trial.s": "Пробный период: 14 дней.",
     "beta.trial.d": "Полный функционал PRO доступен с первого дня — без ограничений функций и платёжных стен во время триала.",
-    "beta.dev.s": "Функции PRO находятся в активной разработке.",
-    "beta.dev.d": "Некоторые продвинутые модули ещё создаются. Вы получаете ранний доступ, а не готовый продукт.",
-    "beta.pro.s": "Готовы перейти на PRO?",
-    "beta.pro.d": "Лицензии пока не продаются публично. Свяжитесь лично —",
     "beta.news.s": "Хотите новости о релизах и функциях?",
     "beta.news.d": "Подпишитесь на",
     "beta.review.s": "Ведёте блог по безопасности, YouTube или Telegram-канал?",
     "beta.review.d": "Напишите честный обзор и порекомендуйте Pentool аудитории — мы выдадим вам",
     "beta.review.b": "постоянную PRO-лицензию бесплатно.",
-    "beta.support.s": "Хотите поддержать разработку?",
-    "donate.label": "Поддержать проект",
-    "donate.title": "💝 Донат",
-    "donate.sub": "Помогите сохранить Pentool бесплатным и открытым. Любая сумма важна.",
-    "donate.copy": "Копировать",
-    "donate.copied": "✓ Скопировано",
-    "donate.soon": "Скоро",
-    "donate.note.s": "⚠️ Важно:",
-    "donate.note.d1": "Всегда выбирайте правильную сеть перед отправкой.",
-    "donate.note.d2": "Отправка в неверную сеть может привести к безвозвратной потере средств.",
-    "donate.note.d3": "После доната свяжитесь в",
     "docs.label": "Документация",
     "docs.title": "Изучите Pentool",
     "docs.sub": "Руководства, справочники и Plugin API.",
@@ -961,21 +635,19 @@ const I18N = {
     "footer.telegramNews": "Telegram-канал (новости)",
     "footer.telegramPersonal": "Telegram @sudores (личный)",
     "footer.email": "Email",
-    "footer.donate": "Донат ☕",
     "footer.legal": "Правовая информация",
     "footer.pricing": "Тарифы и PRO",
     "footer.terms": "Пользовательское соглашение",
     "footer.privacy": "Политика конфиденциальности",
     "footer.licensePortal": "Портал лицензий",
+    "nav.channel": "Telegram-канал",
     "footer.docs": "Документация"
   },
 
   zh: {
     "nav.features": "功能",
-    "nav.screenshots": "截图",
     "nav.install": "安装",
     "nav.docs": "文档",
-    "nav.donate": "捐赠",
     "nav.beta": "试用",
     "hero.badge": "🚀 演示 · 14 天免费试用 · 包含全部 PRO 功能",
     "hero.h1.1": "Web 安全 TUI",
@@ -1013,40 +685,14 @@ const I18N = {
     "install.noUv": "没有 uv？",
     "install.pipAlso": "pip 仍可用：",
     "install.guide": "完整安装指南 →",
-    "screens.label": "实战",
-    "screens.title": "截图",
-    "screens.sub": "Pentool 在真实终端中运行——没有 Mock，没有营销渲染。",
-    "screens.credit": "点击任意截图以全尺寸查看。",
-    "screens.dashboard": "仪表盘",
-    "screens.scanner": "扫描器",
-    "screens.proxy": "代理",
-    "screens.repeater": "Repeater",
-    "screens.intruder": "Intruder",
-    "screens.intruderDetail": "Intruder — 攻击详情",
-    "screens.decoder": "Decoder",
     "beta.title": "🚀 演示版 — 14 天免费试用",
     "beta.trial.s": "试用期：14 天。",
     "beta.trial.d": "第一天即可使用全部 PRO 功能——试用期间无功能限制、无付费墙。",
-    "beta.dev.s": "PRO 功能正在积极开发中。",
-    "beta.dev.d": "一些高级模块仍在构建中。您获得的是早期访问，而非最终成品。",
-    "beta.pro.s": "准备升级 PRO？",
-    "beta.pro.d": "许可证尚未公开销售。请直接联系",
     "beta.news.s": "想了解新版本和功能动态？",
     "beta.news.d": "订阅",
     "beta.review.s": "运营安全博客、YouTube 或 Telegram 频道？",
     "beta.review.d": "撰写评测并向受众推荐 Pentool——我们将为您提供",
     "beta.review.b": "永久免费 PRO 许可证。",
-    "beta.support.s": "想支持开发？",
-    "donate.label": "支持本项目",
-    "donate.title": "💝 捐赠",
-    "donate.sub": "帮助保持 Pentool 免费开源。任何金额都受欢迎。",
-    "donate.copy": "复制",
-    "donate.copied": "✓ 已复制",
-    "donate.soon": "即将推出",
-    "donate.note.s": "⚠️ 重要：",
-    "donate.note.d1": "发送前请务必选择正确的网络。",
-    "donate.note.d2": "发送至错误网络可能导致资金永久丢失。",
-    "donate.note.d3": "捐赠后，欢迎联系",
     "docs.label": "文档",
     "docs.title": "学习 Pentool",
     "docs.sub": "指南、参考和插件 API。",
@@ -1067,21 +713,19 @@ const I18N = {
     "footer.telegramNews": "Telegram 频道（新闻）",
     "footer.telegramPersonal": "Telegram @sudores（个人）",
     "footer.email": "邮箱",
-    "footer.donate": "捐赠 ☕",
     "footer.legal": "法律",
     "footer.pricing": "定价与 PRO",
     "footer.terms": "服务条款",
     "footer.privacy": "隐私政策",
     "footer.licensePortal": "许可证门户",
+    "nav.channel": "Telegram 频道",
     "footer.docs": "文档"
   },
 
   hi: {
     "nav.features": "विशेषताएँ",
-    "nav.screenshots": "स्क्रीनशॉट",
     "nav.install": "इंस्टॉल",
     "nav.docs": "दस्तावेज़",
-    "nav.donate": "दान",
     "nav.beta": "ट्रायल",
     "hero.badge": "🚀 डेमो · 14-दिन मुफ़्त ट्रायल · सभी PRO सुविधाएँ शामिल",
     "hero.h1.1": "Web Security TUI",
@@ -1119,40 +763,14 @@ const I18N = {
     "install.noUv": "uv नहीं है?",
     "install.pipAlso": "pip भी काम करता है:",
     "install.guide": "पूर्ण इंस्टॉल गाइड →",
-    "screens.label": "कार्रवाई में",
-    "screens.title": "स्क्रीनशॉट",
-    "screens.sub": "Pentool असली टर्मिनल में चल रहा है — कोई मॉक नहीं, कोई मार्केटिंग रेंडर नहीं।",
-    "screens.credit": "पूर्ण आकार में खोलने के लिए किसी स्क्रीनशॉट पर क्लिक करें।",
-    "screens.dashboard": "डैशबोर्ड",
-    "screens.scanner": "स्कैनर",
-    "screens.proxy": "प्रॉक्सी",
-    "screens.repeater": "Repeater",
-    "screens.intruder": "Intruder",
-    "screens.intruderDetail": "Intruder — अटैक विवरण",
-    "screens.decoder": "Decoder",
     "beta.title": "🚀 डेमो संस्करण — 14-दिन मुफ़्त ट्रायल",
     "beta.trial.s": "ट्रायल अवधि: 14 दिन।",
     "beta.trial.d": "पहले दिन से पूर्ण PRO कार्यक्षमता उपलब्ध है — ट्रायल के दौरान कोई फ़ीचर-गेट या पे-वॉल नहीं।",
-    "beta.dev.s": "PRO सुविधाएँ सक्रिय विकास में हैं।",
-    "beta.dev.d": "कुछ अग्रिम मॉड्यूल अभी बन रहे हैं। आपको प्रारंभिक पहुँच मिल रही है, पूर्ण उत्पाद नहीं।",
-    "beta.pro.s": "PRO में जाने के लिए तैयार?",
-    "beta.pro.d": "लाइसेंस अभी सार्वजनिक रूप से नहीं बिकते। व्यक्तिगत रूप से संपर्क करें —",
     "beta.news.s": "नए रिलीज़ और सुविधाओं की खबर चाहिए?",
     "beta.news.d": "सदस्यता लें",
     "beta.review.s": "सुरक्षा ब्लॉग, YouTube या Telegram चैनल चलाते हैं?",
     "beta.review.d": "समीक्षा लिखें और अपने दर्शकों को Pentool की अनुशंसा करें — हम आपको देंगे",
     "beta.review.b": "स्थायी FREE PRO लाइसेंस।",
-    "beta.support.s": "विकास का समर्थन करना चाहते हैं?",
-    "donate.label": "परियोजना का समर्थन",
-    "donate.title": "💝 दान",
-    "donate.sub": "Pentool को निःशुल्क और ओपन-सोर्स रखने में मदद करें। कोई भी राशि स्वागत योग्य है।",
-    "donate.copy": "कॉपी",
-    "donate.copied": "✓ कॉपी हो गया",
-    "donate.soon": "जल्द आ रहा है",
-    "donate.note.s": "⚠️ महत्वपूर्ण:",
-    "donate.note.d1": "भेजने से पहले हमेशा सही नेटवर्क चुनें।",
-    "donate.note.d2": "गलत नेटवर्क पर भेजने से धन स्थायी रूप से खो सकता है।",
-    "donate.note.d3": "दान के बाद, बेझिझक संपर्क करें",
     "docs.label": "दस्तावेज़",
     "docs.title": "Pentool सीखें",
     "docs.sub": "गाइड, संदर्भ और प्लगइन API।",
@@ -1173,12 +791,12 @@ const I18N = {
     "footer.telegramNews": "Telegram चैनल (समाचार)",
     "footer.telegramPersonal": "Telegram @sudores (व्यक्तिगत)",
     "footer.email": "ईमेल",
-    "footer.donate": "दान ☕",
     "footer.legal": "कानूनी",
     "footer.pricing": "मूल्य और PRO",
     "footer.terms": "सेवा की शर्तें",
     "footer.privacy": "गोपनीयता नीति",
     "footer.licensePortal": "लाइसेंस पोर्टल",
+    "nav.channel": "Telegram चैनल",
     "footer.docs": "दस्तावेज़"
   }
 };
@@ -1198,11 +816,7 @@ function buildDots() {
   });
 }
 function goToSlide(i) {
-  slideIndex = (i + SLIDES.length) % SLIDES.length;
-  document.getElementById('slider-track').style.transform = 'translateX(-' + slideIndex * 100 + '%)';
-  document.querySelectorAll('#slider-dots .slider-dot').forEach((d, idx) => {
-    d.classList.toggle('active', idx === slideIndex);
-  });
+  slideIndex = (i + SLIDES);
 }
 function sliderMove(dir) { goToSlide(slideIndex + dir); }
 
@@ -1231,16 +845,6 @@ function init() {
   applyLang(saved);
 }
 
-function copyAddr(id, btn) {
-  const text = document.getElementById(id).textContent;
-  const lang = document.documentElement.lang || 'en';
-  const dict = I18N[lang] || I18N.en;
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = dict['donate.copied'] || '✓ Copied';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = dict['donate.copy'] || 'Copy'; btn.classList.remove('copied'); }, 2000);
-  });
-}
 
 init();
 </script>
