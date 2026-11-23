@@ -440,9 +440,9 @@ $ pentool license deactivate</pre>
        напишем, как только оплата заработает.</p>
     <div class="row">
       <input type="email" id="notify-email" placeholder="you@example.com" />
-      <a class="btn btn-fill" id="notify-send" href="mailto:support@pentool.pro?subject=Pentool%20PRO%20—%20notify%20me">Сообщить мне</a>
+      <button class="btn btn-fill" id="notify-send">Оплатить через Coinso →</button>
     </div>
-    <p class="hint">Здесь ничего не списывается. Это кнопка-заглушка, пока платёжный провайдер подключается.</p>
+    <p class="hint">Оплата через Coinso: крипта, СБП, карты. Ключ приходит на e-mail в течение нескольких минут после оплаты.</p>
     <div class="row">
       <a class="btn" href="mailto:support@pentool.pro?subject=Pentool%20PRO%20purchase">Купить по почте</a>
       <button class="btn" id="modal-close">Закрыть</button>
@@ -490,12 +490,41 @@ $ pentool license deactivate</pre>
   document.getElementById('buy-pro')?.addEventListener('click', () => modal.classList.add('open'));
   document.getElementById('modal-close')?.addEventListener('click', () => modal.classList.remove('open'));
   modal?.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
-  document.getElementById('notify-send')?.addEventListener('click', () => {
-    const email = document.getElementById('notify-email')?.value?.trim() || '';
-    const subject = encodeURIComponent('Pentool PRO — сообщите мне');
-    const body = encodeURIComponent(`Сообщите, когда оплата заработает.\nE-mail: ${email}\nСлотов: ${document.querySelector('.slot-btn.active')?.dataset.slots || 1}`);
-    document.getElementById('notify-send').href = `mailto:support@pentool.pro?subject=${subject}&body=${body}`;
-  });
+
+  // ── Checkout: the worker creates a Coinso invoice and we hand the buyer over to it.
+  const CHECKOUT_API = "https://pentool-license.akashtanov2020.workers.dev/api/checkout";
+
+  async function startCheckout() {
+    const emailInput = document.getElementById('notify-email');
+    const email = (emailInput?.value || '').trim();
+    const slots = Number(document.querySelector('.slot-btn.active')?.dataset.slots || 1);
+    const button = document.getElementById('notify-send');
+    const original = button ? button.textContent : '';
+
+    if (!email || !email.includes('@')) {
+      emailInput?.focus();
+      emailInput?.classList.add('invalid');
+      return;
+    }
+    if (button) { button.disabled = true; button.textContent = 'Creating invoice…'; }
+    try {
+      const response = await fetch(CHECKOUT_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, slots }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.payment_url) throw new Error(data.error || 'checkout failed');
+      window.location.href = data.payment_url;
+    } catch (error) {
+      if (button) { button.disabled = false; button.textContent = original || 'Pay'; }
+      const hint = document.querySelector('.modal .hint');
+      if (hint) hint.textContent = 'Could not start the payment: ' + error.message + '. Write to support@pentool.pro.';
+    }
+  }
+
+  document.getElementById('notify-send')?.addEventListener('click', startCheckout);
+
 
   // ── FAQ accordion
   document.querySelectorAll('.faq-q').forEach(q => {
