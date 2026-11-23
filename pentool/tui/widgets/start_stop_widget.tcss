@@ -1,4 +1,0 @@
-StartStopWidget {
-    height: 1;
-    layout: horizontal;
-}

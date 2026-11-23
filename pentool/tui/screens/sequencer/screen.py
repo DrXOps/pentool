@@ -14,6 +14,7 @@ from textual.widget import Widget
 from textual.widgets import Input, Label, Static, TextArea
 
 from pentool.core.logging import get_logger
+from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import SEQUENCER_BINDINGS
 from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
@@ -55,9 +56,9 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
 
     def compose(self) -> ComposeResult:
         # ── Toolbar ────────────────────────────────────────────────────────────
+        # Capture/Stop live in the module header (see header_spec): one place
+        # decides what "start" and "stop" mean for every module.
         yield Toolbar(
-            ToolbarButton("▶ Capture", "btn-seq-capture"),
-            ToolbarButton("■ Stop", "btn-seq-stop", classes="disabled"),
             ToolbarButton("⚡ Analyze", "btn-seq-analyze"),
             ToolbarButton("📂 Load File", "btn-seq-load"),
             ToolbarButton("🗑 Clear", "btn-seq-clear"),
@@ -117,13 +118,52 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
 
     # ── Toolbar ───────────────────────────────────────────────────────────────
 
-    @on(ToolbarButton.Pressed, "#btn-seq-capture")
-    def on_btn_seq_capture(self, _: ToolbarButton.Pressed) -> None:
-        self._start_capture()
+    # ── Module header (see pentool/tui/header.py) ─────────────────────────
+    def header_spec(self) -> HeaderSpec:
+        """Capture state on the header, one-shot actions next to it."""
+        capturing = bool(getattr(self, "_capturing", False))
+        tokens = len(getattr(self._seq, "tokens", []) or [])
+        return HeaderSpec(
+            state=(
+                HeaderAction("capture", "▶ Capture", enabled=not capturing),
+                HeaderAction("stop", "■ Stop", enabled=capturing),
+            ),
+            counters=(f"{tokens} tokens",) if tokens else (),
+            actions=(
+                HeaderAction("analyze", "⚡ Analyze"),
+                HeaderAction("load", "📂 Load File"),
+                HeaderAction("clear", "🗑 Clear"),
+                HeaderAction("copy", "📋 Copy"),
+                HeaderAction("export", "💾 Export"),
+            ),
+        )
 
-    @on(ToolbarButton.Pressed, "#btn-seq-stop")
-    def on_btn_seq_stop(self, _: ToolbarButton.Pressed) -> None:
-        self._stop_capture()
+    def header_action(self, action_id: str) -> None:
+        """A header button was pressed."""
+        if action_id == "capture":
+            self._start_capture()
+        elif action_id == "stop":
+            self._stop_capture()
+        elif action_id == "analyze":
+            self.action_analyze()
+        elif action_id == "load":
+            self._load_file()
+        elif action_id == "clear":
+            self.action_clear_tokens()
+        elif action_id == "copy":
+            self._copy_report()
+        elif action_id == "export":
+            self._export_report()
+        self._refresh_header_now()
+
+    def header_tab_selected(self, tab_id: str) -> None:
+        """Sequencer has no sub-tabs."""
+        return None
+
+    def _refresh_header_now(self) -> None:
+        refresh = getattr(self.app, "refresh_header", None)
+        if refresh is not None:
+            refresh()
 
     @on(ToolbarButton.Pressed, "#btn-seq-analyze")
     def on_btn_seq_analyze(self, _: ToolbarButton.Pressed) -> None:
@@ -191,8 +231,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
                 self.app.notify("Switch to Proxy/Cookie/Body source for live capture", severity="info")
                 return
 
-            self.query_one("#btn-seq-capture", ToolbarButton).disabled = True
-            self.query_one("#btn-seq-stop", ToolbarButton).disabled = False
+            self._refresh_header_now()
         except Exception as exc:
             logger.debug("_start_capture: %s", exc)
 
@@ -277,8 +316,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
             # Sequencer after "Stop", and the token counter grows on its own.
             logger.debug("sequencer: proxy hook not unsubscribed: %s", exc)
         try:
-            self.query_one("#btn-seq-capture", ToolbarButton).disabled = False
-            self.query_one("#btn-seq-stop", ToolbarButton).disabled = True
+            self._refresh_header_now()
         except NoMatches as exc:
             # The buttons stayed in the "capture running" position although the
             # capture has been stopped.

@@ -134,6 +134,11 @@ _CLASS_METHODS = {"add_class", "remove_class", "set_class", "set_classes", "togg
 #: use ``id`` because that name is taken by the widget itself).
 _ID_KWS = ("id", "table_id")
 
+#: Constructors that take the future widget id as their *first positional* argument
+#: — config objects, not widgets: `FilterField("fb-status", …)` describes a filter
+#: field whose control later receives that id, so `#fb-status` in CSS is legitimate.
+_POSITIONAL_ID_CTORS = {"FilterField"}
+
 
 def _iter_tcss() -> list[Path]:
     return sorted(p for tui in tui_roots() for p in tui.rglob("*.tcss"))
@@ -244,6 +249,12 @@ def _string_literals(tree: ast.AST) -> tuple[set[str], set[str], set[str]]:
                     # (``"a" if cond else "b"``) — take every string in it.
                     for value in _constant_strings(kw.value):
                         classes.update(value.split())
+            # Constructors whose *first positional* argument is the DOM id:
+            # `FilterField("fb-status", "Status:", ...)`. The widget it configures
+            # gets that id later, so the selector `#fb-status` is legitimate.
+            if func_name in _POSITIONAL_ID_CTORS and node.args:
+                for value in _constant_strings(node.args[0]):
+                    ids.add(value)
             if func_name in _CLASS_METHODS:
                 for arg in node.args:
                     for value in _constant_strings(arg):

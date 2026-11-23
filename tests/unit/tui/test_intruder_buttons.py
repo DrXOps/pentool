@@ -8,7 +8,6 @@ Verifies:
 
 from __future__ import annotations
 
-import re
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -66,62 +65,6 @@ def _teardown_screen(screen):
             active_app.reset(token)
         except Exception:
             pass
-
-
-# ─── StartStopWidget tests (replaces the removed StartStopMixin) ─────────────
-
-
-class TestStartStopWidget:
-    """StartStopMixin was removed: Start/Stop/Pause state lives in StartStopWidget.
-
-    The screen no longer inherits an abstract mixin — the widget itself holds
-    ``_running``/``_paused`` and declares the four messages that the screen
-    subscribes to with plain ``on_start_stop_widget_*`` handlers.
-    """
-
-    def test_initial_state_is_idle(self):
-        from pentool.tui.widgets.start_stop_widget import StartStopWidget
-
-        widget = StartStopWidget()
-        assert widget.running is False
-        assert widget.paused is False
-
-    def test_set_running_updates_flag(self):
-        from pentool.tui.widgets.start_stop_widget import StartStopWidget
-
-        widget = StartStopWidget()
-        widget.set_running(True)
-        assert widget.running is True
-        widget.set_running(False)
-        assert widget.running is False
-
-    def test_set_paused_updates_flag(self):
-        from pentool.tui.widgets.start_stop_widget import StartStopWidget
-
-        widget = StartStopWidget()
-        widget.set_paused(True)
-        assert widget.paused is True
-        widget.set_paused(False)
-        assert widget.paused is False
-
-    def test_declares_four_request_messages(self):
-        from textual.message import Message
-
-        from pentool.tui.widgets.start_stop_widget import StartStopWidget
-
-        for name in ("StartRequested", "PauseRequested", "ResumeRequested", "StopRequested"):
-            message_cls = getattr(StartStopWidget, name)
-            assert issubclass(message_cls, Message)
-            # The name is derived from the message's __qualname__ in snake_case;
-            # the screen catches them via @on, so this name is only documented.
-            expected = re.sub(r"(?<!^)(?=[A-Z])", "_", message_cls.__name__).lower()
-            assert message_cls.handler_name == "on_start_stop_widget_" + expected
-
-    def test_id_constants_used_by_compose(self):
-        from pentool.tui.widgets.start_stop_widget import StartStopWidget
-
-        assert StartStopWidget.ID_START == "btn-start"
-        assert StartStopWidget.ID_STOP == "btn-stop"
 
 
 # ─── IntruderScreen tests — buttons and their clicks ─────────────────────────

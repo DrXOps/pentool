@@ -13,9 +13,6 @@ ToolbarButton:hover {
 ToolbarButton.active {
     color: $success;
 }
-ToolbarButton.inactive {
-    color: $error;
-}
 ToolbarButton.disabled {
     color: $text-disabled;
     pointer: not-allowed;

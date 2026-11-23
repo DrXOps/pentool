@@ -30,7 +30,10 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Label, ProgressBar, Static
 
-from pentool.tui.widgets.toolbar_button import ToolbarButton
+# Re-exported on purpose: `from pentool.tui.widgets.toolbar import Toolbar, ToolbarButton`
+# is the established import in tests and a few widgets, so dropping it here would break
+# callers that never cared which module owns the class.
+from pentool.tui.widgets.toolbar_button import ToolbarButton  # noqa: F401
 
 _CSS = (Path(__file__).parent / "toolbar.tcss").read_text(encoding="utf-8")
 
@@ -112,15 +115,3 @@ class Toolbar(Horizontal):
     def counter(id: str = "counter", initial: str = "0 req") -> Label:
         """Request counter."""
         return Label(initial, id=id)
-
-    @staticmethod
-    def start_stop(
-        start_id: str = "btn-start",
-        stop_id: str = "btn-stop",
-        start_label: str = "▶ Start",
-        stop_label: str = "■ Stop",
-    ):
-        """Standard Start + Stop pair with a separator in between."""
-        yield ToolbarButton(start_label, start_id, classes="active")
-        yield Static(" │ ", classes="toolbar-sep")
-        yield ToolbarButton(stop_label, stop_id, classes="inactive disabled")

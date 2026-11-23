@@ -77,13 +77,40 @@ class UtilsScreen(AppMixin, Widget):
         return self._active_kind
 
     # ── Module header ─────────────────────────────────────────────────────
+    def _active_tool(self) -> Widget | None:
+        """The screen mounted in the active sub-tab (if it is built yet)."""
+        try:
+            return self.query_one(f"#{self._active_kind}-body")
+        except NoMatches:
+            return None
+
     def header_spec(self) -> HeaderSpec:
+        """Chips for the three tools + whatever the *active* tool wants to show.
+
+        Utils owns no actions: Start/Stop belong to Sequencer, Run to Decoder. The
+        container only merges the tool's spec with its own chips, so the module
+        header keeps one shape while the actions follow the visible tool.
+        """
         tabs = tuple(HeaderTab(tab_id, label) for tab_id, label, _cls in UTILS_TABS)
-        return HeaderSpec(tabs=tabs, active_tab=self._active_kind)
+        tool = self._active_tool()
+        inner = tool.header_spec() if tool is not None and hasattr(tool, "header_spec") else HeaderSpec()
+        return HeaderSpec(
+            state=inner.state,
+            counters=inner.counters,
+            tabs=tabs,
+            active_tab=self._active_kind,
+            actions=inner.actions,
+            more=inner.more,
+        )
 
     def header_action(self, action_id: str) -> None:
-        """No header actions of its own: the tools have their own toolbars."""
-        return None
+        """Forward the click to the active tool — it owns the action."""
+        tool = self._active_tool()
+        handler = getattr(tool, "header_action", None) if tool is not None else None
+        if handler is None:
+            logger.debug("utils: action %s has no handler on the active tool", action_id)
+            return
+        handler(action_id)
 
     def header_tab_selected(self, tab_id: str) -> None:
         """A sub-tab chip was clicked in the header."""
