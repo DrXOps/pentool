@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pentool — payment received</title>
+  <meta name="robots" content="noindex" />
+  <style>
+    :root { --bg:#0d1117; --bg2:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e; --green:#00e08a; }
+    body { background:var(--bg); color:var(--text); font-family:'Courier New',Courier,monospace;
+           min-height:100vh; display:flex; align-items:center; justify-content:center; margin:0; padding:2rem; line-height:1.7; }
+    .card { max-width:620px; border:1px solid var(--border); background:var(--bg2); padding:2.2rem; }
+    .prompt { color:var(--green); font-size:.85rem; margin-bottom:.8rem; }
+    h1 { font-size:1.6rem; margin:0 0 .8rem; }
+    p { color:var(--muted); font-size:.93rem; margin:0 0 .9rem; }
+    a { color:var(--green); }
+    .box { border-left:2px solid var(--green); padding:.7rem 1rem; background:#0f1620; font-size:.85rem; color:var(--muted); }
+    code { background:#1c2128; border:1px solid var(--border); padding:.05rem .35rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="prompt">$ pentool license activate</div>
+    <h1>✅ Payment received</h1>
+    <p>Thank you. Your licence key is on its way to the e-mail address you used at checkout —
+       usually within a few minutes. Check the spam folder if it does not arrive.</p>
+    <div class="box">
+      The e-mail is also the key's name in our system. Keep the message: it contains the key
+      (<code>PTOOL-XXXX-XXXX-XXXX</code>) and the number of activation slots you bought.
+    </div>
+    <p style="margin-top:1.2rem">Next step — activate the key in the app:</p>
+    <p><code>pentool license activate PTOOL-XXXX-XXXX-XXXX</code></p>
+    <p>Or: Pentool → Settings → License. A slot is bound to the first machine that activates.</p>
+    <p>Nothing arrived after 30 minutes? Write to
+       <a href="mailto:support@pentool.pro?subject=Payment%20done%20—%20key%20not%20received">support@pentool.pro</a>
+       and include the payment id from your receipt.</p>
+    <p><a href="https://pentool.pro/pricing.html">← Back to pricing</a></p>
+  </div>
+</body>
+</html>
