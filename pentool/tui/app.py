@@ -259,6 +259,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # previous one is still finishing up; ActivityIndicator's Spider
         # glyph reads this via is_spider_active().
         self._spider_active_count: int = 0
+        #: Set once a fatal exception has been reported to the server. A crash
+        #: inside a handler can repeat on every message pump iteration; the
+        #: report must leave once per process, not once per loop tick.
+        self._fatal_crash_reported: bool = False
 
     def spider_crawl_started(self) -> None:
         """Call when any crawl begins — keeps ActivityIndicator's Spider
@@ -325,7 +329,53 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # to the crash that cannot be caught, so its absence has to be visible
             # in the log instead of being hunted for by eye.
             logger.debug("APP: all-thread dump failed: %s", exc)
+        # Send the report to the licence/crash worker *before* Textual tears the
+        # app down: until 2026-11-23 a TUI crash only reached the local journal,
+        # so the developer never learned about it. Blocking at most ~3 s while the
+        # app is already dying is the right trade — an unsent crash is lost for good.
+        self._report_fatal_crash(error)
         super()._handle_exception(error)
+
+    def _report_fatal_crash(self, error: Exception) -> None:
+        """Post a fatal TUI exception to the crash endpoint (once per run).
+
+        Runs in a worker thread: `crash_reporter.send_crash` builds its own event
+        loop, and the TUI already has one running in this thread. The thread is
+        joined with a timeout because the app is about to exit — a slow network
+        must not keep the terminal hostage.
+        """
+        if self._fatal_crash_reported:
+            return
+        self._fatal_crash_reported = True
+
+        import threading
+
+        def _send() -> None:
+            try:
+                from pentool.core.crash_reporter import send_crash
+
+                send_crash(error, source="tui")
+            except Exception:
+                # The reporter itself failing must never mask the original crash.
+                logger.warning("APP: TUI crash report not sent", exc_info=True)
+
+        try:
+            worker = threading.Thread(target=_send, name="pentool-crash-report", daemon=True)
+            worker.start()
+            worker.join(timeout=self._CRASH_REPORT_JOIN_TIMEOUT)
+            if worker.is_alive():
+                # The report is optional, the exit is not: leave the daemon thread
+                # behind rather than freeze a dying UI. Keep the traceback locally
+                # so the slow-network case does not lose it either.
+                logger.warning("APP: TUI crash report still in flight after 3 s — saved locally instead")
+                try:
+                    from pentool.core.crash_reporter import _save_local_crash
+
+                    _save_local_crash(error)
+                except Exception:
+                    logger.debug("APP: local crash dump not written", exc_info=True)
+        except Exception:
+            logger.warning("APP: TUI crash report could not start", exc_info=True)
 
     @staticmethod
     def _guard_forward_event() -> None:
@@ -963,6 +1013,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
     #: margin also drops to zero in the narrow form, and the 25% inspector is
     #: hidden, which is what a 100-column terminal wants anyway.
     NARROW_BREAKPOINT: int = 100
+
+    #: How long a dying app waits for the crash report before giving up on the
+    #: network and writing the traceback locally instead. Bounded on purpose: the
+    #: terminal must not stay frozen while a crash is uploaded.
+    _CRASH_REPORT_JOIN_TIMEOUT: float = 3.0
 
     def on_resize(self, event) -> None:
         """Adapt the layout to the terminal width — never the user's state.

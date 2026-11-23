@@ -82,8 +82,12 @@ def _anonymize(text: str) -> str:
     return text
 
 
-async def send_crash_async(exc: BaseException, endpoint: str = f"{_API_BASE}/api/crash") -> None:
+async def send_crash_async(exc: BaseException, endpoint: str = f"{_API_BASE}/api/crash", source: str = "cli") -> None:
     """Send crash report asynchronously. Silently ignores any errors.
+
+    ``source`` tells the admin panel where the app died: ``cli`` for the
+    command-line entry point, ``tui`` for a fatal exception inside Textual (a
+    different fix path — the TUI crash also loses the screen state).
 
     Falls back to a local crash log if the HTTP request fails — never loses
     the traceback entirely.
@@ -99,6 +103,7 @@ async def send_crash_async(exc: BaseException, endpoint: str = f"{_API_BASE}/api
     payload = {
         "traceback": tb_text,
         "exception": type(exc).__name__,
+        "source": source,
         **_get_metadata(),
     }
 
@@ -116,8 +121,12 @@ async def send_crash_async(exc: BaseException, endpoint: str = f"{_API_BASE}/api
         _save_local_crash(exc, tb_text)
 
 
-def send_crash(exc: BaseException) -> None:
-    """Fire-and-forget crash report from sync context."""
+def send_crash(exc: BaseException, source: str = "cli") -> None:
+    """Fire-and-forget crash report from sync context.
+
+    ``source`` is forwarded to the server (``cli`` / ``tui``) — see
+    `send_crash_async`.
+    """
     try:
         from pentool.core.config import get_config
 
@@ -133,7 +142,7 @@ def send_crash(exc: BaseException) -> None:
 
     try:
         loop = asyncio.new_event_loop()
-        loop.run_until_complete(send_crash_async(exc))
+        loop.run_until_complete(send_crash_async(exc, source=source))
         loop.close()
     except (RuntimeError, OSError):
         pass
