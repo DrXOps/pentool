@@ -1,21 +1,36 @@
-"""Test that PRO plan features return True (not broken by missing plan_order entry)."""
+"""Plan/feature helpers: PRO must unlock what it advertises, FREE must not."""
 
-from pentool.core.features import get_limit, has_feature
+from __future__ import annotations
+
+from pentool.core.features import (
+    FEATURE_AI_ANALYSIS,
+    FEATURE_AI_DISCOVERY,
+    FEATURE_PAYLOADS_PRO,
+    FEATURE_REPORTS_PRO,
+    FEATURE_SCANNER_PRO,
+    get_feature_status,
+    get_limit,
+    has_feature,
+)
 
 
 def test_pro_plan_has_payloads_pro():
-    assert has_feature("payloads_pro", "pro") is True
+    assert has_feature(FEATURE_PAYLOADS_PRO, "pro") is True
 
 
 def test_free_plan_no_payloads_pro():
-    assert has_feature("payloads_pro", "free") is False
+    assert has_feature(FEATURE_PAYLOADS_PRO, "free") is False
 
 
 def test_pro_limit_threads():
-    limit = get_limit("scanner_threads", "pro")
-    assert limit > 5  # PRO must have more than FREE
+    assert get_limit("intruder_max_threads", "pro") > get_limit("intruder_max_threads", "free")
 
 
 def test_enterprise_has_all_features():
-    # enterprise must have every feature that pro has
-    assert has_feature("payloads_pro", "enterprise") is True
+    for feature in (FEATURE_SCANNER_PRO, FEATURE_AI_DISCOVERY, FEATURE_AI_ANALYSIS, FEATURE_REPORTS_PRO):
+        assert has_feature(feature, "enterprise") is True
+
+
+def test_feature_status_values():
+    assert get_feature_status(FEATURE_SCANNER_PRO) in {"stable", "beta", "alpha"}
+    assert get_feature_status("no_such_feature") == "unknown"

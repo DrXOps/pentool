@@ -1298,6 +1298,7 @@ class IntruderScreen(
         self.run_worker(self._do_load_state(api), exclusive=False, exit_on_error=False)
 
     def _apply_license_limits(self) -> None:
+        from pentool.core.features import get_limit
         from pentool.core.license import get_session_license
 
         license_info = get_session_license()
@@ -1306,14 +1307,19 @@ class IntruderScreen(
             threads_input = self.query_one("#intruder-threads", Input)
             delay_input = self.query_one("#intruder-delay", Input)
             turbo_checkbox = self.query_one("#intruder-turbo", Checkbox)
+            # The numbers live in `core/features.py` (LIMITS), not here: the site, the
+            # licence portal and the input hints must not drift apart.
+            plan = "pro" if is_pro else "free"
+            max_threads = get_limit("intruder_max_threads", plan)
+            min_delay = get_limit("intruder_min_delay_ms", plan)
             if not is_pro:
-                threads_input.placeholder = "Max 5"
-                delay_input.placeholder = "Min 100"
+                threads_input.placeholder = f"Max {max_threads}"
+                delay_input.placeholder = f"Min {min_delay}"
                 turbo_checkbox.disabled = True
                 turbo_checkbox.tooltip = "⚡ Turbo mode requires PRO license"
             else:
-                threads_input.placeholder = "Max 200"
-                delay_input.placeholder = "0"
+                threads_input.placeholder = f"Max {max_threads}"
+                delay_input.placeholder = f"{min_delay}"
                 turbo_checkbox.disabled = False
                 turbo_checkbox.tooltip = "⚡ Turbo: HTTP pipelining, connection pooling"
         except NoMatches as exc:

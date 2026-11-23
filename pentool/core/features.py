@@ -1,199 +1,122 @@
-"""Feature flags and limits for the Pentool licensing model."""
+"""Feature catalogue and limits for the Pentool licensing model.
+
+**This module is the single source of truth for what a plan buys.** It must match the
+code, not the marketing: every entry in `FEATURES` is checked somewhere in the
+application with `LicenseInfo.has_feature(...)`, and every such check has an entry here.
+`tests/unit/core/test_feature_catalogue.py` enforces that both directions stay true.
+
+Plans are `free`, `pro` and `enterprise`. There is no `team` plan and no
+`lite`/`medium`/`full` tiers — earlier revisions of this file invented them, which made
+the site and support answers promise features that did not exist.
+"""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
 
+#: Plans ordered from least to most capable. `has_feature` compares positions here.
+PLAN_ORDER = ("free", "pro", "enterprise")
+
 
 class FeatureStatus(str, Enum):
-    """Feature status."""
+    """Maturity of a feature, shown in the licence portal and the UI."""
 
-    STABLE = "stable"  # Stable, ready for production
-    BETA = "beta"  # Stable, but in beta testing
-    ALPHA = "alpha"  # Experimental, may be unstable
+    STABLE = "stable"  # ready for production
+    BETA = "beta"  # works, still being hardened
+    ALPHA = "alpha"  # experimental, may change or break
 
 
-@dataclass
+@dataclass(frozen=True)
 class Feature:
-    """Description of a single feature."""
+    """Description of a single gated feature."""
 
     name: str
     description: str
     status: FeatureStatus
-    required_plan: str  # "free", "lite", "medium", "full"
+    required_plan: str  # "pro" | "enterprise"
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# FEATURE CONSTANTS — string identifiers for require_feature
+# FEATURE IDENTIFIERS — the exact strings passed to has_feature()
 # ═══════════════════════════════════════════════════════════════════════
 
-# Scanner PRO checks
-FEATURE_SCANNER_ADVANCED_WAF = "scanner_advanced_waf"
-FEATURE_SCANNER_OOB = "scanner_oob"
-FEATURE_SCANNER_SSRF_PORTSCAN = "scanner_ssrf_portscan"
-FEATURE_SCANNER_SQLI_UNION = "scanner_sqli_union"
-FEATURE_SCANNER_SQLI_OOB = "scanner_sqli_oob"
-FEATURE_SCANNER_LFI_LOG_POISON = "scanner_lfi_log_poison"
-FEATURE_SCANNER_XSS_STORED = "scanner_xss_stored"
-FEATURE_SCANNER_DOM_XSS_ACTIVE = "scanner_dom_xss_active"
-FEATURE_SCANNER_DESER = "scanner_deser"
-FEATURE_SCANNER_SMUGGLING = "scanner_smuggling"
-FEATURE_SCANNER_FILE_UPLOAD = "scanner_file_upload"
-FEATURE_SCANNER_IDOR = "scanner_idor"
-FEATURE_SCANNER_PROMPT_INJECT = "scanner_prompt_inject"
-FEATURE_SCANNER_RCE_OOB = "scanner_rce_oob"
-
-# AI features
+#: Unlocks the vulnerability Scanner module (server-side check list included).
+FEATURE_SCANNER_PRO = "scanner_pro"
+#: Unlocks the Reconnaissance module (subdomains, endpoints, real IP, param fuzz).
+FEATURE_AI_DISCOVERY = "ai_discovery"
+#: AI analysis of scanner findings (requires a configured AI backend).
 FEATURE_AI_ANALYSIS = "ai_analysis"
-FEATURE_AI_STRATEGY = "ai_strategy"
-
-# Reports
-FEATURE_REPORTS_PRO = "pro_reports"
+#: Scanner reports: single-finding and bulk HTML (Bug Bounty template).
+FEATURE_REPORTS_PRO = "reports_pro"
+#: Smart Payloads and the PRO payload sets for Intruder.
+FEATURE_PAYLOADS_PRO = "payloads_pro"
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# FEATURES — feature availability by plan
+# FEATURES — everything a PRO key actually unlocks
 # ═══════════════════════════════════════════════════════════════════════
 
-FEATURES = {
-    # ────────────────────────────────────────────────────────────────────
-    # FREE PLAN — basic tools
-    # ────────────────────────────────────────────────────────────────────
-    "proxy": Feature("proxy", "HTTP/HTTPS Proxy with interception", FeatureStatus.STABLE, "free"),
-    "repeater": Feature("repeater", "Repeater — replay and modify requests", FeatureStatus.STABLE, "free"),
-    "intruder_basic": Feature("intruder_basic", "Intruder (Sniper, Battering Ram)", FeatureStatus.BETA, "free"),
-    "decoder": Feature("decoder", "Decoder — encode/decode data", FeatureStatus.STABLE, "free"),
-    "comparer": Feature("comparer", "Comparer — compare requests/responses", FeatureStatus.STABLE, "free"),
-    "httpql": Feature("httpql", "HTTPQL — filter request history", FeatureStatus.BETA, "free"),
-    # ────────────────────────────────────────────────────────────────────
-    # LITE PLAN — extended capabilities
-    # ────────────────────────────────────────────────────────────────────
-    "scanner_extended": Feature("scanner_extended", "Scanner — extended security checks", FeatureStatus.ALPHA, "lite"),
-    "intruder_all_types": Feature(
-        "intruder_all_types", "Intruder (Pitchfork, Cluster Bomb)", FeatureStatus.ALPHA, "lite"
+FEATURES: dict[str, Feature] = {
+    FEATURE_SCANNER_PRO: Feature(
+        FEATURE_SCANNER_PRO,
+        "Vulnerability Scanner module — 21 active and passive checks",
+        FeatureStatus.BETA,
+        "pro",
     ),
-    "spider": Feature("spider", "Spider — automatic site crawling", FeatureStatus.BETA, "lite"),
-    "match_replace": Feature("match_replace", "Match & Replace — auto-modify requests", FeatureStatus.BETA, "lite"),
-    "target_scope": Feature("target_scope", "Target Scope — manage testing scope", FeatureStatus.STABLE, "lite"),
-    # ────────────────────────────────────────────────────────────────────
-    # MEDIUM PLAN — professional tools
-    # ────────────────────────────────────────────────────────────────────
-    "oob_detection": Feature("oob_detection", "Out-of-Band vulnerability detection", FeatureStatus.ALPHA, "medium"),
-    "websocket_intercept": Feature(
-        "websocket_intercept", "WebSocket interception and modification", FeatureStatus.ALPHA, "medium"
+    FEATURE_AI_DISCOVERY: Feature(
+        FEATURE_AI_DISCOVERY,
+        "Reconnaissance — subdomains, endpoints, real IP behind CDN, parameter fuzzing",
+        FeatureStatus.BETA,
+        "pro",
     ),
-    "plugins": Feature("plugins", "Plugin system", FeatureStatus.ALPHA, "medium"),
-    "sequencer": Feature("sequencer", "Sequencer — token randomness analysis", FeatureStatus.BETA, "medium"),
-    "passive_scanner": Feature(
-        "passive_scanner", "Passive Scanner — background traffic analysis", FeatureStatus.BETA, "medium"
+    FEATURE_AI_ANALYSIS: Feature(
+        FEATURE_AI_ANALYSIS,
+        "AI analysis of scanner findings",
+        FeatureStatus.ALPHA,
+        "pro",
     ),
-    "turbo_mode": Feature("turbo_mode", "Turbo Mode Intruder (10x speed)", FeatureStatus.BETA, "medium"),
-    # ────────────────────────────────────────────────────────────────────
-    # FULL PLAN — enterprise capabilities
-    # ────────────────────────────────────────────────────────────────────
-    "ai_analysis": Feature("ai_analysis", "AI vulnerability analysis (GPT-4)", FeatureStatus.ALPHA, "full"),
-    "pro_reports": Feature("pro_reports", "PRO reports (HTML/PDF/JSON)", FeatureStatus.ALPHA, "full"),
-    "collaboration": Feature("collaboration", "Collaborative project work", FeatureStatus.ALPHA, "full"),
-    "api_access": Feature("api_access", "REST API for automation", FeatureStatus.BETA, "full"),
-    "custom_scanner_checks": Feature("custom_scanner_checks", "Custom Scanner checks", FeatureStatus.ALPHA, "full"),
-    "payloads_pro": Feature("payloads_pro", "PRO payload sets for Intruder/Scanner", FeatureStatus.ALPHA, "full"),
+    FEATURE_REPORTS_PRO: Feature(
+        FEATURE_REPORTS_PRO,
+        "Reports — single finding and bulk HTML (Bug Bounty template)",
+        FeatureStatus.BETA,
+        "pro",
+    ),
+    FEATURE_PAYLOADS_PRO: Feature(
+        FEATURE_PAYLOADS_PRO,
+        "Smart Payloads and PRO payload sets for Intruder",
+        FeatureStatus.BETA,
+        "pro",
+    ),
 }
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# LIMITS — limits by plan
+# LIMITS — only limits the code enforces (or at least displays as input bounds)
 # ═══════════════════════════════════════════════════════════════════════
 
-LIMITS = {
-    # Request history
-    "history_max_entries": {
-        "free": 500,
-        "lite": 5000,
-        "medium": 50000,
-        "full": -1,  # unlimited
-    },
-    # Intruder
-    "intruder_max_threads": {
-        "free": 10,
-        "lite": 20,
-        "medium": 50,
-        "full": 100,
-    },
-    "intruder_max_requests": {
-        "free": 1000,
-        "lite": 10000,
-        "medium": 100000,
-        "full": -1,  # unlimited
-    },
-    # Scanner
-    "scanner_max_depth": {
-        "free": 2,
-        "lite": 5,
-        "medium": 10,
-        "full": -1,  # unlimited
-    },
-    "scanner_max_pages": {
-        "free": 20,
-        "lite": 100,
-        "medium": 1000,
-        "full": -1,  # unlimited
-    },
-    "scanner_threads": {
-        "free": 5,
-        "lite": 10,
-        "medium": 20,
-        "full": 50,
-    },
-    # Spider
-    "spider_max_depth": {
-        "free": 2,
-        "lite": 5,
-        "medium": 10,
-        "full": -1,  # unlimited
-    },
-    "spider_max_pages": {
-        "free": 50,
-        "lite": 200,
-        "medium": 1000,
-        "full": -1,  # unlimited
-    },
-    # Projects
-    "projects_max": {
-        "free": 5,
-        "lite": 20,
-        "medium": 100,
-        "full": -1,  # unlimited
-    },
-    # Export
-    "export_formats": {
-        "free": ["txt"],
-        "lite": ["txt", "csv", "json"],
-        "medium": ["txt", "csv", "json", "html"],
-        "full": ["txt", "csv", "json", "html", "pdf"],
-    },
+#: `IntruderScreen._apply_license_limits` reads these: FREE is capped at 5 threads
+#: and a 100 ms minimum delay, PRO allows up to 200 threads and no delay floor.
+LIMITS: dict[str, dict[str, int]] = {
+    "intruder_max_threads": {"free": 5, "pro": 200, "enterprise": 200},
+    "intruder_min_delay_ms": {"free": 100, "pro": 0, "enterprise": 0},
 }
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# PLAN NAMES — human-readable plan names
+# PLAN NAMES — human-readable labels
 # ═══════════════════════════════════════════════════════════════════════
 
 PLAN_NAMES = {
     "free": "Free",
-    "lite": "Lite",
-    "medium": "Medium",
-    "full": "Full (PRO)",
     "pro": "PRO",
     "enterprise": "Enterprise",
 }
 
-
 PLAN_DESCRIPTIONS = {
-    "free": "Basic tools for testing",
-    "lite": "Extended capabilities for professionals",
-    "medium": "Advanced tools + plugins",
-    "full": "Enterprise features + AI + API",
-    "pro": "Full PRO license — all features",
-    "enterprise": "Enterprise license — all features + custom integrations",
+    "free": "Open-source core: proxy, repeater, intruder, decoder, comparer, sequencer, spider",
+    "pro": "Free plus Scanner, Recon, AI analysis, Smart Payloads and HTML reports",
+    "enterprise": "Everything in PRO, for organisations that need custom arrangements",
 }
 
 
@@ -203,52 +126,45 @@ PLAN_DESCRIPTIONS = {
 
 
 def has_feature(feature_name: str, plan: str) -> bool:
-    """Check if a feature is available for the given plan.
+    """Return True if *plan* includes *feature_name*.
 
-    Args:
-        feature_name: Feature name (key from FEATURES)
-        plan: Plan name ("free", "lite", "medium", "full")
-
-    Returns:
-        True if the feature is available for this plan
+    Unknown features and unknown plans return False: a licence that names a feature
+    this build does not know about must not unlock anything.
     """
     feature = FEATURES.get(feature_name)
-    if not feature:
+    if feature is None:
         return False
-
-    # Plan order from lowest to highest
-    plan_order = ["free", "lite", "medium", "full", "pro", "enterprise"]
-
-    # If current plan >= required plan, feature is available
+    plan_key = (plan or "").lower()
     try:
-        current_level = plan_order.index(plan.lower())
-        required_level = plan_order.index(feature.required_plan)
-        return current_level >= required_level
-    except (ValueError, AttributeError):
+        return PLAN_ORDER.index(plan_key) >= PLAN_ORDER.index(feature.required_plan)
+    except ValueError:
         return False
 
 
-def get_limit(limit_name: str, plan: str, default: int = 0) -> int | list:
+def get_limit(limit_name: str, plan: str, default: int = 0) -> int:
+    """Return the numeric limit for *plan*, falling back to *default*."""
     limits = LIMITS.get(limit_name, {})
-    plan_l = plan.lower()
-    # pro/enterprise inherit "full" limits if not explicitly defined
-    if plan_l not in limits and plan_l in ("pro", "enterprise"):
-        return limits.get("full", default)
-    return limits.get(plan_l, default)
+    plan_key = (plan or "").lower()
+    # `pro` and `enterprise` share the paid limits; a future tier may add its own row.
+    if plan_key not in limits and plan_key in ("pro", "enterprise"):
+        plan_key = "pro"
+    return int(limits.get(plan_key, default))
 
 
 def get_feature_status(feature_name: str) -> str:
+    """Return the maturity of a feature as a string (`stable`/`beta`/`alpha`)."""
     feature = FEATURES.get(feature_name)
     return feature.status.value if feature else "unknown"
 
 
 def get_features_for_plan(plan: str) -> list[Feature]:
+    """Return every feature unlocked by *plan*."""
     return [feature for feature in FEATURES.values() if has_feature(feature.name, plan)]
 
 
 def get_plan_info(plan: str) -> dict:
+    """Return a JSON-friendly description of a plan (used by the licence portal)."""
     features = get_features_for_plan(plan)
-
     return {
         "plan": plan,
         "name": PLAN_NAMES.get(plan, plan.capitalize()),
@@ -256,11 +172,11 @@ def get_plan_info(plan: str) -> dict:
         "features_count": len(features),
         "features": [
             {
-                "name": f.name,
-                "description": f.description,
-                "status": f.status.value,
+                "name": feature.name,
+                "description": feature.description,
+                "status": feature.status.value,
             }
-            for f in features
+            for feature in features
         ],
-        "limits": {limit_name: get_limit(limit_name, plan) for limit_name in LIMITS.keys()},
+        "limits": {limit_name: get_limit(limit_name, plan) for limit_name in LIMITS},
     }
