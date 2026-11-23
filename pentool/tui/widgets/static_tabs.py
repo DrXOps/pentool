@@ -88,3 +88,37 @@ def remember_tab(app: object, module_id: str, tab_id: str, *, save: bool = True)
             config.save()
     except Exception as exc:  # noqa: BLE001 - remembering a pane must never break a screen
         logger.debug("static_tabs: could not remember pane %s for %s: %s", tab_id, module_id, exc)
+
+
+"""`remembered_pane()` — the same memory for screens that build panes inline.
+
+Settings and Recon build their TabPanes with nested `with` blocks, so the builder-based
+`static_tabs()` does not fit. They still get the same behaviour: one function reads the
+remembered pane, `remember_tab()` writes it. This keeps "the active sub-tab survives a
+restart" identical across Utils, Settings and Recon.
+"""
+
+
+def remembered_pane(app: object, module_id: str, valid_ids: Sequence[str]) -> str:
+    """The pane this module was last on, or the first valid one.
+
+    Args:
+        app: the running app (kept for symmetry with `remembered_tab`).
+        module_id: key in `Config.last_subtabs` ("settings", "recon", …).
+        valid_ids: pane ids that exist in this build, in strip order.
+    """
+    if not valid_ids:
+        raise ValueError("remembered_pane() needs at least one pane id")
+    default = valid_ids[0]
+    try:
+        from pentool.core.config import get_config
+
+        remembered = (getattr(get_config(), "last_subtabs", None) or {}).get(module_id, "")
+    except Exception as exc:  # noqa: BLE001 - config is optional
+        logger.debug("remembered_pane: %s not read: %s", module_id, exc)
+        return default
+    if remembered in valid_ids:
+        return remembered
+    if remembered:
+        logger.debug("remembered_pane: %s had %r, which no longer exists", module_id, remembered)
+    return default

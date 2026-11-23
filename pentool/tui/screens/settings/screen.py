@@ -20,11 +20,24 @@ from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.settings.hotkeys import HotkeySettingsScreen
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
+from pentool.tui.widgets.static_tabs import remember_tab, remembered_pane
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 logger = get_logger(__name__)
+
+#: Sub-tab ids in strip order — used for the memory key and the fallback.
+SETTINGS_PANE_IDS: tuple[str, ...] = (
+    "tab-interface",
+    "tab-proxy",
+    "tab-hotkeys",
+    "tab-project",
+    "tab-network",
+    "tab-privacy",
+    "tab-ai",
+    "tab-license",
+)
 
 
 class UIMode(str, Enum):
@@ -59,7 +72,11 @@ class SettingsScreen(AppMixin, Widget):
     _PANEL_ICONS = [("Unicode", "unicode"), ("ASCII", "ascii"), ("Emoji", "emoji")]
 
     def compose(self) -> ComposeResult:
-        with TabbedContent(id="settings-tabs"):
+        # Same memory as Utils: the pane you left is the pane you come back to.
+        with TabbedContent(
+            id="settings-tabs",
+            initial=remembered_pane(self.app, "settings", SETTINGS_PANE_IDS),
+        ):
             with TabPane("Interface", id="tab-interface"):
                 with Vertical(classes="settings-pane"):
                     yield Static("Interface Settings", classes="section-title")
@@ -263,6 +280,14 @@ class SettingsScreen(AppMixin, Widget):
                         id="license-buy-link",
                         classes="license-buy",
                     )
+
+    @on(TabbedContent.TabActivated, "#settings-tabs")
+    def _remember_active_pane(self, event: TabbedContent.TabActivated) -> None:
+        """Remember which settings pane the user is on (restored on the next run)."""
+        tab_id = getattr(getattr(event, "tab", None), "id", "") or ""
+        tab_id = tab_id.removeprefix("--content-tab-")
+        if tab_id in SETTINGS_PANE_IDS:
+            remember_tab(self.app, "settings", tab_id)
 
     def on_mount(self) -> None:
         self._load_current_config()
