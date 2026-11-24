@@ -522,6 +522,7 @@ PAGES = {
                             "<strong>Moving.</strong> Deactivate the key on the old machine, or ask support to move the binding.",
                             "<strong>Offline.</strong> The key is validated at startup and cached. Without a network, PRO keeps working for up to 7 days.",
                             "<strong>Expiry.</strong> PRO modules stop opening, the free part keeps working. The key and its slots stay for renewal.",
+                            "<strong>From a terminal.</strong> The same actions exist in the CLI: <code>pentool license activate KEY</code>, <code>pentool license status</code>, <code>pentool license trial</code> — handy on a server and in CI.",
                         ],
                     },
                 ],
@@ -545,8 +546,9 @@ PAGES = {
                             {
                                 "q": "Can I try PRO before buying?",
                                 "a": (
-                                    "Yes: Settings → License → «Start 14-day trial». One trial per "
-                                    "machine, no key and no card needed."
+                                    "Yes: Settings → License → «Start 14-day trial», or the command "
+                                    "<code>pentool license trial</code>. One trial per machine, no key "
+                                    "and no card needed."
                                 ),
                             },
                             {

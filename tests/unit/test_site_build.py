@@ -28,10 +28,11 @@ from tools.site.content import MODULES, check_parity
 ROOT = Path(__file__).resolve().parents[2]
 
 #: Claims that must never come back. They were in the old pages and were not true.
+#: `pentool license trial` is deliberately absent: the command now exists (see
+#: pentool/cli/license_cmd.py) and the pricing page documents it on purpose.
 FORBIDDEN = (
     "cryptoproc",
     "scan active",
-    "license trial",
     "10×",
     "10x",
     "phone home",
@@ -221,6 +222,20 @@ def render_page_path(page: str, lang: str) -> str:
     from tools.site.render import page_path
 
     return page_path(page, lang)
+
+
+def test_licence_cli_is_documented(site: Path) -> None:
+    """`pentool license …` exists (pentool/cli/license_cmd.py) — the site must name it.
+
+    The reverse of the old guard: the pages used to advertise a command that did not
+    exist. Now the command exists and CI fails if the docs stop mentioning it, so the
+    two cannot drift apart silently.
+    """
+    for lang in MODULES:
+        relative = config.PAGES["pricing"].format(prefix=config.page_prefix(lang))
+        text = _text(site / relative)
+        assert "pentool license activate" in text, f"{lang}: activation is CLI-undocumented"
+        assert "pentool license trial" in text, f"{lang}: trial is CLI-undocumented"
 
 
 def test_legacy_urls_still_work(site: Path) -> None:

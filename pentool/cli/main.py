@@ -156,6 +156,22 @@ def cli(
         app = PentoolApp()
         app._pending_open_last = True
         app.run()
+    elif ctx.invoked_subcommand:
+        # The group is `invoke_without_command=True`, so this callback also runs when a
+        # sub-command was given. Printing help here swallowed `pentool license …`
+        # completely — the sub-command never got control. Just let it run.
+        return
     else:
         click.echo(ctx.get_help())
         ctx.exit(0)
+
+
+# ── Sub-commands ──────────────────────────────────────────────────────────────
+# `license` is the only group wired so far, and it is the one the interface, the site
+# and the docs kept pointing at while it did not exist (`pentool license trial` used to
+# answer "No such command"). The other modules in this package (`scan.py`, `proxy.py`,
+# `ai_cmd.py`, `project.py`) are still unreachable and are tracked for removal in
+# docs/tui-audit/REPORT.md — mounting a command that half-works is worse than none.
+from pentool.cli.license_cmd import license as license_group  # noqa: E402
+
+cli.add_command(license_group)

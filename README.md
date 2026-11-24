@@ -96,6 +96,11 @@ pentool --url https://example.com --headless --output result.json
 # Open the most recent project
 pentool --last
 
+# PRO: activate a key, start the trial, check what is active
+pentool license activate PTOOL-XXXX-XXXX-XXXX
+pentool license trial
+pentool license status
+
 # Check for updates
 pentool update --check
 ```

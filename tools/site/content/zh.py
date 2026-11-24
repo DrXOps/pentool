@@ -498,6 +498,7 @@ PAGES = {
                             "<strong>迁移。</strong> 在旧机器上反激活密钥，或请支持迁移绑定。",
                             "<strong>离线。</strong> 密钥在启动时校验并缓存。没有网络时 PRO 最多可用 7 天，之后会要求联网。",
                             "<strong>到期。</strong> PRO 模块不再打开，免费部分照常工作。密钥和槽位都会保留，以便续费。",
+                            "<strong>命令行。</strong> 同样的操作在 CLI 里也有：<code>pentool license activate KEY</code>、<code>pentool license status</code>、<code>pentool license trial</code> —— 适合服务器和 CI。",
                         ],
                     },
                 ],

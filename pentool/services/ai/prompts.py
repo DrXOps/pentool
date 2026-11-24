@@ -234,6 +234,8 @@ _register(
 # (``pro/pentool/modules/ai_discovery/prompts.py``) and pass it through ``context``.
 # Before this task existed every Recon AI call ended with "unknown task 'discovery'",
 # MCPBackend returned None, and the AI half of Recon never produced a candidate.
+# Kept after the migration below: end users can run a PRO package older than this
+# client, and those builds still ask for the catch-all name.
 _register(
     AITask(
         name="discovery",
@@ -245,6 +247,91 @@ _register(
         ),
         expected_json_schema={"type": "array"},
         max_tokens=1024,
+        temperature=0.4,
+    )
+)
+
+# === 8. Discovery, one task per question ===
+# Recon used to keep its prompt text inside the PRO package, so the registry — the
+# contract every ``generate()`` call is checked against — did not know these tasks and
+# the same wording lived in two repositories. The texts belong here; callers pass
+# structured context only.
+_register(
+    AITask(
+        name="discovery_subdomains",
+        system_prompt=(
+            "You are a web security testing assistant. Given a domain, suggest subdomains "
+            "that plausibly exist: common service names (api, admin, dev, staging, mail, "
+            "vpn, cdn, static, docs) and names typical for the domain's industry.\n"
+            "Return ONLY a JSON array of strings like "
+            '["api.example.com", "admin.example.com"], at most 50, no markdown.'
+        ),
+        expected_json_schema={"type": "array", "items": {"type": "string"}},
+        max_tokens=768,
+        temperature=0.4,
+    )
+)
+
+_register(
+    AITask(
+        name="discovery_endpoints",
+        system_prompt=(
+            "You are a web security testing assistant. Given a target URL, its technology "
+            "stack and already known paths, suggest paths that probably exist but are not "
+            "linked from the visible pages (framework routes, API versions, admin panels).\n"
+            "Return ONLY a JSON array of objects, at most 20, no markdown:\n"
+            '[{"method": "GET", "path": "/api/v1/users", "reason": "REST API"}]'
+        ),
+        expected_json_schema={
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "method": {"type": "string"},
+                    "path": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["method", "path"],
+            },
+        },
+        max_tokens=1024,
+        temperature=0.3,
+    )
+)
+
+_register(
+    AITask(
+        name="discovery_params",
+        system_prompt=(
+            "You are a web security testing assistant. Given endpoints of a target, suggest "
+            "query parameters that might enable hidden functionality, debug modes or admin "
+            "features.\n"
+            "Return ONLY a JSON array of [param, value] pairs, no explanation: "
+            '[["debug", "1"], ["admin", "true"]]'
+        ),
+        expected_json_schema={
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "string"}},
+        },
+        max_tokens=512,
+        temperature=0.4,
+    )
+)
+
+_register(
+    AITask(
+        name="discovery_param_fuzz",
+        system_prompt=(
+            "You are a web security testing assistant. Given endpoints of a target, suggest "
+            "query parameters worth fuzzing for hidden functionality.\n"
+            "Return ONLY a JSON array of [param, value, description] triples, no "
+            'explanation: [["debug", "1", "turns on debug output"]]'
+        ),
+        expected_json_schema={
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "string"}},
+        },
+        max_tokens=768,
         temperature=0.4,
     )
 )
