@@ -228,3 +228,23 @@ _register(
         temperature=0.1,
     )
 )
+
+# === 7. Discovery: subdomains and endpoints (Recon) ===
+# One task serves both jobs because the Recon modules build their own instruction text
+# (``pro/pentool/modules/ai_discovery/prompts.py``) and pass it through ``context``.
+# Before this task existed every Recon AI call ended with "unknown task 'discovery'",
+# MCPBackend returned None, and the AI half of Recon never produced a candidate.
+_register(
+    AITask(
+        name="discovery",
+        system_prompt=(
+            "You are a web security testing assistant. Follow the instruction block in the "
+            "context and answer with exactly what it asks for: a JSON array, no markdown, "
+            "no commentary. For subdomains return their names; for endpoints return objects "
+            'with "method" and "path".'
+        ),
+        expected_json_schema={"type": "array"},
+        max_tokens=1024,
+        temperature=0.4,
+    )
+)

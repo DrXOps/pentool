@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 from textual.css.query import NoMatches
 
+from pentool.tui import module_catalog
 from pentool.tui.widgets.module_tabs import BASIC_MODULES, MODULES, ModuleTabs
 
 
@@ -18,12 +19,16 @@ def _make_tabs() -> ModuleTabs:
 
 
 class TestConstants:
-    def test_modules_have_ids_display_and_hotkeys(self) -> None:
+    def test_modules_have_ids_and_labels(self) -> None:
         assert len(MODULES) >= 8
-        for mod_id, label, hotkey in MODULES:
+        for mod_id, label in MODULES:
             assert mod_id
             assert label
-            assert hotkey.startswith("^")
+
+    def test_switch_hotkeys_come_from_the_catalog(self) -> None:
+        letters = [module.hotkey for module in module_catalog.CATALOG if module.hotkey]
+        assert letters, "no module has a switch letter"
+        assert len(letters) == len(set(letters))
 
     def test_basic_modules_defined(self) -> None:
         assert "dashboard" in BASIC_MODULES
@@ -84,30 +89,33 @@ class TestSetMode:
         t.set_mode("basic")
 
 
-class TestSetScannerLocked:
-    def test_lock_adds_class(self) -> None:
+class TestSetModuleLocked:
+    def _tabs_with_tab(self) -> tuple[ModuleTabs, MagicMock]:
         t = _make_tabs()
         fake_tab = MagicMock()
         fake_tab.styles = MagicMock()
         fake_tabs = MagicMock()
         fake_tabs.query_one = lambda sel, cls: fake_tab
-
         t.query_one = lambda sel, cls: fake_tabs if sel == "#module-tabs-inner" else fake_tab
+        return t, fake_tab
 
-        t.set_scanner_locked(True)
+    def test_lock_adds_class_and_a_true_tooltip(self) -> None:
+        t, fake_tab = self._tabs_with_tab()
+
+        t.set_module_locked("scanner", True)
+
         fake_tab.add_class.assert_called_once_with("tab-locked")
-        fake_tab.tooltip = "Scanner is a PRO feature. Activate a license: pentool license trial"
+        tooltip = fake_tab.tooltip
+        assert "PRO feature" in tooltip
+        assert "Settings → License" in tooltip
+        # The old tooltip sent the user to a CLI command that does not exist.
+        assert "pentool license" not in tooltip
 
     def test_unlock_removes_class(self) -> None:
-        t = _make_tabs()
-        fake_tab = MagicMock()
-        fake_tab.styles = MagicMock()
-        fake_tabs = MagicMock()
-        fake_tabs.query_one = lambda sel, cls: fake_tab
+        t, fake_tab = self._tabs_with_tab()
 
-        t.query_one = lambda sel, cls: fake_tabs if sel == "#module-tabs-inner" else fake_tab
+        t.set_module_locked("scanner", False)
 
-        t.set_scanner_locked(False)
         fake_tab.remove_class.assert_called_once_with("tab-locked")
         assert fake_tab.tooltip is None
 
@@ -115,7 +123,7 @@ class TestSetScannerLocked:
         t = _make_tabs()
         # The tab is not in the tree — exactly `NoMatches` (ADR-6 clause 4).
         t.query_one = Mock(side_effect=NoMatches())
-        t.set_scanner_locked(True)
+        t.set_module_locked("recon", True)
 
 
 class TestFlash:

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from textual.binding import Binding, BindingsMap
 
+from pentool.tui import module_catalog
 from pentool.tui.hotkeys import HotkeyEntry, registry
 
 
@@ -41,21 +42,12 @@ def _entries_to_bindings(entries: list[HotkeyEntry]) -> list[Binding]:
 
 
 # ── module switcher letters ──────────────────────────────────────────────
+# Derived from the module catalog: one entry per module that has a letter, with the
+# Utils sub-tab letters (D/C/Q) right after Utils. Adding a module to the catalog
+# adds its switch key here.
 _MODULE_ENTRIES = [
-    _e("H", "switch_module('dashboard')", "Dash", show=True, priority=True),
-    _e("P", "switch_module('proxy')", "Proxy", show=True, priority=True),
-    _e("R", "switch_module('repeater')", "Rpt", show=True, priority=True),
-    _e("I", "switch_module('intruder')", "Intrud", show=True, priority=True),
-    _e("S", "switch_module('scanner')", "Scan", show=True, priority=True),
-    _e("T", "switch_module('target')", "Target", show=True, priority=True),
-    _e("U", "switch_module('utils')", "Utils", show=True, priority=True),
-    # The three tools are sub-tabs of Utils: the old keys still take the user
-    # straight to the tool, they just land inside the merged module.
-    _e("D", "utils_tab('decoder')", "Decoder", show=True, priority=True),
-    _e("C", "utils_tab('comparer')", "Comparer", show=True, priority=True),
-    _e("Q", "utils_tab('sequencer')", "Sequencer", show=True, priority=True),
-    _e("E", "switch_module('extensions')", "Ext", show=True, priority=True),
-    _e("N", "switch_module('recon')", "Recon", show=True, priority=True),
+    _e(key, action, short, show=True, priority=True) for key, action, short in module_catalog.switch_hotkeys()
+] + [
     # Shift+digit aliases (hidden — for terminals where Shift+letter fails)
     _e("!", "switch_module('proxy')", "", show=False),
     _e("@", "switch_module('repeater')", "", show=False),

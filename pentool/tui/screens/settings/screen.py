@@ -276,7 +276,7 @@ class SettingsScreen(AppMixin, Widget):
                     yield Static("Features:", classes="license-features-title")
                     yield Static("", id="license-features")
                     yield Static(
-                        "Buy PRO: https://pentool.pro/pricing",
+                        "Buy PRO: https://pentool.pro/pricing.html",
                         id="license-buy-link",
                         classes="license-buy",
                     )

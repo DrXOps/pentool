@@ -2,10 +2,11 @@
 
 **Ядро приложения: конфигурация, события, лицензия, плагины, БД-схема, обновления.**
 
-- **Связи:** [[utils]], [[api]], [[services]], [[deps/textual]]
+- **Связи:** [[utils]], [[api]], [[services]], [[cli]], [[deps/textual]]
 - **Код:** pentool/core/
-- **Источник:** pentool/core/*.py, tests/unit/core/
-- **Обновлено:** 2026-11-05
+- **Источник:** pentool/core/*.py, tests/unit/core/; тексты про PRO-пакет —
+  изменения 2026-11-24
+- **Обновлено:** 2026-11-24
 
 ## Назначение
 
@@ -21,6 +22,9 @@
   `FindingDiscovered`, `ProxyRequestCaptured`, `ProjectSaved`, …).
 - `LicenseInfo` (`license.py`) — план, фичи, `has_feature()`;
   глобальный кэш `_session_license`, `refresh_session_license()`.
+- `is_pro_package_compatible()` (`license.py`) — сверяет build metadata
+  установленного PRO-пакета с версией базового пакета и возвращает
+  `(совместим, сообщение для пользователя)`.
 - `Feature`, `Subscription`, `FeatureStatus` (`features.py`).
 - `PluginManager` (`plugin_manager.py`) — загрузка плагинов из `plugins_dir`.
 - `init_db()` (`db_schema.py`) — создание схемы SQLite.
@@ -41,6 +45,13 @@
   На free-плане PRO-проверки недоступны, и движок их молча пропускает.
 - `Config` — изменяемый синглтон; тесты используют `override_config`, а не
   прямое присваивание (иначе состояние утекает в последующие тесты).
+- **Тексты про несовместимый PRO-пакет адресуют пользователя в интерфейс, а не
+  в CLI.** `is_pro_package_compatible()` (`license.py`, два сообщения:
+  нет build metadata / расхождение версий) и `load_pro_module()`
+  (`plugin_manager.py`, `FileNotFoundError` с путями поиска) раньше советовали
+  `pentool license activate <key>` — такой команды нет; теперь оба говорят
+  «Settings → License → Activate». Формулировку меняют вместе: это одна и та
+  же подсказка в трёх местах (включая `pentool/cli/scan_runner.py`, см. [[cli]]).
 
 ## Связи
 
@@ -50,4 +61,7 @@
 ## Источник
 
 Код `pentool/core/*.py`; история тестов — `tests/conftest.py`
-(коммиты `2d959fd`, `47d4f8f`); коммит `cb11bfd`.
+(коммиты `2d959fd`, `47d4f8f`); коммит `cb11bfd`. Правка сообщений о
+PRO-пакете — изменения 2026-11-24 `pentool/core/license.py`
+(`is_pro_package_compatible`) и `pentool/core/plugin_manager.py`
+(`load_pro_module`) от 2026-11-24.

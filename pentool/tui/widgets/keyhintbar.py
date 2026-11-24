@@ -35,9 +35,9 @@ def render_global_entry(keys: str, description: str) -> str:
 
 def module_label(module_id: str) -> str:
     """Display name of a module (``Proxy``); falls back to a title-cased id."""
-    from pentool.tui.widgets.module_tabs import MODULES
+    from pentool.tui.module_catalog import get
 
-    for mod_id, label, _hotkey in MODULES:
-        if mod_id == module_id:
-            return label
+    module = get(module_id)
+    if module is not None:
+        return module.label
     return module_id.replace("_", " ").title()

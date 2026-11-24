@@ -95,8 +95,11 @@ class SortableTableMixin:
         # Reload from the DB with SQL sorting
         self.run_worker(reload_cb(order_by=order_col, order_dir=order_dir))
 
-        # Update the arrows after the reload
-        self._update_sort_arrows(None, col_names)
+        # The reload swaps rows, not columns, so the arrows can be set right away.
+        # Passing the real table matters: `None` used to reach _update_sort_arrows and
+        # the resulting AttributeError was swallowed by a broad except — the arrow never
+        # appeared on the SQL-sorted tables (proxy history, intruder results).
+        self._update_sort_arrows(event.data_table, col_names)
 
     def _update_sort_arrows(
         self,
@@ -104,6 +107,9 @@ class SortableTableMixin:
         col_names: list[str],
     ) -> None:
         """Show the ▲/▼ arrow on the active sort column."""
+        if table is None:
+            logger.debug("_update_sort_arrows: no table to update")
+            return
         try:
             for i, name in enumerate(col_names):
                 col = table.ordered_columns[i]
@@ -114,5 +120,6 @@ class SortableTableMixin:
                 else:
                     col.label = base
             table.refresh()
-        except Exception as exc:
+        except (AttributeError, IndexError) as exc:
+            # A table without ordered_columns (a stub in a test) must not break sorting.
             logger.debug("_update_sort_arrows: %s", exc)

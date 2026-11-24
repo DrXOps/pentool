@@ -400,6 +400,6 @@ def load_pro_module(module_stem: str):
     raise FileNotFoundError(
         f"PRO module '{module_stem}.py' not found in any known location "
         f"(checked: {[str(d) for d in _candidate_pro_builtin_dirs()]}). "
-        f"Is the PRO package installed (pentool license activate) or the "
+        f"Is the PRO package installed (activate the key in Settings → License) or the "
         f"'pro' submodule checked out?"
     )

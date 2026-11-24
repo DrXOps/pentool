@@ -157,3 +157,36 @@ class TestSortTableSql:
         self._call_sort(host, 4)  # Size, asc again
         await asyncio.sleep(0)
         assert host._last_reload == ("length", "asc")
+
+    # ── Arrows on SQL-sorted tables (regression: the arrow never appeared) ──
+
+    def _event_with_columns(self, column_index: int, col_names: list[str]):
+        """HeaderSelected whose table exposes real, mutable column labels."""
+        from types import SimpleNamespace
+
+        event = MagicMock(spec=DataTable.HeaderSelected)
+        event.column_index = column_index
+        event.data_table = SimpleNamespace(
+            ordered_columns=[SimpleNamespace(label=name) for name in col_names],
+            refresh=lambda: None,
+        )
+        return event
+
+    def test_arrow_marks_the_active_column(self):
+        host = _Host()
+        self._host = host
+        event = self._event_with_columns(1, self.COL_NAMES)
+        host._sort_table_sql(event, self.COL_NAMES, self.ORDER_BY_MAP, self._reload_cb)
+
+        labels = [column.label for column in event.data_table.ordered_columns]
+        assert labels[1] == "Host ▲"
+        assert labels[0] == "ID", "the previous column must lose its arrow"
+
+    def test_arrow_direction_flips_on_the_second_click(self):
+        host = _Host()
+        self._host = host
+        event = self._event_with_columns(2, self.COL_NAMES)
+        host._sort_table_sql(event, self.COL_NAMES, self.ORDER_BY_MAP, self._reload_cb)
+        host._sort_table_sql(event, self.COL_NAMES, self.ORDER_BY_MAP, self._reload_cb)
+
+        assert event.data_table.ordered_columns[2].label == "Method ▼"

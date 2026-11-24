@@ -11,28 +11,17 @@ from textual.widget import Widget
 from textual.widgets import Static, Tab, Tabs
 
 from pentool.core.logging import get_logger
+from pentool.tui import module_catalog
 from pentool.tui.messages import ModuleSelected
 
 logger = get_logger(__name__)
 
-# Module list: (id, display name, hotkey)
-MODULES: list[tuple[str, str, str]] = [
-    ("dashboard", "Dashboard", "^H"),
-    ("proxy", "Proxy", "^P"),
-    ("repeater", "Repeater", "^R"),
-    ("intruder", "Intruder", "^I"),
-    ("scanner", "Scanner", "^S"),
-    ("target", "Target", "^T"),
-    # Decoder / Comparer / Sequencer live under Utils as sub-tabs; D/C/Q still
-    # open the right one (see `utils_tab` in hotkeys/defaults.py).
-    ("utils", "Utils", "^U"),
-    ("extensions", "Extensions", "^E"),
-    ("recon", "Recon", "^N"),
-    ("settings", "Settings", "^,"),
-]
+#: Module list for the tab bar: (id, label). Derived from ``module_catalog`` — the
+#: single description of the modules; adding one there adds the tab here.
+MODULES: list[tuple[str, str]] = module_catalog.tab_entries()
 
-# Modules available in basic (no-project) mode
-BASIC_MODULES = {"dashboard", "proxy", "repeater", "intruder", "settings"}
+#: Modules available in basic (no-project) mode.
+BASIC_MODULES: frozenset[str] = module_catalog.basic_ids()
 
 _CSS = (Path(__file__).parent / "module_tabs.tcss").read_text(encoding="utf-8")
 
@@ -49,7 +38,7 @@ class ModuleTabs(Widget):
     active_module: reactive[str] = reactive("proxy")
 
     def compose(self) -> ComposeResult:
-        tabs = [Tab(label, id=f"tab-{mod_id}") for mod_id, label, _ in MODULES]
+        tabs = [Tab(label, id=f"tab-{mod_id}") for mod_id, label in MODULES]
         yield Tabs(*tabs, id="module-tabs-inner")
         yield Static("", id="tooltip2", markup=True)
 
@@ -76,7 +65,7 @@ class ModuleTabs(Widget):
     def set_mode(self, mode: str) -> None:
         try:
             tabs = self.query_one("#module-tabs-inner", Tabs)
-            for mod_id, _, _ in MODULES:
+            for mod_id, _label in MODULES:
                 tab_id = f"tab-{mod_id}"
                 try:
                     tab = tabs.query_one(f"#{tab_id}", Tab)
@@ -93,26 +82,31 @@ class ModuleTabs(Widget):
             # The whole UI mode was not applied — the Settings toggle stays silent.
             logger.debug("tabs: mode %r not applied at all: %s", mode, exc)
 
-    def set_scanner_locked(self, locked: bool) -> None:
-        """Grey-out the Scanner tab when no valid license is present.
+    def set_module_locked(self, module_id: str, locked: bool) -> None:
+        """Grey out a module tab whose PRO feature is not licensed.
 
         locked=True  → tab is disabled (CSS class 'tab-locked'), tooltip shown on hover.
         locked=False → normal.
         """
         try:
             tabs = self.query_one("#module-tabs-inner", Tabs)
-            tab = tabs.query_one("#tab-scanner", Tab)
+            tab = tabs.query_one(f"#tab-{module_id}", Tab)
             if locked:
                 tab.add_class("tab-locked")
-                tab.tooltip = "Scanner is a PRO feature. Activate a license: pentool license trial"
+                # Never print a command here: the licence is activated from the app
+                # itself (Settings → License). The old tooltip pointed at a CLI
+                # command that does not exist.
+                tab.tooltip = (
+                    f"{module_catalog.label(module_id)} is a PRO feature. Activate a key in Settings → License."
+                )
             else:
                 tab.remove_class("tab-locked")
                 tab.tooltip = None
             tabs.refresh()
         except Exception as exc:
-            # The Scanner tab looks available without a license (or locked with
-            # a valid one) — this diverges from the check in `_switch_to`.
-            logger.debug("tabs: scanner lock %s not applied: %s", locked, exc)
+            # The tab looks available without a licence (or locked with a valid
+            # one) — this diverges from the check in `_switch_to`.
+            logger.debug("tabs: %s lock %s not applied: %s", module_id, locked, exc)
 
     def flash(self, message: str, severity: str = "information", timeout: float = 2.5) -> None:
         """Flash a short message on the right of the module row for *timeout* seconds.

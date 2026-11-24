@@ -21,12 +21,21 @@
 
 - `PentoolApp` (`app.py`) — корневое приложение; монтирует экраны, содержит
   `ContentSwitcher` и условную загрузку PRO-экранов (Scanner, Recon).
-- `screen_registry.py` — `SCREEN_MAP`, реестр экранов, ленивые импорты.
+- `module_catalog.py` — **единственное описание модулей** (id, подписи, буква
+  переключения, Basic-режим, доступ без проекта, PRO-фича, перезагрузка при смене
+  проекта, группа подсказок). Из него выводятся таб-бар (`module_tabs.MODULES`),
+  буквы хоткеев (`hotkeys/defaults`), гейтинг (`app._FREE_MODULES`,
+  `_refresh_tab_locks`), перезагрузка (`project_manager._RELOADABLE_MODULES`) и
+  подписи подсказок (`keyhintbar.module_label`). Новый модуль = одна запись здесь
+  плюс класс экрана в `screen_registry`; `tests/unit/tui/test_module_catalog.py`
+  проверяет, что оба списка совпадают.
+- `screen_registry.py` — `SCREEN_MAP` (id → класс), ленивые импорты PRO-экранов.
 - `BaseModuleScreen` (`screens/base.py`) — база для экранов с вкладками.
 - **Система вкладок**: `widgets/tab_panel.py::TabbedContentPanel` (Generic по
   типу состояния), `_TabState` / `_IntruderTabState`, стабильный `tab_uid`.
-- Экраны: `proxy`, `repeater`, `intruder`, `decoder`, `comparer`, `sequencer`,
-  `target`, `dashboard`, `extensions`, `settings`.
+- Экраны: `proxy`, `repeater`, `intruder`, `target`, `dashboard`, `utils`
+  (внутри — decoder, comparer, sequencer), `extensions`, `settings` (+ PRO:
+  `scanner`, `recon`). Порядок и подписи вкладок — в `module_catalog.py`.
 - `constants.py` — только 8 `SCREEN_*`, которые импортирует второй модуль
   (F-007); id одного экрана живёт литералом рядом со своим виджетом.
 

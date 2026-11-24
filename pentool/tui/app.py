@@ -37,6 +37,7 @@ from pentool.core.events import (
 from pentool.core.logging import get_logger, setup_logging
 from pentool.proxy.client import ProxyClient
 from pentool.services.proxy_service import ProxyService
+from pentool.tui import module_catalog
 from pentool.tui.constants import (
     SCREEN_INTRUDER,
     SCREEN_REPEATER,
@@ -631,7 +632,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         self._setup_auto_save()
 
         # Lock Scanner tab if no valid license with scanner_pro feature
-        self._refresh_scanner_tab_lock()
+        self._refresh_tab_locks()
 
         # Seed target URL(s) passed via `pentool --url ...` — a NEW project for
         # the target is created, proxy on, target populated, ready to audit.
@@ -1235,28 +1236,39 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             logger.exception("repeater_send: send failed")
 
     # Modules available without an open project
-    _FREE_MODULES = {"dashboard", "settings"}
+    _FREE_MODULES = module_catalog.free_ids()
 
-    def _refresh_scanner_tab_lock(self) -> None:
-        """Lock or unlock the Scanner tab based on the current license."""
+    def _refresh_tab_locks(self) -> None:
+        """Grey out the tabs of PRO modules the current licence does not unlock.
+
+        One loop over the catalog: before this, Scanner had its own copy of the check
+        and Recon another, so a third PRO module would have needed a third copy.
+        """
+        pro_modules = [module for module in module_catalog.CATALOG if module.license_feature]
+        if not pro_modules:
+            return
         try:
             from pentool.core.license import get_session_license
 
-            lic = get_session_license()
-            scanner_available = lic.valid and lic.has_feature("scanner_pro")
+            licence = get_session_license()
+            unlocked = {
+                module.id: bool(licence.valid and licence.has_feature(module.license_feature)) for module in pro_modules
+            }
         except Exception:
-            # A license read error means "we don't know", not "allowed": the Scanner
-            # tab stays locked, and the reason stays in the log as a traceback —
-            # otherwise "the license doesn't work" cannot be told apart from a
-            # corrupted license file.
-            logger.exception("license check failed, Scanner stays locked")
-            scanner_available = False
+            # A licence read error means "we don't know", not "allowed": every PRO tab
+            # stays locked and the reason goes to the log with a traceback — otherwise
+            # "the licence does not work" cannot be told apart from a broken licence file.
+            logger.exception("license check failed, PRO tabs stay locked")
+            unlocked = {module.id: False for module in pro_modules}
         try:
-            self.query_one("#module-tabs", ModuleTabs).set_scanner_locked(not scanner_available)
+            tabs = self.query_one("#module-tabs", ModuleTabs)
         except NoMatches as exc:
-            # The lock did not apply — the tab looks available. Without a log entry
-            # this looks like "the license doesn't work" instead of "no widget".
-            logger.debug("scanner tab lock not applied: %s", exc)
+            # The locks did not apply — the tabs look available. Without a log entry
+            # this looks like "the licence does not work" instead of "no widget".
+            logger.debug("tab locks not applied: %s", exc)
+            return
+        for module_id, allowed in unlocked.items():
+            tabs.set_module_locked(module_id, not allowed)
 
     def _switch_to(self, module_id: str) -> None:
         if module_id == self._active_module and self._screens.is_mounted(module_id):
@@ -1283,59 +1295,31 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 timeout=4,
             )
             return
-        # Block Scanner if no valid license
-        if module_id == "scanner":
+        # PRO modules: the feature each one needs is declared once, in the catalog.
+        feature = module_catalog.license_feature(module_id)
+        if feature:
             try:
                 from pentool.core.license import get_session_license
 
-                lic = get_session_license()
-                if not (lic.valid and lic.has_feature("scanner_pro")):
-                    self.notify(
-                        "🔒 Scanner — paid feature. Activate: pentool license trial",
-                        severity="warning",
-                        timeout=5,
-                    )
-                    return
-            except Exception as exc:
-                # There used to be a `pass` here, and any license read failure
-                # opened the paid screen — i.e. the error worked for the user, not
-                # against them. Now it is the other way round: if we could not
-                # verify, we don't let in, and we write why. `_switch_to` is the
-                # worker entry point (screen mounting), so by the ADR-6 rule a
-                # broad `except` here is obliged to carry a traceback.
-                logger.warning("scanner license check failed, access denied: %s", exc, exc_info=True)
+                licence = get_session_license()
+                allowed = bool(licence.valid and licence.has_feature(feature))
+            except Exception:
+                # There used to be a `pass` here, and any licence read failure opened
+                # the paid screen — the error worked for the user, not against them.
+                # Now an unverifiable licence denies access and logs a traceback.
+                logger.warning("license check failed for %r, access denied", module_id, exc_info=True)
                 self.notify(
-                    "🔒 Scanner — could not verify the license. Try `pentool license status`.",
+                    f"🔒 {module_catalog.label(module_id)} — could not verify the license. "
+                    "Open Settings → License and activate the key again.",
                     severity="warning",
-                    timeout=5,
+                    timeout=6,
                 )
                 return
-
-        # Block Recon if no valid license (ai_discovery feature)
-        if module_id == "recon":
-            try:
-                from pentool.core.license import get_session_license
-
-                lic = get_session_license()
-                if not (lic.valid and lic.has_feature("ai_discovery")):
-                    # The key can be valid but WITHOUT the ai_discovery feature —
-                    # which is exactly what happened: the worker plans (`pro`/`team`)
-                    # did not grant the feature, and Recon was unavailable with an
-                    # active license. The message is obliged to name the reason.
-                    self.notify(
-                        "Recon недоступен: ключ не содержит фичу ai_discovery "
-                        "(перевыпустите ключ плана pro/team или `pentool license trial`)",
-                        severity="warning",
-                        timeout=7,
-                    )
-                    return
-            except Exception as exc:
-                # The same fail-open handling as for Scanner: if we could not verify
-                # the license, we do not let in (and we write why). The traceback
-                # follows the same ADR-6 rule (worker entry point).
-                logger.warning("recon license check failed, access denied: %s", exc, exc_info=True)
+            if not allowed:
+                # The key can be valid and still lack the feature (a plan without
+                # ai_discovery, for instance) — say so instead of "no access".
                 self.notify(
-                    "🔒 Recon — could not verify the license. Try `pentool license status`.",
+                    f"🔒 {module_catalog.label(module_id)} — paid feature. Activate a key in Settings → License.",
                     severity="warning",
                     timeout=5,
                 )
@@ -1409,7 +1393,20 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             entries.sort(key=lambda entry: (-len(entry.keys), entry.keys))
             markup = " │ ".join(render_global_entry(entry.keys, entry.description) for entry in entries)
         else:
-            markup = build_status_bar_markup(registry.get_entries(self._hints_module))
+            module_entries = [
+                entry
+                for group in module_catalog.hints_groups(self._hints_module)
+                for entry in registry.get_entries(group)
+            ]
+            if module_entries:
+                markup = build_status_bar_markup(module_entries)
+            else:
+                # Utils, Extensions, Recon and Settings have no hint group of their own.
+                # They used to show an empty "—" row that taught nothing; the global
+                # keys are at least true in every module.
+                markup = build_status_bar_markup(
+                    [entry for entry in registry.get_entries(SCOPE_GLOBAL) if entry.show and entry.description]
+                )
         text.update(markup or "[dim]—[/]")
 
     # ── Module header: row 1 state + row 2 actions/tabs/more ──────────────

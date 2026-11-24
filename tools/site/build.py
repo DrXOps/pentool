@@ -53,7 +53,10 @@ a{{color:#22d3ee}}</style>
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    # newline="\n" on purpose: the repository stores LF, and Windows would otherwise
+    # turn every regenerated page into a "modified" file (CRLF) after each build.
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
     try:
         shown = path.relative_to(ROOT).as_posix()
     except ValueError:

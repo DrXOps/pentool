@@ -686,16 +686,16 @@ def is_pro_package_compatible() -> tuple[bool, str]:
             "A PRO package is installed, but its build metadata doesn't record "
             "which Pentool version it was built for (a previous PRO update "
             "likely didn't finish). PRO features are disabled to avoid a "
-            "crash from a version mismatch — run "
-            "'pentool license activate <key>' to re-download the PRO package."
+            "crash from a version mismatch — open Settings → License and press "
+            "Activate to re-download the PRO package."
         )
 
     if _base_version(pro_free_version) != _base_version(current_version):
         return True, (
             f"Version mismatch: Pentool {current_version} is installed, but "
             f"the PRO package was built for version {pro_free_version}. "
-            f"PRO features are loaded, but consider re-syncing: run "
-            f"'pentool license activate <key>' or wait for the background "
+            f"PRO features are loaded, but consider re-syncing: press Activate in "
+            f"Settings → License or wait for the background "
             f"PRO update to complete."
         )
 

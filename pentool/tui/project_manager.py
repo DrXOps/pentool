@@ -17,6 +17,7 @@ from textual.css.query import NoMatches
 from pentool.core.db_schema import init_db
 from pentool.core.error_guard import err as _err
 from pentool.core.logging import get_logger
+from pentool.tui import module_catalog
 from pentool.tui.messages import ProxyLoadProject
 
 if TYPE_CHECKING:
@@ -25,8 +26,8 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 #: Modules whose screens hold project data and must be refreshed on a switch.
-#: Ordered as in ``MODULES`` so logs and the deferred-reload queue read the same.
-_RELOADABLE_MODULES: tuple[str, ...] = ("dashboard", "proxy", "repeater", "intruder", "scanner", "target")
+#: Ordered as in the module catalog so logs and the deferred-reload queue read the same.
+_RELOADABLE_MODULES: tuple[str, ...] = module_catalog.reloadable_ids()
 
 
 class ProjectManager:

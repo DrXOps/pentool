@@ -43,7 +43,8 @@ can start auditing immediately. No lag, no heavy setup.
 
 - **💥 Intruder**  
   Run automated payload attacks with four strategies: Sniper, Battering Ram, Pitchfork, Cluster Bomb.  
-  **Turbo Mode** (PRO) delivers 10× speed via Keep-Alive and connection pooling.
+  **Turbo Mode** (PRO) reuses connections instead of opening one per request, so a large attack
+  does not spend its time on TCP and TLS handshakes.
 
 - **🔍 Scanner**  
   Active and passive vulnerability analysis: SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT flaws, and more.  
@@ -65,7 +66,8 @@ can start auditing immediately. No lag, no heavy setup.
   Extend functionality without touching the core. PRO plugins add advanced scanners, smart payloads, and report generators.
 
 - **⚡ Async Core**  
-  Fully async engine handles thousands of concurrent connections and hundreds of requests per second.
+  The proxy, the scanner and the interface share one `asyncio` engine: a long scan does not
+  freeze the UI, and the proxy keeps capturing while it runs.
 
 - **📦 One-line Install**  
   `uv tool install pentool` — no complex setup, works on Linux, macOS, and Windows (WSL).
@@ -81,27 +83,24 @@ can start auditing immediately. No lag, no heavy setup.
 # Install (recommended — isolated, single command)
 uv tool install pentool
 
-# Launch the TUI with a new project for the target (host pre-seeded)
+# Launch the TUI with a new project for the target (proxy starts, target is seeded)
 pentool --url https://example.com
 
 # Same, but actually load the target in a headless browser THROUGH the proxy,
 # so real traffic lands in HTTP History + Target (requires Lightpanda)
 pentool --url https://example.com --smart
 
-# Headless scan — perfect for CI/CD (GitLab CI, GitHub Actions, Jenkins)
+# Headless scan — perfect for CI/CD (GitHub Actions, GitLab CI, Jenkins)
 pentool --url https://example.com --headless --output result.json
 
-> **Windows:** the TUI runs inside WSL2 — see [Running on Windows via WSL2](docs/i18n/en/INSTALLATION.md#running-on-windows-via-wsl2) (WSL, UTF-8 locale, fonts, Kitty).
-
-# Start proxy on custom port
-pentool proxy start --port 8080
-
-# Active scan (CLI)
-pentool scan active --url https://example.com
+# Open the most recent project
+pentool --last
 
 # Check for updates
 pentool update --check
 ```
+
+> **Windows:** the TUI runs inside WSL2 — see [Running on Windows via WSL2](docs/i18n/en/INSTALLATION.md#running-on-windows-via-wsl2) (WSL, UTF-8 locale, fonts, Kitty).
 
 ---
 
@@ -117,7 +116,7 @@ pentool --url https://example.com --headless --output result.json
 pentool --url https://example.com --headless \\
     --check xss,sqli,info_leak \\
     --threads 20 --delay 0.2 \\
-    --use-ai \\
+    --ai \\
     --crawl --depth 3 --max-pages 100 \\
     --format html --output report.html
 ```
@@ -132,7 +131,7 @@ pentool --url https://example.com --headless \\
 | `--check NAMES` | all | Comma-separated checks |
 | `--threads N` | 10 | Parallel threads |
 | `--delay SEC` | 0.0 | Request delay |
-| `--use-ai` | — | AI-assisted scanning |
+| `--ai` | — | AI-assisted scanning (local model) |
 | `--crawl` | — | Crawl before scan |
 | `--depth N` | 3 | Crawl depth |
 | `--max-pages N` | 100 | Max pages |
@@ -160,7 +159,8 @@ Full docs: **[pentool.pro](https://pentool.pro)**
 ## 🧪 Beta / Testing Mode
 
 > **Pentool is currently in public beta.**  
-> All **free modules are fully functional**. PRO features are actively being built — a **14-day trial** is available so you can evaluate everything upfront.
+> All **free modules are fully functional**. PRO features are actively being built — write to
+> [support@pentool.pro](mailto:support@pentool.pro) for a **14-day trial key**.
 
 ### 🎙 For Bloggers & Content Creators
 
