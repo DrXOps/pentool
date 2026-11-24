@@ -4,13 +4,13 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Pentool — 终端里的 Web 渗透测试</title>
-<meta name="description" content="Pentool 是终端里的 Web 渗透测试工具：代理、请求重放、入侵器、漏洞扫描、侦察和报告。核心开源。" />
+<meta name="description" content="Pentool 是终端里的 Web 渗透测试工具：代理、请求重放、Intruder、漏洞扫描、侦察和报告。核心开源。" />
 <link rel="canonical" href="https://pentool.pro/zh/" />
 <link rel="alternate" hreflang="ru" href="https://pentool.pro/ru/" /><link rel="alternate" hreflang="en" href="https://pentool.pro/" /><link rel="alternate" hreflang="zh" href="https://pentool.pro/zh/" /><link rel="alternate" hreflang="hi" href="https://pentool.pro/hi/" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Pentool" />
 <meta property="og:title" content="Pentool — 终端里的 Web 渗透测试" />
-<meta property="og:description" content="Pentool 是终端里的 Web 渗透测试工具：代理、请求重放、入侵器、漏洞扫描、侦察和报告。核心开源。" />
+<meta property="og:description" content="Pentool 是终端里的 Web 渗透测试工具：代理、请求重放、Intruder、漏洞扫描、侦察和报告。核心开源。" />
 <meta property="og:url" content="https://pentool.pro/zh/" />
 <meta property="og:image" content="https://pentool.pro/icons/mark-14-radar-terminal-compact.png" />
 <meta name="twitter:card" content="summary_large_image" />
@@ -41,7 +41,7 @@
 <aside class="callout">AI 是助手，不能替代检查：对发现的最终判断仍在你手上。</aside></div></section>
 <section class="section" id="ci"><div class="wrap"><header class="section-head"><p class="eyebrow">自动化</p><h2 class="section-title">在流水线里扫描</h2><p class="section-lead">同一个扫描器可以不带界面运行——用 <code>--headless</code> 标志。适用于 GitHub Actions、GitLab CI 和任何 shell。</p></header><div class="term"><div class="term-bar"><span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span><span class="term-title">bash</span></div><div class="term-body"><div class="term-line term-cmd">$ pentool --url https://example.com --headless \</div><div class="term-line term-cmd">    --check xss,sqli --threads 20 --delay 0.2 \</div><div class="term-line term-cmd">    --format html --output report.html</div><div class="term-line term-dim"># 退出码：0 — 成功，1 — 扫描失败，2 — 参数错误</div></div></div><p class="note">还有其他标志：<code>--crawl --depth</code>、<code>--ai</code>、<code>--format json</code>。</p>
 <p class="prose">自定义检查以插件形式提供：<code>BasePlugin</code> 可以添加界面、CLI 命令、扫描器检查和被动检查。插件放在 <code>~/.config/pentool/plugins</code>，API 有文档。</p></div></section>
-<section class="section" id="install"><div class="wrap"><header class="section-head"><p class="eyebrow">安装</p><h2 class="section-title">两条命令，直到发出第一个请求</h2><p class="section-lead">软件包从 PyPI 安装。不需要 Docker、JDK 和外部 broker。</p></header><div class="term"><div class="term-bar"><span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span><span class="term-title">bash</span></div><div class="term-body"><div class="term-line term-cmd">$ uv tool install pentool</div><div class="term-line term-cmd">$ pentool --url https://example.com</div><div class="term-line term-accent">▶ Dashboard  ·  Proxy  ·  Repeater  ·  Intruder  ·  Scanner  ·  Target  ·  Utils  ·  Extensions  ·  Recon  ·  Settings</div></div></div><p class="note">没有 <code>uv</code> 也可以用 <code>pip install pentool</code>。HTTPS 证书 Pentool 会自己生成。</p>
+<section class="section" id="install"><div class="wrap"><header class="section-head"><p class="eyebrow">安装</p><h2 class="section-title">两条命令，直到发出第一个请求</h2><p class="section-lead">软件包从 PyPI 安装。不需要 Docker、JDK 和外部代理。</p></header><div class="term"><div class="term-bar"><span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span><span class="term-title">bash</span></div><div class="term-body"><div class="term-line term-cmd">$ uv tool install pentool</div><div class="term-line term-cmd">$ pentool --url https://example.com</div><div class="term-line term-accent">▶ Dashboard  ·  Proxy  ·  Repeater  ·  Intruder  ·  Scanner  ·  Target  ·  Utils  ·  Extensions  ·  Recon  ·  Settings</div></div></div><p class="note">没有 <code>uv</code> 也可以用 <code>pip install pentool</code>。HTTPS 证书 Pentool 会自己生成。</p>
 <aside class="callout">需要现代终端：Windows Terminal、iTerm2、GNOME Terminal、Kitty、Alacritty 或 WezTerm。在 Windows 上 WSL2 更省事。</aside></div></section>
 <section class="section" id="start"><div class="wrap"><div class="cta-band"><h2 class="cta-title">在自己的项目上试试</h2><p class="cta-text">免费核心没有时间限制。扫描器、侦察和报告需要 PRO。</p><div class="btn-row is-center"><a class="btn btn-primary" href="#install">免费下载</a><a class="btn btn-ghost" href="/zh/pricing.html">购买 PRO</a></div></div></div></section>
 </main>

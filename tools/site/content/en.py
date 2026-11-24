@@ -319,7 +319,7 @@ PAGES = {
                 "id": "install",
                 "eyebrow": "Installation",
                 "title": "Two commands to the first request",
-                "lead": "The package comes from PyPI. No Docker, no JDK, no external broker.",
+                "lead": "The package comes from PyPI. No Docker, no JDK, no external proxy.",
                 "blocks": [
                     {
                         "t": "term",

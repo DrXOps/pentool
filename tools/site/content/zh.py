@@ -77,7 +77,7 @@ PAGES = {
     "index": {
         "title": "Pentool — 终端里的 Web 渗透测试",
         "description": (
-            "Pentool 是终端里的 Web 渗透测试工具：代理、请求重放、入侵器、漏洞扫描、侦察和报告。核心开源。"
+            "Pentool 是终端里的 Web 渗透测试工具：代理、请求重放、Intruder、漏洞扫描、侦察和报告。核心开源。"
         ),
         "hero": {
             "kicker": "面向终端的渗透测试工具",
@@ -305,7 +305,7 @@ PAGES = {
                 "id": "install",
                 "eyebrow": "安装",
                 "title": "两条命令，直到发出第一个请求",
-                "lead": "软件包从 PyPI 安装。不需要 Docker、JDK 和外部 broker。",
+                "lead": "软件包从 PyPI 安装。不需要 Docker、JDK 和外部代理。",
                 "blocks": [
                     {
                         "t": "term",
@@ -516,7 +516,7 @@ PAGES = {
                             },
                             {
                                 "q": "PRO 密钥解锁什么？",
-                                "a": "漏洞扫描器、侦察、本地 AI、带导出的报告，以及入侵器的 Turbo 模式。上面的表格是完整清单。",
+                                "a": "漏洞扫描器、侦察、本地 AI、带导出的报告，以及 Intruder 的 Turbo 模式。上面的表格是完整清单。",
                             },
                             {
                                 "q": "购买前可以先看看 PRO 吗？",
