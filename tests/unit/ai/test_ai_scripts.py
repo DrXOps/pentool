@@ -20,6 +20,11 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTEXT_HOOK = REPO_ROOT / ".claude" / "hooks" / "context-state.sh"
 WORKTREE = REPO_ROOT / "scripts" / "ai" / "worktree"
 
+# `.claude/` is local agent tooling, not part of the repository (.gitignore), so CI has
+# no context-state.sh to run. Without this guard every test here fails with exit 127.
+if not CONTEXT_HOOK.is_file():
+    pytest.skip(".claude/hooks is local tooling, not part of the repository", allow_module_level=True)
+
 
 def _run(cmd, cwd, stdin: str | None = None, env: dict | None = None):
     full_env = {**os.environ, **(env or {})}

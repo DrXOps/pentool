@@ -333,7 +333,14 @@ class TestCopyToClipboard:
 
         proc = MagicMock()
         proc.returncode = 0
-        with patch("pentool.utils.copy_as.subprocess.run", return_value=proc):
+        # The xclip branch is only reached with an X display and an xclip binary.
+        # A CI runner has neither, so both are stubbed: without this the test only
+        # passed on machines that happen to run a graphical session.
+        with (
+            patch("pentool.utils.copy_as._x11_display_ok", return_value=True),
+            patch("pentool.utils.copy_as._find_executable", return_value="/usr/bin/xclip"),
+            patch("pentool.utils.copy_as.subprocess.run", return_value=proc),
+        ):
             assert copy_to_clipboard("hi") is True
 
     def test_pyperclip_fallback(self):

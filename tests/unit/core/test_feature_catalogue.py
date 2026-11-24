@@ -32,6 +32,11 @@ from pentool.core.features import (
 ROOT = Path(__file__).resolve().parents[3]
 CODE_ROOTS = (ROOT / "pentool", ROOT / "pro" / "pentool")
 
+#: PRO features are gated inside the private submodule. A free checkout (CI has no
+#: access to `DrXOps/pentool-pro`) cannot see those gates, so the "every feature is
+#: checked somewhere" rule is only decidable with both trees present.
+PRO_TREE = ROOT / "pro" / "pentool"
+
 GATE_PATTERN = re.compile(r"""(?:has_feature|require_feature)\(\s*["']([a-z0-9_]+)["']""")
 
 
@@ -79,6 +84,8 @@ def test_every_gate_in_code_is_declared() -> None:
 
 
 def test_every_declared_feature_is_checked_by_the_code() -> None:
+    if not PRO_TREE.is_dir():
+        pytest.skip("PRO submodule is not checked out: its feature gates live there")
     gates = _gates_used_in_code()
     unused = sorted(set(FEATURES) - set(gates))
     assert not unused, (
