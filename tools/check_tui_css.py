@@ -119,8 +119,8 @@ _PSEUDO_ELEMENT = {
 }
 _DEVNULL = open("/dev/null", "w")  # noqa: SIM115 - process-lifetime sink
 _CLASS_ATTRS = {"classes"}
-# Severity names shared by app.notify() and CustomNotifyCard; each maps to the
-# ``-<severity>`` class the card sets (pentool/tui/widgets/custom_notify.py).
+# Severity names shared by app.notify() and Textual's own Toast widget; each maps to
+# the ``-<severity>`` class the toast sets (textual/widgets/_toast.py).
 _SEVERITIES = (
     "information",
     "success",
@@ -402,8 +402,8 @@ def collect_python() -> tuple[set[str], set[str], set[str], set[str], set[int]]:
     for idx, value in id_calls:
         if idx in id_arg_indexes:
             ids.add(value)
-    # Notification severities become ``-<severity>`` classes (custom_notify.py:
-    # ``SEVERITIES = ("information", …)`` and ``_card.add_class(f"-{severity}")``).
+    # Notification severities become ``-<severity>`` classes (textual/widgets/_toast.py:
+    # ``self.add_class(f"-{severity}")`` on the Toast).
     for severity in _SEVERITIES:
         classes.add(f"-{severity}")
     return ids, prefixes, classes, types, id_arg_indexes

@@ -49,7 +49,6 @@ from pentool.tui.hotkeys.defaults import build_global_bindings
 from pentool.tui.messages import (
     ConfigChanged,
     ModuleSelected,
-    ProxyClearHistory,
     ProxyLoadProject,
     ProxyRequestAdded,
     ProxyRequestDone,
@@ -2240,19 +2239,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # The URL from --url never made it into the site tree.
             logger.exception("on_send_url_to_target: url not added")
 
-    @on(ProxyClearHistory)
-    def on_proxy_clear_history(self, msg: ProxyClearHistory) -> None:
-        try:
-            screen = self.require_module_screen("proxy", ProxyScreen)
-            screen.action_clear_list()
-        except NoMatches as e:
-            # The Proxy screen is not in the tree — there is nothing to clear.
-            logger.debug("on_proxy_clear_history: screen not mounted: %s", e)
-        except Exception:
-            # The user pressed "clear" and expects an empty table, but the rows
-            # stay: it looks like "the button doesn't work".
-            logger.exception("on_proxy_clear_history: list not cleared")
-
     @on(ProxyLoadProject)
     def on_proxy_load_project(self, msg: ProxyLoadProject) -> None:
         """Reload the ProxyScreen table after loading a project."""
@@ -2407,29 +2393,6 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
 
     def _update_project_name(self, path: str, saved: bool = True) -> None:
         self._pm.update_project_name(path, saved)
-
-    # ── Helpers kept in app.py (used by other app-level methods) ──────────────
-
-    def _do_save_project_json(self, path: str) -> None:
-        self._pm._do_save_json(path)
-
-    def _do_load_project_json(self, path: str) -> None:
-        self._pm._do_load_json(path)
-
-    def _collect_spider_sessions(self) -> dict:
-        return self._pm._collect_spider_sessions()
-
-    async def _reload_project_screens(self, path: str) -> None:
-        await self._pm._reload_project_screens(path)
-
-    async def _init_new_db(self, path: str) -> None:
-        await self._pm._init_new_db(path)
-
-    async def _switch_storage_db(self, path: str) -> None:
-        await self._pm._switch_storage_db(path)
-
-    async def _open_project_sequence(self, path: str) -> None:
-        await self._pm._open_project_sequence(path)
 
     # ── EventBus handlers ──────────────────────────────────────────────────────
     # All handlers are called from the main event loop (via emit or

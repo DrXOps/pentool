@@ -63,10 +63,6 @@ class ProxyRequestDone(Message):
         self.req = req
 
 
-class ProxyClearHistory(Message):
-    pass
-
-
 class ProxyLoadProject(Message):
     """Reload the ProxyScreen table from storage after loading a project."""
 

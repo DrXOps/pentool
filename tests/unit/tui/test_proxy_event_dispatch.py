@@ -23,10 +23,12 @@ from pentool.tui.mixins.events_handlers import ProxyEventHandlersMixin
 
 # Handlers that MUST be dispatched by Textual's @on — they must remain
 # defined directly on PentoolApp (not inherited from a mixin).
+# `on_proxy_clear_history` used to be here; the message and the handler were deleted
+# in the audit cleanup (nothing ever posted `ProxyClearHistory` — the Proxy screen
+# clears its own table), so there is no handler left to place.
 _APP_LEVEL_ON_HANDLERS = (
     "on_proxy_request_added",
     "on_proxy_request_done",
-    "on_proxy_clear_history",
     "on_proxy_load_project",
 )
 

@@ -54,22 +54,3 @@ def safe_query_one(
         if context:
             logger.debug("safe_query_one(%s): %s", context, _e)
         return default
-
-
-def safe_notify(
-    app: Any,
-    msg: str,
-    severity: str = "warning",
-    timeout: int = 4,
-) -> None:
-    """Safe notify wrapper — never raises into the caller.
-
-    The notification is the user's only signal that something went wrong, so a
-    failure here must not propagate — but it must be recorded, otherwise a
-    broken ``app.notify`` (e.g. a host that is not a Textual App) looks the
-    same as a call that simply had nothing to say.
-    """
-    try:
-        app.notify(msg, severity=severity, timeout=timeout)
-    except Exception as exc:
-        logger.debug("safe_notify failed: %s", exc)
