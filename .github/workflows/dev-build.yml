@@ -34,10 +34,14 @@ jobs:
         id: version
         run: |
           BASE_VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
-          DEV_VERSION="${BASE_VERSION}.dev${GITHUB_RUN_NUMBER}"
+          # PEP 440 has no "0.5.2-dev.dev173": a version carries at most one
+          # pre-release/dev segment. Strip whatever is already there ("-dev",
+          # ".dev0", "a1", "rc2") and append this run's number to the bare core.
+          CORE_VERSION=$(printf '%s' "$BASE_VERSION" | sed -E 's/[-.]?(dev|a|b|rc)[0-9]*$//')
+          DEV_VERSION="${CORE_VERSION}.dev${GITHUB_RUN_NUMBER}"
           sed -i "s/^version = \".*\"/version = \"${DEV_VERSION}\"/" pyproject.toml
           echo "dev_version=${DEV_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Dev build version: ${DEV_VERSION}"
+          echo "Dev build version: ${DEV_VERSION} (base ${BASE_VERSION})"
 
       - name: Build package
         run: uv build
