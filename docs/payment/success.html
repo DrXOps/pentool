@@ -1,40 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pentool — payment received</title>
-  <meta name="robots" content="noindex" />
-  <style>
-    :root { --bg:#0d1117; --bg2:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e; --green:#00e08a; }
-    body { background:var(--bg); color:var(--text); font-family:'Courier New',Courier,monospace;
-           min-height:100vh; display:flex; align-items:center; justify-content:center; margin:0; padding:2rem; line-height:1.7; }
-    .card { max-width:620px; border:1px solid var(--border); background:var(--bg2); padding:2.2rem; }
-    .prompt { color:var(--green); font-size:.85rem; margin-bottom:.8rem; }
-    h1 { font-size:1.6rem; margin:0 0 .8rem; }
-    p { color:var(--muted); font-size:.93rem; margin:0 0 .9rem; }
-    a { color:var(--green); }
-    .box { border-left:2px solid var(--green); padding:.7rem 1rem; background:#0f1620; font-size:.85rem; color:var(--muted); }
-    code { background:#1c2128; border:1px solid var(--border); padding:.05rem .35rem; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pentool — payment received</title>
+<meta name="description" content="Payment accepted: your PRO key is on its way to the e-mail you provided." />
+<link rel="canonical" href="https://pentool.pro/payment/success.html" />
+<link rel="alternate" hreflang="ru" href="https://pentool.pro/ru/payment/success.html" /><link rel="alternate" hreflang="en" href="https://pentool.pro/payment/success.html" /><link rel="alternate" hreflang="zh" href="https://pentool.pro/zh/payment/success.html" /><link rel="alternate" hreflang="hi" href="https://pentool.pro/hi/payment/success.html" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Pentool" />
+<meta property="og:title" content="Pentool — payment received" />
+<meta property="og:description" content="Payment accepted: your PRO key is on its way to the e-mail you provided." />
+<meta property="og:url" content="https://pentool.pro/payment/success.html" />
+<meta property="og:image" content="https://pentool.pro/icons/mark-14-radar-terminal-compact.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#0a0e14" />
+<link rel="icon" href="/icons/mark-14-radar-terminal-compact.png" />
+<link rel="apple-touch-icon" href="/icons/mark-14-radar-terminal-compact.png" /><meta name="robots" content="noindex" />
+<link rel="stylesheet" href="/assets/site.css" />
 </head>
-<body>
-  <div class="card">
-    <div class="prompt">$ pentool license activate</div>
-    <h1>✅ Payment received</h1>
-    <p>Thank you. Your licence key is on its way to the e-mail address you used at checkout —
-       usually within a few minutes. Check the spam folder if it does not arrive.</p>
-    <div class="box">
-      The e-mail is also the key's name in our system. Keep the message: it contains the key
-      (<code>PTOOL-XXXX-XXXX-XXXX</code>) and the number of activation slots you bought.
-    </div>
-    <p style="margin-top:1.2rem">Next step — activate the key in the app:</p>
-    <p><code>pentool license activate PTOOL-XXXX-XXXX-XXXX</code></p>
-    <p>Or: Pentool → Settings → License. A slot is bound to the first machine that activates.</p>
-    <p>Nothing arrived after 30 minutes? Write to
-       <a href="mailto:support@pentool.pro?subject=Payment%20done%20—%20key%20not%20received">support@pentool.pro</a>
-       and include the payment id from your receipt.</p>
-    <p><a href="https://pentool.pro/pricing.html">← Back to pricing</a></p>
-  </div>
+<body data-page="success" data-lang="en" data-checkout="https://pentool-license.akashtanov2020.workers.dev/api/checkout"
+ data-price-first="29" data-price-extra="19"
+ data-msg-slots="Slots: {n}" data-msg-email="That address looks off — please check the e-mail."
+ data-msg-fail="Could not create the invoice. Write to support: support@pentool.pro" data-msg-waiting="Creating the invoice…">
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-head"><div class="wrap head-row">
+<a class="brand brand-normal" href="/"><img class="brand-mark" src="/icons/mark-14-radar-terminal-compact.png" width="40" height="40" alt="" /><span class="brand-word">Pentool</span></a>
+<nav class="nav-links" aria-label="Sections"><ul><li><a href="/#modules">Features</a></li><li><a href="/#install">Install</a></li><li><a href="/pricing.html">Pricing</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md" target="_blank" rel="noopener">Documentation</a></li></ul></nav>
+<div class="langs" role="group" aria-label="Language"><a class="lang" href="/ru/payment/success.html" hreflang="ru" lang="ru" title="Русский">RU</a><a class="lang is-active" href="/payment/success.html" hreflang="en" lang="en" title="English" aria-current="true">EN</a><a class="lang" href="/zh/payment/success.html" hreflang="zh" lang="zh" title="中文">ZH</a><a class="lang" href="/hi/payment/success.html" hreflang="hi" lang="hi" title="हिन्दी">HI</a></div>
+<a class="btn btn-quiet nav-cta" href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">GitHub</a>
+</div></header>
+<main id="main">
+<section class="page-intro"><div class="wrap"><h1 class="page-title">Payment received</h1><p class="page-lead">Thank you. The key is sent to the e-mail given at checkout — usually within a few minutes. If it is not there, check the spam folder.</p></div></section>
+<section class="section" id="next"><div class="wrap"><div class="steps"><div class="step"><div class="step-num">01</div><h3 class="step-title">Find the key in the letter</h3><p class="step-text">The letter contains a key like <code>PTOOL-XXXX-XXXX-XXXX</code> and the number of slots you bought.</p></div><div class="step"><div class="step-num">02</div><h3 class="step-title">Activate it in the app</h3><p class="step-text">Pentool → Settings → License → Activate. The first activation takes a slot and binds it to this machine.</p></div><div class="step"><div class="step-num">03</div><h3 class="step-title">If the letter is missing</h3><p class="step-text">Write to support@pentool.pro with the order number and the e-mail used for payment — we will issue the key by hand.</p></div></div>
+<div class="btn-row"><a class="btn btn-primary" href="/pricing.html">Back to pricing</a><a class="btn btn-ghost" href="mailto:support@pentool.pro">Write to support</a></div></div></section>
+</main>
+<footer class="site-foot"><div class="wrap foot-grid"><div class="foot-brand"><a class="brand brand-small" href="/"><img class="brand-mark" src="/icons/mark-14-radar-terminal-compact.png" width="32" height="32" alt="" /><span class="brand-word">Pentool</span></a><p class="foot-blurb">Pentesting in the terminal: interception, attacks, scanner and reports in one project. Open-source core.</p></div><div class="foot-col"><h2 class="foot-title">Product</h2><ul><li><a href="/#features">Features</a></li><li><a href="/#modules">Modules</a></li><li><a href="/#install">Install</a></li><li><a href="/pricing.html">Pricing and PRO</a></li></ul></div><div class="foot-col"><h2 class="foot-title">Documentation</h2><ul><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md" target="_blank" rel="noopener">Quick start</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/USER_GUIDE.md" target="_blank" rel="noopener">User guide</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/CI_CD.md" target="_blank" rel="noopener">Scanning in CI</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/API_CONTRACTS.md" target="_blank" rel="noopener">Plugin API</a></li><li><a href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">Source code</a></li></ul></div><div class="foot-col"><h2 class="foot-title">Contact</h2><ul><li><a href="mailto:support@pentool.pro">Support</a></li><li><a href="https://t.me/pentool_pro" target="_blank" rel="noopener">Telegram channel</a></li><li><a href="https://t.me/sudores" target="_blank" rel="noopener">Author</a></li><li><a href="https://github.com/DrXOps/pentool/issues" target="_blank" rel="noopener">Report a bug</a></li></ul></div><div class="foot-col"><h2 class="foot-title">Legal</h2><ul><li><a href="/terms.html">Terms of Service</a></li><li><a href="/privacy.html">Privacy Policy</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0 licence</a></li><li><a href="https://license.pentool.pro/" target="_blank" rel="noopener">Licence portal</a></li></ul></div></div><div class="wrap foot-bottom"><p>© 2024–2026 Anatoly Kashtanov (DoctorX). Pentool is an independent project.</p><p>This site is static HTML — no analytics, no trackers.</p></div></footer>
+
+<script src="/assets/site.js" defer></script>
 </body>
 </html>

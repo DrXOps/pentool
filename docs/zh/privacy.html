@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pentool — 隐私政策</title>
+<meta name="description" content="Pentool 会把什么发送到服务器、什么留在你的机器上：许可证校验、安装遥测、崩溃报告、本地 AI 和密钥购买。" />
+<link rel="canonical" href="https://pentool.pro/zh/privacy.html" />
+<link rel="alternate" hreflang="ru" href="https://pentool.pro/ru/privacy.html" /><link rel="alternate" hreflang="en" href="https://pentool.pro/privacy.html" /><link rel="alternate" hreflang="zh" href="https://pentool.pro/zh/privacy.html" /><link rel="alternate" hreflang="hi" href="https://pentool.pro/hi/privacy.html" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Pentool" />
+<meta property="og:title" content="Pentool — 隐私政策" />
+<meta property="og:description" content="Pentool 会把什么发送到服务器、什么留在你的机器上：许可证校验、安装遥测、崩溃报告、本地 AI 和密钥购买。" />
+<meta property="og:url" content="https://pentool.pro/zh/privacy.html" />
+<meta property="og:image" content="https://pentool.pro/icons/mark-14-radar-terminal-compact.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#0a0e14" />
+<link rel="icon" href="/icons/mark-14-radar-terminal-compact.png" />
+<link rel="apple-touch-icon" href="/icons/mark-14-radar-terminal-compact.png" />
+<link rel="stylesheet" href="/assets/site.css" />
+</head>
+<body data-page="privacy" data-lang="zh" data-checkout="https://pentool-license.akashtanov2020.workers.dev/api/checkout"
+ data-price-first="29" data-price-extra="19"
+ data-msg-slots="槽位：{n}" data-msg-email="这个地址看起来有笔误，请检查 e-mail。"
+ data-msg-fail="无法创建账单。请联系支持：support@pentool.pro" data-msg-waiting="正在创建账单…">
+<a class="skip" href="#main">跳到正文</a>
+<header class="site-head"><div class="wrap head-row">
+<a class="brand brand-normal" href="/zh/"><img class="brand-mark" src="/icons/mark-14-radar-terminal-compact.png" width="40" height="40" alt="" /><span class="brand-word">Pentool</span></a>
+<nav class="nav-links" aria-label="栏目"><ul><li><a href="/zh/#modules">功能</a></li><li><a href="/zh/#install">安装</a></li><li><a href="/zh/pricing.html">价格</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/zh/QUICKSTART.md" target="_blank" rel="noopener">文档</a></li></ul></nav>
+<div class="langs" role="group" aria-label="Language"><a class="lang" href="/ru/privacy.html" hreflang="ru" lang="ru" title="Русский">RU</a><a class="lang" href="/privacy.html" hreflang="en" lang="en" title="English">EN</a><a class="lang is-active" href="/zh/privacy.html" hreflang="zh" lang="zh" title="中文" aria-current="true">ZH</a><a class="lang" href="/hi/privacy.html" hreflang="hi" lang="hi" title="हिन्दी">HI</a></div>
+<a class="btn btn-quiet nav-cta" href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">GitHub</a>
+</div></header>
+<main id="main">
+<section class="page-intro"><div class="wrap"><h1 class="page-title">隐私政策</h1><p class="page-lead">Pentool 是本地工具：流量、项目和发现都留在你的机器上。这里说明所有离开本机的内容、为什么离开，以及怎么关闭。</p><p class="page-note">更新于 2026 年 11 月 24 日</p></div></section>
+<section class="section" id="short"><div class="wrap"><aside class="callout"><strong>简要说明。</strong> 我们收不到你的流量、请求、响应、发现和项目数据库。购买许可证时我们会收到 e-mail 和密钥数据。崩溃报告可以关闭。</aside></div></section>
+<section class="section" id="controller"><div class="wrap"><header class="section-head"><h2 class="section-title">1. 谁负责数据</h2></header><p class="prose">数据控制者：Anatoly Kashtanov (DoctorX)，Pentool 的作者。任何涉及个人数据的请求：<a href="mailto:support@pentool.pro">support@pentool.pro</a>。</p></div></section>
+<section class="section" id="sent"><div class="wrap"><header class="section-head"><h2 class="section-title">2. 应用发送什么，什么时候发送</h2></header><div class="table-wrap"><table class="compare"><thead><tr><th>内容</th><th>时间</th><th>具体是什么</th><th>可以关闭吗？</th></tr></thead><tbody><tr><td>许可证校验</td><td>带 PRO 密钥启动时，之后从缓存读取</td><td>密钥字符串、机器标识符的哈希、应用版本</td><td>使用 PRO 期间——不能</td></tr><tr><td>安装 ping</td><td>每次安装一次</td><td>随机的安装标识符、操作系统和版本——不含流量和个人数据</td><td>可以，在设置里</td></tr><tr><td>崩溃报告</td><td>仅在异常结束时</td><td>traceback、错误类型、版本、操作系统与架构、来源（tui 或 cli）</td><td>可以——<code>send_crash_reports: false</code></td></tr></tbody></table></div>
+<p class="prose">发送前会从 traceback 中剔除类似令牌的行。报告保存在部署于 Cloudflare Workers 的许可证服务上。</p></div></section>
+<section class="section" id="local-ai"><div class="wrap"><header class="section-head"><h2 class="section-title">3. 人工智能在本地运行</h2></header><p class="prose">Pentool 的 AI 功能由一个本地模型提供：它作为独立进程在你的机器上运行。请求、响应和发现都不会发给我们，也不发往云服务。唯一的联网行为是：如果你启用了模型，会一次性下载模型文件。</p></div></section>
+<section class="section" id="not-collected"><div class="wrap"><header class="section-head"><h2 class="section-title">4. 我们不收集什么</h2></header><ul class="prose-list"><li>经代理的请求和响应、cookie、凭据、会话令牌；</li><li>发现、站点地图、项目数据库和你磁盘上的文件；</li><li>按键、剪贴板、屏幕内容和终端历史；</li><li>本站上的分析代码和广告标识符。</li></ul></div></section>
+<section class="section" id="purchases"><div class="wrap"><header class="section-head"><h2 class="section-title">5. 购买许可证</h2></header><p class="prose">购买 PRO 时我们会处理：</p>
+<ul class="prose-list"><li><strong>e-mail</strong> —— 密钥发到这里，它同时作为许可证名称用于支持和续费；</li><li><strong>槽位数、金额和付款日期</strong> —— 用于账务和续费；</li><li><strong>支付数据</strong> —— 由服务商 Coinso 和支付网络处理；我们看不到钱包私钥和银行卡数据。</li></ul>
+<p class="prose">处理的依据是履行合同（发放许可证）和会计核算的要求。购买记录按税法要求的期限保存。</p></div></section>
+<section class="section" id="activation"><div class="wrap"><header class="section-head"><h2 class="section-title">6. 激活数据</h2></header><p class="prose">每次激活都会在许可证服务上保存密钥和机器标识符的哈希——用于统计已占用的槽位并支持许可证迁移。机器标识符是系统标识符的哈希，不用于识别个人。</p></div></section>
+<section class="section" id="files"><div class="wrap"><header class="section-head"><h2 class="section-title">7. 你机器上的数据</h2></header><p class="prose">Pentool 会写入 <code>~/.config/pentool/</code>：设置、许可证缓存、日志、用于拦截 HTTPS 的证书、项目数据库和插件。AI 模型位于 <code>~/.pentool/ai/models</code>。这些数据不会离开本机，除非你自己把它们发出去。删除该目录即删除全部内容。</p></div></section>
+<section class="section" id="site"><div class="wrap"><header class="section-head"><h2 class="section-title">8. Cookie 与本站</h2></header><p class="prose">本站是静态的：不设置 cookie，不加载分析代码和第三方脚本。支付页面归服务商所有，按其规则运行。</p></div></section>
+<section class="section" id="rights"><div class="wrap"><header class="section-head"><h2 class="section-title">9. 你的权利</h2></header><p class="prose">视你所在的司法辖区而定（GDPR、152-FZ 等），你可以要求访问自己的数据、更正、删除或导出它们，反对处理，并向监管机构申诉。请写信到 <a href="mailto:support@pentool.pro">support@pentool.pro</a>——我们会在 30 天内答复。</p></div></section>
+<section class="section" id="retention"><div class="wrap"><header class="section-head"><h2 class="section-title">10. 保存期限</h2></header><ul class="prose-list"><li>崩溃报告 —— 最多 12 个月；</li><li>购买和许可证记录 —— 许可证有效期加上税法要求的期限；</li><li>安装计数 —— 只有聚合数值，没有按用户的记录。</li></ul></div></section>
+<section class="section" id="children"><div class="wrap"><header class="section-head"><h2 class="section-title">11. 儿童</h2></header><p class="prose">Pentool 是专业安全工具，不面向 18 岁以下人士。</p></div></section>
+<section class="section" id="changes"><div class="wrap"><header class="section-head"><h2 class="section-title">12. 政策变更</h2></header><p class="prose">新版本会连同新日期发布在这里，并自发布之时起生效。</p></div></section>
+<section class="section" id="contacts"><div class="wrap"><header class="section-head"><h2 class="section-title">13. 联系方式</h2></header><p class="prose">关于数据的问题和请求：<a href="mailto:support@pentool.pro">support@pentool.pro</a>。</p></div></section>
+</main>
+<footer class="site-foot"><div class="wrap foot-grid"><div class="foot-brand"><a class="brand brand-small" href="/zh/"><img class="brand-mark" src="/icons/mark-14-radar-terminal-compact.png" width="32" height="32" alt="" /><span class="brand-word">Pentool</span></a><p class="foot-blurb">终端里的渗透测试：拦截、攻击、扫描和报告都在同一个项目里。核心开源。</p></div><div class="foot-col"><h2 class="foot-title">产品</h2><ul><li><a href="/zh/#features">功能</a></li><li><a href="/zh/#modules">模块</a></li><li><a href="/zh/#install">安装</a></li><li><a href="/zh/pricing.html">价格与 PRO</a></li></ul></div><div class="foot-col"><h2 class="foot-title">文档</h2><ul><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/zh/QUICKSTART.md" target="_blank" rel="noopener">快速开始</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/zh/USER_GUIDE.md" target="_blank" rel="noopener">用户手册</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/CI_CD.md" target="_blank" rel="noopener">在 CI 中扫描</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/API_CONTRACTS.md" target="_blank" rel="noopener">Plugin API</a></li><li><a href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">源代码</a></li></ul></div><div class="foot-col"><h2 class="foot-title">联系</h2><ul><li><a href="mailto:support@pentool.pro">支持</a></li><li><a href="https://t.me/pentool_pro" target="_blank" rel="noopener">Telegram 频道</a></li><li><a href="https://t.me/sudores" target="_blank" rel="noopener">作者</a></li><li><a href="https://github.com/DrXOps/pentool/issues" target="_blank" rel="noopener">报告问题</a></li></ul></div><div class="foot-col"><h2 class="foot-title">法律</h2><ul><li><a href="/zh/terms.html">用户协议</a></li><li><a href="/zh/privacy.html">隐私政策</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0 许可证</a></li><li><a href="https://license.pentool.pro/" target="_blank" rel="noopener">许可证门户</a></li></ul></div></div><div class="wrap foot-bottom"><p>© 2024–2026 Anatoly Kashtanov (DoctorX)。Pentool 是一个独立项目。</p><p>本站是静态 HTML，没有分析代码，也没有跟踪器。</p></div></footer>
+
+<script src="/assets/site.js" defer></script>
+</body>
+</html>

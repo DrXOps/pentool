@@ -1,38 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pentool — payment not completed</title>
-  <meta name="robots" content="noindex" />
-  <style>
-    :root { --bg:#0d1117; --bg2:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e; --green:#00e08a; --red:#ff6b6b; }
-    body { background:var(--bg); color:var(--text); font-family:'Courier New',Courier,monospace;
-           min-height:100vh; display:flex; align-items:center; justify-content:center; margin:0; padding:2rem; line-height:1.7; }
-    .card { max-width:620px; border:1px solid var(--border); background:var(--bg2); padding:2.2rem; }
-    .prompt { color:var(--red); font-size:.85rem; margin-bottom:.8rem; }
-    h1 { font-size:1.6rem; margin:0 0 .8rem; }
-    p { color:var(--muted); font-size:.93rem; margin:0 0 .9rem; }
-    a { color:var(--green); }
-    .box { border-left:2px solid var(--border); padding:.7rem 1rem; background:#0f1620; font-size:.85rem; color:var(--muted); }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pentool — payment not completed</title>
+<meta name="description" content="The payment did not go through: nothing was charged and no key was issued." />
+<link rel="canonical" href="https://pentool.pro/payment/fail.html" />
+<link rel="alternate" hreflang="ru" href="https://pentool.pro/ru/payment/fail.html" /><link rel="alternate" hreflang="en" href="https://pentool.pro/payment/fail.html" /><link rel="alternate" hreflang="zh" href="https://pentool.pro/zh/payment/fail.html" /><link rel="alternate" hreflang="hi" href="https://pentool.pro/hi/payment/fail.html" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Pentool" />
+<meta property="og:title" content="Pentool — payment not completed" />
+<meta property="og:description" content="The payment did not go through: nothing was charged and no key was issued." />
+<meta property="og:url" content="https://pentool.pro/payment/fail.html" />
+<meta property="og:image" content="https://pentool.pro/icons/mark-14-radar-terminal-compact.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#0a0e14" />
+<link rel="icon" href="/icons/mark-14-radar-terminal-compact.png" />
+<link rel="apple-touch-icon" href="/icons/mark-14-radar-terminal-compact.png" /><meta name="robots" content="noindex" />
+<link rel="stylesheet" href="/assets/site.css" />
 </head>
-<body>
-  <div class="card">
-    <div class="prompt">$ payment cancelled</div>
-    <h1>Payment was not completed</h1>
-    <p>No money was taken. The invoice expired or the payment was cancelled before it
-       went through — nothing is charged and no key was issued.</p>
-    <div class="box">
-      If your bank shows a charge anyway, it is most likely a temporary hold that is
-      released automatically. If it stays, write to
-      <a href="mailto:support@pentool.pro?subject=Payment%20issue">support@pentool.pro</a>
-      with the payment id and date.
-    </div>
-    <p style="margin-top:1.2rem">You can start again from the pricing page — the slot count
-       and payment method are chosen there.</p>
-    <p><a href="https://pentool.pro/pricing.html">← Try again</a> ·
-       <a href="https://license.pentool.pro/">Licence portal</a></p>
-  </div>
+<body data-page="fail" data-lang="en" data-checkout="https://pentool-license.akashtanov2020.workers.dev/api/checkout"
+ data-price-first="29" data-price-extra="19"
+ data-msg-slots="Slots: {n}" data-msg-email="That address looks off — please check the e-mail."
+ data-msg-fail="Could not create the invoice. Write to support: support@pentool.pro" data-msg-waiting="Creating the invoice…">
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-head"><div class="wrap head-row">
+<a class="brand brand-normal" href="/"><img class="brand-mark" src="/icons/mark-14-radar-terminal-compact.png" width="40" height="40" alt="" /><span class="brand-word">Pentool</span></a>
+<nav class="nav-links" aria-label="Sections"><ul><li><a href="/#modules">Features</a></li><li><a href="/#install">Install</a></li><li><a href="/pricing.html">Pricing</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md" target="_blank" rel="noopener">Documentation</a></li></ul></nav>
+<div class="langs" role="group" aria-label="Language"><a class="lang" href="/ru/payment/fail.html" hreflang="ru" lang="ru" title="Русский">RU</a><a class="lang is-active" href="/payment/fail.html" hreflang="en" lang="en" title="English" aria-current="true">EN</a><a class="lang" href="/zh/payment/fail.html" hreflang="zh" lang="zh" title="中文">ZH</a><a class="lang" href="/hi/payment/fail.html" hreflang="hi" lang="hi" title="हिन्दी">HI</a></div>
+<a class="btn btn-quiet nav-cta" href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">GitHub</a>
+</div></header>
+<main id="main">
+<section class="page-intro"><div class="wrap"><h1 class="page-title">Payment not completed</h1><p class="page-lead">Nothing was charged and no key was issued: the invoice expired or the payment was cancelled before it went through. You can start again — slots and payment method are chosen on the pricing page.</p></div></section>
+<section class="section" id="what-now"><div class="wrap"><p class="prose">If your bank still shows a charge, it is usually a temporary hold that is released automatically. If it stays, write to <a href="mailto:support@pentool.pro">support@pentool.pro</a> with the payment id and date.</p>
+<div class="btn-row"><a class="btn btn-primary" href="/pricing.html">Try again</a><a class="btn btn-ghost" href="mailto:support@pentool.pro">Write to support</a></div></div></section>
+</main>
+<footer class="site-foot"><div class="wrap foot-grid"><div class="foot-brand"><a class="brand brand-small" href="/"><img class="brand-mark" src="/icons/mark-14-radar-terminal-compact.png" width="32" height="32" alt="" /><span class="brand-word">Pentool</span></a><p class="foot-blurb">Pentesting in the terminal: interception, attacks, scanner and reports in one project. Open-source core.</p></div><div class="foot-col"><h2 class="foot-title">Product</h2><ul><li><a href="/#features">Features</a></li><li><a href="/#modules">Modules</a></li><li><a href="/#install">Install</a></li><li><a href="/pricing.html">Pricing and PRO</a></li></ul></div><div class="foot-col"><h2 class="foot-title">Documentation</h2><ul><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md" target="_blank" rel="noopener">Quick start</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/USER_GUIDE.md" target="_blank" rel="noopener">User guide</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/CI_CD.md" target="_blank" rel="noopener">Scanning in CI</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/API_CONTRACTS.md" target="_blank" rel="noopener">Plugin API</a></li><li><a href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">Source code</a></li></ul></div><div class="foot-col"><h2 class="foot-title">Contact</h2><ul><li><a href="mailto:support@pentool.pro">Support</a></li><li><a href="https://t.me/pentool_pro" target="_blank" rel="noopener">Telegram channel</a></li><li><a href="https://t.me/sudores" target="_blank" rel="noopener">Author</a></li><li><a href="https://github.com/DrXOps/pentool/issues" target="_blank" rel="noopener">Report a bug</a></li></ul></div><div class="foot-col"><h2 class="foot-title">Legal</h2><ul><li><a href="/terms.html">Terms of Service</a></li><li><a href="/privacy.html">Privacy Policy</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0 licence</a></li><li><a href="https://license.pentool.pro/" target="_blank" rel="noopener">Licence portal</a></li></ul></div></div><div class="wrap foot-bottom"><p>© 2024–2026 Anatoly Kashtanov (DoctorX). Pentool is an independent project.</p><p>This site is static HTML — no analytics, no trackers.</p></div></footer>
+
+<script src="/assets/site.js" defer></script>
 </body>
 </html>

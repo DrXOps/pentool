@@ -1,547 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- Payment provider (CryptoProc) domain verification: same as the main page. -->
-  <meta name="cryptoproc-verify" content="cp_6a8f9d2c4e5b" />
-  <title>Pentool — Licensing & Pricing</title>
-  <meta name="description" content="Pentool PRO licensing: scanner with 21 checks, Recon, AI analysis, Smart Payloads, HTML reports. Crypto, SBP and card payments. One key, several activation slots." />
-  <link rel="canonical" href="https://pentool.pro/pricing.html" />
-  <link rel="alternate" hreflang="en" href="https://pentool.pro/pricing.html" />
-  <link rel="alternate" hreflang="ru" href="https://pentool.pro/pricing.ru.html" />
-  <style>
-    :root {
-      --bg:       #0d1117;
-      --bg2:      #161b22;
-      --bg3:      #1c2128;
-      --border:   #30363d;
-      --text:     #e6edf3;
-      --muted:    #8b949e;
-      --green:    #00e08a;
-      --green2:   #00b36e;
-      --yellow:   #ffcc00;
-      --font:     'Courier New', Courier, monospace;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      min-height: 100vh;
-      line-height: 1.6;
-    }
-
-    /* ── NAV ── */
-    nav {
-      border-bottom: 1px solid var(--border);
-      padding: .75rem 2rem;
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-      position: sticky;
-      top: 0;
-      background: var(--bg);
-      z-index: 100;
-    }
-    .nav-logo { color: var(--green); font-size: 1.1rem; font-weight: bold; text-decoration: none; }
-    .nav-logo span { color: var(--text); }
-    nav ul { list-style: none; display: flex; gap: 1.4rem; margin-left: auto; flex-wrap: wrap; }
-    nav a { color: var(--muted); text-decoration: none; font-size: .85rem; transition: color .2s; }
-    nav a:hover { color: var(--green); }
-
-    /* ── HERO ── */
-    .hero { text-align: center; padding: 4rem 2rem 2.5rem; border-bottom: 1px solid var(--border); }
-    .hero-prompt { color: var(--green); font-size: .85rem; margin-bottom: 1rem; }
-    .hero h1 { font-size: 2.6rem; margin-bottom: 1rem; line-height: 1.2; }
-    .hero h1 em { font-style: normal; color: var(--green); }
-    .hero p { color: var(--muted); max-width: 620px; margin: 0 auto 2rem; }
-    .btn {
-      display: inline-block; padding: .6rem 1.4rem;
-      border: 1px solid var(--green); color: var(--green);
-      text-decoration: none; font-family: var(--font); font-size: .9rem;
-      cursor: pointer; background: transparent; transition: background .2s, color .2s;
-    }
-    .btn:hover { background: var(--green); color: var(--bg); }
-    .btn-fill { background: var(--green); color: var(--bg); }
-    .btn-fill:hover { background: var(--green2); }
-    .btn[disabled] { opacity: .55; cursor: not-allowed; }
-    .btn[disabled]:hover { background: transparent; color: var(--green); }
-
-    /* ── SECTIONS ── */
-    section { padding: 3.5rem 2rem; max-width: 1100px; margin: 0 auto; }
-    .section-title { color: var(--green); font-size: .8rem; text-transform: uppercase; letter-spacing: .15em; margin-bottom: .5rem; }
-    h2 { font-size: 1.7rem; margin-bottom: 1.5rem; }
-    .lead { color: var(--muted); margin-bottom: 1.75rem; max-width: 760px; }
-    hr.sep { border: none; border-top: 1px solid var(--border); margin: 0; }
-
-    /* ── PLANS ── */
-    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
-    .plan-card { border: 1px solid var(--border); background: var(--bg2); padding: 2rem; position: relative; }
-    .plan-card.featured { border-color: var(--green); }
-    .plan-badge {
-      position: absolute; top: -1px; right: 1.5rem;
-      background: var(--green); color: var(--bg);
-      font-size: .7rem; padding: .2rem .6rem;
-      text-transform: uppercase; letter-spacing: .1em;
-    }
-    .plan-name { font-size: 1.2rem; margin-bottom: .3rem; }
-    .plan-price { font-size: 2.2rem; color: var(--green); margin: .8rem 0 .2rem; }
-    .plan-price sup { font-size: 1rem; vertical-align: super; }
-    .plan-price sub { font-size: .85rem; color: var(--muted); }
-    .plan-period { color: var(--muted); font-size: .85rem; margin-bottom: 1.2rem; }
-    .plan-features { list-style: none; }
-    .plan-features li {
-      padding: .35rem 0; border-top: 1px solid var(--border);
-      font-size: .88rem; display: flex; align-items: flex-start; gap: .5rem;
-    }
-    .plan-features li:first-child { border-top: none; }
-    .feat-yes { color: var(--green); }
-    .feat-no  { color: var(--muted); }
-    .plan-cta { margin-top: 1.4rem; width: 100%; text-align: center; display: block; }
-    .plan-note { color: var(--muted); font-size: .78rem; margin-top: .7rem; }
-
-    /* ── SLOT PICKER ── */
-    .slots { margin: .4rem 0 0; }
-    .slots-label { color: var(--muted); font-size: .8rem; margin-bottom: .35rem; }
-    .slot-buttons { display: flex; gap: .5rem; flex-wrap: wrap; }
-    .slot-btn {
-      border: 1px solid var(--border); background: transparent; color: var(--muted);
-      font-family: var(--font); font-size: .82rem; padding: .3rem .7rem; cursor: pointer;
-    }
-    .slot-btn.active { border-color: var(--green); color: var(--green); }
-    .slot-hint { color: var(--muted); font-size: .75rem; margin-top: .35rem; }
-
-    /* ── MATRIX ── */
-    .feat-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-    .feat-table th, .feat-table td { padding: .7rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
-    .feat-table th { color: var(--green); font-weight: normal; }
-    .feat-table td:not(:first-child) { text-align: center; }
-    .feat-table tr:hover td { background: var(--bg2); }
-    .check { color: var(--green); }
-    .cross { color: var(--muted); }
-    .matrix-note { color: var(--muted); font-size: .8rem; margin-top: .9rem; }
-
-    /* ── PAYMENT ── */
-    .pay-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1.2rem; }
-    .pay-card { border: 1px solid var(--border); background: var(--bg2); padding: 1.2rem; }
-    .pay-card h3 { color: var(--green); font-size: .95rem; margin-bottom: .4rem; }
-    .pay-card p { color: var(--muted); font-size: .85rem; }
-
-    /* ── STEPS ── */
-    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
-    .step { border-left: 2px solid var(--green); padding-left: 1rem; }
-    .step-num { color: var(--green); font-size: .8rem; margin-bottom: .3rem; }
-    .step h3 { margin-bottom: .4rem; font-size: 1rem; }
-    .step p { color: var(--muted); font-size: .85rem; }
-    pre.code-block {
-      background: var(--bg3); border: 1px solid var(--border);
-      padding: 1rem 1.2rem; overflow-x: auto;
-      font-size: .85rem; color: var(--green); margin-top: 1rem;
-    }
-
-    /* ── FAQ ── */
-    .faq-item { border-top: 1px solid var(--border); padding: 1rem 0; }
-    .faq-q { cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-    .faq-q h3 { font-size: .95rem; font-weight: normal; }
-    .faq-toggle { color: var(--green); font-size: 1.2rem; transition: transform .2s; }
-    .faq-a { color: var(--muted); font-size: .9rem; max-height: 0; overflow: hidden; transition: max-height .3s ease; }
-    .faq-item.open .faq-a { max-height: 420px; padding-top: .5rem; }
-    .faq-item.open .faq-toggle { transform: rotate(45deg); }
-
-    /* ── MODAL (buy placeholder) ── */
-    .modal-backdrop {
-      position: fixed; inset: 0; background: rgba(0,0,0,.72);
-      display: none; align-items: center; justify-content: center; z-index: 200; padding: 1rem;
-    }
-    .modal-backdrop.open { display: flex; }
-    .modal {
-      background: var(--bg2); border: 1px solid var(--green);
-      max-width: 520px; width: 100%; padding: 1.8rem;
-    }
-    .modal h3 { color: var(--green); margin-bottom: .8rem; font-size: 1.1rem; }
-    .modal p { color: var(--muted); font-size: .9rem; margin-bottom: .8rem; }
-    .modal .row { display: flex; gap: .6rem; margin-top: 1.2rem; flex-wrap: wrap; }
-    .modal input {
-      flex: 1 1 220px; background: var(--bg3); border: 1px solid var(--border);
-      color: var(--text); font-family: var(--font); font-size: .9rem; padding: .5rem .7rem;
-    }
-    .modal .hint { color: var(--muted); font-size: .75rem; margin-top: .5rem; }
-
-    /* ── FOOTER ── */
-    footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--muted); font-size: .8rem; }
-    footer a { color: var(--muted); text-decoration: none; }
-    footer a:hover { color: var(--green); }
-    footer .legal { margin-top: .5rem; }
-
-    @media (max-width: 640px) {
-      .hero h1 { font-size: 1.9rem; }
-      nav ul { display: none; }
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pentool — pricing and PRO licence</title>
+<meta name="description" content="Free Pentool core and the PRO licence: vulnerability scanner, reconnaissance, local AI and reports. One key with the number of machines you choose." />
+<link rel="canonical" href="https://pentool.pro/pricing.html" />
+<link rel="alternate" hreflang="ru" href="https://pentool.pro/ru/pricing.html" /><link rel="alternate" hreflang="en" href="https://pentool.pro/pricing.html" /><link rel="alternate" hreflang="zh" href="https://pentool.pro/zh/pricing.html" /><link rel="alternate" hreflang="hi" href="https://pentool.pro/hi/pricing.html" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Pentool" />
+<meta property="og:title" content="Pentool — pricing and PRO licence" />
+<meta property="og:description" content="Free Pentool core and the PRO licence: vulnerability scanner, reconnaissance, local AI and reports. One key with the number of machines you choose." />
+<meta property="og:url" content="https://pentool.pro/pricing.html" />
+<meta property="og:image" content="https://pentool.pro/icons/mark-14-radar-terminal-compact.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#0a0e14" />
+<link rel="icon" href="/icons/mark-14-radar-terminal-compact.png" />
+<link rel="apple-touch-icon" href="/icons/mark-14-radar-terminal-compact.png" />
+<link rel="stylesheet" href="/assets/site.css" />
 </head>
-<body>
-
-<nav>
-  <a class="nav-logo" href="/">PENTO<span>OL</span></a>
-  <ul>
-    <li><a href="/">Home</a></li>
-    <li><a href="#pricing">Pricing</a></li>
-    <li><a href="#features">What's in PRO</a></li>
-    <li><a href="#payment">Payment</a></li>
-    <li><a href="#howto">Activation</a></li>
-    <li><a href="#faq">FAQ</a></li>
-    <li><a href="pricing.ru.html" hreflang="ru">RU</a></li>
-    <li><a href="https://github.com/DrXOps/pentool" target="_blank">GitHub</a></li>
-  </ul>
-</nav>
-
-<div class="hero">
-  <div class="hero-prompt">$ pentool license activate PTOOL-XXXX-XXXX-XXXX</div>
-  <h1>Free core.<br/><em>PRO</em> adds the heavy artillery.</h1>
-  <p>The TUI toolkit (proxy, repeater, intruder, decoder, comparer, sequencer, spider) is free and
-     open source. PRO unlocks the vulnerability scanner, reconnaissance, AI analysis,
-     Smart Payloads and HTML reports.</p>
-  <a href="#pricing" class="btn btn-fill">See pricing</a>
-  &nbsp;
-  <a href="#features" class="btn">Compare Free &amp; PRO</a>
+<body data-page="pricing" data-lang="en" data-checkout="https://pentool-license.akashtanov2020.workers.dev/api/checkout"
+ data-price-first="29" data-price-extra="19"
+ data-msg-slots="Slots: {n}" data-msg-email="That address looks off — please check the e-mail."
+ data-msg-fail="Could not create the invoice. Write to support: support@pentool.pro" data-msg-waiting="Creating the invoice…">
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-head"><div class="wrap head-row">
+<a class="brand brand-normal" href="/"><img class="brand-mark" src="/icons/mark-14-radar-terminal-compact.png" width="40" height="40" alt="" /><span class="brand-word">Pentool</span></a>
+<nav class="nav-links" aria-label="Sections"><ul><li><a href="/#modules">Features</a></li><li><a href="/#install">Install</a></li><li><a class="is-active" href="/pricing.html">Pricing</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md" target="_blank" rel="noopener">Documentation</a></li></ul></nav>
+<div class="langs" role="group" aria-label="Language"><a class="lang" href="/ru/pricing.html" hreflang="ru" lang="ru" title="Русский">RU</a><a class="lang is-active" href="/pricing.html" hreflang="en" lang="en" title="English" aria-current="true">EN</a><a class="lang" href="/zh/pricing.html" hreflang="zh" lang="zh" title="中文">ZH</a><a class="lang" href="/hi/pricing.html" hreflang="hi" lang="hi" title="हिन्दी">HI</a></div>
+<a class="btn btn-quiet nav-cta" href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">GitHub</a>
+</div></header>
+<main id="main">
+<section class="page-intro"><div class="wrap"><p class="eyebrow">Pricing</p><h1 class="page-title">Free core. PRO adds the scanner, reconnaissance and reports</h1><p class="page-lead">The core is released under AGPL-3.0: no sign-up, no time limit. PRO is a separate annual key; you choose the number of machines when you buy.</p></div></section>
+<section class="section" id="plans"><div class="wrap"><div class="plans"><article class="plan"><h3 class="plan-name">Free</h3><div class="plan-price">$0<span class="plan-suffix"></span></div><div class="plan-period">forever, no sign-up</div><ul class="plan-features"><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Proxy: interception, history, WebSocket, Match &amp; Replace, scope</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Repeater with tabs and response comparison</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Intruder: four attack modes, up to 5 threads</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Utils: Decoder (19 operations), Comparer, Sequencer</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Spider, Target and the site map</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Plugins: screens, checks, CLI commands</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Headless scanning in CI</span></li><li class="plan-feature is-off"><span class="mark" aria-hidden="true">—</span><span>Vulnerability scanner</span></li><li class="plan-feature is-off"><span class="mark" aria-hidden="true">—</span><span>Reconnaissance (Recon)</span></li></ul><a class="btn btn-ghost plan-cta" href="/#install">Install free</a></article><article class="plan plan-featured"><div class="plan-badge">PRO</div><h3 class="plan-name">PRO</h3><div class="plan-price"><span id="plan-price">$29</span><span class="plan-suffix">/year</span></div><div class="plan-period" id="plan-period">1 slot · each extra +$19/year</div><div class="slot-picker" data-period-template="{n} slot · each extra +$19/year"><div class="slot-label">How many machines will you activate?</div><div class="slot-buttons" role="group" aria-label="How many machines will you activate?"><button type="button" class="slot-btn is-active" data-slots="1">1</button><button type="button" class="slot-btn" data-slots="3">3</button><button type="button" class="slot-btn" data-slots="5">5</button><button type="button" class="slot-btn" data-slots="10">10</button></div><p class="slot-hint">One slot is one machine. You can move the licence to another machine at any time.</p></div><ul class="plan-features"><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Everything in the free version</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span><strong>Scanner: 21 checks</strong> — active and passive</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span><strong>Reconnaissance:</strong> subdomains, endpoints, real IP behind a CDN</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Local AI: payloads, WAF bypass, finding analysis</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Reports in HTML, JSON, CSV plus a bulk Bug Bounty report</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Exports for HackerOne, Bugcrowd, DefectDojo</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Intruder Turbo: connection pool and up to 200 threads</span></li><li class="plan-feature"><span class="mark" aria-hidden="true">✓</span><span>Priority e-mail support</span></li></ul><button type="button" class="btn btn-primary plan-cta" data-buy="pro">Buy PRO</button><p class="plan-note">Payment in cryptocurrency via Coinso. The key goes to the e-mail you provide; if it does not arrive, write to support with the order number.</p></article></div>
+<aside class="callout">Prices are shown in US dollars; the provider issues the invoice in rubles at its own rate.</aside></div></section>
+<section class="section" id="compare"><div class="wrap"><header class="section-head"><p class="eyebrow">Comparison</p><h2 class="section-title">What the key unlocks</h2></header><div class="table-wrap"><table class="compare"><thead><tr><th>Capability</th><th>Free</th><th>PRO</th></tr></thead><tbody><tr><td>Proxy: interception, history, WebSocket</td><td>✓</td><td>✓</td></tr><tr><td>Repeater: tabs, replay, comparison</td><td>✓</td><td>✓</td></tr><tr><td>Intruder: Sniper, Battering Ram, Pitchfork, Cluster Bomb</td><td>✓</td><td>✓</td></tr><tr><td>Intruder Turbo: connection pool, up to 200 threads</td><td>—</td><td>✓</td></tr><tr><td>Utils: Decoder, Comparer, Sequencer</td><td>✓</td><td>✓</td></tr><tr><td>Spider, Target, scope, Match &amp; Replace</td><td>✓</td><td>✓</td></tr><tr><td>Vulnerability scanner: 21 checks, active and passive</td><td>—</td><td>✓</td></tr><tr><td>Reconnaissance: subdomains, endpoints, real IP, fuzzing</td><td>—</td><td>✓</td></tr><tr><td>Local AI: payload generation, WAF bypass, analysis</td><td>—</td><td>✓</td></tr><tr><td>Reports and exports: HTML, JSON, CSV, HackerOne, Bugcrowd, DefectDojo</td><td>—</td><td>✓</td></tr><tr><td>Headless scanning in CI/CD</td><td>✓</td><td>✓</td></tr></tbody></table></div></div></section>
+<section class="section" id="payment"><div class="wrap"><header class="section-head"><p class="eyebrow">Payment</p><h2 class="section-title">How buying works</h2><p class="section-lead">You choose the number of machines and leave an e-mail. Then the Coinso payment page opens — cryptocurrency only, no cards or bank transfers.</p></header><div class="steps"><div class="step"><div class="step-num">01</div><h3 class="step-title">Pick the slots</h3><p class="step-text">One slot is one machine. The price updates right away: $29 a year for the first slot, +$19 for each extra one.</p></div><div class="step"><div class="step-num">02</div><h3 class="step-title">Leave an e-mail</h3><p class="step-text">The key goes to that address. It also names the licence for support, which makes orders easy to find.</p></div><div class="step"><div class="step-num">03</div><h3 class="step-title">Pay in cryptocurrency</h3><p class="step-text">Coinso issues an invoice with the exact amount and network. The key is generated automatically after payment.</p></div><div class="step"><div class="step-num">04</div><h3 class="step-title">Activate the key</h3><p class="step-text">Settings → License → Activate. The first activation takes a slot and binds it to that machine.</p></div></div>
+<aside class="callout">No key within half an hour? Write to <a href="mailto:support@pentool.pro">support@pentool.pro</a> with the order number and e-mail — we will issue it by hand.</aside></div></section>
+<section class="section" id="activation"><div class="wrap"><header class="section-head"><p class="eyebrow">Licence</p><h2 class="section-title">Slots, moving machines and offline work</h2></header><ul class="prose-list"><li><strong>Slots.</strong> The number of machines is fixed at purchase. Activating on a new machine takes a free slot; deactivating frees it.</li><li><strong>Moving.</strong> Deactivate the key on the old machine, or ask support to move the binding.</li><li><strong>Offline.</strong> The key is validated at startup and cached. Without a network, PRO keeps working for up to 7 days.</li><li><strong>Expiry.</strong> PRO modules stop opening, the free part keeps working. The key and its slots stay for renewal.</li></ul></div></section>
+<section class="section" id="faq"><div class="wrap"><header class="section-head"><p class="eyebrow">Questions</p><h2 class="section-title">The short answers</h2></header><div class="faq-list"><details class="faq"><summary>Do I need an account for the free version?<span class="faq-mark" aria-hidden="true"></span></summary><div class="faq-body">No. <code>uv tool install pentool</code> and you are working. No e-mail, no account, no expiry.</div></details><details class="faq"><summary>What does a PRO key unlock?<span class="faq-mark" aria-hidden="true"></span></summary><div class="faq-body">The vulnerability scanner, reconnaissance, the local AI, reports with exports and Intruder Turbo. The table above is the complete list.</div></details><details class="faq"><summary>Can I try PRO before buying?<span class="faq-mark" aria-hidden="true"></span></summary><div class="faq-body">Write to support — we will set up a 14-day trial by hand.</div></details><details class="faq"><summary>How many machines can I activate?<span class="faq-mark" aria-hidden="true"></span></summary><div class="faq-body">As many as you bought slots. One slot is one machine; when you move, the slot is released on the old one.</div></details><details class="faq"><summary>What happens after a year?<span class="faq-mark" aria-hidden="true"></span></summary><div class="faq-body">PRO modules close, everything else keeps working. The key and slots stay — renewal brings the access back.</div></details><details class="faq"><summary>Does Pentool send data to a server?<span class="faq-mark" aria-hidden="true"></span></summary><div class="faq-body">Only service data: the licence check at startup (the key and a hashed machine id), a one-time install ping and crash reports. Traffic, findings and projects stay on your machine; the AI runs locally. Crash reports can be switched off in the settings.</div></details><details class="faq"><summary>What is the refund policy?<span class="faq-mark" aria-hidden="true"></span></summary><div class="faq-body">Full refund within 14 days of purchase — write to <a href="mailto:support@pentool.pro">support@pentool.pro</a> from the purchase e-mail with the key. The key is disabled and its slots released.</div></details><details class="faq"><summary>Is there a team plan?<span class="faq-mark" aria-hidden="true"></span></summary><div class="faq-body">There is no separate plan. If you need several machines, buy a key with the number of slots you need.</div></details></div></div></section>
+</main>
+<footer class="site-foot"><div class="wrap foot-grid"><div class="foot-brand"><a class="brand brand-small" href="/"><img class="brand-mark" src="/icons/mark-14-radar-terminal-compact.png" width="32" height="32" alt="" /><span class="brand-word">Pentool</span></a><p class="foot-blurb">Pentesting in the terminal: interception, attacks, scanner and reports in one project. Open-source core.</p></div><div class="foot-col"><h2 class="foot-title">Product</h2><ul><li><a href="/#features">Features</a></li><li><a href="/#modules">Modules</a></li><li><a href="/#install">Install</a></li><li><a href="/pricing.html">Pricing and PRO</a></li></ul></div><div class="foot-col"><h2 class="foot-title">Documentation</h2><ul><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/QUICKSTART.md" target="_blank" rel="noopener">Quick start</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/i18n/en/USER_GUIDE.md" target="_blank" rel="noopener">User guide</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/CI_CD.md" target="_blank" rel="noopener">Scanning in CI</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/docs/API_CONTRACTS.md" target="_blank" rel="noopener">Plugin API</a></li><li><a href="https://github.com/DrXOps/pentool" target="_blank" rel="noopener">Source code</a></li></ul></div><div class="foot-col"><h2 class="foot-title">Contact</h2><ul><li><a href="mailto:support@pentool.pro">Support</a></li><li><a href="https://t.me/pentool_pro" target="_blank" rel="noopener">Telegram channel</a></li><li><a href="https://t.me/sudores" target="_blank" rel="noopener">Author</a></li><li><a href="https://github.com/DrXOps/pentool/issues" target="_blank" rel="noopener">Report a bug</a></li></ul></div><div class="foot-col"><h2 class="foot-title">Legal</h2><ul><li><a href="/terms.html">Terms of Service</a></li><li><a href="/privacy.html">Privacy Policy</a></li><li><a href="https://github.com/DrXOps/pentool/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0 licence</a></li><li><a href="https://license.pentool.pro/" target="_blank" rel="noopener">Licence portal</a></li></ul></div></div><div class="wrap foot-bottom"><p>© 2024–2026 Anatoly Kashtanov (DoctorX). Pentool is an independent project.</p><p>This site is static HTML — no analytics, no trackers.</p></div></footer>
+<dialog class="modal" id="buy-modal" aria-labelledby="buy-title">
+<form method="dialog" class="modal-close-form"><button class="modal-close" aria-label="Close">×</button></form>
+<h2 class="modal-title" id="buy-title">Buy Pentool PRO</h2>
+<p class="modal-text">Leave your e-mail — the key goes there. Next comes the Coinso payment page; payment is made in cryptocurrency.</p>
+<p class="modal-summary"><span id="buy-slots">Slots: 1</span>
+· <span id="buy-price">$29</span></p>
+<label class="field"><span class="field-label">E-mail for the key</span>
+<input type="email" id="buy-email" name="email" required placeholder="you@example.com" autocomplete="email" /></label>
+<p class="modal-hint" id="buy-hint">If the letter does not arrive, write to support with your order number.</p>
+<div class="modal-actions">
+<button type="button" class="btn btn-primary" id="buy-confirm">Continue to payment</button>
+<button type="button" class="btn btn-ghost" id="buy-cancel">Close</button>
 </div>
-
-<hr class="sep" />
-
-<!-- PLANS -->
-<section id="pricing">
-  <div class="section-title">// plans</div>
-  <h2>One key, one or several machines</h2>
-  <p class="lead">A key activates on a fixed number of machines ("slots"). Pick the number of slots you
-     need — a desktop, a laptop and a work machine are three slots. Annual licence, renews at the same price.</p>
-
-  <div class="plans">
-    <div class="plan-card">
-      <div class="plan-name">Free</div>
-      <div class="plan-price"><sup>$</sup>0</div>
-      <div class="plan-period">open source · AGPL-3.0 · forever</div>
-      <ul class="plan-features">
-        <li><span class="feat-yes">✓</span> HTTP/HTTPS proxy with history (SQLite)</li>
-        <li><span class="feat-yes">✓</span> Repeater with diff and search</li>
-        <li><span class="feat-yes">✓</span> Intruder — all 4 attack modes</li>
-        <li><span class="feat-yes">✓</span> Decoder (19 operations), Comparer</li>
-        <li><span class="feat-yes">✓</span> Sequencer (token entropy)</li>
-        <li><span class="feat-yes">✓</span> Spider crawler, Target &amp; Scope</li>
-        <li><span class="feat-yes">✓</span> Match &amp; Replace, extensions</li>
-        <li><span class="feat-no">✗</span> Vulnerability scanner</li>
-        <li><span class="feat-no">✗</span> Reconnaissance module</li>
-      </ul>
-      <a href="https://github.com/DrXOps/pentool#installation" class="btn plan-cta" target="_blank">Install free →</a>
-    </div>
-
-    <div class="plan-card featured">
-      <div class="plan-badge">PRO</div>
-      <div class="plan-name">PRO</div>
-      <div class="plan-price"><sup>$</sup><span id="price-total">29</span><sub>/yr</sub></div>
-      <div class="plan-period" id="price-period">1 slot · annual billing</div>
-
-      <div class="slots">
-        <div class="slots-label">Activation slots:</div>
-        <div class="slot-buttons" id="slot-buttons">
-          <button class="slot-btn active" data-slots="1">1</button>
-          <button class="slot-btn" data-slots="3">3</button>
-          <button class="slot-btn" data-slots="5">5</button>
-          <button class="slot-btn" data-slots="10">10</button>
-        </div>
-        <div class="slot-hint">Each slot binds one machine. Move to a new machine anytime.</div>
-      </div>
-
-      <ul class="plan-features">
-        <li><span class="feat-yes">✓</span> Everything in Free</li>
-        <li><span class="feat-yes">✓</span> <strong>Scanner — 21 checks</strong> (SQLi, XSS, SSTI, LFI, RCE, SSRF, XXE, CORS, JWT, OAuth, NoSQL, GraphQL, prototype pollution, path traversal, open redirect, header injection, broken auth, sensitive data, missing headers, info leak, DOM XSS)</li>
-        <li><span class="feat-yes">✓</span> <strong>Recon</strong> — subdomains, endpoints, real IP behind CDN, parameter fuzzing</li>
-        <li><span class="feat-yes">✓</span> AI analysis of findings</li>
-        <li><span class="feat-yes">✓</span> Smart Payloads (SQLi, XSS, SSTI…) + PRO payload sets</li>
-        <li><span class="feat-yes">✓</span> <strong>HTML reports</strong> — single finding and bulk (Bug Bounty template)</li>
-        <li><span class="feat-yes">✓</span> Passive scan mode</li>
-        <li><span class="feat-yes">✓</span> Turbo Intruder (connection pooling)</li>
-        <li><span class="feat-yes">✓</span> Priority email support</li>
-      </ul>
-      <button class="btn btn-fill plan-cta" id="buy-pro">Buy PRO →</button>
-      <div class="plan-note">Crypto, SBP (Russian instant payments) and cards via CryptoProc.
-        Key is sent to the e-mail you provide.</div>
-    </div>
-  </div>
-</section>
-
-<hr class="sep" />
-
-<!-- FEATURE MATRIX -->
-<section id="features">
-  <div class="section-title">// what's in PRO</div>
-  <h2>Free vs PRO — exactly what the code does</h2>
-
-  <table class="feat-table">
-    <thead>
-      <tr><th>Capability</th><th>Free</th><th>PRO</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>HTTP/HTTPS Proxy + history, interception, WebSocket</td><td class="check">✓</td><td class="check">✓</td></tr>
-      <tr><td>Repeater (replay, diff against last send, search)</td><td class="check">✓</td><td class="check">✓</td></tr>
-      <tr><td>Intruder: Sniper, Battering Ram, Pitchfork, Cluster Bomb</td><td class="check">✓</td><td class="check">✓</td></tr>
-      <tr><td>Intruder Turbo mode (keep-alive connection pool)</td><td class="cross">—</td><td class="check">✓</td></tr>
-      <tr><td>Decoder (19 operations, chains)</td><td class="check">✓</td><td class="check">✓</td></tr>
-      <tr><td>Comparer, Sequencer, Spider, Target/Scope, Match &amp; Replace</td><td class="check">✓</td><td class="check">✓</td></tr>
-      <tr><td>Vulnerability scanner — 21 checks</td><td class="cross">—</td><td class="check">✓</td></tr>
-      <tr><td>Passive scan of proxied traffic</td><td class="cross">—</td><td class="check">✓</td></tr>
-      <tr><td>Reconnaissance: subdomains, endpoints, real IP, param fuzz</td><td class="cross">—</td><td class="check">✓</td></tr>
-      <tr><td>AI analysis of findings</td><td class="cross">—</td><td class="check">✓</td></tr>
-      <tr><td>Smart Payloads and PRO payload sets</td><td class="cross">—</td><td class="check">✓</td></tr>
-      <tr><td>HTML reports (single finding, bulk Bug Bounty)</td><td class="cross">—</td><td class="check">✓</td></tr>
-    </tbody>
-  </table>
-  <p class="matrix-note">No "team" plan exists — one standalone PRO licence with a chosen number of slots.
-     PDF export is not available yet; reports are HTML. Everything listed above is present in the shipped code.</p>
-</section>
-
-<hr class="sep" />
-
-<!-- PAYMENT -->
-<section id="payment">
-  <div class="section-title">// payment</div>
-  <h2>How buying works</h2>
-  <p class="lead">Payments are handled by <strong>CryptoProc</strong>. You choose the number of slots,
-     leave the e-mail that should receive the key, and the key arrives by e-mail within minutes.
-     The e-mail is also the key's name in our system, so renewals and support requests are easy to match.</p>
-
-  <div class="pay-grid">
-    <div class="pay-card">
-      <h3>₿ Crypto</h3>
-      <p>BTC, ETH, USDT and other major coins. The invoice shows the exact amount and the network.</p>
-    </div>
-    <div class="pay-card">
-      <h3>⚡ SBP</h3>
-      <p>Russian instant bank transfers (Система быстрых платежей) — pay from a banking app by QR.</p>
-    </div>
-    <div class="pay-card">
-      <h3>💳 Cards</h3>
-      <p>Visa / Mastercard where the provider supports card acquiring for your region.</p>
-    </div>
-    <div class="pay-card">
-      <h3>✉ Key delivery</h3>
-      <p>The key goes to the e-mail you enter at checkout, in the form
-         <code>PTOOL-XXXX-XXXX-XXXX</code>. Keep it — it is the licence.</p>
-    </div>
-  </div>
-</section>
-
-<hr class="sep" />
-
-<!-- ACTIVATION -->
-<section id="howto">
-  <div class="section-title">// activation</div>
-  <h2>After the key arrives</h2>
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">01 / activate</div>
-      <h3>Enter the key</h3>
-      <p>Open Pentool → <strong>Settings → License</strong>, paste the key, press Activate.
-         The first activation occupies one slot and binds it to this machine.</p>
-    </div>
-    <div class="step">
-      <div class="step-num">02 / more machines</div>
-      <h3>Use your slots</h3>
-      <p>Activate the same key on another machine — it takes the next free slot. When all slots are
-         used, further machines are refused with the count shown.</p>
-    </div>
-    <div class="step">
-      <div class="step-num">03 / offline</div>
-      <h3>Works without network</h3>
-      <p>The licence is validated online at startup and cached. Without network Pentool keeps working
-         with PRO features for the grace period, then asks to reconnect.</p>
-    </div>
-    <div class="step">
-      <div class="step-num">04 / transfer</div>
-      <h3>Moving to a new machine?</h3>
-      <p>Deactivate on the old machine (frees the slot), or ask support to reassign it — the old binding
-         is released and the new machine takes its place.</p>
-    </div>
-  </div>
-
-  <pre class="code-block"># activate from the command line (same as Settings → License)
-$ pentool license activate PTOOL-XXXX-XXXX-XXXX
-
-# 14-day trial, no card required
-$ pentool license trial
-
-# release this machine's slot
-$ pentool license deactivate</pre>
-</section>
-
-<hr class="sep" />
-
-<!-- FAQ -->
-<section id="faq">
-  <div class="section-title">// faq</div>
-  <h2>Frequently asked questions</h2>
-
-  <div class="faq-item">
-    <div class="faq-q"><h3>Does the free version have usage restrictions?</h3><span class="faq-toggle">+</span></div>
-    <div class="faq-a">No. The free core is open source under AGPL-3.0: you may use it commercially, modify it and
-      redistribute it under the same licence. PRO is an optional add-on — the tool works without it.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q"><h3>What exactly does PRO unlock?</h3><span class="faq-toggle">+</span></div>
-    <div class="faq-a">Vulnerability scanner (21 checks, active + passive), Reconnaissance (subdomains,
-      endpoints, real IP behind CDN, parameter fuzzing), AI analysis of findings, Smart Payloads and PRO
-      payload sets, HTML reports, Turbo Intruder. The table above is the complete list.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q"><h3>Is there a Team plan?</h3><span class="faq-toggle">+</span></div>
-    <div class="faq-a">There is no separate Team plan. If several people need the tool, buy a PRO key with
-      enough slots: each slot is one machine, and any number of people can use those machines.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q"><h3>How do slots work?</h3><span class="faq-toggle">+</span></div>
-    <div class="faq-a">A key has a fixed number of slots (chosen at purchase). Each machine you activate on
-      occupies one slot. Deactivating on a machine frees its slot for another machine.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q"><h3>What happens when the licence expires?</h3><span class="faq-toggle">+</span></div>
-    <div class="faq-a">PRO features stop working; the free part of the tool keeps running. You get a warning
-      before expiry and can renew — the key and its slots stay the same.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q"><h3>Does Pentool phone home constantly?</h3><span class="faq-toggle">+</span></div>
-    <div class="faq-a">No. The licence is validated at startup and cached; the only identifiers sent are the
-      key and a hashed machine id. Crash reports are opt-out and contain a traceback, version and OS —
-      never your traffic. Details in the privacy policy.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q"><h3>Refund policy?</h3><span class="faq-toggle">+</span></div>
-    <div class="faq-a">Full refund within 14 days of purchase, no questions asked — write to
-      support@pentool.pro with the key. Refund frees the slots and disables the key.</div>
-  </div>
-
-  <div class="faq-item">
-    <div class="faq-q"><h3>Is there a trial for PRO?</h3><span class="faq-toggle">+</span></div>
-    <div class="faq-a">Yes — run <code>pentool license trial</code> for a 14-day trial, no card required.</div>
-  </div>
-</section>
-
-<!-- BUY PLACEHOLDER MODAL -->
-<div class="modal-backdrop" id="buy-modal">
-  <div class="modal">
-    <h3>Checkout is being connected</h3>
-    <p>Payments (crypto, SBP, cards) are being wired up through CryptoProc. Leave your e-mail —
-       we'll write to you the moment the checkout is live.</p>
-    <div class="row">
-      <input type="email" id="notify-email" placeholder="you@example.com" />
-      <button class="btn btn-fill" id="notify-send">Pay with Coinso →</button>
-    </div>
-    <p class="hint">Payments via Coinso: crypto, SBP, cards. The key arrives by e-mail within minutes of payment.</p>
-    <div class="row">
-      <a class="btn" href="mailto:support@pentool.pro?subject=Pentool%20PRO%20purchase">Buy now by e-mail</a>
-      <button class="btn" id="modal-close">Close</button>
-    </div>
-  </div>
-</div>
-
-<footer>
-  <p>
-    © 2024–2026 Anatoly Kashtanov (DoctorX) · Pentool ·
-    <a href="https://github.com/DrXOps/pentool">GitHub</a> ·
-    <a href="mailto:support@pentool.pro">support@pentool.pro</a>
-  </p>
-  <p class="legal">
-    <a href="terms.html">Terms of Service</a> ·
-    <a href="privacy.html">Privacy Policy</a> ·
-    <a href="https://license.pentool.pro/">Licence portal</a>
-  </p>
-</footer>
-
-<script>
-  // ── Prices live in exactly one place: change these two numbers to re-price.
-  const PRICE_FIRST_SLOT = 29;   // USD per year for the first slot
-  const PRICE_EXTRA_SLOT = 19;   // USD per year for each additional slot
-
-  const slotButtons = document.querySelectorAll('.slot-btn');
-  const priceTotal = document.getElementById('price-total');
-  const pricePeriod = document.getElementById('price-period');
-
-  function renderPrice(slots) {
-    priceTotal.textContent = PRICE_FIRST_SLOT + PRICE_EXTRA_SLOT * (slots - 1);
-    pricePeriod.textContent = `${slots} slot${slots > 1 ? 's' : ''} · annual billing`;
-  }
-
-  slotButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      slotButtons.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderPrice(Number(btn.dataset.slots));
-    });
-  });
-
-  // ── Buy placeholder: the real checkout opens here once CryptoProc is connected.
-  const modal = document.getElementById('buy-modal');
-  document.getElementById('buy-pro')?.addEventListener('click', () => modal.classList.add('open'));
-  document.getElementById('modal-close')?.addEventListener('click', () => modal.classList.remove('open'));
-  modal?.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
-
-  // ── Checkout: the worker creates a Coinso invoice and we hand the buyer over to it.
-  const CHECKOUT_API = "https://pentool-license.akashtanov2020.workers.dev/api/checkout";
-
-  async function startCheckout() {
-    const emailInput = document.getElementById('notify-email');
-    const email = (emailInput?.value || '').trim();
-    const slots = Number(document.querySelector('.slot-btn.active')?.dataset.slots || 1);
-    const button = document.getElementById('notify-send');
-    const original = button ? button.textContent : '';
-
-    if (!email || !email.includes('@')) {
-      emailInput?.focus();
-      emailInput?.classList.add('invalid');
-      return;
-    }
-    if (button) { button.disabled = true; button.textContent = 'Creating invoice…'; }
-    try {
-      const response = await fetch(CHECKOUT_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, slots }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.payment_url) throw new Error(data.error || 'checkout failed');
-      window.location.href = data.payment_url;
-    } catch (error) {
-      if (button) { button.disabled = false; button.textContent = original || 'Pay'; }
-      const hint = document.querySelector('.modal .hint');
-      if (hint) hint.textContent = 'Could not start the payment: ' + error.message + '. Write to support@pentool.pro.';
-    }
-  }
-
-  document.getElementById('notify-send')?.addEventListener('click', startCheckout);
-
-
-  // ── FAQ accordion
-  document.querySelectorAll('.faq-q').forEach(q => {
-    q.addEventListener('click', () => {
-      const item = q.closest('.faq-item');
-      const isOpen = item.classList.contains('open');
-      document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
-      if (!isOpen) item.classList.add('open');
-    });
-  });
-
-  // ── Smooth scroll for in-page links
-  document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', e => {
-      const target = document.querySelector(a.getAttribute('href'));
-      if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-    });
-  });
-</script>
+</dialog>
+<script src="/assets/site.js" defer></script>
 </body>
 </html>
