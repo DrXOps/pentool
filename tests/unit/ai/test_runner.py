@@ -19,6 +19,12 @@ import pytest
 
 AI_DIR = Path(__file__).resolve().parents[3] / "ai"
 
+# `ai/` is local agent tooling and is deliberately not part of the repository
+# (.gitignore), so CI has no runner.py to import. Without this guard the whole
+# module fails at collection and the job goes red on a missing local file.
+if not (AI_DIR / "runner.py").is_file():
+    pytest.skip("ai/ is local tooling, not part of the repository", allow_module_level=True)
+
 
 def _load_runner():
     spec = importlib.util.spec_from_file_location("ai_runner_under_test", AI_DIR / "runner.py")
