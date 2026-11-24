@@ -126,7 +126,14 @@ class TestLayoutPiecesSurviveTheTabPort:
         app = _App()
         async with app.run_test(size=(200, 60)) as pilot:
             _, tid, pane = await _mounted(pilot)
-            handles = list(pane.query(ResizeHandle))
+            # The pane mounts its children in a follow-up pass: on a slow runner the
+            # query ran before the handles existed (flaky in CI, always green locally).
+            handles = []
+            for _ in range(100):
+                handles = list(pane.query(ResizeHandle))
+                if len(handles) >= 3:
+                    break
+                await pilot.pause()
             assert len(handles) == 3, (
                 f"expected Positions|Payloads, top|results and request|response handles, got {len(handles)}"
             )
