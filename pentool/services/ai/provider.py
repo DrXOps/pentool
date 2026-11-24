@@ -30,7 +30,6 @@ _MCP_PENDING_REQUESTS: int = 0
 
 def is_mcp_busy() -> bool:
     """True if there are pending AI requests being processed."""
-    global _MCP_PENDING_REQUESTS
     return _MCP_PENDING_REQUESTS > 0
 
 

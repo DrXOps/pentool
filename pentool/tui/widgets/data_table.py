@@ -231,7 +231,9 @@ class ArrowBackendDataTable(DataTable):
             self.clear()
         self.refresh()
 
-    def _get_cell_renderable(self, row_index, column_index):  # noqa: ANN201
+    def _get_cell_renderable(  # noqa: ANN201
+        self, row_index: int, column_index: int, max_width: int | None = None
+    ) -> object:
         """Crash-guard: wraps column headers in Text().
 
         In textual_fastdatatable.DataTable._get_cell_renderable (line 1785)
@@ -243,7 +245,7 @@ class ArrowBackendDataTable(DataTable):
             if isinstance(label, str):
                 label = RichText(label)
             return label
-        return super()._get_cell_renderable(row_index, column_index)
+        return super()._get_cell_renderable(row_index, column_index, max_width)
 
     def _mouse_ready(self) -> bool:
         """Check: the table is mounted and has a non-zero size."""

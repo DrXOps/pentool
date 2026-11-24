@@ -8,7 +8,7 @@ Usage::
         confirm_text="Yes",
         cancel_text="No",
     )
-    result = await app.push_screen_widget(dialog)
+    result = await app.push_screen_wait(dialog)
     if result:
         # user confirmed
 """

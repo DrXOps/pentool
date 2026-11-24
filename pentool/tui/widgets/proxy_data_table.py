@@ -50,7 +50,9 @@ class ProxyDataTable(ArrowBackendDataTable):
 
     # ── Size formatting (int64 data → human-readable display) ────────────────
 
-    def _get_cell_renderable(self, row_index, column_index):  # noqa: ANN201
+    def _get_cell_renderable(  # noqa: ANN201
+        self, row_index: int, column_index: int, max_width: int | None = None
+    ) -> object:
         """Format Size (int64) into a human-readable form (KB/MB).
 
         All other columns keep the standard behaviour.
@@ -75,7 +77,7 @@ class ProxyDataTable(ArrowBackendDataTable):
             # then shown in bytes, unformatted, and cannot be eyeballed against
             # the neighbouring rows.
             logger.debug("proxy table: size cell not formatted: %s", exc)
-        return super()._get_cell_renderable(row_index, column_index)
+        return super()._get_cell_renderable(row_index, column_index, max_width)
 
     # ── on_event: context menu + comment icon ────────────────────────────
 

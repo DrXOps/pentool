@@ -58,7 +58,6 @@ _ACTIVE_BACKEND: "MCPBackend | None" = None
 
 def is_ai_running() -> bool:
     """True if an MCP backend was created and its subprocess is alive."""
-    global _ACTIVE_BACKEND
     b = _ACTIVE_BACKEND
     if b is None:
         return False

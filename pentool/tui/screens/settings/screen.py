@@ -887,7 +887,7 @@ class SettingsScreen(AppMixin, Widget):
                 # Offer to release the old binding
                 from pentool.tui.dialogs.confirm import ConfirmDialog
 
-                confirmed = await self.app.push_screen_widget(  # type: ignore[attr-defined]
+                confirmed = await self.app.push_screen_wait(  # type: ignore[attr-defined]
                     ConfirmDialog(
                         title="License already in use",
                         message=(
