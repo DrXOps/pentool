@@ -33,7 +33,6 @@ class ScannerUnavailableScreen(Widget):
             yield Static("🔒 Scanner is a PRO feature", markup=False)
             yield Static("")
             yield Static("Have a key? Open Settings → License, paste it and press Activate.")
-            yield Static("")
-            yield Static("No key yet? Ask support@pentool.pro for a 14-day trial key.")
+            yield Static("No key yet? Press «Start 14-day trial» on the same screen.")
             yield Static("")
             yield Static("The rest of Pentool keeps working without PRO.")

@@ -544,7 +544,10 @@ PAGES = {
                             },
                             {
                                 "q": "Can I try PRO before buying?",
-                                "a": "Write to support — we will set up a 14-day trial by hand.",
+                                "a": (
+                                    "Yes: Settings → License → «Start 14-day trial». One trial per "
+                                    "machine, no key and no card needed."
+                                ),
                             },
                             {
                                 "q": "How many machines can I activate?",
@@ -893,8 +896,9 @@ PAGES = {
                     {
                         "t": "p",
                         "text": (
-                            "A 14-day trial is arranged on request through support. It is granted once per "
-                            "person or organisation; repeated requests to avoid buying are not granted."
+                            "The 14-day trial is started inside the app: Settings → License → "
+                            "«Start 14-day trial». It is issued once per machine; a second attempt on "
+                            "the same machine is rejected by the licence server."
                         ),
                     }
                 ],

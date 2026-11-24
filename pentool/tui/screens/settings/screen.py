@@ -271,6 +271,11 @@ class SettingsScreen(AppMixin, Widget):
                     with Horizontal(classes="license-buttons-row"):
                         yield ToolbarButton("Activate", "btn-license-activate")
                         yield ToolbarButton("Deactivate", "btn-license-deactivate")
+                    with Horizontal(classes="license-buttons-row"):
+                        # The trial is issued by the licence server (one per machine) and
+                        # needs no key, so it gets its own button instead of a command
+                        # nobody has.
+                        yield ToolbarButton("Start 14-day trial", "btn-license-trial")
                     yield Static("", id="license-error", classes="license-error")
                     yield Static("─" * 40, classes="license-sep")
                     yield Static("Features:", classes="license-features-title")
@@ -463,6 +468,10 @@ class SettingsScreen(AppMixin, Widget):
     @on(ToolbarButton.Pressed, "#btn-license-deactivate")
     def on_btn_license_deactivate(self, _: ToolbarButton.Pressed) -> None:
         self._do_deactivate_license()
+
+    @on(ToolbarButton.Pressed, "#btn-license-trial")
+    def on_btn_license_trial(self, _: ToolbarButton.Pressed) -> None:
+        self._do_start_trial()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
@@ -936,4 +945,45 @@ class SettingsScreen(AppMixin, Widget):
             )
         except Exception as exc:
             err(exc, "Deactivation error", self)
+        self.call_after_refresh(self._refresh_license_ui)
+
+    def _do_start_trial(self) -> None:
+        """Ask the licence server for the 14-day trial (no key, one per machine)."""
+        self.run_worker(self._async_start_trial(), exclusive=True, name="license-trial")
+
+    async def _async_start_trial(self) -> None:
+        """Trial worker: the server issues a real PRO key with an expiry date."""
+        from pentool.core.license import get_session_license, refresh_session_license, start_trial
+
+        current = get_session_license()
+        if current.valid and current.plan != "free":
+            # One trial per machine is enforced server-side, but saying it before the
+            # request is cheaper than an error after it — and PRO is already on.
+            self.app.notify(  # type: ignore[attr-defined]
+                f"PRO is already active ({esc(current.plan.upper())}). Nothing to do.",
+                timeout=4,
+            )
+            return
+
+        self.app.notify("Starting the 14-day trial…", timeout=3)  # type: ignore[attr-defined]
+        try:
+            info = await start_trial()
+            refresh_session_license(info)
+            if info.valid:
+                self.app.notify(  # type: ignore[attr-defined]
+                    "✓ Trial started: PRO for 14 days\nRestart Pentool to load PRO modules (Scanner, Recon).",
+                    timeout=8,
+                )
+                # The tabs unlock only after a restart, but the lock state in this
+                # session should not contradict the licence that is now cached.
+                refresh_tab_locks = getattr(self.app, "_refresh_tab_locks", None)
+                if callable(refresh_tab_locks):
+                    refresh_tab_locks()
+            else:
+                self.err(Exception(info.error or "the trial was not issued"), "Trial failed")
+        except Exception as exc:
+            # `err()` reports to the user; the traceback goes to the log because a
+            # network or signature failure here is invisible otherwise.
+            logger.warning("license trial failed", exc_info=True)
+            err(exc, "Trial failed", self)
         self.call_after_refresh(self._refresh_license_ui)

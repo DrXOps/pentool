@@ -159,8 +159,8 @@ Full docs: **[pentool.pro](https://pentool.pro)**
 ## 🧪 Beta / Testing Mode
 
 > **Pentool is currently in public beta.**  
-> All **free modules are fully functional**. PRO features are actively being built — write to
-> [support@pentool.pro](mailto:support@pentool.pro) for a **14-day trial key**.
+> All **free modules are fully functional**. PRO features are actively being built — press
+> **Start 14-day trial** in *Settings → License* to evaluate them (one trial per machine).
 
 ### 🎙 For Bloggers & Content Creators
 

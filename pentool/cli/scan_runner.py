@@ -20,7 +20,7 @@ import click
 _SCANNER_UNAVAILABLE_MSG = (
     "Scanner is a PRO feature and isn't installed.\n"
     "Have a key? Open Pentool → Settings → License, paste it and press Activate.\n"
-    "No key yet? Ask support@pentool.pro for a 14-day trial key."
+    "No key yet? Start the 14-day trial on the same screen (it activates PRO)."
 )
 
 
