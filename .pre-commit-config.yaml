@@ -116,6 +116,29 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Факты проекта: «что сейчас правда» записано в tools/facts.yml, у каждого факта
+      # есть исполняемая проверка (tools/verify_facts.py). Гвард падает, если факт
+      # разошёлся с кодом, если внешний факт (сайт, CI, почта) устарел, или если
+      # docs/PROJECT_STATE.md не пересобран после правки фактов (`--render`).
+      # Зачем: в плановых документах годами лежали взаимоисключающие утверждения
+      # («оплата работает, кроме письма» против «ключи приходят письмом»), и понять,
+      # что правда, можно было только перечитав код.
+      - id: verify-facts
+        name: project facts match the code (tools/facts.yml)
+        entry: uv run python tools/verify_facts.py --check-render
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Планы: «сделано» подтверждается фактом, а не прозой. Проверяет MYPLANS/
+      # (локальный каталог; если его нет — пропускает). Правила — MYPLANS/README.md.
+      - id: check-plans
+        name: "планы: статусы подтверждены фактами"
+        entry: uv run python tools/check_plans.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       # guard-git-staging: в коммит попадают только файлы проекта.
       # Проверяет ИНДЕКС, а не команду — работает и для `git commit` из IDE,
       # и в CI (через --files-from). Логика и списки продублированы из

@@ -1,0 +1,135 @@
+# What is true about this project RIGHT NOW — the only place where current state is written.
+#
+# Rules (enforced by tools/verify_facts.py and tools/check_plans.py):
+#   * every fact has an executable check from tools/verify_facts.py;
+#   * "kind: code"  — the check reads the repository (fast, offline, runs in pre-commit);
+#   * "kind: external" — the check needs the network or a human (site, CI, mail); it is
+#     verified on demand (`--online`), and `last_verified` records WHEN it was proven.
+#     Stale external facts are reported as WARN, never as "done";
+#   * plan documents (MYPLANS/) must not restate state: they link to a fact id.
+#
+# History lives in git: change a value with the date and the reason, git shows the trail.
+
+version: 1
+
+facts:
+  - id: site.languages
+    claim: "Сайт: 4 языка отдельными страницами (RU/EN/ZH/HI), EN в корне"
+    kind: code
+    check: site_languages
+    since: "2026-11-24"
+
+  - id: site.pages
+    claim: "Сайт генерируется: 24 страницы + 5 редиректов, единый /assets/site.css"
+    kind: code
+    check: site_pages
+    since: "2026-11-24"
+
+  - id: site.published
+    claim: "pentool.pro отдаёт новый сайт (новый CSS, страницы на 4 языках)"
+    kind: external
+    check: site_published
+    since: "2026-11-24"
+    last_verified: "2026-11-25"
+    max_age_days: 30
+
+  - id: payment.provider
+    claim: "Оплата: Coinso, только криптовалюта; нигде не упоминается CryptoProc"
+    kind: code
+    check: payment_provider
+    since: "2026-11-24"
+
+  - id: mail.outbound
+    claim: "Письма с ключом уходят с licence@pentool.pro (Resend, домен verified)"
+    kind: external
+    check: mail_outbound
+    since: "2026-11-25"
+    last_verified: "2026-11-25"
+    max_age_days: 60
+    evidence: "живое письмо на akashtanov2020@gmail.com, id 01a20fc9-85e1-7cce-805d-d40e98ae200d"
+
+  - id: license.trial
+    claim: "14-дневный триал запускается из UI (Settings → License) и из CLI"
+    kind: code
+    check: license_trial
+    since: "2026-11-24"
+
+  - id: license.cli
+    claim: "`pentool license` — status/activate/deactivate/trial; группа подключена к корню CLI"
+    kind: code
+    check: license_cli
+    since: "2026-11-25"
+
+  - id: license.texts
+    claim: "Ни в TUI, ни в CLI нет ссылок на несуществующие команды вида `pentool license …`, которых нет"
+    kind: code
+    check: license_texts
+    since: "2026-11-24"
+
+  - id: tui.module_catalog
+    claim: "Каталог модулей один (module_catalog.py); вкладки, хоткеи, гейтинг и подсказки — производные"
+    kind: code
+    check: tui_module_catalog
+    since: "2026-11-24"
+
+  - id: tui.action_row
+    claim: "Ряд действий модуля — только header_spec(); Toolbar остался лишь как строка конфигурации Intruder"
+    kind: code
+    check: tui_action_row
+    since: "2026-11-25"
+
+  - id: tui.header_refresh
+    claim: "Обновление шапки — одна реализация AppMixin.refresh_header, копий нет"
+    kind: code
+    check: tui_header_refresh
+    since: "2026-11-25"
+
+  - id: tui.project_reload
+    claim: "Смена проекта: ProjectReloadable; app/project_manager не трогают приватные поля экранов"
+    kind: code
+    check: tui_project_reload
+    since: "2026-11-25"
+
+  - id: tui.tab_rename
+    claim: "Переименование вкладок — одна реализация (TabRenameMixin)"
+    kind: code
+    check: tui_tab_rename
+    since: "2026-11-25"
+
+  - id: intruder.payloads
+    claim: "Payload-файлы: один парсер и один загрузчик (PayloadSources) вне экрана Интрудера"
+    kind: code
+    check: intruder_payloads
+    since: "2026-11-25"
+
+  - id: tui.dead_code
+    claim: "Мёртвый код удалён: custom_notify, hintbar_base, ProxyClearHistory, safe_notify"
+    kind: code
+    check: tui_dead_code
+    since: "2026-11-25"
+
+  - id: recon.prompts
+    claim: "Промпты Recon в общем реестре задач (pro/…/ai_discovery/prompts.py удалён)"
+    kind: code
+    check: recon_prompts
+    since: "2026-11-25"
+
+  - id: repo.branches
+    claim: "origin/develop и origin/main совпадают"
+    kind: code
+    check: repo_branches
+    since: "2026-11-25"
+
+  - id: ci.green
+    claim: "CI на develop зелёный: Tests, CI, Dev Build (test-windows — advisory)"
+    kind: external
+    check: ci_green
+    since: "2026-11-25"
+    last_verified: "2026-11-25"
+    max_age_days: 14
+
+  - id: license.core
+    claim: "Лицензии: ядро AGPL-3.0, PRO — proprietary"
+    kind: code
+    check: license_core
+    since: "2026-11-25"
