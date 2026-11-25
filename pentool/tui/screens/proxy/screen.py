@@ -535,7 +535,7 @@ class ProxyScreen(
         except NoMatches as exc:
             logger.debug("proxy: header tab %s not applied: %s", tab_id, exc)
             return
-        self._refresh_header_now()
+        self.refresh_header()
 
     @on(TabbedContent.TabActivated)
     def _on_subtab_activated(self, _: TabbedContent.TabActivated) -> None:
@@ -544,16 +544,7 @@ class ProxyScreen(
         Row 2 shows the actions of the *active* sub-tab — Forward/Drop only exist
         for Intercept — so the header follows the tabs, whatever changed them.
         """
-        self._refresh_header_now()
-
-    def _refresh_header_now(self) -> None:
-        """Ask the app to redraw the header (state, counters, actions)."""
-        refresh = getattr(self.app, "refresh_header", None)
-        if refresh is None:
-            # Standalone screen (unit tests mount it without PentoolApp).
-            logger.debug("proxy: app has no header to refresh")
-            return
-        refresh()
+        self.refresh_header()
 
     def on_mount(self) -> None:
         self._sync_proxy_button()
@@ -1867,7 +1858,7 @@ class ProxyScreen(
             self._proxy_transition = "starting"
         elif proxy and proxy.is_running:
             self._proxy_transition = "stopping"
-        self._refresh_header_now()
+        self.refresh_header()
         self.app.action_toggle_proxy()  # type: ignore[attr-defined]
         self.call_after_refresh(self._sync_proxy_button)
 
@@ -2049,7 +2040,7 @@ class ProxyScreen(
         project switch, settings load, toolbar action — still call it; the state
         itself is read from the proxy inside `header_spec()`.
         """
-        self._refresh_header_now()
+        self.refresh_header()
 
     def action_open_mr(self) -> None:
         proxy = self._get_proxy()
@@ -2072,7 +2063,7 @@ class ProxyScreen(
     def _sync_proxy_button(self) -> None:
         """Repaint the proxy state in the header (label + counter come from the spec)."""
         self._proxy_transition = ""
-        self._refresh_header_now()
+        self.refresh_header()
 
     def update_proxy_label(self, running: bool, port: int) -> None:
         self._sync_proxy_button()

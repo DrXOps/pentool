@@ -129,7 +129,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         """Kept for external callers; the button itself is in the module header.
 
         Send/Cancel moved to the header (`header_spec`), so nothing inside this
-        screen should poke them directly — use `_refresh_header_now()`.
+        screen should poke them directly — use `refresh_header()`.
         """
         return self.app.query_one("#hdr-state-2", ToolbarButton)
 
@@ -214,16 +214,11 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             self.action_new_tab()
         elif action_id == "close_tab":
             self.action_close_tab()
-        self._refresh_header_now()
+        self.refresh_header()
 
     def header_tab_selected(self, tab_id: str) -> None:
         """Request tabs are documents — switching them stays in TabbedContent."""
         return None
-
-    def _refresh_header_now(self) -> None:
-        refresh = getattr(self.app, "refresh_header", None)
-        if refresh is not None:
-            refresh()
 
     def compose(self) -> ComposeResult:
         # Send / Cancel / Follow and the sub-tab actions live in the module header
@@ -935,7 +930,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self._set_status("Sending...")
         # Send/Cancel live in the header now: redraw instead of poking buttons
         # that are no longer in this screen's DOM.
-        self._refresh_header_now()
+        self.refresh_header()
         self.run_worker(self._do_send(tab_id, raw), exclusive=False, name="repeater-send")
 
     def action_cancel(self) -> None:
@@ -944,7 +939,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
         self.workers.cancel_group(self, "repeater-send")
         self._sending = False
         self._set_status("Cancelled")
-        self._refresh_header_now()
+        self.refresh_header()
 
     async def _do_send(self, tab_id: str, raw: str) -> None:
         repeater_api = self._get_api()
@@ -983,7 +978,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
 
         self._set_status(f"[green]HTTP {resp.status}[/green] — {len(resp.body)} bytes — {elapsed_ms}ms")
         self._sending = False
-        self._refresh_header_now()
+        self.refresh_header()
         self.app.notify(f"HTTP {resp.status} — {elapsed_ms}ms", timeout=2)
         await service.close()
 
@@ -998,7 +993,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             # (exactly what shows up in manual testing).
             self._sending = False
             # Send/Cancel are header buttons now: one redraw resets both.
-            self._refresh_header_now()
+            self.refresh_header()
 
     def action_clear(self) -> None:
         tab_id = self._active_tab_id

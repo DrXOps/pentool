@@ -145,16 +145,11 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
             self._copy_report()
         elif action_id == "export":
             self._export_report()
-        self._refresh_header_now()
+        self.refresh_header()
 
     def header_tab_selected(self, tab_id: str) -> None:
         """Sequencer has no sub-tabs."""
         return None
-
-    def _refresh_header_now(self) -> None:
-        refresh = getattr(self.app, "refresh_header", None)
-        if refresh is not None:
-            refresh()
 
     @on(ToolbarButton.Pressed, "#btn-seq-source")
     def on_btn_seq_source(self, event: ToolbarButton.Pressed) -> None:
@@ -202,7 +197,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
                 self.app.notify("Switch to Proxy/Cookie/Body source for live capture", severity="info")
                 return
 
-            self._refresh_header_now()
+            self.refresh_header()
         except Exception as exc:
             logger.debug("_start_capture: %s", exc)
 
@@ -287,7 +282,7 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
             # Sequencer after "Stop", and the token counter grows on its own.
             logger.debug("sequencer: proxy hook not unsubscribed: %s", exc)
         try:
-            self._refresh_header_now()
+            self.refresh_header()
         except NoMatches as exc:
             # The buttons stayed in the "capture running" position although the
             # capture has been stopped.

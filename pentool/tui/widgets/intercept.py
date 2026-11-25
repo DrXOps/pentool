@@ -219,7 +219,7 @@ class InterceptMixin:
 
         # Forward/Drop live in the module header; their enabled state comes from
         # the header spec (queue length), so a redraw is the whole sync.
-        self._refresh_header_now()  # type: ignore[attr-defined]
+        self.refresh_header()  # type: ignore[attr-defined]
         if hint:
             try:
                 self.query_one("#intercept-hint", Label).update(hint)
@@ -286,7 +286,7 @@ class InterceptMixin:
             # A new intercepted request, yet the response panel holds the previous response.
             logger.debug("intercept: response panel not cleared for new request: %s", exc)
         # Forward/Drop are header buttons now: redraw so they become enabled.
-        self._refresh_header_now()  # type: ignore[attr-defined]
+        self.refresh_header()  # type: ignore[attr-defined]
         queued = len(self._intercept_pending)
         hint = f"⏸ Intercepted: {req.method} {req.url}"
         if queued:
@@ -343,4 +343,4 @@ class InterceptMixin:
 
     def _sync_intercept_button(self: _InterceptHost) -> None:
         """Repaint the intercept state in the module header (spec reads the proxy)."""
-        self._refresh_header_now()  # type: ignore[attr-defined]
+        self.refresh_header()  # type: ignore[attr-defined]

@@ -12,6 +12,17 @@ class AppMixin:
         """Log exception + TUI notify — shorthand for error_guard.err."""
         _err(exception, context, self, severity=severity)
 
+    def refresh_header(self) -> None:
+        """Ask the app to redraw the module header.
+
+        Screens call this after state changes that alter header buttons (start/stop,
+        capture, tab add/remove). A screen can exist without an app in unit tests, so
+        the lookup is guarded — the same three lines were copy-pasted in six screens.
+        """
+        refresh = getattr(getattr(self, "app", None), "refresh_header", None)
+        if callable(refresh):
+            refresh()
+
     def _get_proxy(self):
         try:
             return self.app.get_proxy_api().proxy  # type: ignore[attr-defined]

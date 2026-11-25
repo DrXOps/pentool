@@ -716,7 +716,7 @@ class IntruderScreen(
         except Exception as exc:
             logger.debug("_sync_toolbar_from_tab: %s", exc)
         # Start/Pause/Stop and the counters live in the module header now.
-        self._refresh_header_now()
+        self.refresh_header()
 
     @on(TabbedContentPanel.TabCreated, "#intruder-tabs")
     def _on_tab_created(self, event: TabbedContentPanel.TabCreated) -> None:
@@ -751,7 +751,7 @@ class IntruderScreen(
         if isinstance(closed, _IntruderTabState) and (closed.running or closed.attack is not None):
             self._stop_tab_attack(closed)
             if self._active_tab is None:
-                self._refresh_header_now()
+                self.refresh_header()
         state = self._active_tab
         if state:
             self._rebuild_table_data()
@@ -879,7 +879,7 @@ class IntruderScreen(
             self.action_close_tab()
         elif action_id == "beautify":
             self._beautify_active_template()
-        self._refresh_header_now()
+        self.refresh_header()
 
     def _beautify_active_template(self) -> None:
         """Beautify the template of the active tab (header button).
@@ -904,11 +904,6 @@ class IntruderScreen(
     def header_tab_selected(self, tab_id: str) -> None:
         """Sub-tabs belong to the tab body (Positions/Payloads/…), not the header."""
         return None
-
-    def _refresh_header_now(self) -> None:
-        refresh = getattr(self.app, "refresh_header", None)
-        if refresh is not None:
-            refresh()
 
     # ── Tab lifecycle (action_*) — delegates to TabbedContentPanel ─────
 
@@ -2451,7 +2446,7 @@ class IntruderScreen(
         tab.attack = attack
 
         # Capture the tab: results are written into it, not into the active one
-        self._refresh_header_now()
+        self.refresh_header()
         tab.running = True
         tab.paused = False
         tab.all_results = []
@@ -2544,7 +2539,7 @@ class IntruderScreen(
             # The toolbar status is updated only if this is the active tab.
             # Background tabs get their status pulled on switch (_sync_toolbar).
             if _tab is self._active_tab:
-                self._refresh_header_now()
+                self.refresh_header()
                 self.app.notify(
                     f"Attack finished: {len(_tab.all_results)} requests",
                     severity="information",
@@ -2609,19 +2604,19 @@ class IntruderScreen(
         else:
             self.run_worker(tab.attack.resume(), exit_on_error=False)
         tab.paused = should_pause
-        self._refresh_header_now()
+        self.refresh_header()
         self.app.notify("Paused" if should_pause else "Resumed", timeout=2)
 
     def action_resume(self) -> None:
         logger.info("INTRUDER: action_resume tab=%s", self._active_tab.tab_id if self._active_tab else None)
-        self._refresh_header_now()
+        self.refresh_header()
         self.action_start_attack()
 
     def action_stop(self) -> None:
         tab = self._active_tab
         if tab is not None:
             self._stop_tab_attack(tab)
-        self._refresh_header_now()
+        self.refresh_header()
         self.app.notify("Attack stopped", severity="warning")
 
     def on_worker_state_changed(self, event) -> None:
@@ -2638,8 +2633,8 @@ class IntruderScreen(
                 tab.paused = False
                 # If this is the active tab — sync the toolbar
                 if tab is self._active_tab:
-                    self._refresh_header_now()
-                    self._refresh_header_now()
+                    self.refresh_header()
+                    self.refresh_header()
 
     @staticmethod
     def _row_from_result(result: IntruderResult) -> list[str]:

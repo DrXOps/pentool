@@ -85,7 +85,7 @@ class UtilsScreen(AppMixin, Widget):
             logger.debug("utils: sub-tab %s not applied: %s", tab_id, exc)
             return
         self._active_kind = tab_id
-        self._refresh_header_now()
+        self.refresh_header()
 
     def active_kind(self) -> str:
         """Active sub-tab id (e.g. ``utils-decoder``)."""
@@ -135,7 +135,7 @@ class UtilsScreen(AppMixin, Widget):
             logger.debug("utils: header tab %s not applied: %s", tab_id, exc)
             return
         self._active_kind = tab_id
-        self._refresh_header_now()
+        self.refresh_header()
 
     @on(TabbedContent.TabActivated, "#utils-tabs")
     def _on_subtab_activated(self, event: TabbedContent.TabActivated) -> None:
@@ -147,9 +147,4 @@ class UtilsScreen(AppMixin, Widget):
         if tab_id:
             self._active_kind = tab_id
             remember_tab(self.app, "utils", tab_id)
-        self._refresh_header_now()
-
-    def _refresh_header_now(self) -> None:
-        refresh = getattr(self.app, "refresh_header", None)
-        if refresh is not None:
-            refresh()
+        self.refresh_header()

@@ -554,11 +554,6 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         """No sub-tabs on the dashboard."""
         return None
 
-    def _refresh_header_now(self) -> None:
-        refresh = getattr(self.app, "refresh_header", None)
-        if refresh is not None:
-            refresh()
-
     def on_mount(self) -> None:
         # Textual stops node timers on unmount (CONVENTIONS §3.3), so the
         # return value is not kept: nothing else ever reads it.
@@ -765,7 +760,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             self._req_bucket = 0
             self._find_bucket = 0
             self.query_one("#chart-requests", LiveChart).push(rps)
-            self._refresh_header_now()
+            self.refresh_header()
         except Exception as exc:
             # Tick once per second: a silently broken tick is "the chart is not
             # running", and it also zeroes the packet counter for good.
@@ -924,7 +919,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             self._set_led_bar("led-proxy-bar", "dim", "Proxy: [dim]STOPPED[/dim]")
         msg = f"Proxy {'started' if running else 'stopped'} on :{port}"
         self.log_activity(msg, "ok" if running else "warning")
-        self._refresh_header_now()
+        self.refresh_header()
 
     def update_passive_status(self, enabled: bool) -> None:
         if enabled:
@@ -946,7 +941,7 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
         else:
             self._set_led_bar("led-scan-bar", "dim", "Active: [dim]IDLE[/dim]")
             self._set_led_bar("led-threads-bar", "dim", "Scan workers: [dim]—[/dim]")
-        self._refresh_header_now()
+        self.refresh_header()
 
     def update_spider_status(self, running: bool, pages: int = 0) -> None:
         if running:
