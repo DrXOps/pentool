@@ -233,10 +233,13 @@ def proxy_history_counter() -> tuple[bool, str]:
     # No hand-rolled "Showing N of M" left in the screen.
     no_inline_text = "Showing {shown" not in screen and 'f"Showing ' not in screen
     delegates = screen.count(".update(self.query_one, len(") >= 2
-    ok = module and two_counters and no_inline_text and delegates
+    # Pagination window/prepend used by both history tables (step 6.2).
+    paging_shared = screen.count("page_window(") >= 2 and screen.count("merge_older(") >= 2
+    ok = module and two_counters and no_inline_text and delegates and paging_shared
     return ok, (
         f"модуль: {module}; счётчиков на общей реализации: {two_counters}; "
-        f"формат в одном месте: {no_inline_text}; оба делегируют: {delegates}"
+        f"формат в одном месте: {no_inline_text}; оба делегируют: {delegates}; "
+        f"пагинация общая: {paging_shared}"
     )
 
 

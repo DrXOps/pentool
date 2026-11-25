@@ -46,3 +46,21 @@ class HistoryCounter:
             return
         self._text = text
         label.update(text)
+
+
+def page_window(oldest_offset: int, page_size: int) -> tuple[int, int]:
+    """`(offset, limit)` of the next older page.
+
+    Both tables load "one page above what is already shown": the window ends at the
+    oldest loaded row and never goes below zero.
+    """
+    offset = max(oldest_offset - page_size, 0)
+    return offset, oldest_offset - offset
+
+
+def merge_older(rows: list, older_newest_first: list) -> list:
+    """Put an older page in front of the loaded rows (oldest-first for the table).
+
+    The service returns newest-first; the table is oldest-first, hence the reversal.
+    """
+    return list(reversed(older_newest_first)) + rows

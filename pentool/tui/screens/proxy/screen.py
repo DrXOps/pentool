@@ -26,7 +26,7 @@ from pentool.tui.messages import SendToIntruder, SendToRepeater, SyncScopeToTarg
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.module_screen import ModuleScreen
-from pentool.tui.screens.proxy.history_view import HistoryCounter
+from pentool.tui.screens.proxy.history_view import HistoryCounter, merge_older, page_window
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.context_menu import ContextMenu
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
@@ -732,8 +732,7 @@ class ProxyScreen(
             return
         self._history_loading_more = True
         try:
-            page_offset = max(self._history_oldest_offset - _HISTORY_PAGE_SIZE, 0)
-            page_limit = self._history_oldest_offset - page_offset
+            page_offset, page_limit = page_window(self._history_oldest_offset, _HISTORY_PAGE_SIZE)
             if page_limit <= 0:
                 return
             older_newest_first = await self._proxy_service.get_history(
@@ -741,10 +740,11 @@ class ProxyScreen(
                 limit=page_limit,
                 filters=self._current_filters,
             )
-            older_rows = list(reversed(older_newest_first))
-            if not older_rows:
+            if not older_newest_first:
                 return
-            self._rows_cache = older_rows + self._rows_cache
+            merged = merge_older(self._rows_cache, older_newest_first)
+            older_rows = merged[: len(merged) - len(self._rows_cache)]
+            self._rows_cache = merged
             self._history_oldest_offset = page_offset
             try:
                 table = self.query_one("#request-list", DataTable)
@@ -788,8 +788,7 @@ class ProxyScreen(
             return
         self._ws_history_loading_more = True
         try:
-            page_offset = max(self._ws_history_oldest_offset - _HISTORY_PAGE_SIZE, 0)
-            page_limit = self._ws_history_oldest_offset - page_offset
+            page_offset, page_limit = page_window(self._ws_history_oldest_offset, _HISTORY_PAGE_SIZE)
             if page_limit <= 0:
                 return
             if self._ws_current_filters and not self._ws_current_filters.is_empty:
@@ -805,10 +804,11 @@ class ProxyScreen(
                 limit=page_limit,
                 filters=ws_filter,
             )
-            older_rows = list(reversed(older_newest_first))
-            if not older_rows:
+            if not older_newest_first:
                 return
-            self._ws_rows_cache = older_rows + self._ws_rows_cache
+            merged = merge_older(self._ws_rows_cache, older_newest_first)
+            older_rows = merged[: len(merged) - len(self._ws_rows_cache)]
+            self._ws_rows_cache = merged
             self._ws_history_oldest_offset = page_offset
             try:
                 table = self.query_one("#ws-request-list", DataTable)
