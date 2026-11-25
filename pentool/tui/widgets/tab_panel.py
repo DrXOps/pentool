@@ -17,12 +17,12 @@ from typing import Awaitable, Callable, Generic, TypeVar
 
 from textual.app import ComposeResult
 from textual.css.query import NoMatches
-from textual.events import Click
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Input, Tab, TabbedContent, TabPane
+from textual.widgets import Input, TabbedContent, TabPane
 
 from pentool.core.logging import get_logger
+from pentool.tui.mixins.tab_rename import TabRenameMixin
 
 logger = get_logger(__name__)
 
@@ -44,7 +44,7 @@ class _TabMeta:
 TState = TypeVar("TState")
 
 
-class TabbedContentPanel(Widget, Generic[TState]):
+class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
     """Generic container with isolated tabs.
 
     Generic[TState] — the module passes in its own dataclass (e.g. _IntruderTabState).
@@ -495,59 +495,19 @@ class TabbedContentPanel(Widget, Generic[TState]):
 
     # ── Rename (double-click) ───────────────────────────────────────────
 
-    def on_click(self, event: Click) -> None:
-        """Double-click on a Tab → rename."""
-        if event.chain < 2:
-            return
-        widget = event.widget
-        if not isinstance(widget, Tab):
-            return
-        # Derive the tab_id from the Tab
-        tab_widget_id = widget.id or ""
-        if not tab_widget_id.startswith("--content-tab-"):
-            return
-        pane_id = tab_widget_id.removeprefix("--content-tab-")
-        if pane_id not in self._states:
-            return
-        event.stop()
-        self._start_rename(pane_id)
+    # Rename (double-click / F2) comes from TabRenameMixin: the same four handlers lived
+    # here and in BaseModuleScreen, and a third time in RepeaterScreen.
+    def _rename_state(self, tab_id: str) -> object | None:
+        """A tab of this panel, if it has state (the mixin uses it for name + ownership)."""
+        return self._states.get(tab_id)
 
-    def _start_rename(self, tab_id: str) -> None:
+    def _apply_tab_rename(self, tab_id: str, new_name: str) -> None:
         state = self._states.get(tab_id)
         if state is None:
             return
-        try:
-            inp = self.query_one(f"#{self._rename_input_id}", Input)
-            inp.value = getattr(state, "name", "Tab")
-            inp.display = True
-            inp.focus()
-            inp.action_select_all()
-            inp._rename_tab_id = tab_id  # type: ignore[attr-defined]
-        except Exception as exc:
-            # The rename field did not open — F2 on a tab "does not work".
-            logger.debug("tab_panel: rename not started for %s: %s", tab_id, exc)
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id != self._rename_input_id:
-            return
-        tab_id = getattr(event.input, "_rename_tab_id", None)
-        new_name = event.value.strip()
-        event.input.display = False
-        if tab_id and new_name and tab_id in self._states:
-            state = self._states[tab_id]
-            if hasattr(state, "name"):
-                state.name = new_name
-            self._update_tab_label(tab_id, new_name)
-
-    def on_input_blurred(self, event: Input.Blurred) -> None:
-        try:
-            inp = self.query_one(f"#{self._rename_input_id}", Input)
-            if inp.display:
-                inp.display = False
-        except NoMatches as exc:
-            # The rename field would stay on top of the tabs after focus is lost;
-            # the field is not in the tree — the panel has already been removed.
-            logger.debug("tab_panel: rename input not hidden on blur: %s", exc)
+        if hasattr(state, "name"):
+            state.name = new_name
+        self._update_tab_label(tab_id, new_name)
 
     def _update_tab_label(self, tab_id: str, name: str) -> None:
         try:
