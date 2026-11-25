@@ -1051,17 +1051,13 @@ class IntruderScreen(
             # cause is visible: the panel itself swallows the error into debug.
             logger.exception("intruder: rename not started for %s", tab_id)
 
-    def _rename_tab(self, tab_id: str, new_name: str) -> None:
-        state = None
-        for t in self._tc_panel.all_states:
-            if getattr(t, "tab_id", None) == tab_id:
-                state = t
+    def _apply_tab_rename(self, tab_id: str, new_name: str) -> None:
+        """The panel owns the field and the label; the autosave is ours."""
+        self._tc_panel._apply_tab_rename(tab_id, new_name)
+        for state in self._tc_panel.all_states:
+            if getattr(state, "tab_id", None) == tab_id:
+                self._auto_save_tab(state)
                 break
-        if state is None:
-            return
-        state.name = new_name
-        self._tc_panel.update_tab_label(tab_id, new_name)
-        self._auto_save_tab(state)
 
     # ── Mount, show ──────────────────────────────────────────────────────
 

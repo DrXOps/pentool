@@ -6,17 +6,15 @@ no longer need to import a separate mixin.
 
 from __future__ import annotations
 
-from textual.css.query import NoMatches
-from textual.events import Click
 from textual.widget import Widget
-from textual.widgets import Input, Tab, TabbedContent
 
 from pentool.core.logging import get_logger
+from pentool.tui.mixins.tab_rename import TabRenameMixin
 
 _log = get_logger(__name__)
 
 
-class BaseModuleScreen(Widget):
+class BaseModuleScreen(TabRenameMixin, Widget):
     """Base for tabbed module screens (double-click-to-rename).
 
     Subclasses set _rename_input_id, _rename_tab_prefix, _rename_tabs_widget_id.
@@ -28,96 +26,16 @@ class BaseModuleScreen(Widget):
     _rename_tab_prefix: str = ""
     _rename_tabs_widget_id: str = ""
 
-    # ── Double-click → rename ─────────────────────────────────────────────────
+    # ── Rename contract (see pentool/tui/mixins/tab_rename.py) ────────────────
+    # The four handlers used to live here; they are in TabRenameMixin now, together
+    # with the copies that grew in TabbedContentPanel and RepeaterScreen.
 
-    def on_click(self, event: Click) -> None:
-        """Double-click on Tab (chain=2) → rename."""
-        if event.chain < 2:
-            return
+    _rename_input_id: str = "rename-input"
 
-        widget = event.widget
-        _log.debug(
-            "BaseModuleScreen.on_click: chain=%d widget=%r type=%s",
-            event.chain,
-            widget,
-            type(widget).__name__,
-        )
+    def _rename_state(self, tab_id: str) -> object | None:
+        """Screens whose tab state lives elsewhere override this (Repeater, panel users)."""
+        return None
 
-        if not isinstance(widget, Tab):
-            return
-
-        # Derive pane_id from tab.id: "--content-tab-{pane_id}"
-        tab_widget_id = widget.id or ""
-        pane_id = tab_widget_id.removeprefix("--content-tab-")
-
-        _log.debug(
-            "BaseModuleScreen: pane_id=%r prefix=%r",
-            pane_id,
-            self._rename_tab_prefix,
-        )
-
-        # Filter by prefix
-        if self._rename_tab_prefix and not pane_id.startswith(self._rename_tab_prefix):
-            _log.debug(
-                "BaseModuleScreen: pane_id %r does not match prefix %r",
-                pane_id,
-                self._rename_tab_prefix,
-            )
-            return
-
-        # Filter: Tab must be inside our TabbedContent
-        if self._rename_tabs_widget_id:
-            try:
-                tc = self.query_one(f"#{self._rename_tabs_widget_id}", TabbedContent)
-                ancestor = widget.parent
-                found = False
-                while ancestor is not None:
-                    if ancestor is tc:
-                        found = True
-                        break
-                    ancestor = getattr(ancestor, "parent", None)
-                if not found:
-                    _log.debug(
-                        "BaseModuleScreen: Tab is not a descendant of %r",
-                        self._rename_tabs_widget_id,
-                    )
-                    return
-            except NoMatches as e:
-                # The screen's tabs are not in the tree — there is nothing to
-                # rename, so a double click on a tab simply does nothing.
-                _log.debug("BaseModuleScreen: TabbedContent not in tree: %s", e)
-                return
-
-        _log.debug("BaseModuleScreen: DOUBLE CLICK → _start_rename(%r)", pane_id)
-        event.stop()
-        self._start_rename(pane_id)
-
-    # ── Input events ──────────────────────────────────────────────────────────
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id != self._rename_input_id:
-            return
-        tab_id = getattr(event.input, "_rename_tab_id", None)
-        new_name = event.value.strip()
-        event.input.display = False
-        if tab_id and new_name:
-            self._rename_tab(tab_id, new_name)
-
-    def on_input_blurred(self, event: Input.Blurred) -> None:
-        try:
-            inp = self.query_one(f"#{self._rename_input_id}", Input)
-            if inp.display:
-                inp.display = False
-        except NoMatches as e:
-            # The rename field would stay on top of the tabs after focus is
-            # lost — it covers the headers and clicks go into it instead.
-            # The field is not in the tree — the only source of `NoMatches` here.
-            _log.debug("BaseModuleScreen: rename input not hidden on blur: %s", e)
-
-    # ── Abstract interface ────────────────────────────────────────────────────
-
-    def _start_rename(self, tab_id: str) -> None:  # type: ignore[empty-body]
-        raise NotImplementedError
-
-    def _rename_tab(self, tab_id: str, new_name: str) -> None:  # type: ignore[empty-body]
-        raise NotImplementedError
+    def _apply_tab_rename(self, tab_id: str, new_name: str) -> None:
+        """Default: nothing to write. A screen with tab state overrides it."""
+        _log.debug("BaseModuleScreen: rename of %r ignored (no state hook)", tab_id)

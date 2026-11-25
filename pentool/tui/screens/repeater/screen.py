@@ -8,7 +8,7 @@ from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.widgets import Input, Static, TabbedContent, TabPane, TextArea
+from textual.widgets import Static, TabbedContent, TabPane, TextArea
 from textual.widgets.text_area import Selection
 
 from pentool.core.logging import get_logger
@@ -81,6 +81,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
     _rename_input_id: str = "rename-input"
     _rename_tab_prefix: str = "tab-"
     _rename_tabs_widget_id: str = "repeater-tabs"
+    # The field is mounted on first use: this screen's tabs are a plain
+    # TabbedContent, not a TabbedContentPanel that ships the input itself.
+    _rename_input_host: str = "#tabs-area"
 
     # RequestContextMenuMixin config — Repeater: Send to Intruder + Scanner, no nmap
     _cm_show_nmap = False
@@ -595,32 +598,11 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
         self._active_tab_id = pane.id
         self._refresh_diff_panel_if_visible()
 
-    def _start_rename(self, tab_id: str) -> None:
-        state = self._get_tab_state(tab_id)
-        if state is None:
-            return
-        try:
-            try:
-                inp = self.query_one("#rename-input", Input)
-            except NoMatches as exc:
-                # The field does not exist yet — we create it below ourselves.
-                # Expected path; the log entry tells it apart from a typo in the id.
-                logger.debug("repeater: rename input not found, creating: %s", exc)
-                # classes="tab-rename" is mandatory: without it the field joins the normal
-                # flow and drops to the bottom of the screen instead of overlaying the tab row.
-                inp = Input(id="rename-input", classes="tab-rename", placeholder="Tab name...", compact=True)
-                self.query_one("#tabs-area").mount(inp)
-            inp.value = state.name
-            inp.display = True
-            inp.focus()
-            inp.action_select_all()
-            inp._rename_tab_id = tab_id  # type: ignore[attr-defined]
-        except Exception as exc:
-            # F2 on a tab does nothing: the tab is not renamed, and it looks
-            # like "the key does not work".
-            logger.debug("repeater: rename not started for %s: %s", tab_id, exc)
+    def _rename_state(self, tab_id: str) -> object | None:
+        """A tab of this screen (the mixin reads `.name` from it)."""
+        return self._get_tab_state(tab_id)
 
-    def _rename_tab(self, tab_id: str, new_name: str) -> None:
+    def _apply_tab_rename(self, tab_id: str, new_name: str) -> None:
         state = self._get_tab_state(tab_id)
         if state is None:
             return
