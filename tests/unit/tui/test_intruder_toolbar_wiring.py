@@ -79,6 +79,20 @@ class TestDispatchTableHasWidgets:
         app = _App()
         async with app.run_test(size=(200, 60)) as pilot:
             screen, tid, pane = await _mounted(pilot)
+
+            def _all_present() -> bool:
+                return all(
+                    len(pane.query(f"#{key}-{tid}")) or len(screen.query(f"#{key}")) for key in _dispatch_keys() - moved
+                )
+
+            # The per-tab widgets mount in a follow-up pass: on a slower runner the
+            # query below ran before they existed and CI (3.12) reported the whole
+            # dispatch table as "handler without a widget" — a false alarm.
+            for _ in range(100):
+                if _all_present():
+                    break
+                await pilot.pause()
+
             missing = [
                 key
                 for key in _dispatch_keys() - moved
