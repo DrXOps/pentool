@@ -366,6 +366,12 @@ class TestIntruderTabContent:
                 panel = screen._tc_panel
                 tid = panel.active_tab_id
                 pane = panel.tabs_content.get_pane(tid)
+                # The pane mounts its children in a follow-up pass; on a slow runner the
+                # query below ran too early and the test failed with NoMatches.
+                for _ in range(100):
+                    if len(pane.query(f"#template-panel-{tid}")) and len(pane.query(f"#body-right-{tid}")):
+                        break
+                    await pilot.pause()
                 # The tab must contain the template-panel — the most critical point
                 template = pane.query_one(f"#template-panel-{tid}", ContentPanel)
                 assert template is not None
