@@ -56,6 +56,7 @@ from pentool.tui.screens.intruder.results_view import (
     result_is_visible,
     row_from_result,
 )
+from pentool.tui.screens.intruder.tab_fields import _ActiveTabField
 from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
@@ -283,94 +284,19 @@ class IntruderScreen(
                     return t
         return None
 
-    # Proxy properties for backward compatibility (all read from _active_tab)
-    @property
-    def _attack_type(self) -> AttackType:
-        t = self._active_tab
-        return t.attack_type if t else AttackType.SNIPER
-
-    @_attack_type.setter
-    def _attack_type(self, v: AttackType) -> None:
-        t = self._active_tab
-        if t:
-            t.attack_type = v
-
-    @property
-    def _payloads(self) -> list:
-        t = self._active_tab
-        return t.payload_sources if t else [[]]
-
-    @_payloads.setter
-    def _payloads(self, v: list) -> None:
-        t = self._active_tab
-        if t:
-            t.payload_sources = v
-
-    @property
-    def _active_set_idx(self) -> int:
-        t = self._active_tab
-        return t.active_set_idx if t else 0
-
-    @_active_set_idx.setter
-    def _active_set_idx(self, v: int) -> None:
-        t = self._active_tab
-        if t:
-            t.active_set_idx = v
-
-    @property
-    def _all_results(self) -> list:
-        t = self._active_tab
-        return t.all_results if t else []
-
-    @_all_results.setter
-    def _all_results(self, v: list) -> None:
-        t = self._active_tab
-        if t:
-            t.all_results = v
-
-    @property
-    def _filtered_results(self) -> list:
-        t = self._active_tab
-        return t.filtered_results if t else []
-
-    @_filtered_results.setter
-    def _filtered_results(self, v: list) -> None:
-        t = self._active_tab
-        if t:
-            t.filtered_results = v
-
-    @property
-    def _current_result(self) -> "IntruderResult | None":
-        t = self._active_tab
-        return t.current_result if t else None
-
-    @_current_result.setter
-    def _current_result(self, v: "IntruderResult | None") -> None:
-        t = self._active_tab
-        if t:
-            t.current_result = v
-
-    @property
-    def _filter_spec(self) -> "FilterSpec | None":
-        t = self._active_tab
-        return t.filter_spec if t else None
-
-    @_filter_spec.setter
-    def _filter_spec(self, v: "FilterSpec | None") -> None:
-        t = self._active_tab
-        if t:
-            t.filter_spec = v
-
-    @property
-    def _payload_load_in_progress(self) -> bool:
-        t = self._active_tab
-        return t.payload_load_in_progress if t else False
-
-    @_payload_load_in_progress.setter
-    def _payload_load_in_progress(self, v: bool) -> None:
-        t = self._active_tab
-        if t:
-            t.payload_load_in_progress = v
+    #: Fields of the active tab, readable and writable from the screen.
+    #: One descriptor instead of eight identical @property/@setter pairs — see
+    #: `intruder/tab_fields.py` for why the default may be a factory.
+    _attack_type = _ActiveTabField("attack_type", AttackType.SNIPER)
+    # Without an active tab the screen still shows one (empty) payload set: that is
+    # what the handlers and the old property default expected.
+    _payloads = _ActiveTabField("payload_sources", lambda: [[]])
+    _active_set_idx = _ActiveTabField("active_set_idx", int)
+    _all_results = _ActiveTabField("all_results", list)
+    _filtered_results = _ActiveTabField("filtered_results", list)
+    _current_result = _ActiveTabField("current_result", None)
+    _filter_spec = _ActiveTabField("filter_spec", None)
+    _payload_load_in_progress = _ActiveTabField("payload_load_in_progress", bool)
 
     # ── Per-tab widget helpers ────────────────────────────────────────────
 

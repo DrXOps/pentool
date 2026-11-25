@@ -120,6 +120,12 @@ facts:
     check: intruder_results_view
     since: "2026-11-25"
 
+  - id: intruder.tab_fields
+    claim: "Поля активной вкладки Интрудера — один дескриптор вместо восьми пар property/setter"
+    kind: code
+    check: intruder_tab_fields
+    since: "2026-11-25"
+
   - id: repo.branches
     claim: "origin/develop и origin/main совпадают"
     kind: code

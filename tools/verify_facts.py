@@ -226,6 +226,18 @@ def recon_prompts() -> tuple[bool, str]:
     return not local_module and len(tasks) == 3, f"локальный prompts.py: {local_module}; задач в реестре: {tasks}"
 
 
+def intruder_tab_fields() -> tuple[bool, str]:
+    module = _exists("pentool/tui/screens/intruder/tab_fields.py")
+    screen = _read("pentool/tui/screens/intruder/screen.py")
+    used = screen.count("_ActiveTabField(")
+    no_setters = ".setter" not in screen
+    ok = module and used >= 8 and no_setters
+    return (
+        ok,
+        f"модуль: {module}; полей через дескриптор: {used}; пар property/setter осталось: {'нет' if no_setters else 'есть'}",
+    )
+
+
 def intruder_results_view() -> tuple[bool, str]:
     module = _exists("pentool/tui/screens/intruder/results_view.py")
     screen = _read("pentool/tui/screens/intruder/screen.py")
@@ -318,6 +330,7 @@ CHECKS: dict[str, Check] = {
     "tui_tab_rename": tui_tab_rename,
     "intruder_payloads": intruder_payloads,
     "intruder_results_view": intruder_results_view,
+    "intruder_tab_fields": intruder_tab_fields,
     "tui_dead_code": tui_dead_code,
     "recon_prompts": recon_prompts,
     "repo_branches": repo_branches,
