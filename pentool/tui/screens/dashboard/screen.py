@@ -964,6 +964,14 @@ class DashboardScreen(AiModeSyncMixin, ModuleScreen):
         else:
             self._set_led_bar("led-mcp-bar", "dim", "MCP: [dim]OFF[/dim]")
 
+    async def reload_from_project(self, db_path: str) -> None:
+        """Recount findings and traffic for the project that is now open."""
+        self.refresh_stats()
+
+    async def reset_for_new_project(self) -> None:
+        """A brand-new project starts with zeroed counters, not the old project's."""
+        self.refresh_stats()
+
     def refresh_stats(self) -> None:
         self._load_stats_bg()
 

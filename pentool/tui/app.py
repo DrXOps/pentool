@@ -38,11 +38,6 @@ from pentool.core.logging import get_logger, setup_logging
 from pentool.proxy.client import ProxyClient
 from pentool.services.proxy_service import ProxyService
 from pentool.tui import module_catalog
-from pentool.tui.constants import (
-    SCREEN_INTRUDER,
-    SCREEN_REPEATER,
-    SCREEN_TARGET,
-)
 from pentool.tui.header import HeaderProvider
 from pentool.tui.hotkeys import build_status_bar_markup, registry
 from pentool.tui.hotkeys.defaults import build_global_bindings
@@ -2073,7 +2068,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # switch (see ProxyScreen._load_scope_setting).
             try:
                 proxy_screen = self.require_module_screen("proxy", ProxyScreen)
-                self.run_worker(proxy_screen._save_scope_setting(list(proxy.scope)))
+                self.run_worker(proxy_screen.save_scope_setting(list(proxy.scope)))
             except NoMatches as e:
                 # The Proxy screen is not in the tree — persisting to the project was
                 # skipped; the old setting will come back on the next project switch.
@@ -2485,23 +2480,26 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         except Exception as e:
             logger.warning("APP: HttpStorage close error on quit: %s", e)
 
-        # Per-screen storages: Intruder, Target, Repeater
-        _storage_screens: list[tuple[str, type, str, str]] = [
-            (SCREEN_INTRUDER, IntruderScreen, "_api", "Intruder"),
-            (SCREEN_TARGET, TargetScreen, "_target_api", "Target"),
-            (SCREEN_REPEATER, RepeaterScreen, "_repeater_api", "Repeater"),
-        ]
-        for selector, cls, api_attr, name in _storage_screens:
+        # Per-screen storages. Every mounted screen that owns a database handle
+        # implements `close_storage()` (contract: ProjectReloadable); this loop knows
+        # nothing about screen internals, so adding a storage cannot be forgotten here.
+        for module in module_catalog.CATALOG:
+            screen = self.module_screen(module.id)
+            if screen is None:
+                continue
+            cancel = getattr(screen, "_cancel_save_workers", None)
+            if callable(cancel):
+                cancel()
+            close_storage = getattr(screen, "close_storage", None)
+            if not callable(close_storage):
+                continue
             try:
-                screen = self.query_one(selector, cls)
-                if hasattr(screen, "_cancel_save_workers"):
-                    screen._cancel_save_workers()
-                api = getattr(screen, api_attr, None)
-                if api is not None:
-                    await api.close()
-                    logger.info("APP: %s storage closed on quit", name)
-            except Exception as e:
-                logger.warning("APP: %s storage close error on quit: %s", name, e)
+                await close_storage()
+                logger.info("APP: %s storage closed on quit", module.label)
+            except Exception:
+                # Not fatal: the process exits right after, but if the hard exit is ever
+                # removed this trace is the only way to see a handle leak.
+                logger.warning("APP: %s storage close error on quit", module.label, exc_info=True)
 
         # Spider CPU pool
         # Spider CPU pool

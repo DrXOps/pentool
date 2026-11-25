@@ -941,6 +941,29 @@ class ProxyScreen(
         await self._proxy_service.reload_from_proxy(self._get_proxy_api())
         await self._reload_table()
 
+    async def reload_from_project(self, db_path: str) -> None:
+        """Read the project that is now open (contract: ProjectReloadable)."""
+        await self._reload_from_storage(is_new=False)
+
+    async def clear_view(self) -> None:
+        """Empty the table and the detail panels — the project behind them changed."""
+        try:
+            await self._do_clear_table()
+        except Exception as exc:
+            # The table still shows the previous project's rows.
+            logger.debug("proxy: table not cleared for a new project: %s", exc)
+        try:
+            self.query_one("#req-editor").clear()
+            self.query_one("#resp-viewer").clear()
+        except NoMatches as exc:
+            # Panels keep the previous project's request — it reads as loaded.
+            logger.debug("proxy: detail panels not cleared: %s", exc)
+        self._selected_req_id = None
+
+    async def reset_for_new_project(self) -> None:
+        """A brand-new project starts with an empty scope, not the old one."""
+        await self._reload_from_storage(is_new=True)
+
     async def _reload_from_storage(self, is_new: bool = False) -> None:
         """Reload the table from current storage without clearing data."""
         if self._proxy_service is None:
@@ -1953,6 +1976,10 @@ class ProxyScreen(
                 await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
         except Exception:
             logger.warning("_save_enforce_scope_setting: setting not saved", exc_info=True)
+
+    async def save_scope_setting(self, hosts: list[str]) -> None:
+        """Persist the scope of this project (public: the app calls it)."""
+        await self._save_scope_setting(hosts)
 
     async def _save_scope_setting(self, hosts: list[str]) -> None:
         """Save scope host list per-project."""

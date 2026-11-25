@@ -1216,6 +1216,21 @@ class IntruderScreen(
             self._api = IntruderAPI(db_path=db_path)
         return self._api
 
+    async def close_storage(self) -> None:
+        """Close the IntruderAPI handle (contract: ProjectReloadable)."""
+        api = self._api
+        if api is None:
+            return
+        self._api = None
+        await api.close()
+
+    async def reset_for_new_project(self) -> None:
+        """A new project starts with one empty tab, not the old project's tabs."""
+        # `reload_from_project` closes every tab and opens a fresh one; for a brand-new
+        # project that is exactly the wanted state, and the DB it points at is already
+        # the new one, so no path juggling is needed here.
+        await self.reload_from_project(self._get_db_path())
+
     async def reload_from_project(self, db_path: str) -> None:
         """Point persistent IntruderAPI at a different project DB (project switch)."""
         from pentool.api.intruder_api import IntruderAPI

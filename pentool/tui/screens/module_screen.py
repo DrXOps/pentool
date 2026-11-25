@@ -17,7 +17,7 @@ separate concern and not every module has them.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from textual.widget import Widget
 
@@ -27,7 +27,8 @@ from pentool.tui.mixins.app_mixin import AppMixin
 logger = get_logger(__name__)
 
 
-class ProjectReloadable:
+@runtime_checkable
+class ProjectReloadable(Protocol):
     """Contract for screens that hold project data (structural, not a base class).
 
     A screen that owns a database handle implements all three:

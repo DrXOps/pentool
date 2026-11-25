@@ -286,6 +286,57 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
             # global setting; its failure is a visible mismatch.
             logger.debug("target: AI UI not synced: %s", exc)
 
+    def project_export(self) -> dict:
+        """Site map data for the JSON project file."""
+        return self._get_api().export_project_data()
+
+    def project_import(self, data: dict) -> int:
+        """Put site map data from a JSON project into the open database."""
+        count = self._get_api().import_project_data(data)
+        self._load_sitemap()
+        return count
+
+    async def reload_from_project(self, db_path: str) -> None:
+        """Re-create the SiteMap against the newly opened project."""
+        await self._switch_project(is_new=False)
+
+    async def reset_for_new_project(self) -> None:
+        """Same as a reload, plus an explicit clear: the new DB is empty."""
+        await self._switch_project(is_new=True)
+
+    async def close_storage(self) -> None:
+        """Save and close the SiteMap connection (called on project close)."""
+        await self._close_target_api()
+
+    async def _switch_project(self, *, is_new: bool) -> None:
+        """Persist and drop the old SiteMap, then open the new one."""
+        await self._close_target_api()
+        self._get_api()
+        if is_new:
+            try:
+                self._target_api.clear()
+                self._target_api.sitemap._scope_hosts.clear()
+            except Exception:
+                # Nodes from the previous project may show up in the new one.
+                logger.error("target: new project's site map not cleared", exc_info=True)
+        self._load_sitemap()
+
+    async def _close_target_api(self) -> None:
+        """Save, then close: SiteMap holds one persistent SQLite connection."""
+        if self._target_api is None:
+            return
+        try:
+            await self._target_api.save()
+        except Exception:
+            # Unsaved changes of the previous project are lost on a switch.
+            logger.warning("target: old site map not saved before switch", exc_info=True)
+        try:
+            await self._target_api.close()
+        except Exception:
+            # The connection stays open until quit: FDs and locks pile up.
+            logger.warning("target: old site map connection not closed", exc_info=True)
+        self._target_api = None
+
     def _get_api(self):
         if self._target_api is None:
             from pentool.api.target_api import TargetAPI

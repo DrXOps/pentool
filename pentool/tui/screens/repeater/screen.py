@@ -519,6 +519,14 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
 
     # ── Project lifecycle ──────────────────────────────────────────────────────
 
+    async def close_storage(self) -> None:
+        """Close the RepeaterAPI handle (contract: ProjectReloadable)."""
+        api = self._repeater_api
+        if api is None:
+            return
+        self._repeater_api = None
+        await api.close()
+
     async def reset_for_new_project(self) -> None:
         """Remove all tabs and create a single clean one. Called on Ctrl+N."""
         await self._close_all_tabs()
