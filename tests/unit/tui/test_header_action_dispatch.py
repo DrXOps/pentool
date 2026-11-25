@@ -95,6 +95,29 @@ def test_allowlisted_chains_are_still_pending() -> None:
     assert not stale, f"these screens no longer have a chain — drop them from PENDING_CHAINS: {stale}"
 
 
+def test_no_screen_draws_its_own_action_toolbar() -> None:
+    """One action row per module: the header. A private `Toolbar` is the old second way.
+
+    ``intruder`` is the one exception and not an action row: Threads / Delay / Turbo are
+    settings that only exist inside a tab, and they were never offered by the header.
+    """
+    allowed = {"intruder/screen.py"}
+    offenders: list[str] = []
+    for path in _screen_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef) or node.name != "compose":
+                continue
+            for call in ast.walk(node):
+                if isinstance(call, ast.Call) and getattr(call.func, "id", "") == "Toolbar":
+                    if _rel(path) not in allowed:
+                        offenders.append(f"{_rel(path)}:{call.lineno}")
+    assert not offenders, (
+        "a module screen mounts its own Toolbar again — actions belong in header_spec() "
+        f"(docs/tui-audit/REPORT.md, E1): {offenders}"
+    )
+
+
 @pytest.mark.parametrize("path", _screen_files(), ids=_rel)
 def test_actions_table_points_at_real_methods(path: Path) -> None:
     module = importlib.import_module(_module_name(path))
