@@ -92,6 +92,10 @@ _ATTACK_DESCRIPTIONS = {
     AttackType.CLUSTER_BOMB: "Cartesian product of all sets",
 }
 
+#: Worker name and group of a tab's attack. Parsed back into a tab id in
+#: `on_worker_state_changed`, so producer and consumer must share this string.
+ATTACK_WORKER_PREFIX = "intruder-attack-"
+
 _RESULTS_COL_NAMES = ["#", "Payload(s)", "Status", "Length", "Time(ms)", "Error"]
 
 _PAYLOAD_LIST_PREVIEW_LIMIT = 500
@@ -2315,7 +2319,7 @@ class IntruderScreen(
         the name, ``cancel_group`` looks up the group, and a second string with
         the same letters would drift apart on the first rename.
         """
-        return f"intruder-attack-{tab_id}"
+        return f"{ATTACK_WORKER_PREFIX}{tab_id}"
 
     def _stop_tab_attack(self, tab: _IntruderTabState) -> None:
         """Stop a tab's attack: cancel the worker and ask the attack to stop.
@@ -2400,20 +2404,14 @@ class IntruderScreen(
         if tab is None:
             return
         tab.all_results.append(result)
-        row_dict = {
-            "status": str(result.response_status),
-            "length": result.response_length or 0,
-            "payload": " ".join(result.payload_values),
-        }
-        passes = True
-        if tab.filter_spec and not tab.filter_spec.is_empty:
-            passes = tab.filter_spec.apply([row_dict]) == [row_dict]
-        if passes and tab.grep_only_match and tab.grep_match_patterns:
-            text = f"{result.response_status} {result.response_length} {' '.join(result.payload_values)}"
-            import re
-
-            passes = any(re.search(pat, text, re.IGNORECASE) for pat in tab.grep_match_patterns)
-        if passes:
+        # Same visibility rule as the table repaint — it used to be a third copy here,
+        # so a filter fix had to be made in three places to take effect.
+        if result_is_visible(
+            result,
+            filter_spec=tab.filter_spec,
+            grep_only_match=tab.grep_only_match,
+            grep_patterns=tab.grep_match_patterns,
+        ):
             tab.filtered_results.append(result)
             self._add_result_row(result, tab)
         self._auto_save_result(result, tab)
@@ -2466,17 +2464,15 @@ class IntruderScreen(
         from textual.worker import WorkerState
 
         name = getattr(event.worker, "name", "") or ""
-        if not name.startswith("intruder-attack-"):
+        if not name.startswith(ATTACK_WORKER_PREFIX):
             return
-        # Derive the tab from the worker name: intruder-attack-<tab_id>
-        tid = name[len("intruder-attack-") :]
+        tid = name[len(ATTACK_WORKER_PREFIX) :]
         tab = self._tc_panel.get_state(tid)
         if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
             if tab is not None and tab.running:
                 tab.paused = False
                 # If this is the active tab — sync the toolbar
                 if tab is self._active_tab:
-                    self.refresh_header()
                     self.refresh_header()
 
     def _add_result_row(self, result: IntruderResult, tab: _IntruderTabState | None = None) -> None:

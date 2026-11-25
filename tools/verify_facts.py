@@ -244,10 +244,16 @@ def intruder_results_view() -> tuple[bool, str]:
     delegates = "build_results_arrow(" in screen and "def _paint_results" in screen
     single_mapper = "def _row_from_result" not in screen
     no_inline_arrow = "pa.array(" not in screen
-    ok = module and delegates and single_mapper and no_inline_arrow
+    # The table repaint and the live result handler must share the visibility rule;
+    # a third inline copy in `_on_result` was found and removed in step 5.5.
+    shared_filter = screen.count("result_is_visible(") >= 2
+    # One spelling of the worker prefix: the constant itself, plus both users.
+    single_prefix = screen.count('"intruder-attack-"') == 1 and screen.count("ATTACK_WORKER_PREFIX") >= 3
+    ok = module and delegates and single_mapper and no_inline_arrow and shared_filter and single_prefix
     return ok, (
         f"модуль: {module}; экран делегирует: {delegates}; "
-        f"маппер один: {single_mapper}; Arrow собирается в одном месте: {no_inline_arrow}"
+        f"маппер один: {single_mapper}; Arrow в одном месте: {no_inline_arrow}; "
+        f"фильтр общий: {shared_filter}; префикс воркера один: {single_prefix}"
     )
 
 
