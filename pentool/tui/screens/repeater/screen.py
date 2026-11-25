@@ -15,10 +15,10 @@ from pentool.core.logging import get_logger
 from pentool.services.repeater_service import RepeaterService
 from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import REPEATER_BINDINGS
-from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.diff_panel import DiffPanel
 from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
 from pentool.tui.widgets.resize_handle import ResizeHandle
@@ -66,7 +66,7 @@ class _TabState:
         self.ui_ready: bool = False
 
 
-class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, AppMixin):
+class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, ModuleScreen):
     """Repeater module screen."""
 
     DEFAULT_CSS = _CSS
@@ -194,27 +194,29 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, A
             ),
         )
 
-    def header_action(self, action_id: str) -> None:
-        """A header button was pressed."""
-        if action_id == "send":
-            self.action_send()
-        elif action_id == "cancel":
-            self.action_cancel()
-        elif action_id == "follow":
-            self._follow_redirects = not self._follow_redirects
-        elif action_id == "beautify":
-            self._beautify_active_request()
-        elif action_id == "decoder":
-            self._send_to_decoder(self._get_active_text())
-        elif action_id == "comparer":
-            self._send_to_comparer(self._get_active_text(), label="Repeater Request")
-        elif action_id == "intruder":
-            self._send_to_intruder()
-        elif action_id == "new_tab":
-            self.action_new_tab()
-        elif action_id == "close_tab":
-            self.action_close_tab()
-        self.refresh_header()
+    #: Header buttons (see `header_spec`) → methods that run them.
+    ACTIONS = {
+        "send": "action_send",
+        "cancel": "action_cancel",
+        "follow": "_header_toggle_follow",
+        "beautify": "_beautify_active_request",
+        "decoder": "_header_send_to_decoder",
+        "comparer": "_header_send_to_comparer",
+        "intruder": "_send_to_intruder",
+        "new_tab": "action_new_tab",
+        "close_tab": "action_close_tab",
+    }
+
+    def _header_toggle_follow(self) -> None:
+        """Flip redirect-following; the header render reads the flag."""
+        self._follow_redirects = not self._follow_redirects
+
+    def _header_send_to_decoder(self) -> None:
+        """The action needs the active tab's text, so it cannot be a bare method name."""
+        self.run_worker(self._send_to_decoder(self._get_active_text()))
+
+    def _header_send_to_comparer(self) -> None:
+        self.run_worker(self._send_to_comparer(self._get_active_text(), label="Repeater Request"))
 
     def header_tab_selected(self, tab_id: str) -> None:
         """Request tabs are documents — switching them stays in TabbedContent."""

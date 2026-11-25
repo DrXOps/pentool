@@ -13,7 +13,6 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.widget import Widget
 from textual.widgets import Label, Static, TabbedContent, TabPane
 
 from pentool.api.proxy_api import InterceptedRequest, MatchReplaceRule
@@ -24,9 +23,9 @@ from pentool.tui.header import HeaderAction, HeaderSpec, HeaderTab
 from pentool.tui.hotkeys.defaults import PROXY_BINDINGS
 from pentool.tui.markup import esc
 from pentool.tui.messages import SendToIntruder, SendToRepeater, SyncScopeToTarget
-from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.context_menu import ContextMenu
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
@@ -90,9 +89,8 @@ class ProxyScreen(
     ContentClipboardMixin,
     SortableTableMixin,
     RequestContextMenuMixin,
-    AppMixin,
     InterceptMixin,
-    Widget,
+    ModuleScreen,
 ):
     """Full Proxy module screen."""
 
@@ -491,38 +489,40 @@ class ProxyScreen(
         """Label for the Special-chars toggle (the flag lives on the screen)."""
         return "⏎ Special: ON" if self._intercept_show_special_chars else "⏎ Special: OFF"
 
-    def header_action(self, action_id: str) -> None:
-        """A header button was pressed: route to the existing screen actions."""
-        if action_id == "proxy":
-            self.action_toggle_proxy()
-        elif action_id == "intercept":
-            self.action_toggle_intercept()
-        elif action_id == "skip":
-            self.action_toggle_enforce_scope()
-        elif action_id == "forward":
-            if self._nothing_intercepted():
-                self.notify(
-                    "Nothing intercepted yet — enable Intercept to capture requests",
-                    severity="warning",
-                    timeout=3,
-                )
-                return
-            self.action_forward()
-        elif action_id == "drop":
-            if self._nothing_intercepted():
-                self.notify(
-                    "Nothing intercepted yet — enable Intercept to capture requests",
-                    severity="warning",
-                    timeout=3,
-                )
-                return
-            self.action_drop()
-        elif action_id == "special":
-            self._toggle_intercept_special_chars(None)
-        elif action_id == "mr":
-            self.action_open_mr()
-        elif action_id == "clear":
-            self.action_clear_list()
+    #: Header buttons (see `header_spec`) → methods that run them.
+    ACTIONS = {
+        "proxy": "action_toggle_proxy",
+        "intercept": "action_toggle_intercept",
+        "skip": "action_toggle_enforce_scope",
+        "forward": "_header_forward",
+        "drop": "_header_drop",
+        "special": "_header_toggle_special_chars",
+        "mr": "action_open_mr",
+        "clear": "action_clear_list",
+    }
+
+    def _warn_nothing_intercepted(self) -> None:
+        """Forward/Drop have no subject until Intercept captured something."""
+        self.notify(
+            "Nothing intercepted yet — enable Intercept to capture requests",
+            severity="warning",
+            timeout=3,
+        )
+
+    def _header_forward(self) -> None:
+        if self._nothing_intercepted():
+            self._warn_nothing_intercepted()
+            return
+        self.action_forward()
+
+    def _header_drop(self) -> None:
+        if self._nothing_intercepted():
+            self._warn_nothing_intercepted()
+            return
+        self.action_drop()
+
+    def _header_toggle_special_chars(self) -> None:
+        self._toggle_intercept_special_chars(None)
 
     def _nothing_intercepted(self) -> bool:
         """True when the intercept queue is empty (Forward/Drop have no subject)."""

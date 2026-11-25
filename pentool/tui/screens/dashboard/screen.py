@@ -12,7 +12,6 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.widget import Widget
 from textual.widgets import RichLog, Static, Tree
 
 from pentool.core.logging import get_logger
@@ -20,8 +19,8 @@ from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import DASHBOARD_BINDINGS
 from pentool.tui.markup import esc
 from pentool.tui.mixins.ai_sync import AiModeSyncMixin
-from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.dashboard.live_dashboard import ResourceMonitor
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
@@ -376,7 +375,7 @@ class SeverityMatrix(Vertical):
             logger.debug("dashboard: severity matrix not refreshed: %s", exc)
 
 
-class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
+class DashboardScreen(AiModeSyncMixin, ModuleScreen):
     """Dashboard — application start screen."""
 
     DEFAULT_CSS = _CSS
@@ -545,10 +544,12 @@ class DashboardScreen(AiModeSyncMixin, AppMixin, Widget):
             counters.append(f"scan {progress}%")
         return HeaderSpec(state=state, counters=tuple(counters))
 
-    def header_action(self, action_id: str) -> None:
+    #: Header buttons (see `header_spec`) → methods that run them.
+    ACTIONS = {"proxy": "_header_toggle_proxy"}
+
+    def _header_toggle_proxy(self) -> None:
         """The only state button on the dashboard is the proxy toggle."""
-        if action_id == "proxy":
-            self.app.action_toggle_proxy()  # type: ignore[attr-defined]
+        self.app.action_toggle_proxy()  # type: ignore[attr-defined]
 
     def header_tab_selected(self, tab_id: str) -> None:
         """No sub-tabs on the dashboard."""

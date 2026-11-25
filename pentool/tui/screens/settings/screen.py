@@ -10,13 +10,12 @@ from textual.app import ComposeResult, InvalidThemeError
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.timer import Timer
-from textual.widget import Widget
 from textual.widgets import Button, Input, Static, Switch, TabbedContent, TabPane
 
 from pentool.core.error_guard import err
 from pentool.core.logging import get_logger
 from pentool.tui.markup import esc
-from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.screens.settings.hotkeys import HotkeySettingsScreen
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
@@ -45,7 +44,7 @@ class UIMode(str, Enum):
     ADVANCED = "advanced"
 
 
-class SettingsScreen(AppMixin, Widget):
+class SettingsScreen(ModuleScreen):
     """Settings dialog: Interface / Proxy / Hotkeys / Project.
 
     Mounted as a regular screen-widget; opened via ContentSwitcher.

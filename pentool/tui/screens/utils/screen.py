@@ -21,9 +21,9 @@ from textual.widgets import TabbedContent
 
 from pentool.core.logging import get_logger
 from pentool.tui.header import HeaderSpec, HeaderTab
-from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.screens.comparer.screen import ComparerScreen
 from pentool.tui.screens.decoder.screen import DecoderScreen
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.screens.sequencer.screen import SequencerScreen
 from pentool.tui.widgets.static_tabs import remember_tab, remembered_tab, static_tabs
 
@@ -39,7 +39,7 @@ UTILS_TABS: tuple[tuple[str, str, type[Widget]], ...] = (
 )
 
 
-class UtilsScreen(AppMixin, Widget):
+class UtilsScreen(ModuleScreen):
     """One module for the three standalone tools, one sub-tab each."""
 
     DEFAULT_CSS = _CSS

@@ -47,11 +47,11 @@ from pentool.tui.hotkeys.defaults import INTRUDER_BINDINGS
 from pentool.tui.markup import esc
 from pentool.tui.messages import SendToRepeater
 from pentool.tui.mixins.ai_sync import AiModeSyncMixin
-from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
 from pentool.tui.widgets.intruder_filter_bar import IntruderFilterBar as _IntruderFilterBar
@@ -191,7 +191,7 @@ class _IntruderTabState:
 
 class IntruderScreen(
     BaseModuleScreen,
-    AppMixin,
+    ModuleScreen,
     ContentClipboardMixin,
     AutoSaveMixin,
     SortableTableMixin,
@@ -860,26 +860,22 @@ class IntruderScreen(
             more=(),
         )
 
-    def header_action(self, action_id: str) -> None:
-        """A header button was pressed — route to the existing screen actions."""
-        if action_id == "start":
-            tab = self._active_tab
-            self.action_resume() if (tab and tab.paused) else self.action_start_attack()
-        elif action_id == "pause":
-            self.action_toggle_pause()
-        elif action_id == "stop":
-            self.action_stop()
-        elif action_id == "export":
-            self._export_csv()
-        elif action_id == "clear":
-            self._clear_results()
-        elif action_id == "new_tab":
-            self.action_new_tab()
-        elif action_id == "close_tab":
-            self.action_close_tab()
-        elif action_id == "beautify":
-            self._beautify_active_template()
-        self.refresh_header()
+    #: Header buttons (see `header_spec`) → methods that run them.
+    ACTIONS = {
+        "start": "_header_start_or_resume",
+        "pause": "action_toggle_pause",
+        "stop": "action_stop",
+        "export": "_export_csv",
+        "clear": "_clear_results",
+        "new_tab": "action_new_tab",
+        "close_tab": "action_close_tab",
+        "beautify": "_beautify_active_template",
+    }
+
+    def _header_start_or_resume(self) -> None:
+        """One button for both: a paused attack resumes, anything else starts."""
+        tab = self._active_tab
+        self.action_resume() if (tab and tab.paused) else self.action_start_attack()
 
     def _beautify_active_template(self) -> None:
         """Beautify the template of the active tab (header button).

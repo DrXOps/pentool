@@ -10,14 +10,13 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.widget import Widget
 from textual.widgets import Input, Label, Static, TextArea
 
 from pentool.core.logging import get_logger
 from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import SEQUENCER_BINDINGS
-from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
@@ -34,7 +33,7 @@ _SOURCE_OPTIONS = [
 ]
 
 
-class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
+class SequencerScreen(ContentClipboardMixin, ModuleScreen):
     """Capture and entropy analysis of tokens (session IDs, CSRF, JWT…)."""
 
     DEFAULT_CSS = _CSS
@@ -129,23 +128,16 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
             ),
         )
 
-    def header_action(self, action_id: str) -> None:
-        """A header button was pressed."""
-        if action_id == "capture":
-            self._start_capture()
-        elif action_id == "stop":
-            self._stop_capture()
-        elif action_id == "analyze":
-            self.action_analyze()
-        elif action_id == "load":
-            self._load_file()
-        elif action_id == "clear":
-            self.action_clear_tokens()
-        elif action_id == "copy":
-            self._copy_report()
-        elif action_id == "export":
-            self._export_report()
-        self.refresh_header()
+    #: Header buttons (see `header_spec`) → methods that run them.
+    ACTIONS = {
+        "capture": "_start_capture",
+        "stop": "_stop_capture",
+        "analyze": "action_analyze",
+        "load": "_load_file",
+        "clear": "action_clear_tokens",
+        "copy": "_copy_report",
+        "export": "_export_report",
+    }
 
     def header_tab_selected(self, tab_id: str) -> None:
         """Sequencer has no sub-tabs."""
