@@ -232,16 +232,18 @@ def proxy_history_counter() -> tuple[bool, str]:
     two_counters = screen.count("HistoryCounter(") >= 2
     # No hand-rolled "Showing N of M" left in the screen.
     no_inline_text = "Showing {shown" not in screen and 'f"Showing ' not in screen
-    delegates = screen.count(".update(self.query_one, len(") >= 2
+    delegates = screen.count("_counter.update(") >= 2
     # Pagination window/prepend used by both history tables (step 6.2).
     paging_shared = screen.count("page_window(") >= 2 and screen.count("merge_older(") >= 2
     # Row picking for both tables (step 6.3): bounds check and "same row" shortcut.
     picking_shared = screen.count("pick_row(") >= 2
-    ok = module and two_counters and no_inline_text and delegates and paging_shared and picking_shared
+    # Both counters must say how to reach older pages (step 6.4).
+    hint_shared = screen.count("more_available=") >= 2
+    ok = module and two_counters and no_inline_text and delegates and paging_shared and picking_shared and hint_shared
     return ok, (
         f"модуль: {module}; счётчиков на общей реализации: {two_counters}; "
         f"формат в одном месте: {no_inline_text}; оба делегируют: {delegates}; "
-        f"пагинация общая: {paging_shared}; выбор строки общий: {picking_shared}"
+        f"пагинация общая: {paging_shared}; выбор строки общий: {picking_shared}; подсказка пагинации: {hint_shared}"
     )
 
 

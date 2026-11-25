@@ -16,9 +16,17 @@ from pentool.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-def count_text(shown: int, total: int) -> str:
-    """Label text for a history table (thousands separators, same wording in both)."""
-    return f"Showing {shown:,} of {total:,} records"
+def count_text(shown: int, total: int, more_available: bool = False) -> str:
+    """Label text for a history table (thousands separators, same wording in both).
+
+    ``more_available`` adds the hint that older rows are one scroll away — the tables load
+    one page at a time on purpose: thousands of rows in the widget would slow the UI, so
+    the counter has to explain why the list is capped.
+    """
+    text = f"Showing {shown:,} of {total:,} records"
+    if more_available:
+        text += " — scroll up to load more"
+    return text
 
 
 class HistoryCounter:
@@ -29,13 +37,13 @@ class HistoryCounter:
         self._name = name
         self._text = ""
 
-    def update(self, lookup: Callable[[str], Any], shown: int, total: int) -> None:
+    def update(self, lookup: Callable[[str], Any], shown: int, total: int, more_available: bool = False) -> None:
         """Set the label from the current row counts.
 
         ``lookup`` resolves the widget (``screen.query_one``); a missing label is not an
         error — the tab can be unmounted while rows are still arriving.
         """
-        text = count_text(shown, total)
+        text = count_text(shown, total, more_available)
         if text == self._text:
             return
         try:

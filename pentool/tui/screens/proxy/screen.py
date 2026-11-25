@@ -712,8 +712,17 @@ class ProxyScreen(
             logger.error("_reload_table failed: %s", exc, exc_info=True)
 
     def _update_history_count_label(self) -> None:
-        """HTTP History counter (the rule lives in proxy/history_view.py)."""
-        self._history_counter.update(self.query_one, len(self._rows_cache), self._history_total)
+        """HTTP History counter (the rule lives in proxy/history_view.py).
+
+        ``oldest_offset > 0`` means older pages exist: the table is capped on purpose, and
+        scroll-up loads the next 300 rows.
+        """
+        self._history_counter.update(
+            self.query_one,
+            len(self._rows_cache),
+            self._history_total,
+            more_available=self._history_oldest_offset > 0,
+        )
 
     def _update_ws_history_count_label(self) -> None:
         """WS History counter — same rule and same text cache as HTTP.
@@ -722,7 +731,12 @@ class ProxyScreen(
         now both share `HistoryCounter`, so a layout pass happens only when the numbers
         actually change.
         """
-        self._ws_history_counter.update(self.query_one, len(self._ws_rows_cache), self._ws_history_total)
+        self._ws_history_counter.update(
+            self.query_one,
+            len(self._ws_rows_cache),
+            self._ws_history_total,
+            more_available=self._ws_history_oldest_offset > 0,
+        )
 
     async def _load_more_history(self) -> None:
         """Load one older page of history when the user scrolls to the top.
