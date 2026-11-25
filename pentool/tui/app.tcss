@@ -416,3 +416,24 @@ Screen.narrow #app-shell {
 Screen.narrow ProxyScreen InspectorPanel.-visible {
     display: none;
 }
+
+/* Header rows. `#module-header` holds one row by default; a module with sub-tab
+ * chips gets a second one (`with-chips`), so the chips sit above the actions
+ * instead of beside them (reported from the UI in Utils/Sequencer). */
+#module-header {
+    height: auto;
+}
+
+#hdr-row-tabs {
+    height: 0;
+    display: none;
+}
+
+#module-header.with-chips #hdr-row-tabs {
+    height: 1;
+    display: block;
+}
+
+#hdr-row-main {
+    height: 1;
+}

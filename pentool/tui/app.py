@@ -454,19 +454,25 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             # module tabs there is no room left on 120 columns; when Decoder /
             # Comparer / Sequencer merge into `Utils` (plan-redesign stage 4) the
             # state moves up to row 1, exactly as in the approved mockup.
-            with Horizontal(id="module-header"):
-                with Horizontal(id="hdr-actions"):
-                    for slot in range(1, 10):
-                        yield ToolbarButton("", f"hdr-act-{slot}", classes="hdr-act disabled")
-                with Horizontal(id="hdr-tabs"):
-                    for slot in range(1, 6):
-                        yield ToolbarButton("", f"hdr-tab-{slot}", classes="hdr-tab disabled")
-                with Horizontal(id="hdr-state"):
-                    for slot in range(1, 4):
-                        yield ToolbarButton("", f"hdr-state-{slot}", classes="hdr-state disabled")
-                    yield Static("", id="hdr-counters")
-                with Horizontal(id="hdr-more-zone"):
-                    yield ToolbarButton("⋯", "hdr-more", classes="hdr-more disabled")
+            # The header is two rows when the module has sub-tabs: the chips on their
+            # own line, the actions below them. With chips and actions on one line the
+            # Utils buttons sat level with the tabs (reported from the UI). Modules
+            # without chips keep one row — `#hdr-row-tabs` stays hidden.
+            with Vertical(id="module-header"):
+                with Horizontal(id="hdr-row-tabs"):
+                    with Horizontal(id="hdr-tabs"):
+                        for slot in range(1, 6):
+                            yield ToolbarButton("", f"hdr-tab-{slot}", classes="hdr-tab disabled")
+                with Horizontal(id="hdr-row-main"):
+                    with Horizontal(id="hdr-actions"):
+                        for slot in range(1, 10):
+                            yield ToolbarButton("", f"hdr-act-{slot}", classes="hdr-act disabled")
+                    with Horizontal(id="hdr-state"):
+                        for slot in range(1, 4):
+                            yield ToolbarButton("", f"hdr-state-{slot}", classes="hdr-state disabled")
+                        yield Static("", id="hdr-counters")
+                    with Horizontal(id="hdr-more-zone"):
+                        yield ToolbarButton("⋯", "hdr-more", classes="hdr-more disabled")
             # Only the start screen is mounted. The other module screens are
             # created on first use and dropped when the user leaves them — see
             # `tui/screen_lifecycle.py`: with all thirteen mounted (~1600 widgets)
@@ -1426,7 +1432,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 [self.query_one(f"#hdr-tab-{slot}", ToolbarButton) for slot in range(1, 6)],
                 self.query_one("#hdr-more", ToolbarButton),
                 self.query_one("#hdr-counters", Static),
-                self.query_one("#module-header", Horizontal),
+                self.query_one("#module-header", Vertical),
             )
         except NoMatches:
             logger.debug("header: slots not mounted yet, redraw skipped")
@@ -1504,6 +1510,9 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         header.display = bool(
             spec and not spec.is_empty() and (spec.tabs or spec.actions or spec.more or spec.state or spec.counters)
         )
+        # Chips get their own line, so the action row starts below them.
+        has_chips = bool(spec and spec.tabs)
+        header.set_class(has_chips, "with-chips")
 
     @on(ToolbarButton.Pressed, ".hdr-state")
     def _on_hdr_state(self, event: ToolbarButton.Pressed) -> None:
