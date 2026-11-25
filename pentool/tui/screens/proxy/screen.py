@@ -26,6 +26,7 @@ from pentool.tui.messages import SendToIntruder, SendToRepeater, SyncScopeToTarg
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.module_screen import ModuleScreen
+from pentool.tui.screens.proxy.history_view import HistoryCounter
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.context_menu import ContextMenu
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
@@ -129,6 +130,9 @@ class ProxyScreen(
         #: Last text written to the "Showing N of M" label — a repeated `update()`
         #: re-measures the widget and costs a layout pass over the whole screen.
         self._history_count_text: str = ""
+        # Counters: "Showing N of M" for HTTP and WS history (proxy/history_view.py).
+        self._history_counter = HistoryCounter("#history-count", "history")
+        self._ws_history_counter = HistoryCounter("#ws-history-count", "ws history")
         self._sort_col: int | None = None
         self._sort_reverse: bool = False
         self._inspector_visible: bool = False
@@ -703,40 +707,17 @@ class ProxyScreen(
             logger.error("_reload_table failed: %s", exc, exc_info=True)
 
     def _update_history_count_label(self) -> None:
-        try:
-            label = self.query_one("#history-count", Static)
-        except NoMatches as exc:
-            # Counter not updated — "Showing N of M" still reflects the previous
-            # page, so the number of loaded records cannot be read off it.
-            logger.debug("proxy: history counter not found: %s", exc)
-            return
-        shown = len(self._rows_cache)
-        total = self._history_total
-        # Every update makes Textual re-measure the widget, and a re-measure means
-        # a layout pass over the whole screen (measured: ~55 ms with the cards UI).
-        # The label changes only when the numbers do.
-        text = f"Showing {shown:,} of {total:,} records"
-        if text != self._history_count_text:
-            self._history_count_text = text
-            label.update(text)
+        """HTTP History counter (the rule lives in proxy/history_view.py)."""
+        self._history_counter.update(self.query_one, len(self._rows_cache), self._history_total)
 
     def _update_ws_history_count_label(self) -> None:
-        """Same "Showing N of M" treatment for the WS History table.
+        """WS History counter — same rule and same text cache as HTTP.
 
-        WS History now has the same scroll-up pagination as HTTP (page-capped
-        at 300), so the counter is identical in shape to HTTP's. When the cap
-        hides rows it shows "Showing N of M — scroll up to load more";
-        otherwise it's blank (everything loaded)."""
-        try:
-            label = self.query_one("#ws-history-count", Static)
-        except NoMatches as exc:
-            # Same for WS History: the counter lags behind the rows actually shown,
-            # and "scroll up to load more" does not appear when it should.
-            logger.debug("proxy: WS history counter not found: %s", exc)
-            return
-        shown = len(self._ws_rows_cache)
-        total = self._ws_history_total
-        label.update(f"Showing {shown:,} of {total:,} records")
+        The WS copy used to repaint on every append while HTTP skipped no-op updates;
+        now both share `HistoryCounter`, so a layout pass happens only when the numbers
+        actually change.
+        """
+        self._ws_history_counter.update(self.query_one, len(self._ws_rows_cache), self._ws_history_total)
 
     async def _load_more_history(self) -> None:
         """Load one older page of history when the user scrolls to the top.

@@ -226,6 +226,20 @@ def recon_prompts() -> tuple[bool, str]:
     return not local_module and len(tasks) == 3, f"локальный prompts.py: {local_module}; задач в реестре: {tasks}"
 
 
+def proxy_history_counter() -> tuple[bool, str]:
+    module = _exists("pentool/tui/screens/proxy/history_view.py")
+    screen = _read("pentool/tui/screens/proxy/screen.py")
+    two_counters = screen.count("HistoryCounter(") >= 2
+    # No hand-rolled "Showing N of M" left in the screen.
+    no_inline_text = "Showing {shown" not in screen and 'f"Showing ' not in screen
+    delegates = screen.count(".update(self.query_one, len(") >= 2
+    ok = module and two_counters and no_inline_text and delegates
+    return ok, (
+        f"модуль: {module}; счётчиков на общей реализации: {two_counters}; "
+        f"формат в одном месте: {no_inline_text}; оба делегируют: {delegates}"
+    )
+
+
 def intruder_attack_runner() -> tuple[bool, str]:
     module = _exists("pentool/tui/screens/intruder/attack_runner.py")
     runner = _read("pentool/tui/screens/intruder/attack_runner.py")
@@ -358,6 +372,7 @@ CHECKS: dict[str, Check] = {
     "intruder_results_view": intruder_results_view,
     "intruder_tab_fields": intruder_tab_fields,
     "intruder_attack_runner": intruder_attack_runner,
+    "proxy_history_counter": proxy_history_counter,
     "tui_dead_code": tui_dead_code,
     "recon_prompts": recon_prompts,
     "repo_branches": repo_branches,

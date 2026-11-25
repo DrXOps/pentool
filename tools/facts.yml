@@ -132,6 +132,12 @@ facts:
     check: intruder_attack_runner
     since: "2026-11-25"
 
+  - id: proxy.history_counter
+    claim: "Счётчик истории Proxy («Showing N of M») — одна реализация для HTTP и WS"
+    kind: code
+    check: proxy_history_counter
+    since: "2026-11-25"
+
   - id: repo.branches
     claim: "origin/develop и origin/main совпадают"
     kind: code

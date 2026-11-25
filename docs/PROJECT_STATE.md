@@ -3,7 +3,7 @@
 <!-- СГЕНЕРИРОВАНО: python tools/verify_facts.py --render.
      Источник: tools/facts.yml. Руками не править: следующий рендер перезапишет. -->
 
-**Обновлено:** 2026-11-25
+**Обновлено:** 2026-11-26
 
 Единственное место, где записано «что сейчас правда». Планы (`MYPLANS/`) описывают,
 что делать, и ссылаются на эти id — состояние в них не повторяется, поэтому
@@ -30,6 +30,7 @@
 | `intruder.results_view` | Рендер результатов Интрудера вынесен: одна сборка Arrow-таблицы и один маппер строк | проверка в `tools/verify_facts.py` | ✅ OK |
 | `intruder.tab_fields` | Поля активной вкладки Интрудера — один дескриптор вместо восьми пар property/setter | проверка в `tools/verify_facts.py` | ✅ OK |
 | `intruder.attack_runner` | Жизненный цикл атаки Интрудера — в attack_runner.py; префикс воркера один | проверка в `tools/verify_facts.py` | ✅ OK |
+| `proxy.history_counter` | Счётчик истории Proxy («Showing N of M») — одна реализация для HTTP и WS | проверка в `tools/verify_facts.py` | ✅ OK |
 | `repo.branches` | origin/develop и origin/main совпадают | проверка в `tools/verify_facts.py` | ✅ OK |
 | `ci.green` | CI на develop зелёный: Tests, CI, Dev Build (test-windows — advisory) | проверено 2026-11-25: OK (ручная) | ⚠️ OK (ручная) |
 | `license.core` | Лицензии: ядро AGPL-3.0, PRO — proprietary | проверка в `tools/verify_facts.py` | ✅ OK |
