@@ -23,7 +23,7 @@ def mock_intruder_deps():
         patch("pentool.tui.screens.intruder.screen.IntruderConfig", MagicMock()),
         patch("pentool.tui.screens.intruder.screen.IntruderResult", MagicMock()),
         patch("pentool.tui.screens.intruder.screen.count_markers", return_value=1),
-        patch("pentool.tui.screens.intruder.screen.count_lines_with_progress", return_value=0),
+        patch("pentool.tui.screens.intruder.payload_sources.count_lines_with_progress", return_value=0),
     ]
     for p in patches:
         p.start()

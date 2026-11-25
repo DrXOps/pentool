@@ -7,7 +7,6 @@ global.
 
 from __future__ import annotations
 
-import asyncio
 import re
 import time
 from dataclasses import dataclass, field
@@ -31,7 +30,6 @@ from pentool.api.intruder_api import (
     IntruderResult,
     NumericPayloadSource,
     ProcessedPayloads,
-    count_lines_with_progress,
     count_markers,
     process_payload,
 )
@@ -51,6 +49,7 @@ from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
+from pentool.tui.screens.intruder.payload_sources import PayloadSources
 from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
@@ -239,6 +238,8 @@ class IntruderScreen(
         self._tab_factory = _factory
         # ── API ──
         self._api = None
+        # Payload picking / reading / counting lives in its own module (step 5).
+        self._payload_sources = PayloadSources(self)
         # Saved selection in template-editor (for ADD §§ after focus loss)
         self._last_editor_selection: tuple | None = None
         self._last_click_time: float = 0.0
@@ -2165,129 +2166,36 @@ class IntruderScreen(
             self._refresh_payload_list()
             self._auto_save_state()
 
-    _EAGER_LOAD_MAX_BYTES = 20 * 1024 * 1024
+    # ── Payload sources (see intruder/payload_sources.py) ───────────────────
 
     def _load_payloads_from_file(self) -> None:
-        tab = self._active_tab
-        if tab is None:
-            return
-        if tab.payload_load_in_progress:
-            self.app.notify("A payload file is already loading — please wait", severity="warning", timeout=3)
-            return
-        from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
-
-        captured_idx = tab.active_set_idx
-
-        def _on_file(path: str | None) -> None:
-            if path:
-                self.run_worker(
-                    self._load_file_async(path, captured_idx),
-                    exclusive=False,
-                    name="payload-load",
-                    exit_on_error=False,
-                )
-
-        self.app.push_screen(
-            FileSelectorDialog(
-                mode=FileSelectorMode.OPEN,
-                filter_ext=["*.txt", "*.yaml", "*.yml"],
-                title="Select payload file",
-            ),
-            _on_file,
-        )
+        """Ask for a payload file and load it into the active set."""
+        self._payload_sources.pick_and_load()
 
     async def _load_file_async(self, path: str, target_idx: int) -> None:
-        tab = self._active_tab
-        try:
-            size = await asyncio.get_running_loop().run_in_executor(None, lambda: Path(path).stat().st_size)
-        except Exception as exc:
-            from pentool.core.error_guard import err
-
-            err(exc, "Failed to load payload file", self, severity="error")
-            return
-        if tab:
-            while target_idx >= len(tab.payload_sources):
-                tab.payload_sources.append([])
-            if size <= self._EAGER_LOAD_MAX_BYTES:
-                await self._load_file_eager(path, target_idx)
-            else:
-                await self._load_file_streamed(path, target_idx, size)
+        """Eager or streamed is decided by file size; the loader owns both paths."""
+        await self._payload_sources.load(path, target_idx)
 
     async def _load_file_eager(self, path: str, target_idx: int) -> None:
-        tab = self._active_tab
-        if tab is None:
-            return
-        try:
-            # The parsing rule ("strip, skip blanks and '#' comments") lives in
-            # `modules/intruder.py` and is shared with the drop zone and the API —
-            # this screen used to keep its own copy of the loop plus a file reader.
-            from pentool.api.intruder_api import load_payloads_from_file
-
-            loop = asyncio.get_running_loop()
-            payloads = await loop.run_in_executor(None, load_payloads_from_file, path)
-        except Exception as exc:
-            from pentool.core.error_guard import err
-
-            err(exc, "Failed to load payload (eager)", self, severity="error")
-            return
-        existing = tab.payload_sources[target_idx]
-        if isinstance(existing, _LAZY_SOURCE_TYPES):
-            tab.payload_sources[target_idx] = payloads
-        else:
-            existing.extend(payloads)
-        if target_idx == tab.active_set_idx:
-            self._refresh_payload_list()
-        name = Path(path).name
-        self.app.notify(f"Loaded {len(payloads)} payloads from {name}", timeout=3)
-        self._auto_save_state()
+        await self._payload_sources.load_eager(path, target_idx)
 
     async def _load_file_streamed(self, path: str, target_idx: int, size_bytes: int) -> None:
+        await self._payload_sources.load_streamed(path, target_idx, size_bytes)
+
+    def update_payload_count_label(self, message: str | None = None) -> None:
+        """Set the payload counter text, or recompute it when *message* is None."""
+        if message is None:
+            self._update_payload_count_label()
+            return
         tab = self._active_tab
         if tab is None:
             return
-        tab.payload_load_in_progress = True
-        source = FilePayloadSource(path)
-        tab.payload_sources[target_idx] = source
-        if target_idx == tab.active_set_idx:
-            self._refresh_payload_list()
-        size_mb = size_bytes / (1024 * 1024)
-        name = Path(path).name
-        self.app.notify(
-            f"Loading {name} ({size_mb:.0f} MB) — streaming, counting lines in background…",
-            timeout=4,
-        )
-
-        def _on_progress(count: int, bytes_read: int, total_bytes: int) -> None:
-            self.app.call_from_thread(self._on_payload_count_progress, target_idx, count, bytes_read, total_bytes)
-
         try:
-            loop = asyncio.get_running_loop()
-            final_count = await loop.run_in_executor(None, count_lines_with_progress, path, "utf-8", _on_progress)
-            source.set_count(final_count)
-        except Exception as exc:
-            from pentool.core.error_guard import err
-
-            err(exc, "Payload line count failed (still usable)", self, severity="warning")
-        finally:
-            tab.payload_load_in_progress = False
-            if target_idx == tab.active_set_idx:
-                self._update_payload_count_label()
-            self._auto_save_state()
-
-    def _on_payload_count_progress(self, target_idx: int, count: int, bytes_read: int, total_bytes: int) -> None:
-        tab = self._active_tab
-        if tab is None:
-            return
-        active = tab.payload_sources[target_idx] if target_idx < len(tab.payload_sources) else None
-        if not isinstance(active, FilePayloadSource):
-            return
-        tab_id = tab.tab_id
-        try:
-            label = self.query_one(f"#{self._wid(tab_id, _TabId.PAYLOAD_COUNT_LABEL)}", Static)
-            pct = f" ({bytes_read / total_bytes * 100:.0f}%)" if total_bytes else ""
-            if target_idx == tab.active_set_idx:
-                label.update(f"[dim]{count:,} line(s) counted so far{pct}…[/dim]")
+            label = self.query_one(f"#{self._wid(tab.tab_id, _TabId.PAYLOAD_COUNT_LABEL)}", Static)
+            label.update(f"[dim]{message}[/dim]")
         except Exception:
+            # Progress of the background line counter is not visible; the final count
+            # still appears, so this is a warning rather than a failure.
             logger.warning("intruder: payload count progress not shown", exc_info=True)
 
     def _append_to_active_set(self, new_source) -> int:
