@@ -126,6 +126,12 @@ facts:
     check: intruder_tab_fields
     since: "2026-11-25"
 
+  - id: intruder.attack_runner
+    claim: "Жизненный цикл атаки Интрудера — в attack_runner.py; префикс воркера один"
+    kind: code
+    check: intruder_attack_runner
+    since: "2026-11-25"
+
   - id: repo.branches
     claim: "origin/develop и origin/main совпадают"
     kind: code

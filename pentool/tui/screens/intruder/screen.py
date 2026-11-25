@@ -26,16 +26,13 @@ from pentool.api.intruder_api import (
     CharPayloadSource,
     FilePayloadSource,
     IntruderAttack,
-    IntruderConfig,
     IntruderResult,
     NumericPayloadSource,
-    ProcessedPayloads,
     count_markers,
     process_payload,
 )
 from pentool.api.payload_serialization import deserialize_payloads, serialize_payloads
 from pentool.collections.filter_predicate import FilterPredicate, FilterSpec
-from pentool.core.activity import set_activity
 from pentool.core.logging import get_logger
 from pentool.tui.dialogs.intruder_generate import GenerateDialog
 from pentool.tui.dialogs.intruder_input import InputDialog
@@ -49,6 +46,7 @@ from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
+from pentool.tui.screens.intruder.attack_runner import AttackRunner
 from pentool.tui.screens.intruder.payload_sources import PayloadSources
 from pentool.tui.screens.intruder.results_view import (
     build_results_arrow,
@@ -91,10 +89,6 @@ _ATTACK_DESCRIPTIONS = {
     AttackType.PITCHFORK: "Multiple sets, parallel (zip)",
     AttackType.CLUSTER_BOMB: "Cartesian product of all sets",
 }
-
-#: Worker name and group of a tab's attack. Parsed back into a tab id in
-#: `on_worker_state_changed`, so producer and consumer must share this string.
-ATTACK_WORKER_PREFIX = "intruder-attack-"
 
 _RESULTS_COL_NAMES = ["#", "Payload(s)", "Status", "Length", "Time(ms)", "Error"]
 
@@ -251,6 +245,7 @@ class IntruderScreen(
         self._api = None
         # Payload picking / reading / counting lives in its own module (step 5).
         self._payload_sources = PayloadSources(self)
+        self._attack_runner = AttackRunner(self)
         # Saved selection in template-editor (for ADD §§ after focus loss)
         self._last_editor_selection: tuple | None = None
         self._last_click_time: float = 0.0
@@ -2180,232 +2175,53 @@ class IntruderScreen(
 
     # ── Attack start/stop/pause/resume ────────────────────────────────────
 
+    # ── Attack lifecycle (see intruder/attack_runner.py) ─────────────────────
+    # The lifecycle used to live here, in the middle of the screen: starting,
+    # supervising and stopping attacks is one responsibility and now has one home.
+
     def action_start_attack(self) -> None:
-        tab = self._active_tab
-        if tab is None:
-            return
-        running_tab = self._active_tab
-        running = bool(running_tab and running_tab.running)
-        logger.info("INTRUDER: action_start_attack called, running=%s", running)
-        if running:
-            return
-        if tab.payload_load_in_progress:
-            self.app.notify(
-                "A payload file is still being counted — wait for it to finish before starting",
-                severity="warning",
-                timeout=4,
-            )
-            return
-        try:
-            editor = self._template_editor()
-            w = editor.content_widget
-            template = w.text if isinstance(w, TextArea) else ""
-            logger.info("INTRUDER: template len=%d", len(template))
-        except (LookupError, NoMatches) as e:
-            # No tab, or its body is not mounted. This used to be a bare
-            # `except Exception`; it caught both this pair and a typo in a field
-            # name — but a typo would have produced "cannot get template"
-            # instead of the real cause, so the pair is named explicitly.
-            logger.error("INTRUDER: cannot get template: %s", e)
-            return
-        if not template.strip():
-            self.app.notify("Template is empty", severity="warning", timeout=3)
-            return
-        if count_markers(template) == 0:
-            self.app.notify(
-                "No §§ markers in template — use Auto §§ or Add §§ to mark positions first",
-                severity="warning",
-                timeout=5,
-            )
-            return
-        logger.info("INTRUDER: action_start: attack_type=%s", tab.attack_type)
-
-        processing_ops = self._get_processing_ops()
-        payload_sets = []
-        for ps in tab.payload_sources:
-            if len(ps) == 0:
-                processed = [""]
-            else:
-                processed = ProcessedPayloads(ps, processing_ops, self._apply_processing)
-            payload_sets.append(processed)
-
-        logger.info("INTRUDER: payload_sets sizes=%s", [len(ps) for ps in payload_sets])
-        if not any(p.strip() for ps in payload_sets for p in ps):
-            self.app.notify("No payloads configured", severity="warning", timeout=3)
-            return
-
-        from pentool.core.license import get_session_license
-
-        license_info = get_session_license()
-        is_pro = license_info.is_pro() if license_info else False
-
-        try:
-            threads = int(self.query_one("#intruder-threads", Input).value or "10")
-            if not is_pro:
-                threads = max(1, min(threads, 5))
-            else:
-                threads = max(1, min(threads, 200))
-        except (NoMatches, ValueError) as exc:
-            # The field is missing or not a number — the attack runs on 5/10
-            # threads while the screen keeps showing what was typed.
-            logger.debug("intruder: thread count not usable, falling back: %s", exc)
-            threads = 5 if not is_pro else 10
-
-        try:
-            delay_ms = int(self.query_one("#intruder-delay", Input).value or "0")
-            if not is_pro:
-                delay_ms = max(100, delay_ms)
-            else:
-                delay_ms = max(0, delay_ms)
-        except (NoMatches, ValueError) as exc:
-            # Same for the delay: the attack will use a different pace than the
-            # delay field shows, and the screen gives no hint of that.
-            logger.debug("intruder: delay not usable, falling back: %s", exc)
-            delay_ms = 100 if not is_pro else 0
-
-        turb_cb = self.query_one("#intruder-turbo", Checkbox)
-        turbo_mode = bool(turb_cb.value) if is_pro else False
-        if not is_pro:
-            turb_cb.value = False
-        tab.turbo_mode = turbo_mode
-
-        # Store the active tab's parameters in its state
-        tab.thread_count = threads
-        tab.delay_ms = delay_ms
-
-        config = IntruderConfig(
-            template=template,
-            attack_type=tab.attack_type,
-            payload_sets=payload_sets,
-            threads=threads,
-            delay_ms=delay_ms,
-            follow_redirects=False,
-            timeout=30,
-        )
-
-        api = self._get_api()
-        if api is None:
-            self.app.notify("No project open", severity="warning", timeout=3)
-            return
-
-        # Create an isolated attack for THIS tab (parallel to the others)
-        attack = api.make_attack(config, turbo_mode=turbo_mode)
-        tab.attack = attack
-
-        # Capture the tab: results are written into it, not into the active one
-        self.refresh_header()
-        tab.running = True
-        tab.paused = False
-        tab.all_results = []
-        self._clear_results()
-
-        total_payloads = sum(len(ps) for ps in payload_sets)
-        mode_label = " [⚡ Turbo]" if turbo_mode else ""
-        limit_label = "" if is_pro else " [FREE: limited]"
-        self.app.notify(
-            f"Attack started: {total_payloads} payload(s){mode_label}{limit_label}",
-            severity="success",
-            title="Intruder",
-        )
-        group = self._attack_group(tab.tab_id)
-        self._live_attacks[tab.tab_id] = attack
-        self.run_worker(self._run_attack(tab, attack), exclusive=False, name=group, group=group)
+        self._attack_runner.start()
 
     @staticmethod
     def _attack_group(tab_id: str) -> str:
-        """Worker group of a tab's attack — tab close cancels the attack by it.
-
-        Name and group intentionally match: ``on_worker_state_changed`` parses
-        the name, ``cancel_group`` looks up the group, and a second string with
-        the same letters would drift apart on the first rename.
-        """
-        return f"{ATTACK_WORKER_PREFIX}{tab_id}"
+        """Worker group of a tab's attack (tests and tab close rely on it)."""
+        return AttackRunner.group(tab_id)
 
     def _stop_tab_attack(self, tab: _IntruderTabState) -> None:
-        """Stop a tab's attack: cancel the worker and ask the attack to stop.
+        self._attack_runner.stop_tab(tab)
 
-        The worker is cancelled first: ``attack.stop()`` does not return at once
-        on a long network loop, and a closed tab must not wait for it.
-        """
-        try:
-            self.workers.cancel_group(self, self._attack_group(tab.tab_id))
-        except Exception:
-            # The attack worker survived: the closed tab will keep sending requests.
-            logger.exception("_stop_tab_attack: cancel_group failed for %s", tab.tab_id)
-        attack = getattr(tab, "attack", None)
-        self._live_attacks.pop(tab.tab_id, None)
-        tab.running = False
-        tab.paused = False
-        if attack is not None:
-            # On the App, not the screen: the screen may be leaving (on_unmount),
-            # and then its own cancel_node would kill the stop worker before it
-            # had a chance to run — the attack would stay alive.
-            try:
-                self.app.run_worker(attack.stop(), exit_on_error=False)  # type: ignore[attr-defined]
-            except Exception:
-                # `tab.running` is already False yet the attack keeps running:
-                # the screen considers it closed and Stop is no longer available.
-                logger.exception("_stop_tab_attack: attack.stop failed for %s", tab.tab_id)
+    async def _run_attack(self, tab: _IntruderTabState, attack) -> None:
+        """Run a tab's attack (tests call it directly)."""
+        await self._attack_runner.run(tab, attack)
 
-    async def _run_attack(self, tab: _IntruderTabState, attack: "IntruderAttack") -> None:
-        """Run the tab's isolated attack.
+    def _on_progress(self, done: int, total: int, tab: _IntruderTabState | None = None) -> None:
+        self._attack_runner.progress(done, total, tab)
 
-        ``tab`` is captured at start — results go into it, not into _active_tab,
-        so that with parallel attacks switching tabs does not scramble the data.
-        """
-        logger.info("INTRUDER: _run_attack started tab=%s type=%s", tab.tab_id, tab.attack_type)
-        set_activity("intruder", True)
+    def action_toggle_pause(self) -> None:
+        self._attack_runner.toggle_pause()
 
-        # Keep a reference to the working tab
-        _tab = tab
+    def action_resume(self) -> None:
+        logger.info("INTRUDER: action_resume tab=%s", self._active_tab.tab_id if self._active_tab else None)
+        self._attack_runner.resume()
 
-        def on_result(result: IntruderResult) -> None:
-            self.call_after_refresh(self._on_result, result, _tab)
+    def action_stop(self) -> None:
+        self._attack_runner.stop()
 
-        def on_progress(done: int, total: int) -> None:
-            self.call_after_refresh(self._on_progress, done, total, _tab)
-
-        try:
-            tab.running = True
-            await attack.run(on_result, on_progress)
-        except Exception as exc:
-            from pentool.core.error_guard import err
-
-            err(exc, "Intruder attack error", self, severity="error")
-        finally:
-            _tab.running = False
-            self._live_attacks.pop(_tab.tab_id, None)
-            set_activity("intruder", bool(self._live_attacks))
-            _tab.paused = False
-            _tab.attack = None
-            logger.info(
-                "INTRUDER: _run_attack tab=%s finished, results=%d",
-                _tab.tab_id,
-                len(_tab.all_results),
-            )
-            # The toolbar status is updated only if this is the active tab.
-            # Background tabs get their status pulled on switch (_sync_toolbar).
-            if _tab is self._active_tab:
-                self.refresh_header()
-                self.app.notify(
-                    f"Attack finished: {len(_tab.all_results)} requests",
-                    severity="information",
-                    timeout=4,
-                )
+    def on_worker_state_changed(self, event) -> None:
+        """Textual handler: stays on the screen, the runner decides what to do."""
+        self._attack_runner.handle_worker_state(event)
 
     def _on_result(self, result: IntruderResult, tab: _IntruderTabState | None = None) -> None:
-        """A result from a tab's attack — written into that tab (not _active_tab).
+        """A result from a tab's attack — written into that tab, not into the active one.
 
-        With parallel attacks the tab is captured at start and passed in here,
-        otherwise the result would land in whatever tab is active at the moment.
+        With parallel attacks the tab is captured at start and passed in here; without it
+        the result would land in whatever tab is open when the response arrives.
         """
         if tab is None:
             tab = self._active_tab
         if tab is None:
             return
         tab.all_results.append(result)
-        # Same visibility rule as the table repaint — it used to be a third copy here,
-        # so a filter fix had to be made in three places to take effect.
         if result_is_visible(
             result,
             filter_spec=tab.filter_spec,
@@ -2415,65 +2231,6 @@ class IntruderScreen(
             tab.filtered_results.append(result)
             self._add_result_row(result, tab)
         self._auto_save_result(result, tab)
-
-    def _on_progress(self, done: int, total: int, tab: _IntruderTabState | None = None) -> None:
-        if tab is None:
-            tab = self._active_tab
-        if tab is None:
-            return
-        try:
-            pb = self.query_one(f"#{self._wid(tab.tab_id, _TabId.ATTACK_PROGRESS)}", ProgressBar)
-            if done == 0:
-                pb.update(total=max(1, total), progress=0)
-            else:
-                pb.advance(done - pb.progress)
-        except Exception as exc:
-            logger.debug("op: %s", exc)
-        try:
-            pct = f"{done / total * 100:.1f}%" if total > 0 else "0%"
-            self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROGRESS_LABEL)}", Static).update(f"{done}/{total} ({pct})")
-        except Exception as exc:
-            logger.debug("op: %s", exc)
-
-    def action_toggle_pause(self) -> None:
-        tab = self._active_tab
-        if tab is None or not tab.running or tab.attack is None:
-            return
-        should_pause = not tab.paused
-        if should_pause:
-            self.run_worker(tab.attack.pause(), exit_on_error=False)
-        else:
-            self.run_worker(tab.attack.resume(), exit_on_error=False)
-        tab.paused = should_pause
-        self.refresh_header()
-        self.app.notify("Paused" if should_pause else "Resumed", timeout=2)
-
-    def action_resume(self) -> None:
-        logger.info("INTRUDER: action_resume tab=%s", self._active_tab.tab_id if self._active_tab else None)
-        self.refresh_header()
-        self.action_start_attack()
-
-    def action_stop(self) -> None:
-        tab = self._active_tab
-        if tab is not None:
-            self._stop_tab_attack(tab)
-        self.refresh_header()
-        self.app.notify("Attack stopped", severity="warning")
-
-    def on_worker_state_changed(self, event) -> None:
-        from textual.worker import WorkerState
-
-        name = getattr(event.worker, "name", "") or ""
-        if not name.startswith(ATTACK_WORKER_PREFIX):
-            return
-        tid = name[len(ATTACK_WORKER_PREFIX) :]
-        tab = self._tc_panel.get_state(tid)
-        if event.state in (WorkerState.SUCCESS, WorkerState.CANCELLED, WorkerState.ERROR):
-            if tab is not None and tab.running:
-                tab.paused = False
-                # If this is the active tab — sync the toolbar
-                if tab is self._active_tab:
-                    self.refresh_header()
 
     def _add_result_row(self, result: IntruderResult, tab: _IntruderTabState | None = None) -> None:
         if tab is None:

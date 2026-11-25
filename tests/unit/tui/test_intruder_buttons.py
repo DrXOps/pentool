@@ -20,9 +20,9 @@ def mock_intruder_deps():
     """Mock the heavy IntruderScreen dependencies."""
     patches = [
         patch("pentool.tui.screens.intruder.screen.get_logger", return_value=MagicMock()),
-        patch("pentool.tui.screens.intruder.screen.IntruderConfig", MagicMock()),
+        patch("pentool.modules.intruder.IntruderConfig", MagicMock()),
         patch("pentool.tui.screens.intruder.screen.IntruderResult", MagicMock()),
-        patch("pentool.tui.screens.intruder.screen.count_markers", return_value=1),
+        patch("pentool.modules.intruder.count_markers", return_value=1),
         patch("pentool.tui.screens.intruder.payload_sources.count_lines_with_progress", return_value=0),
     ]
     for p in patches:

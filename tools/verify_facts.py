@@ -226,6 +226,25 @@ def recon_prompts() -> tuple[bool, str]:
     return not local_module and len(tasks) == 3, f"локальный prompts.py: {local_module}; задач в реестре: {tasks}"
 
 
+def intruder_attack_runner() -> tuple[bool, str]:
+    module = _exists("pentool/tui/screens/intruder/attack_runner.py")
+    runner = _read("pentool/tui/screens/intruder/attack_runner.py")
+    screen = _read("pentool/tui/screens/intruder/screen.py")
+    moved = all(
+        marker in runner for marker in ("def start(", "async def run(", "def stop_tab(", "def handle_worker_state(")
+    )
+    delegates = "AttackRunner(self)" in screen and "self._attack_runner.start()" in screen
+    # The prefix must be spelled once (the constant) and used by both sides.
+    single_prefix = runner.count('ATTACK_WORKER_PREFIX = "intruder-attack-"') == 1
+    no_copy = "def _run_attack" not in screen.replace("async def _run_attack", "")
+    lifecycle_stays = "def action_start_attack(self) -> None:\n        self._attack_runner.start()" in screen
+    ok = module and moved and delegates and single_prefix and no_copy and lifecycle_stays
+    return ok, (
+        f"модуль: {module}; lifecycle в раннере: {moved}; экран делегирует: {delegates}; "
+        f"префикс один: {single_prefix}; логики в экране нет: {no_copy}"
+    )
+
+
 def intruder_tab_fields() -> tuple[bool, str]:
     module = _exists("pentool/tui/screens/intruder/tab_fields.py")
     screen = _read("pentool/tui/screens/intruder/screen.py")
@@ -247,8 +266,9 @@ def intruder_results_view() -> tuple[bool, str]:
     # The table repaint and the live result handler must share the visibility rule;
     # a third inline copy in `_on_result` was found and removed in step 5.5.
     shared_filter = screen.count("result_is_visible(") >= 2
-    # One spelling of the worker prefix: the constant itself, plus both users.
-    single_prefix = screen.count('"intruder-attack-"') == 1 and screen.count("ATTACK_WORKER_PREFIX") >= 3
+    # The worker prefix lives in attack_runner.py (fact `intruder.attack_runner`); the
+    # results view only needs to know that no second spelling crept into the screen.
+    single_prefix = '"intruder-attack-' not in screen
     ok = module and delegates and single_mapper and no_inline_arrow and shared_filter and single_prefix
     return ok, (
         f"модуль: {module}; экран делегирует: {delegates}; "
@@ -337,6 +357,7 @@ CHECKS: dict[str, Check] = {
     "intruder_payloads": intruder_payloads,
     "intruder_results_view": intruder_results_view,
     "intruder_tab_fields": intruder_tab_fields,
+    "intruder_attack_runner": intruder_attack_runner,
     "tui_dead_code": tui_dead_code,
     "recon_prompts": recon_prompts,
     "repo_branches": repo_branches,

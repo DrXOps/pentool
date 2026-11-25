@@ -29,6 +29,7 @@
 | `recon.prompts` | Промпты Recon в общем реестре задач (pro/…/ai_discovery/prompts.py удалён) | проверка в `tools/verify_facts.py` | ✅ OK |
 | `intruder.results_view` | Рендер результатов Интрудера вынесен: одна сборка Arrow-таблицы и один маппер строк | проверка в `tools/verify_facts.py` | ✅ OK |
 | `intruder.tab_fields` | Поля активной вкладки Интрудера — один дескриптор вместо восьми пар property/setter | проверка в `tools/verify_facts.py` | ✅ OK |
+| `intruder.attack_runner` | Жизненный цикл атаки Интрудера — в attack_runner.py; префикс воркера один | проверка в `tools/verify_facts.py` | ✅ OK |
 | `repo.branches` | origin/develop и origin/main совпадают | проверка в `tools/verify_facts.py` | ✅ OK |
 | `ci.green` | CI на develop зелёный: Tests, CI, Dev Build (test-windows — advisory) | проверено 2026-11-25: OK (ручная) | ⚠️ OK (ручная) |
 | `license.core` | Лицензии: ядро AGPL-3.0, PRO — proprietary | проверка в `tools/verify_facts.py` | ✅ OK |
