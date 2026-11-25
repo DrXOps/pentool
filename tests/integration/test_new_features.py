@@ -57,42 +57,41 @@ class TestSequencerScreen:
             assert len(ta) > 0
 
     @pytest.mark.asyncio
-    async def test_seq_analyze_button_in_dom(self) -> None:
-        """Analyze button is present in DOM."""
+    async def test_seq_actions_live_only_in_the_module_header(self) -> None:
+        """Analyze/Load/Clear/Copy/Export are header actions — and appear once.
+
+        The screen used to draw its own Toolbar with the same five buttons while the
+        module header offered them too, so the user saw the row twice (the same defect
+        was fixed in Scanner earlier).
+        """
         from pentool.tui.app import PentoolApp
+        from pentool.tui.screens.sequencer.screen import SequencerScreen
+        from pentool.tui.widgets.toolbar import Toolbar
 
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
             await pilot.press("Q")
             await pilot.pause()
-            btn = app.query("#btn-seq-analyze")
-            assert len(btn) > 0
-
-    @pytest.mark.asyncio
-    async def test_seq_export_button_in_dom(self) -> None:
-        """Export button (Block 4.5) is present in DOM."""
-        from pentool.tui.app import PentoolApp
-
-        app = PentoolApp()
-        async with app.run_test(size=(120, 30)) as pilot:
-            await pilot.pause()
-            await pilot.press("Q")
-            await pilot.pause()
-            btn = app.query("#btn-seq-export")
-            assert len(btn) > 0
+            screen = app.query_one(SequencerScreen)
+            offered = {action.action for action in screen.header_spec().actions}
+            assert {"analyze", "load", "clear", "copy", "export"} <= offered
+            assert not screen.query(Toolbar), "the action row is drawn twice"
 
     @pytest.mark.asyncio
     async def test_seq_analyze_no_tokens_shows_warning(self) -> None:
         """Analyze without tokens does not crash."""
         from pentool.tui.app import PentoolApp
+        from pentool.tui.screens.sequencer.screen import SequencerScreen
 
         app = PentoolApp()
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
             await pilot.press("Q")
             await pilot.pause()
-            await pilot.click("#btn-seq-analyze")
+            # The header dispatches to `header_action("analyze")`; the action itself is
+            # the same method, so calling it is what a header press ends up doing.
+            app.query_one(SequencerScreen).action_analyze()
             await pilot.pause()
             # No crash = OK
 

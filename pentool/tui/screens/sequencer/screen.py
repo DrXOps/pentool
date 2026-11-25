@@ -20,7 +20,6 @@ from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.toolbar import Toolbar
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
@@ -55,18 +54,12 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         self._source: str = "manual"  # currently selected source
 
     def compose(self) -> ComposeResult:
-        # ── Toolbar ────────────────────────────────────────────────────────────
-        # Capture/Stop live in the module header (see header_spec): one place
-        # decides what "start" and "stop" mean for every module.
-        yield Toolbar(
-            ToolbarButton("⚡ Analyze", "btn-seq-analyze"),
-            ToolbarButton("📂 Load File", "btn-seq-load"),
-            ToolbarButton("🗑 Clear", "btn-seq-clear"),
-            ToolbarButton("📋 Copy", "btn-seq-copy"),
-            ToolbarButton("💾 Export", "btn-seq-export"),
-        )
-
         # ── Config row ─────────────────────────────────────────────────────────
+        # Every one-shot action (Analyze/Load/Clear/Copy/Export) and Capture/Stop
+        # lives in the module header — `header_spec()` below is the single place.
+        # This screen used to draw the same five buttons twice: a Toolbar here and
+        # the header row above it. The duplicates were reported from the UI and the
+        # same defect was fixed in Scanner earlier.
         with Horizontal(id="seq-config-row"):
             yield Label("Source:", classes="seq-cfg-label")
             yield ToolbarButton("Manual input ▼", "btn-seq-source")
@@ -116,8 +109,6 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
             yield Static(" ", id="seq-assessment")
             yield Static(" ", id="seq-bits-label")
 
-    # ── Toolbar ───────────────────────────────────────────────────────────────
-
     # ── Module header (see pentool/tui/header.py) ─────────────────────────
     def header_spec(self) -> HeaderSpec:
         """Capture state on the header, one-shot actions next to it."""
@@ -164,26 +155,6 @@ class SequencerScreen(ContentClipboardMixin, AppMixin, Widget):
         refresh = getattr(self.app, "refresh_header", None)
         if refresh is not None:
             refresh()
-
-    @on(ToolbarButton.Pressed, "#btn-seq-analyze")
-    def on_btn_seq_analyze(self, _: ToolbarButton.Pressed) -> None:
-        self.action_analyze()
-
-    @on(ToolbarButton.Pressed, "#btn-seq-load")
-    def on_btn_seq_load(self, _: ToolbarButton.Pressed) -> None:
-        self._load_file()
-
-    @on(ToolbarButton.Pressed, "#btn-seq-clear")
-    def on_btn_seq_clear(self, _: ToolbarButton.Pressed) -> None:
-        self.action_clear_tokens()
-
-    @on(ToolbarButton.Pressed, "#btn-seq-copy")
-    def on_btn_seq_copy(self, _: ToolbarButton.Pressed) -> None:
-        self._copy_report()
-
-    @on(ToolbarButton.Pressed, "#btn-seq-export")
-    def on_btn_seq_export(self, _: ToolbarButton.Pressed) -> None:
-        self._export_report()
 
     @on(ToolbarButton.Pressed, "#btn-seq-source")
     def on_btn_seq_source(self, event: ToolbarButton.Pressed) -> None:
