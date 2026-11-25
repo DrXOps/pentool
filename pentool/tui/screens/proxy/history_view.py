@@ -64,3 +64,16 @@ def merge_older(rows: list, older_newest_first: list) -> list:
     The service returns newest-first; the table is oldest-first, hence the reversal.
     """
     return list(reversed(older_newest_first)) + rows
+
+
+def pick_row(rows: list, row_index: int) -> dict | None:
+    """The row at ``row_index``, or ``None`` when the index is stale.
+
+    Highlight events can arrive after a reload shortened the table, so the bounds check
+    belongs here rather than in every caller.
+    """
+    if 0 <= row_index < len(rows):
+        row = rows[row_index]
+        if isinstance(row, dict):
+            return row
+    return None

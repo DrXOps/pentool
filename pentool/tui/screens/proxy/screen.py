@@ -26,7 +26,12 @@ from pentool.tui.messages import SendToIntruder, SendToRepeater, SyncScopeToTarg
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.module_screen import ModuleScreen
-from pentool.tui.screens.proxy.history_view import HistoryCounter, merge_older, page_window
+from pentool.tui.screens.proxy.history_view import (
+    HistoryCounter,
+    merge_older,
+    page_window,
+    pick_row,
+)
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.context_menu import ContextMenu
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
@@ -1282,38 +1287,32 @@ class ProxyScreen(
         self._update_ws_history_count_label()
 
     def _select_row(self, row_idx: int) -> None:
-        try:
-            if 0 <= row_idx < len(self._rows_cache):
-                row = self._rows_cache[row_idx]
-                new_id = row.get("id")
-                if new_id == self._selected_req_id:
-                    return
-                self._selected_req_id = new_id
-                # Debounce: cancel pending timer, schedule _load_row_details in 0.25s.
-                if self._highlight_debounce_handle is not None:
-                    try:
-                        self._highlight_debounce_handle.stop()
-                    except Exception as exc:
-                        # The timer already fired — nothing to stop; the handle is
-                        # overwritten by the next line anyway.
-                        logger.debug("proxy: highlight timer already gone: %s", exc)
-                self._highlight_debounce_handle = self.set_timer(0.25, lambda: self._debounced_load(new_id))
-        except Exception as exc:
-            logger.error("PROXY SCREEN: _select_row crashed: %s", exc, exc_info=True)
+        """Highlight of an HTTP History row → details, debounced by 0.25 s.
+
+        The debounce exists because the highlight event fires while the cursor moves
+        through rows; loading details for every passed row would flood the storage.
+        """
+        row = pick_row(self._rows_cache, row_idx)
+        if row is None:
+            return
+        new_id = row.get("id")
+        if new_id is None or new_id == self._selected_req_id:
+            return
+        self._selected_req_id = new_id
+        if self._highlight_debounce_handle is not None:
+            self._highlight_debounce_handle.stop()
+        self._highlight_debounce_handle = self.set_timer(0.25, lambda: self._debounced_load(new_id))
 
     def _select_ws_row(self, row_idx: int) -> None:
-        """Select a row in WS History — loads details into the WS panels."""
-        try:
-            if 0 <= row_idx < len(self._ws_rows_cache):
-                row = self._ws_rows_cache[row_idx]
-                row_id = row.get("id")
-                if row_id is not None:
-                    if row_id == self._selected_ws_req_id:
-                        return
-                    self._selected_ws_req_id = row_id
-                    self.run_worker(self._load_ws_row_details(row_id))
-        except Exception as exc:
-            logger.error("PROXY SCREEN: _select_ws_row crashed: %s", exc, exc_info=True)
+        """Highlight of a WS History row → details, loaded at once (WS rows are few)."""
+        row = pick_row(self._ws_rows_cache, row_idx)
+        if row is None:
+            return
+        row_id = row.get("id")
+        if row_id is None or row_id == self._selected_ws_req_id:
+            return
+        self._selected_ws_req_id = row_id
+        self.run_worker(self._load_ws_row_details(row_id))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.data_table.id == "ws-request-list":
