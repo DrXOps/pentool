@@ -2218,13 +2218,13 @@ class IntruderScreen(
         if tab is None:
             return
         try:
+            # The parsing rule ("strip, skip blanks and '#' comments") lives in
+            # `modules/intruder.py` and is shared with the drop zone and the API —
+            # this screen used to keep its own copy of the loop plus a file reader.
+            from pentool.api.intruder_api import load_payloads_from_file
+
             loop = asyncio.get_running_loop()
-            content = await loop.run_in_executor(None, self._read_file_sync, path)
-            payloads: list[str] = []
-            for line in content.splitlines():
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    payloads.append(line)
+            payloads = await loop.run_in_executor(None, load_payloads_from_file, path)
         except Exception as exc:
             from pentool.core.error_guard import err
 
@@ -2289,10 +2289,6 @@ class IntruderScreen(
                 label.update(f"[dim]{count:,} line(s) counted so far{pct}…[/dim]")
         except Exception:
             logger.warning("intruder: payload count progress not shown", exc_info=True)
-
-    @staticmethod
-    def _read_file_sync(path: str) -> str:
-        return Path(path).read_text(encoding="utf-8", errors="replace")
 
     def _append_to_active_set(self, new_source) -> int:
         tab = self._active_tab
