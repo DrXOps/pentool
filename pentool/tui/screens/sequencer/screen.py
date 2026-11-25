@@ -17,6 +17,7 @@ from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import SEQUENCER_BINDINGS
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.screens.module_screen import ModuleScreen
+from pentool.tui.widgets.action_row import action_buttons, action_of
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
@@ -60,6 +61,7 @@ class SequencerScreen(ContentClipboardMixin, ModuleScreen):
         # the header row above it. The duplicates were reported from the UI and the
         # same defect was fixed in Scanner earlier.
         with Horizontal(id="seq-config-row"):
+            yield from action_buttons(self.header_spec().actions)
             yield Label("Source:", classes="seq-cfg-label")
             yield ToolbarButton("Manual input ▼", "btn-seq-source")
             yield Label("  Param:", classes="seq-cfg-label")
@@ -109,6 +111,11 @@ class SequencerScreen(ContentClipboardMixin, ModuleScreen):
             yield Static(" ", id="seq-bits-label")
 
     # ── Module header (see pentool/tui/header.py) ─────────────────────────
+    @on(ToolbarButton.Pressed, ".tool-act")
+    def _on_tool_action(self, event: ToolbarButton.Pressed) -> None:
+        """A button in the tool's own row — same path as the header buttons."""
+        self.header_action(action_of(event.button))
+
     def header_spec(self) -> HeaderSpec:
         """Capture state on the header, one-shot actions next to it."""
         capturing = bool(getattr(self, "_capturing", False))

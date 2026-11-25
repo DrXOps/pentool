@@ -114,7 +114,9 @@ class UtilsScreen(ModuleScreen):
             counters=inner.counters,
             tabs=tabs,
             active_tab=self._active_kind,
-            actions=inner.actions,
+            # Actions are drawn inside the tool's row, next to its own controls
+            # (owner's layout): the header keeps only the chips and the state.
+            actions=(),
             more=inner.more,
         )
 

@@ -16,6 +16,7 @@ from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
 from pentool.tui.markup import esc
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.screens.module_screen import ModuleScreen
+from pentool.tui.widgets.action_row import action_buttons, action_of
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.toolbar_button import ToolbarButton
@@ -49,6 +50,11 @@ class DecoderScreen(ContentClipboardMixin, ModuleScreen):
         "smart": "_smart_decode",
     }
 
+    @on(ToolbarButton.Pressed, ".tool-act")
+    def _on_tool_action(self, event: ToolbarButton.Pressed) -> None:
+        """A button in the tool's own row — same path as the header buttons."""
+        self.header_action(action_of(event.button))
+
     def header_spec(self) -> HeaderSpec:
         """The five one-shot actions; the operation picker stays in the config row."""
         return HeaderSpec(
@@ -65,6 +71,7 @@ class DecoderScreen(ContentClipboardMixin, ModuleScreen):
 
         # ── Operation selector (adding steps) ──────────────────────────────────
         with Horizontal(id="dec-op-row"):
+            yield from action_buttons(self.header_spec().actions)
             yield Label("Operation:", id="dec-op-label")
             yield ToolbarButton(f"{self._selected_op} ▼", "btn-dec-op-select")
             yield Label("  Chain:", id="dec-chain-label")

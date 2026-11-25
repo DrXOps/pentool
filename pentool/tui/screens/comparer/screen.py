@@ -6,6 +6,7 @@ import os
 import re
 from pathlib import Path
 
+from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
@@ -17,8 +18,10 @@ from pentool.tui.hotkeys.defaults import COMPARER_BINDINGS
 from pentool.tui.markup import esc
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.screens.module_screen import ModuleScreen
+from pentool.tui.widgets.action_row import action_buttons, action_of
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
+from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
@@ -45,6 +48,11 @@ class ComparerScreen(ContentClipboardMixin, ModuleScreen):
         "clear": "action_clear",
     }
 
+    @on(ToolbarButton.Pressed, ".tool-act")
+    def _on_tool_action(self, event: ToolbarButton.Pressed) -> None:
+        """A button in the tool's own row — same path as the header buttons."""
+        self.header_action(action_of(event.button))
+
     def header_spec(self) -> HeaderSpec:
         return HeaderSpec(
             actions=(
@@ -66,6 +74,7 @@ class ComparerScreen(ContentClipboardMixin, ModuleScreen):
 
         # ── Stat bar ───────────────────────────────────────────────────────────
         with Horizontal(id="cmp-stat-bar"):
+            yield from action_buttons(self.header_spec().actions)
             yield Static("[dim]— Press Compare or Ctrl+Enter to diff —[/dim]", id="cmp-stats", markup=True)
 
         # ── Two TextAreas via ContentPanel ──────────────────────────────────────
