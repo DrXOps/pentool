@@ -6,29 +6,26 @@ import os
 import re
 from pathlib import Path
 
-from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.widget import Widget
 from textual.widgets import Static, TextArea
 
 from pentool.core.logging import get_logger
+from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import COMPARER_BINDINGS
 from pentool.tui.markup import esc
-from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.toolbar import Toolbar
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 
-class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
+class ComparerScreen(ContentClipboardMixin, ModuleScreen):
     """Side-by-side text diff with difference highlighting."""
 
     DEFAULT_CSS = _CSS
@@ -39,15 +36,33 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
         super().__init__(**kwargs)
         self._last_result = None
 
-    def compose(self) -> ComposeResult:
-        # ── Toolbar ────────────────────────────────────────────────────────────
-        yield Toolbar(
-            ToolbarButton("⇄ Compare", "btn-cmp-compare"),
-            ToolbarButton("↑ Load Left", "btn-cmp-load-left"),
-            ToolbarButton("↑ Load Right", "btn-cmp-load-right"),
-            ToolbarButton("📋 Copy Diff", "btn-cmp-copy"),
-            ToolbarButton("🗑 Clear", "btn-cmp-clear"),
+    #: Header buttons (see `header_spec`) → methods that run them.
+    ACTIONS = {
+        "compare": "action_compare",
+        "load_left": "_header_load_left",
+        "load_right": "_header_load_right",
+        "copy": "_copy_diff",
+        "clear": "action_clear",
+    }
+
+    def header_spec(self) -> HeaderSpec:
+        return HeaderSpec(
+            actions=(
+                HeaderAction("compare", "⇄ Compare"),
+                HeaderAction("load_left", "↑ Load Left"),
+                HeaderAction("load_right", "↑ Load Right"),
+                HeaderAction("copy", "📋 Copy Diff"),
+                HeaderAction("clear", "🗑 Clear"),
+            ),
         )
+
+    def _header_load_left(self) -> None:
+        self._load_from_file("left")
+
+    def _header_load_right(self) -> None:
+        self._load_from_file("right")
+
+    def compose(self) -> ComposeResult:
 
         # ── Stat bar ───────────────────────────────────────────────────────────
         with Horizontal(id="cmp-stat-bar"):
@@ -91,26 +106,6 @@ class ComparerScreen(ContentClipboardMixin, AppMixin, Widget):
             )
 
     # ── Toolbar ───────────────────────────────────────────────────────────────
-
-    @on(ToolbarButton.Pressed, "#btn-cmp-compare")
-    def on_btn_cmp_compare(self, _: ToolbarButton.Pressed) -> None:
-        self.action_compare()
-
-    @on(ToolbarButton.Pressed, "#btn-cmp-load-left")
-    def on_btn_cmp_load_left(self, _: ToolbarButton.Pressed) -> None:
-        self._load_from_file("left")
-
-    @on(ToolbarButton.Pressed, "#btn-cmp-load-right")
-    def on_btn_cmp_load_right(self, _: ToolbarButton.Pressed) -> None:
-        self._load_from_file("right")
-
-    @on(ToolbarButton.Pressed, "#btn-cmp-copy")
-    def on_btn_cmp_copy(self, _: ToolbarButton.Pressed) -> None:
-        self._copy_diff()
-
-    @on(ToolbarButton.Pressed, "#btn-cmp-clear")
-    def on_btn_cmp_clear(self, _: ToolbarButton.Pressed) -> None:
-        self.action_clear()
 
     def _load_from_file(self, side: str) -> None:
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode

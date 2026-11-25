@@ -8,17 +8,16 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.widget import Widget
 from textual.widgets import Label, Static
 
 from pentool.core.logging import get_logger
+from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import DECODER_BINDINGS
 from pentool.tui.markup import esc
-from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.toolbar import Toolbar
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
@@ -26,7 +25,7 @@ logger = get_logger(__name__)
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
 
-class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
+class DecoderScreen(ContentClipboardMixin, ModuleScreen):
     """Encoder / Decoder with operation chains."""
 
     DEFAULT_CSS = _CSS
@@ -41,15 +40,28 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
         self._selected_op: str = OP_LABELS[0]  # currently selected operation
         self._chain: list[str] = []  # list of operations in the chain
 
-    def compose(self) -> ComposeResult:
-        # ── Toolbar ────────────────────────────────────────────────────────────
-        yield Toolbar(
-            ToolbarButton("▶ Run", "btn-dec-run"),
-            ToolbarButton("+ Add Step", "btn-dec-add"),
-            ToolbarButton("✗ Clear Chain", "btn-dec-clrchain"),
-            ToolbarButton("⇅ Swap I/O", "btn-dec-swap"),
-            ToolbarButton("🔍 Smart", "btn-dec-smart"),
+    #: Header buttons (see `header_spec`) → methods that run them.
+    ACTIONS = {
+        "run": "action_run_chain",
+        "add_step": "_add_step",
+        "clear_chain": "_clear_chain",
+        "swap": "_swap_io",
+        "smart": "_smart_decode",
+    }
+
+    def header_spec(self) -> HeaderSpec:
+        """The five one-shot actions; the operation picker stays in the config row."""
+        return HeaderSpec(
+            actions=(
+                HeaderAction("run", "▶ Run"),
+                HeaderAction("add_step", "+ Add Step"),
+                HeaderAction("clear_chain", "✗ Clear Chain"),
+                HeaderAction("swap", "⇅ Swap I/O"),
+                HeaderAction("smart", "🔍 Smart"),
+            ),
         )
+
+    def compose(self) -> ComposeResult:
 
         # ── Operation selector (adding steps) ──────────────────────────────────
         with Horizontal(id="dec-op-row"):
@@ -99,29 +111,9 @@ class DecoderScreen(ContentClipboardMixin, AppMixin, Widget):
 
     # ── Toolbar actions ────────────────────────────────────────────────────────
 
-    @on(ToolbarButton.Pressed, "#btn-dec-run")
-    def on_btn_dec_run(self, _: ToolbarButton.Pressed) -> None:
-        self.action_run_chain()
-
-    @on(ToolbarButton.Pressed, "#btn-dec-add")
-    def on_btn_dec_add(self, _: ToolbarButton.Pressed) -> None:
-        self._add_step()
-
     @on(ToolbarButton.Pressed, "#btn-dec-op-select")
     def on_btn_dec_op_select(self, event: ToolbarButton.Pressed) -> None:
         self._open_op_menu(event.button)
-
-    @on(ToolbarButton.Pressed, "#btn-dec-clrchain")
-    def on_btn_dec_clrchain(self, _: ToolbarButton.Pressed) -> None:
-        self._clear_chain()
-
-    @on(ToolbarButton.Pressed, "#btn-dec-swap")
-    def on_btn_dec_swap(self, _: ToolbarButton.Pressed) -> None:
-        self._swap_io()
-
-    @on(ToolbarButton.Pressed, "#btn-dec-smart")
-    def on_btn_dec_smart(self, _: ToolbarButton.Pressed) -> None:
-        self._smart_decode()
 
     # ── ContentPanel handlers ──────────────────────────────────────────────────
 

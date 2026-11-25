@@ -6,27 +6,25 @@ import asyncio
 import time
 from pathlib import Path
 
-from textual import on, work
+from textual import work
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
-from textual.widget import Widget
 from textual.widgets import Tree
 
 from pentool.core.logging import get_logger
+from pentool.tui.header import HeaderAction, HeaderSpec
 from pentool.tui.hotkeys.defaults import TARGET_BINDINGS
 from pentool.tui.markup import esc
 from pentool.tui.messages import SendHostToScanner, SendToRepeater, SyncScopeToProxy
 from pentool.tui.mixins.ai_sync import AiModeSyncMixin
-from pentool.tui.mixins.app_mixin import AppMixin
 from pentool.tui.mixins.autosave import AutoSaveMixin
 from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.safe_query import safe_query_one
+from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.resize_handle import ResizeHandle
-from pentool.tui.widgets.toolbar import Toolbar
-from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "screen.tcss").read_text(encoding="utf-8")
 
@@ -133,7 +131,7 @@ def _format_tech_profile(profile: dict) -> str:
     return " | ".join(parts) if parts else ""
 
 
-class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMixin, Widget):
+class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, ModuleScreen):
     """Tree view of discovered hosts and URLs."""
 
     DEFAULT_CSS = _CSS
@@ -157,35 +155,44 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         self._sitemap_dirty: bool = False
         self._sitemap_save_timer = None
 
+    #: Header buttons (see `header_spec`) → methods that run them.
+    ACTIONS = {
+        "add_scope": "action_add_to_scope",
+        "remove_scope": "action_remove_from_scope",
+        "scope_rules": "action_open_scope_rules",
+        "crawl_scope": "action_crawl_scope",
+        "crawl_host": "action_crawl_selected_host",
+        "clear": "action_clear",
+        "export": "action_export_json",
+        "recon": "_header_open_recon",
+    }
+
+    def header_spec(self) -> HeaderSpec:
+        """Scope and crawl actions; the "Use AI" setting stays in the config row."""
+        return HeaderSpec(
+            actions=(
+                HeaderAction("add_scope", "★ Add to Scope"),
+                HeaderAction("remove_scope", "✖ Remove from Scope"),
+                HeaderAction("scope_rules", "⚙ Scope"),
+                HeaderAction("crawl_scope", "🕷 Crawl Scope"),
+                HeaderAction("crawl_host", "🕷 Crawl Host"),
+                HeaderAction("export", "📄 Export JSON"),
+                HeaderAction("recon", "🧭 Recon"),
+                HeaderAction("clear", "🗑 Clear"),
+            ),
+        )
+
     def compose(self) -> ComposeResult:
-        yield Toolbar(
-            ToolbarButton("★ Add to Scope", "btn-add-scope"),
-            ToolbarButton("✖ Remove from Scope", "btn-remove-scope"),
-            ToolbarButton("⚙ Scope", "btn-scope-rules", tooltip="Edit scope rules (hosts, wildcards, regex)"),
-            ToolbarButton(
-                "🕷 Crawl Scope",
-                "btn-crawl-scope",
-                tooltip="Crawl every in-scope host with the Spider",
-            ),
-            ToolbarButton(
-                "🕷 Crawl Host",
-                "btn-crawl-host",
-                tooltip="Crawl the selected host in the tree with the Spider",
-            ),
-            # "🤖 Use AI" checkbox lives in its own Horizontal so it can be shown/hidden
-            Horizontal(
-                Checkbox(
+        # A setting, not an action: it lives in its own row under the module header.
+        with Horizontal(id="tgt-config-row"):
+            # The wrapper keeps its id: `_sync_ai_visibility` toggles `#ai-crawl-box`.
+            with Horizontal(id="ai-crawl-box"):
+                yield Checkbox(
                     "🤖 Use AI",
                     id="cfg-ai-use",
                     value=False,
                     tooltip="When set, Spider adds AI-suggested endpoints after crawling",
-                ),
-                id="ai-crawl-box",
-            ),
-            ToolbarButton("🗑 Clear", "btn-clear"),
-            ToolbarButton("📄 Export JSON", "btn-export"),
-            ToolbarButton("🧭 Recon", "btn-recon", tooltip="Open Recon screen for the selected domain"),
-        )
+                )
 
         # Hide the AI section on startup when ai_enabled is off
         from pentool.core.config import get_config
@@ -557,36 +564,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
             return
         self.app.post_message(SendHostToScanner(host))  # type: ignore[attr-defined]
 
-    @on(ToolbarButton.Pressed, "#btn-add-scope")
-    def on_btn_add_scope(self, _: ToolbarButton.Pressed) -> None:
-        self.action_add_to_scope()
-
-    @on(ToolbarButton.Pressed, "#btn-remove-scope")
-    def on_btn_remove_scope(self, _: ToolbarButton.Pressed) -> None:
-        self.action_remove_from_scope()
-
-    @on(ToolbarButton.Pressed, "#btn-scope-rules")
-    def on_btn_scope_rules(self, _: ToolbarButton.Pressed) -> None:
-        self.action_open_scope_rules()
-
-    @on(ToolbarButton.Pressed, "#btn-crawl-scope")
-    def on_btn_crawl_scope(self, _: ToolbarButton.Pressed) -> None:
-        self.action_crawl_scope()
-
-    @on(ToolbarButton.Pressed, "#btn-crawl-host")
-    def on_btn_crawl_host(self, _: ToolbarButton.Pressed) -> None:
-        self.action_crawl_selected_host()
-
-    @on(ToolbarButton.Pressed, "#btn-clear")
-    def on_btn_clear(self, _: ToolbarButton.Pressed) -> None:
-        self.action_clear()
-
-    @on(ToolbarButton.Pressed, "#btn-export")
-    def on_btn_export(self, _: ToolbarButton.Pressed) -> None:
-        self.action_export_json()
-
-    @on(ToolbarButton.Pressed, "#btn-recon")
-    async def on_btn_recon(self, _: ToolbarButton.Pressed) -> None:
+    def _header_open_recon(self) -> None:
         """Open Recon screen and pre-fill domain from selected host."""
         from urllib.parse import urlparse
 
@@ -610,7 +588,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, AppMix
         # Get-or-mount: Recon is lazy, so `action_switch_module` alone only
         # *starts* mounting it — pre-filling afterwards needs the widget.
         if domain:
-            await self._prefill_recon_domain(domain)
+            self.run_worker(self._prefill_recon_domain(domain))
         self.app.action_switch_module("recon")
 
     async def _prefill_recon_domain(self, domain: str) -> None:
