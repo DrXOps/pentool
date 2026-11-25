@@ -389,7 +389,15 @@ def render(rows: list[tuple[str, str, str, str]]) -> str:
         "|---|---|---|---|",
     ]
     for fact_id, claim, detail, state in rows:
-        lines.append(f"| `{fact_id}` | {claim} | {detail} | {'✅ OK' if state == 'OK' else '⚠️ ' + state} |")
+        # Detail is only kept when it explains a problem: an "OK" cell that embeds live
+        # numbers (commit SHAs, timings) would make this page stale on every commit.
+        if state == "OK":
+            cell = "✅ OK"
+            how = "проверка в `tools/verify_facts.py`"
+        else:
+            cell = "⚠️ " + state
+            how = detail
+        lines.append(f"| `{fact_id}` | {claim} | {how} | {cell} |")
     lines += [
         "",
         "`kind: external` — проверяется сетью или руками (`--online`), дата проверки хранится",
