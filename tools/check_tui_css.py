@@ -222,6 +222,21 @@ def _tokens(selector: str) -> tuple[set[str], set[str], set[str], set[str]]:
     return tags, ids, classes, prefixes
 
 
+def _is_id_attribute(node: ast.AST) -> bool:
+    """True for ``name = "..."`` / ``name: str = "..."`` where the name holds an id.
+
+    A widget can be created as ``Input(id=self._rename_input_id)`` — the literal lives in
+    a class attribute, not in the ``id=`` keyword, so it has to be collected too.
+    """
+    name = ""
+    if isinstance(node, ast.Name):
+        name = node.id
+    elif isinstance(node, ast.Attribute):
+        name = node.attr
+    lowered = name.lower()
+    return lowered == "id" or lowered.endswith("_id")
+
+
 def _string_literals(tree: ast.AST) -> tuple[set[str], set[str], set[str]]:
     """Return (id_literals, id_prefixes, class_tokens) found in a module AST.
 
@@ -268,6 +283,18 @@ def _string_literals(tree: ast.AST) -> tuple[set[str], set[str], set[str]]:
                     ids.add(v.value)
                 if k.value in _CLASS_ATTRS and isinstance(v, ast.Constant) and isinstance(v.value, str):
                     classes.update(v.value.split())
+        # Attributes that carry a DOM id (`_rename_input_id = ...`): the widget is
+        # created later as `Input(id=self._rename_input_id)`, so the literal is only
+        # visible here.
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if _is_id_attribute(target):
+                    for value in _constant_strings(node.value):
+                        ids.add(value)
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            if _is_id_attribute(node.target):
+                for value in _constant_strings(node.value):
+                    ids.add(value)
         # f-strings: collect the leading constant prefix and the full constants.
         if isinstance(node, ast.JoinedStr) and node.values:
             first = node.values[0]
