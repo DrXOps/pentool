@@ -114,6 +114,12 @@ facts:
     check: recon_prompts
     since: "2026-11-25"
 
+  - id: intruder.results_view
+    claim: "Рендер результатов Интрудера вынесен: одна сборка Arrow-таблицы и один маппер строк"
+    kind: code
+    check: intruder_results_view
+    since: "2026-11-25"
+
   - id: repo.branches
     claim: "origin/develop и origin/main совпадают"
     kind: code

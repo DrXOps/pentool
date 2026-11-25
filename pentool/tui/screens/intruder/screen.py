@@ -50,6 +50,12 @@ from pentool.tui.mixins.content_clipboard_mixin import ContentClipboardMixin
 from pentool.tui.mixins.request_context_menu import RequestContextMenuMixin
 from pentool.tui.screens.base import BaseModuleScreen
 from pentool.tui.screens.intruder.payload_sources import PayloadSources
+from pentool.tui.screens.intruder.results_view import (
+    build_results_arrow,
+    extract_grep_value,
+    result_is_visible,
+    row_from_result,
+)
 from pentool.tui.screens.module_screen import ModuleScreen
 from pentool.tui.widgets.content_panel import ContentPanel
 from pentool.tui.widgets.data_table_mixins import SortableTableMixin
@@ -2547,46 +2553,23 @@ class IntruderScreen(
                     self.refresh_header()
                     self.refresh_header()
 
-    @staticmethod
-    def _row_from_result(result: IntruderResult) -> list[str]:
-        payloads_str = " | ".join(result.payload_values)
-        if len(payloads_str) > 40:
-            payloads_str = payloads_str[:37] + "…"
-        return [
-            str(result.request_number),
-            payloads_str,
-            str(result.response_status or "-"),
-            str(result.response_length or "-"),
-            str(result.response_time_ms or "-"),
-            result.error or "",
-        ]
-
     def _add_result_row(self, result: IntruderResult, tab: _IntruderTabState | None = None) -> None:
         if tab is None:
             tab = self._active_tab
         if tab is None:
             return
         try:
-            row = self._row_from_result(result)
+            row = row_from_result(result)
             if tab.grep_extract_patterns:
-                extract_val = ""
-                resp_body = getattr(result, "request_raw", "") or ""
-                for pat in tab.grep_extract_patterns:
-                    try:
-                        m = re.search(pat, resp_body)
-                        if m:
-                            extract_val = m.group(1) if m.lastindex else m.group(0)
-                            extract_val = extract_val[:30]
-                            break
-                    except re.error as exc:
-                        logger.debug("extract val: %s", exc)
-                row.append(extract_val)
+                row.append(extract_grep_value(result, tab.grep_extract_patterns))
             table = self._results_table()
             if table is None:
                 return
             table.add_rows([tuple(row)])
-        except Exception as exc:
-            logger.debug("_add_result_row: %s", exc)
+        except Exception:
+            # One row failed to render: the attack continues, but this result is
+            # invisible to the user, so the traceback is worth keeping.
+            logger.warning("intruder: result row not rendered", exc_info=True)
 
     def _clear_results(self) -> None:
         tab = self._active_tab
@@ -2619,90 +2602,52 @@ class IntruderScreen(
             return None
 
     def _rebuild_table_data(self) -> None:
+        """Repaint the table from the tab's current filter result."""
         tab = self._active_tab
         if tab is None:
             return
         table = self._results_table()
         if table is None:
             return
-        try:
-            if not tab.filtered_results:
-                if tab.all_results:
-                    self._apply_and_display(tab.all_results, table)
-                else:
-                    table.clear_data()
-                return
-            display_rows = []
-            for r in tab.filtered_results:
-                row = self._row_from_result(r)
-                if tab.grep_extract_patterns:
-                    extract_val = self._extract_grep_value(r, tab.grep_extract_patterns)
-                    row.append(extract_val)
-                display_rows.append(row)
-            import pyarrow as pa
-
-            cols = _RESULTS_COL_NAMES
-            if tab.grep_extract_patterns:
-                cols = cols + ["Extract"]
-            data = {c: pa.array([row[i] for row in display_rows], type=pa.string()) for i, c in enumerate(cols)}
-            arrow = pa.table(data)
-            table.set_data(arrow)
-        except Exception as exc:
-            logger.error("_rebuild_table_data failed: %s", exc)
+        self._paint_results(tab.all_results if not tab.filtered_results else tab.filtered_results, table, tab)
 
     def _apply_and_display(self, results: list[IntruderResult], table: DataTable) -> None:
+        """Filter the results, remember the survivors and paint them."""
         tab = self._active_tab
         if tab is None:
             return
-        filtered = []
-        for r in results:
-            row_dict = {
-                "status": str(r.response_status),
-                "length": r.response_length or 0,
-                "payload": " ".join(r.payload_values),
-            }
-            passes = True
-            if tab.filter_spec and not tab.filter_spec.is_empty:
-                passes = tab.filter_spec.apply([row_dict]) == [row_dict]
-            if passes and tab.grep_only_match and tab.grep_match_patterns:
-                text = f"{r.response_status} {r.response_length} {' '.join(r.payload_values)}"
-                import re
+        tab.filtered_results = [
+            result
+            for result in results
+            if result_is_visible(
+                result,
+                filter_spec=tab.filter_spec,
+                grep_only_match=tab.grep_only_match,
+                grep_patterns=tab.grep_match_patterns,
+            )
+        ]
+        self._paint_results(tab.filtered_results, table, tab)
 
-                passes = any(re.search(pat, text, re.IGNORECASE) for pat in tab.grep_match_patterns)
-            if passes:
-                filtered.append(r)
-        tab.filtered_results = filtered
-        if not filtered:
-            table.clear_data()
-            return
-        display_rows = []
-        for r in filtered:
-            row = self._row_from_result(r)
-            if tab.grep_extract_patterns:
-                extract_val = self._extract_grep_value(r, tab.grep_extract_patterns)
-                row.append(extract_val)
-            display_rows.append(row)
-        import pyarrow as pa
-
-        cols = _RESULTS_COL_NAMES
-        if tab.grep_extract_patterns:
-            cols = cols + ["Extract"]
-        data = {c: pa.array([row[i] for row in display_rows], type=pa.string()) for i, c in enumerate(cols)}
-        arrow = pa.table(data)
-        table.set_data(arrow)
+    def _paint_results(self, results: list[IntruderResult], table: DataTable, tab: _IntruderTabState) -> None:
+        """One place that turns results into an Arrow table and shows it."""
+        try:
+            arrow = build_results_arrow(
+                results,
+                column_names=_RESULTS_COL_NAMES,
+                extract_patterns=tab.grep_extract_patterns,
+            )
+            if arrow is None:
+                table.clear_data()
+                return
+            table.set_data(arrow)
+        except Exception:
+            # The table shows stale or partial rows — the user reads them as current.
+            logger.warning("intruder: results table not repainted", exc_info=True)
 
     @staticmethod
     def _extract_grep_value(result: IntruderResult, patterns: list[str] | None = None) -> str:
-        import re
-
-        for pat in patterns or []:
-            try:
-                m = re.search(pat, result.request_raw or "")
-                if m:
-                    return (m.group(1) if m.lastindex else m.group(0))[:30]
-            except re.error as exc:
-                logger.debug("extract grep: %s", exc)
-        return ""
+        """Kept for callers: the implementation lives in intruder/results_view.py."""
+        return extract_grep_value(result, patterns)
 
     def _redraw_results(self) -> None:
         self._rebuild_table_data()

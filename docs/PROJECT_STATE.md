@@ -27,7 +27,8 @@
 | `intruder.payloads` | Payload-файлы: один парсер и один загрузчик (PayloadSources) вне экрана Интрудера | модуль: True; экран делегирует: True; общий парсер: True | ✅ OK |
 | `tui.dead_code` | Мёртвый код удалён: custom_notify, hintbar_base, ProxyClearHistory, safe_notify | файлов осталось: нет; ProxyClearHistory: нет; safe_notify: нет | ✅ OK |
 | `recon.prompts` | Промпты Recon в общем реестре задач (pro/…/ai_discovery/prompts.py удалён) | локальный prompts.py: False; задач в реестре: ['discovery_subdomains', 'discovery_endpoints', 'discovery_params'] | ✅ OK |
-| `repo.branches` | origin/develop и origin/main совпадают | origin/develop=465db5a origin/main=465db5a | ✅ OK |
+| `intruder.results_view` | Рендер результатов Интрудера вынесен: одна сборка Arrow-таблицы и один маппер строк | модуль: True; экран делегирует: True; маппер один: True; Arrow собирается в одном месте: True | ✅ OK |
+| `repo.branches` | origin/develop и origin/main совпадают | origin/develop=66f4579 origin/main=66f4579 | ✅ OK |
 | `ci.green` | CI на develop зелёный: Tests, CI, Dev Build (test-windows — advisory) | проверено 2026-11-25: OK (ручная) | ⚠️ OK (ручная) |
 | `license.core` | Лицензии: ядро AGPL-3.0, PRO — proprietary | ядро AGPL-3.0: True; PRO proprietary: True | ✅ OK |
 

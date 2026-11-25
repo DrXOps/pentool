@@ -226,6 +226,19 @@ def recon_prompts() -> tuple[bool, str]:
     return not local_module and len(tasks) == 3, f"локальный prompts.py: {local_module}; задач в реестре: {tasks}"
 
 
+def intruder_results_view() -> tuple[bool, str]:
+    module = _exists("pentool/tui/screens/intruder/results_view.py")
+    screen = _read("pentool/tui/screens/intruder/screen.py")
+    delegates = "build_results_arrow(" in screen and "def _paint_results" in screen
+    single_mapper = "def _row_from_result" not in screen
+    no_inline_arrow = "pa.array(" not in screen
+    ok = module and delegates and single_mapper and no_inline_arrow
+    return ok, (
+        f"модуль: {module}; экран делегирует: {delegates}; "
+        f"маппер один: {single_mapper}; Arrow собирается в одном месте: {no_inline_arrow}"
+    )
+
+
 def repo_branches() -> tuple[bool, str]:
     def sha(ref: str) -> str:
         result = subprocess.run(
@@ -304,6 +317,7 @@ CHECKS: dict[str, Check] = {
     "tui_project_reload": tui_project_reload,
     "tui_tab_rename": tui_tab_rename,
     "intruder_payloads": intruder_payloads,
+    "intruder_results_view": intruder_results_view,
     "tui_dead_code": tui_dead_code,
     "recon_prompts": recon_prompts,
     "repo_branches": repo_branches,
