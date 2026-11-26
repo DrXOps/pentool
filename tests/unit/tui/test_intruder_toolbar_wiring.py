@@ -119,16 +119,21 @@ class TestDispatchTableHasWidgets:
             assert not missing, f"header lost these actions: {sorted(missing)}"
             assert {"export", "clear"} <= _HEADER_ACTIONS
 
-    async def test_navigation_actions_are_offered_by_the_header(self) -> None:
-        """Tab add/remove moved to `⋯`; they must still be reachable."""
+    async def test_navigation_actions_live_in_the_control_row(self) -> None:
+        """Tab add/remove sit next to the attack settings (owner's layout), not the header."""
         app = _App()
         async with app.run_test(size=(200, 60)) as pilot:
             await pilot.pause()
             screen = pilot.app.query_one(IntruderScreen)
+
+            row = screen.query_one("#intruder-control-row")
+            ids = {widget.id for widget in row.walk_children() if getattr(widget, "id", None)}
+            for widget_id in ("btn-intruder-new-tab", "btn-intruder-close-tab"):
+                assert widget_id in ids, f"{widget_id} нет в строке с настройками"
+
             spec = screen.header_spec()
             offered = {item.action for item in (*spec.state, *spec.actions, *spec.more)}
-            for action in ("new_tab", "close_tab"):
-                assert action in offered, f"{action} is not offered anywhere in the header"
+            assert not {"new_tab", "close_tab"} & offered, "кнопки вкладок не должны дублироваться в шапке"
 
 
 class TestLayoutPiecesSurviveTheTabPort:

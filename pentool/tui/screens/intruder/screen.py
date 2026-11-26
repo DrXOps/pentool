@@ -738,18 +738,18 @@ class IntruderScreen(
     # ── Compose ──────────────────────────────────────────────────────────
 
     def compose(self) -> ComposeResult:
-        # ── Attack parameters live here; the actions moved to the module header ──
-        # Start / Pause / Stop, Clear results, Export CSV and tab add/remove are
-        # header buttons now (`header_spec()`), so only the per-attack inputs stay
-        # in the panel — no duplicated controls.
-        yield Toolbar(
-            Label("Threads:", classes="toolbar-label"),
-            Input("10", id="intruder-threads", placeholder="10", compact=True, type="integer"),
-            Label("Delay(ms):", classes="toolbar-label"),
-            Input("0", id="intruder-delay", placeholder="0", compact=True, type="integer"),
-            Checkbox("⚡ Turbo", id="intruder-turbo", value=False),
-            id="intruder-global-toolbar",
-        )
+        # ── One control row: attack settings + tab add/remove ────────────────
+        # The owner asked for the settings (threads/delay/turbo) to sit on the same line
+        # as the ➕/➖ Tab buttons: one strip instead of a settings toolbar plus two header
+        # buttons. Start/Pause/Stop and Export/Clear stay in the module header.
+        with Horizontal(id="intruder-control-row"):
+            yield Label("Threads:", classes="toolbar-label")
+            yield Input("10", id="intruder-threads", placeholder="10", compact=True, type="integer")
+            yield Label("Delay(ms):", classes="toolbar-label")
+            yield Input("0", id="intruder-delay", placeholder="0", compact=True, type="integer")
+            yield Checkbox("⚡ Turbo", id="intruder-turbo", value=False)
+            yield ToolbarButton("➕ Tab", "btn-intruder-new-tab")
+            yield ToolbarButton("➖ Tab", "btn-intruder-close-tab")
 
         # ── TabbedContentPanel (full per-tab UI inside) ───────────────────
         yield TabbedContentPanel[_IntruderTabState](
@@ -786,8 +786,6 @@ class IntruderScreen(
             state=(primary, HeaderAction("stop", "■ Stop", enabled=running)),
             counters=counters,
             actions=(
-                HeaderAction("new_tab", "➕ Tab"),
-                HeaderAction("close_tab", "➖ Tab"),
                 HeaderAction("export", "⤓ Export CSV", enabled=bool(done)),
                 HeaderAction("clear", "⌫ Clear results", enabled=bool(done)),
             ),
@@ -804,9 +802,15 @@ class IntruderScreen(
         "stop": "action_stop",
         "export": "_export_csv",
         "clear": "_clear_results",
-        "new_tab": "action_new_tab",
-        "close_tab": "action_close_tab",
     }
+
+    @on(ToolbarButton.Pressed, "#btn-intruder-new-tab")
+    def _on_new_tab_button(self, _event: ToolbarButton.Pressed) -> None:
+        self.action_new_tab()
+
+    @on(ToolbarButton.Pressed, "#btn-intruder-close-tab")
+    def _on_close_tab_button(self, _event: ToolbarButton.Pressed) -> None:
+        self.action_close_tab()
 
     def _header_start_or_resume(self) -> None:
         """One button for both: a paused attack resumes, anything else starts."""

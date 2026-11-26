@@ -82,12 +82,19 @@ class TestIntruderButtons:
         # Attack parameters stay in the panel...
         assert '"intruder-threads"' in src
         assert '"intruder-delay"' in src
-        # ...while Start/Pause/Stop and tab add/remove are module-header buttons:
-        # they are declared in `header_spec()`, not composed here.
+        # The settings share one row with the tab +/- buttons (owner's layout).
+        assert '"intruder-control-row"' in src
+        assert '"btn-intruder-new-tab"' in src
+        assert '"btn-intruder-close-tab"' in src
+        # Start/Pause/Stop stay module-header buttons: declared in `header_spec()`.
         assert "StartStopWidget(" not in src
         spec_src = inspect.getsource(IntruderScreen.header_spec)
-        for action in ('"start"', '"pause"', '"stop"', '"new_tab"', '"close_tab"'):
+        for action in ('"start"', '"pause"', '"stop"'):
             assert action in spec_src, f"{action} is not offered by the Intruder header"
+        # Tab add/remove moved into the control row next to the settings (owner's layout),
+        # so the header must NOT offer them any more.
+        for moved in ('"new_tab"', '"close_tab"'):
+            assert moved not in spec_src, f"{moved} still duplicates the control row in the header"
         # The per-tab toolbar still has content buttons, but no StartStop.
         # The identifiers are built from _TabId (F-023), so we assert the
         # constant and its value rather than a literal in the method text.

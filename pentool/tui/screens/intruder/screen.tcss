@@ -29,22 +29,22 @@ IntruderScreen .intruder-tab-body {
 }
 
 /* ── Global toolbar (табы + атака) ───────────────────────────────────── */
-IntruderScreen #intruder-global-toolbar {
+IntruderScreen #intruder-control-row {
     height: 1;
 }
-IntruderScreen #intruder-global-toolbar Label.toolbar-label {
+IntruderScreen #intruder-control-row Label.toolbar-label {
     width: auto;
     padding: 0 1;
     color: $text-muted;
 }
-IntruderScreen #intruder-global-toolbar Input {
+IntruderScreen #intruder-control-row Input {
     width: 6;
     height: 1;
     border: round $foreground;
     padding: 0 1;
     background: transparent;
 }
-IntruderScreen #intruder-global-toolbar #intruder-turbo {
+IntruderScreen #intruder-control-row #intruder-turbo {
     width: auto;
 }
 /* Start / Pause / Stop moved to the module header (see `header_spec()`), so the
