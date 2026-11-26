@@ -288,24 +288,46 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
         self.call_after_refresh(self._post_tab_messages, tab_id, state)
         return tab_id
 
+    def _set_active(self, tc: TabbedContent, tab_id: str) -> None:
+        """Assign ``TabbedContent.active`` without racing the pane mount.
+
+        Textual raises ``ValueError("No Tab with id …")`` while the pane's ``ContentTab``
+        is not registered yet (``add_pane`` mounts it one pass later) and ``NoMatches``
+        when the pane is already gone. Both mean "not now", so a failed assignment is
+        retried on the next frame — as long as the tab still exists.
+        """
+
+        try:
+            tc.active = tab_id
+            return
+        except (NoMatches, ValueError) as exc:
+            logger.debug("tab panel: active %s postponed: %s", tab_id, exc)
+
+        def retry() -> None:
+            if tab_id not in self._states:
+                return  # closed meanwhile
+            try:
+                tc.active = tab_id
+            except (NoMatches, ValueError) as exc:
+                # The state says this tab is active while another one is on screen.
+                logger.warning("tab panel: tab %s never became active: %s", tab_id, exc)
+
+        self.call_after_refresh(retry)
+
     def _activate_later(self, tc: TabbedContent, tab_id: str) -> None:
         """Select the tab after its content tab has been mounted.
 
-        `TabbedContent.add_pane()` mounts the `ContentTab` asynchronously;
-        assigning `active` in the same tick makes Textual resolve the content tab
-        id before it exists and raise `NoMatches`
-        (`'#--content-tab-…' on ContentTabs()`), which closed the whole TUI.
+        `TabbedContent.add_pane()` mounts the `ContentTab` asynchronously; assigning
+        `active` in the same tick makes Textual resolve the content tab id before it
+        exists. Depending on the Textual version that surfaces as `NoMatches`
+        (`'#--content-tab-…' on ContentTabs()`) or as `ValueError('No Tab with id …')` —
+        both closed the whole TUI, which is what `_set_active` now prevents.
         """
 
         def activate() -> None:
             if tab_id not in self._states:
                 return  # closed meanwhile
-            try:
-                if tc.query("#tabs-list") and tc.active != tab_id:
-                    tc.active = tab_id
-            except NoMatches:
-                # Tab gone (closed by the user while it was opening).
-                logger.debug("tab panel: tab %s vanished before activation", tab_id)
+            self._set_active(tc, tab_id)
 
         self.call_after_refresh(activate)
 
@@ -397,11 +419,11 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
             self._active_tab_id = new_id
             try:
                 tc = self.tabs_content
-                tc.active = new_id
             except NoMatches as exc:
-                # The title switched but the content did not: the wrong tab is
-                # on screen while the state is correct. The container is not in the tree.
-                logger.debug("tab_panel: active tab not switched to %s: %s", new_id, exc)
+                # The container is not in the tree (screen leaving).
+                logger.debug("tab_panel: container gone, cannot switch to %s: %s", new_id, exc)
+            else:
+                self._set_active(tc, new_id)
         else:
             self._active_tab_id = None
         if state is not None:
@@ -420,11 +442,12 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
         self._active_tab_id = tab_id
         try:
             tc = self.tabs_content
-            tc.active = tab_id
-        except Exception as exc:
+        except NoMatches as exc:
             # The state considers the tab active while the screen shows the previous
             # one — edits will go to the wrong place.
             logger.debug("tab_panel: switch to %s not shown: %s", tab_id, exc)
+        else:
+            self._set_active(tc, tab_id)
         state = self._states.get(tab_id)
         if state is not None:
             self.post_message(self.TabActivated(self, tab_id, state))

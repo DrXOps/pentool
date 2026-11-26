@@ -207,6 +207,12 @@ class IntruderScreen(
     DEFAULT_CSS = _CSS
     BINDINGS = INTRUDER_BINDINGS
 
+    #: Widget-id suffixes as a class attribute, so collaborators that only have the screen
+    #: (attack_runner, payload_sources) do not reach for a module global — the absence of
+    #: this alias crashed the app on every attack start (`'IntruderScreen' object has no
+    #: attribute '_TabId'`, reported from the server crash log).
+    _TabId = _TabId
+
     # TabRenameMixin config (kept for compatibility, but delegates to TabbedContentPanel)
     _rename_input_id: str = "intruder-rename-input"
     _rename_tab_prefix: str = "intruder-tab-"
