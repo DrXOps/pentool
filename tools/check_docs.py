@@ -79,6 +79,21 @@ def main() -> int:
         if not DATE_PREFIX.match(path.name):
             problems.append(f"{path.relative_to(ROOT).as_posix()}: имя аудита без даты")
 
+    # 5. DONE.md keeps the owner's verdict column: "—" accepted, "✗" disagrees.
+    done_file = DEVELOP / "DONE.md"
+    if done_file.is_file():
+        done_text = done_file.read_text(encoding="utf-8")
+        if "Ваша отметка" not in done_text:
+            problems.append("develop/DONE.md: нет колонки «Ваша отметка»")
+        for line_no, line in enumerate(done_text.splitlines(), 1):
+            if not line.startswith("| 20"):
+                continue
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) != 4:
+                problems.append(f"develop/DONE.md:{line_no}: строка без отметки владельца")
+            elif not cells[3]:
+                problems.append(f"develop/DONE.md:{line_no}: пустая отметка — «—» или комментарий")
+
     if problems:
         print("check_docs: нарушения правил документации:", file=sys.stderr)
         for problem in problems:

@@ -240,9 +240,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             self,
             registry=get_screen_class,
             keep_alive=frozenset(),
-            # One spare screen: coming back to where you were is instant instead
-            # of a ~600-1100 ms re-mount, at the price of ~50-110 ms on every
-            # action *while* two screens are mounted (measured 2026-11-20).
+            # One spare screen: coming back to where you were skips the re-mount at the
+            # price of ~50-110 ms on every action while two screens are mounted (measured
+            # 2026-11-20). Keeping three did NOT help the 669 ms median of a repeat switch
+            # (2026-11-26: 633 ms, inside noise) — that time is painting, not mounting.
             keep_recent=1,
             reload=self._reload_mounted_screen,
         )
