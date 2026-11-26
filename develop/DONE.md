@@ -31,3 +31,4 @@
 | 2026-11-26 | Сканер: дублирующий тулбар убран (N1) | grep: в PRO-сканере нет `id="toolbar"` |
 | 2026-11-26 | WS-счётчик истории: виджет есть, идёт через `HistoryCounter` (N4) | `proxy/history_view.py` + `test_proxy_history_paging.py` |
 | 2026-11-26 | Удалены устаревшие P3: `docs/audit/README.md` и права `docs/i18n/**` (папок больше нет) | `check_docs` |
+| 2026-11-26 | `--smart host:port` больше не теряется: цель нормализуется в URL со схемой, `--wait-ms` 800 вместо 3000 (N2) | `test_url_normalize.py` |

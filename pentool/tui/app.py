@@ -734,8 +734,11 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         for url in urls:
             try:
                 from pentool.utils.parser import ParsedRequest
+                from pentool.utils.urls import normalize_url
 
-                self.post_message(SendUrlToTarget(ParsedRequest(method="GET", url=url)))
+                # Target gets the same interpretation of the target as the fetch does: a
+                # scheme-less `host:port` used to land in the tree as an unparseable URL.
+                self.post_message(SendUrlToTarget(ParsedRequest(method="GET", url=normalize_url(url))))
             except Exception:
                 # The host from --url never landed in Target: the flag fired but the
                 # target is not in the tree — so a traceback is needed, not a line.
@@ -871,15 +874,21 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             logger.warning("--real: lightpanda не найден — перехожу на HTTP-фолбэк (без JS)")
             return self._do_http_fallback_fetch(urls, proxy_url, ca_path)
 
+        from pentool.utils.urls import normalize_url
+
+        # A scheme-less `host:port` made Lightpanda fetch something else entirely (the run
+        # produced one odd POST and an empty history) — normalise before asking for it.
         cmd = [binary, "fetch"]
-        cmd.extend(urls)
+        cmd.extend(normalize_url(url) for url in urls)
         cmd += [
             "--dump",
             "html",
             "--http-proxy",
             proxy_url,
+            # 3000 ms of extra waiting delayed the first captured request by ~3 s on top of
+            # the process start; the page is usable much earlier.
             "--wait-ms",
-            "3000",
+            "800",
         ]
         if os.path.isfile(ca_path):
             cmd += ["--ca-cert", ca_path]
@@ -932,8 +941,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         )
         opener.addheaders = [("User-Agent", f"pentool/{__version__} (real-fetch fallback)")]
 
+        from pentool.utils.urls import normalize_url
+
         captured = 0
-        for url in urls:
+        for url in (normalize_url(u) for u in urls):
             try:
                 with opener.open(url, timeout=25) as response:
                     response.read(64 * 1024)
