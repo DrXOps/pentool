@@ -27,7 +27,7 @@ Passive, False+, Tab, «→ Repeater» видны дважды — шапка м
 Одновременно проверить Repeater/Intruder на ту же ошибку (там тулбар остался
 легально — в нём живут Threads/Delay/Turbo).
 
-### N2. `--smart <host:port>` не создаёт запись в истории сразу (новое, 2026-11-23)
+### N2. `--smart <host:port>` не создаёт запись в истории сразу (приёмка ТУИ, пункт 11)
 
 Симптом: запуск `pentool --smart telemetry.lightpanda.io:443` — в истории Proxy
 пусто, позже появляется **один** POST `https://telemetry.lightpanda.io:443/v2`.

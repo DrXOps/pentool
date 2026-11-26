@@ -121,6 +121,26 @@ async def send_crash_async(exc: BaseException, endpoint: str = f"{_API_BASE}/api
         _save_local_crash(exc, tb_text)
 
 
+def _run_coroutine_in_thread(coro_factory, timeout: float = 5.0) -> bool:
+    """Run ``coro_factory()`` in a dedicated thread with its own event loop.
+
+    The coroutine is created *inside* the thread, so it can never be left un-awaited when
+    the caller already runs a loop. Returns True when the thread finished within *timeout*.
+    """
+    import threading
+
+    def runner() -> None:
+        try:
+            asyncio.run(coro_factory())
+        except Exception:  # noqa: BLE001 - telemetry must never raise into the caller
+            logger.debug("crash-telemetry: send failed in thread", exc_info=True)
+
+    thread = threading.Thread(target=runner, name="crash-telemetry", daemon=True)
+    thread.start()
+    thread.join(timeout)
+    return not thread.is_alive()
+
+
 def send_crash(exc: BaseException, source: str = "cli") -> None:
     """Fire-and-forget crash report from sync context.
 
@@ -140,10 +160,26 @@ def send_crash(exc: BaseException, source: str = "cli") -> None:
         # something is broken.
         logger.debug("crash-telemetry: opt-out setting not read — sending anyway", exc_info=True)
 
+    # A dedicated thread with its own loop: called from async context the old code raised
+    # "Cannot run the event loop while another loop is running", lost the report and left an
+    # un-awaited coroutine behind.
     try:
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(send_crash_async(exc, source=source))
-        loop.close()
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # Sync caller (CLI, worker thread): a private loop is fine and keeps the report
+        # bounded to this call.
+        try:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(send_crash_async(exc, source=source))
+            loop.close()
+        except (RuntimeError, OSError):
+            pass
+        return
+
+    # Async caller (TUI exception handler): the old code raised "Cannot run the event loop
+    # while another loop is running", losing the report and leaving an un-awaited coroutine.
+    try:
+        _run_coroutine_in_thread(lambda: send_crash_async(exc, source=source))
     except (RuntimeError, OSError):
         pass
 
@@ -199,8 +235,17 @@ def send_first_run_ping() -> None:
         logger.debug("crash-telemetry: opt-out setting not read — sending anyway", exc_info=True)
 
     try:
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(send_first_run_ping_async())
-        loop.close()
+        asyncio.get_running_loop()
+    except RuntimeError:
+        try:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(send_first_run_ping_async())
+            loop.close()
+        except (RuntimeError, OSError):
+            pass
+        return
+
+    try:
+        _run_coroutine_in_thread(send_first_run_ping_async, timeout=3.0)
     except (RuntimeError, OSError):
         pass
