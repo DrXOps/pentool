@@ -1932,7 +1932,19 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         try:
             screen = self._get_proxy_screen()
             if screen is None:
-                return  # quiet no-op — screen not mounted; do NOT log each call
+                # Proxy screen is not mounted (Dashboard is open, `--smart` start, or the
+                # user is on another module). Storage used to live in the screen, so the
+                # traffic was NOT recorded at all — the host with its request and response
+                # never reached HTTP history. Store the completed exchange here instead:
+                # one row per request/response, same service, no duplicates with the
+                # screen path (which writes on capture, not on completion).
+                if self._proxy_service is not None:
+                    self.run_worker(
+                        self._proxy_service.store_request(msg.req),
+                        exclusive=False,
+                        exit_on_error=False,
+                    )
+                return
             screen.update_request_row(msg.req)
             if self._proxy and self._proxy.intercept_enabled:
                 screen.show_intercept_response(msg.req)  # type: ignore[arg-type]
