@@ -139,6 +139,15 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Правила документации (docs/DOC_RULES.md): дата в имени аудита, никаких ссылок на
+      # удалённые папки, никаких рабочих планов в docs/ (он публикуется на сайте).
+      - id: check-docs
+        name: "документация: правила раскладки"
+        entry: uv run python tools/check_docs.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       # guard-git-staging: в коммит попадают только файлы проекта.
       # Проверяет ИНДЕКС, а не команду — работает и для `git commit` из IDE,
       # и в CI (через --files-from). Логика и списки продублированы из

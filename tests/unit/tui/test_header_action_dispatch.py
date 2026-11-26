@@ -114,7 +114,7 @@ def test_no_screen_draws_its_own_action_toolbar() -> None:
                         offenders.append(f"{_rel(path)}:{call.lineno}")
     assert not offenders, (
         "a module screen mounts its own Toolbar again — actions belong in header_spec() "
-        f"(docs/tui-audit/REPORT.md, E1): {offenders}"
+        f"(docs/audit/2026-11-21-tui-report.md, E1): {offenders}"
     )
 
 

@@ -6,7 +6,7 @@ rather than with ``@on(...)``. Textual collects ``@on`` handlers in
 not the MRO — see ``textual/message_pump.py``), so an ``@on`` inside a plain
 mixin is never registered and the handler silently never fires. Handlers
 matched by name *are* resolved over the MRO, which is exactly what a mixin
-needs. See docs/tui-audit/DECISIONS.md, ADR-3.
+needs. See docs/DECISIONS.md, ADR-3.
 
 Screens may override ``_paste_text_to_panel`` for custom insertion.
 """

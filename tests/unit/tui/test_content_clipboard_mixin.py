@@ -4,7 +4,7 @@ The mixin used to declare its handlers with ``@on(...)``. Textual registers
 ``@on`` handlers only in the concrete class that defines them (it walks the
 class ``__dict__``, not the MRO), so on a plain mixin the handlers were never
 registered and every Copy/Paste button in the app silently did nothing.
-See docs/tui-audit/REPORT.md, finding F-001.
+See docs/audit/2026-11-21-tui-report.md, finding F-001.
 """
 
 from __future__ import annotations

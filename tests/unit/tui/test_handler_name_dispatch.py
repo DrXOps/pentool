@@ -7,7 +7,7 @@ qualified name, so ``ProxyDataTable.ScrolledToTop`` → ``on_proxy_data_table_sc
 Handlers written as ``on__proxy_data_table_scrolled_to_top`` (double
 underscore) are **never** dispatched. That exact typo silently disabled
 infinite-scroll history loading and the comment-icon click in the Proxy
-screen (docs/tui-audit/REPORT.md, F-041), and the same class of typo killed
+screen (docs/audit/2026-11-21-tui-report.md, F-041), and the same class of typo killed
 ``on_input_blur`` (the message is ``Input.Blurred`` → ``on_input_blurred``,
 F-042), ``on_static_click`` (``Static`` posts no click message, F-043) and
 ``on_data_table_row_activated`` (no such message in Textual 8, F-044).

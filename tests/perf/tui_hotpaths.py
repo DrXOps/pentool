@@ -3,7 +3,7 @@
 Why a separate file: `tui_deep.py` boots the whole app through the Textual pilot (seconds
 per scenario, flaky timings under load). These measurements are pure functions — the code
 that a screen calls in a loop — so they are stable, fast, and can run in CI. Together with
-`tui_deep.py` they form the numbers for `docs/tui-audit/perf-report.md`.
+`tui_deep.py` they form the numbers for `docs/audit/2026-11-26-tui-perf.md`.
 
 Run:
     uv run python tests/perf/tui_hotpaths.py

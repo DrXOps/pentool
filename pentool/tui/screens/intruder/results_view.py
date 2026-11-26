@@ -1,6 +1,6 @@
 """Rendering the Intruder results table: rows, filtering and the Arrow rebuild.
 
-Extracted from `IntruderScreen` (docs/tui-audit/REPORT.md, step 5): the same "results →
+Extracted from `IntruderScreen` (docs/audit/2026-11-21-tui-report.md, step 5): the same "results →
 display rows → Arrow table" block was written twice in the screen (`_rebuild_table_data`
 and `_apply_and_display`), each with its own loop over grep-extract patterns, and the
 row mapping lived next to the tab machinery. The screen keeps only the DOM calls.

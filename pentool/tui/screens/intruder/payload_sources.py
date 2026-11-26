@@ -1,6 +1,6 @@
 """Payload sources of the Intruder module: picking, reading and counting payload files.
 
-Extracted from `IntruderScreen` (docs/tui-audit/REPORT.md, step 5): file picking, the
+Extracted from `IntruderScreen` (docs/audit/2026-11-21-tui-report.md, step 5): file picking, the
 20 MB eager/streamed decision and the background line counter were four methods of a
 3 100-line class, mixed with table rendering and tab state. They now live here, behind a
 small host protocol, so the screen keeps only the parts that draw something.

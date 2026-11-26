@@ -1,6 +1,6 @@
 """ModuleScreen — the base every module screen shares.
 
-Why: the audit (docs/tui-audit/REPORT.md, E2/D10) found eight screens inheriting
+Why: the audit (docs/audit/2026-11-21-tui-report.md, E2/D10) found eight screens inheriting
 different mixin sets, so each cross-cutting duty was re-implemented on the spot — six
 copies of the header refresh, six `if/elif` chains for header actions, two incompatible
 `reload_from_project` implementations, eleven screens reaching into `App`'s private

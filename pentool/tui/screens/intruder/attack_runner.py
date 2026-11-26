@@ -1,6 +1,6 @@
 """Starting, stopping and supervising Intruder attacks — one responsibility, one file.
 
-Extracted from `IntruderScreen` (docs/tui-audit/REPORT.md, step 5.6): the attack lifecycle
+Extracted from `IntruderScreen` (docs/audit/2026-11-21-tui-report.md, step 5.6): the attack lifecycle
 was ~200 lines in the middle of a 2 900-line screen, mixed with template editing, payload
 lists and table rendering. The screen keeps the DOM it must draw; the lifecycle lives here.
 
