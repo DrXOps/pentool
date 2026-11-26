@@ -310,6 +310,9 @@ Toast.-critical    { border: heavy $error; }
        no room for the buttons (content height 0), which made the header look
        empty and swallow every click. */
     height: 2;
+    /* Hidden until the active module describes a HeaderSpec: at startup Dashboard has
+       none, and showing the row first meant a visible jump when the first module opened. */
+    display: none;
     width: 100%;
     /* Chrome has no fill of its own: it sits on the window background, separated
        from the content by one line in the card-frame colour. */
@@ -414,5 +417,15 @@ Screen.narrow #app-shell {
 /* Narrow terminal: the inspector is the first thing to go, but
    `_inspector_visible` is untouched — widening the terminal brings it back. */
 Screen.narrow ProxyScreen InspectorPanel.-visible {
+    display: none;
+}
+
+/* Slots start hidden and `_refresh_header()` enables exactly what the module uses.
+ * Compose creates every slot up front (to avoid rebuilding the header), so without this
+ * the first frame showed a row of empty buttons that blinked away on the first refresh. */
+#module-header ToolbarButton.hdr-act,
+#module-header ToolbarButton.hdr-tab,
+#module-header ToolbarButton.hdr-state,
+#module-header ToolbarButton.hdr-more {
     display: none;
 }
