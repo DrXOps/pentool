@@ -190,7 +190,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
                 ),
                 HeaderAction("new_tab", "➕ Tab"),
                 HeaderAction("close_tab", "➖ Tab"),
-                HeaderAction("beautify", "✨ Beautify"),
                 HeaderAction("decoder", "→ Decoder"),
                 HeaderAction("comparer", "→ Comparer"),
                 HeaderAction("intruder", "→ Intruder"),
@@ -202,7 +201,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
         "send": "action_send",
         "cancel": "action_cancel",
         "follow": "_header_toggle_follow",
-        "beautify": "_beautify_active_request",
         "decoder": "_header_send_to_decoder",
         "comparer": "_header_send_to_comparer",
         "intruder": "_send_to_intruder",
@@ -1000,35 +998,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
             # are absent from the tree, i.e. the tab is not mounted.
             logger.debug("repeater: tab %s not cleared: %s", tab_id, exc)
         self._set_status("Cleared")
-
-    def _beautify_active_request(self) -> None:
-        """Beautify both Request and Response panels of the active tab —
-        previously this only reformatted the request body."""
-        if self._active_tab_id is None:
-            return
-        req_ok = False
-        resp_ok = False
-        try:
-            editor = self._editor(self._active_tab_id)
-            req_ok = editor.beautify_body()
-        except Exception as exc:
-            # Stays False — below the user reads "no valid JSON/XML", although
-            # the cause is different. This log entry keeps the two apart.
-            logger.debug("repeater: request beautify failed: %s", exc)
-        try:
-            viewer = self._viewer(self._active_tab_id)
-            resp_ok = viewer.beautify_body()
-        except Exception as exc:
-            logger.debug("repeater: response beautify failed: %s", exc)
-
-        if req_ok and resp_ok:
-            self._notify("Request and response beautified", timeout=2)
-        elif req_ok:
-            self._notify("Request beautified (response body not valid JSON/XML)", timeout=2)
-        elif resp_ok:
-            self._notify("Response beautified (request body not valid JSON/XML)", timeout=2)
-        else:
-            self._notify("Nothing to beautify — no valid JSON/XML body found", severity="warning", timeout=3)
 
     def _send_to_intruder(self) -> None:
         try:

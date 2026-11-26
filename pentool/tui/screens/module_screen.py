@@ -19,10 +19,12 @@ from __future__ import annotations
 
 from typing import Any, Callable, Protocol, runtime_checkable
 
+from textual import on
 from textual.widget import Widget
 
 from pentool.core.logging import get_logger
 from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.widgets.content_panel import ContentPanel
 
 logger = get_logger(__name__)
 
@@ -70,6 +72,30 @@ class ModuleScreen(AppMixin, Widget):
 
     #: Redraw the header after a mapped action ran.
     refresh_after_action: bool = True
+
+    @on(ContentPanel.FormatToggleRequested)
+    def on_panel_format_requested(self, event: ContentPanel.FormatToggleRequested) -> None:
+        """The ✨ tool of a panel: beautify the body it shows.
+
+        The panel draws this tool for every body panel, but no screen except Decoder had a
+        handler (and that one was a no-op), so the only working "beautify" was a header
+        button. One handler here makes the in-window tool real for all screens.
+        """
+        widget = getattr(event.panel, "content_widget", None)
+        beautify = getattr(widget, "beautify_body", None)
+        if beautify is None:
+            self.notify_to_user("Nothing to format in this panel", severity="warning")
+            return
+        try:
+            changed = bool(beautify())
+        except Exception as exc:  # noqa: BLE001 - a formatting failure must not kill the screen
+            logger.warning("format: beautify failed", exc_info=True)
+            self.notify_to_user(f"Format failed: {exc}", severity="error")
+            return
+        if changed:
+            self.notify_to_user("Formatted")
+        else:
+            self.notify_to_user("Nothing to beautify — no valid JSON/XML body found", severity="warning")
 
     def header_action(self, action_id: str) -> None:
         """Run the method registered for this header action.

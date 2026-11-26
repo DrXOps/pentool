@@ -767,7 +767,7 @@ class IntruderScreen(
 
         Two state buttons, as in the standard: Start (which turns into Pause
         while the attack runs, and into Resume when it is paused) and Stop. Tab
-        add/remove and Beautify sit on the left next to Export/Clear.
+        add/remove sit on the left next to Export/Clear; formatting lives in each panel.
         """
         tab = self._active_tab
         running = bool(tab and tab.running)
@@ -788,7 +788,6 @@ class IntruderScreen(
             actions=(
                 HeaderAction("new_tab", "➕ Tab"),
                 HeaderAction("close_tab", "➖ Tab"),
-                HeaderAction("beautify", "✨ Beautify"),
                 HeaderAction("export", "⤓ Export CSV", enabled=bool(done)),
                 HeaderAction("clear", "⌫ Clear results", enabled=bool(done)),
             ),
@@ -807,33 +806,12 @@ class IntruderScreen(
         "clear": "_clear_results",
         "new_tab": "action_new_tab",
         "close_tab": "action_close_tab",
-        "beautify": "_beautify_active_template",
     }
 
     def _header_start_or_resume(self) -> None:
         """One button for both: a paused attack resumes, anything else starts."""
         tab = self._active_tab
         self.action_resume() if (tab and tab.paused) else self.action_start_attack()
-
-    def _beautify_active_template(self) -> None:
-        """Beautify the template of the active tab (header button).
-
-        Delegates to the editor widget that already knows how to split headers
-        from the body and pretty-print JSON/XML — no second implementation here.
-        """
-        tab = self._active_tab
-        if tab is None:
-            return
-        try:
-            panel = self._template_editor(tab)
-            changed = panel.content_widget.beautify_body()  # type: ignore[attr-defined]
-        except Exception:
-            logger.warning("intruder: template beautify failed for %s", tab.tab_id, exc_info=True)
-            return
-        if changed:
-            self.notify("Template beautified", timeout=2)
-        else:
-            self.notify("Nothing to beautify — no valid JSON/XML body found", severity="warning", timeout=3)
 
     def header_tab_selected(self, tab_id: str) -> None:
         """Sub-tabs belong to the tab body (Positions/Payloads/…), not the header."""
