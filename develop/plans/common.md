@@ -1,21 +1,9 @@
 # Подплан: общие правки (инфраструктура, гварды, тесты, документация)
 
-**Родитель:** [PLAN.md](../PLAN.md). **Обновлён:** 2026-11-23.
+**Родитель:** [PLAN.md](../PLAN.md). **Обновлён:** 2026-11-27.
 
-То, что не относится к конкретному модулю, но влияет на весь проект.
-
-## Закрыто (для ориентира)
-
-- Комментарии и докстринги на английском: `check_english_comments` — 0 строк в 0
-  файлах, база пуста (2026-11-23). Гвард оставлен, новый русский комментарий роняет
-  коммит; цитата в комментарии помечается `# i18n-ok:`.
-- Логирование: уровни по последствию (ADR-6), ротация журнала, DEBUG на горячем пути,
-  трещотки `check_broad_except` / `check_silent_except` / `check_logging_policy`.
-- Гварды структуры: `check_tui_css` (592 селектора сверяются с DOM),
-  `check_lazy_screens`, `check_layers`, `review_new_files`, `test_on_selectors_resolve`,
-  `test_handler_name_dispatch`, `test_app_mixin_surface`, `test_dialogs_unified`,
-  `test_filter_bar_unified`.
-- Краш-репортинг из TUI (источник `tui` в payload `/api/crash`).
+Только открытые общие задачи: инфраструктура, гварды, тесты, документация. Закрытое —
+[../DONE.md](../DONE.md), порядок до релиза — [pre-release.md](pre-release.md).
 
 ## Открытое
 
@@ -38,14 +26,3 @@ this section is pending», проверить самодостаточность
 `~/.config/pentool/projects` — для полной изоляции прогонов их тоже нужно выводить
 из конфига.
 
-### Чистка документации (сделано 2026-11-23, см. PLAN.md)
-
-- удалены: 4 файла сессий, `plan_tabs_repeater_intruder`, `plan-features-2026-11-23`,
-  `plan-recon-integration`, `plan-release-2026-11-20`, `tasks-pentool` (переехали в
-  подпланы и pre-release);
-- `docs/tui-audit/`: оставлены `DECISIONS.md` (ADR) и `CONVENTIONS.md` (правила),
-  удалены `REPORT.md`, `SUMMARY.md`, `COMPONENTS.md` (исторические находки, устарели
-  после редизайна); ссылки в `pentool/tui/README.md` обновлены;
-- `docs/audit/`: оставлен свежий `2026-11-21-tui-audit.md` и
-  `pro-audit-2026-11-17.md`; удалены сентябрьские и ноябрьские исторические аудиты;
-  индекс `README.md` переписан.
