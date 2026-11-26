@@ -10,7 +10,7 @@ Design:
 * ``tools/facts.yml`` is the single place where current state lives, one fact per claim;
 * every fact names a check implemented here — mostly "read the repository" (fast, offline,
   runs in pre-commit), a few need the network or a human and record ``last_verified``;
-* ``docs/PROJECT_STATE.md`` is generated from the file, so the human-readable page cannot
+* ``develop/state.md`` is generated from the file, so the human-readable page cannot
   drift from the machine one;
 * history comes from git: a value changes with a date and a reason, ``git log`` shows it.
 
@@ -18,7 +18,7 @@ Usage::
 
     python tools/verify_facts.py                # code checks + staleness of external ones
     python tools/verify_facts.py --online       # also call the network checks
-    python tools/verify_facts.py --render       # rewrite docs/PROJECT_STATE.md
+    python tools/verify_facts.py --render       # rewrite develop/state.md
     python tools/verify_facts.py --check-render # fail if the page is out of date
     python tools/verify_facts.py --update ci.green   # mark an external fact verified today
 """
@@ -37,7 +37,7 @@ from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
 FACTS_FILE = ROOT / "tools" / "facts.yml"
-STATE_PAGE = ROOT / "docs" / "PROJECT_STATE.md"
+STATE_PAGE = ROOT / "develop" / "state.md"
 
 #: (ok, detail) — a check never raises; a broken probe is a FAILED fact, not a crash.
 Check = Callable[[], tuple[bool, str]]
@@ -443,7 +443,7 @@ def render(rows: list[tuple[str, str, str, str]]) -> str:
         "",
         f"**Обновлено:** {_today().isoformat()}",
         "",
-        "Единственное место, где записано «что сейчас правда». Планы (`MYPLANS/`) описывают,",
+        "Единственное место, где записано «что сейчас правда». Планы (`develop/plans/`) описывают,",
         "что делать, и ссылаются на эти id — состояние в них не повторяется, поэтому",
         "расхождений между документами быть не может. История — в git (`git log tools/facts.yml`).",
         "",
@@ -503,7 +503,7 @@ def main(argv: list[str] | None = None) -> int:
             STATE_PAGE.write_text(page, encoding="utf-8")
             print(f"verify_facts: {STATE_PAGE.relative_to(ROOT).as_posix()} обновлён")
         elif STATE_PAGE.is_file() and STATE_PAGE.read_text(encoding="utf-8") != page:
-            print("verify_facts: docs/PROJECT_STATE.md устарел — запустите --render", file=sys.stderr)
+            print("verify_facts: develop/state.md устарел — запустите --render", file=sys.stderr)
             problems += 1
     if problems:
         print(f"verify_facts: проблем — {problems}", file=sys.stderr)

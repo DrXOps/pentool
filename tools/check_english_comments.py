@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     grown = {path: (baseline.get(path, 0), count) for path, count in current.items() if count > baseline.get(path, 0)}
     if grown:
         print(
-            "check_english_comments: new Russian comments/docstrings (rule: code is English, see MYPLANS T-018):",
+            "check_english_comments: new Russian comments/docstrings (rule: code is English, see develop/conventions.md (T-018)):",
             file=sys.stderr,
         )
         for path, (was, now) in sorted(grown.items()):

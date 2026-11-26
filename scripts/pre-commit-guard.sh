@@ -90,7 +90,7 @@ in_blacklist() {
 in_whitelist() {
   local p="$1"
   case "$p" in
-    src/* | pentool/* | tests/* | test/* | docs/* | wiki/* | prompts/* | scripts/* | \
+    src/* | pentool/* | tests/* | test/* | develop/* | docs/* | wiki/* | prompts/* | scripts/* | \
     templates/* | ai/* | \
     tools/* | screens/* | config/* | configs/* | assets/* | infra/* | deploy/* | \
     migrations/* | .github/* | .gitlab/* | .devcontainer/* | \

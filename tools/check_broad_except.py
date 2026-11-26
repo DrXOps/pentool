@@ -3,7 +3,7 @@
 
 Why a ratchet and not a wipe
 ----------------------------
-ADR-6 (docs/DECISIONS.md) closed the two worst shapes of the
+ADR-6 (develop/decisions/ADR.md) closed the two worst shapes of the
 problem mechanically: ``except Exception: pass`` cannot grow
 (``tools/check_silent_except.py``, now at zero) and handlers in
 ``on_*``/``action_*``/``watch_*``/workers must write a traceback

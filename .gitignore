@@ -20,7 +20,6 @@ prompts/
 coverage.json
 .coverage
 .pytest_cache/
-MYPLANS/
 "fix comment"
 handFIX/
 specs/

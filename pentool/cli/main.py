@@ -171,7 +171,7 @@ def cli(
 # and the docs kept pointing at while it did not exist (`pentool license trial` used to
 # answer "No such command"). The other modules in this package (`scan.py`, `proxy.py`,
 # `ai_cmd.py`, `project.py`) are still unreachable and are tracked for removal in
-# docs/audit/2026-11-21-tui-report.md — mounting a command that half-works is worse than none.
+# develop/audits/2026-11-21-tui-report.md — mounting a command that half-works is worse than none.
 from pentool.cli.license_cmd import license as license_group  # noqa: E402
 
 cli.add_command(license_group)

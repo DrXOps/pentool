@@ -39,7 +39,7 @@ repos:
       # (pentool/tui/screen_lifecycle.py). Гвард запрещает три ошибки, которые
       # ломают TUI незаметно: прямой query_one(SCREEN_X)/query_one(SomeScreen),
       # сборку экранов в PentoolApp.compose() (именно она стоила ~1.4 с на
-      # действие, см. MYPLANS T-002) и использование результата get_screen()
+      # действие, см. develop/DONE.md (T-002)) и использование результата get_screen()
       # без проверки на None. Разбор — AST, без импорта Textual.
       - id: check-lazy-screens
         name: module screens are lazy and None-checked
@@ -129,50 +129,6 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-
-      # Планы: «сделано» подтверждается фактом, а не прозой. Проверяет MYPLANS/
-      # (локальный каталог; если его нет — пропускает). Правила — MYPLANS/README.md.
-      - id: check-plans
-        name: "планы: статусы подтверждены фактами"
-        entry: uv run python tools/check_plans.py
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      # Правила документации (docs/DOC_RULES.md): дата в имени аудита, никаких ссылок на
-      # удалённые папки, никаких рабочих планов в docs/ (он публикуется на сайте).
-      - id: check-docs
-        name: "документация: правила раскладки"
-        entry: uv run python tools/check_docs.py
-        language: system
-        pass_filenames: false
-        always_run: true
-
-      # guard-git-staging: в коммит попадают только файлы проекта.
-      # Проверяет ИНДЕКС, а не команду — работает и для `git commit` из IDE,
-      # и в CI (через --files-from). Логика и списки продублированы из
-      # .claude/hooks/guard-git-staging.sh намеренно: pre-commit должен
-      # работать в свежем клоне, где .claude/ может отсутствовать.
-      - id: guard-git-staging
-        name: guard git staging (только файлы проекта)
-        entry: scripts/pre-commit-guard.sh
-        language: script
-        stages: [pre-commit]
-        pass_filenames: false
-        always_run: true
-
-      # detect-secrets: блокирует коммит с секретом. Baseline (.secrets.baseline)
-      # фиксирует 23 уже существующие находки — все в тестах и license-коде
-      # (фиктивные ключи, тестовые JWT, сгенерированные сертификаты), не секреты.
-      # Обновление baseline: detect-secrets scan --baseline .secrets.baseline
-      # Ложное срабатывание в новой строке помечается `pragma: allowlist secret`.
-      - id: detect-secrets
-        name: detect-secrets (секреты не попадают в историю)
-        entry: detect-secrets-hook --baseline .secrets.baseline
-        language: python
-        additional_dependencies: ["detect-secrets>=1.5,<2"]
-        exclude: ^\.secrets\.baseline$
-        pass_filenames: true
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0

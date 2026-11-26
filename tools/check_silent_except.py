@@ -3,7 +3,7 @@
 
 Why a ratchet and not a wipe
 ----------------------------
-ADR-6 (docs/DECISIONS.md) records the policy: in handlers an
+ADR-6 (develop/decisions/ADR.md) records the policy: in handlers an
 ``except Exception`` must carry ``logger.exception``, and ``pass`` without a
 log is not allowed. The codebase has hundreds of historical breaches (F-009:
 601 ``except Exception`` in ``pentool/tui``, 278 of them bare ``pass``). A mass

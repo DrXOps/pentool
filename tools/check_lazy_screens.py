@@ -5,7 +5,7 @@ Why this exists
 Until 2026-11-20 all thirteen module screens were built in ``PentoolApp.compose()``
 and stayed in the DOM for the whole session (~1600 widgets). Textual runs an
 idle/refresh sweep on every interaction that costs roughly five message dispatches
-per mounted widget, so a single click cost ~1.4 s (MYPLANS T-002 / measured
+per mounted widget, so a single click cost ~1.4 s (develop/DONE.md (T-002) / measured
 2026-11-20: 1444 ms with all screens mounted, 238 ms with the lazy policy).
 
 Screens are now mounted on demand by ``pentool/tui/screen_lifecycle.py``. That
@@ -267,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print(
-        "check_lazy_screens: module screens must be mounted lazily (see wiki/tui.md §12, MYPLANS T-002):",
+        "check_lazy_screens: module screens must be mounted lazily (see wiki/tui.md §12, develop/DONE.md (T-002)):",
         file=sys.stderr,
     )
     for path, line, message in findings:
