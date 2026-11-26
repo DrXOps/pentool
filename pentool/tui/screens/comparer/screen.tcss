@@ -11,6 +11,15 @@ ComparerScreen #cmp-stat-bar {
     padding: 0 1;
     border-bottom: solid $primary 35%;
 }
+ComparerScreen #cmp-stat-bar ToolbarButton {
+    /* The row is one line tall; without an explicit height the buttons are clipped and
+       the toolbar looks empty ("в компарере пропали инструменты"). */
+    height: 1;
+    width: auto;
+    padding: 0 1;
+    background: transparent;
+}
+
 ComparerScreen #cmp-stats {
     width: 1fr;
 }
