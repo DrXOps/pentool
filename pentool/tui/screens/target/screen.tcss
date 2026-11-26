@@ -3,6 +3,12 @@ TargetScreen {
     width: 1fr;
     height: 1fr;
 }
+TargetScreen #tgt-config-row {
+    /* A row of controls, not a pane: without a height it defaulted to 1fr and took
+       half the screen, pushing the Site Map card down (seen in the app by the owner). */
+    height: auto;
+    align-vertical: middle;
+}
 TargetScreen #main-split {
     layout: horizontal;
     height: 1fr;
