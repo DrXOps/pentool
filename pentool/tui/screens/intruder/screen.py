@@ -2199,6 +2199,52 @@ class IntruderScreen(
         """Textual handler: stays on the screen, the runner decides what to do."""
         self._attack_runner.handle_worker_state(event)
 
+    def _record_to_proxy_history(self, result: IntruderResult) -> None:
+        """Store the exchange in Proxy → History, like traffic that went through the proxy.
+
+        Intruder talks to the target with its own client, so the request never passed the
+        proxy and the user could not inspect it (owner's report). Failures are logged, never
+        raised: recording must not disturb an attack.
+        """
+        service = getattr(self.app, "_proxy_service", None)
+        if service is None:
+            return
+        raw = getattr(result, "request_raw", "") or ""
+        if not raw.strip():
+            return
+        try:
+            from datetime import datetime
+            from uuid import uuid4
+
+            from pentool.utils.intercepted_request import InterceptedRequest
+            from pentool.utils.parser import ParsedResponse, parse_http_request
+
+            parsed = parse_http_request(raw)
+            status = getattr(result, "response_status", None)
+            response = None
+            if status is not None:
+                response = ParsedResponse(
+                    status=int(status),
+                    reason="",
+                    headers={},
+                    body=getattr(result, "response_body", "") or "",
+                )
+            entry = InterceptedRequest(
+                id=f"intruder-{uuid4().hex[:8]}",
+                method=parsed.method,
+                url=parsed.url,
+                headers=dict(parsed.headers),
+                body=parsed.body,
+                timestamp=datetime.now(),
+                state="forwarded",
+                response=response,
+                is_https=parsed.url.startswith("https://"),
+            )
+            self.run_worker(service.store_request(entry), exclusive=False, exit_on_error=False)
+        except Exception:
+            # History is a convenience here; the attack result stays valid without it.
+            logger.warning("intruder: exchange not stored in proxy history", exc_info=True)
+
     def _on_result(self, result: IntruderResult, tab: _IntruderTabState | None = None) -> None:
         """A result from a tab's attack — written into that tab, not into the active one.
 
@@ -2210,6 +2256,7 @@ class IntruderScreen(
         if tab is None:
             return
         tab.all_results.append(result)
+        self._record_to_proxy_history(result)
         if result_is_visible(
             result,
             filter_spec=tab.filter_spec,
