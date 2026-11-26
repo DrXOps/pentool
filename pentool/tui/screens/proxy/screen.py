@@ -643,6 +643,26 @@ class ProxyScreen(
             # failed inside it.
             logger.exception("proxy: WS frame unsubscribe failed on unmount")
 
+    async def _table_or_wait(self, selector: str, timeout: float = 2.0) -> DataTable | None:
+        """Return the table, waiting for it to mount (lazy sub-tabs mount a frame later).
+
+        Reloading history used to query the table directly: on a rebuilt sub-tab the widget was
+        not there yet, the query raised `NoMatches`, the rows were cached but never painted and
+        the user saw an empty history until a manual filter. Waiting is the honest fix — the
+        data is already fetched by then.
+        """
+        import asyncio
+
+        waited = 0.0
+        while waited <= timeout:
+            try:
+                return self.query_one(selector, DataTable)
+            except NoMatches:
+                await asyncio.sleep(0.02)
+                waited += 0.02
+        logger.warning("proxy: table %s did not mount in %.1fs — history not painted", selector, timeout)
+        return None
+
     async def _reload_table(
         self,
         filters: FilterSpec | None = None,
@@ -692,7 +712,9 @@ class ProxyScreen(
             self._history_total = total
             self._history_oldest_offset = max(total - len(rows), 0)
             arrow = _rows_to_arrow(rows)
-            table = self.query_one("#request-list", DataTable)
+            table = await self._table_or_wait("#request-list")
+            if table is None:
+                return
             # One layout pass for the whole update instead of one per widget:
             # `set_data`, the cursor move and the counter each mark the screen
             # dirty on their own (measured: 6-8 full passes per action).
@@ -830,7 +852,9 @@ class ProxyScreen(
             self._ws_rows_cache = merged
             self._ws_history_oldest_offset = page_offset
             try:
-                table = self.query_one("#ws-request-list", DataTable)
+                table = await self._table_or_wait("#ws-request-list", timeout=0.5)
+                if table is None:
+                    return
                 arrow = _rows_to_arrow(self._ws_rows_cache)
                 table.set_data(arrow)  # set_data already resets caches and dimensions
                 table.scroll_to(y=table.scroll_y + len(older_rows), animate=False)
@@ -891,12 +915,10 @@ class ProxyScreen(
             self._ws_current_filters = filters
             self._update_ws_history_count_label()
             arrow = _rows_to_arrow(rows)
-            try:
-                table = self.query_one("#ws-request-list", DataTable)
-            except NoMatches as exc:
-                # WS table not found — the loaded page is not displayed even though
-                # the counter was already bumped: "Showing N of M" now lies.
-                logger.debug("proxy: WS table not found, page not shown: %s", exc)
+            # Same race as HTTP history: on a rebuilt WS sub-tab the table mounts a frame
+            # later, and giving up left "Showing N of M" describing rows nobody could see.
+            table = await self._table_or_wait("#ws-request-list")
+            if table is None:
                 return
             table.set_data(arrow)
             # Same as the HTTP table: widths are fitted by the table itself.
