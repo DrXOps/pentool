@@ -234,8 +234,64 @@ def _x11_display_ok() -> bool:
     return bool(os.environ.get("DISPLAY"))
 
 
+def _is_wsl() -> bool:
+    """True inside WSL, where the Windows clipboard is reachable via interop."""
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
+    except OSError:
+        return False
+
+
+def _copy_via_wsl(text: str) -> bool:
+    """Write the Windows clipboard with clip.exe (no DISPLAY, no xclip needed)."""
+    clip = _find_executable("clip.exe") or "/mnt/c/Windows/System32/clip.exe"
+    try:
+        result = subprocess.run(
+            [clip],
+            input=text.encode("utf-16-le"),  # clip.exe expects UTF-16LE for non-ASCII
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - interop may be disabled
+        logger.debug("copy_to_clipboard: clip.exe error: %s", exc)
+        return False
+    if result.returncode == 0:
+        logger.debug("copy_to_clipboard: clip.exe OK")
+        return True
+    logger.debug("copy_to_clipboard: clip.exe rc=%s", result.returncode)
+    return False
+
+
+def _paste_via_wsl() -> str | None:
+    """Read the Windows clipboard through PowerShell interop."""
+    shell = _find_executable("powershell.exe") or "powershell.exe"
+    try:
+        result = subprocess.run(
+            [shell, "-NoProfile", "-NonInteractive", "-Command", "Get-Clipboard -Raw"],
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - interop may be disabled
+        logger.debug("paste_from_clipboard: powershell error: %s", exc)
+        return None
+    if result.returncode == 0:
+        text = result.stdout.decode("utf-8", "replace").rstrip("\r\n")
+        if text.strip():
+            logger.debug("paste_from_clipboard: powershell OK")
+            return text
+    logger.debug("paste_from_clipboard: powershell rc=%s", result.returncode)
+    return None
+
+
 def copy_to_clipboard(text: str) -> bool:
-    """Copy to clipboard via (tkinter → xclip/xsel → GTK → wl-copy → pyperclip)."""
+    """Copy to clipboard via (WSL clip.exe → tkinter → xclip/xsel → GTK → wl-copy → pyperclip)."""
+
+    if _is_wsl() and _copy_via_wsl(text):
+        return True
 
     if not text:
         logger.debug("copy_to_clipboard: empty text, skipping")
@@ -365,7 +421,12 @@ def copy_to_clipboard(text: str) -> bool:
 
 
 def paste_from_clipboard() -> str | None:
-    """Read from clipboard via (tkinter → xclip/xsel → GTK → wl-paste → pyperclip)."""
+    """Read from clipboard via (WSL PowerShell → tkinter → xclip/xsel → GTK → wl-paste → pyperclip)."""
+
+    if _is_wsl():
+        text_from_windows = _paste_via_wsl()
+        if text_from_windows:
+            return text_from_windows
 
     # tkinter — works without external binaries
     try:
