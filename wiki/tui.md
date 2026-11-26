@@ -4,11 +4,12 @@
 
 - **Связи:** [[api]], [[core]], [[deps/textual]], [[deps/textual-fastdatatable]]
 - **Код:** pentool/tui/
-- **Источник:** pentool/tui/; аудит TUI 2026-11-06…12 —
-  `docs/tui-audit/DECISIONS.md`, `CONVENTIONS.md`,
-  ; волна 5 (порт Intruder) — см. историю git;
-  волна 6 (F-026, экранирование разметки) — §39
-- **Обновлено:** 2026-11-16
+- **Источник:** pentool/tui/; правила — `develop/conventions.md`, решения —
+  `develop/decisions/ADR.md`, замеры — `develop/audits/2026-11-26-tui-perf.md`;
+  изменения 2026-11-25…26 — коммиты `c8b1852`, `17903d3`, `ab08f2f`, `1861440`,
+  `00f5310`, `cd96e27`, `3e70e9d`, `666caa0`, `c86f1e3`, `01e9f7d`, `17c33fb`,
+  `018bf62`, `2ea8040`, `f7629c0`
+- **Обновлено:** 2026-11-26
 
 ## Назначение
 
@@ -40,6 +41,46 @@
   (F-007); id одного экрана живёт литералом рядом со своим виджетом.
 
 ---
+
+## Что изменилось 2026-11-25…26 (проверено кодом и тестами)
+
+**Один владелец на каждую механику.** Эти вещи существовали в нескольких копиях и разъехались;
+теперь у каждой одна реализация:
+
+| Механика | Где живёт | Копий было |
+|---|---|---|
+| Переименование вкладок (двойной клик) | `mixins/tab_rename.py::TabRenameMixin` | 4 (панель, база, Repeater, PRO-сканер) |
+| Обновление шапки | `mixins/app_mixin.py::refresh_header` | 6 |
+| Ряд действий модуля | `HeaderSpec` + `ModuleScreen.ACTIONS` | цепочки `if action_id ==` в 7 экранах |
+| Смена проекта | `ProjectReloadable` (Protocol) | приватные поля экранов |
+| Каталог модулей | `module_catalog.py` | 5 списков |
+| Payload-файлы Интрудера | `screens/intruder/payload_sources.py` | парсер + загрузчик |
+| Рендер результатов Интрудера | `screens/intruder/results_view.py` | 2 копии цикла Arrow |
+| Поля активной вкладки | `screens/intruder/tab_fields.py::_ActiveTabField` | 8 пар property/setter |
+| Жизненный цикл атаки | `screens/intruder/attack_runner.py` | ~200 строк внутри экрана |
+| История Proxy (счётчик, пагинация, выбор, детали) | `screens/proxy/history_view.py` | 9 пар методов HTTP/WS |
+| Кнопки инструмента Utils | `widgets/action_row.py` | 3 экрана рисовали сами |
+
+**Инварианты, которые легко сломать (и как это заметить):**
+
+- `TabbedContent.active` бросает **`ValueError`**, а не только `NoMatches`, пока панель не
+  смонтирована: присваивать только через `TabbedContentPanel._set_active()`
+  (`test_crash_regressions.py`).
+- Кооператор экрана (`attack_runner`) обращается к `screen._TabId`; это алиас класса
+  `IntruderScreen`, без него падает любая атака (`test_crash_regressions.py`).
+- Загрузка истории ждёт появления таблицы (`ProxyScreen._table_or_wait`), иначе строки
+  кэшируются, а таблица остаётся пустой (`test_proxy_history_mount_wait.py`).
+- Строка с `border-bottom` требует `height: 2`: иначе контент получает 0 строк и кнопки
+  невидимы (`test_comparer_row_visible.py`).
+- Слоты шапки по умолчанию `display: none`; `_refresh_header` включает нужные, поэтому первый
+  кадр совпадает с установившимся (`test_startup_paint.py`).
+- Форматирование панели — `ModuleScreen.on_panel_format_requested`; в шапке кнопки Beautify
+  больше нет (`test_panel_beautify.py`).
+
+**Замеры (для будущих решений):** переключение модуля 4–15 мс на само действие и 318–686 мс на
+следующий кадр (время уходит на отрисовку, не на монтирование); отрисовка таблицы не зависит от
+числа строк (122–162 мс); сборка Arrow для всего кэша — 755 мс на 200k. Полный отчёт —
+`develop/audits/2026-11-26-tui-perf.md`.
 
 ## Правила: как писать TUI-код
 

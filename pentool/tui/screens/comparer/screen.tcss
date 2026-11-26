@@ -6,7 +6,10 @@ ComparerScreen {
 
 /* ── Stat bar ────────────────────────────────────────────────────────────── */
 ComparerScreen #cmp-stat-bar {
-    height: 1;
+    /* 1 content row + the border-bottom line: with height 1 the border left no row for the
+       content, so the row collapsed to zero and both the status text and the buttons were
+       invisible (owner: «в компарере пропали инструменты»). */
+    height: 2;
     background: transparent;
     padding: 0 1;
     border-bottom: solid $primary 35%;
