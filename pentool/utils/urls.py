@@ -35,3 +35,19 @@ def normalize_url(target: str) -> str:
         return f"{DEFAULT_SCHEME}:{value}"
 
     return f"{DEFAULT_SCHEME}://{value}"
+
+
+def host_of(url: str) -> str:
+    """Host part of a URL without the port, lower-cased; empty string when absent.
+
+    `urlparse(url).netloc.split(":")[0]` was written three times in the spider API and once
+    more in the scope checks — the copies disagreed on IPv6 and on a missing scheme. One
+    helper keeps the answer identical everywhere.
+    """
+    from urllib.parse import urlsplit
+
+    try:
+        return (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        # A malformed URL (bad IPv6 literal) must not raise in a crawler loop.
+        return ""

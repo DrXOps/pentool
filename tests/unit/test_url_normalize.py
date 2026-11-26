@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from pentool.utils.urls import normalize_url
+from pentool.utils.urls import host_of, normalize_url
 
 
 @pytest.mark.parametrize(
@@ -32,3 +32,17 @@ def test_targets_get_a_scheme(raw: str, expected: str) -> None:
 def test_empty_target_stays_empty() -> None:
     assert normalize_url("") == ""
     assert normalize_url("   ") == ""
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://example.com:8443/x", "example.com"),
+        ("http://EXAMPLE.com/", "example.com"),
+        ("http://[::1]:8080/", "::1"),
+        ("not a url", ""),
+        ("", ""),
+    ],
+)
+def test_host_of_strips_port_and_lowercases(url: str, expected: str) -> None:
+    assert host_of(url) == expected

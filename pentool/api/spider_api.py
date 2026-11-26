@@ -21,6 +21,7 @@ from pentool.modules.spider import (
     shutdown_proc_pool,
 )
 from pentool.utils.auth_headers import extract_auth_headers
+from pentool.utils.urls import host_of
 
 logger = get_logger(__name__)
 
@@ -131,7 +132,7 @@ class SpiderAPI(ExportableAPI):
             # its active-scan phase instead of sending unauthenticated probes.
             result.auth_headers = merged_headers
             # Cache result by host — Scanner checks this before re-crawling.
-            host = urlparse(url).netloc.split(":")[0]
+            host = host_of(url)
             if host:
                 self._last_results[host] = result
             logger.info(
@@ -213,17 +214,15 @@ class SpiderAPI(ExportableAPI):
 
         Used by Scanner to skip re-crawling when Target already crawled.
         """
-        from urllib.parse import urlparse
 
-        host = urlparse(url).netloc.split(":")[0]
+        host = host_of(url)
         return host in cls._last_results and bool(cls._last_results[host].pages)
 
     @classmethod
     def get_cached_pages(cls, url: str) -> list[str]:
         """Return cached page URLs for this host, or empty list."""
-        from urllib.parse import urlparse
 
-        host = urlparse(url).netloc.split(":")[0]
+        host = host_of(url)
         result = cls._last_results.get(host)
         if result:
             return result.pages  # pages is already list[str]
