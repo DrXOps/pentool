@@ -42,7 +42,7 @@ this section is pending», проверить самодостаточность
 
 - удалены: 4 файла сессий, `plan_tabs_repeater_intruder`, `plan-features-2026-11-23`,
   `plan-recon-integration`, `plan-release-2026-11-20`, `tasks-pentool` (переехали в
-  подпланы и `tech_debt.md`);
+  подпланы и pre-release);
 - `docs/tui-audit/`: оставлены `DECISIONS.md` (ADR) и `CONVENTIONS.md` (правила),
   удалены `REPORT.md`, `SUMMARY.md`, `COMPONENTS.md` (исторические находки, устарели
   после редизайна); ссылки в `pentool/tui/README.md` обновлены;

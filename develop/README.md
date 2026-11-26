@@ -30,9 +30,8 @@
 - [plans/PLAN.md](plans/PLAN.md) — треки и приоритеты
 - [plans/bugs-tui-2026-11-26.md](plans/bugs-tui-2026-11-26.md) — приёмка ТУИ владельцем (16 пунктов)
 - [plans/tui-unification.md](plans/tui-unification.md) — унификация ТУИ, шаги 5.6+
-- [plans/tui.md](plans/tui.md) — очередь ТУИ и отзывчивость
+- [plans/pre-release.md](plans/pre-release.md) — **что делать до релиза (рекомендация)**
 - [plans/release.md](plans/release.md) — релиз v0.6.0 и профилирование
-- [plans/tech_debt.md](plans/tech_debt.md) — технический долг
 - [plans/backlog.md](plans/backlog.md) — идеи без приоритета
 - [plans/modules.md](plans/modules.md) — модули и материалы
 - [plans/common.md](plans/common.md) — инфраструктура и гварды
