@@ -6,8 +6,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from pro.pentool.api.passive_scanner_manager import _recent_history
-from pro.pentool.modules.scanner.passive import PassiveScanner
+# The passive scanner lives in the PRO tree: the core CI job has no `pro/` checkout, and a
+# module-level import would turn a missing optional tree into a collection error for the
+# whole suite.
+pytest.importorskip("pro.pentool.api.passive_scanner_manager", reason="PRO tree not checked out")
+
+from pro.pentool.api.passive_scanner_manager import _recent_history  # noqa: E402
+from pro.pentool.modules.scanner.passive import PassiveScanner  # noqa: E402
 
 
 class _Engine:
