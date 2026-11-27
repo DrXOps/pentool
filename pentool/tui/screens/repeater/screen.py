@@ -394,7 +394,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
             # First step of building the tab body. Breaking here leaves an
             # empty tab — exactly the defect class the audit is looking for.
             logger.error("repeater: tab %s body not mounted: %s", tab_id, exc, exc_info=True)
-            self._notify(f"Tab {tab_id}: body could not be built — see the log", severity="error")
+            self.notify_user(f"Tab {tab_id}: body could not be built — see the log", severity="error")
 
     def _fill_tab_body(self, tab_id: str, state: _TabState, body: Vertical) -> None:
         try:
@@ -905,14 +905,14 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
             # Send was pressed but the editor is not in the tree (tab not
             # mounted) — the request was not read, so there is nothing to send.
             logger.debug("repeater: editor not found for send: %s", exc)
-            self._notify("Could not read the request — see the log", severity="error")
+            self.notify_user("Could not read the request — see the log", severity="error")
             return
         except Exception:
             # Same outcome, different cause: the text could not be read from an
             # editor that was found. To the user it is still "not read", but we
             # need a traceback — this is a defect, not an unmounted panel.
             logger.exception("repeater: request text not read for send")
-            self._notify("Could not read the request — see the log", severity="error")
+            self.notify_user("Could not read the request — see the log", severity="error")
             return
         if not raw.strip():
             return

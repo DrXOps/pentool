@@ -24,6 +24,7 @@ from textual.widget import Widget
 
 from pentool.core.logging import get_logger
 from pentool.tui.mixins.app_mixin import AppMixin
+from pentool.tui.mixins.notify import NotifyMixin
 from pentool.tui.widgets.content_panel import ContentPanel
 
 logger = get_logger(__name__)
@@ -58,7 +59,7 @@ class ProjectReloadable(Protocol):
         raise NotImplementedError
 
 
-class ModuleScreen(AppMixin, Widget):
+class ModuleScreen(AppMixin, NotifyMixin, Widget):
     """Base class for a top-level module screen.
 
     Subclasses declare :attr:`ACTIONS` — the mapping between the ids their
