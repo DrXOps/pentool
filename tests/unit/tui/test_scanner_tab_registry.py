@@ -8,11 +8,18 @@ still a plain `TabbedContent`, and registry/strip agree after a tab is created o
 from __future__ import annotations
 
 import pytest
-from pentool.tui.screens.scanner.screen import ScannerScreen
 
 from pentool.core.license import LicenseInfo
 from pentool.tui.app import PentoolApp
 from pentool.tui.widgets.tab_registry import TabRegistry
+
+# The Scanner screen lives in the PRO tree: the core CI job has no `pro/` checkout, and an
+# unguarded module-level import would turn a missing optional tree into a collection error
+# for the whole suite (same guard as `test_passive_replay.py`).
+try:
+    from pentool.tui.screens.scanner.screen import ScannerScreen
+except ModuleNotFoundError:  # pragma: no cover - the core CI job only
+    pytest.skip("PRO tree not checked out", allow_module_level=True)
 
 PRO = LicenseInfo(valid=True, plan="pro", features=["scanner_pro"])
 
