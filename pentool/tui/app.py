@@ -702,6 +702,51 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # Use the same exclusive worker path as manual open — no races
         self._pm.switch_project_db(path, is_new=False)
 
+    async def _store_pending_history_rows(self, urls: list[str]) -> list[int]:
+        """Put a "fetch started" row into Proxy history so the history is not empty.
+
+        Returns the row ids, so the result can be written into the same rows afterwards.
+        A failure here must not stop the fetch: the rows are a convenience, not the goal.
+        """
+        if self._proxy_service is None:
+            return []
+        from datetime import datetime
+        from uuid import uuid4
+
+        from pentool.utils.intercepted_request import InterceptedRequest
+        from pentool.utils.urls import normalize_url
+
+        rows: list[int] = []
+        for url in urls:
+            try:
+                entry = InterceptedRequest(
+                    id=f"pending-{uuid4().hex[:8]}",
+                    method="GET",
+                    url=normalize_url(url),
+                    headers={},
+                    body="",
+                    timestamp=datetime.now(),
+                    state="forwarded",
+                    response=None,
+                )
+                row_id = await self._proxy_service.store_request(entry)
+                if row_id is not None:
+                    await self._proxy_service.update_comment(row_id, "fetch started")
+                    rows.append(row_id)
+            except Exception:
+                logger.warning("seed: pending history row not stored for %s", url, exc_info=True)
+        return rows
+
+    async def _finalize_pending_history_rows(self, rows: list[int], captured: bool) -> None:
+        if self._proxy_service is None or not rows:
+            return
+        note = "captured" if captured else "no response captured"
+        for row_id in rows:
+            try:
+                await self._proxy_service.update_comment(row_id, note)
+            except Exception:
+                logger.debug("seed: pending row %s not updated", row_id, exc_info=True)
+
     async def _seed_pending_urls(self, urls: list[str]) -> None:
         """Seed targets from --url flag into Target/SiteMap."""
         await asyncio.sleep(0.6)  # let the TUI render first
@@ -807,6 +852,9 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 logger.exception("seed: force-scope failed for %s", target_url)
 
         if real:
+            # A row per target right away: the browser takes ~1 s to start, and an empty
+            # history in that window reads as "nothing works".
+            pending_rows = await self._store_pending_history_rows(urls)
             # Actually fetch the target(s) through the proxy so real requests
             # show up in the project (not just a dry seed entry).
             try:
@@ -830,6 +878,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
                 from pentool.core.error_guard import err
 
                 err(exc, "--real fetch failed", self, severity="warning")
+            finally:
+                await self._finalize_pending_history_rows(
+                    pending_rows, captured=bool(self._proxy and self._proxy.is_running)
+                )
 
         proxy_ready = proxy_started or bool(self._proxy and self._proxy.is_running)
         ready = "proxy on, ready to audit" if proxy_ready else "ready to audit"
