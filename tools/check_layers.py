@@ -24,8 +24,9 @@ PACKAGE_ROOT = Path(__file__).parent.parent / "pentool"
 
 # Rules: (layer, forbidden imports from that layer)
 FORBIDDEN_IMPORTS: list[tuple[str, list[str]]] = [
-    # tui/ must not import modules/ directly
-    ("tui", ["pentool.modules"]),
+    # tui/ must not import modules/ or storage/ directly: modules via api/, storage via
+    # services/ (the screen talks to a service, the service owns the database).
+    ("tui", ["pentool.modules", "pentool.storage"]),
     # modules/ must not import tui/, api/, cli/
     ("modules", ["pentool.tui", "pentool.api", "pentool.cli"]),
     # core/ must not import modules/, tui/, api/
