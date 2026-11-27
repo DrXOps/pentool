@@ -28,6 +28,17 @@ class _ClipboardHost(ContentClipboardMixin, App):
     def _paste_text_to_panel(self, panel: ContentPanel, text: str) -> None:  # noqa: D401
         self.pasted.append(text)
 
+    def notify_user(
+        self,
+        message: str,
+        *,
+        severity: str = "information",
+        timeout: float | None = 3,
+        title: str | None = None,
+    ) -> None:
+        """`NotifyMixin` surface — the mixin reports through it, not through app.notify."""
+        self.notices.append(str(message))
+
     def notify(self, message, **kwargs) -> None:  # type: ignore[override]
         self.notices.append(str(message))
 

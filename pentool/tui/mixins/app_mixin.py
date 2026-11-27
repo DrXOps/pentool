@@ -52,15 +52,15 @@ class AppMixin:
             from pentool.tui.screens.decoder.screen import DecoderScreen
 
             if not text:
-                self.app.notify("No text to send", severity="warning")  # type: ignore[attr-defined]
+                self.notify_user("No text to send", severity="warning")  # type: ignore[attr-defined]
                 return
             decoder = await self.app.ensure_module_screen("decoder", DecoderScreen)  # type: ignore[attr-defined]
             if decoder is None:
-                self.app.notify("Decoder is unavailable", severity="error")  # type: ignore[attr-defined]
+                self.notify_user("Decoder is unavailable", severity="error")  # type: ignore[attr-defined]
                 return
             decoder.load_text(text)
             self.app.action_switch_module("decoder")  # type: ignore[attr-defined]
-            self.app.notify("Sent to Decoder", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("Sent to Decoder", timeout=2)  # type: ignore[attr-defined]
         except Exception as exc:
             self.err(exc, "Could not send to Decoder")
 
@@ -70,11 +70,11 @@ class AppMixin:
             from pentool.tui.screens.comparer.screen import ComparerScreen
 
             if not text:
-                self.app.notify("No text to send", severity="warning")  # type: ignore[attr-defined]
+                self.notify_user("No text to send", severity="warning")  # type: ignore[attr-defined]
                 return
             comparer = await self.app.ensure_module_screen("comparer", ComparerScreen)  # type: ignore[attr-defined]
             if comparer is None:
-                self.app.notify("Comparer is unavailable", severity="error")  # type: ignore[attr-defined]
+                self.notify_user("Comparer is unavailable", severity="error")  # type: ignore[attr-defined]
                 return
             left_text = comparer.query_one("#cmp-left").text  # type: ignore[attr-defined]
             if left_text.strip():
@@ -84,6 +84,6 @@ class AppMixin:
                 comparer.load_left(text, label=label or "Request")
                 side = "left"
             self.app.action_switch_module("comparer")  # type: ignore[attr-defined]
-            self.app.notify(f"Sent to Comparer ({side})", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user(f"Sent to Comparer ({side})", timeout=2)  # type: ignore[attr-defined]
         except Exception as exc:
             self.err(exc, "Could not send to Comparer")

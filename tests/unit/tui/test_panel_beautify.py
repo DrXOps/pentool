@@ -41,7 +41,7 @@ def test_header_no_longer_offers_beautify() -> None:
 def test_panel_format_request_beautifies_the_body() -> None:
     screen = ModuleScreen.__new__(ModuleScreen)  # no DOM needed: handler is self-contained
     notes: list[tuple[str, str]] = []
-    screen.notify_to_user = lambda message, severity="information", **_: notes.append((message, severity))
+    screen.notify_user = lambda message, severity="information", **_: notes.append((message, severity))
 
     widget = _Widget(result=True)
     screen.on_panel_format_requested(SimpleNamespace(panel=_Panel(widget)))
@@ -53,7 +53,7 @@ def test_panel_format_request_beautifies_the_body() -> None:
 def test_panel_format_request_reports_nothing_to_change() -> None:
     screen = ModuleScreen.__new__(ModuleScreen)
     notes: list[tuple[str, str]] = []
-    screen.notify_to_user = lambda message, severity="information", **_: notes.append((message, severity))
+    screen.notify_user = lambda message, severity="information", **_: notes.append((message, severity))
 
     widget = _Widget(result=False)
     screen.on_panel_format_requested(SimpleNamespace(panel=_Panel(widget)))

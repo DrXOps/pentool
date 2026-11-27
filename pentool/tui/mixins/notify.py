@@ -1,9 +1,11 @@
 """One way for a screen to tell the user something.
 
-Three mechanisms had grown side by side: `self.app.notify(...)` (used directly in screens),
+Three mechanisms had grown side by side: `self.app.notify(...)` used directly in screens,
 `self._notify(...)` (a thin wrapper in one screen) and `ModuleScreen.notify_to_user(...)`.
-They differ in defaults and in how they behave when the app is not attached (tests), so the same
-message behaved differently depending on which copy the author reached for.
+They differed in defaults and in how they behaved when the app is not attached (tests), so the
+same message behaved differently depending on which copy the author reached for. Everything now
+goes through `notify_user()`; the migration is checked by
+`tests/unit/tui/test_notify_is_one_way.py`.
 """
 
 from __future__ import annotations
@@ -31,10 +33,16 @@ class NotifyMixin:
         A screen can be composed without an app (unit tests, previews), and a notification is
         never worth an exception in the middle of a handler.
         """
-        app: Any = getattr(self, "app", None)
+        try:
+            app: Any = self.app
+        except Exception as exc:  # noqa: BLE001 - an unmounted widget has no screen/app
+            # `Widget.app` resolves through `self.screen`, which raises when the widget is
+            # not mounted yet. A toast in that state is dropped with a log line.
+            logger.debug("notify: no app attached (%s), message dropped: %s", exc, message)
+            return
         notify = getattr(app, "notify", None)
         if notify is None:
-            logger.debug("notify: no app attached, message dropped: %s", message)
+            logger.debug("notify: app cannot show messages, message dropped: %s", message)
             return
         try:
             notify(message, severity=severity, timeout=timeout, title=title)

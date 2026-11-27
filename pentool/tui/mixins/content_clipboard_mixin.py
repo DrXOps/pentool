@@ -69,6 +69,6 @@ class ContentClipboardMixin:
     def _notify_clipboard(self, message: str, *, severity: str = "information") -> None:
         """Show a toast; a screen mounted without an App must not raise."""
         try:
-            self.app.notify(message, severity=severity, timeout=2)  # type: ignore[attr-defined]
+            self.notify_user(message, severity=severity, timeout=2)  # type: ignore[attr-defined]
         except Exception:  # noqa: BLE001 — notify is best-effort by design
             return

@@ -107,7 +107,7 @@ class SmartPayloadsDialog(BaseDialog):
             self.dismiss(payloads)
         except Exception as exc:
             logger.error("Smart Payload Generator failed: %s", exc, exc_info=True)
-            self.app.notify(f"Smart Payload Generator failed: {exc}", severity="error", timeout=5)
+            self.notify_user(f"Smart Payload Generator failed: {exc}", severity="error", timeout=5)
             self.dismiss(None)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

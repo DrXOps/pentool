@@ -1,7 +1,7 @@
 """HTTP editor widgets: text loading, special characters, beautify, response label (T-014).
 
 `request_editor.py` is the surface Proxy/Repeater show requests and responses in. The pure
-helpers were covered; the widget methods were not — exactly the pатhs where "the request
+helpers were covered; the widget methods were not — exactly the paths where "the request
 arrived but the panel shows the previous one" lived. These tests mount the real widgets
 (HttpView / RequestEditor / ResponseViewer) in a small app.
 """

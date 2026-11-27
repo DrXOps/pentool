@@ -16,6 +16,7 @@ from textual.binding import Binding
 from textual.screen import ModalScreen
 
 from pentool.tui.mixins.dialog_cancel import DialogCancelMixin
+from pentool.tui.mixins.notify import NotifyMixin
 
 _BASE_DIR = Path(__file__).parent
 
@@ -25,7 +26,7 @@ _BASE_DIR = Path(__file__).parent
 _ResultT = TypeVar("_ResultT")
 
 
-class BaseDialog(DialogCancelMixin, ModalScreen[_ResultT], Generic[_ResultT]):
+class BaseDialog(DialogCancelMixin, NotifyMixin, ModalScreen[_ResultT], Generic[_ResultT]):
     """Standard dialog base: centred, sized, Escape-cancellable.
 
     Subclasses inherit:

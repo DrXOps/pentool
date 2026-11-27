@@ -30,12 +30,23 @@ class _FakeApp:
 
 
 class _FakeScreen:
-    """The minimum SettingsScreen needs: app.notify, err and a UI refresh."""
+    """The minimum SettingsScreen needs: notify_user, err and a UI refresh."""
 
     def __init__(self) -> None:
         self.app = _FakeApp()
         self.refreshed = 0
         self.errors: list[tuple[str, str]] = []
+
+    def notify_user(
+        self,
+        message: str,
+        *,
+        severity: str = "information",
+        timeout: float | None = 3,
+        title: str | None = None,
+    ) -> None:
+        """`NotifyMixin` surface: the screen reports through it, not through app.notify."""
+        self.app.notes.append(message)
 
     def call_after_refresh(self, callback) -> None:  # noqa: ANN001 - Textual API
         callback()

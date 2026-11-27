@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from pathlib import Path
@@ -179,21 +180,21 @@ class SequencerScreen(ContentClipboardMixin, ModuleScreen):
             if src in ("proxy", "cookie", "body_regex"):
                 proxy_api = getattr(self.app, "_proxy_api", None)
                 if not proxy_api:
-                    self.app.notify("Proxy not available", severity="warning")
+                    self.notify_user("Proxy not available", severity="warning")
                     return
                 if src in ("proxy", "cookie") and not param:
-                    self.app.notify("Enter param/cookie name to capture", severity="warning")
+                    self.notify_user("Enter param/cookie name to capture", severity="warning")
                     return
                 if src == "body_regex" and not param:
-                    self.app.notify("Enter regex pattern for body extraction", severity="warning")
+                    self.notify_user("Enter regex pattern for body extraction", severity="warning")
                     return
                 self._capturing = True
                 self._capture_param = param
                 self._attach_proxy_hook(proxy_api, param, src)
                 src_labels = {"proxy": "param", "cookie": "cookie", "body_regex": "regex"}
-                self.app.notify(f"Capturing '{param}' ({src_labels[src]}) from Proxy…", timeout=3)
+                self.notify_user(f"Capturing '{param}' ({src_labels[src]}) from Proxy…", timeout=3)
             else:
-                self.app.notify("Switch to Proxy/Cookie/Body source for live capture", severity="info")
+                self.notify_user("Switch to Proxy/Cookie/Body source for live capture", severity="info")
                 return
 
             self.refresh_header()
@@ -286,7 +287,7 @@ class SequencerScreen(ContentClipboardMixin, ModuleScreen):
             # The buttons stayed in the "capture running" position although the
             # capture has been stopped.
             logger.debug("sequencer: capture buttons not reset: %s", exc)
-        self.app.notify("Capture stopped", timeout=2)
+        self.notify_user("Capture stopped", timeout=2)
 
     def _update_counter(self) -> None:
         try:
@@ -302,20 +303,27 @@ class SequencerScreen(ContentClipboardMixin, ModuleScreen):
         def _on_path(path: str | None) -> None:
             if not path or not os.path.exists(path):
                 return
-            try:
-                text = Path(path).read_text(encoding="utf-8", errors="replace")
-                added = self._seq.add_from_text(text)
-                # Update TextArea
-                self.query_one("#seq-token-area", TextArea).load_text("\n".join(self._seq.tokens))
-                self._update_counter()
-                self.app.notify(f"Loaded {added} tokens from {os.path.basename(path)}", timeout=3)
-            except Exception as exc:
-                self.err(exc, "Load failed")
+            self.run_worker(self._load_tokens_file(path), exclusive=False, name="sequencer-load-tokens")
 
         self.app.push_screen(
             FileSelectorDialog(mode=FileSelectorMode.OPEN, title="Load Tokens"),
             _on_path,
         )
+
+    async def _load_tokens_file(self, path: str) -> None:
+        """Read the token file off the UI thread, then update the panel."""
+        try:
+            text = await asyncio.to_thread(Path(path).read_text, encoding="utf-8", errors="replace")
+        except OSError as exc:
+            self.err(exc, "Load failed")
+            return
+        try:
+            added = self._seq.add_from_text(text)
+            self.query_one("#seq-token-area", TextArea).load_text("\n".join(self._seq.tokens))
+            self._update_counter()
+            self.notify_user(f"Loaded {added} tokens from {Path(path).name}", timeout=3)
+        except Exception as exc:
+            self.err(exc, "Load failed")
 
     def _copy_report(self) -> None:
         try:
@@ -324,13 +332,13 @@ class SequencerScreen(ContentClipboardMixin, ModuleScreen):
             report = self._seq.analyze()
             text = re.sub(r"\[/?[^\]]+\]", "", report.summary())
             if copy_to_clipboard(text):
-                self.app.notify("Report copied", timeout=2)
+                self.notify_user("Report copied", timeout=2)
         except Exception as exc:
             self.err(exc, "Copy failed")
 
     def _export_report(self) -> None:
         if self._seq.count == 0:
-            self.app.notify("No tokens to export", severity="warning")
+            self.notify_user("No tokens to export", severity="warning")
             return
 
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
@@ -368,13 +376,11 @@ class SequencerScreen(ContentClipboardMixin, ModuleScreen):
                 lines.append("── Tokens ──")
                 for tok in report.tokens:
                     lines.append(f"  {tok}")
-                import os
-
                 if not path.endswith(".txt"):
                     path = path + ".txt"
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write("\n".join(lines))
-                self.app.notify(f"Report exported → {os.path.basename(path)}", timeout=3)
+                self.run_worker(
+                    self._write_report_file(path, "\n".join(lines)), exclusive=False, name="sequencer-export-report"
+                )
             except Exception as exc:
                 self.err(exc, "Export failed")
 
@@ -382,6 +388,15 @@ class SequencerScreen(ContentClipboardMixin, ModuleScreen):
             FileSelectorDialog(mode=FileSelectorMode.SAVE, title="Export Report"),
             _on_path,
         )
+
+    async def _write_report_file(self, path: str, text: str) -> None:
+        """Write the report off the UI thread."""
+        try:
+            await asyncio.to_thread(Path(path).write_text, text, encoding="utf-8")
+        except OSError as exc:
+            self.err(exc, "Export failed")
+            return
+        self.notify_user(f"Report exported → {Path(path).name}", timeout=3)
 
     # ── Analyze ───────────────────────────────────────────────────────────────
 
@@ -395,7 +410,7 @@ class SequencerScreen(ContentClipboardMixin, ModuleScreen):
                 self._seq.add_from_text(ta_text)
 
             if self._seq.count == 0:
-                self.app.notify("No tokens to analyze", severity="warning")
+                self.notify_user("No tokens to analyze", severity="warning")
                 return
 
             self._update_counter()

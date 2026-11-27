@@ -606,7 +606,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
             url = f"https://{node.host}{node.path}"
             raw = build_http_request(ParsedRequest(method=method, url=url, headers={}, body=""))
             self.app.post_message(SendToRepeater(raw))  # type: ignore[attr-defined]
-            self.app.notify(f"Sent {method} {node.path} to Repeater", timeout=3)
+            self.notify_user(f"Sent {method} {node.path} to Repeater", timeout=3)
         except Exception as exc:
             logger.debug("send_selected_to_repeater: %s", exc)
 
@@ -695,7 +695,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
             summary = ", ".join(parts) if parts else "no filters"
             # Sync hosts/wildcards with SiteMap — fire-and-forget
             self._sync_scope_rules(result.hosts)
-            self.app.notify(f"Scope saved: {summary}", timeout=3)
+            self.notify_user(f"Scope saved: {summary}", timeout=3)
 
         self.app.push_screen(
             ScopeDialog(current_scope=current, extended=True),
@@ -752,7 +752,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
             self._build_tree(tree_data)
             display = host if not host.startswith("*") else f"*{host}"
             msg = f"{'Added' if in_scope else 'Removed'} {display} {'to' if in_scope else 'from'} scope"
-            self.app.notify(msg, severity="information")
+            self.notify_user(msg, severity="information")
             # Mirror the change into ProxyServer.scope — keep both modules in sync
             # Skip for wildcards (Proxy handles its own scope rules)
             if not host.startswith("*"):
@@ -776,26 +776,26 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
             profile = await detect_tech(url)
             logger.info("TECHDETECT: profile=%s for host=%s", profile, host)
             if not profile:
-                self.app.notify(f"⚠️ TechDetect for {host}: no profile returned", timeout=5)
+                self.notify_user(f"⚠️ TechDetect for {host}: no profile returned", timeout=5)
                 return
             # Check that the profile holds at least something meaningful
             has_data = any(profile.get(k) for k in ("language", "framework", "cms", "server", "waf"))
             logger.info("TECHDETECT: has_data=%s profile_keys=%s", has_data, list(profile.keys()))
             if not has_data:
-                self.app.notify(f"⚠️ TechDetect for {host}: empty profile (no headers matched)", timeout=5)
+                self.notify_user(f"⚠️ TechDetect for {host}: empty profile (no headers matched)", timeout=5)
                 return
             tech_str = (
                 _format_tech_profile(profile) or f"{profile.get('language') or '?'} / {profile.get('framework') or '?'}"
             )
             if profile.get("cms"):
                 tech_str += f" / {profile['cms']}"
-            self.app.notify(f"🔍 {host}: {tech_str}", timeout=6)
+            self.notify_user(f"🔍 {host}: {tech_str}", timeout=6)
             logger.info("TECHDETECT: updating tree node for %s with tech=%s", host, tech_str)
             # Update the tree — add a tech node under the host
             self._update_tech_node(host, profile)
         except Exception as exc:
             logger.error("TECHDETECT: error for %s: %s", host, exc, exc_info=True)
-            self.app.notify(f"⚠️ TechDetect error for {host}: {exc}", timeout=5)
+            self.notify_user(f"⚠️ TechDetect error for {host}: {exc}", timeout=5)
 
     def action_clear(self) -> None:
         self._clear_worker()
@@ -814,7 +814,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
                 # The map is cleared but Details still holds the previous node —
                 # a reference to data that no longer exists.
                 logger.debug("target: details not cleared with site map: %s", exc)
-            self.app.notify("Site map cleared", severity="information")
+            self.notify_user("Site map cleared", severity="information")
         except Exception:
             # "Clear" did not work: the map stayed on screen and no success
             # notification appeared — the only thing that will say what exactly
@@ -839,14 +839,14 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
         if not hosts:
             hosts = api.get_hosts()
         if not hosts:
-            self.app.notify("No hosts to crawl — Site Map is empty", severity="warning")
+            self.notify_user("No hosts to crawl — Site Map is empty", severity="warning")
             return
         self._maybe_crawl_hosts(hosts)
 
     def action_crawl_selected_host(self) -> None:
         """Crawl only the host currently selected in the tree."""
         if not self._selected_host:
-            self.app.notify("Select a host in the tree first", severity="warning")
+            self.notify_user("Select a host in the tree first", severity="warning")
             return
         self._maybe_crawl_hosts([self._selected_host])
 
@@ -879,7 +879,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
     async def _crawl_hosts_worker(self, hosts: list[str]) -> None:
         from pentool.api.spider_api import SpiderAPI, SpiderConfig
 
-        self.app.notify(
+        self.notify_user(
             f"Crawling {len(hosts)} host{'s' if len(hosts) != 1 else ''}…",
             timeout=3,
         )
@@ -953,7 +953,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
                 if use_ai:
                     ai_added = await self._ai_suggest_endpoints(api, url)
                     if ai_added:
-                        self.app.notify(f"AI endpoints added: {ai_added}", timeout=3)
+                        self.notify_user(f"AI endpoints added: {ai_added}", timeout=3)
         except asyncio.CancelledError:
             raise  # re-raise after cleanup
         finally:
@@ -979,7 +979,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
         )
         if total_errors:
             msg += f", {total_errors} error(s)"
-        self.app.notify(msg, severity="information")
+        self.notify_user(msg, severity="information")
 
     async def _ai_suggest_endpoints(self, api, url: str) -> int:
         """Ask the AI for non-obvious endpoints and register them in the SiteMap.
@@ -1118,7 +1118,7 @@ class TargetScreen(ContentClipboardMixin, AiModeSyncMixin, AutoSaveMixin, Module
         try:
             api = self._get_api()
             api.export_json(path)
-            self.app.notify(f"Exported: {path}", severity="information")
+            self.notify_user(f"Exported: {path}", severity="information")
         except Exception as exc:
             self.err(exc, "Export failed")
 

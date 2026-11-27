@@ -673,13 +673,13 @@ class DashboardScreen(AiModeSyncMixin, ModuleScreen):
         if not path or not isinstance(path, str):
             return
         if not os.path.exists(path):
-            self.app.notify(f"File not found: {path}", severity="warning", timeout=3)
+            self.notify_user(f"File not found: {path}", severity="warning", timeout=3)
             return
         switch_fn = getattr(self.app, "_switch_project_db", None)
         if switch_fn:
             switch_fn(path, is_new=False)
         else:
-            self.app.notify(f"Opened: {os.path.basename(path)}", timeout=3)
+            self.notify_user(f"Opened: {os.path.basename(path)}", timeout=3)
 
     def _update_ai_status(self) -> None:
         """Refresh the AI and MCP status rows in the STATUS block (under MCP)."""
@@ -1046,7 +1046,7 @@ class DashboardScreen(AiModeSyncMixin, ModuleScreen):
                 update_fn = getattr(self.app, "_update_project_name", None)
                 if update_fn:
                     update_fn(path)
-                self.app.notify(f"Saved to {os.path.basename(path)}", timeout=3)
+                self.notify_user(f"Saved to {os.path.basename(path)}", timeout=3)
                 self._populate_projects()
                 self.log_activity(f"Project saved: {path}", "ok")
             except Exception as e:

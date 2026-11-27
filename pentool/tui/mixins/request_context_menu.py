@@ -195,13 +195,13 @@ class RequestContextMenuMixin:
 
         url = extract_url_from_raw(raw)
         if url and copy_to_clipboard(url):
-            self.app.notify("URL copied", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("URL copied", timeout=2)  # type: ignore[attr-defined]
         elif not url:
-            self.app.notify("No URL found", severity="warning", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("No URL found", severity="warning", timeout=2)  # type: ignore[attr-defined]
 
     def _cm_do_copy_as(self, action: str, raw: str) -> None:
         if not raw.strip():
-            self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         from pentool.utils.copy_as import (
             copy_as_curl,
@@ -230,9 +230,9 @@ class RequestContextMenuMixin:
         fn, label = _map[action]
         text = fn(req)
         if copy_to_clipboard(text):
-            self.app.notify(f"{label} copied", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user(f"{label} copied", timeout=2)  # type: ignore[attr-defined]
         else:
-            self.app.notify(  # type: ignore[attr-defined]
+            self.notify_user(  # type: ignore[attr-defined]
                 f"Clipboard unavailable.\n{text[:80]}",
                 severity="warning",
                 timeout=5,
@@ -244,13 +244,13 @@ class RequestContextMenuMixin:
         url = extract_url_from_raw(raw)
         if url:
             open_in_browser(url)
-            self.app.notify(f"Opening: {url[:60]}", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user(f"Opening: {url[:60]}", timeout=2)  # type: ignore[attr-defined]
         else:
-            self.app.notify("No URL found", severity="warning", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("No URL found", severity="warning", timeout=2)  # type: ignore[attr-defined]
 
     def _cm_do_save_txt(self, raw: str) -> None:
         if not raw.strip():
-            self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         import os
 
@@ -261,13 +261,13 @@ class RequestContextMenuMixin:
             req = parse_http_request(raw)
             path = os.path.expanduser("~/request.txt")
             save_request_txt(req, path)
-            self.app.notify(f"Saved → {path}", timeout=3)  # type: ignore[attr-defined]
+            self.notify_user(f"Saved → {path}", timeout=3)  # type: ignore[attr-defined]
         except Exception as exc:
             self.err(exc, "Save failed")
 
     def _cm_do_send_repeater(self, raw: str) -> None:
         if not raw.strip():
-            self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
 
@@ -278,7 +278,7 @@ class RequestContextMenuMixin:
 
     def _cm_do_send_intruder(self, raw: str) -> None:
         if not raw.strip():
-            self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
 
@@ -289,7 +289,7 @@ class RequestContextMenuMixin:
 
     def _cm_do_send_scanner(self, raw: str) -> None:
         if not raw.strip():
-            self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         try:
             from pentool.tui.mixins.auto_scope import _maybe_auto_scope_request
@@ -318,21 +318,21 @@ class RequestContextMenuMixin:
     async def _cm_do_send_recon(self, raw: str, mode: str = "domain") -> None:
         """Send the request's host to Recon, optionally starting a stage."""
         if not raw.strip():
-            self.app.notify("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
+            self.notify_user("No request", severity="warning", timeout=2)  # type: ignore[attr-defined]
             return
         try:
             from pentool.utils.parser import parse_http_request
 
             request = parse_http_request(raw)
         except (ValueError, KeyError, AttributeError) as exc:
-            self.app.notify(  # type: ignore[attr-defined]
+            self.notify_user(  # type: ignore[attr-defined]
                 f"Cannot parse request: {exc}", severity="warning", timeout=3
             )
             return
 
         host = (getattr(request, "host", "") or "").strip()
         if not host:
-            self.app.notify("Request has no Host header", severity="warning", timeout=3)  # type: ignore[attr-defined]
+            self.notify_user("Request has no Host header", severity="warning", timeout=3)  # type: ignore[attr-defined]
             return
 
         open_recon = getattr(self.app, "open_recon", None)  # type: ignore[attr-defined]
@@ -374,7 +374,7 @@ class RequestContextMenuMixin:
 
     def _cm_do_export(self, fmt: str) -> None:
         """Generic export — override in subclass to provide ReportData."""
-        self.app.notify(  # type: ignore[attr-defined]
+        self.notify_user(  # type: ignore[attr-defined]
             f"Export {fmt.upper()} not implemented for this module",
             severity="warning",
             timeout=3,

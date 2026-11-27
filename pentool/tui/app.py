@@ -680,6 +680,9 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
             try:
                 import traceback as _tb
 
+                # Deliberate exception to "file I/O never runs on the UI thread": this is a
+                # dev-only diagnostic on a one-shot failure path (a recording script reads
+                # the file), not a handler that runs on user data.
                 with open("/tmp/pentool_coords_err.log", "a") as _f:
                     _f.write(f"PENTOOL coords activation error: {exc!r}\n")
                     _tb.print_exc(file=_f)

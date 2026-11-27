@@ -85,18 +85,18 @@ class ModuleScreen(AppMixin, NotifyMixin, Widget):
         widget = getattr(event.panel, "content_widget", None)
         beautify = getattr(widget, "beautify_body", None)
         if beautify is None:
-            self.notify_to_user("Nothing to format in this panel", severity="warning")
+            self.notify_user("Nothing to format in this panel", severity="warning")
             return
         try:
             changed = bool(beautify())
         except Exception as exc:  # noqa: BLE001 - a formatting failure must not kill the screen
             logger.warning("format: beautify failed", exc_info=True)
-            self.notify_to_user(f"Format failed: {exc}", severity="error")
+            self.notify_user(f"Format failed: {exc}", severity="error")
             return
         if changed:
-            self.notify_to_user("Formatted")
+            self.notify_user("Formatted")
         else:
-            self.notify_to_user("Nothing to beautify — no valid JSON/XML body found", severity="warning")
+            self.notify_user("Nothing to beautify — no valid JSON/XML body found", severity="warning")
 
     def header_action(self, action_id: str) -> None:
         """Run the method registered for this header action.
@@ -123,9 +123,3 @@ class ModuleScreen(AppMixin, NotifyMixin, Widget):
         handler()
         if self.refresh_after_action:
             self.refresh_header()
-
-    def notify_to_user(self, message: str, severity: str = "information", timeout: float | None = None) -> None:
-        """Show a notification through the app, tolerating a screen without one."""
-        notify = getattr(getattr(self, "app", None), "notify", None)
-        if callable(notify):
-            notify(message, severity=severity, timeout=timeout)

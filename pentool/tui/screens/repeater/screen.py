@@ -177,18 +177,6 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
     def _diff_panel(self) -> DiffPanel:
         return self.query_one("#repeater-diff-panel", DiffPanel)
 
-    def _notify(self, msg: str, severity: str = "information", timeout: float = 2) -> None:
-        """Safe notification through the app-level NotificationsMixin."""
-        try:
-            app = self.app
-            if hasattr(app, "notify"):
-                app.notify(msg, severity=severity, timeout=timeout)
-        except Exception:
-            # The notification was not shown — so the user learned neither of
-            # the send error nor of the result. Silence is especially costly
-            # here, so this is a warning with a traceback, not debug.
-            logger.warning("repeater: notify(%r) failed", msg[:60], exc_info=True)
-
     def _editor(self, tab_id: str | None = None) -> RequestEditor:
         tid = tab_id or self._active_tab_id
         return self.query_one(f"#req-editor-{tid}", RequestEditor)
@@ -659,7 +647,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
             return
         if state.last_sent_text is None:
             panel.clear()
-            self.app.notify("This tab has not been sent yet — nothing to diff", severity="warning", timeout=3)
+            self.notify_user("This tab has not been sent yet — nothing to diff", severity="warning", timeout=3)
             return
         current_text = self._get_active_text()
         panel.show_diff(state.last_sent_text, current_text)
@@ -939,7 +927,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
         self._set_status(f"[green]HTTP {resp.status}[/green] — {len(resp.body)} bytes — {elapsed_ms}ms")
         self._sending = False
         self.refresh_header()
-        self.app.notify(f"HTTP {resp.status} — {elapsed_ms}ms", timeout=2)
+        self.notify_user(f"HTTP {resp.status} — {elapsed_ms}ms", timeout=2)
         await service.close()
 
     def on_worker_state_changed(self, event) -> None:
@@ -975,7 +963,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
 
             text = self._get_active_text()
             if not text:
-                self.app.notify("No request text to send", severity="warning")
+                self.notify_user("No request text to send", severity="warning")
                 return
             self.app.post_message(SendToIntruder(text))
         except Exception as exc:
@@ -1083,7 +1071,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
         """Send the active request to Scanner."""
         text = self._get_active_text()
         if not text:
-            self.app.notify("No request text to send", severity="warning")
+            self.notify_user("No request text to send", severity="warning")
             return
         from pentool.tui.messages import SendToScanner
 
@@ -1093,7 +1081,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
         """Open the request URL in the default browser."""
         text = self._get_active_text()
         if not text:
-            self.app.notify("No request to open", severity="warning")
+            self.notify_user("No request to open", severity="warning")
             return
         from pentool.utils.parser import ParsedRequest
 

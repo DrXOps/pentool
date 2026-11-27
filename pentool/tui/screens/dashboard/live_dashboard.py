@@ -76,6 +76,10 @@ class ResourceMonitor(Widget):
         yield Static("", id="res-version")
 
     def on_mount(self) -> None:
+        # The branch of a source checkout does not change while the app runs, so the
+        # one-line `.git/HEAD` read happens once here, not in the 2-second timer.
+        root = Path(__file__).resolve().parent.parent.parent.parent.parent
+        self._branch = self._get_git_branch(root) if (root / ".git").exists() else ""
         self.set_interval(2.0, self._update)
 
     def _update(self) -> None:
@@ -116,12 +120,9 @@ class ResourceMonitor(Widget):
             try:
                 from pentool import __version__
 
-                pentool_root = Path(__file__).resolve().parent.parent.parent.parent.parent
-                is_dev = (pentool_root / ".git").exists()
-                if is_dev:
-                    branch = self._get_git_branch(pentool_root)
+                if self._branch:
                     self.query_one("#res-version", Static).update(
-                        f"[bold green]DEV[/bold green] [bold]{__version__}[/bold] [dim]({branch})[/dim]"
+                        f"[bold green]DEV[/bold green] [bold]{__version__}[/bold] [dim]({self._branch})[/dim]"
                     )
                 else:
                     self.query_one("#res-version", Static).update(f"[dim]v{__version__}[/dim]")

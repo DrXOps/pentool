@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from pathlib import Path
@@ -122,16 +123,7 @@ class ComparerScreen(ContentClipboardMixin, ModuleScreen):
         def _on_path(path: str | None) -> None:
             if not path or not os.path.exists(path):
                 return
-            try:
-                text = Path(path).read_text(encoding="utf-8", errors="replace")
-                panel_id = f"cmp-{side}-panel"
-                panel = self.query_one(f"#{panel_id}", ContentPanel)
-                w = panel.content_widget
-                if isinstance(w, TextArea):
-                    w.load_text(text)
-                panel.set_title(os.path.basename(path))
-            except Exception as exc:
-                self.err(exc, "Load failed")
+            self.run_worker(self._load_file_into_panel(path, side), exclusive=False, name="comparer-load-file")
 
         self.app.push_screen(
             FileSelectorDialog(
@@ -141,18 +133,35 @@ class ComparerScreen(ContentClipboardMixin, ModuleScreen):
             _on_path,
         )
 
+    async def _load_file_into_panel(self, path: str, side: str) -> None:
+        """Read the chosen file off the UI thread and show it in the side's panel."""
+        try:
+            text = await asyncio.to_thread(Path(path).read_text, encoding="utf-8", errors="replace")
+        except OSError as exc:
+            self.err(exc, "Load failed")
+            return
+        try:
+            panel_id = f"cmp-{side}-panel"
+            panel = self.query_one(f"#{panel_id}", ContentPanel)
+            w = panel.content_widget
+            if isinstance(w, TextArea):
+                w.load_text(text)
+            panel.set_title(os.path.basename(path))
+        except Exception as exc:
+            self.err(exc, "Load failed")
+
     def _copy_diff(self) -> None:
         try:
             from pentool.utils.copy_as import copy_to_clipboard
 
             if self._last_result is None:
-                self.app.notify("Run Compare first", severity="warning")
+                self.notify_user("Run Compare first", severity="warning")
                 return
             text = self._last_result.rich_text()
             # Strip markup before copying
             plain = re.sub(r"\[/?[^\]]+\]", "", text)
             if copy_to_clipboard(plain):
-                self.app.notify("Diff copied", timeout=2)
+                self.notify_user("Diff copied", timeout=2)
         except Exception as exc:
             self.err(exc, "Copy failed")
 

@@ -22,6 +22,7 @@ from textual.widgets import RichLog, Static, TextArea
 
 from pentool.core.logging import get_logger
 from pentool.tui.markup import esc
+from pentool.tui.mixins.notify import NotifyMixin
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     from textual.app import ComposeResult
 
 
-class ContentPanel(Widget):
+class ContentPanel(NotifyMixin, Widget):
     """Container block: RichLog or TextArea + button toolbar in the header."""
 
     class CopyRequested(Message):

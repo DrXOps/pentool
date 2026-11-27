@@ -181,7 +181,7 @@ class DecoderScreen(ContentClipboardMixin, ModuleScreen):
             inp = self.query_one("#dec-input", ContentPanel).content_widget
             text = inp.text.strip()
             if not text:
-                self.app.notify("Input is empty", severity="warning")
+                self.notify_user("Input is empty", severity="warning")
                 return
 
             # Run chain and collect steps for visualization
@@ -241,7 +241,7 @@ class DecoderScreen(ContentClipboardMixin, ModuleScreen):
 
             inp_text = self.query_one("#dec-input", ContentPanel).content_widget.text
             if not inp_text:
-                self.app.notify("Input is empty", severity="warning")
+                self.notify_user("Input is empty", severity="warning")
                 return
 
             if not self._chain:
@@ -288,9 +288,9 @@ class DecoderScreen(ContentClipboardMixin, ModuleScreen):
 
             text = self.query_one("#dec-output", ContentPanel).content_widget.text
             if text and copy_to_clipboard(text):
-                self.app.notify("Result copied", timeout=2)
+                self.notify_user("Result copied", timeout=2)
             else:
-                self.app.notify("Nothing to copy", severity="warning")
+                self.notify_user("Nothing to copy", severity="warning")
         except Exception as exc:
             self.err(exc, "Copy failed")
 

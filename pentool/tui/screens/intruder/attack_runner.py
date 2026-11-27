@@ -56,7 +56,7 @@ class AttackRunner:
         if running:
             return
         if tab.payload_load_in_progress:
-            screen.app.notify(
+            screen.notify_user(
                 "A payload file is still being counted — wait for it to finish before starting",
                 severity="warning",
                 timeout=4,
@@ -67,12 +67,12 @@ class AttackRunner:
         if template is None:
             return
         if not template.strip():
-            screen.app.notify("Template is empty", severity="warning", timeout=3)
+            screen.notify_user("Template is empty", severity="warning", timeout=3)
             return
         from pentool.api.intruder_api import count_markers
 
         if count_markers(template) == 0:
-            screen.app.notify(
+            screen.notify_user(
                 "No §§ markers in template — use Auto §§ or Add §§ to mark positions first",
                 severity="warning",
                 timeout=5,
@@ -106,7 +106,7 @@ class AttackRunner:
 
         api = screen._get_api()
         if api is None:
-            screen.app.notify("No project open", severity="warning", timeout=3)
+            screen.notify_user("No project open", severity="warning", timeout=3)
             return
 
         attack = api.make_attack(config, turbo_mode=turbo_mode)
@@ -121,7 +121,7 @@ class AttackRunner:
         total_payloads = sum(len(ps) for ps in payload_sets)
         mode_label = " [⚡ Turbo]" if turbo_mode else ""
         limit_label = "" if is_pro else " [FREE: limited]"
-        screen.app.notify(
+        screen.notify_user(
             f"Attack started: {total_payloads} payload(s){mode_label}{limit_label}",
             severity="success",
             title="Intruder",
@@ -160,7 +160,7 @@ class AttackRunner:
             payload_sets.append(processed)
         logger.info("INTRUDER: payload_sets sizes=%s", [len(ps) for ps in payload_sets])
         if not any(p.strip() for ps in payload_sets for p in ps):
-            screen.app.notify("No payloads configured", severity="warning", timeout=3)
+            screen.notify_user("No payloads configured", severity="warning", timeout=3)
             return None
         return payload_sets
 
@@ -242,7 +242,7 @@ class AttackRunner:
             # Only the visible tab updates the header; background tabs sync on switch.
             if tab is screen._active_tab:
                 screen.refresh_header()
-                screen.app.notify(
+                screen.notify_user(
                     f"Attack finished: {len(tab.all_results)} requests",
                     severity="information",
                     timeout=4,
@@ -287,7 +287,7 @@ class AttackRunner:
             self._screen.run_worker(tab.attack.resume(), exit_on_error=False)
         tab.paused = should_pause
         self._screen.refresh_header()
-        self._screen.app.notify("Paused" if should_pause else "Resumed", timeout=2)
+        self._screen.notify_user("Paused" if should_pause else "Resumed", timeout=2)
 
     def resume(self) -> None:
         """Resume goes through the screen action, so there is one way to start an attack."""
@@ -299,7 +299,7 @@ class AttackRunner:
         if tab is not None:
             self.stop_tab(tab)
         self._screen.refresh_header()
-        self._screen.app.notify("Attack stopped", severity="warning")
+        self._screen.notify_user("Attack stopped", severity="warning")
 
     def stop_tab(self, tab: Any) -> None:
         """Cancel the worker first, then ask the attack to stop.

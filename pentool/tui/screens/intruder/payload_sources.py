@@ -55,7 +55,7 @@ class PayloadSources:
         if tab is None:
             return
         if tab.payload_load_in_progress:
-            self._host.app.notify("A payload file is already loading — please wait", severity="warning", timeout=3)
+            self._host.notify_user("A payload file is already loading — please wait", severity="warning", timeout=3)
             return
 
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
@@ -121,7 +121,7 @@ class PayloadSources:
             existing.extend(payloads)
         if target_idx == tab.active_set_idx:
             self._host._refresh_payload_list()
-        self._host.app.notify(f"Loaded {len(payloads)} payloads from {Path(path).name}", timeout=3)
+        self._host.notify_user(f"Loaded {len(payloads)} payloads from {Path(path).name}", timeout=3)
         self._host._auto_save_state()
 
     async def load_streamed(self, path: str, target_idx: int, size_bytes: int) -> None:
@@ -134,7 +134,7 @@ class PayloadSources:
         if target_idx == tab.active_set_idx:
             self._host._refresh_payload_list()
         name = Path(path).name
-        self._host.app.notify(
+        self._host.notify_user(
             f"Loading {name} ({size_bytes / (1024 * 1024):.0f} MB) — streaming, counting lines in background…",
             timeout=4,
         )

@@ -1737,9 +1737,9 @@ class ProxyScreen(
 
         ok = copy_to_clipboard(parsed.url)
         if ok:
-            self.app.notify("URL copied", timeout=2)
+            self.notify_user("URL copied", timeout=2)
         else:
-            self.app.notify("Could not copy to clipboard", severity="warning", timeout=3)
+            self.notify_user("Could not copy to clipboard", severity="warning", timeout=3)
 
     async def _get_selected_parsed(self):
         if self._selected_req_id is None or self._proxy_service is None or not self._proxy_service.is_storage_ready():
@@ -1789,9 +1789,9 @@ class ProxyScreen(
             return
         ok = copy_to_clipboard(text)
         if ok:
-            self.app.notify(f"Copied as {label}", timeout=2)
+            self.notify_user(f"Copied as {label}", timeout=2)
         else:
-            self.app.notify(f"Clipboard unavailable. {label}:\n{text[:80]}", severity="warning", timeout=5)
+            self.notify_user(f"Clipboard unavailable. {label}:\n{text[:80]}", severity="warning", timeout=5)
 
     def _open_in_browser(self) -> None:
         self.run_worker(self._do_open_in_browser())
@@ -1805,7 +1805,7 @@ class ProxyScreen(
         url = parsed.url
         if url:
             open_in_browser(url)
-            self.app.notify(f"Opening: {url[:60]}", timeout=2)
+            self.notify_user(f"Opening: {url[:60]}", timeout=2)
 
     def _save_request_txt(self) -> None:
         self.run_worker(self._do_save_request_txt())
@@ -1813,19 +1813,19 @@ class ProxyScreen(
     async def _do_save_request_txt(self) -> None:
         parsed = await self._get_selected_parsed()
         if parsed is None:
-            self.app.notify("No request selected", severity="warning", timeout=3)
+            self.notify_user("No request selected", severity="warning", timeout=3)
             return
         from pentool.utils.copy_as import save_request_txt
 
         path = os.path.expanduser("~/request.txt")
         try:
             save_request_txt(parsed, path)
-            self.app.notify(f"Saved to {path}", timeout=3)
+            self.notify_user(f"Saved to {path}", timeout=3)
         except Exception as exc:
             # The notification shows the reason to the user, but the journal never
             # had it — and the journal is what people read to find "where did it save".
             logger.warning("proxy: request not saved to file", exc_info=True)
-            self.app.notify(f"Save failed: {exc}", severity="error", timeout=4)
+            self.notify_user(f"Save failed: {exc}", severity="error", timeout=4)
 
     def _delete_selected_request(self) -> None:
         self.run_worker(self._do_delete_selected())
@@ -1984,7 +1984,7 @@ class ProxyScreen(
             # Scope host list is empty — is_in_scope() treats an empty list as
             # "everything matches", so there is nothing to tunnel yet. Without
             # this, turning the toggle on looks like it silently does nothing.
-            self.app.notify(
+            self.notify_user(
                 "Skip out-of-scope: ON, but Scope has no hosts yet — "
                 "everything still counts as in-scope. Add hosts via the "
                 "'Scope' button to actually filter traffic.",
@@ -1992,7 +1992,7 @@ class ProxyScreen(
                 timeout=5,
             )
         else:
-            self.app.notify(
+            self.notify_user(
                 (
                     "Skip out-of-scope: ON — non-scope traffic will be tunneled, not captured"
                     if enabled
@@ -2360,18 +2360,18 @@ class ProxyScreen(
             if host not in scope:
                 scope.append(host)
                 proxy.set_scope(scope)
-                self.app.notify(f"★ {host} added to scope", severity="information", timeout=2)
+                self.notify_user(f"★ {host} added to scope", severity="information", timeout=2)
                 self._sync_target_host_scope(host, True)
             else:
-                self.app.notify(f"{host} is already in scope", timeout=2)
+                self.notify_user(f"{host} is already in scope", timeout=2)
         else:
             if host in scope:
                 scope.remove(host)
                 proxy.set_scope(scope)
-                self.app.notify(f"{host} removed from scope", severity="information", timeout=2)
+                self.notify_user(f"{host} removed from scope", severity="information", timeout=2)
                 self._sync_target_host_scope(host, False)
             else:
-                self.app.notify(f"{host} is not in scope", timeout=2)
+                self.notify_user(f"{host} is not in scope", timeout=2)
         # Persist per-project (DB) so it survives a project switch, plus
         # mirror into the global Config as the last-used fallback — same
         # two writes as action_open_scope._apply.
@@ -2496,7 +2496,7 @@ class ProxyScreen(
             # Visual update: rebuild table so the 💬 marker in Host shows up
             # right away instead of only after the next reload/restart.
             await self._reload_table(self._current_filters)
-            self.app.notify("Comment saved" if comment else "Comment cleared", timeout=2)
+            self.notify_user("Comment saved" if comment else "Comment cleared", timeout=2)
         except Exception:
             logger.error("proxy: comment not saved", exc_info=True)
 

@@ -20,27 +20,104 @@ from pathlib import Path
 
 # Directories to be fully excluded from traversal
 EXCLUDE_DIRS = {
-    '.git', '__pycache__', 'node_modules', '.venv', 'venv', 'env',
-    'dist', 'build', '.idea', '.vscode', '.pytest_cache', '.mypy_cache',
-    '.tox', '.eggs', 'coverage', 'htmlcov', '.ruff_cache', '.ipynb_checkpoints'
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".venv",
+    "venv",
+    "env",
+    "dist",
+    "build",
+    ".idea",
+    ".vscode",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".tox",
+    ".eggs",
+    "coverage",
+    "htmlcov",
+    ".ruff_cache",
+    ".ipynb_checkpoints",
 }
 
 # File extensions considered as text (code, configs, documentation)
 INCLUDE_EXTS = {
-    '.py', '.js', '.jsx', '.ts', '.tsx', '.html', '.htm', '.css', '.scss', '.sass',
-    '.json', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
-    '.txt', '.md', '.rst', '.log', '.sh', '.bash', '.bat', '.cmd', '.ps1',
-    '.sql', '.php', '.rb', '.go', '.rs', '.c', '.cpp', '.h', '.hpp', '.java',
-    '.kt', '.swift', '.pl', '.pm', '.lua', '.r', '.dart', '.lisp', '.clj',
-    '.scala', '.groovy', '.gradle', '.makefile', '.cmake', '.dockerfile',
-    '.gitignore', '.gitattributes', '.editorconfig', '.env',
-    '.csv', '.tsv', '.svg', '.xml', '.xslt', '.wsdl'
+    ".py",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".json",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".txt",
+    ".md",
+    ".rst",
+    ".log",
+    ".sh",
+    ".bash",
+    ".bat",
+    ".cmd",
+    ".ps1",
+    ".sql",
+    ".php",
+    ".rb",
+    ".go",
+    ".rs",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".java",
+    ".kt",
+    ".swift",
+    ".pl",
+    ".pm",
+    ".lua",
+    ".r",
+    ".dart",
+    ".lisp",
+    ".clj",
+    ".scala",
+    ".groovy",
+    ".gradle",
+    ".makefile",
+    ".cmake",
+    ".dockerfile",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    ".env",
+    ".csv",
+    ".tsv",
+    ".svg",
+    ".xml",
+    ".xslt",
+    ".wsdl",
 }
 
 # Extension-less filenames to include as well
 SPECIAL_NAMES = {
-    'Dockerfile', 'Makefile', 'makefile', 'CMakeLists.txt', 'LICENSE',
-    'README', 'README.md', 'CHANGELOG', 'CONTRIBUTING', 'AUTHORS'
+    "Dockerfile",
+    "Makefile",
+    "makefile",
+    "CMakeLists.txt",
+    "LICENSE",
+    "README",
+    "README.md",
+    "CHANGELOG",
+    "CONTRIBUTING",
+    "AUTHORS",
 }
 
 
@@ -68,7 +145,7 @@ def should_include_file(file_path: Path, include_exts, exclude_dirs, special_nam
 
     # Try reading a small chunk as UTF-8 text
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             f.read(1024)
         return True
     except (UnicodeDecodeError, PermissionError, OSError):
@@ -89,7 +166,7 @@ def collect_files(root_dir: str, include_exts=None, exclude_dirs=None, special_n
         raise NotADirectoryError(f"'{root_dir}' is not a directory.")
 
     files = []
-    for item in root.rglob('*'):
+    for item in root.rglob("*"):
         if item.is_file():
             if should_include_file(item, include_exts, exclude_dirs, special_names):
                 files.append(item)
@@ -98,7 +175,7 @@ def collect_files(root_dir: str, include_exts=None, exclude_dirs=None, special_n
 
 def generate_output(files, output_file: str, root_dir: str):
     """Write all files to the output file with separators."""
-    with open(output_file, 'w', encoding='utf-8') as out:
+    with open(output_file, "w", encoding="utf-8") as out:
         out.write("=" * 80 + "\n")
         out.write("PROJECT FILES BUNDLE\n")
         out.write(f"Root directory: {root_dir}\n")
@@ -115,7 +192,7 @@ def generate_output(files, output_file: str, root_dir: str):
             out.write(f"FILE: {rel_path}\n")
             out.write("-" * 80 + "\n")
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
                 out.write(content)
             except Exception as e:
@@ -124,37 +201,22 @@ def generate_output(files, output_file: str, root_dir: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Bundle all project text files into a single file for AI input."
+    parser = argparse.ArgumentParser(description="Bundle all project text files into a single file for AI input.")
+    parser.add_argument("--root", default=".", help="Project root directory (default: current directory)")
+    parser.add_argument("--output", default="project_export.txt", help="Output file (default: project_export.txt)")
+    parser.add_argument(
+        "--extensions", nargs="+", help="List of extensions to include (e.g. .py .js) — overrides the default list"
     )
     parser.add_argument(
-        '--root', default='.',
-        help='Project root directory (default: current directory)'
+        "--exclude-dirs", nargs="+", help="List of additional directories to exclude (added to defaults)"
     )
     parser.add_argument(
-        '--output', default='project_export.txt',
-        help='Output file (default: project_export.txt)'
+        "--no-default-excludes", action="store_true", help="Do not use the default excluded directories list"
     )
     parser.add_argument(
-        '--extensions', nargs='+',
-        help='List of extensions to include (e.g. .py .js) — overrides the default list'
+        "--max-size-mb", type=float, default=None, help="Skip files larger than the given MB (default: no limit)"
     )
-    parser.add_argument(
-        '--exclude-dirs', nargs='+',
-        help='List of additional directories to exclude (added to defaults)'
-    )
-    parser.add_argument(
-        '--no-default-excludes', action='store_true',
-        help='Do not use the default excluded directories list'
-    )
-    parser.add_argument(
-        '--max-size-mb', type=float, default=None,
-        help='Skip files larger than the given MB (default: no limit)'
-    )
-    parser.add_argument(
-        '--no-stats', action='store_true',
-        help='Do not print stats for the output file'
-    )
+    parser.add_argument("--no-stats", action="store_true", help="Do not print stats for the output file")
     args = parser.parse_args()
 
     root_dir = args.root
@@ -182,15 +244,14 @@ def main():
     if not args.no_stats:
         try:
             file_size = os.path.getsize(output_file)
-            with open(output_file, 'r', encoding='utf-8') as f:
+            with open(output_file, "r", encoding="utf-8") as f:
                 content = f.read()
             char_count = len(content)
             approx_tokens = char_count // 4  # rough estimate
 
             print("\n" + "=" * 50)
             print("OUTPUT FILE STATS")
-            print(f"Size on disk: {file_size} bytes "
-                  f"({file_size / 1024:.2f} KB, {file_size / 1024 / 1024:.2f} MB)")
+            print(f"Size on disk: {file_size} bytes ({file_size / 1024:.2f} KB, {file_size / 1024 / 1024:.2f} MB)")
             print(f"Character count: {char_count:,}")
             print(f"Estimated tokens (chars / 4): {approx_tokens:,}")
 
@@ -208,5 +269,5 @@ def main():
             print(f"Could not compute stats: {e}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

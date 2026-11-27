@@ -1842,13 +1842,13 @@ class IntruderScreen(
             w.load_text(new_text)
             self._update_payload_select()
             n = new_text.count("§") // 2
-            self.app.notify(f"Marked {n} parameter(s)", timeout=2)
+            self.notify_user(f"Marked {n} parameter(s)", timeout=2)
             tab = self._active_tab
             if n > 1 and (tab is None or tab.attack_type == AttackType.SNIPER):
                 if tab:
                     tab.attack_type = AttackType.BATTERING_RAM
                     self._sync_attack_type_ui(tab)
-                self.app.notify(
+                self.notify_user(
                     f"Marked {n} positions — switched to Battering Ram "
                     "(Sniper only fills one position per request; change "
                     "back via the attack-type menu if you really want Sniper)",
@@ -2031,7 +2031,7 @@ class IntruderScreen(
         if tab.active_set_idx < len(tab.payload_sources) and isinstance(
             tab.payload_sources[tab.active_set_idx], _LAZY_SOURCE_TYPES
         ):
-            self.app.notify(
+            self.notify_user(
                 "This set is generated/loaded from a file — click Clear first to switch it to a manually-edited list.",
                 severity="warning",
                 timeout=4,
@@ -2057,7 +2057,7 @@ class IntruderScreen(
         if tab.active_set_idx < len(tab.payload_sources) and isinstance(
             tab.payload_sources[tab.active_set_idx], _LAZY_SOURCE_TYPES
         ):
-            self.app.notify(
+            self.notify_user(
                 "This set is generated/loaded from a file — individual lines "
                 "can't be removed. Click Clear to remove the whole set.",
                 severity="warning",
@@ -2140,14 +2140,14 @@ class IntruderScreen(
         if source:
             added = self._append_to_active_set(source)
             self._refresh_payload_list()
-            self.app.notify(f"Generated {added:,} payload(s)", timeout=2)
+            self.notify_user(f"Generated {added:,} payload(s)", timeout=2)
 
     def _open_smart_payloads_dialog(self) -> None:
         from pentool.core.license import get_session_license
 
         info = get_session_license()
         if not info.has_feature("payloads_pro"):
-            self.app.notify(
+            self.notify_user(
                 "🔒 Smart Payloads requires PRO license — go to Settings → License",
                 severity="warning",
                 timeout=4,
@@ -2159,7 +2159,7 @@ class IntruderScreen(
         if payloads:
             added = self._append_to_active_set(payloads)
             self._refresh_payload_list()
-            self.app.notify(f"🧠 Smart: added {added:,} payloads", timeout=3)
+            self.notify_user(f"🧠 Smart: added {added:,} payloads", timeout=3)
 
     # ── Attack start/stop/pause/resume ────────────────────────────────────
 
@@ -2495,9 +2495,9 @@ class IntruderScreen(
                         break
                 if host:
                     self.app.post_message(SendHostToScanner(host))
-                    self.app.notify(f"Sent {host} to Scanner", timeout=2)
+                    self.notify_user(f"Sent {host} to Scanner", timeout=2)
                 else:
-                    self.app.notify("Could not extract host from request", severity="warning")
+                    self.notify_user("Could not extract host from request", severity="warning")
         except Exception as exc:
             logger.debug("_send_selected_to_scanner: %s", exc)
 
@@ -2527,14 +2527,14 @@ class IntruderScreen(
                 from pentool.utils.copy_as import copy_to_clipboard
 
                 copy_to_clipboard(payload_str)
-                self.app.notify("Payload copied", timeout=2)
+                self.notify_user("Payload copied", timeout=2)
         except Exception:
             logger.warning("intruder: payload not copied to clipboard", exc_info=True)
 
     def _export_csv(self) -> None:
         tab = self._active_tab
         if not tab or not tab.all_results:
-            self.app.notify("No results to export", severity="warning", timeout=3)
+            self.notify_user("No results to export", severity="warning", timeout=3)
             return
         from pentool.tui.dialogs.file_selector import FileSelectorDialog, FileSelectorMode
 
@@ -2543,36 +2543,49 @@ class IntruderScreen(
                 return
             if not path.endswith(".csv"):
                 path += ".csv"
-            try:
-                import csv
-
-                with open(path, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["#", "Payloads", "Status", "Length", "Time(ms)", "Error", "Timestamp"])
-                    tab = self._active_tab
-                    if tab:
-                        for r in tab.all_results:
-                            writer.writerow(
-                                [
-                                    r.request_number,
-                                    " | ".join(r.payload_values),
-                                    r.response_status or "",
-                                    r.response_length or "",
-                                    r.response_time_ms or "",
-                                    r.error or "",
-                                    r.timestamp.isoformat(),
-                                ]
-                            )
-                self.app.notify(f"Exported to {path}", timeout=4)
-            except Exception as exc:
-                from pentool.core.error_guard import err
-
-                err(exc, "Intruder export failed", self, severity="error")
+            tab = self._active_tab
+            rows = (
+                [
+                    [
+                        r.request_number,
+                        " | ".join(r.payload_values),
+                        r.response_status or "",
+                        r.response_length or "",
+                        r.response_time_ms or "",
+                        r.error or "",
+                        r.timestamp.isoformat(),
+                    ]
+                    for r in tab.all_results
+                ]
+                if tab
+                else []
+            )
+            self.run_worker(self._write_csv(path, rows), exclusive=False, name="intruder-export-csv")
 
         self.app.push_screen(
             FileSelectorDialog(mode=FileSelectorMode.SAVE, title="Save CSV"),
             _on_path,
         )
+
+    async def _write_csv(self, path: str, rows: list[list]) -> None:
+        """Write the CSV off the UI thread (a large attack can hold many rows)."""
+        import asyncio
+        import csv
+
+        def _write() -> None:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["#", "Payloads", "Status", "Length", "Time(ms)", "Error", "Timestamp"])
+                writer.writerows(rows)
+
+        try:
+            await asyncio.to_thread(_write)
+        except OSError as exc:
+            from pentool.core.error_guard import err
+
+            err(exc, "Intruder export failed", self, severity="error")
+            return
+        self.notify_user(f"Exported to {path}", timeout=4)
 
     def _get_processing_ops(self) -> list[str]:
         tab = self._active_tab

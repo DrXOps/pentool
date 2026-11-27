@@ -592,7 +592,7 @@ class SettingsScreen(ModuleScreen):
             # even though "applied" has already been shown.
             logger.debug("settings: UI mode %r not applied on save: %s", mode_val, exc)
 
-        self.app.notify("Interface settings applied", timeout=2)  # type: ignore[attr-defined]
+        self.notify_user("Interface settings applied", timeout=2)  # type: ignore[attr-defined]
 
     def _apply_ui_mode(self, mode: UIMode) -> None:
         """Show/hide tabs depending on the complexity mode."""
@@ -627,7 +627,7 @@ class SettingsScreen(ModuleScreen):
                 cfg.save()
 
             await loop.run_in_executor(None, _do_save)
-            self.app.notify(notify_msg, timeout=2)  # type: ignore[attr-defined]
+            self.notify_user(notify_msg, timeout=2)  # type: ignore[attr-defined]
         except Exception as e:
             err(e, "Save failed", self)
 
@@ -871,7 +871,7 @@ class SettingsScreen(ModuleScreen):
             logger.warning("settings: license key input unreadable", exc_info=True)
             key = ""
         if not key:
-            self.app.notify("Enter a license key first", severity="warning", timeout=3)  # type: ignore[attr-defined]
+            self.notify_user("Enter a license key first", severity="warning", timeout=3)  # type: ignore[attr-defined]
             return
         self.run_worker(self._async_activate(key), exclusive=True, name="license-activate")
 
@@ -879,7 +879,7 @@ class SettingsScreen(ModuleScreen):
         """Async activation worker."""
         from pentool.core.license import activate_license, reassign_license, refresh_session_license
 
-        self.app.notify("Activating license…", timeout=2)  # type: ignore[attr-defined]
+        self.notify_user("Activating license…", timeout=2)  # type: ignore[attr-defined]
         try:
             info = await activate_license(key)
             if not info.valid and ("slots in use" in info.error or "bound to another machine" in info.error):
@@ -900,7 +900,7 @@ class SettingsScreen(ModuleScreen):
                     )
                 )
                 if confirmed:
-                    self.app.notify("Reassigning license…", timeout=2)  # type: ignore[attr-defined]
+                    self.notify_user("Reassigning license…", timeout=2)  # type: ignore[attr-defined]
                     info = await reassign_license(key)
                 else:
                     refresh_session_license(info)
@@ -914,7 +914,7 @@ class SettingsScreen(ModuleScreen):
                 # `pentool/__main__.py`), so Scanner/Recon stay unavailable in this
                 # session even though the license now allows them. Saying so beats
                 # "I paid and the module is still locked".
-                self.app.notify(  # type: ignore[attr-defined]
+                self.notify_user(  # type: ignore[attr-defined]
                     f"✓ License activated: {plan}\nRestart Pentool to use PRO modules (Scanner, Recon).",
                     timeout=8,
                 )
@@ -932,13 +932,13 @@ class SettingsScreen(ModuleScreen):
         """Async deactivation worker."""
         from pentool.core.license import deactivate_license, refresh_session_license
 
-        self.app.notify("Deactivating license…", timeout=2)  # type: ignore[attr-defined]
+        self.notify_user("Deactivating license…", timeout=2)  # type: ignore[attr-defined]
         try:
             await deactivate_license()
             refresh_session_license()
             # Same reason as on activation: the PRO modules already imported in
             # this process keep working until a restart, so say it out loud.
-            self.app.notify(  # type: ignore[attr-defined]
+            self.notify_user(  # type: ignore[attr-defined]
                 "✓ License deactivated\nRestart Pentool to unload PRO modules.",
                 timeout=6,
             )
@@ -958,18 +958,18 @@ class SettingsScreen(ModuleScreen):
         if current.valid and current.plan != "free":
             # One trial per machine is enforced server-side, but saying it before the
             # request is cheaper than an error after it — and PRO is already on.
-            self.app.notify(  # type: ignore[attr-defined]
+            self.notify_user(  # type: ignore[attr-defined]
                 f"PRO is already active ({esc(current.plan.upper())}). Nothing to do.",
                 timeout=4,
             )
             return
 
-        self.app.notify("Starting the 14-day trial…", timeout=3)  # type: ignore[attr-defined]
+        self.notify_user("Starting the 14-day trial…", timeout=3)  # type: ignore[attr-defined]
         try:
             info = await start_trial()
             refresh_session_license(info)
             if info.valid:
-                self.app.notify(  # type: ignore[attr-defined]
+                self.notify_user(  # type: ignore[attr-defined]
                     "✓ Trial started: PRO for 14 days\nRestart Pentool to load PRO modules (Scanner, Recon).",
                     timeout=8,
                 )

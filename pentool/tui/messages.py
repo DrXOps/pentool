@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     # Type-only: `proxy_api` is the proxy façade, and importing it here would pull the API
     # layer into the module every screen imports. Annotations are strings thanks to
     # `from __future__ import annotations`, so runtime stays clean.
-    pass
+    from pentool.api.proxy_api import InterceptedRequest  # noqa: F401 - used in annotations
 
 
 class SendToRepeater(Message):
