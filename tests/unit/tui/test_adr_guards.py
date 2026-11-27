@@ -39,3 +39,34 @@ def test_no_textual_handlers_live_in_mixins() -> None:
         "ADR-3: обработчики Textual не диспетчеризуются из миксинов — "
         "перенесите их в прямой класс App/Widget:\n  " + "\n  ".join(offenders)
     )
+
+
+def _call_counts(tree: ast.AST) -> tuple[int, int]:
+    """Count real .subscribe(...) calls and every unsubscribe variant."""
+    subs = unsubs = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        name = node.func.attr
+        if name == "subscribe":
+            subs += 1
+        elif name in {"unsubscribe", "unsubscribe_all"}:
+            unsubs += 1
+    return subs, unsubs
+
+
+def test_global_subscriptions_are_released() -> None:
+    """ADR-12: a global subscription must have a matching release.
+
+    Counted on the AST, not by grep: events_handlers.py only *mentions* subscribe(...) in
+    its docstring, and pp.py releases with unsubscribe_all (a different name, same
+    contract), so a text search reports a false asymmetry.
+    """
+    offenders: list[str] = []
+    for path in sorted(MIXINS.parent.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        subs, unsubs = _call_counts(tree)
+        if subs and unsubs < subs:
+            offenders.append(f"{path.relative_to(MIXINS.parents[1]).as_posix()}: subscribe={subs}, release={unsubs}")
+
+    assert not offenders, "ADR-12: подписка без снятия — событие живёт дольше экрана:\n  " + "\n  ".join(offenders)
