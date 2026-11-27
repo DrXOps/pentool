@@ -70,17 +70,23 @@ class TabRegistry(Generic[TState]):
         return self._states[tab_id]
 
     def close(self, tab_id: str) -> TState | None:
-        """Remove a tab and move the active one to its left neighbour.
+        """Remove a tab; the active one hands over to its next tab, else to the previous.
 
-        Returns the removed state (the screen needs it for the "tab closed" notification) or
-        ``None`` when the id is unknown. The last remaining tab cannot be closed by the registry:
-        the owner of the screen decides whether an empty screen is allowed.
+        "Next, else previous" is Textual's own rule when the active tab is removed
+        (`Tabs.remove_tab`): the user sees the tab to the right become active, or the left one
+        when the closed tab was last. Returns the removed state (the screen needs it for the
+        "tab closed" notification) or ``None`` when the id is unknown. The last remaining tab
+        cannot be closed by the registry: the owner of the screen decides whether an empty
+        screen is allowed.
         """
+        ids = self.ids
         state = self._states.pop(tab_id, None)
         if state is None:
             return None
         if self._active == tab_id:
-            self._active = self.ids[-1] if self._states else None
+            idx = ids.index(tab_id)
+            remaining = self.ids
+            self._active = remaining[min(idx, len(remaining) - 1)] if remaining else None
         return state
 
     def rename(self, tab_id: str, name: str) -> TState | None:

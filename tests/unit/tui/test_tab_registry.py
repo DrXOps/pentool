@@ -57,6 +57,19 @@ def test_closing_the_active_tab_moves_to_the_left_neighbour() -> None:
     assert registry.active_id == "t2", "активной должна стать соседняя слева вкладка"
 
 
+def test_closing_a_middle_tab_moves_to_the_next_one() -> None:
+    """Textual's rule for the removed active tab: next, else previous."""
+    registry: TabRegistry[_State] = TabRegistry()
+    for tab_id in ("t1", "t2", "t3", "t4"):
+        registry.add(tab_id, _State(tab_id))
+    registry.activate("t2")
+
+    registry.close("t2")
+
+    assert registry.ids == ["t1", "t3", "t4"]
+    assert registry.active_id == "t3", "после закрытия средней вкладки активна следующая, как в Tabs"
+
+
 def test_closing_a_background_tab_keeps_the_active_one() -> None:
     registry: TabRegistry[_State] = TabRegistry()
     registry.add("t1", _State("a"))
