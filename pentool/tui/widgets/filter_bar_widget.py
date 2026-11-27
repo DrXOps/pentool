@@ -147,6 +147,11 @@ class FilterBarWidget(Widget):
         predicates: list[FilterPredicate] = []
         for f in self.configure():
             raw = self._read_field(f)
+            # An unticked toggle means "no constraint", not "field = False": a filter bar
+            # that always filters is useless, and `error_count > False` is not a filter
+            # anybody wrote. Ticked — the field is added with `value=True`.
+            if f.field_type == FilterFieldType.TOGGLE and raw is False:
+                continue
             if raw is not None and raw != "":
                 predicates.append(
                     FilterPredicate(

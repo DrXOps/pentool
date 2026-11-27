@@ -34,7 +34,6 @@
 - [plans/release.md](plans/release.md) — релиз v0.6.0 и профилирование
 - [plans/backlog.md](plans/backlog.md) — идеи без приоритета
 - [plans/modules.md](plans/modules.md) — модули и материалы
-- [plans/common.md](plans/common.md) — инфраструктура и гварды
 - [plans/pro-licensing.md](plans/pro-licensing.md) — PRO, оплата, лицензии
 - [plans/intruder-autolimits.md](plans/intruder-autolimits.md) — авто-лимиты Intruder
 - [plans/idea-ml-layer-distillation.md](plans/idea-ml-layer-distillation.md) — ML-слой (идея)

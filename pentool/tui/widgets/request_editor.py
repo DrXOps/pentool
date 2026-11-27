@@ -610,7 +610,10 @@ class RequestEditor(ContentPanel):
         self._raw_full = ""
         self._headers_part = ""
         self._special_chars_mode = False
-        self._set_text("")
+        # `load_raw("")` is the one path that resets the TextArea, the language and the
+        # HTTP highlights together. The old code called `self._set_text("")`, which lives
+        # on `_BaseHttpWidget` — a sibling, not a base — so Clear raised AttributeError.
+        self.load_raw("")
 
     @on(ToolbarButton.Pressed, "#cp-btn-special")
     def _on_special_chars(self, event: ToolbarButton.Pressed) -> None:

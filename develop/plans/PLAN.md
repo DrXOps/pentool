@@ -16,7 +16,6 @@
 
 - [pro-licensing.md](pro-licensing.md) — PRO: остался `/api/pro/version` (503) и продвижение;
 - [modules.md](modules.md) — модули и материалы;
-- [common.md](common.md) — инфраструктура и гварды;
 - [intruder-autolimits.md](intruder-autolimits.md) — авто-лимиты вместо Turbo;
 - [backlog.md](backlog.md) — идеи без приоритета;
 - [idea-ml-layer-distillation.md](idea-ml-layer-distillation.md) — ML-слой;
