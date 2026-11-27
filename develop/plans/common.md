@@ -14,9 +14,3 @@
 - [ ] `services/scan_service.py` (→ 60%)
 - [x] `services/proxy_service.py` — путь записи в историю покрыт (`test_proxy_service_storage.py`, 7 тестов)
 
-### T-022. Переводы документации: раздел «Запуск в Windows через WSL2»
-
-`docs/i18n/hi/INSTALLATION.md` и `docs/i18n/zh/INSTALLATION.md` содержат указатель на
-английский гайд (88 строк на язык). Нужно перевести, убрать вставку «translation of
-this section is pending», проверить самодостаточность и якоря.
-

@@ -47,3 +47,4 @@
 | 2026-11-27 | Scanner (PRO): вкладки в общем реестре `TabRegistry`, экран не держит ни списка, ни активного id; виджет прежний (шаг 11, этап 5) | characterization-тесты Scanner + `test_scanner_tab_registry.py`; pro `c7bb570` | — |
 | 2026-11-27 | Scanner (PRO) на `TabbedContentPanel`: панели, закрытие и переименование — через панель, старый код экрана удалён (шаг 11, этапы 6–7) | characterization-тесты Scanner + `test_scanner_tab_registry.py` + факт `tui.document_tabs`; pro `52d7a78` | — |
 | 2026-11-27 | T-024: `--config` изолирует прогон целиком — БД, сертификаты, плагины, логи и `--url`-проекты создаются рядом с файлом конфига, `save()` пишет в него же | `test_config_isolation.py`, `test_cli_project.py`, `test_project_paths.py` | — |
+| 2026-11-28 | T-022: раздел «Запуск в Windows через WSL2» переведён в hi/zh INSTALLATION, заглушка «translation pending» убрана, якоря детерминированные (`#wsl2-windows`) | `docs/i18n/{hi,zh}/INSTALLATION.md` + `check_docs` | — |

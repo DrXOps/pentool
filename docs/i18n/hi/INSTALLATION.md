@@ -126,10 +126,101 @@ uv tool install pentool
 pentool
 ```
 
-> **Windows users: the TUI requires WSL2.** Install and run Pentool inside WSL2
-> (Ubuntu). The step-by-step guide (WSL, UTF-8 locale, fonts, Kitty) is in the
-> [English installation guide](../en/INSTALLATION.md#running-on-windows-via-wsl2).
-> A translation of this section is pending.
+> **Windows उपयोगकर्ताओं के लिए: TUI के लिए WSL2 चाहिए।** ऊपर दिए PowerShell कमांड CLI और
+> headless स्कैन (`--headless`) के लिए काफ़ी हैं। इंटरैक्टिव इंटरफ़ेस — प्रॉक्सी, ANSI
+> फ़्रेम, हुक — के लिए WSL2 इस्तेमाल करें: नीचे देखें
+> [WSL2 के ज़रिए Windows पर चलाना](#wsl2-windows)।
+
+---
+
+<a id="wsl2-windows"></a>
+## WSL2 के ज़रिए Windows पर चलाना
+
+TUI को POSIX टर्मिनल चाहिए: प्रॉक्सी, हुक और ANSI बॉक्स-ड्रॉइंग UI — सब UTF-8 लोकेल पर
+निर्भर करते हैं। WSL2 (Ubuntu) के अंदर सब कुछ Linux की तरह काम करता है। कमांड
+**WSL शेल** में चलाएँ, PowerShell में नहीं।
+
+### 1. WSL2 इंस्टॉल करें (PowerShell, Administrator के रूप में)
+
+```powershell
+wsl --install -d Ubuntu-24.04
+wsl --set-default-version 2
+wsl --update
+wsl --status
+```
+
+### 2. लोकेल और UTF-8 — बॉक्स-ड्रॉइंग अक्षर इसी से काम करते हैं
+
+```bash
+sudo apt update
+sudo apt install -y locales
+sudo locale-gen en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8
+exec bash
+echo $LANG    # en_US.UTF-8 होना चाहिए, C या POSIX नहीं
+```
+
+`LANG=C`, `POSIX` या खाली मान — फ़्रेम की जगह `?` दिखने और सिरिलिक में “मोजीबेक” की
+आम वजह है।
+
+### 3. ऐसा फ़ॉन्ट जिसमें ग्लिफ़ मौजूद हैं
+
+**Windows तरफ़** (Windows Terminal के लिए): **JetBrains Mono Nerd Font** या
+**Cascadia Code NF** इंस्टॉल करें और टर्मिनल प्रोफ़ाइल में उसे चुनें। इमोजी
+(`▶ ✖ 💥 🧭`) **Segoe UI Emoji** से fallback के तौर पर आते हैं।
+
+**WSL तरफ़** (Kitty के लिए):
+
+```bash
+sudo apt install -y unzip curl fonts-noto-color-emoji
+mkdir -p ~/.local/share/fonts && cd ~/.local/share/fonts
+curl -LO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+unzip -o JetBrainsMono.zip && fc-cache -fv
+```
+
+### 4. Kitty (वैकल्पिक — Windows Terminal भी चलता है)
+
+```bash
+sudo apt install -y kitty
+```
+
+`~/.config/kitty/kitty.conf`:
+
+```conf
+font_family JetBrainsMono Nerd Font
+font_size 12.0
+# बॉक्स ड्रॉइंग
+symbol_map U+2500-U+257F JetBrainsMono Nerd Font
+# इमोजी
+symbol_map U+1F300-U+1FAFF Noto Color Emoji
+# WSLg में आसान डिफ़ॉल्ट
+sync_to_monitor no
+repaint_delay 8
+```
+
+शुरू करें: `kitty pentool`, या Windows से: `wsl.exe -e kitty pentool`।
+
+अगर कुछ पैनल आइकन नहीं दिखते — **Settings → Interface → Panel icons** में आइकन सेट
+बदलें (`unicode` / `ascii` / `emoji`)।
+
+### 5. जाँचें कि अक्षर ठीक हैं
+
+```bash
+python3 -c "print('┌────┬────┐\n│ OK │ 42 │\n└────┴────┘')"
+printf '█ ▓ ▒ ░  →  ✔ ✖ ⚠\n'
+infocmp -1 | head -3    # TERM *-256color होना चाहिए, dumb नहीं
+```
+
+### 6. अगर कुछ फिर भी गलत दिखे
+
+| लक्षण | कारण | उपाय |
+|---|---|---|
+| `?` या `+---+` जैसे फ़्रेम | UTF-8 लोकेल नहीं | चरण 2, `export LANG=en_US.UTF-8` |
+| सिरिलिक में “मोजीबेक” | `LANG=C` / `POSIX` | चरण 2 |
+| फ़्रेम दुगनी चौड़ाई, लेआउट खिसकता है | फ़ॉन्ट में बॉक्स ग्लिफ़ नहीं | चरण 3 |
+| आइकन चौकोर | इमोजी/Nerd फ़ॉन्ट नहीं | चरण 3, या `ascii` आइकन सेट |
+| TUI शुरू नहीं होता | `TERM=dumb` | `export TERM=xterm-256color` |
+| रंग नहीं | 8-रंग वाला टर्मिनल | Windows Terminal या Kitty |
 
 ---
 

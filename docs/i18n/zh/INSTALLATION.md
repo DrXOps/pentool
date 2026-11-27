@@ -126,10 +126,98 @@ uv tool install pentool
 pentool
 ```
 
-> **Windows users: the TUI requires WSL2.** Install and run Pentool inside WSL2
-> (Ubuntu). The step-by-step guide (WSL, UTF-8 locale, fonts, Kitty) is in the
-> [English installation guide](../en/INSTALLATION.md#running-on-windows-via-wsl2).
-> A translation of this section is pending.
+> **Windows 用户：TUI 需要 WSL2。** 上面的 PowerShell 命令足以运行 CLI 和无界面扫描
+> （`--headless`）。交互界面（代理、ANSI 边框、钩子）请使用 WSL2：见下方
+> [在 Windows 上通过 WSL2 运行](#wsl2-windows)。
+
+---
+
+<a id="wsl2-windows"></a>
+## 在 Windows 上通过 WSL2 运行
+
+TUI 需要 POSIX 终端：代理、钩子和 ANSI 制表符界面都依赖 UTF-8 locale。在 WSL2（Ubuntu）
+中，一切与 Linux 相同。命令请在 **WSL 终端**中执行，而不是 PowerShell。
+
+### 1. 安装 WSL2（以管理员身份运行 PowerShell）
+
+```powershell
+wsl --install -d Ubuntu-24.04
+wsl --set-default-version 2
+wsl --update
+wsl --status
+```
+
+### 2. Locale 与 UTF-8 —— 边框字符能否正常显示取决于此
+
+```bash
+sudo apt update
+sudo apt install -y locales
+sudo locale-gen en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8
+exec bash
+echo $LANG    # 应输出 en_US.UTF-8，而不是 C 或 POSIX
+```
+
+`LANG=C`、`POSIX` 或空值，是边框变成 `?` 以及西里尔字母出现乱码的常见原因。
+
+### 3. 包含所需字形的字体
+
+**Windows 端**（用于 Windows Terminal）：安装 **JetBrains Mono Nerd Font** 或
+**Cascadia Code NF**，然后在终端配置中选择它。表情符号（`▶ ✖ 💥 🧭`）由
+**Segoe UI Emoji** 作为后备字体提供。
+
+**WSL 端**（用于 Kitty）：
+
+```bash
+sudo apt install -y unzip curl fonts-noto-color-emoji
+mkdir -p ~/.local/share/fonts && cd ~/.local/share/fonts
+curl -LO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+unzip -o JetBrainsMono.zip && fc-cache -fv
+```
+
+### 4. Kitty（可选 —— Windows Terminal 也可以）
+
+```bash
+sudo apt install -y kitty
+```
+
+`~/.config/kitty/kitty.conf`：
+
+```conf
+font_family JetBrainsMono Nerd Font
+font_size 12.0
+# 制表符
+symbol_map U+2500-U+257F JetBrainsMono Nerd Font
+# 表情符号
+symbol_map U+1F300-U+1FAFF Noto Color Emoji
+# WSLg 下更平滑的默认值
+sync_to_monitor no
+repaint_delay 8
+```
+
+启动：`kitty pentool`，或从 Windows：`wsl.exe -e kitty pentool`。
+
+如果部分面板图标无法显示，请在 **Settings → Interface → Panel icons** 中切换图标集
+（`unicode` / `ascii` / `emoji`）。
+
+### 5. 验证字符是否正常
+
+```bash
+python3 -c "print('┌────┬────┐\n│ OK │ 42 │\n└────┴────┘')"
+printf '█ ▓ ▒ ░  →  ✔ ✖ ⚠\n'
+infocmp -1 | head -3    # TERM 应为 *-256color，而不是 dumb
+```
+
+### 6. 如果仍然显示异常
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 边框显示为 `?` 或 `+---+` | 没有 UTF-8 locale | 第 2 步，`export LANG=en_US.UTF-8` |
+| 西里尔字母乱码 | `LANG=C` / `POSIX` | 第 2 步 |
+| 边框过宽、布局错位 | 字体缺少制表符字形 | 第 3 步 |
+| 图标显示为方块 | 缺少 emoji/Nerd 字体 | 第 3 步，或改用 `ascii` 图标集 |
+| TUI 无法启动 | `TERM=dumb` | `export TERM=xterm-256color` |
+| 没有颜色 | 8 色终端 | Windows Terminal 或 Kitty |
 
 ---
 
