@@ -189,6 +189,38 @@ def tui_tab_rename() -> tuple[bool, str]:
     ) == 2 and not offenders, f"миксин: {mixin}; потребители: {consumers}; копии: {offenders}"
 
 
+def tui_document_tabs() -> tuple[bool, str]:
+    """Document tabs go through `TabbedContentPanel`; only fixed sub-tabs build a strip.
+
+    Step 11 unified the three document-tab implementations (Intruder, Repeater, Scanner PRO).
+    Proxy (fixed HTTP/WS/intercept tabs), Settings (fixed sections) and Recon (PRO, fixed
+    sections) keep their own `TabbedContent` by design — those are not document tabs.
+    """
+    allowed = {
+        "pentool/tui/screens/proxy/screen.py",
+        "pentool/tui/screens/settings/screen.py",
+        "pro/pentool/tui/screens/recon/screen.py",
+    }
+    offenders: list[str] = []
+    for root in (ROOT / "pentool/tui/screens", ROOT / "pro/pentool/tui/screens"):
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.py")):
+            relative = path.relative_to(ROOT).as_posix()
+            if relative in allowed:
+                continue
+            text = path.read_text(encoding="utf-8")
+            for match in re.finditer(r"\bTabbedContent\(", text):
+                line = text[: match.start()].count("\n") + 1
+                offenders.append(f"{relative}:{line}")
+    panel = _read("pentool/tui/widgets/tab_panel.py")
+    takes_registry = "registry: TabRegistry" in panel and "self._registry" in panel
+    detail = f"ручных TabbedContent в документных экранах: {len(offenders)}"
+    if offenders:
+        detail += f" ({', '.join(offenders[:5])})"
+    return not offenders and takes_registry, detail + f"; панель принимает реестр: {takes_registry}"
+
+
 def intruder_payloads() -> tuple[bool, str]:
     module = _exists("pentool/tui/screens/intruder/payload_sources.py")
     screen = _read("pentool/tui/screens/intruder/screen.py")
@@ -375,6 +407,7 @@ CHECKS: dict[str, Check] = {
     "tui_header_refresh": tui_header_refresh,
     "tui_project_reload": tui_project_reload,
     "tui_tab_rename": tui_tab_rename,
+    "tui_document_tabs": tui_document_tabs,
     "intruder_payloads": intruder_payloads,
     "intruder_results_view": intruder_results_view,
     "intruder_tab_fields": intruder_tab_fields,

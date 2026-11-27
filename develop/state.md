@@ -24,6 +24,7 @@
 | `tui.header_refresh` | Обновление шапки — одна реализация AppMixin.refresh_header, копий нет | проверка в `tools/verify_facts.py` | ✅ OK |
 | `tui.project_reload` | Смена проекта: ProjectReloadable; app/project_manager не трогают приватные поля экранов | проверка в `tools/verify_facts.py` | ✅ OK |
 | `tui.tab_rename` | Переименование вкладок — одна реализация (TabRenameMixin) | проверка в `tools/verify_facts.py` | ✅ OK |
+| `tui.document_tabs` | Документные вкладки — через `TabbedContentPanel`; ручной `TabbedContent` остался только у фиксированных подвкладок (Proxy, Settings, Recon) | проверка в `tools/verify_facts.py` | ✅ OK |
 | `intruder.payloads` | Payload-файлы: один парсер и один загрузчик (PayloadSources) вне экрана Интрудера | проверка в `tools/verify_facts.py` | ✅ OK |
 | `tui.dead_code` | Мёртвый код удалён: custom_notify, hintbar_base, ProxyClearHistory, safe_notify | проверка в `tools/verify_facts.py` | ✅ OK |
 | `recon.prompts` | Промпты Recon в общем реестре задач (pro/…/ai_discovery/prompts.py удалён) | проверка в `tools/verify_facts.py` | ✅ OK |

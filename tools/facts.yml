@@ -96,6 +96,12 @@ facts:
     check: tui_tab_rename
     since: "2026-11-25"
 
+  - id: tui.document_tabs
+    claim: "Документные вкладки — через `TabbedContentPanel`; ручной `TabbedContent` остался только у фиксированных подвкладок (Proxy, Settings, Recon)"
+    kind: code
+    check: tui_document_tabs
+    since: "2026-11-27"
+
   - id: intruder.payloads
     claim: "Payload-файлы: один парсер и один загрузчик (PayloadSources) вне экрана Интрудера"
     kind: code

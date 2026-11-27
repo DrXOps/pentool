@@ -292,7 +292,11 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
             #    Add when the strip is ready, then activate on the next frame.
             if tc.query("#tabs-list"):
                 tc.add_pane(pane)
-                self._activate_later(tc, tab_id)
+                # `_set_active` already retries on the next frame when the pane's ContentTab
+                # is not registered yet — a separate always-deferred call would leave the
+                # tab inactive for one more frame in the normal case, and an owner that
+                # switches tabs right after the add would be pulled back to the new one.
+                self._set_active(tc, tab_id)
             else:
                 self._defer_add_pane(tc, pane, tab_id)
         except Exception:
@@ -332,23 +336,6 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
 
         self.call_after_refresh(retry)
 
-    def _activate_later(self, tc: TabbedContent, tab_id: str) -> None:
-        """Select the tab after its content tab has been mounted.
-
-        `TabbedContent.add_pane()` mounts the `ContentTab` asynchronously; assigning
-        `active` in the same tick makes Textual resolve the content tab id before it
-        exists. Depending on the Textual version that surfaces as `NoMatches`
-        (`'#--content-tab-…' on ContentTabs()`) or as `ValueError('No Tab with id …')` —
-        both closed the whole TUI, which is what `_set_active` now prevents.
-        """
-
-        def activate() -> None:
-            if tab_id not in self._registry:
-                return  # closed meanwhile
-            self._set_active(tc, tab_id)
-
-        self.call_after_refresh(activate)
-
     def _defer_add_pane(self, tc: TabbedContent, pane: TabPane, tab_id: str, attempts: int = 5) -> None:
         """Retry `add_pane` on the next frame until the tab strip exists.
 
@@ -372,7 +359,7 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
             except Exception:
                 logger.exception("action_new_tab setup failed for %s", tab_id)
                 return
-            self._activate_later(tc, tab_id)
+            self._set_active(tc, tab_id)
 
         self.call_after_refresh(attempt)
 

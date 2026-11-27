@@ -45,3 +45,4 @@
 | 2026-11-27 | Repeater: вкладки живут в общем реестре — экран не держит ни списка, ни активной вкладки (шаг 11, этап 2) | `test_repeater_tab_registry.py` + characterization-тесты вкладок | — |
 | 2026-11-27 | Repeater на `TabbedContentPanel`: тела, переименование и закрытие вкладок — через панель, старый код экрана удалён (шаг 11, этапы 3–4) | characterization-тесты вкладок + e2e Repeater + `test_repeater_tab_registry.py` | — |
 | 2026-11-27 | Scanner (PRO): вкладки в общем реестре `TabRegistry`, экран не держит ни списка, ни активного id; виджет прежний (шаг 11, этап 5) | characterization-тесты Scanner + `test_scanner_tab_registry.py`; pro `c7bb570` | — |
+| 2026-11-27 | Scanner (PRO) на `TabbedContentPanel`: панели, закрытие и переименование — через панель, старый код экрана удалён (шаг 11, этапы 6–7) | characterization-тесты Scanner + `test_scanner_tab_registry.py` + факт `tui.document_tabs`; pro `52d7a78` | — |
