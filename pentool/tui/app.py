@@ -1031,12 +1031,10 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         if not host_clean:
             host_clean = "target"
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Fixed projects dir (~/.config/pentool/projects/) — NOT derived from
-        # the current db_path, which would nest projects/projects/... deeper
-        # on every --real run.
-        from pentool.core.config import DEFAULT_CONFIG_DIR
-
-        projects_dir = DEFAULT_CONFIG_DIR / "projects"
+        # The projects dir comes from the config, not from `db_path`: `db_path` points at
+        # the project that is open now, so deriving from it nested projects/projects/...
+        # deeper on every run. With `--config` the dir lives next to that file (T-024).
+        projects_dir = Path(self._cfg.projects_dir)
         projects_dir.mkdir(parents=True, exist_ok=True)
         return str(projects_dir / f"{host_clean}_{stamp}.db")
 

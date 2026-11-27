@@ -24,13 +24,13 @@ def project() -> None:
 @click.option(
     "--path",
     default=None,
-    help="Project directory (default: ~/.config/pentool/projects/<name>).",
+    help="Project directory (default: <config>/projects/<name>).",
 )
 def project_init(name: str, path: str | None) -> None:
     cfg = get_config()
 
     if path is None:
-        project_dir = Path.home() / ".config" / "pentool" / "projects" / name
+        project_dir = Path(cfg.projects_dir) / name
     else:
         project_dir = Path(path) / name
 
@@ -71,7 +71,7 @@ def project_init(name: str, path: str | None) -> None:
 
 @project.command("list")
 def project_list() -> None:
-    projects_dir = Path.home() / ".config" / "pentool" / "projects"
+    projects_dir = Path(get_config().projects_dir)
     if not projects_dir.exists():
         click.echo("No projects found.")
         return

@@ -1,4 +1,8 @@
-"""Unit tests: cli/project.py — `pentool project init/list`."""
+"""Unit tests: cli/project.py — `pentool project init/list`.
+
+The projects directory is taken from the active config (T-024), so a `--config` run keeps
+its projects next to its config file instead of the developer's home.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,11 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from pentool.cli.project import project
+from pentool.core.config import Config, override_config
+
+
+def _config_with_projects(tmp_path: Path) -> Config:
+    return Config(projects_dir=str(tmp_path / "cfg" / "projects"))
 
 
 def test_project_init_with_path(tmp_path):
@@ -29,13 +38,12 @@ def test_project_init_sets_db_path_in_config(tmp_path):
     assert str(tmp_path / "p1" / "pentool.db") in cfg_yaml
 
 
-def test_project_init_uses_home_default(tmp_path):
-    home = tmp_path / "home"
-    home.mkdir()
-    with patch.object(Path, "home", classmethod(lambda cls: home)):
+def test_project_init_uses_configured_projects_dir(tmp_path):
+    cfg = _config_with_projects(tmp_path)
+    with override_config(cfg):
         r = CliRunner().invoke(project, ["init", "--name", "proj_default"])
     assert r.exit_code == 0
-    assert (home / ".config" / "pentool" / "projects" / "proj_default").is_dir()
+    assert (Path(cfg.projects_dir) / "proj_default").is_dir()
 
 
 def test_project_init_db_error_exits(tmp_path):
@@ -47,29 +55,27 @@ def test_project_init_db_error_exits(tmp_path):
 
 
 def test_project_list_empty_when_no_projects_dir(tmp_path):
-    home = tmp_path / "nohome"
-    home.mkdir()
-    with patch.object(Path, "home", classmethod(lambda cls: home)):
+    with override_config(_config_with_projects(tmp_path)):
         r = CliRunner().invoke(project, ["list"])
     assert r.exit_code == 0
     assert "No projects found." in r.output
 
 
 def test_project_list_empty_when_no_subdirs(tmp_path):
-    home = tmp_path / "home"
-    (home / ".config" / "pentool" / "projects").mkdir(parents=True)
-    with patch.object(Path, "home", classmethod(lambda cls: home)):
+    cfg = _config_with_projects(tmp_path)
+    Path(cfg.projects_dir).mkdir(parents=True)
+    with override_config(cfg):
         r = CliRunner().invoke(project, ["list"])
     assert r.exit_code == 0
     assert "No projects found." in r.output
 
 
 def test_project_list_shows_projects(tmp_path):
-    home = tmp_path / "home"
-    proj_dir = home / ".config" / "pentool" / "projects"
+    cfg = _config_with_projects(tmp_path)
+    proj_dir = Path(cfg.projects_dir)
     (proj_dir / "alpha").mkdir(parents=True)
     (proj_dir / "beta").mkdir()
-    with patch.object(Path, "home", classmethod(lambda cls: home)):
+    with override_config(cfg):
         r = CliRunner().invoke(project, ["list"])
     assert r.exit_code == 0
     assert "alpha" in r.output

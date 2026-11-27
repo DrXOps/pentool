@@ -32,6 +32,9 @@ class Config:
     plugins_dir: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "plugins"))
     scope: list[str] = field(default_factory=list)
     intercept_enabled: bool = False
+    #: Directory for projects created by `--url` runs and `pentool project`. Lives next to
+    #: the config file when `--config` points elsewhere (see `Config.load`).
+    projects_dir: str = field(default_factory=lambda: str(DEFAULT_CONFIG_DIR / "projects"))
     # Proxy backend: 'daemon' (isolated subprocess, default) or 'memory'
     # (legacy ProxyServer on a daemon thread in the TUI process — fallback).
     proxy_engine: str = "daemon"
@@ -89,6 +92,9 @@ class Config:
 
     # Observer list — not serialized
     _observers: list[ConfigObserver] = field(default_factory=list, init=False, repr=False, compare=False)
+    #: File this config was loaded from, so `save()` writes back to it instead of the
+    #: default path (a `--config /tmp/run/config.yaml` run must not edit the user's file).
+    _source_path: Path | None = field(default=None, init=False, repr=False, compare=False)
 
     def add_observer(self, cb: ConfigObserver) -> None:
         """Subscribe to configuration changes.
@@ -151,23 +157,41 @@ class Config:
         except Exception:
             pass
 
-    def save(self, path: str | Path = DEFAULT_CONFIG_PATH) -> None:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
+    def save(self, path: str | Path | None = None) -> None:
+        target = Path(path) if path is not None else (self._source_path or DEFAULT_CONFIG_PATH)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, "w", encoding="utf-8") as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False, allow_unicode=True)
 
+    #: Paths that follow the config file when `--config` points outside the default dir.
     @classmethod
     def load(cls, path: str | Path = DEFAULT_CONFIG_PATH) -> "Config":
-        path = Path(path)
-        if not path.exists():
-            return cls()
-        with open(path, "r", encoding="utf-8") as f:
-            data: dict[str, Any] = yaml.safe_load(f) or {}
+        target = Path(path)
         cfg = cls()
-        for key, value in data.items():
-            if hasattr(cfg, key) and not key.startswith("_"):
-                setattr(cfg, key, value)
+        # An explicitly supplied config file makes the run self-contained: paths that
+        # still hold their built-in `~/.config/pentool/...` value move next to the file,
+        # so `--config /tmp/run/config.yaml` stops writing state into the user's home.
+        # Values written in the file always win (applied below).
+        default_cfg = cls()
+        if target.resolve() != DEFAULT_CONFIG_PATH.resolve():
+            base = target.resolve().parent
+            relocated = {
+                "db_path": base / "pentool.db",
+                "cert_dir": base / "certs",
+                "plugins_dir": base / "plugins",
+                "log_file": base / "logs" / "pentool.log",
+                "projects_dir": base / "projects",
+            }
+            for name, value in relocated.items():
+                if getattr(cfg, name) == getattr(default_cfg, name):
+                    setattr(cfg, name, str(value))
+        if target.exists():
+            with open(target, "r", encoding="utf-8") as f:
+                data: dict[str, Any] = yaml.safe_load(f) or {}
+            for key, value in data.items():
+                if hasattr(cfg, key) and not key.startswith("_"):
+                    setattr(cfg, key, value)
+        cfg._source_path = target
         # Normalize proxy backend — tolerate junk/legacy values in config.yaml
         if cfg.proxy_engine not in ("daemon", "memory"):
             cfg.proxy_engine = "daemon"
