@@ -70,3 +70,30 @@ def test_global_subscriptions_are_released() -> None:
             offenders.append(f"{path.relative_to(MIXINS.parents[1]).as_posix()}: subscribe={subs}, release={unsubs}")
 
     assert not offenders, "ADR-12: подписка без снятия — событие живёт дольше экрана:\n  " + "\n  ".join(offenders)
+
+
+#: Calls to run_worker(...) that pass no group/name. ADR-11 wants cancellable tasks grouped;
+#: most of these are one-shot fire-and-forget calls (a save, a fetch), which cannot be
+#: cancelled meaningfully. Migrating them is fine, but the number must not grow.
+RUN_WORKER_WITHOUT_GROUP_BUDGET = 58
+
+
+def test_cancellable_worker_calls_keep_their_group_ratio() -> None:
+    """ADR-11 ratchet: a new run_worker call names its task or its group."""
+    total = without = 0
+    for path in sorted(MIXINS.parent.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != "run_worker":
+                continue
+            total += 1
+            if not ({"group", "name"} & {kw.arg for kw in node.keywords}):
+                without += 1
+
+    assert total, "no run_worker call found — the check itself is broken"
+    assert without <= RUN_WORKER_WITHOUT_GROUP_BUDGET, (
+        f"run_worker without group/name grew: {without} (was {RUN_WORKER_WITHOUT_GROUP_BUDGET}); "
+        "such a task cannot be cancelled — give it name= or group="
+    )
