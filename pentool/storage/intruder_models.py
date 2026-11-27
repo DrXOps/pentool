@@ -35,4 +35,7 @@ class IntruderResult:
     response_length: int | None = None
     response_time_ms: int | None = None
     error: str | None = None
+    #: Seconds from `Retry-After`, when the response carried one — the adaptive limit
+    #: controller obeys it instead of guessing a backoff.
+    retry_after_s: float | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import itertools
+import time
 import uuid
 from dataclasses import dataclass
 from enum import Enum
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 from pentool.core.logging import get_logger
+from pentool.modules.intruder_limits import AdaptiveLimits, LimitDecision, LimitRecord
 from pentool.storage.intruder_models import IntruderResult
 
 __all__ = ["IntruderResult"]
@@ -35,6 +37,9 @@ class IntruderConfig:
     delay_ms: int = 0
     follow_redirects: bool = False
     timeout: int = 30
+    #: PRO: adapt parallelism and delay to the target inside `threads` (AIMD). The UI switch
+    #: that used to be "Turbo" is gone — it was a connection-pool profile, not another attack.
+    adaptive: bool = False
     # Turbo mode settings (PRO)
     turbo_pipeline: bool = False  # HTTP pipelining
     turbo_keep_alive: bool = True  # connection reuse
@@ -382,7 +387,6 @@ def count_lines_with_progress(
     Runs in a worker thread; fires on_progress(count, bytes_read, total_bytes)
     a few times/sec so TUI can show live progress without being starved.
     """
-    import time
 
     try:
         total_bytes = Path(path).stat().st_size
@@ -518,6 +522,21 @@ def _lazy_cartesian_product(*sets):
             yield (head,) + rest
 
 
+def _parse_retry_after(headers) -> float | None:
+    """Seconds from a `Retry-After` header; HTTP-dates are ignored (numeric form only)."""
+    if not headers:
+        return None
+    for name, value in headers.items():
+        if str(name).lower() != "retry-after":
+            continue
+        try:
+            seconds = float(str(value).strip())
+        except (TypeError, ValueError):
+            return None
+        return seconds if seconds > 0 else None
+    return None
+
+
 class IntruderAttack:
     """Runs an intruder attack (sniper/batteringram/pitchfork/clusterbomb)."""
 
@@ -539,6 +558,24 @@ class IntruderAttack:
         self._results: list[IntruderResult] = []
         self._pause_event = asyncio.Event()
         self._pause_event.set()  # not paused initially
+        # Adaptive limits (PRO): None when the run is fixed-rate.
+        self._limits: AdaptiveLimits | None = None
+        self._limit_journal: list[LimitRecord] = []
+        self._stop_reason: str = ""
+        #: Shared cooldown (Retry-After / error pause): every request waits until it passes.
+        self._cooldown_until: float = 0.0
+
+    @property
+    def limits(self) -> AdaptiveLimits | None:
+        return self._limits
+
+    @property
+    def limit_journal(self) -> list[LimitRecord]:
+        return list(self._limit_journal)
+
+    @property
+    def stop_reason(self) -> str:
+        return self._stop_reason
 
     @property
     def attack_id(self) -> str:
@@ -664,11 +701,47 @@ class IntruderAttack:
         self,
         on_result: Callable[[IntruderResult], None],
         on_progress: Callable[[int, int], None],
+        on_limit_change: Callable[[LimitDecision], None] | None = None,
     ) -> None:
         self._is_running = True
         self._stopped = False
         self._done = 0
         self._results = []
+        self._stop_reason = ""
+        self._limit_journal = []
+        self._cooldown_until = 0.0
+        # Adaptive limits: `threads` is the ceiling. The gate below enforces the *current*
+        # limit, so a decrease takes effect for the next request without killing the
+        # requests that are already in flight.
+        self._limits = (
+            AdaptiveLimits(
+                hard_cap=self._config.threads,
+                min_delay_ms=self._config.delay_ms,
+            )
+            if self._config.adaptive
+            else None
+        )
+        self._active_slots = 0
+        self._gate = asyncio.Condition()
+
+        async def _acquire_slot() -> None:
+            async with self._gate:
+                limit = self._limits.threads if self._limits is not None else self._config.threads
+                await self._gate.wait_for(lambda: self._active_slots < limit)
+                self._active_slots += 1
+
+        async def _release_slot() -> None:
+            async with self._gate:
+                self._active_slots -= 1
+                self._gate.notify_all()
+
+        async def _wait_cooldown() -> None:
+            """Hold every request while a shared cooldown (Retry-After / pause) is active."""
+            while True:
+                remaining = self._cooldown_until - time.monotonic()
+                if remaining <= 0:
+                    return
+                await asyncio.sleep(remaining)
 
         # NOT `combinations = list(self._get_iterator())` — that materialized
         # every (payload_values) combination into one Python list before the
@@ -710,15 +783,54 @@ class IntruderAttack:
             # Substitute payloads
             request_raw = substitute_payload(self._config.template, payload_values)
 
-            # Delay
-            if self._config.delay_ms > 0:
-                await asyncio.sleep(self._config.delay_ms / 1000.0)
+            await _acquire_slot()
+            try:
+                await _wait_cooldown()
+                if self._stopped:
+                    return
+                # Delay: the adaptive value (when enabled) moves between the user's minimum
+                # and the cap, so a target under load is not hammered at the old rate.
+                delay_ms = self._limits.delay_ms if self._limits is not None else self._config.delay_ms
+                if delay_ms > 0:
+                    await asyncio.sleep(delay_ms / 1000.0)
 
-            result = await self._send_request(req_num, payload_values, request_raw, client)
+                result = await self._send_request(req_num, payload_values, request_raw, client)
+            finally:
+                await _release_slot()
+
             self._results.append(result)
             on_result(result)
             self._done += 1
             on_progress(self._done, self._total)
+
+            if self._limits is None:
+                return
+            decision = self._limits.observe(
+                status=result.response_status,
+                elapsed_ms=result.response_time_ms,
+                error=result.error,
+                retry_after_s=result.retry_after_s,
+                now=time.monotonic(),
+            )
+            if decision is None:
+                return
+            self._limit_journal = self._limits.journal
+            logger.info(
+                "INTRUDER: adaptive limit → %d threads, %d ms (%s)",
+                decision.threads,
+                decision.delay_ms,
+                decision.reason,
+            )
+            if on_limit_change is not None:
+                on_limit_change(decision)
+            if decision.stop:
+                self._stop_reason = decision.stop_reason
+                self._stopped = True
+                logger.warning("INTRUDER: attack stopped by adaptive limits — %s", decision.stop_reason)
+            elif decision.pause_s > 0:
+                # Shared pause: no worker sends until it passes (Retry-After is obeyed, the
+                # error pause is not guessed per request).
+                self._cooldown_until = max(self._cooldown_until, time.monotonic() + decision.pause_s)
 
         # ── Bounded worker pool instead of eager fan-out ──────────────────────
         # BEFORE: tasks = [asyncio.create_task(_run_one(...)) for i, vals in
@@ -772,13 +884,13 @@ class IntruderAttack:
         request_raw: str,
         client=None,
     ) -> IntruderResult:
-        import time
 
         t0 = time.monotonic()
         status = None
         length = None
         error_msg = None
         response_raw = None
+        retry_after_s = None
 
         try:
             from pentool.utils.http_client import HTTPClient
@@ -796,6 +908,7 @@ class IntruderAttack:
             status = resp.status
             body = resp.body if isinstance(resp.body, (bytes, str)) else b""
             length = len(body) if isinstance(body, bytes) else len(body.encode("utf-8", errors="replace"))
+            retry_after_s = _parse_retry_after(getattr(resp, "headers", None))
 
             # Build response_raw locally — the PRO format_response_raw
             # instantiates aiohttp.ClientResponse the pre-3.14 way and crashes
@@ -830,6 +943,7 @@ class IntruderAttack:
             response_length=length,
             response_time_ms=elapsed_ms,
             error=error_msg,
+            retry_after_s=retry_after_s,
         )
 
     async def pause(self) -> None:
