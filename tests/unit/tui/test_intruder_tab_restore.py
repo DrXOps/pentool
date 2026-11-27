@@ -149,8 +149,14 @@ class TestRestoreFromStorage:
                 pane = panel.tabs_content.get_pane(state.tab_id)
                 assert pane is not None, f"{state.name} has no pane — its body mounted under another id"
 
-            # The last tab of the batch is active and painted without a click.
+            # The last tab of the batch is active and painted without a click. The batch
+            # activates tabs one after another, so give the last activation its frame before
+            # asserting (CI on 3.12 caught the assertion mid-activation).
             active = by_uid["uid-b"]
+            for _ in range(100):
+                if panel.active_tab_id == active.tab_id:
+                    break
+                await pilot.pause()
             assert panel.active_tab_id == active.tab_id
             listing = screen.query_one(f"#payload-list-{active.tab_id}")
             assert len(listing.children) == 2, (
