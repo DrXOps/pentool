@@ -40,3 +40,4 @@
 | 2026-11-26 | Тестовая покупка: `POST /api/admin/test_purchase` выдаёт ключ и отправляет письмо (`PTOOL-UUPF-SA4Z-KYCT`, email_sent=true, validate valid) | живой прогон на license.pentool.pro | — |
 | 2026-11-23 | Recon: «Отправить в Recon» из контекстного меню (`open_recon`, PRO-гейт, duck-typing без импорта PRO) | `cdb1b12`, PRO `7073dce` | — |
 | 2026-11-27 | Фиксированные подвкладки Utils, Settings, Recon — через `widgets/static_tabs` (T-030 ч.2) | `test_subtabs_use_one_factory.py` | — |
+| 2026-11-27 | Индикатор активности работает от `ActivityChanged`, поллинг — только fallback (пункт 5) | `test_activity_events.py` | — |
