@@ -30,6 +30,14 @@ def test_new_tab_becomes_active_and_order_is_kept() -> None:
     assert registry.active is not None and registry.active.name == "Request 2"
 
 
+def test_states_are_exposed_in_the_same_order_as_ids() -> None:
+    registry: TabRegistry[_State] = TabRegistry()
+    for tab_id, name in (("t1", "first"), ("t2", "second")):
+        registry.add(tab_id, _State(name))
+
+    assert [state.name for state in registry.states] == ["first", "second"]
+
+
 def test_add_without_activation_keeps_the_current_tab() -> None:
     registry: TabRegistry[_State] = TabRegistry()
     registry.add("t1", _State("a"))

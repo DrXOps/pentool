@@ -1,9 +1,9 @@
-"""Stage 1 of step 11: a document-tab registry as its own object.
+"""Document-tab bookkeeping as its own object (step 11).
 
-Scanner and Repeater each keep a document-tab list inside the screen (Plus tab id bookkeeping,
-active tab, persistence). Before either screen can move to `TabbedContentPanel`, the bookkeeping has
-to exist as a separate, testable object — this is it. Nothing here touches a widget: it answers
-"which tabs exist, which is active, what happens when one is added/closed/renamed".
+Scanner and Repeater used to keep a document-tab list inside the screen (Plus tab id bookkeeping,
+active tab, persistence). This object owns that half: "which tabs exist, which is active, what
+happens when one is added/closed/renamed". Repeater reads and writes through it now; the widget it
+drives is still a plain `TabbedContent` until the screens move to `TabbedContentPanel`.
 """
 
 from __future__ import annotations
@@ -36,6 +36,11 @@ class TabRegistry(Generic[TState]):
     def ids(self) -> list[str]:
         """Tab ids in insertion order (the order the tabs are shown)."""
         return list(self._states)
+
+    @property
+    def states(self) -> list[TState]:
+        """States in the same order as `ids` — the read-only view screens iterate."""
+        return list(self._states.values())
 
     @property
     def active_id(self) -> str | None:

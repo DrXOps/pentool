@@ -42,3 +42,4 @@
 | 2026-11-27 | Фиксированные подвкладки Utils, Settings, Recon — через `widgets/static_tabs` (T-030 ч.2) | `test_subtabs_use_one_factory.py` | — |
 | 2026-11-27 | Индикатор активности работает от `ActivityChanged`, поллинг — только fallback (пункт 5) | `test_activity_events.py` | — |
 | 2026-11-27 | Реестр документных вкладок вынесен объектом (`TabRegistry`, 9 тестов), экраны ещё не подключены | `test_tab_registry.py` | — |
+| 2026-11-27 | Repeater: вкладки живут в общем реестре — экран не держит ни списка, ни активной вкладки (шаг 11, этап 2) | `test_repeater_tab_registry.py` + characterization-тесты вкладок | — |
