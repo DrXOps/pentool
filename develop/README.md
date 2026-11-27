@@ -48,3 +48,4 @@
 - [audits/2026-11-21-tui-audit.md](audits/2026-11-21-tui-audit.md) — предыдущая ревизия
 - [audits/2026-11-17-pro-audit.md](audits/2026-11-17-pro-audit.md) — аудит PRO
 - [audits/2026-11-24-handoff.md](audits/2026-11-24-handoff.md) — снимок состояния на 24 ноября
+- [audits/2026-11-27-session-handoff.md](audits/2026-11-27-session-handoff.md) — передача смены: что закрыто, что дальше, грабли
