@@ -2004,11 +2004,11 @@ class ProxyScreen(
     async def _save_enforce_scope_setting(self, enabled: bool) -> None:
         """Save enforce-scope flag per-project (DB)."""
         try:
-            from pentool.core.db_schema import set_project_setting
+            from pentool.services.project_settings import set_setting
 
             db_path = self._get_db_path()
             if db_path:
-                await set_project_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
+                await set_setting(db_path, "proxy.enforce_scope", "1" if enabled else "0")
         except Exception:
             logger.warning("_save_enforce_scope_setting: setting not saved", exc_info=True)
 
@@ -2019,11 +2019,11 @@ class ProxyScreen(
     async def _save_scope_setting(self, hosts: list[str]) -> None:
         """Save scope host list per-project."""
         try:
-            from pentool.core.db_schema import set_project_setting
+            from pentool.services.project_settings import set_setting
 
             db_path = self._get_db_path()
             if db_path:
-                await set_project_setting(db_path, "proxy.scope", json.dumps(hosts))
+                await set_setting(db_path, "proxy.scope", json.dumps(hosts))
         except Exception:
             logger.warning("_save_scope_setting: scope not saved", exc_info=True)
 
@@ -2034,10 +2034,10 @@ class ProxyScreen(
             return
         hosts: list[str] | None = None
         try:
-            from pentool.core.db_schema import get_project_setting
+            from pentool.services.project_settings import get_setting
 
             db_path = self._get_db_path()
-            raw = await get_project_setting(db_path, "proxy.scope", None) if db_path else None
+            raw = await get_setting(db_path, "proxy.scope", None) if db_path else None
             if raw is not None:
                 hosts = json.loads(raw)
         except Exception:
@@ -2080,10 +2080,10 @@ class ProxyScreen(
             return
         enabled: bool = False
         try:
-            from pentool.core.db_schema import get_project_setting
+            from pentool.services.project_settings import get_setting
 
             db_path = self._get_db_path()
-            raw = await get_project_setting(db_path, "proxy.enforce_scope", None) if db_path else None
+            raw = await get_setting(db_path, "proxy.enforce_scope", None) if db_path else None
             if raw is not None:
                 enabled = json.loads(raw)
         except Exception:

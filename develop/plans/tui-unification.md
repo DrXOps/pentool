@@ -42,8 +42,3 @@
 - файловые операции в обработчиках — в executor (часть уже вынесена);
 - `NotifyMixin` — один способ уведомлять, вместо `app.notify`/`_notify`/`notify_to_user`;
 - `host_of(url)` — один разбор хоста вместо трёх.
-
-## Шаг 10. Документация кода
-
-- ADR привести к реальности (ADR-2/3/5/9/12 разошлись с кодом);
-- `tools/check_layers.py` расширить с `tui → modules` на `tui → core/services/storage`.

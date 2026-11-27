@@ -23,7 +23,6 @@ from pentool import __version__
 from pentool.api.proxy_api import InterceptedRequest, ProxyAPI, ProxyServer
 from pentool.core.activity import set_activity
 from pentool.core.config import get_config
-from pentool.core.db_schema import init_db
 from pentool.core.event_bus import get_event_bus
 from pentool.core.events import (
     FindingDiscovered,
@@ -36,6 +35,7 @@ from pentool.core.events import (
 )
 from pentool.core.logging import get_logger, setup_logging
 from pentool.proxy.client import ProxyClient
+from pentool.services.project_settings import init_project_db
 from pentool.services.proxy_service import ProxyService
 from pentool.tui import module_catalog
 from pentool.tui.header import HeaderProvider
@@ -526,7 +526,7 @@ class PentoolApp(NotificationsMixin, ProxyRuntimeMixin, ProxyEventHandlersMixin,
         # _exit_caller_stack removed — dead code (was always empty, see __init__).
 
         try:
-            await init_db(self._cfg.db_path)
+            await init_project_db(self._cfg.db_path)
         except Exception:
             # Without a schema no module can open a project: the app starts, but
             # everything that writes to the DB will fail with its own errors.

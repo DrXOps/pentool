@@ -1,15 +1,20 @@
 # TUI Audit — DECISIONS (ADR)
 
-**Дата:** 2026-11-06 · **Textual:** 8.2.8 · **Ветка:** `audit/tui-refactor-2026-11-06`
+**Дата:** 2026-11-06 · **Textual:** 8.2.8 · **Обновлено сверкой с кодом:** 2026-11-28
 
 Формат: **Контекст → Решение → Последствия**. Ссылки на находки — `REPORT.md` (`F-NNN`).
 
 > **Где смотреть статус.** Исходный отчёт первого аудита утерян; нумерация `F-NNN`
 > восстановлена по цитатам в этом файле и сведена в таблицу со статусами —
-> [`REPORT.md` §2](REPORT.md). Решения, которые код перестал соблюдать (ADR-2, ADR-3,
-> ADR-5, ADR-9, ADR-12), перечислены в [`REPORT.md` §3](REPORT.md), раздел «Дрейф
-> конвенций». Решения не отменяются молча: если ADR разошёлся с кодом — это дефект кода
-> либо повод переписать ADR, а не игнорировать его.
+> [`../audits/2026-11-21-tui-report.md`](../audits/2026-11-21-tui-report.md) §2. Дрейф
+> конвенций (`C1…C10`) разобран там же в §3. Решения не отменяются молча: если ADR разошёлся
+> с кодом — это дефект кода либо повод переписать ADR, а не игнорировать его.
+>
+> **Сверка 2026-11-28.** Все расхождения §3 закрыты: `ProxyClearHistory` удалён, комментарии
+> в `events_handlers.py`/`app.py` переписаны, `Config.remove_observer` снимается в
+> `_on_exit_app`, каталог компонентов (ADR-5) приведён к факту, `constants.py` держит только
+> импортируемые имена, а у всех решений ниже появился исполняемый гвард (назван в каждом
+> пункте). ADR-2 закрыт до конца: `req: object` заменены на реальные типы.
 
 ---
 
@@ -40,13 +45,18 @@ Composition root: PentoolApp.__init__ / on_mount — единственное м
 2. **`tui → storage` запрещён** — всё через `ProxyService` / `*API`.
 3. **Работа с БД — только в воркерах** (`run_worker` / `@work`), никогда в теле хендлера.
 
-**Последствия.** Портов в виде `Protocol` не вводим (ADR-4); правило проверяется расширением `tools/check_layers.py` на `tui → services/storage` (не входит в этот аудит).
+**Последствия.** Портов в виде `Protocol` не вводим (ADR-4). Правило проверяется
+`tools/check_layers.py`: для `tui` запрещены `pentool.modules`, `pentool.storage` и
+`pentool.core.db_schema` (схема БД — слой данных, дверь для UI —
+`services/project_settings.py`), а из `pentool.services` разрешён только явный список
+фасадов (`TUI_ALLOWED_SERVICES`); правило решения — чистая функция `check_imports`,
+её тесты — `tests/unit/tools/test_check_layers.py`.
 
 ---
 
 ## ADR-2. Сообщения: единая иерархия и направление
 
-**Контекст.** `messages.py` — плоский список 15 классов, поле `req: object` (4 места), нет базового класса, нет префикса namespace.
+**Контекст.** `messages.py` — плоский список классов, поле `req: object` (4 места), нет базового класса, нет префикса namespace.
 
 **Решение.**
 
@@ -58,10 +68,18 @@ Composition root: PentoolApp.__init__ / on_mount — единственное м
 
 Соглашения:
 - имена — глагол-в-прошедшем для факта (`Captured`, `Completed`), императив-запрос для намерения (`SendToRepeater`, `SyncScopeToTarget`);
-- `req: object` → `InterceptedRequest` через `TYPE_CHECKING`-импорт (не ломает слой: `pentool.api.proxy_api` уже импортируется в `app.py`);
-- мёртвые классы удаляются, а не «оставляются на будущее» (F-039, `ProxyClearHistory`).
+- `req: object` заменены **реальными типами** (2026-11-28): `ParsedRequest` из
+  `pentool.utils.parser` для `SendToTarget`/`SendUrlToTarget`/`SendRequestToScanner`,
+  `InterceptedRequest` из `pentool.api.proxy_api` (только `TYPE_CHECKING` — рантайм-импорт
+  API-слоя в модуль, который импортируют все экраны, не нужен) для
+  `ProxyRequestAdded`/`ProxyRequestDone`;
+- мёртвые классы удаляются, а не «оставляются на будущее» (F-039, `ProxyClearHistory`
+  удалён — факт `tui.dead_code`).
 
-**Последствия.** `messages.py` остаётся плоским — на 15 классах иерархия дороже, чем экономит. Правило: новый класс обязан иметь хотя бы одного producer и одного handler в одном PR.
+**Последствия.** `messages.py` остаётся плоским (14 классов): иерархия на таком объёме дороже,
+чем экономит. Правило: новый класс обязан иметь хотя бы одного producer и одного handler;
+на 2026-11-28 проверено — у всех 14 классов есть оба (producer вне `messages.py` и
+`@on(...)`-handler в `app.py` или экране).
 
 ---
 
@@ -78,10 +96,13 @@ Composition root: PentoolApp.__init__ / on_mount — единственное м
 
 **Решение.**
 1. В миксинах, чей хост — `Widget`/`App`, обработчики объявляются **соглашением об именах** (`on_<handler_name>`), а не `@on`.
-2. Запрещено добавлять `@on` в `mixins/`; проверка — `tools/check_tui_css.py`-аналог или grep в code-review.
+2. Запрещено добавлять `@on`/`@watch` в `mixins/` — это гвард, а не ревьюерское правило:
+   `tests/unit/tui/test_adr_guards.py::test_no_textual_handlers_live_in_mixins` (AST, чтобы
+   упоминания `@on` в докстрингах не считались обработчиками). Имена обработчиков проверяет
+   `tests/unit/tui/test_handler_name_dispatch.py` (по `Message.handler_name`).
 3. Если нужен selector-матчинг (`@on(X, "#id")`) — миксин обязан наследовать `Widget` (тогда он реально участвует в MRO-MessagePump).
 
-**Последствия.** Миксины становятся «поведением без декораторов». `events_handlers.py:5-12` содержит комментарий, утверждающий обратное («Textual не видит `@on` в миксинах» — верно, но делает вывод «поэтому держим в app.py» вместо «поэтому не используем `@on`»); комментарий переписан.
+**Последствия.** Миксины становятся «поведением без декораторов». `events_handlers.py:5-12` содержал комментарий, утверждающий обратное («Textual не видит `@on` в миксинах» — верно, но делает вывод «поэтому держим в app.py» вместо «поэтому не используем `@on`»); комментарий переписан (C2 закрыт).
 
 ---
 
@@ -102,7 +123,7 @@ Composition root: PentoolApp.__init__ / on_mount — единственное м
 
 **Контекст.** F-017 (4 копии paste), F-019 (два Start/Stop), F-020 (два Cycler), F-021 (три фильтр-бара), F-024 (11 диалогов мимо базы), F-038 (CSS-дубли 25 %).
 
-**Решение — каталог (реализовано в этом аудите помечено ✅):**
+**Решение — каталог (сверено с кодом 2026-11-28):**
 
 | Паттерн | Компонент | Файл | Статус |
 |---|---|---|---|
@@ -111,11 +132,12 @@ Composition root: PentoolApp.__init__ / on_mount — единственное м
 | Start/Pause/Resume/Stop | `StartStopWidget` | `widgets/start_stop_widget.py` | единственный ✅ (`StartStopMixin` удалён) |
 | Панель с заголовком + кнопки | `ContentPanel` | `widgets/content_panel.py` | есть ✅ |
 | Копирование/вставка содержимого | `ContentClipboardMixin` (именованные хендлеры) | `mixins/content_clipboard_mixin.py` | исправлен ✅ |
-| Диалог | `BaseDialog` (+ `DialogCancelMixin`) | `dialogs/base_dialog.py` | миграция 11 диалогов — D-итерация 4 |
-| Циклер | `OptionCycler` | `widgets/option_cycler.py` | единственный (поглотит `Cycler`) |
-| Фильтр-бар | `FilterBarWidget` + наследники | `widgets/filter_bar_widget.py` | есть, CSS-дубли — D-итерация 5 |
+| Диалог | `BaseDialog` (+ `DialogCancelMixin`) | `dialogs/base_dialog.py` | ✅ 16 диалогов в `dialogs/`, все на базе (F-024 закрыт) |
+| Циклер | `OptionCycler` | `widgets/option_cycler.py` | единственный ✅ (`Cycler` поглощён) |
+| Фильтр-бар | `FilterBarWidget` + наследники | `widgets/filter_bar_widget.py` | ✅ один `filter_bar_widget.tcss` на наследников (F-021) |
 | Разделитель панелей | `ResizeHandle` | `widgets/resize_handle.py` | есть ✅ |
 | AI-синхронизация экрана | `AiModeSyncMixin` | `mixins/ai_sync.py` | новый ✅ |
+| Форма с полями | `FormDialog` | — | нет; шаг 7 плана `tui-unification.md` |
 
 **Правило CSS-токенов.** Только `$text, $text-muted, $text-disabled, $panel, $surface, $surface-lighten-1/-2, $surface-darken-1, $primary, $primary-darken-1/-2/-3, $success, $warning, $error, $accent, $background` + производные `%`. Hex/rgb запрещены (сейчас — 0, поддерживаем).
 
@@ -253,7 +275,8 @@ ProxyScreen.narrow #inspector-panel { display: none; }
 
 **Решение.** Удалить неиспользуемые константы. Оставить 8 экранных (`SCREEN_*`), которые импортируются 6+ модулями: это единственные значения, на которые действительно опирается больше одного файла. Подключать остальные 53 «обратно» — механический рефактор на ~200 правок без выигрыша: id всё равно проверяются только в рантайме, а тест-гвард (см. `test_handler_name_dispatch.py`) строит карту по AST.
 
-**Последствия.** Новые id пишутся литералом на месте. Конвенция: константа попадает в `constants.py` **только** когда её читают ≥2 модуля и она фигурирует в селекторе `query_one`/`@on`. Проверка: `grep -rn <NAME> pentool/ | wc -l`.
+**Последствия.** Новые id пишутся литералом на месте. Конвенция: константа попадает в `constants.py` **только** когда её читают ≥2 модуля и она фигурирует в селекторе `query_one`/`@on`. Сейчас там ровно 8 экранных `SCREEN_*`; проверка механическая —
+`tests/unit/tui/test_constants_are_used.py` падает, если константу никто не импортирует.
 
 ---
 
@@ -288,7 +311,12 @@ ProxyScreen.narrow #inspector-panel { display: none; }
 
 **Решение.** Глобальные подписки снимаются в `_on_exit_app` (вызывается после `run()` на любом пути выхода), а не в `action_quit`. Подписки уровня виджета — в `on_unmount`. Оба места обязаны быть симметричны `subscribe`/`add_observer`: правило «каждый `subscribe` в `on_mount` имеет `unsubscribe` в `on_unmount`» (или в миксине, как `AiModeSyncMixin`).
 
-**Последствия.** Новые подписки добавляются только парами. Проверка при ревью: `grep -n "subscribe\|add_observer" <file>` и столько же `unsubscribe`/`remove_observer`.
+**Последствия.** Новые подписки добавляются только парами. Проверка механическая:
+`tests/unit/tui/test_adr_guards.py::test_global_subscriptions_are_released` считает по AST
+`subscribe(...)` и `unsubscribe`/`unsubscribe_all` в каждом файле TUI и падает, если снятий
+меньше подписок; `_on_exit_app` (`app.py`) — единственная точка снятия глобальных подписок,
+подписки уровня виджета снимаются в `on_unmount` (гвард индикатора активности —
+`tests/unit/tui/test_activity_events.py`).
 
 ---
 
@@ -315,3 +343,5 @@ ProxyScreen.narrow #inspector-panel { display: none; }
 3. Ошибка внутри задачи логируется самой задачей (`_tech_detect_and_cache` уже это делает); спавн оборачивается `try/except` с `log.warning`.
 
 **Последствия.** Отмена при выходе приходит бесплатно через `WorkerManager.cancel_group`/`cancel_all`. `run_worker` потокобезопасен: из чужого потока он сам делает `call_from_thread`, поэтому сигнатуры `_force_scope_host`/`_maybe_auto_scope_host` не меняются.
+
+**Гвард (2026-11-27).** `tests/unit/tui/test_adr_guards.py::test_cancellable_worker_calls_keep_their_group_ratio` — трещотка: число `run_worker(...)` без `name=`/`group=` не растёт (бюджет 58). Это не делает старые вызовы отменяемыми, но не даёт добавить новые вслепую.

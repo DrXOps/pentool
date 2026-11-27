@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 
 from textual.css.query import NoMatches
 
-from pentool.core.db_schema import init_db
 from pentool.core.error_guard import err as _err
 from pentool.core.logging import get_logger
+from pentool.services.project_settings import init_project_db
 from pentool.tui import module_catalog
 from pentool.tui.messages import ProxyLoadProject
 
@@ -583,7 +583,7 @@ class ProjectManager:
 
     async def _init_new_db(self, path: str) -> None:
         try:
-            await init_db(path)
+            await init_project_db(path)
         except Exception as exc:
             logger.warning("_init_new_db: %s", exc)
 

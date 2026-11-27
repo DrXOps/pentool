@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from textual.message import Message
+
+from pentool.utils.parser import ParsedRequest
+
+if TYPE_CHECKING:
+    # Type-only: `proxy_api` is the proxy façade, and importing it here would pull the API
+    # layer into the module every screen imports. Annotations are strings thanks to
+    # `from __future__ import annotations`, so runtime stays clean.
+    pass
 
 
 class SendToRepeater(Message):
@@ -18,7 +28,7 @@ class SendToIntruder(Message):
 
 
 class SendToTarget(Message):
-    def __init__(self, req: object) -> None:
+    def __init__(self, req: ParsedRequest) -> None:
         super().__init__()
         self.req = req
 
@@ -50,7 +60,7 @@ class SendHostToScanner(Message):
 class ProxyRequestAdded(Message):
     """Proxy received a new request — add a row to the ProxyScreen table."""
 
-    def __init__(self, req: object) -> None:
+    def __init__(self, req: InterceptedRequest) -> None:
         super().__init__()
         self.req = req
 
@@ -58,7 +68,7 @@ class ProxyRequestAdded(Message):
 class ProxyRequestDone(Message):
     """Proxy completed a request — update the row in the ProxyScreen table."""
 
-    def __init__(self, req: object) -> None:
+    def __init__(self, req: InterceptedRequest) -> None:
         super().__init__()
         self.req = req
 
@@ -74,13 +84,13 @@ class SendToScanner(Message):
 
 
 class SendRequestToScanner(Message):
-    def __init__(self, request: object) -> None:
+    def __init__(self, request: ParsedRequest | None) -> None:
         super().__init__()
         self.request = request
 
 
 class SendUrlToTarget(Message):
-    def __init__(self, req: object) -> None:
+    def __init__(self, req: ParsedRequest) -> None:
         super().__init__()
         self.req = req
 
