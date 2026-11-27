@@ -23,6 +23,7 @@ from textual.widgets import Input, TabbedContent, TabPane
 
 from pentool.core.logging import get_logger
 from pentool.tui.mixins.tab_rename import TabRenameMixin
+from pentool.tui.widgets.tab_registry import TabRegistry
 
 logger = get_logger(__name__)
 
@@ -52,9 +53,17 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
     Args:
         id: container ID in the DOM (needed for @on filtering).
         tab_id_prefix: prefix for generated tab_id (e.g. "intruder-tab-").
+        content_id: id of the inner `TabbedContent`; defaults to ``f"{id}-content"``.
+            A screen that keeps talking to the `TabbedContent` by its historical id
+            passes that id here.
         build_tab_ui: (state, tab_id) -> TabPane. Builds the widgets synchronously.
         save_tab: (state) -> Awaitable. Persist the tab state.
         load_tabs: () -> Awaitable[list[state]]. Load all tabs.
+        rename_tab: (state) -> None. Called after a tab was renamed, so the owner can
+            persist the new name.
+        registry: the tab bookkeeping to use. A screen that already owns a `TabRegistry`
+            passes it here, so "which tabs exist / which is active" has one owner
+            instead of two copies.
     """
 
     # ── Messages ───────────────────────────────────────────────────────
@@ -130,28 +139,35 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
         *,
         id: str = "tcp",
         tab_id_prefix: str = "tcp-tab-",
+        content_id: str | None = None,
         build_tab_ui: Callable[[TState, str], TabPane] | None = None,
         mount_tab_ui: Callable[[TState, str], None] | None = None,
         save_tab: Callable[[TState], Awaitable[None]] | None = None,
         load_tabs: Callable[[], Awaitable[list[TState]]] | None = None,
         rename_input_id: str = "tcp-rename-input",
+        rename_tab: Callable[[TState], None] | None = None,
+        registry: TabRegistry[TState] | None = None,
         # Minimum number of tabs (1 = the last one cannot be closed)
         min_tabs: int = 1,
     ) -> None:
         super().__init__(id=id)
+        self._content_id = content_id or f"{id}-content"
         self._tab_id_prefix = tab_id_prefix
         self._build_tab_ui = build_tab_ui
         self._mount_tab_ui = mount_tab_ui
         self._save_tab = save_tab
         self._load_tabs_fn = load_tabs
         self._rename_input_id = rename_input_id
+        self._rename_tab = rename_tab
         self._min_tabs = min_tabs
 
         # ── State ──────────────────────────────────────────────────────
-        self._states: dict[str, TState] = {}  # tab_id → state
+        # Tab bookkeeping lives in `TabRegistry` (step 11): the panel keeps the panes
+        # (`_meta`) and the counter, the registry keeps the states and the active id.
+        # A screen may pass its registry so both read the same object.
+        self._registry: TabRegistry[TState] = registry if registry is not None else TabRegistry()
         self._meta: dict[str, _TabMeta] = {}  # tab_id → meta
         self._counter: int = 0
-        self._active_tab_id: str | None = None
         self._generation: int = 0
 
         # ── Generation guard ────────────────────────────────────────────
@@ -162,7 +178,7 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
     # ── compose ──────────────────────────────────────────────────────────
 
     def compose(self) -> ComposeResult:
-        yield TabbedContent(id=f"{self.id}-content")
+        yield TabbedContent(id=self._content_id)
         # Class in addition to id: screens style the field with a single `.tab-rename`
         # rule instead of a copy of that rule per screen with its own id.
         inp_rename = Input(id=self._rename_input_id, classes="tab-rename", placeholder="Tab name...", compact=True)
@@ -173,25 +189,23 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
 
     @property
     def tabs_content(self) -> TabbedContent:
-        return self.query_one(f"#{self.id}-content", TabbedContent)
+        return self.query_one(f"#{self._content_id}", TabbedContent)
 
     @property
     def active_tab_id(self) -> str | None:
-        return self._active_tab_id
+        return self._registry.active_id
 
     @property
     def active_state(self) -> TState | None:
-        if self._active_tab_id is None:
-            return None
-        return self._states.get(self._active_tab_id)
+        return self._registry.active
 
     @property
     def tab_count(self) -> int:
-        return len(self._states)
+        return len(self._registry)
 
     @property
     def all_states(self) -> list[TState]:
-        return list(self._states.values())
+        return self._registry.states
 
     # ── Generation guard ──────────────────────────────────────────────────
 
@@ -224,10 +238,12 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
         # learns that the previous tab stopped being active — and everything it
         # kept "per tab" outside of state (the global Intruder toolbar:
         # Threads/Delay/Turbo) stays unsaved. Hence we post it ourselves while
-        # _active_tab_id still points at the old tab.
-        previous_id = self._active_tab_id
-        if previous_id and previous_id in self._states:
-            self.post_message(self.TabDeactivated(self, previous_id, self._states[previous_id]))
+        # the registry still points at the old tab.
+        previous_id = self._registry.active_id
+        if previous_id and previous_id in self._registry:
+            previous_state = self._registry.get(previous_id)
+            if previous_state is not None:
+                self.post_message(self.TabDeactivated(self, previous_id, previous_state))
 
         self._counter += 1
         tab_id = f"{self._tab_id_prefix}{self._counter}"
@@ -259,7 +275,9 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
                 pane = TabPane(pane_id, id=tab_id)
         else:
             pane = TabPane(pane_id, id=tab_id)
-        self._states[tab_id] = state
+        # `activate=False`: the tab becomes active only once the pane is in the DOM
+        # (the owner is told by TabActivated, as before).
+        self._registry.add(tab_id, state, activate=False)
         meta = _TabMeta(tab_id=tab_id, pane=pane, name=pane_id)
         self._meta[tab_id] = meta
 
@@ -278,11 +296,11 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
             else:
                 self._defer_add_pane(tc, pane, tab_id)
         except Exception:
-            # The new tab was added to `_states`, but its pane is not in the DOM:
+            # The new tab is in the registry, but its pane is not in the DOM:
             # switching to it will show an empty body and the tab cannot be closed.
             logger.exception("action_new_tab setup failed for %s", tab_id)
 
-        self._active_tab_id = tab_id
+        self._registry.activate(tab_id)
 
         # Build per-tab UI and notify the owner once the widget is in the DOM.
         self.call_after_refresh(self._post_tab_messages, tab_id, state)
@@ -304,7 +322,7 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
             logger.debug("tab panel: active %s postponed: %s", tab_id, exc)
 
         def retry() -> None:
-            if tab_id not in self._states:
+            if tab_id not in self._registry:
                 return  # closed meanwhile
             try:
                 tc.active = tab_id
@@ -325,7 +343,7 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
         """
 
         def activate() -> None:
-            if tab_id not in self._states:
+            if tab_id not in self._registry:
                 return  # closed meanwhile
             self._set_active(tc, tab_id)
 
@@ -341,7 +359,7 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
         """
 
         def attempt() -> None:
-            if tab_id not in self._states:
+            if tab_id not in self._registry:
                 return  # closed meanwhile
             if not tc.query("#tabs-list"):
                 if attempts > 0:
@@ -369,7 +387,7 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
 
     def _do_build_ui(self, tab_id: str, state: TState) -> None:
         """Mount the per-tab widgets into the TabPane (the TabPane is already in the DOM)."""
-        if tab_id not in self._states:
+        if tab_id not in self._registry:
             return
         # If the pane was already built with children via build_tab_ui — nothing to do.
         existing = self._meta[tab_id].pane if tab_id in self._meta else None
@@ -397,26 +415,26 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
 
     def action_close_tab(self) -> None:
         """Close the active tab (when > min_tabs)."""
-        if len(self._states) <= self._min_tabs:
+        if len(self._registry) <= self._min_tabs:
             return
-        tab_id = self._active_tab_id
+        tab_id = self._registry.active_id
         if tab_id is None:
             return
-        state = self._states.get(tab_id)
+        state = self._registry.get(tab_id)
         try:
             tc = self.tabs_content
             tc.remove_pane(tab_id)
         except NoMatches as exc:
             # The pane stays in the DOM even though it was already removed from
-            # `_states` just below — the tab is visible but cannot be switched to.
+            # the registry just below — the tab is visible but cannot be switched to.
             # `NoMatches` — the tab container is not in the tree (screen teardown).
             logger.debug("tab_panel: pane %s not removed: %s", tab_id, exc)
-        self._states.pop(tab_id, None)
+        # The registry hands the active id to the left neighbour by itself.
+        self._registry.close(tab_id)
         self._meta.pop(tab_id, None)
-        # Switch to last remaining tab
-        if self._states:
-            new_id = list(self._states.keys())[-1]
-            self._active_tab_id = new_id
+        # Switch to the last remaining tab
+        new_id = self._registry.active_id
+        if new_id is not None:
             try:
                 tc = self.tabs_content
             except NoMatches as exc:
@@ -424,22 +442,21 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
                 logger.debug("tab_panel: container gone, cannot switch to %s: %s", new_id, exc)
             else:
                 self._set_active(tc, new_id)
-        else:
-            self._active_tab_id = None
         if state is not None:
             self.post_message(self.TabClosed(self, tab_id, state))
 
     def switch_to(self, tab_id: str) -> None:
         """Switch to a tab by id programmatically."""
-        if tab_id not in self._states:
+        if tab_id not in self._registry:
             return
         # Deactivate old
-        old_id = self._active_tab_id
-        if old_id and old_id in self._states and old_id != tab_id:
-            old_state = self._states[old_id]
-            self.post_message(self.TabDeactivated(self, old_id, old_state))
+        old_id = self._registry.active_id
+        if old_id and old_id in self._registry and old_id != tab_id:
+            old_state = self._registry.get(old_id)
+            if old_state is not None:
+                self.post_message(self.TabDeactivated(self, old_id, old_state))
         # Activate new
-        self._active_tab_id = tab_id
+        self._registry.activate(tab_id)
         try:
             tc = self.tabs_content
         except NoMatches as exc:
@@ -448,17 +465,16 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
             logger.debug("tab_panel: switch to %s not shown: %s", tab_id, exc)
         else:
             self._set_active(tc, tab_id)
-        state = self._states.get(tab_id)
+        state = self._registry.get(tab_id)
         if state is not None:
             self.post_message(self.TabActivated(self, tab_id, state))
 
     def get_any_tab_id(self) -> str | None:
         """Return any tab_id (for tests)."""
-        if self._states:
-            return next(iter(self._states))
-        return None
+        ids = self._registry.ids
+        return ids[0] if ids else None
 
-    async def close_all(self) -> None:
+    async def close_all(self, *, post_closed: bool = True) -> None:
         """Close all tabs (on project change).
 
         IMPORTANT: every remove_pane() is awaited. Previously the discard-style
@@ -467,8 +483,13 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
         being removed from the DOM, the new add_pane with the old id failed (id
         already taken) → the header was not added, and subsequent "+" clicks drifted.
         As in Repeater: await remove_pane() — to avoid a race with action_new_tab().
+
+        ``post_closed=False`` — the tabs are dropped without the `TabClosed` messages.
+        A screen that keeps the states elsewhere (project switch) uses it when closing
+        means "forget the DOM", not "the user deleted these tabs".
         """
-        for tab_id, state in list(self._states.items()):
+        for tab_id in self._registry.ids:
+            state = self._registry.get(tab_id)
             try:
                 tc = self.tabs_content
                 await tc.remove_pane(tab_id)
@@ -476,12 +497,11 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
                 # This is exactly the race described in the docstring above: a pane
                 # that was not removed with the same id breaks the next add_pane.
                 logger.debug("tab_panel: pane %s not removed in close_all: %s", tab_id, exc)
-            if state is not None:
+            if state is not None and post_closed:
                 self.post_message(self.TabClosed(self, tab_id, state))
-        self._states.clear()
+        self._registry.replace_all([])
         self._meta.clear()
         self._counter = 0
-        self._active_tab_id = None
 
     async def load_from_storage(self) -> None:
         """Load tabs from storage (via load_tabs)."""
@@ -511,8 +531,8 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
         uid = getattr(state, "tab_uid", None)
         if not uid:
             return None
-        for tid, st in self._states.items():
-            if getattr(st, "tab_uid", None) == uid:
+        for tid in self._registry.ids:
+            if getattr(self._registry.get(tid), "tab_uid", None) == uid:
                 return tid
         return None
 
@@ -522,15 +542,16 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
     # here and in BaseModuleScreen, and a third time in RepeaterScreen.
     def _rename_state(self, tab_id: str) -> object | None:
         """A tab of this panel, if it has state (the mixin uses it for name + ownership)."""
-        return self._states.get(tab_id)
+        return self._registry.get(tab_id)
 
     def _apply_tab_rename(self, tab_id: str, new_name: str) -> None:
-        state = self._states.get(tab_id)
+        state = self._registry.rename(tab_id, new_name)
         if state is None:
             return
-        if hasattr(state, "name"):
-            state.name = new_name
         self._update_tab_label(tab_id, new_name)
+        if self._rename_tab is not None:
+            # The owner persists the name (Repeater: upsert into `repeater_tabs`).
+            self._rename_tab(state)
 
     def _update_tab_label(self, tab_id: str, name: str) -> None:
         try:
@@ -550,34 +571,36 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
     # ── TabActivated (from Textual) ─────────────────────────────────────
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        if event.tabbed_content.id != f"{self.id}-content":
+        if event.tabbed_content.id != self._content_id:
             return
         pane = event.pane
         if pane is None or pane.id is None:
             return
         new_tab_id = pane.id
+        if new_tab_id not in self._registry:
+            return  # a pane whose state is gone (screen teardown)
 
         # Deactivate old
-        old_id = self._active_tab_id
-        if old_id and old_id in self._states and old_id != new_tab_id:
-            old_state = self._states.get(old_id)
+        old_id = self._registry.active_id
+        if old_id and old_id in self._registry and old_id != new_tab_id:
+            old_state = self._registry.get(old_id)
             if old_state is not None:
                 self.post_message(self.TabDeactivated(self, old_id, old_state))
 
         # Activate new
-        self._active_tab_id = new_tab_id
-        new_state = self._states.get(new_tab_id)
+        self._registry.activate(new_tab_id)
+        new_state = self._registry.get(new_tab_id)
         if new_state is not None:
             self.post_message(self.TabActivated(self, new_tab_id, new_state))
 
     # ── Get state ───────────────────────────────────────────────────────
 
     def get_state(self, tab_id: str) -> TState | None:
-        return self._states.get(tab_id)
+        return self._registry.get(tab_id)
 
     def get_tab_id_by_uid(self, tab_uid: str) -> str | None:
         """Find the tab_id by tab_uid (for DB loading)."""
-        for tid, st in self._states.items():
-            if getattr(st, "tab_uid", None) == tab_uid:
+        for tid in self._registry.ids:
+            if getattr(self._registry.get(tid), "tab_uid", None) == tab_uid:
                 return tid
         return None

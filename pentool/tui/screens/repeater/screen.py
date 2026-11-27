@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
@@ -23,6 +24,7 @@ from pentool.tui.widgets.diff_panel import DiffPanel
 from pentool.tui.widgets.request_editor import RequestEditor, ResponseViewer
 from pentool.tui.widgets.resize_handle import ResizeHandle
 from pentool.tui.widgets.search_bar import SearchBar
+from pentool.tui.widgets.tab_panel import TabbedContentPanel
 from pentool.tui.widgets.tab_registry import TabRegistry
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
@@ -78,13 +80,9 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
     _sort_reverse: bool = False
     _HIST_COL_LABELS = ["ID", "Method", "URL", "Status", "Length", "Time"]
 
-    # TabRenameMixin config
-    _rename_input_id: str = "rename-input"
-    _rename_tab_prefix: str = "tab-"
-    _rename_tabs_widget_id: str = "repeater-tabs"
-    # The field is mounted on first use: this screen's tabs are a plain
-    # TabbedContent, not a TabbedContentPanel that ships the input itself.
-    _rename_input_host: str = "#tabs-area"
+    # Tab rename is handled by the tabs panel itself (it ships the input field and
+    # applies the name), so the screen deliberately has no rename config and no
+    # `_rename_state`: `BaseModuleScreen` answers "not our tab".
 
     # RequestContextMenuMixin config — Repeater: Send to Intruder + Scanner, no nmap
     _cm_show_nmap = False
@@ -93,12 +91,23 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        # Document tabs live in the shared registry (step 11): the screen keeps no
-        # second list and no second active id. `_tab_counter` is only the tab-naming
-        # counter — ids must stay unique after a close, so it cannot be derived
-        # from the registry.
+        # Document tabs: states and the active id live in the shared registry, the
+        # panes and labels in `TabbedContentPanel` (step 11). The screen keeps neither
+        # a tab list nor a tab counter — the panel names the tabs and owns the strip.
         self._tab_registry: TabRegistry[_TabState] = TabRegistry()
-        self._tab_counter: int = 0
+        self._tabs_panel: TabbedContentPanel[_TabState] = TabbedContentPanel(
+            id="repeater-tabs-panel",
+            # The inner TabbedContent keeps its historical id: hotkeys, tests and the
+            # `#repeater-tabs` selector keep addressing the same widget.
+            content_id="repeater-tabs",
+            tab_id_prefix="tab-",
+            build_tab_ui=self._build_tab_ui,
+            rename_input_id="repeater-rename-input",
+            rename_tab=self._on_tab_renamed,
+            min_tabs=1,
+            registry=self._tab_registry,
+        )
+        self._tabs_panel.set_default_state_factory(lambda tab_id, name: _TabState(tab_id, name))
         self._sending: bool = False
         self._follow_redirects: bool = True
         self._search_matches: list[int] = []
@@ -139,7 +148,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
 
     @property
     def _tabs_w(self) -> TabbedContent:
-        return self.query_one("#repeater-tabs", TabbedContent)
+        """The inner `TabbedContent` (hotkeys and tests address it by its old id)."""
+        return self._tabs_panel.tabs_content
 
     @property
     def _search_bar(self) -> SearchBar:
@@ -246,7 +256,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
         # (`header_spec()` below) — the toolbar row is gone, request tabs stay.
         with Horizontal(id="content-row"):
             with Vertical(id="tabs-area"):
-                yield TabbedContent(id="repeater-tabs")
+                yield self._tabs_panel
             yield DiffPanel(id="repeater-diff-panel")
 
         yield SearchBar(id="repeater-search-bar")
@@ -326,17 +336,15 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
                 return
 
             for row in tabs:
-                self._tab_counter += 1
-                tab_id = f"tab-{self._tab_counter}"
-                state = _TabState(tab_id, row["tab_name"], tab_uid=row["tab_uid"])
+                if generation != self._tabs_generation:
+                    return
+                # The panel assigns the tab_id and keeps `tab_uid` (the persistence
+                # key): a restored tab upserts its own row instead of creating a new one.
+                state = _TabState("", row["tab_name"], tab_uid=row["tab_uid"])
                 state.request_text = row["request_text"] or state.request_text
-                # `activate=False`: every restored tab becomes active once its own
-                # pane exists (`_create_tab_ui`), so the last one stays active —
-                # the same order the widget used to produce.
-                self._tab_registry.add(tab_id, state, activate=False)
-                self.call_after_refresh(self._create_tab_ui, tab_id, state, generation)
+                self._tabs_panel.action_new_tab(state=state)
 
-            if not self._tab_registry:
+            if not self._tabs_panel.tab_count:
                 self.call_after_refresh(self._new_tab_if_current, generation)
 
         except Exception:
@@ -355,133 +363,55 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
             return
         self.action_new_tab()
 
-    def _create_tab_ui(self, tab_id: str, state: _TabState, generation: int | None = None) -> None:
-        """Create tab UI and mount widgets."""
-        if generation is not None and generation != self._tabs_generation:
-            # Stale — a project switch reset the screen after this was
-            # scheduled. Drop the now-orphaned state from the registry too, so
-            # nothing refers to a generation that no longer exists.
-            self._tab_registry.close(tab_id)
-            return
-        if tab_id not in self._tab_registry:
-            # Closed while this callback was queued.
-            return
-        try:
-            tabs = self._tabs_w
-            pane = TabPane(state.name, id=tab_id)
-            tabs.add_pane(pane)
-            self._tab_registry.activate(tab_id)
-            tabs.active = tab_id
-            self.call_after_refresh(self._mount_tab_widgets, tab_id, state)
-        except Exception as exc:
-            logger.debug("_create_tab_ui failed: %s", exc)
+    # ── Tab bodies (built by the panel) ────────────────────────────────────────
 
-    def action_new_tab(self) -> None:
-        if self._tearing_down:
-            return
-        # Commit the outgoing tab BEFORE the new one becomes active:
-        # `_save_current_tab_state()` reads the registry's active tab, and
-        # activating the new one first (as `_create_tab_ui` does on restore)
-        # makes the TabActivated that follows save the *new* tab instead — whose
-        # editor is not built yet, so it is a no-op and the text typed in the old
-        # tab never reaches its state or the database. The widget keeps it until
-        # a project reload, which is exactly where the loss surfaces.
-        self._save_current_tab_state()
-        self._tab_counter += 1
-        tab_id = f"tab-{self._tab_counter}"
-        name = f"Tab {self._tab_counter}"
-        state = _TabState(tab_id, name)
-        # Activation waits for the pane: `TabbedContent.active` can still refuse
-        # the id (see the rollback below).
-        self._tab_registry.add(tab_id, state, activate=False)
+    def _build_tab_ui(self, state: _TabState, tab_id: str) -> TabPane:
+        """Build one tab's whole body synchronously.
 
-        tabs = self._tabs_w
-        pane = TabPane(name, id=tab_id)
-        tabs.add_pane(pane)
-        try:
-            tabs.active = tab_id
-        except ValueError as exc:
-            # The app stopped between add_pane and activation: the pane is
-            # already added but there is nothing to activate it with. Roll the
-            # tab back entirely, otherwise state and DOM drift apart.
-            logger.debug("repeater: tab %s not activated during teardown: %s", tab_id, exc)
-            self._tab_registry.close(tab_id)
-            return
-        self._tab_registry.activate(tab_id)
-        self.call_after_refresh(self._mount_tab_widgets, tab_id, state)
+        The widgets keep their per-tab ids (`req-editor-<tab_id>` and friends), so the
+        screen's lookups, the ResizeHandle wiring and the CSS did not change. The panel
+        mounts this pane together with the tab — that is why the old chain of
+        `call_after_refresh` builders is gone. The one thing that still has to wait is
+        the editor's own TextArea: handled in `_load_request_into` when the tab is
+        announced.
+        """
+        row = Horizontal(
+            Vertical(
+                RequestEditor(
+                    label="Request Editor",
+                    role="request-editable",
+                    id=f"req-editor-{tab_id}",
+                ),
+                classes="req-panel card",
+                id=f"req-panel-{tab_id}",
+            ),
+            ResizeHandle(
+                f"req-panel-{tab_id}",
+                f"resp-panel-{tab_id}",
+                id=f"resize-{tab_id}",
+            ),
+            Vertical(
+                ResponseViewer(id=f"resp-viewer-{tab_id}"),
+                classes="resp-panel card",
+                id=f"resp-panel-{tab_id}",
+            ),
+            classes="req-resp-row",
+            id=f"req-resp-row-{tab_id}",
+        )
+        body = Vertical(
+            row,
+            ResizeHandle(
+                f"req-resp-row-{tab_id}",
+                f"log-area-{tab_id}",
+                vertical=True,
+                id=f"resize-bottom-{tab_id}",
+            ),
+            Static("", classes="log-area", id=f"log-area-{tab_id}"),
+            classes="tab-body",
+        )
+        return TabPane(state.name, body, id=tab_id)
 
-    def _mount_tab_widgets(self, tab_id: str, state: _TabState) -> None:
-        try:
-            pane = self.query_one(f"#{tab_id}", TabPane)
-            body = Vertical(classes="tab-body")
-            pane.mount(body)
-            self.call_after_refresh(self._fill_tab_body, tab_id, state, body)
-        except Exception as exc:
-            # First step of building the tab body. Breaking here leaves an
-            # empty tab — exactly the defect class the audit is looking for.
-            logger.error("repeater: tab %s body not mounted: %s", tab_id, exc, exc_info=True)
-            self.notify_user(f"Tab {tab_id}: body could not be built — see the log", severity="error")
-
-    def _fill_tab_body(self, tab_id: str, state: _TabState, body: Vertical) -> None:
-        try:
-            row = Horizontal(classes="req-resp-row", id=f"req-resp-row-{tab_id}")
-            log_area = Static("", classes="log-area", id=f"log-area-{tab_id}")
-            body.mount(row)
-            body.mount(
-                ResizeHandle(
-                    f"req-resp-row-{tab_id}",
-                    f"log-area-{tab_id}",
-                    vertical=True,
-                    id=f"resize-bottom-{tab_id}",
-                )
-            )
-            body.mount(log_area)
-            self.call_after_refresh(self._fill_req_resp, tab_id, state, row)
-        except Exception as exc:
-            logger.error("repeater: tab %s layout not filled: %s", tab_id, exc, exc_info=True)
-
-    def _fill_req_resp(self, tab_id: str, state: _TabState, row: Horizontal) -> None:
-        try:
-            req_panel = Vertical(classes="req-panel card", id=f"req-panel-{tab_id}")
-            resp_panel = Vertical(classes="resp-panel card", id=f"resp-panel-{tab_id}")
-            row.mount(req_panel)
-            row.mount(
-                ResizeHandle(
-                    f"req-panel-{tab_id}",
-                    f"resp-panel-{tab_id}",
-                    id=f"resize-{tab_id}",
-                )
-            )
-            row.mount(resp_panel)
-            self.call_after_refresh(self._fill_panels, tab_id, state, req_panel, resp_panel)
-        except Exception as exc:
-            logger.error("repeater: tab %s request/response split failed: %s", tab_id, exc, exc_info=True)
-
-    def _fill_panels(
-        self,
-        tab_id: str,
-        state: _TabState,
-        req_panel: Vertical,
-        resp_panel: Vertical,
-    ) -> None:
-        try:
-            editor = RequestEditor(
-                label="Request Editor",
-                role="request-editable",
-                id=f"req-editor-{tab_id}",
-            )
-            req_panel.mount(editor)
-
-            viewer = ResponseViewer(id=f"resp-viewer-{tab_id}")
-            resp_panel.mount(viewer)
-
-            self.call_after_refresh(self._init_tab_content, tab_id, state)
-        except Exception as exc:
-            # Without the editor and the response panel the tab stays empty:
-            # Send can be pressed, but there is nowhere to type.
-            logger.error("repeater: tab %s editor/viewer not mounted: %s", tab_id, exc, exc_info=True)
-
-    def _init_tab_content(self, tab_id: str, state: _TabState, attempt: int = 0) -> None:
+    def _load_request_into(self, tab_id: str, state: _TabState, attempt: int = 0) -> None:
         try:
             editor = self._editor(tab_id)
         except Exception as exc:
@@ -489,18 +419,17 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
             return
         if not editor.content_mounted:
             # The editor widget exists but its TextArea has not been composed
-            # yet — `req_panel.mount(editor)` returns before the children are
-            # in the DOM. Loading now raises `NoMatches` inside `load_raw`,
-            # which reports it as a failed load and leaves the tab empty while
-            # `state.request_text` still holds the request. Wait for the mount
-            # instead of guessing.
+            # yet — the pane's children mount after the pane itself. Loading now
+            # raises `NoMatches` inside `load_raw`, which reports it as a failed
+            # load and leaves the tab empty while `state.request_text` still holds
+            # the request. Wait for the mount instead of guessing.
             if attempt >= _MOUNT_ATTEMPTS:
                 logger.error(
                     "repeater: tab %s editor body never composed; request text not shown",
                     tab_id,
                 )
                 return
-            self.call_after_refresh(self._init_tab_content, tab_id, state, attempt + 1)
+            self.call_after_refresh(self._load_request_into, tab_id, state, attempt + 1)
             return
         try:
             editor.load_raw(state.request_text)
@@ -528,22 +457,59 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
         state.is_dirty = False
         self._update_tab_label(state)
 
+    # ── TabbedContentPanel messages ────────────────────────────────────────────
+    # The panel owns the widget operations; the screen owns the document data: it
+    # loads the request into a freshly built editor, saves the tab being left, and
+    # forgets a closed tab in the registry table.
+
+    @on(TabbedContentPanel.TabCreated, "#repeater-tabs-panel")
+    def _on_tab_created(self, event: TabbedContentPanel.TabCreated) -> None:
+        state = event.tab_state
+        if not isinstance(state, _TabState):
+            return
+        self.call_after_refresh(self._load_request_into, event.tab_id, state)
+
+    @on(TabbedContentPanel.TabDeactivated, "#repeater-tabs-panel")
+    def _on_tab_deactivated(self, event: TabbedContentPanel.TabDeactivated) -> None:
+        """Save the tab being left, from the state the panel handed over.
+
+        Reading the *active* tab here would save the new one — whose editor is not
+        built yet — which is exactly the defect `test_repeater_tab_state_survives`
+        was written for.
+        """
+        state = event.tab_state
+        if isinstance(state, _TabState):
+            self._save_tab_state(state)
+
+    @on(TabbedContentPanel.TabActivated, "#repeater-tabs-panel")
+    def _on_tab_activated(self, event: TabbedContentPanel.TabActivated) -> None:
+        self._refresh_diff_panel_if_visible()
+
+    @on(TabbedContentPanel.TabClosed, "#repeater-tabs-panel")
+    def _on_tab_closed(self, event: TabbedContentPanel.TabClosed) -> None:
+        state = event.tab_state
+        if isinstance(state, _TabState):
+            self._delete_tab_from_db(state)
+
+    def _on_tab_renamed(self, state: _TabState) -> None:
+        """The panel renamed a tab: persist the name, keep the dirty marker."""
+        self._auto_save_tab_to_db(state)
+        self._update_tab_label(state)
+
+    # ── Tab actions ────────────────────────────────────────────────────────────
+
+    def action_new_tab(self) -> None:
+        if self._tearing_down:
+            return
+        # The panel posts TabDeactivated for the outgoing tab before the new one
+        # becomes active, so the tab-state rule (wiki/tui.md §11) is enforced by
+        # the panel's message order instead of by the screen touching the active id.
+        self._tabs_panel.action_new_tab()
+
     def action_close_tab(self) -> None:
-        if len(self._tab_registry) <= 1:
+        if self._tearing_down:
             return
-        tab_id = self._tab_registry.active_id
-        if tab_id is None:
-            return
-        tabs = self._tabs_w
-        tabs.remove_pane(tab_id)
-        # The registry hands the active id to the left neighbour by itself; the
-        # screen only follows it, in the DOM and in the database.
-        closing = self._tab_registry.close(tab_id)
-        if closing is not None:
-            self._delete_tab_from_db(closing)
-        new_active = self._tab_registry.active_id
-        if new_active is not None:
-            tabs.active = new_active
+        self._tabs_panel.action_close_tab()
 
     # ── Project lifecycle ──────────────────────────────────────────────────────
 
@@ -595,47 +561,25 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
     async def _close_all_tabs(self) -> None:
         """Remove all tabs and reset state.
 
-        `TabbedContent.clear_panes()` is the proper way to drop all panes at once.
-        Removing them one by one left the internal `Tabs` updating `active` for a
-        pane that was already gone (`ValueError: No Tab with id '--content-tab-tab-N'`);
-        this surfaced on project reload, when the screen holds a single tab.
+        The panel awaits every `remove_pane()` — removing panes one by one without
+        waiting left the internal `Tabs` updating `active` for a pane that was already
+        gone (`ValueError: No Tab with id '--content-tab-tab-N'`); this surfaced on
+        project reload, when the screen holds a single tab.
+
+        `post_closed=False`: closing on a project switch means "forget the DOM", not
+        "the user deleted these tabs" — the screen's TabClosed handler would otherwise
+        delete the tabs it is about to reload from the database.
         """
         self._cancel_save_workers()
 
         self._tabs_generation += 1  # invalidate any in-flight _do_load_tabs from on_mount
         try:
-            await self._tabs_w.clear_panes()
+            await self._tabs_panel.close_all(post_closed=False)
         except Exception as exc:
-            # The panes were not removed — yet the list below is cleared anyway,
+            # The panes were not removed — yet the registry below is cleared anyway,
             # so the tabs in the tree become orphans without state.
             logger.debug("repeater: panes not cleared: %s", exc)
-        self._tab_registry.replace_all([])
-        self._tab_counter = 0  # counter reset — numbering always starts at 1
-
-    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        if event.tabbed_content.id != "repeater-tabs":
-            return
-        pane = event.pane
-        if pane is None or pane.id is None:
-            return
-        # Save the outgoing tab before the registry's active id moves: that is
-        # the whole tab-state rule (wiki/tui.md §11).
-        self._save_current_tab_state()
-        if pane.id not in self._tab_registry:
-            return  # a pane that is not (or no longer) one of this screen's tabs
-        self._tab_registry.activate(pane.id)
-        self._refresh_diff_panel_if_visible()
-
-    def _rename_state(self, tab_id: str) -> object | None:
-        """A tab of this screen (the mixin reads `.name` from it)."""
-        return self._get_tab_state(tab_id)
-
-    def _apply_tab_rename(self, tab_id: str, new_name: str) -> None:
-        state = self._tab_registry.rename(tab_id, new_name)
-        if state is None:
-            return
-        self._update_tab_label(state)
-        self._auto_save_tab_to_db(state)
+            self._tab_registry.replace_all([])
 
     def _update_tab_label(self, state: _TabState) -> None:
         """Refresh the Tab widget's label to reflect state.name + dirty marker.
@@ -643,16 +587,8 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
         Called after rename, after a successful Send (clears "*"), and after
         an edit is detected (adds "*") — see on_text_area_changed.
         """
-        try:
-            tabs = self._tabs_w
-            tab_widget = tabs.get_tab(state.tab_id)
-            if tab_widget is not None:
-                suffix = "*" if state.is_dirty else ""
-                tab_widget.label = f"{state.name}{suffix}"
-        except Exception as exc:
-            # The tab label stops reflecting the dirty state — and that is the
-            # only sign of an unsaved request (F-031).
-            logger.debug("repeater: label not updated for tab %s: %s", state.tab_id, exc)
+        suffix = "*" if state.is_dirty else ""
+        self._tabs_panel.update_tab_label(state.tab_id, f"{state.name}{suffix}")
 
     def on_text_area_changed(self, event) -> None:
         """Mark the active tab dirty ("*") when its request text changes.
@@ -851,21 +787,29 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
             logger.debug("repeater: cursor not moved to match at %d: %s", offset, exc)
 
     def _save_current_tab_state(self) -> None:
-        """Save current tab's request text to memory AND database."""
-        if self._active_tab_id is None:
+        """Save the active tab's request text to memory AND database."""
+        tab_id = self._active_tab_id
+        if tab_id is None:
             return
-        state = self._get_tab_state(self._active_tab_id)
-        if state is None:
-            return
+        state = self._get_tab_state(tab_id)
+        if state is not None:
+            self._save_tab_state(state)
+
+    def _save_tab_state(self, state: _TabState) -> None:
+        """Save one tab (whichever it is) from its editor into state and the database.
+
+        Takes the state explicitly: `TabDeactivated` hands over the tab being left, and
+        at that moment the registry's active id already points at the incoming tab. The
+        old code read the active id here and saved the wrong tab.
+        """
         if not state.ui_ready:
             # The editor for this tab does not exist yet, so `get_text()`
             # returns "" — saving it would replace the tab's own request text
-            # with an empty string. TabbedContent fires TabActivated twice for
-            # a new tab and the second one arrives before the editor is built;
-            # that is the path that emptied every freshly opened tab.
+            # with an empty string. A new tab is announced before its editor is
+            # built; that is the path that emptied every freshly opened tab.
             return
         try:
-            editor = self._editor(self._active_tab_id)
+            editor = self._editor(state.tab_id)
             state.request_text = editor.get_text()
             # Auto-save to DB (async, fire-and-forget)
             self._auto_save_tab_to_db(state)
@@ -873,7 +817,7 @@ class RepeaterScreen(AutoSaveMixin, BaseModuleScreen, RequestContextMenuMixin, M
             # The tab text never reached state — switching tabs will lose it,
             # which is exactly the loss auto-save exists to prevent. Error level
             # and a traceback: data loss must not be left at debug.
-            logger.error("repeater: tab %s state not saved", self._active_tab_id, exc_info=True)
+            logger.error("repeater: tab %s state not saved", state.tab_id, exc_info=True)
 
     def _auto_save_tab_to_db(self, state: _TabState) -> None:
         """Persist one tab (upsert by `tab_uid`), fire-and-forget.

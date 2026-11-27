@@ -180,6 +180,52 @@ def test_get_tab_id_by_uid(panel):
     assert panel.get_tab_id_by_uid("nonexistent") is None
 
 
+# ── Step 11 knobs: an owner-supplied registry and a named content -----------
+
+
+def test_the_owner_registry_is_the_state_source():
+    """A screen that passes its registry must read the same states the panel writes."""
+    from pentool.tui.widgets.tab_panel import TabbedContentPanel
+    from pentool.tui.widgets.tab_registry import TabRegistry
+
+    registry: TabRegistry[_TestState] = TabRegistry()
+    p = TabbedContentPanel(id="x", tab_id_prefix="x-", registry=registry)
+    p.query_one = MagicMock(return_value=MagicMock())
+    p.call_after_refresh = lambda fn, *a, **kw: fn(*a, **kw)
+    p.post_message = lambda msg: None
+
+    p.action_new_tab(state=_TestState(tab_id="", name="A"))
+
+    assert registry.active_id == "x-1"
+    assert p.get_state("x-1") is registry.get("x-1")
+    p._apply_tab_rename("x-1", "B")
+    renamed = registry.get("x-1")
+    assert renamed is not None and renamed.name == "B"
+
+
+def test_content_id_keeps_the_historical_tabbed_content_id():
+    """A screen that talks to the `TabbedContent` by its old id passes it as content_id."""
+    from textual.app import App, ComposeResult
+    from textual.widgets import TabbedContent
+
+    from pentool.tui.widgets.tab_panel import TabbedContentPanel
+
+    class _App(App):
+        def compose(self) -> ComposeResult:
+            yield TabbedContentPanel(id="p-tabs", content_id="legacy-tabs")
+
+    async def _run() -> None:
+        async with _App().run_test() as pilot:
+            await pilot.pause()
+            panel = pilot.app.query_one(TabbedContentPanel)
+            assert panel.tabs_content.id == "legacy-tabs"
+            assert pilot.app.query_one("#legacy-tabs", TabbedContent) is panel.tabs_content
+
+    import asyncio
+
+    asyncio.run(_run())
+
+
 # ── Regression: message.control must return the owning panel ─────────
 # Previously 4 messages returned `self._widget`, which Message does NOT have in
 # __slots__ → `AttributeError: 'TabActivated' object has no attribute '_widget'`

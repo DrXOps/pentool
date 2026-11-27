@@ -64,7 +64,7 @@ async def test_rename_input_becomes_visible_and_focused() -> None:
         inp = panel.query_one(f"#{screen._rename_input_id}", Input)
         assert inp.display is True, "поле переименования осталось скрытым"
         assert inp.has_focus, "поле не получило фокус — ввод уйдёт в другое место"
-        assert inp.value == panel._states[tab_id].name
+        assert inp.value == panel.get_state(tab_id).name
 
 
 @pytest.mark.asyncio
@@ -86,6 +86,6 @@ async def test_submitting_a_new_name_renames_the_tab() -> None:
         screen.on_input_submitted(event)
         await _settle(pilot, 15)
 
-        assert panel._states[tab_id].name == "RENAMED-TAB"
+        assert panel.get_state(tab_id).name == "RENAMED-TAB"
         assert panel.tabs_content.get_tab(tab_id).label == "RENAMED-TAB"
         assert inp.display is False, "поле осталось висеть поверх вкладок"
