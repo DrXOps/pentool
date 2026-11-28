@@ -1,7 +1,3 @@
-FormDialog {
-    align: center middle;
-}
-
 FormDialog > #form-dialog {
     width: 60;
     max-width: 90%;
