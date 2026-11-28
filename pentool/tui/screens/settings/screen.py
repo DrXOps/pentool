@@ -648,17 +648,9 @@ class SettingsScreen(ModuleScreen):
         )
 
     def _collect_proxy_changes(self) -> dict:
-        from pentool.core.config import get_config
+        from pentool.tui.screens.settings.fields import PROXY, collect_changes
 
-        cfg = get_config()
-        host = self.query_one("#set-proxy-host", Input).value.strip()
-        port_str = self.query_one("#set-proxy-port", Input).value.strip()
-        changes: dict = {}
-        if host and host != cfg.proxy_host:
-            changes["proxy_host"] = host
-        if port_str.isdigit() and int(port_str) != cfg.proxy_port:
-            changes["proxy_port"] = int(port_str)
-        return changes
+        return collect_changes(self, PROXY)
 
     def _save_proxy_settings(self) -> None:
         try:
@@ -668,27 +660,9 @@ class SettingsScreen(ModuleScreen):
 
     def _save_project_settings(self) -> None:
         try:
-            from pentool.core.config import get_config
+            from pentool.tui.screens.settings.fields import PROJECT, collect_changes
 
-            cfg = get_config()
-            changes: dict = {}
-            try:
-                enabled = self.query_one("#set-autosave-enabled", Checkbox).value
-                if enabled != getattr(cfg, "auto_save_enabled", False):
-                    changes["auto_save_enabled"] = enabled
-            except Exception:
-                # The field was not read — so its new value will not be saved,
-                # while the notification below still says "saved".
-                logger.warning("settings: auto_save_enabled not collected", exc_info=True)
-            try:
-                interval_str = self.query_one("#set-autosave-interval", Input).value.strip()
-                if interval_str.isdigit():
-                    interval = max(1, int(interval_str))
-                    if interval != getattr(cfg, "auto_save_interval", 5):
-                        changes["auto_save_interval"] = interval
-            except Exception:
-                logger.warning("settings: auto_save_interval not collected", exc_info=True)
-            self._save_settings(changes, "Project settings saved")
+            self._save_settings(collect_changes(self, PROJECT), "Project settings saved")
         except Exception as e:
             err(e, "Save failed", self)
 
@@ -703,121 +677,17 @@ class SettingsScreen(ModuleScreen):
 
     def _save_network_settings(self) -> None:
         try:
-            from pentool.core.config import get_config
+            from pentool.tui.screens.settings.fields import NETWORK, collect_changes
 
-            cfg = get_config()
-            changes: dict = {}
-
-            try:
-                ua = self.query_one("#set-user-agent", Input).value.strip()
-                if ua and ua != cfg.default_user_agent:
-                    changes["default_user_agent"] = ua
-            except Exception:
-                logger.warning("settings: default_user_agent not collected", exc_info=True)
-
-            try:
-                req_str = self.query_one("#set-req-timeout", Input).value.strip()
-                if req_str.isdigit():
-                    v = max(1, int(req_str))
-                    if v != cfg.request_timeout:
-                        changes["request_timeout"] = v
-            except Exception:
-                logger.warning("settings: request_timeout not collected", exc_info=True)
-
-            try:
-                conn_str = self.query_one("#set-conn-timeout", Input).value.strip()
-                if conn_str.isdigit():
-                    v = max(1, int(conn_str))
-                    if v != cfg.connect_timeout:
-                        changes["connect_timeout"] = v
-            except Exception:
-                logger.warning("settings: connect_timeout not collected", exc_info=True)
-
-            try:
-                redir_str = self.query_one("#set-max-redirects", Input).value.strip()
-                if redir_str.isdigit():
-                    v = max(0, int(redir_str))
-                    if v != cfg.max_redirects:
-                        changes["max_redirects"] = v
-            except Exception:
-                logger.warning("settings: max_redirects not collected", exc_info=True)
-
-            try:
-                ssl_v = self.query_one("#set-verify-ssl", Checkbox).value
-                if ssl_v != cfg.verify_ssl:
-                    changes["verify_ssl"] = ssl_v
-            except NoMatches:
-                logger.warning("settings: verify_ssl not collected", exc_info=True)
-
-            # Interface: hints and icon set. Collected here as well so that they
-            # go through the shared save path (their own `cfg.save()` in tests wrote
-            # to the real config.yaml and broke isolation).
-            try:
-                hints_v = self.query_one("#set-tooltips", Checkbox).value
-                if hints_v != getattr(cfg, "tooltips_enabled", True):
-                    changes["tooltips_enabled"] = bool(hints_v)
-            except NoMatches:
-                logger.warning("settings: tooltips field not collected", exc_info=True)
-            try:
-                icons_v = self.query_one("#set-panel-icons", OptionCycler).value
-                if icons_v != getattr(cfg, "panel_icons", "unicode"):
-                    changes["panel_icons"] = str(icons_v)
-            except NoMatches:
-                logger.warning("settings: panel icons field not collected", exc_info=True)
-
-            try:
-                collab = self.query_one("#set-collaborator-url", Input).value.strip()
-                if collab != cfg.collaborator_url:
-                    changes["collaborator_url"] = collab
-            except Exception:
-                logger.warning("settings: collaborator_url not collected", exc_info=True)
-
-            try:
-                marker_en = self.query_one("#set-scan-marker-enabled", Checkbox).value
-                if marker_en != cfg.scan_marker_enabled:
-                    changes["scan_marker_enabled"] = marker_en
-                marker_name = self.query_one("#set-scan-marker-name", Input).value.strip()
-                if marker_name and marker_name != cfg.scan_marker_name:
-                    changes["scan_marker_name"] = marker_name
-                marker_val = self.query_one("#set-scan-marker-value", Input).value.strip()
-                if marker_val != cfg.scan_marker_value:
-                    changes["scan_marker_value"] = marker_val
-            except Exception:
-                logger.warning("settings: scan-marker fields not collected", exc_info=True)
-
-            self._save_settings(changes, "Network settings saved")
+            self._save_settings(collect_changes(self, NETWORK), "Network settings saved")
         except Exception as e:
             err(e, "Save failed", self)
 
     def _save_privacy_settings(self) -> None:
         try:
-            from pentool.core.config import get_config
+            from pentool.tui.screens.settings.fields import PRIVACY, collect_changes
 
-            cfg = get_config()
-            changes: dict = {}
-
-            try:
-                crash_v = self.query_one("#set-send-crash-reports", Checkbox).value
-                if crash_v != getattr(cfg, "send_crash_reports", True):
-                    changes["send_crash_reports"] = crash_v
-            except Exception:
-                logger.warning("settings: send_crash_reports not collected", exc_info=True)
-
-            try:
-                upd_v = self.query_one("#set-check-updates", Checkbox).value
-                if upd_v != getattr(cfg, "check_updates", True):
-                    changes["check_updates"] = upd_v
-            except Exception:
-                logger.warning("settings: check_updates not collected", exc_info=True)
-
-            try:
-                scope_v = self.query_one("#set-auto-scope", Checkbox).value
-                if scope_v != getattr(cfg, "auto_scope", False):
-                    changes["auto_scope"] = scope_v
-            except Exception:
-                logger.warning("settings: auto_scope not collected", exc_info=True)
-
-            self._save_settings(changes, "Privacy settings saved")
+            self._save_settings(collect_changes(self, PRIVACY), "Privacy settings saved")
         except Exception as e:
             err(e, "Save failed", self)
 

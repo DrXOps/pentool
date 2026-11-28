@@ -48,6 +48,15 @@
 `SmartPayloadsDialog` (список от ИИ), `LoadFromProxyDialog` (выбор запроса). Им достаточно
 `BaseDialog`; заставлять их быть «формами» — натягивать абстракцию.
 
-## Шаг 8. `SettingsScreen` на декларативных секциях `FieldSpec`
+## Шаг 8. Секции настроек на `FieldSpec` (остаток)
 
-Сейчас каждая настройка — свой обработчик. Оценка: 1.5 дня.
+Сделано: `settings/fields.py` — `FieldSpec` (ключ конфига, id виджета, тип, min/max,
+require_text), `SectionSpec` и `read_section`/`collect_changes`; сохранение Proxy, Project,
+Network и Privacy переведено на спеки (одна строка на панель вместо десятка try/except).
+Гвард `test_settings_fields.py`: id из спек обязаны быть в `compose()`, ключи — у `Config`.
+
+Осталось:
+
+- рисовать строки панелей из спек (`compose()` всё ещё повторяет label + widget руками);
+- перевести на спеки Interface (тема, UI-режим), AI (live-save переключателя) и License;
+- `OptionCycler`-поля (тема, UI-режим) — добавить вид `option` с вариантами и проверкой.
