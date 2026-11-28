@@ -148,7 +148,7 @@ for f in findings:
 ## IntruderAPI
 
 **File:** `pentool/api/intruder_api.py`
-**Purpose:** Automated attacks (Sniper / Battering Ram / Pitchfork / Cluster Bomb) with an optional Turbo mode (connection pooling + keep-alive, PRO).
+**Purpose:** Automated attacks (Sniper / Battering Ram / Pitchfork / Cluster Bomb). In PRO the attack adapts parallelism and delay to the target (AIMD) inside the configured thread ceiling; every decision lands in `IntruderAttack.limit_journal` and is reported through `on_limit_change`.
 
 ### Types
 
@@ -182,8 +182,8 @@ class IntruderResult:
 
 ### Methods
 
-#### `async start_attack(config: IntruderConfig, on_result=None, on_progress=None, turbo_mode: bool = False) -> str`
-Returns the attack ID (or `"turbo"` in Turbo mode).
+#### `async start_attack(config: IntruderConfig, on_result=None, on_progress=None) -> str`
+Returns the attack ID.
 
 #### `async pause() -> None` / `async resume() -> None` / `async stop() -> None`
 

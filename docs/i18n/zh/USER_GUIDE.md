@@ -513,7 +513,7 @@ status = 404 OR status = 500
 ### 4. Intruder 优化
 
 - 从少量线程开始（5-10）
-- 对于大型字典使用 Turbo Mode（PRO）
+- 大型字典请提高线程数（PRO 最多 200）；目标限速时自适应限制会自动降速
 - 按 Length 排序结果以识别异常
 
 ### 5. Scanner 配置

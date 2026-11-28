@@ -205,13 +205,13 @@ the commit message.
 **Example:**
 ```bash
 git add .
-git commit -m "feat: add Turbo Mode to Intruder
+git commit -m "feat: add adaptive limits to Intruder
 
-Implements HTTP Keep-Alive and connection pooling for 10x speed boost.
+Tunes parallelism and delay to the target (AIMD) inside the thread ceiling.
 
-- Created pentool/modules/intruder_turbo.py
-- Integrated into IntruderAPI
-- Added turbo_mode parameter
+- Created pentool/modules/intruder_limits.py
+- Integrated into IntruderAttack
+- Added IntruderConfig.adaptive
 
 Closes #123"
 ```

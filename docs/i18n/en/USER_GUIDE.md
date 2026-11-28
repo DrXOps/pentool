@@ -227,7 +227,7 @@ test
 - **Threads:** 5-50 (more = faster, but may trigger rate limits)
 - **Delay:** Milliseconds between requests
 - **Follow Redirects:** Enable/disable
-- **Turbo Mode:** 10x speed boost (PRO)
+- **Adaptive limits (PRO):** the attack tunes threads and delay to the target; the old Turbo switch is gone
 
 **Step 6: Start Attack**
 
@@ -555,7 +555,7 @@ method == "POST" AND request contains "password="
 ### Performance
 
 **Speed up Intruder:**
-- Use Turbo Mode (PRO) for 10x speed
+- Use more threads (PRO: up to 200) — adaptive limits slow down automatically when the target pushes back
 - Increase threads (but watch for rate limiting)
 - Reduce payload list size
 
@@ -657,7 +657,7 @@ curl -X POST http://example.com/api ...
 
 **Intruder Slow:**
 - Reduce threads
-- Enable Turbo Mode
+- Check that adaptive limits are on (PRO)
 - Check network speed
 
 ---

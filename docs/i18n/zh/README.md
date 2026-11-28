@@ -37,7 +37,7 @@ CA 证书到无头浏览器、发送首个请求并填充项目，即可立即�
 
 - **💥 Intruder（入侵器）**  
   自动化 payload 攻击，支持四种策略：Sniper、Battering Ram、Pitchfork、Cluster Bomb。  
-  **Turbo 模式（PRO）**通过 Keep-Alive 和连接池实现 10 倍速度提升。
+  **自适应限制（PRO）**会根据目标调整线程数与延迟：逐步升到上限，遇到 429/延迟/错误就降速，原因显示在结果里。
 
 - **🔍 Scanner（扫描器）**  
   主动与被动漏洞分析：SQLi、XSS、SSTI、LFI、RCE、SSRF、XXE、CORS、JWT 缺陷等。  
