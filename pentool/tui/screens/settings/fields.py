@@ -14,11 +14,13 @@ whole section and returns only the keys whose value actually changed — the sha
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from textual.containers import Horizontal
 from textual.css.query import NoMatches
-from textual.widgets import Checkbox
+from textual.widgets import Checkbox, Input, Static
 
 from pentool.core.logging import get_logger
 
@@ -35,10 +37,17 @@ class FieldSpec:
     widget_id: str
     #: "bool" for a Checkbox, "int"/"text" for an Input, "option" for an OptionCycler.
     kind: FieldKind
+    #: Row label in the pane ("Listen port:"); empty means the row has no label.
+    label: str = ""
     minimum: int | None = None
     maximum: int | None = None
     #: For text fields: an empty input means "leave as is" (host, user agent, header name).
     require_text: bool = False
+    #: Text inside a checkbox when it differs from the row label.
+    widget_label: str = ""
+    placeholder: str = ""
+    #: `(label, value)` pairs for an `option` field (an OptionCycler).
+    choices: tuple[tuple[str, str], ...] = ()
 
     def coerce(self, raw: Any) -> tuple[Any, str | None]:
         """Return `(value, error)` for the raw widget value; error means "skip this field"."""
@@ -65,6 +74,32 @@ class SectionSpec:
 
     name: str
     fields: tuple[FieldSpec, ...]
+
+
+def render_field(spec: FieldSpec, cfg: Any) -> Any:
+    """The input widget for a spec, prefilled from *cfg*."""
+    current = getattr(cfg, spec.key, None)
+    if spec.kind == "bool":
+        return Checkbox(spec.widget_label or spec.label, value=bool(current), id=spec.widget_id)
+    if spec.kind == "option":
+        from pentool.tui.widgets.option_cycler import OptionCycler
+
+        return OptionCycler(list(spec.choices), initial=str(current or ""), id=spec.widget_id)
+    return Input(
+        value="" if current is None else str(current),
+        id=spec.widget_id,
+        placeholder=spec.placeholder,
+        compact=True,
+    )
+
+
+def render_rows(fields: Iterable[FieldSpec], cfg: Any) -> Iterator[Any]:
+    """The pane rows for *fields*: one label + widget per row, in a `row` container."""
+    for spec in fields:
+        with Horizontal(classes="row"):
+            if spec.label:
+                yield Static(f"{spec.label}:", classes="row-label")
+            yield render_field(spec, cfg)
 
 
 def _read_widget(screen: Any, spec: FieldSpec) -> Any:
@@ -115,44 +150,119 @@ def collect_changes(screen: Any, section: SectionSpec, cfg: Any | None = None) -
 # names an id that the screen no longer composes, so a renamed widget cannot silently stop
 # being saved.
 
+INTERFACE = SectionSpec(
+    "interface",
+    (
+        FieldSpec(
+            "tooltips_enabled",
+            "set-tooltips",
+            "bool",
+            label="Hints on hover",
+            widget_label="Show tooltips",
+        ),
+        FieldSpec(
+            "panel_icons",
+            "set-panel-icons",
+            "option",
+            label="Panel icons",
+            # Kept in sync with `SettingsScreen._PANEL_ICONS` by `test_settings_fields.py`.
+            choices=(("Unicode", "unicode"), ("ASCII", "ascii"), ("Emoji", "emoji")),
+        ),
+    ),
+)
+
 PROXY = SectionSpec(
     "proxy",
     (
-        FieldSpec("proxy_host", "set-proxy-host", "text", require_text=True),
-        FieldSpec("proxy_port", "set-proxy-port", "int", minimum=1, maximum=65535),
+        FieldSpec("proxy_host", "set-proxy-host", "text", label="Listen host", require_text=True),
+        FieldSpec("proxy_port", "set-proxy-port", "int", label="Listen port", minimum=1, maximum=65535),
     ),
 )
 
 PROJECT = SectionSpec(
     "project",
     (
-        FieldSpec("auto_save_enabled", "set-autosave-enabled", "bool"),
-        FieldSpec("auto_save_interval", "set-autosave-interval", "int", minimum=1),
+        FieldSpec(
+            "auto_save_interval",
+            "set-autosave-interval",
+            "int",
+            label="Auto-save interval (min)",
+            placeholder="0 = disabled",
+            minimum=1,
+        ),
+        FieldSpec(
+            "auto_save_enabled",
+            "set-autosave-enabled",
+            "bool",
+            label="Auto-save enabled",
+            widget_label="Enable auto-save",
+        ),
     ),
 )
 
 NETWORK = SectionSpec(
     "network",
     (
-        FieldSpec("default_user_agent", "set-user-agent", "text", require_text=True),
-        FieldSpec("request_timeout", "set-req-timeout", "int", minimum=1),
-        FieldSpec("connect_timeout", "set-conn-timeout", "int", minimum=1),
-        FieldSpec("max_redirects", "set-max-redirects", "int", minimum=0),
-        FieldSpec("verify_ssl", "set-verify-ssl", "bool"),
-        FieldSpec("tooltips_enabled", "set-tooltips", "bool"),
-        FieldSpec("panel_icons", "set-panel-icons", "option"),
-        FieldSpec("collaborator_url", "set-collaborator-url", "text"),
-        FieldSpec("scan_marker_enabled", "set-scan-marker-enabled", "bool"),
-        FieldSpec("scan_marker_name", "set-scan-marker-name", "text", require_text=True),
-        FieldSpec("scan_marker_value", "set-scan-marker-value", "text"),
+        FieldSpec(
+            "default_user_agent",
+            "set-user-agent",
+            "text",
+            label="User-Agent",
+            placeholder="Mozilla/5.0 ...",
+            require_text=True,
+        ),
+        FieldSpec("request_timeout", "set-req-timeout", "int", label="Request timeout (s)", minimum=1),
+        FieldSpec("connect_timeout", "set-conn-timeout", "int", label="Connect timeout (s)", minimum=1),
+        FieldSpec("max_redirects", "set-max-redirects", "int", label="Max redirects", minimum=0),
+        FieldSpec(
+            "verify_ssl",
+            "set-verify-ssl",
+            "bool",
+            label="Verify SSL",
+            widget_label="Verify SSL certificates",
+        ),
+        FieldSpec(
+            "collaborator_url",
+            "set-collaborator-url",
+            "text",
+            label="Collaborator URL",
+            placeholder="https://xxx.oastify.com",
+        ),
+        FieldSpec(
+            "scan_marker_enabled",
+            "set-scan-marker-enabled",
+            "bool",
+            label="Scan Marker Header",
+            widget_label="Add custom header to all scan requests",
+        ),
+        FieldSpec("scan_marker_name", "set-scan-marker-name", "text", label="Header Name", require_text=True),
+        FieldSpec("scan_marker_value", "set-scan-marker-value", "text", label="Header Value"),
     ),
 )
 
 PRIVACY = SectionSpec(
     "privacy",
     (
-        FieldSpec("send_crash_reports", "set-send-crash-reports", "bool"),
-        FieldSpec("check_updates", "set-check-updates", "bool"),
-        FieldSpec("auto_scope", "set-auto-scope", "bool"),
+        FieldSpec(
+            "send_crash_reports",
+            "set-send-crash-reports",
+            "bool",
+            label="Crash Reporting",
+            widget_label="Send anonymous crash reports",
+        ),
+        FieldSpec(
+            "check_updates",
+            "set-check-updates",
+            "bool",
+            label="Auto-update check",
+            widget_label="Check for updates at startup",
+        ),
+        FieldSpec(
+            "auto_scope",
+            "set-auto-scope",
+            "bool",
+            label="Auto Scope",
+            widget_label="Add hosts to scope automatically",
+        ),
     ),
 )

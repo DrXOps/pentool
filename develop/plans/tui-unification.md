@@ -28,16 +28,3 @@
 3. **Догрузка без пересборки таблицы** — в [pre-release.md](pre-release.md), пункт 1: одна
    тема, одно место. Здесь только архитектурная часть: она должна лечь в `HistoryTab`
    (6.5), а не в текущие два метода.
-
-## Шаг 8. Секции настроек на `FieldSpec` (остаток)
-
-Сделано: `settings/fields.py` — `FieldSpec` (ключ конфига, id виджета, тип, min/max,
-require_text), `SectionSpec` и `read_section`/`collect_changes`; сохранение Proxy, Project,
-Network и Privacy переведено на спеки (одна строка на панель вместо десятка try/except).
-Гвард `test_settings_fields.py`: id из спек обязаны быть в `compose()`, ключи — у `Config`.
-
-Осталось:
-
-- рисовать строки панелей из спек (`compose()` всё ещё повторяет label + widget руками);
-- перевести на спеки Interface (тема, UI-режим), AI (live-save переключателя) и License;
-- `OptionCycler`-поля (тема, UI-режим) — добавить вид `option` с вариантами и проверкой.

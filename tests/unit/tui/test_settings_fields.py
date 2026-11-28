@@ -17,6 +17,7 @@ from textual.css.query import NoMatches
 
 from pentool.core.config import Config
 from pentool.tui.screens.settings.fields import (
+    INTERFACE,
     NETWORK,
     PRIVACY,
     PROJECT,
@@ -25,6 +26,8 @@ from pentool.tui.screens.settings.fields import (
     SectionSpec,
     collect_changes,
     read_section,
+    render_field,
+    render_rows,
 )
 
 SCREEN_SOURCE = Path(__file__).resolve().parents[3] / "pentool" / "tui" / "screens" / "settings" / "screen.py"
@@ -144,15 +147,17 @@ class TestReadSection:
 
     def test_option_and_bool_fields_are_collected(self) -> None:
         cfg = _cfg(panel_icons="unicode", tooltips_enabled=True, send_crash_reports=True)
-        values = {spec.widget_id: getattr(cfg, spec.key) for spec in NETWORK.fields}
-        values.update({"set-panel-icons": "emoji", "set-tooltips": False})
-        changes, _ = read_section(_Screen(values), NETWORK, cfg)
+        network_values = {spec.widget_id: getattr(cfg, spec.key) for spec in NETWORK.fields}
+        changes, _ = read_section(_Screen(network_values), NETWORK, cfg)
+        interface_values = {spec.widget_id: getattr(cfg, spec.key) for spec in INTERFACE.fields}
+        interface_values.update({"set-panel-icons": "emoji", "set-tooltips": False})
+        interface_changes, _ = read_section(_Screen(interface_values), INTERFACE, cfg)
         privacy_changes, _ = read_section(
             _Screen({"set-send-crash-reports": False, "set-check-updates": True, "set-auto-scope": False}), PRIVACY, cfg
         )
 
-        assert changes["panel_icons"] == "emoji"
-        assert changes["tooltips_enabled"] is False
+        assert interface_changes["panel_icons"] == "emoji"
+        assert interface_changes["tooltips_enabled"] is False
         assert privacy_changes == {"send_crash_reports": False}
 
     def test_collect_changes_uses_the_given_config(self) -> None:
@@ -163,21 +168,108 @@ class TestReadSection:
 
 
 class TestSpecsMatchTheCode:
-    @pytest.mark.parametrize("section", [PROXY, PROJECT, NETWORK, PRIVACY], ids=lambda s: s.name)
-    def test_every_widget_id_is_composed_by_the_screen(self, section: SectionSpec) -> None:
+    @pytest.mark.parametrize("section", [PROXY, PROJECT, NETWORK, PRIVACY, INTERFACE], ids=lambda s: s.name)
+    def test_every_widget_id_reaches_the_compose(self, section: SectionSpec) -> None:
+        """Either the pane renders the section's rows, or it composes the id itself.
+
+        Every section is rendered from `render_rows(<SECTION>.fields…)`; only a spec that a
+        pane composes by hand (none today) would be accepted through a literal `id=` instead.
+        """
         source = SCREEN_SOURCE.read_text(encoding="utf-8")
+        rendered_from_section = f"render_rows({section.name.upper()}.fields" in source
         for spec in section.fields:
-            assert f'id="{spec.widget_id}"' in source, (
-                f"{section.name}: #{spec.widget_id} is not composed by SettingsScreen — "
-                "the field would silently stop being saved"
+            composed = f'id="{spec.widget_id}"' in source
+            assert rendered_from_section or composed, (
+                f"{section.name}: #{spec.widget_id} is neither rendered from the section "
+                "nor composed anywhere — the field would silently stop being saved"
             )
 
-    @pytest.mark.parametrize("section", [PROXY, PROJECT, NETWORK, PRIVACY], ids=lambda s: s.name)
+    @pytest.mark.parametrize("section", [PROXY, PROJECT, NETWORK, PRIVACY, INTERFACE], ids=lambda s: s.name)
     def test_every_key_exists_on_the_config(self, section: SectionSpec) -> None:
         cfg = Config()
         for spec in section.fields:
             assert hasattr(cfg, spec.key), f"{section.name}: Config has no attribute {spec.key!r}"
 
+    def test_option_choices_match_the_screen_lists(self) -> None:
+        """The spec's choices must be the pane's list, or the two would drift apart."""
+        from pentool.tui.screens.settings.screen import SettingsScreen
+
+        spec = next(field for field in INTERFACE.fields if field.widget_id == "set-panel-icons")
+        assert list(spec.choices) == list(SettingsScreen._PANEL_ICONS)
+
     def test_widget_ids_are_unique_across_sections(self) -> None:
-        ids = [spec.widget_id for section in (PROXY, PROJECT, NETWORK, PRIVACY) for spec in section.fields]
+        ids = [spec.widget_id for section in (PROXY, PROJECT, NETWORK, PRIVACY, INTERFACE) for spec in section.fields]
         assert len(ids) == len(set(ids)), "two fields sharing a widget id would fight over one widget"
+
+
+class TestRendering:
+    """Rows are built from the specs, so a pane cannot drift from its section."""
+
+    async def test_rows_carry_the_spec_ids_and_the_config_values(self) -> None:
+        from textual.app import App, ComposeResult
+        from textual.containers import Vertical
+        from textual.widgets import Checkbox, Input
+
+        cfg = _cfg(proxy_port=9090, verify_ssl=True)
+
+        class _RowsApp(App):
+            def compose(self) -> ComposeResult:
+                with Vertical():
+                    yield from render_rows(PROXY.fields, cfg)
+                    yield from render_rows(NETWORK.fields[4:5], cfg)
+
+        app = _RowsApp()
+        async with app.run_test():
+            assert app.query_one("#set-proxy-host", Input).value == "127.0.0.1"
+            assert app.query_one("#set-proxy-port", Input).value == "9090"
+            ssl = app.query_one("#set-verify-ssl", Checkbox)
+            assert ssl.value is True
+            assert str(ssl.label) == "Verify SSL certificates", "подпись чекбокса берётся из спека"
+
+    async def test_render_field_covers_bool_int_text_and_option(self) -> None:
+        from textual.app import App, ComposeResult
+        from textual.containers import Vertical
+        from textual.widgets import Checkbox, Input
+
+        cfg = _cfg(panel_icons="emoji", request_timeout=42)
+
+        class _FieldsApp(App):
+            def compose(self) -> ComposeResult:
+                with Vertical():
+                    # int, bool and option: the three widget types the panes use.
+                    yield render_field(NETWORK.fields[1], cfg)
+                    yield render_field(NETWORK.fields[4], cfg)
+                    yield render_field(INTERFACE.fields[1], cfg)
+
+        app = _FieldsApp()
+        async with app.run_test():
+            assert app.query_one("#set-req-timeout", Input).value == "42"
+            assert isinstance(app.query_one("#set-verify-ssl"), Checkbox)
+            assert app.query_one("#set-panel-icons").value == "emoji"
+
+
+class TestSettingsScreenMounts:
+    """The real screen renders every pane from its section (not just the helpers in isolation)."""
+
+    async def test_panes_are_rendered_and_prefilled_from_the_config(self) -> None:
+        from textual.app import App, ComposeResult
+        from textual.widgets import Checkbox, Input
+
+        from pentool.core.config import get_config
+        from pentool.tui.screens.settings.screen import SettingsScreen
+
+        class _SettingsHost(App):
+            def compose(self) -> ComposeResult:
+                yield SettingsScreen()
+
+        cfg = get_config()
+        app = _SettingsHost()
+        async with app.run_test(size=(140, 50)) as pilot:
+            await pilot.pause()
+            screen = app.query_one(SettingsScreen)
+            assert screen.query_one("#set-proxy-host", Input).value == cfg.proxy_host
+            assert screen.query_one("#set-proxy-port", Input).value == str(cfg.proxy_port)
+            assert screen.query_one("#set-autosave-interval", Input).value == str(cfg.auto_save_interval)
+            assert isinstance(screen.query_one("#set-verify-ssl", Checkbox), Checkbox)
+            assert isinstance(screen.query_one("#set-send-crash-reports", Checkbox), Checkbox)
+            assert screen.query_one("#set-panel-icons").value == (cfg.panel_icons or "unicode")

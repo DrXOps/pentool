@@ -16,6 +16,15 @@ from pentool.core.error_guard import err
 from pentool.core.logging import get_logger
 from pentool.tui.markup import esc
 from pentool.tui.screens.module_screen import ModuleScreen
+from pentool.tui.screens.settings.fields import (
+    INTERFACE,
+    NETWORK,
+    PRIVACY,
+    PROJECT,
+    PROXY,
+    collect_changes,
+    render_rows,
+)
 from pentool.tui.screens.settings.hotkeys import HotkeySettingsScreen
 from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
 from pentool.tui.widgets.option_cycler import OptionCycler
@@ -71,6 +80,9 @@ class SettingsScreen(ModuleScreen):
     _PANEL_ICONS = [("Unicode", "unicode"), ("ASCII", "ascii"), ("Emoji", "emoji")]
 
     def compose(self) -> ComposeResult:
+        from pentool.core.config import get_config
+
+        settings_cfg = get_config()
         # Same memory as Utils: the pane you left is the pane you come back to.
         with TabbedContent(
             id="settings-tabs",
@@ -85,26 +97,13 @@ class SettingsScreen(ModuleScreen):
                     with Horizontal(classes="row"):
                         yield Static("UI Mode:", classes="row-label")
                         yield OptionCycler(self._MODES, initial="advanced", id="set-ui-mode")
-                    with Horizontal(classes="row"):
-                        yield Static("Hints on hover:", classes="row-label")
-                        yield Checkbox("Show tooltips", id="set-tooltips", value=True)
-                    with Horizontal(classes="row"):
-                        yield Static("Panel icons:", classes="row-label")
-                        yield OptionCycler(self._PANEL_ICONS, initial="unicode", id="set-panel-icons")
+                    yield from render_rows(INTERFACE.fields, settings_cfg)
                     yield ToolbarButton("Save", "settings-save")
 
             with TabPane("Proxy", id="tab-proxy"):
                 with Vertical(classes="settings-pane"):
                     yield Static("Proxy Settings", classes="section-title")
-                    with Horizontal(classes="row"):
-                        yield Static("Listen host:", classes="row-label")
-                        yield Input(value="127.0.0.1", id="set-proxy-host", compact=True)
-                    with Horizontal(classes="row"):
-                        yield Static("Listen port:", classes="row-label")
-                        yield Input(value="8080", id="set-proxy-port", compact=True)
-                    with Horizontal(classes="row"):
-                        yield Static("Upstream proxy:", classes="row-label")
-                        yield Input(placeholder="http://proxy:8080", id="set-upstream", compact=True)
+                    yield from render_rows(PROXY.fields, settings_cfg)
                     with Horizontal(classes="row"):
                         yield Static("CA certificate:", classes="row-label")
                         yield Button("Install CA cert", id="settings-open-ca")
@@ -116,95 +115,39 @@ class SettingsScreen(ModuleScreen):
             with TabPane("Project", id="tab-project"):
                 with Vertical(classes="settings-pane"):
                     yield Static("Project Settings", classes="section-title")
-                    with Horizontal(classes="row"):
-                        yield Static("Auto-save interval (min):", classes="row-label")
-                        yield Input(placeholder="0 = disabled", id="set-autosave-interval", compact=True)
-                    with Horizontal(classes="row"):
-                        yield Static("Auto-save enabled:", classes="row-label")
-                        yield Checkbox("Enable auto-save", id="set-autosave-enabled", value=False)
+                    yield from render_rows(PROJECT.fields, settings_cfg)
                     yield ToolbarButton("Save", "settings-save-project")
 
             with TabPane("Network", id="tab-network"):
                 with Vertical(classes="settings-pane"):
                     yield Static("Network / Scanner Settings", classes="section-title")
-                    with Horizontal(classes="row"):
-                        yield Static("User-Agent:", classes="row-label")
-                        yield Input(
-                            placeholder="Mozilla/5.0 ...",
-                            id="set-user-agent",
-                            compact=True,
-                        )
-                    with Horizontal(classes="row"):
-                        yield Static("Request timeout (s):", classes="row-label")
-                        yield Input(value="15", id="set-req-timeout", compact=True)
-                    with Horizontal(classes="row"):
-                        yield Static("Connect timeout (s):", classes="row-label")
-                        yield Input(value="10", id="set-conn-timeout", compact=True)
-                    with Horizontal(classes="row"):
-                        yield Static("Max redirects:", classes="row-label")
-                        yield Input(value="10", id="set-max-redirects", compact=True)
-                    with Horizontal(classes="row"):
-                        yield Static("Verify SSL:", classes="row-label")
-                        yield Checkbox("Verify SSL certificates", id="set-verify-ssl", value=False)
-                    with Horizontal(classes="row"):
-                        yield Static("Collaborator URL:", classes="row-label")
-                        yield Input(
-                            placeholder="https://xxx.oastify.com",
-                            id="set-collaborator-url",
-                            compact=True,
-                        )
+                    # The pane's own fields, then the collaborator URL, then the scan marker
+                    # block. `tooltips_enabled`/`panel_icons` live in this section for saving
+                    # but are composed by the Interface pane.
+                    yield from render_rows(NETWORK.fields[:5], settings_cfg)
+                    yield from render_rows(NETWORK.fields[5:6], settings_cfg)
                     yield Static("─" * 40, classes="license-sep")
-                    with Horizontal(classes="row"):
-                        yield Static("Scan Marker Header:", classes="row-label")
-                        yield Checkbox(
-                            "Add custom header to all scan requests",
-                            id="set-scan-marker-enabled",
-                            value=False,
-                        )
-                    with Horizontal(classes="row"):
-                        yield Static("Header Name:", classes="row-label")
-                        yield Input(value="X-Scanner", id="set-scan-marker-name", compact=True)
-                    with Horizontal(classes="row"):
-                        yield Static("Header Value:", classes="row-label")
-                        yield Input(value="pentool/1.0", id="set-scan-marker-value", compact=True)
+                    yield from render_rows(NETWORK.fields[6:], settings_cfg)
                     yield ToolbarButton("Save", "settings-save-network")
 
             with TabPane("Privacy", id="tab-privacy"):
                 with Vertical(classes="settings-pane"):
                     yield Static("Privacy & Updates", classes="section-title")
-                    with Horizontal(classes="row"):
-                        yield Static("Crash Reporting:", classes="row-label")
-                        yield Checkbox(
-                            "Send anonymous crash reports",
-                            id="set-send-crash-reports",
-                            value=True,
-                        )
+                    yield from render_rows(PRIVACY.fields[:1], settings_cfg)
                     yield Static(
                         "Crash reports contain only the error type and stack trace.\n"
                         "No URLs, IPs, tokens, or personal data are included.",
                         classes="settings-hint",
                     )
                     yield Static("─" * 40, classes="license-sep")
-                    with Horizontal(classes="row"):
-                        yield Static("Auto-update check:", classes="row-label")
-                        yield Checkbox(
-                            "Check for updates at startup",
-                            id="set-check-updates",
-                            value=True,
-                        )
+                    yield from render_rows(PRIVACY.fields[1:2], settings_cfg)
                     yield Static(
                         "Checks GitHub releases for a newer version on startup.\n"
                         "Run `pentool update` to install an available update.",
                         classes="settings-hint",
                     )
                     yield Static("─" * 40, classes="license-sep")
-                    with Horizontal(classes="row"):
-                        yield Static("Auto Scope:", classes="row-label")
-                        yield Checkbox(
-                            "Add hosts to scope automatically",
-                            id="set-auto-scope",
-                            value=False,
-                        )
+                    yield from render_rows(PRIVACY.fields[2:], settings_cfg)
                     yield Static(
                         "When enabled: sending a request to Repeater, starting a crawl\n"
                         "or a scan will automatically add the target host to scope\n"
@@ -592,7 +535,9 @@ class SettingsScreen(ModuleScreen):
             # even though "applied" has already been shown.
             logger.debug("settings: UI mode %r not applied on save: %s", mode_val, exc)
 
-        self.notify_user("Interface settings applied", timeout=2)  # type: ignore[attr-defined]
+        # The pane's own collectable fields (tooltips, icon set) go through the shared save
+        # path; theme/UI mode were applied above (the theme is persisted by `_apply_theme`).
+        self._save_settings(collect_changes(self, INTERFACE), "Interface settings applied")
 
     def _apply_ui_mode(self, mode: UIMode) -> None:
         """Show/hide tabs depending on the complexity mode."""
