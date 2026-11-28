@@ -144,6 +144,8 @@ class _TabId:
     PROGRESS_ROW = "progress-row"
     ATTACK_PROGRESS = "attack-progress"
     PROGRESS_LABEL = "progress-label"
+    #: Adaptive-limit note of a tab, e.g. "limit: 8 threads, 120 ms - 429 x3".
+    LIMIT_LABEL = "limit-label"
     RESULTS_TABLE = "results-table"
 
     # DETAIL
@@ -185,7 +187,8 @@ class _IntruderTabState:
     running: bool = False
     paused: bool = False
     stop_requested: bool = False
-    turbo_mode: bool = False
+    #: Last adaptive-limit note (PRO), e.g. ``8 threads, 120 ms - 429 x3``.
+    limit_note: str = ""
     payload_load_in_progress: bool = False
     last_payload_sets: list | None = None
     # This tab's attack — isolated and able to run in parallel (IntruderAttack).
@@ -458,6 +461,11 @@ class IntruderScreen(
                     id=self._wid(tab_id, _TabId.PROGRESS_LABEL),
                     classes="progress-label",
                 ),
+                Static(
+                    "",
+                    id=self._wid(tab_id, _TabId.LIMIT_LABEL),
+                    classes="limit-label",
+                ),
                 id=self._wid(tab_id, _TabId.PROGRESS_ROW),
                 classes="progress-row",
             ),
@@ -573,7 +581,7 @@ class IntruderScreen(
             # lost on switching. Exactly the class of loss described in the
             # comment below, hence an error with a traceback.
             logger.error("intruder: template text not saved for tab %s", state.tab_id, exc_info=True)
-        # Threads/Delay/Turbo live in the global toolbar and describe the active
+        # Threads/Delay live in the global toolbar and describe the active
         # tab, so they must be captured BEFORE the toolbar is redrawn for the
         # new tab. Without this the values survived only in state defaults: the
         # user typed 77 threads, switched to another tab and came back to the
@@ -582,7 +590,7 @@ class IntruderScreen(
         self._auto_save_tab(state)
 
     def _save_toolbar_to_tab(self, state: _IntruderTabState) -> None:
-        """Move Threads/Delay/Turbo from the global toolbar into the tab state.
+        """Move Threads/Delay from the global toolbar into the tab state.
 
         Errors are not propagated: the toolbar may not be mounted yet (the
         first tab is created in ``on_mount`` before layout), and that is no
@@ -598,7 +606,6 @@ class IntruderScreen(
         try:
             threads = self.query_one("#intruder-threads", Input)
             delay = self.query_one("#intruder-delay", Input)
-            turbo = self.query_one("#intruder-turbo", Checkbox)
         except NoMatches:
             return
         # An empty field is not zero threads but "the user erased the value";
@@ -614,7 +621,6 @@ class IntruderScreen(
                 state.delay_ms = int(delay.value)
             except ValueError:
                 pass
-        state.turbo_mode = bool(turbo.value)
 
     @on(TabbedContentPanel.TabActivated, "#intruder-tabs")
     def _on_tab_activated(self, event: TabbedContentPanel.TabActivated) -> None:
@@ -631,30 +637,54 @@ class IntruderScreen(
     def _sync_toolbar_from_tab(self, tab: _IntruderTabState) -> None:
         """Move the active tab's status/parameters into the global toolbar.
 
-        Start/Stop, Threads, Delay, Turbo reflect the active tab; each tab keeps
+        Start/Stop, Threads, Delay reflect the active tab; each tab keeps
         its own values in state, so on switching the toolbar shows exactly the
         active one.
         """
         try:
             self.query_one("#intruder-threads", Input).value = str(tab.thread_count if tab.thread_count else 10)
             self.query_one("#intruder-delay", Input).value = str(tab.delay_ms if tab.delay_ms else 0)
-            cb = self.query_one("#intruder-turbo", Checkbox)
-            # Turbo cannot be enabled in FREE mode
-            from pentool.core.license import get_session_license
-
-            is_pro = get_session_license().is_pro() if get_session_license() else False
-            if is_pro:
-                cb.value = tab.turbo_mode
-                cb.disabled = False
-            else:
-                cb.value = False
-                cb.disabled = True
-                cb.tooltip = "⚡ Turbo mode requires PRO license"
             self._toolbar_tab_id = tab.tab_id
         except Exception as exc:
             logger.debug("_sync_toolbar_from_tab: %s", exc)
+        self._sync_limit_indicator(tab)
         # Start/Pause/Stop and the counters live in the module header now.
         self.refresh_header()
+
+    # ── Adaptive limits (PRO) ─────────────────────────────────────────────
+
+    def _sync_limit_indicator(self, tab: _IntruderTabState) -> None:
+        """Show the active tab's last adaptive-limit note (or the resting state)."""
+        try:
+            indicator = self.query_one("#intruder-limit", Static)
+        except NoMatches as exc:
+            # The control row is not composed yet (a restored tab before mount).
+            logger.debug("intruder: limit indicator not found: %s", exc)
+            return
+        indicator.update(f"adaptive: {tab.limit_note}" if tab.limit_note else "adaptive: —")
+
+    def _on_limit_change(self, decision, tab: _IntruderTabState) -> None:
+        """A request signal moved the adaptive limit: show why, in this tab's own place."""
+        tab.limit_note = f"{decision.threads} потоков, {decision.delay_ms} мс — {decision.reason}"
+        try:
+            self.query_one(f"#{self._wid(tab.tab_id, _TabId.LIMIT_LABEL)}", Static).update(
+                f"[dim]лимит: {tab.limit_note}[/dim]"
+            )
+        except NoMatches as exc:
+            logger.debug("intruder: limit label not found for %s: %s", tab.tab_id, exc)
+        if tab is self._active_tab:
+            self._sync_limit_indicator(tab)
+        if getattr(decision, "stop", False):
+            self.notify_user(f"Attack stopped: {decision.stop_reason}", severity="warning", timeout=6)
+
+    def _clear_limit_note(self, tab: _IntruderTabState) -> None:
+        tab.limit_note = ""
+        try:
+            self.query_one(f"#{self._wid(tab.tab_id, _TabId.LIMIT_LABEL)}", Static).update("")
+        except NoMatches as exc:
+            logger.debug("intruder: limit label not cleared for %s: %s", tab.tab_id, exc)
+        if tab is self._active_tab:
+            self._sync_limit_indicator(tab)
 
     @on(TabbedContentPanel.TabCreated, "#intruder-tabs")
     def _on_tab_created(self, event: TabbedContentPanel.TabCreated) -> None:
@@ -739,7 +769,7 @@ class IntruderScreen(
 
     def compose(self) -> ComposeResult:
         # ── One control row: attack settings + tab add/remove ────────────────
-        # The owner asked for the settings (threads/delay/turbo) to sit on the same line
+        # The owner asked for the settings (threads/delay) to sit on the same line
         # as the ➕/➖ Tab buttons: one strip instead of a settings toolbar plus two header
         # buttons. Start/Pause/Stop and Export/Clear stay in the module header.
         with Horizontal(id="intruder-control-row"):
@@ -747,7 +777,9 @@ class IntruderScreen(
             yield Input("10", id="intruder-threads", placeholder="10", compact=True, type="integer")
             yield Label("Delay(ms):", classes="toolbar-label")
             yield Input("0", id="intruder-delay", placeholder="0", compact=True, type="integer")
-            yield Checkbox("⚡ Turbo", id="intruder-turbo", value=False)
+            # The Turbo checkbox is gone: it was a transport profile behind a switch. What the
+            # user needs to see is the current adaptive limit and why it moved (PRO).
+            yield Static("adaptive: —", id="intruder-limit", classes="toolbar-label")
             yield ToolbarButton("➕ Tab", "btn-intruder-new-tab")
             yield ToolbarButton("➖ Tab", "btn-intruder-close-tab")
 
@@ -1229,7 +1261,7 @@ class IntruderScreen(
         try:
             threads_input = self.query_one("#intruder-threads", Input)
             delay_input = self.query_one("#intruder-delay", Input)
-            turbo_checkbox = self.query_one("#intruder-turbo", Checkbox)
+            limit_indicator = self.query_one("#intruder-limit", Static)
             # The numbers live in `core/features.py` (LIMITS), not here: the site, the
             # licence portal and the input hints must not drift apart.
             plan = "pro" if is_pro else "free"
@@ -1238,13 +1270,16 @@ class IntruderScreen(
             if not is_pro:
                 threads_input.placeholder = f"Max {max_threads}"
                 delay_input.placeholder = f"Min {min_delay}"
-                turbo_checkbox.disabled = True
-                turbo_checkbox.tooltip = "⚡ Turbo mode requires PRO license"
+                limit_indicator.update("adaptive: PRO")
+                limit_indicator.tooltip = "Адаптивный режим (AIMD) доступен в PRO"
             else:
                 threads_input.placeholder = f"Max {max_threads}"
                 delay_input.placeholder = f"{min_delay}"
-                turbo_checkbox.disabled = False
-                turbo_checkbox.tooltip = "⚡ Turbo: HTTP pipelining, connection pooling"
+                limit_indicator.update("adaptive: on")
+                limit_indicator.tooltip = (
+                    "Адаптивный режим: потолок — Threads; при 429/задержке/ошибках атака сама "
+                    "снижает темп и показывает причину"
+                )
         except NoMatches as exc:
             logger.debug("_apply_license_limits error: %s", exc)
 
@@ -2251,6 +2286,7 @@ class IntruderScreen(
             logger.debug("_clear_results: %s", exc)
         tab.all_results = []
         tab.filtered_results = []
+        self._clear_limit_note(tab)
         try:
             self.query_one(f"#{self._wid(tab.tab_id, _TabId.PROGRESS_LABEL)}", Static).update("0/0 (0%)")
             self.query_one(f"#{self._wid(tab.tab_id, _TabId.ATTACK_PROGRESS)}", ProgressBar).update(total=100)

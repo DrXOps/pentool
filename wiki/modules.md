@@ -11,15 +11,19 @@
 
 Реализует сами атаки и обработку трафика без знания о TUI. Правило слоёв:
 `modules` не импортирует `tui`, `api`, `cli` — общение идёт через [[api]].
-PRO-надстройки (`scanner/`, `intruder_turbo.py`) лежат в сабмодуле `pro/`
+PRO-надстройки (`scanner/`, `ai_discovery/`) лежат в сабмодуле `pro/`
 и подхватываются через `pkgutil.extend_path`.
 
 ## Публичный интерфейс
 
 - **Intruder** — `AttackType` (Sniper, Battering Ram, Pitchfork, Cluster Bomb),
-  `IntruderConfig`, `IntruderAttack`, `IntruderResult`; источники payload'ов:
+  `IntruderConfig` (включая `adaptive`), `IntruderAttack`, `IntruderResult`
+  (`retry_after_s`); источники payload'ов:
   `FilePayloadSource`, `NumericPayloadSource`, `CharPayloadSource`,
   `ChainedPayloadSource`, `ProcessedPayloads`.
+- **Адаптивные лимиты** — `intruder_limits.AdaptiveLimits` и `LimitDecision`: AIMD-контроллер
+  транспортной нагрузки (потолок пользователя, 429-серии, задержка, сетевые ошибки,
+  Retry-After, журнал решений). Это замена Turbo: отдельного «быстрого движка» нет.
 - **Repeater** — `Repeater`, `RepeaterEntry` (сохраняется в SQLite).
 - **Match & Replace** — `MatchReplaceRule`, `MatchReplaceEngine`.
 - **Decoder** — `DecoderChain` (19 операций, цепочки).

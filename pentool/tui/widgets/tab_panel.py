@@ -237,7 +237,7 @@ class TabbedContentPanel(TabRenameMixin, Widget, Generic[TState]):
         # the "deactivate the old one" branch never fires either. The owner never
         # learns that the previous tab stopped being active — and everything it
         # kept "per tab" outside of state (the global Intruder toolbar:
-        # Threads/Delay/Turbo) stays unsaved. Hence we post it ourselves while
+        # Threads/Delay) stays unsaved. Hence we post it ourselves while
         # the registry still points at the old tab.
         previous_id = self._registry.active_id
         if previous_id and previous_id in self._registry:

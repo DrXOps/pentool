@@ -44,9 +44,6 @@ IntruderScreen #intruder-control-row Input {
     padding: 0 1;
     background: transparent;
 }
-IntruderScreen #intruder-control-row #intruder-turbo {
-    width: auto;
-}
 /* Start / Pause / Stop moved to the module header (see `header_spec()`), so the
    StartStopWidget rules that used to live here are gone with the widget. */
 
@@ -149,6 +146,12 @@ IntruderScreen .progress-row {
 }
 
 IntruderScreen .progress-row .progress-label {
+    width: auto;
+    color: $text-muted;
+    padding: 0 1;
+}
+
+IntruderScreen .progress-row .limit-label {
     width: auto;
     color: $text-muted;
     padding: 0 1;

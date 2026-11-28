@@ -38,7 +38,7 @@ class _SpyAttack:
         self._releases = releases
         self._release = asyncio.Event()
 
-    async def run(self, on_result, on_progress) -> None:
+    async def run(self, on_result, on_progress, on_limit_change=None) -> None:
         self.started += 1
         await self._release.wait()
 
@@ -58,7 +58,7 @@ class _SpyAttack:
 class _FakeApi:
     attack: _SpyAttack
 
-    def make_attack(self, config, turbo_mode: bool = False) -> _SpyAttack:
+    def make_attack(self, config) -> _SpyAttack:
         return self.attack
 
 

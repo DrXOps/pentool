@@ -216,7 +216,7 @@ class TestIntruderAPI:
 
     @pytest.mark.asyncio
     async def test_pause_attack_without_pause_support(self) -> None:
-        # Turbo attack has no pause() attribute — must not crash
+        # An attack double without pause() — must not crash
         from pentool.api.intruder_api import IntruderAPI
 
         api = IntruderAPI()
@@ -254,7 +254,7 @@ class TestIntruderAPI:
 
         api = IntruderAPI()
         attack = MagicMock()
-        attack.get_results.return_value = ["r"]
+        attack.results = ["r"]
         api._attack = attack
         assert api.get_results() == ["r"]
 
@@ -303,45 +303,8 @@ class TestIntruderAPI:
             patch.object(m, "IntruderAttack", return_value=attack),
             patch.object(m.asyncio, "create_task", side_effect=lambda coro: asyncio.ensure_future(coro)),
         ):
-            aid = await api.start_attack(MagicMock(), on_result=None, on_progress=None, turbo_mode=False)
+            aid = await api.start_attack(MagicMock(), on_result=None, on_progress=None)
         assert aid == "aid-1"
-
-    @pytest.mark.asyncio
-    async def test_start_attack_turbo_mode(self) -> None:
-        import asyncio
-        import sys
-        import types
-        from unittest.mock import AsyncMock, MagicMock
-
-        import pentool.modules as _mods
-        from pentool.api import intruder_api as m
-
-        # intruder_turbo is a PRO module not present in CI. Synthesize a fake
-        # module so this test runs regardless of whether PRO is installed.
-        saved = sys.modules.get("pentool.modules.intruder_turbo")
-        fake_mod = types.ModuleType("pentool.modules.intruder_turbo")
-        # Reassigned to a mock below; just needs the attribute present so the
-        # `from pentool.modules.intruder_turbo import TurboIntruderAttack`
-        # inside start_attack resolves against the fake module.
-        fake_mod.TurboIntruderAttack = None
-        sys.modules["pentool.modules.intruder_turbo"] = fake_mod
-        _mods.intruder_turbo = fake_mod  # expose as a package attr for from-import
-        api = m.IntruderAPI()
-        turbo = MagicMock()
-        turbo.run = AsyncMock()
-        turbo.attack_id = "turbo-1"
-        fake_mod.TurboIntruderAttack = lambda *a, **k: turbo
-        try:
-            with patch.object(m.asyncio, "create_task", side_effect=lambda coro: asyncio.ensure_future(coro)):
-                aid = await api.start_attack(MagicMock(), on_result=None, on_progress=None, turbo_mode=True)
-            assert aid == "turbo-1"
-        finally:
-            if saved is not None:
-                sys.modules["pentool.modules.intruder_turbo"] = saved
-            else:
-                sys.modules.pop("pentool.modules.intruder_turbo", None)
-            if hasattr(_mods, "intruder_turbo"):
-                delattr(_mods, "intruder_turbo")
 
     @pytest.mark.asyncio
     async def test_state_proxy_methods(self) -> None:
@@ -425,7 +388,7 @@ class TestIntruderAPI:
         from unittest.mock import MagicMock
 
         attack = MagicMock()
-        attack.get_results.return_value = [res]
+        attack.results = [res]
         api._attack = attack
         data = api.export_project_data()
         assert data["results"][0]["attack_id"] == "a"

@@ -38,7 +38,6 @@ class IntruderService(BaseService):
         config: IntruderConfig,
         on_result: Callable[[IntruderResult], None] | None = None,
         on_progress: Callable[[int, int], None] | None = None,
-        turbo_mode: bool = False,
     ) -> list[IntruderResult]:
         def _on_result(result: IntruderResult) -> None:
             self._emit(IntruderResultAdded(result=result, source="intruder"))
@@ -56,7 +55,7 @@ class IntruderService(BaseService):
                     logger.debug("intruder on_progress callback failed", exc_info=True)
 
         try:
-            await self._api.start_attack(config, _on_result, _on_progress, turbo_mode=turbo_mode)
+            await self._api.start_attack(config, _on_result, _on_progress)
             results = self._api.get_results()
             self._emit(
                 IntruderFinished(

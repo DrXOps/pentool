@@ -66,10 +66,7 @@ class IntruderAPI(ExportableAPI):
         # had no way to pass one in — it always let IntruderAttack create
         # its own from scratch. Threading it through here just extends the
         # existing `http_client=None` pattern one layer up, matching how
-        # ScannerAPI(db_path, http_client) already works. Does not apply to
-        # Turbo mode — TurboIntruderAttack manages its own aiohttp session
-        # pool internally by design (Keep-Alive tuning specific to Turbo),
-        # unrelated to this DI change.
+        # ScannerAPI(db_path, http_client) already works.
         self._http_client = http_client
         self._attack: IntruderAttack | None = None
         self._task: asyncio.Task | None = None
@@ -88,18 +85,14 @@ class IntruderAPI(ExportableAPI):
         # same way it always did.
         self._repo = storage or IntruderStorage(db_path=db_path)
 
-    def make_attack(self, config: IntruderConfig, turbo_mode: bool = False):
-        """Create an IntruderAttack (or TurboIntruderAttack) without binding it to the shared `_attack`.
+    def make_attack(self, config: IntruderConfig) -> IntruderAttack:
+        """Create an IntruderAttack without binding it to the shared `_attack`.
 
         Needed for parallel per-tab attacks: every tab creates its OWN attack instance
         through this factory and keeps it in its own state, so pause/stop/abort
         act independently of other tabs. `_attack` itself is left alone.
         (Inherits http_client to reuse a single connection pool by default.)
         """
-        if turbo_mode:
-            from pentool.modules.intruder_turbo import TurboIntruderAttack
-
-            return TurboIntruderAttack(config)
         return IntruderAttack(config, db_path=self._db_path, http_client=self._http_client)
 
     async def start_attack(
@@ -107,17 +100,9 @@ class IntruderAPI(ExportableAPI):
         config: IntruderConfig,
         on_result=None,
         on_progress=None,
-        turbo_mode: bool = False,
     ) -> str:
         """Run attack to completion and return attack_id (awaits full completion, not just start)."""
-        if turbo_mode:
-            # Turbo Mode: connection pooling + Keep-Alive
-            from pentool.modules.intruder_turbo import TurboIntruderAttack
-
-            self._attack = TurboIntruderAttack(config)
-        else:
-            # Standard mode
-            self._attack = IntruderAttack(config, db_path=self._db_path, http_client=self._http_client)
+        self._attack = IntruderAttack(config, db_path=self._db_path, http_client=self._http_client)
 
         _on_result = on_result if on_result else lambda r: None
         _on_progress = on_progress if on_progress else lambda d, t: None
@@ -127,16 +112,16 @@ class IntruderAPI(ExportableAPI):
             await self._task
         except asyncio.CancelledError:
             pass
-        return self._attack.attack_id if hasattr(self._attack, "attack_id") else "turbo"
+        return self._attack.attack_id
 
     async def pause(self) -> None:
-        """Pause the attack (Turbo mode unsupported — guarded by hasattr)."""
-        if self._attack and hasattr(self._attack, "pause"):
+        """Pause the attack (a double without `pause` must not crash the caller)."""
+        if self._attack is not None and hasattr(self._attack, "pause"):
             await self._attack.pause()
 
     async def resume(self) -> None:
-        """Resume attack after pause (guarded by hasattr)."""
-        if self._attack and hasattr(self._attack, "resume"):
+        """Resume attack after pause (guarded like `pause`)."""
+        if self._attack is not None and hasattr(self._attack, "resume"):
             await self._attack.resume()
 
     async def stop(self) -> None:
@@ -145,9 +130,6 @@ class IntruderAPI(ExportableAPI):
 
     def get_results(self) -> list[IntruderResult]:
         if self._attack:
-            # Turbo mode uses get_results(), standard mode uses results property
-            if hasattr(self._attack, "get_results"):
-                return self._attack.get_results()
             return self._attack.results
         # Fallback: results restored from the DB
         return list(getattr(self, "_restored_results", []))

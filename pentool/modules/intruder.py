@@ -40,10 +40,6 @@ class IntruderConfig:
     #: PRO: adapt parallelism and delay to the target inside `threads` (AIMD). The UI switch
     #: that used to be "Turbo" is gone — it was a connection-pool profile, not another attack.
     adaptive: bool = False
-    # Turbo mode settings (PRO)
-    turbo_pipeline: bool = False  # HTTP pipelining
-    turbo_keep_alive: bool = True  # connection reuse
-    turbo_rate_limit: int | None = None  # requests per second limit
 
 
 def parse_markers(template: str) -> tuple[str, list[tuple[int, int]]]:

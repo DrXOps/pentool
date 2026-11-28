@@ -1,6 +1,6 @@
 """Port completeness: per-tab state and tooltips must survive a tab switch.
 
-The pre-multitab Intruder had one set of Threads/Delay/Turbo inputs and one set
+The pre-multitab Intruder had one set of Threads/Delay inputs and one set
 of tooltips, all written once from ``on_mount``. Both assumptions broke when
 the screen became tabbed, and both broke silently:
 
@@ -68,7 +68,7 @@ async def _mounted(pilot):
 
 
 class TestToolbarValuesSurviveTabSwitch:
-    """Threads/Delay/Turbo belong to a tab, not to the global toolbar."""
+    """Threads/Delay belong to a tab, not to the global toolbar."""
 
     async def test_threads_typed_on_one_tab_come_back_after_switching(self) -> None:
         app = _App()
@@ -97,7 +97,7 @@ class TestToolbarValuesSurviveTabSwitch:
                 "the second tab must keep its own thread count, not inherit 77"
             )
 
-    async def test_delay_and_turbo_travel_with_their_tab_too(self) -> None:
+    async def test_delay_travels_with_its_tab_too(self) -> None:
         app = _App()
         async with app.run_test(size=(200, 60)) as pilot:
             screen, panel = await _mounted(pilot)

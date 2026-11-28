@@ -98,7 +98,7 @@ def test_allowlisted_chains_are_still_pending() -> None:
 def test_no_screen_draws_its_own_action_toolbar() -> None:
     """One action row per module: the header. A private `Toolbar` is the old second way.
 
-    ``intruder`` is the one exception and not an action row: Threads / Delay / Turbo are
+    ``intruder`` is the one exception and not an action row: Threads / Delay / adaptive limit are
     settings that only exist inside a tab, and they were never offered by the header.
     """
     allowed = {"intruder/screen.py"}

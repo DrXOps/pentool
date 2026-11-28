@@ -87,8 +87,6 @@ class AttackRunner:
         is_pro = self._is_pro()
         threads = self._thread_limit(is_pro)
         delay_ms = self._delay_limit(is_pro)
-        turbo_mode = self._turbo_mode(is_pro)
-        tab.turbo_mode = turbo_mode
         tab.thread_count = threads
         tab.delay_ms = delay_ms
 
@@ -102,6 +100,9 @@ class AttackRunner:
             delay_ms=delay_ms,
             follow_redirects=False,
             timeout=30,
+            # PRO adapts parallelism/delay to the target inside the user's ceiling; FREE
+            # keeps the fixed rate it always had.
+            adaptive=is_pro,
         )
 
         api = screen._get_api()
@@ -109,7 +110,7 @@ class AttackRunner:
             screen.notify_user("No project open", severity="warning", timeout=3)
             return
 
-        attack = api.make_attack(config, turbo_mode=turbo_mode)
+        attack = api.make_attack(config)
         tab.attack = attack
 
         screen.refresh_header()
@@ -119,7 +120,7 @@ class AttackRunner:
         screen._clear_results()
 
         total_payloads = sum(len(ps) for ps in payload_sets)
-        mode_label = " [⚡ Turbo]" if turbo_mode else ""
+        mode_label = " [⚡ adaptive]" if is_pro else ""
         limit_label = "" if is_pro else " [FREE: limited]"
         screen.notify_user(
             f"Attack started: {total_payloads} payload(s){mode_label}{limit_label}",
@@ -194,20 +195,6 @@ class AttackRunner:
             return 0 if is_pro else 100
         return max(0, delay_ms) if is_pro else max(100, delay_ms)
 
-    def _turbo_mode(self, is_pro: bool) -> bool:
-        from textual.css.query import NoMatches
-        from textual.widgets import Checkbox
-
-        try:
-            checkbox = self._screen.query_one("#intruder-turbo", Checkbox)
-        except NoMatches as exc:
-            logger.debug("intruder: turbo checkbox missing: %s", exc)
-            return False
-        turbo = bool(checkbox.value) if is_pro else False
-        if not is_pro:
-            checkbox.value = False
-        return turbo
-
     # ── Run ───────────────────────────────────────────────────────────────
 
     async def run(self, tab: Any, attack: Any) -> None:
@@ -224,9 +211,13 @@ class AttackRunner:
         def on_progress(done: int, total: int) -> None:
             screen.call_after_refresh(self.progress, done, total, tab)
 
+        def on_limit_change(decision: Any) -> None:
+            # The decision comes from the worker thread; the screen updates from the app loop.
+            screen.call_after_refresh(screen._on_limit_change, decision, tab)
+
         try:
             tab.running = True
-            await attack.run(on_result, on_progress)
+            await attack.run(on_result, on_progress, on_limit_change=on_limit_change)
         except Exception as exc:
             # The attack stopped unexpectedly: the user sees the notification, the log
             # keeps the traceback (BLE001 wants a logging call it can see).

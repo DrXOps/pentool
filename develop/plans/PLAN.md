@@ -16,7 +16,7 @@
 
 - [pro-licensing.md](pro-licensing.md) — PRO: остался `/api/pro/version` (503) и продвижение;
 - [modules.md](modules.md) — модули и материалы;
-- [intruder-autolimits.md](intruder-autolimits.md) — авто-лимиты вместо Turbo;
+- [intruder-autolimits.md](intruder-autolimits.md) — адаптивные лимиты сделаны: осталась ручная проверка на локальном 429-сервере;
 - [backlog.md](backlog.md) — идеи без приоритета;
 - [idea-ml-layer-distillation.md](idea-ml-layer-distillation.md) — ML-слой;
 - [idea-request-pipeline.md](idea-request-pipeline.md) — труба запросов.
