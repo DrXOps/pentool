@@ -25,14 +25,14 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Checkbox, Input, Label, Select, Static
+from textual.widgets import Checkbox, Input, Label, Select, Static, TextArea
 
 from pentool.tui.dialogs.base_dialog import BaseDialog
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 _CSS = (Path(__file__).parent / "form_dialog.tcss").read_text(encoding="utf-8")
 
-FieldKind = Literal["text", "int", "bool", "select", "secret"]
+FieldKind = Literal["text", "int", "bool", "select", "secret", "lines"]
 
 
 @dataclass
@@ -50,6 +50,8 @@ class FormField:
     #: Extra rule: return an error message, or None when the value is fine.
     validate: Callable[[Any], str | None] | None = None
     help: str = ""
+    #: Height of a `lines` field (a multi-line TextArea).
+    lines_height: int = 5
 
 
 class FormDialog(BaseDialog[dict[str, Any] | None]):
@@ -95,6 +97,10 @@ class FormDialog(BaseDialog[dict[str, Any] | None]):
                 allow_blank=not spec.required,
                 id=wid,
             )
+        if spec.kind == "lines":
+            area = TextArea(str(spec.default or ""), id=wid, classes="form-lines")
+            area.styles.height = spec.lines_height
+            return area
         return Input(
             str(spec.default or ""),
             id=wid,
@@ -136,6 +142,8 @@ class FormDialog(BaseDialog[dict[str, Any] | None]):
             return widget.value
         if isinstance(widget, Select):
             return None if widget.value is Select.NULL else widget.value
+        if isinstance(widget, TextArea):
+            return widget.text
         return widget.value.strip()
 
     def _coerce(self, spec: FormField, raw: Any) -> tuple[Any, str | None]:
@@ -144,6 +152,9 @@ class FormDialog(BaseDialog[dict[str, Any] | None]):
                 return int(raw), None
             except (TypeError, ValueError):
                 return raw, f"{spec.label}: enter a whole number"
+        if spec.kind == "lines":
+            # One value per line: blank lines are formatting, not data.
+            return [line.strip() for line in str(raw).splitlines() if line.strip()], None
         return raw, None
 
     def _check(self, spec: FormField, value: Any) -> str | None:
@@ -180,9 +191,13 @@ class FormDialog(BaseDialog[dict[str, Any] | None]):
             error_widget = self.query_one(f"#{self._wid(spec.name)}-error", Static)
             error_widget.update(f"[red]{errors.get(spec.name, '')}[/red]")
         for spec in self._fields:
-            if spec.name in errors and spec.kind in {"text", "int", "secret"}:
+            if spec.name not in errors:
+                continue
+            if spec.kind in {"text", "int", "secret"}:
                 self.query_one(f"#{self._wid(spec.name)}", Input).focus()
-                break
+            elif spec.kind == "lines":
+                self.query_one(f"#{self._wid(spec.name)}", TextArea).focus()
+            break
 
     def _result(self, values: dict[str, Any]) -> Any:
         """Map the collected values to this dialog's result. Subclasses change this."""

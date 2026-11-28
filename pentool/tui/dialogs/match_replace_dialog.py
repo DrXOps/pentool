@@ -1,4 +1,14 @@
-"""Dialog for managing Match/Replace rules."""
+"""Dialog for managing Match/Replace rules.
+
+The rule *editor* is a `FormDialog` (`MatchReplaceRuleDialog`, step 7): match/replace text,
+target and scope as selects, the two flags as checkboxes. The manager keeps the list: a table,
+add/delete/reorder and Apply/Cancel.
+
+Editing used to happen in an always-visible form under the table whose two "dropdowns" were
+`ToolbarButton`s with hand-maintained labels — the labels and the saved values could disagree
+(the rule was saved with one target while the button showed another), which is exactly what a
+form with real `Select` fields fixes.
+"""
 
 from __future__ import annotations
 
@@ -8,21 +18,50 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.css.query import NoMatches
-from textual.widgets import Button, DataTable, Input, Label, Static
+from textual.widgets import Button, DataTable, Label, Static
 
 from pentool.api.proxy_api import MatchReplaceRule
 from pentool.core.logging import get_logger
 from pentool.tui.dialogs.base_dialog import BaseDialog
-from pentool.tui.widgets.nice_checkbox import NiceCheckbox as Checkbox
+from pentool.tui.dialogs.form_dialog import FormDialog, FormField
 from pentool.tui.widgets.toolbar_button import ToolbarButton
 
 logger = get_logger(__name__)
 
 _CSS = (Path(__file__).parent / "match_replace_dialog.tcss").read_text(encoding="utf-8")
 
-_TARGET_OPTIONS = [("request", "Request"), ("response", "Response"), ("both", "Both")]
-_SCOPE_OPTIONS = [("all", "All"), ("headers", "Headers"), ("body", "Body")]
+_TARGET_OPTIONS = [("Request", "request"), ("Response", "response"), ("Both", "both")]
+_SCOPE_OPTIONS = [("All", "all"), ("Headers", "headers"), ("Body", "body")]
+
+
+class MatchReplaceRuleDialog(FormDialog):
+    """Edit one rule; returns `MatchReplaceRule` (the id is assigned by the manager)."""
+
+    def __init__(self, rule: MatchReplaceRule | None = None) -> None:
+        current = rule or MatchReplaceRule(match="", replace="")
+        super().__init__(
+            "Edit rule",
+            [
+                FormField("match", "Match", default=current.match, placeholder="string or regex"),
+                FormField("replace", "Replace", default=current.replace, placeholder="replacement"),
+                FormField("target", "Target", kind="select", options=_TARGET_OPTIONS, default=current.target),
+                FormField("scope", "Scope", kind="select", options=_SCOPE_OPTIONS, default=current.scope),
+                FormField("is_regex", "Regex", kind="bool", default=current.is_regex),
+                FormField("enabled", "Enabled", kind="bool", default=current.enabled),
+            ],
+            submit_label="Save",
+            description="An empty match rule does nothing and can be left for later.",
+        )
+
+    def _result(self, values: dict) -> MatchReplaceRule:
+        return MatchReplaceRule(
+            match=values["match"],
+            replace=values["replace"],
+            target=values["target"] or "both",
+            scope=values["scope"] or "all",
+            is_regex=values["is_regex"],
+            enabled=values["enabled"],
+        )
 
 
 class MatchReplaceDialog(BaseDialog[list[MatchReplaceRule] | None]):
@@ -38,8 +77,6 @@ class MatchReplaceDialog(BaseDialog[list[MatchReplaceRule] | None]):
         super().__init__()
         self._rules: list[MatchReplaceRule] = list(rules)
         self._selected_idx: int | None = None
-        self._target_val: str = "both"
-        self._scope_val: str = "all"
 
     def compose(self) -> ComposeResult:
         with Static(id="dialog"):
@@ -54,28 +91,10 @@ class MatchReplaceDialog(BaseDialog[list[MatchReplaceRule] | None]):
                 yield ToolbarButton("✕ Del", "btn-delete")
                 yield ToolbarButton("▲ Up", "btn-up")
                 yield ToolbarButton("▼ Down", "btn-down")
-
-            with Static(id="form"):
-                yield Label("Edit rule:", id="form-title")
-                with Static(classes="form-row"):
-                    yield Label("Match:", classes="form-label")
-                    yield Input(placeholder="string or regex", id="input-match", compact=True)
-                with Static(classes="form-row"):
-                    yield Label("Replace:", classes="form-label")
-                    yield Input(placeholder="replacement", id="input-replace", compact=True)
-                with Static(classes="form-row"):
-                    yield Label("Target:", classes="form-label")
-                    yield ToolbarButton("Both ▼", "btn-sel-target", classes="sel-btn")
-                with Static(classes="form-row"):
-                    yield Label("Scope:", classes="form-label")
-                    yield ToolbarButton("All ▼", "btn-sel-scope", classes="sel-btn")
-                with Static(classes="form-row form-row-checks"):
-                    yield Checkbox("Regex", id="chk-regex")
-                    yield Checkbox("Enabled", value=True, id="chk-enabled")
+                yield ToolbarButton("✎ Edit", "btn-edit")
 
             with Horizontal(id="bottom-buttons"):
                 yield ToolbarButton("Apply", "btn-apply")
-                yield ToolbarButton("Save Rule", "btn-save")
                 yield ToolbarButton("Cancel", "btn-cancel")
 
     def on_mount(self) -> None:
@@ -103,90 +122,35 @@ class MatchReplaceDialog(BaseDialog[list[MatchReplaceRule] | None]):
         idx = event.cursor_row
         if 0 <= idx < len(self._rules):
             self._selected_idx = idx
-            self._load_rule_to_form(self._rules[idx])
+            self._open_editor(idx)
 
-    def _load_rule_to_form(self, rule: MatchReplaceRule) -> None:
-        self.query_one("#input-match", Input).value = rule.match
-        self.query_one("#input-replace", Input).value = rule.replace
-        self._target_val = rule.target
-        self._scope_val = rule.scope
-        self._update_sel_labels()
-        self.query_one("#chk-regex", Checkbox).value = rule.is_regex
-        self.query_one("#chk-enabled", Checkbox).value = rule.enabled
+    # ── editor ────────────────────────────────────────────────────────────────
 
-    def _update_sel_labels(self) -> None:
-        target_label = dict(_TARGET_OPTIONS).get(self._target_val, self._target_val).title()
-        scope_label = dict(_SCOPE_OPTIONS).get(self._scope_val, self._scope_val).title()
-        try:
-            self.query_one("#btn-sel-target", ToolbarButton).label = f"{target_label} ▼"
-        except NoMatches as exc:
-            # The button will show the previous value — the rule is saved with one
-            # target/scope while the user sees another one on screen.
-            logger.debug("match/replace: target label not updated: %s", exc)
-        try:
-            self.query_one("#btn-sel-scope", ToolbarButton).label = f"{scope_label} ▼"
-        except NoMatches as exc:
-            # Same for scope: the screen and the saved rule diverge.
-            logger.debug("match/replace: scope label not updated: %s", exc)
+    def _open_editor(self, idx: int | None) -> None:
+        current = self._rules[idx] if idx is not None else None
 
-    def _read_form(self) -> MatchReplaceRule:
-        match = self.query_one("#input-match", Input).value
-        replace = self.query_one("#input-replace", Input).value
-        is_regex = self.query_one("#chk-regex", Checkbox).value
-        enabled = self.query_one("#chk-enabled", Checkbox).value
-        return MatchReplaceRule(
-            match=match,
-            replace=replace,
-            target=self._target_val,  # type: ignore[arg-type]
-            scope=self._scope_val,  # type: ignore[arg-type]
-            is_regex=is_regex,
-            enabled=enabled,
-        )
+        def _applied(result: MatchReplaceRule | None) -> None:
+            if result is None:
+                return
+            if idx is None:
+                self._rules.append(result)
+                self._selected_idx = len(self._rules) - 1
+            else:
+                result.id = self._rules[idx].id
+                self._rules[idx] = result
+                self._selected_idx = idx
+            self._rebuild_table()
 
-    # ── Target / Scope dropdown menus ────────────────────────────────────────
-
-    @on(ToolbarButton.Pressed, "#btn-sel-target")
-    def on_btn_sel_target(self, event: ToolbarButton.Pressed) -> None:
-        items = [(val, ("✓ " if val == self._target_val else "  ") + label) for val, label in _TARGET_OPTIONS]
-        r = event.button.region
-        self.app.show_context_menu(
-            items,
-            r.x,
-            r.y + 1,
-            callback=self._on_target_selected,
-        )
-
-    def _on_target_selected(self, val: str) -> None:
-        self._target_val = val
-        self._update_sel_labels()
-
-    @on(ToolbarButton.Pressed, "#btn-sel-scope")
-    def on_btn_sel_scope(self, event: ToolbarButton.Pressed) -> None:
-        items = [(val, ("✓ " if val == self._scope_val else "  ") + label) for val, label in _SCOPE_OPTIONS]
-        r = event.button.region
-        self.app.show_context_menu(
-            items,
-            r.x,
-            r.y + 1,
-            callback=self._on_scope_selected,
-        )
-
-    def _on_scope_selected(self, val: str) -> None:
-        self._scope_val = val
-        self._update_sel_labels()
-
-    # ── table buttons ─────────────────────────────────────────────────────────
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-close-title":
-            self.action_cancel()
+        self.app.push_screen(MatchReplaceRuleDialog(current), _applied)
 
     @on(ToolbarButton.Pressed, "#btn-add")
     def on_btn_add(self, _: ToolbarButton.Pressed) -> None:
-        rule = MatchReplaceRule(match="", replace="")
-        self._rules.append(rule)
-        self._selected_idx = len(self._rules) - 1
-        self._rebuild_table()
+        self._open_editor(None)
+
+    @on(ToolbarButton.Pressed, "#btn-edit")
+    def on_btn_edit(self, _: ToolbarButton.Pressed) -> None:
+        if self._selected_idx is not None and 0 <= self._selected_idx < len(self._rules):
+            self._open_editor(self._selected_idx)
 
     @on(ToolbarButton.Pressed, "#btn-delete")
     def on_btn_delete(self, _: ToolbarButton.Pressed) -> None:
@@ -211,14 +175,6 @@ class MatchReplaceDialog(BaseDialog[list[MatchReplaceRule] | None]):
             self._selected_idx = i + 1
             self._rebuild_table()
 
-    @on(ToolbarButton.Pressed, "#btn-save")
-    def on_btn_save(self, _: ToolbarButton.Pressed) -> None:
-        if self._selected_idx is not None:
-            new_rule = self._read_form()
-            new_rule.id = self._rules[self._selected_idx].id
-            self._rules[self._selected_idx] = new_rule
-            self._rebuild_table()
-
     @on(ToolbarButton.Pressed, "#btn-apply")
     def on_btn_apply(self, _: ToolbarButton.Pressed) -> None:
         self.dismiss(list(self._rules))
@@ -226,6 +182,10 @@ class MatchReplaceDialog(BaseDialog[list[MatchReplaceRule] | None]):
     @on(ToolbarButton.Pressed, "#btn-cancel")
     def on_btn_cancel(self, _: ToolbarButton.Pressed) -> None:
         self.action_cancel()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-close-title":
+            self.action_cancel()
 
     def action_cancel(self) -> None:
         self.dismiss(None)

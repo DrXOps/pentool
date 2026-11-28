@@ -1,26 +1,26 @@
-"""Scope settings dialog (host list + regex include/exclude)."""
+"""Scope settings dialog (host list + regex include/exclude) on `FormDialog` (step 7).
+
+The dialog used to hand-build three `TextArea`s, its own Save button, its own Escape binding
+and its own validation line. All of that now comes from `FormDialog`: the fields are declared as
+`lines` fields, the regex check is a `validate` on the field, and the error appears under the
+field that caused it instead of a separate message at the bottom.
+"""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 
-from textual import on
-from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
-from textual.css.query import NoMatches
-from textual.widgets import Label, Static, TextArea
 
-from pentool.core.logging import get_logger
-from pentool.tui.dialogs.base_dialog import BaseDialog
-from pentool.tui.markup import esc
-from pentool.tui.widgets.toolbar_button import ToolbarButton
+from pentool.tui.dialogs.form_dialog import FormDialog, FormField
 
-logger = get_logger(__name__)
-
-_CSS = (Path(__file__).parent / "scope_dialog.tcss").read_text(encoding="utf-8")
+_EXTENDED_HINT = (
+    "Hosts one per line (wildcards: *.example.com). Leave empty to match all hosts.\n"
+    "Regex Include: a URL must match at least one (empty = match all). "
+    "Regex Exclude: a URL must not match any (empty = exclude nothing)."
+)
+_SIMPLE_HINT = "One host per line. Wildcards supported: *.example.com. Leave empty to intercept all hosts."
 
 
 @dataclass
@@ -101,26 +101,28 @@ def validate_patterns(patterns: list[str]) -> list[str]:
     return invalid
 
 
-class ScopeDialog(BaseDialog[list[str] | ScopeConfig | None]):
+def _regex_list_validate(patterns: list[str]) -> str | None:
+    """FormDialog field rule: reject invalid regular expressions by name."""
+    bad = validate_patterns(list(patterns or []))
+    if not bad:
+        return None
+    return f"invalid regex: {', '.join(bad[:3])}"
+
+
+class ScopeDialog(FormDialog):
     """Modal dialog for editing Scope.
 
     In `extended=True` mode returns `ScopeConfig` (hosts + regex include/exclude).
     In `extended=False` mode (default) returns `list[str]` — backward-compat.
     """
 
-    DEFAULT_CSS = _CSS
-
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("ctrl+s", "confirm", "Save"),
-    ]
+    BINDINGS = [*FormDialog.BINDINGS, Binding("ctrl+s", "submit", "Save")]
 
     def __init__(
         self,
         current_scope: list[str] | ScopeConfig | None = None,
         extended: bool = False,
     ) -> None:
-        super().__init__()
         self._extended = extended
 
         if isinstance(current_scope, ScopeConfig):
@@ -131,110 +133,49 @@ class ScopeDialog(BaseDialog[list[str] | ScopeConfig | None]):
         else:
             self._cfg = ScopeConfig()
 
-    def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            yield Label("Scope Settings", id="title")
-
-            if self._extended:
-                yield Label(
-                    "Hosts (one per line, wildcards: *.example.com):\nLeave empty to match all hosts.",
-                    id="hint",
-                )
-            else:
-                yield Label(
-                    "One host per line. Wildcards supported: *.example.com\nLeave empty to intercept all hosts.",
-                    id="hint",
-                )
-
-            yield TextArea(
-                "\n".join(self._cfg.hosts),
-                id="scope-area",
+        fields = [
+            FormField(
+                "hosts",
+                "Hosts",
+                kind="lines",
+                default="\n".join(self._cfg.hosts),
+                lines_height=5,
             )
-
-            if self._extended:
-                yield Static(
-                    "── Regex Include (URL must match at least one) ──",
-                    id="regex-include-label",
-                    classes="regex-section-label",
-                )
-                yield Label(
-                    "[dim]E.g.: /api/  or  \\.(php|asp)  (empty = match all)[/dim]",
-                    id="regex-include-hint",
-                    classes="regex-hint",
-                )
-                yield TextArea(
-                    "\n".join(self._cfg.regex_include),
-                    id="regex-include-area",
-                    classes="regex-area",
-                )
-
-                yield Static(
-                    "── Regex Exclude (URL must NOT match any) ──",
-                    id="regex-exclude-label",
-                    classes="regex-section-label",
-                )
-                yield Label(
-                    "[dim]E.g.: \\.js$  or  /static/  (empty = exclude nothing)[/dim]",
-                    id="regex-exclude-hint",
-                    classes="regex-hint",
-                )
-                yield TextArea(
-                    "\n".join(self._cfg.regex_exclude),
-                    id="regex-exclude-area",
-                    classes="regex-area",
-                )
-
-                yield Static("", id="validation-msg", classes="validation-msg")
-
-            with Horizontal(id="buttons"):
-                yield ToolbarButton("Save", "btn-ok")
-                yield ToolbarButton("Cancel", "btn-cancel")
-
-    @on(ToolbarButton.Pressed, "#btn-ok")
-    def on_btn_ok(self, _: ToolbarButton.Pressed) -> None:
-        self.action_confirm()
-
-    @on(ToolbarButton.Pressed, "#btn-cancel")
-    def on_btn_cancel(self, _: ToolbarButton.Pressed) -> None:
-        self.action_cancel()
-
-    def action_confirm(self) -> None:
-        text = self.query_one("#scope-area", TextArea).text
-        hosts = [h.strip() for h in text.splitlines() if h.strip()]
-
-        if not self._extended:
-            self.dismiss(hosts)
-            return
-
-        # Extended mode — collect regex include/exclude
-        inc_text = self.query_one("#regex-include-area", TextArea).text
-        exc_text = self.query_one("#regex-exclude-area", TextArea).text
-
-        regex_include = [p.strip() for p in inc_text.splitlines() if p.strip()]
-        regex_exclude = [p.strip() for p in exc_text.splitlines() if p.strip()]
-
-        # Validate patterns
-        bad_inc = validate_patterns(regex_include)
-        bad_exc = validate_patterns(regex_exclude)
-        if bad_inc or bad_exc:
-            bad_all = bad_inc + bad_exc
-            try:
-                self.query_one("#validation-msg", Static).update(
-                    f"[bold red]Invalid regex: {esc(', '.join(bad_all[:3]))}[/bold red]"
-                )
-            except NoMatches as exc:
-                # The invalid regex is not shown: the dialog simply will not
-                # close, and the user cannot tell why OK does nothing.
-                logger.debug("scope dialog: validation message not shown: %s", exc)
-            return
-
-        self.dismiss(
-            ScopeConfig(
-                hosts=hosts,
-                regex_include=regex_include,
-                regex_exclude=regex_exclude,
-            )
+        ]
+        if self._extended:
+            fields += [
+                FormField(
+                    "regex_include",
+                    "Regex Include",
+                    kind="lines",
+                    default="\n".join(self._cfg.regex_include),
+                    lines_height=3,
+                    help=r"E.g. /api/ or \.(php|asp) (empty = match all)",
+                    validate=_regex_list_validate,
+                ),
+                FormField(
+                    "regex_exclude",
+                    "Regex Exclude",
+                    kind="lines",
+                    default="\n".join(self._cfg.regex_exclude),
+                    lines_height=3,
+                    help=r"E.g. \.js$ or /static/ (empty = exclude nothing)",
+                    validate=_regex_list_validate,
+                ),
+            ]
+        super().__init__(
+            "Scope Settings",
+            fields,
+            submit_label="Save",
+            description=_EXTENDED_HINT if self._extended else _SIMPLE_HINT,
         )
 
-    def action_cancel(self) -> None:
-        self.dismiss(None)
+    def _result(self, values: dict) -> list[str] | ScopeConfig:
+        hosts = list(values["hosts"])
+        if not self._extended:
+            return hosts
+        return ScopeConfig(
+            hosts=hosts,
+            regex_include=list(values["regex_include"]),
+            regex_exclude=list(values["regex_exclude"]),
+        )

@@ -29,25 +29,6 @@
    тема, одно место. Здесь только архитектурная часть: она должна лечь в `HistoryTab`
    (6.5), а не в текущие два метода.
 
-## Шаг 7 (остаток). Формы на `FormDialog`
-
-`FormDialog` есть (`pentool/tui/dialogs/form_dialog.py`): поля объявляются `FormField`, ошибки
-показываются под полем, Enter отправляет, Esc отменяет, результат — `dict` (или свой тип через
-`_result`). `CommentDialog` переведён на него; `TextInputDialog` и `ProjectDialog` удалены как
-мёртвый код.
-
-Остались две настоящие формы, которые пока дублируют валидацию руками:
-
-- `ScopeDialog` (194 строки) — редактор хостов/wildcard-правил: перевести поля и проверки на
-  `FormField`, список хостов оставить отдельным виджетом;
-- `MatchReplaceDialog` (192 строки) — редактор правила: поля + предпросмотр замены.
-
-Остальные диалоги — не формы: `FileSelectorDialog` (браузер файлов), `ColorPickScreen`,
-`LightpandaViewer`, `CertInstallDialog` (инструкция), `RecrawlDialog` (два исхода),
-`InputDialog` (аккумулирует значения), `IntruderAutoMarkDialog` (набор чекбоксов),
-`SmartPayloadsDialog` (список от ИИ), `LoadFromProxyDialog` (выбор запроса). Им достаточно
-`BaseDialog`; заставлять их быть «формами» — натягивать абстракцию.
-
 ## Шаг 8. Секции настроек на `FieldSpec` (остаток)
 
 Сделано: `settings/fields.py` — `FieldSpec` (ключ конфига, id виджета, тип, min/max,
