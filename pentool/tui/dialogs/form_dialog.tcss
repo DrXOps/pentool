@@ -1,0 +1,61 @@
+FormDialog {
+    align: center middle;
+}
+
+FormDialog > #form-dialog {
+    width: 60;
+    max-width: 90%;
+    height: auto;
+    max-height: 80%;
+    padding: 1 2;
+    background: $surface;
+    border: round $primary;
+    overflow-y: auto;
+}
+
+FormDialog #form-dialog-title {
+    width: 100%;
+    padding-bottom: 1;
+}
+
+FormDialog #form-dialog-desc {
+    width: 100%;
+    padding-bottom: 1;
+    color: $text-muted;
+}
+
+FormDialog .field-label {
+    width: 100%;
+    color: $text-muted;
+    padding-top: 1;
+}
+
+FormDialog .field-error {
+    width: 100%;
+    height: auto;
+    min-height: 1;
+}
+
+FormDialog .field-help {
+    width: 100%;
+    color: $text-muted;
+}
+
+FormDialog Input {
+    width: 100%;
+}
+
+FormDialog Select {
+    width: 100%;
+}
+
+FormDialog #form-dialog-buttons {
+    width: 100%;
+    height: auto;
+    padding-top: 1;
+    align-horizontal: right;
+}
+
+FormDialog #form-dialog-buttons ToolbarButton {
+    margin-left: 1;
+}

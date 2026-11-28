@@ -27,12 +27,11 @@ ROOTS = [ROOT / "pentool" / "tui", ROOT / "pro" / "pentool" / "tui"]
 #: same `compose()`, so absence means the dialog is broken and must be seen in a
 #: traceback rather than swallowed.
 ALLOWED_FILES = {
-    "pentool/tui/dialogs/comment_dialog.py",
     "pentool/tui/dialogs/file_selector.py",
+    "pentool/tui/dialogs/form_dialog.py",
     "pentool/tui/dialogs/intruder_generate.py",
     "pentool/tui/dialogs/intruder_input.py",
     "pentool/tui/dialogs/load_from_proxy.py",
-    "pentool/tui/dialogs/project_dialog.py",
     "pentool/tui/screens/settings/hotkeys.py",
 }
 
